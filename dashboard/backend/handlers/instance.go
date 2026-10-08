@@ -25,8 +25,10 @@ func instanceRequest(ctx context.Context, method, path string, body []byte) (int
 		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", socket)
 	}}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: 35 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{
+		Transport: transport, Timeout: 35 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	request, err := http.NewRequestWithContext(ctx, method, "http://instance"+path, bytes.NewReader(body))
 	if err != nil {
 		return 0, nil, err

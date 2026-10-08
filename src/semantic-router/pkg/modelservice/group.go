@@ -54,6 +54,7 @@ type group struct {
 // servedModel is one model of a process and the deployments that call it.
 // ready is read lock-free on every call.
 type servedModel struct {
+	load        replicaLoad
 	name        string
 	deployments []string
 	ready       atomic.Bool
@@ -72,8 +73,8 @@ func newGroup(plan *processPlan, client *Client, managed bool) *group {
 			served = &servedModel{name: model, state: "starting", cache: newResultCache(ResultCacheEntries())}
 			g.models[model] = served
 		}
-		served.deployments = append(served.deployments, deployment)
-		readyGauge.WithLabelValues(deployment).Set(0)
+		served.deployments = append(served.deployments, plan.logical)
+		g.recordReady(plan.logical, false)
 	}
 	return g
 }
@@ -111,6 +112,7 @@ func (g *group) stop() {
 	g.mu.Lock()
 	for _, served := range g.models {
 		served.ready.Store(false)
+		g.recordReady(g.plan.logical, false)
 		served.state = "stopped"
 	}
 	g.broadcastLocked()
@@ -202,7 +204,7 @@ func (g *group) refresh(ctx context.Context) {
 			served.ready.Store(ready)
 			served.state, served.reason = state, reason
 			for _, deployment := range served.deployments {
-				readyGauge.WithLabelValues(deployment).Set(boolGauge(ready))
+				g.recordReady(deployment, ready)
 			}
 		}
 		if ready {
@@ -274,7 +276,7 @@ func (g *group) processExited(err error, ran time.Duration) {
 		served.ready.Store(false)
 		served.state = "restarting"
 		for _, deployment := range served.deployments {
-			readyGauge.WithLabelValues(deployment).Set(0)
+			g.recordReady(deployment, false)
 		}
 	}
 	var execErr *exec.Error
@@ -370,4 +372,12 @@ func boolGauge(value bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func (g *group) recordReady(deployment string, ready bool) {
+	replicaReadyGauge.WithLabelValues(deployment, g.plan.replica).Set(boolGauge(ready))
+	if g.plan.pool {
+		return
+	}
+	readyGauge.WithLabelValues(deployment).Set(boolGauge(ready))
 }

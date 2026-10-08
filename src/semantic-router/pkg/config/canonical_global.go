@@ -22,6 +22,7 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
+	Enabled           *bool                    `yaml:"enabled,omitempty"`
 	ConfigSource      ConfigSource             `yaml:"config_source,omitempty"`
 	Strategy          RoutingStrategy          `yaml:"strategy,omitempty"`
 	ListBackendModels bool                     `yaml:"list_backend_models"`
@@ -278,6 +279,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.Strategy = router.Strategy
 
 	cfg.ListBackendModels = router.ListBackendModels
+	cfg.RouterEnabled = router.Enabled
 	cfg.ClearRouteCache = router.ClearRouteCache
 	cfg.StreamedBodyMode = router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes

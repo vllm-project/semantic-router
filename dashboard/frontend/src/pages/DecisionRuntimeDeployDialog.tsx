@@ -137,10 +137,16 @@ export default function DecisionRuntimeDeployDialog({
                 value={device}
                 options={deviceOptions}
                 onChange={setDevice}
-                disabled={busy || !writable}
+                disabled={busy || !writable || Boolean(existing?.replicas?.length)}
               />
             </div>
           </div>
+          {existing?.replicas?.length ? (
+            <p className={styles.help}>
+              This deployment uses a replica pool. Manage placement in Decision Models → Model
+              replicas.
+            </p>
+          ) : null}
           <div className={styles.field}>
             <SystemOneSelect
               label="Deployment consumer"

@@ -11,7 +11,7 @@ routing.
 
 You need Linux, macOS or WSL2 with Docker or Podman, Python 3.10 or newer, and
 a few gigabytes of free disk for the router image and the model download. No
-GPU is needed. Engine mode (`vllm-sr serve MODEL`) is newer than the 0.4.0
+GPU is needed. Engine mode (`vllm-sr serve --mode engine --model ARTIFACT`) is newer than the 0.4.0
 release; see the [release channel note](../installation/installation.md).
 
 ## 1. Install
@@ -25,7 +25,7 @@ pip install vllm-sr
 ```
 
 The model runtime, the `vllm-srun` Python package, ships only inside the
-router images. `vllm-sr serve MODEL` runs it in a container from the
+router images. `vllm-sr serve --mode engine --model ARTIFACT` starts the instance frontend from the
 `vllm-sr` image, which the CLI pulls on first use, so nothing else is
 installed on your machine. On a GPU host, `--platform amd` or
 `--platform nvidia` selects the `vllm-sr-rocm` or `vllm-sr-cuda` image and
@@ -40,30 +40,31 @@ Start Decision 2.0 Kai, the smallest decision model. A decision model answers
 questions you write in plain language.
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --device cpu
 ```
 
 On an AMD GPU, the same model runs on the first GPU with:
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --platform amd --device rocm:0 --port 8100
+vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --platform amd --device rocm:0
 ```
 
 The `vllm-sr-rocm` image is a 6.5 GB download on first use. `rocm:N` picks
 another GPU of the host.
 
-The runtime runs in the foreground; Ctrl-C stops it. The first start downloads
-the model (about 1.5 GB) into the engine-mode cache, `~/.cache/vllm-sr/models`,
-and checks every file against its pinned hash; later starts reuse it. Set
-`VLLM_SR_ENGINE_CACHE_DIR` to keep the cache elsewhere. The model is ready when
-its health check passes. In a second terminal:
+The CLI starts the persistent frontend, Dashboard and a managed model worker.
+The first start downloads the model into the instance model cache. Later starts
+reuse it. Startup waits for readiness; use `vllm-sr status` to inspect the stack
+and `vllm-sr stop` to stop it.
+
+The initial Engine configuration publishes the selected model on the default
+listener. An existing config keeps its explicit `listeners[].systemone.models`
+allowlist and API keys; changing mode or selecting a model never broadens it.
+In a second terminal, inspect the public native model list:
 
 ```bash
-curl -s localhost:8100/health
+curl -s localhost:8899/v1/systemone/models
 ```
-
-It answers `{"status": "ready", ...}` once the model has loaded and passed its
-self-check. Until then it answers HTTP 503 with the current stage.
 
 ## 3. Send a request
 
@@ -72,7 +73,8 @@ Ask two questions about one request at once: which kind of work it is
 question, called **noul**).
 
 ```bash
-curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
   "state": "Write a Python function that merges two sorted lists.",
   "questions": {
     "kind": {"type": "choice", "instructions": "What kind of work is this?",
@@ -87,7 +89,7 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 
 ```json title="Response"
 {
-  "model": "Decision-2.0-Kai-0.6B",
+  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
   "answers": {
     "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.106},
     "reasoning": {"type": "noul", "noul": 0.519}
@@ -98,21 +100,11 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 
 Add `"options": {"return_meta": true}` to the request to also get `meta`: the
 revision, profile and device that answered and how long it took. On 16 CPU
-cores this request takes about 0.2 seconds. `POST /v1/systemone` is the same
-endpoint under its System One name. `GET /v1/models` shows what is loaded,
-where it runs and whether it passed its self-check.
-
-The same command serves classifiers. Stop the server with Ctrl-C and serve the
-Vela Domain classifier instead:
-
-```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain --device cpu --port 8100
-curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
-  -d '{"input": ["What is the derivative of x squared?"]}'
-```
-
-The result lists the most likely domain (`label`) and the probability of each
-of the 14 domains.
+cores this request takes about 0.2 seconds in the recorded worker benchmark.
+`POST /v1/decisions` is an alias of `/v1/systemone`; both use the same explicit
+public model ID. Native discovery uses `/v1/systemone/models`, while `/v1/models`
+remains Chat discovery. The worker's classify, embeddings, rerank and bundle
+APIs are separate; see the [task guides](./guides/classify.md).
 
 ## 4. Use it from the router
 
@@ -142,7 +134,7 @@ routing:
   signals:
     decision:
       - name: needs_reasoning
-        deployment: decision-kai
+        deployment: primary
         question:
           type: noul
           instructions: Does answering this request need multi-step reasoning?
@@ -171,7 +163,7 @@ routing:
 global:
   model_catalog:
     deployments:
-      decision-kai:
+      primary:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: cpu
@@ -184,10 +176,13 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-The router starts its own runtime for `decision-kai`. The first time, it
-downloads its own copy of the model into the `models/` directory next to your
-`config.yaml` and keeps it there for later starts. `vllm-sr serve` returns once
-the model has loaded, and prints its state while it waits. Send a request
+Use the same logical deployment key (`primary` in this example) when you want Router tasks and direct System One requests
+to share the same model pool. The frontend keeps managed workers available
+when routing is toggled; `global.router.enabled` changes only routing.
+To activate this new authored config over the existing Engine state, run
+`vllm-sr serve --mode router --config config.yaml --replace-active-config`.
+
+Send a request
 through the router and look at which route it took:
 
 ```bash
@@ -202,10 +197,9 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 runtime restarts later, the signal is unknown until the model is back and
 `on_unknown: no_match` sends requests to `default-route` meanwhile.
 
-To reuse the server you started in step 2 instead of a second copy of the
-model, replace `artifact` and `device` with its address, for example
-`endpoint: http://host.docker.internal:8100`, and start that server with
-`--host 0.0.0.0` so the router container can reach it.
+Router and Engine mode share one managed instance. To attach an independently
+operated worker instead, use an explicit `endpoint` and `served_name`; the
+[deployment guide](./deploy.md) describes its separate worker API and lifecycle.
 
 ## Next steps
 

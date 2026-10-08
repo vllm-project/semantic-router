@@ -85,9 +85,11 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 		return spec, nil
 	}
 	if deploymentName, deployment, ok, err := m.cfg.ImplicitTaskDeployment(name); ok && err == nil && deploymentName == m.cfg.DecisionModel {
-		return config.ResolvedModelBinding{Recipe: m.recipe, Name: name,
+		return config.ResolvedModelBinding{
+			Recipe: m.recipe, Name: name,
 			Binding:    config.ModelBinding{Deployment: deploymentName, Adapter: adapter, Contract: contract},
-			Deployment: deployment, Admission: m.cfg.ModelAdmission[deploymentName]}, nil
+			Deployment: deployment, Admission: m.cfg.ModelAdmission[deploymentName],
+		}, nil
 	}
 	limit := 0
 	if len(maxTokens) > 0 {

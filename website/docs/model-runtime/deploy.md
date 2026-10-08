@@ -1,18 +1,34 @@
 ---
-title: Run it with the router
-description: How the router runs models for you, how to put models on a GPU or in their own process, and how to attach to a runtime you run yourself.
+title: Frontend and runtime deployments
+description: Serve decision models through a persistent frontend, place independent replicas, and attach externally managed runtimes.
 ---
 
-# Run it with the router
+# Frontend and runtime deployments
 
-The router can run its models in two ways:
+The frontend owns API listeners, authentication, configuration and model
+resources. Router and Engine are two capabilities of the same frontend:
 
-- **Managed (the default).** The router starts the runtime as a child
-  process, restarts it if it crashes, and stops it when the router stops.
-- **Attached.** You run the runtime yourself, for example on a GPU machine or
-  as a Kubernetes service, and the router connects to it with `endpoint`.
+- **Engine** serves native System One questions without Chat backends or a
+  user-authored routing configuration.
+- **Router** additionally runs signals, decisions, algorithms and Chat routing.
 
-Both use the same configuration, the same models and the same answers.
+```bash
+vllm-sr serve --mode engine --model vllm-sr/Vela-2.0-0.3B
+vllm-sr serve --config config.yaml --mode router
+```
+
+The canonical setting is `global.router.enabled` (default `true`). Turning it
+off preserves the routing configuration but does not initialize its consumers
+or Chat backends. Mode changes publish configuration through the running
+frontend; they do not replace the frontend or unchanged model workers. The
+Dashboard and native API remain available in either mode. Listener keys and
+native model grants still apply.
+
+Model resources use either **managed** workers, which the frontend starts and
+supervises, or **attached** workers, whose lifecycle belongs to another owner.
+A logical deployment can have one or more compatible replicas. Task bindings
+and public model names identify the logical deployment, independently of where
+its workers run.
 
 ## Built-in features need no configuration
 
@@ -21,13 +37,12 @@ cache, the router already knows which Vela model it needs. It runs that model
 in a managed runtime on the CPU. Set `use_cpu: false` on the feature's module
 to let the runtime pick a GPU instead (`device: auto`).
 
-Only models that an active feature uses are started. Declaring a deployment
-that nothing uses does not load it.
+The default decision model and deployments used by enabled consumers or published
+native model grants are loaded. Other declarations do not start workers.
 
 ## Describe a deployment
 
-Write a deployment when you want to choose the model, the device or the
-process yourself. A deployment is a named model under
+Write a deployment to choose the model, execution profile and worker placement. A deployment is a named model under
 `global.model_catalog.deployments`:
 
 ```yaml
@@ -45,7 +60,6 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: auto
-        process: decisions
 ```
 
 | Field | Meaning |
@@ -56,7 +70,7 @@ global:
 | `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N`, `mps`, or an accelerator a plugin adds. |
 | `profile` | `exact` (default) or an opt-in faster profile. See [Profiles](./profiles.md). |
 | `input` | For task models: the longest input in tokens (`max_tokens`) and what to do with longer input (`overflow`: `reject`, `truncate` or `window`). |
-| `process` | Runs deployments with the same name in one runtime process. |
+| `replicas` | Explicit managed `device` or attached `endpoint`/`served_name` placements for this model. Omit for one worker. |
 | `endpoint` | Attach to a runtime you run instead of starting one. |
 | `served_name` | The model's name on an attached runtime that serves several models (default: the deployment name). |
 
@@ -82,55 +96,63 @@ mismatch before it serves traffic.
 A binding under `global.model_catalog.bindings` applies everywhere. A recipe
 can override it under its own `routing.model_bindings`.
 
-## Group models into processes
+## Place and scale replicas
 
-By default the models of one GPU share one runtime process, so all models on
-`rocm:0` answer a request in one call and use memory efficiently. They take
-turns on the GPU, one device call at a time; put a model on a GPU of its own
-when it must not wait for the others. CPU models
-are spread over several processes, one per model up to one per two cores the
-router may use, so a request's models run in parallel; each process runs an
-equal share of the cores as threads. `VLLM_SRUN_CPU_PROCESSES` caps the
-number of CPU processes, and `1` keeps every CPU model in one process. Keep the
-default where you can: in one process, a model on the optional ONNX Runtime
-engine and a PyTorch model share the CPU's threads, and one of them answers
-more slowly under load.
-
-Deployments on `device: auto` (the default) are grouped by the device `auto`
-picks on the router's host. On a host without a GPU that is the CPU, so each
-of them gets a CPU process of its own, as with `device: cpu`. On a GPU host
-they share the process of the first GPU, such as `rocm:0`, with the
-deployments you put on that GPU; the runtime may still place a model on
-another device when that GPU lacks the memory, and a model it places on the
-CPU there may use every core the router has. `vllm-srun devices` shows
-the device `auto` picks first. The router asks once, the first time it runs a
-deployment on `auto`; if the runtime cannot answer, the `auto` deployments
-share one process until the router restarts, and the router logs
-`auto_device_unresolved`.
-
-Give a deployment its own `process` name when it should not share a fault
-domain or memory with the others, for example a large decision model:
+Each managed replica has its own process. All replicas of a deployment use the
+same artifact, revision, profile and capabilities. A request's fused question
+batch is dispatched as one unit after the logical model is selected. The pool
+uses its own in-flight work observations to select a ready worker; those
+observations are not the attached runtime's internal queue length.
 
 ```yaml
 global:
+  router:
+    enabled: false
   model_catalog:
     deployments:
-      decision-lux:
+      primary:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
-        device: rocm:0
-        process: large-decisions
+        artifact: vllm-sr/Vela-2.0-4B
+        profile: exact
+        replicas:
+          - device: rocm:0
+          - device: rocm:1
+    system:
+      decision_model:
+        deployment: primary
 ```
 
-If that process crashes or runs out of memory, only its deployments become
-unavailable while the router restarts it; the other models keep answering.
+Use different GPUs for data parallelism. Repeating a device explicitly starts
+multiple workers on that GPU; each worker needs memory for its model. Measure
+throughput and tail latency with your input lengths and concurrency before
+choosing this layout. `batching` can improve cross-request utilization within
+a worker; `max_speed` also changes numerics and requires a separate quality
+assessment. Replicas do not shard weights and are not tensor or pipeline
+parallelism.
+
+Do not combine `replicas` with deployment-level `device`, `endpoint` or
+`served_name`. Omitting `replicas` keeps the one-worker shorthand with the same dispatch and
+status contract as an explicit single replica. Single-worker deployments retain
+the frontend result cache; multiple replicas use independent worker caches. A replica's
+placement is independent of bindings, so changes to routing consumers retain
+unchanged worker identities. Reconfiguration prepares a compatible pool before
+publishing it, and retired workers drain existing requests.
+
+The pool admits a bounded number of outstanding requests per replica. It
+returns overload when all ready replicas are full. Inventory reports desired
+and ready replica counts, per-worker readiness, in-flight requests and
+restarts. A degraded pool can keep serving through its healthy replicas.
+
+CPU workers receive a stable thread budget based on host cores and
+`VLLM_SRUN_CPU_PROCESSES`. Mode changes do not recalculate that budget from the
+number of active consumers.
 
 ## Attach to a runtime you run
 
 Start a runtime anywhere the router can reach, then point a deployment at it:
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B vllm-sr/Vela-1.0-Encoder-307M-PII --platform amd --device rocm:0 --host 0.0.0.0 --port 8100
+vllm-srun serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --host 0.0.0.0 --port 8100
 ```
 
 ```yaml
@@ -139,12 +161,9 @@ global:
     deployments:
       gpu-lux:
         provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Lux-9B
         endpoint: http://gpu-runtime.internal:8100
         served_name: vllm-sr/Decision-2.0-Lux-9B
-      gpu-pii:
-        provider: model_runtime
-        endpoint: http://gpu-runtime.internal:8100
-        served_name: vllm-sr/Vela-1.0-Encoder-307M-PII
 ```
 
 `endpoint` takes `http://host:port`, `https://host:port` or a Unix socket,

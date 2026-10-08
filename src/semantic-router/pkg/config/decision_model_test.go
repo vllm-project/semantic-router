@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -70,6 +71,7 @@ func selectedDecisionYAML(artifact, system string) string {
 	return decisionModelYAML("      decision_model: {deployment: selected}\n"+system, "") +
 		"    deployments:\n      selected: {provider: model_runtime, artifact: " + artifact + ", device: cpu}\n"
 }
+
 func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 	cfg := mustParseDecisionModel(t, withDecisionQuestion(builtInSignalsYAML("")))
 	name, resource, ok, err := cfg.DecisionModelDeployment()
@@ -78,7 +80,7 @@ func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 	}
 	for _, consumer := range []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "hallucination_detector"} {
 		got, deployment, found, err := cfg.ImplicitTaskDeployment(consumer)
-		if err != nil || !found || got != name || deployment != resource {
+		if err != nil || !found || got != name || !reflect.DeepEqual(deployment, resource) {
 			t.Fatalf("%s duplicated resource: %s %+v %v", consumer, got, deployment, err)
 		}
 	}
@@ -86,6 +88,7 @@ func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 		t.Fatal("question did not inherit default deployment")
 	}
 }
+
 func TestDecisionModelAcceptsGenericDeclaredFamilies(t *testing.T) {
 	for _, artifact := range []string{"vllm-sr/Decision-1.0-Kai-0.6B", "vllm-sr/Decision-2.0-Kai-0.6B", "vllm-sr/Vela-2.0-4B", "provider/Future-Judgment"} {
 		t.Run(artifact, func(t *testing.T) {
@@ -109,6 +112,7 @@ func TestDecisionModelAcceptsGenericDeclaredFamilies(t *testing.T) {
 		})
 	}
 }
+
 func TestDecisionModelPreservesExplicitSpecialist(t *testing.T) {
 	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Decision-2.0-Kai-0.6B", "      prompt_guard: models/Vela-1.0-Encoder-307M-Guard\n"))
 	name, resource, _, err := cfg.ImplicitTaskDeployment("prompt_guard")
@@ -119,6 +123,7 @@ func TestDecisionModelPreservesExplicitSpecialist(t *testing.T) {
 		t.Fatalf("domain %s", got)
 	}
 }
+
 func TestDecisionModelReferenceIsExactObject(t *testing.T) {
 	for _, selector := range []string{"Vela-2.0-4B", "{deployment: missing}", "{deployment: vllm-sr/Decision-2.0-Kai-0.6B}"} {
 		if _, err := ParseYAMLBytes([]byte(decisionModelYAML("      decision_model: "+selector+"\n", ""))); err == nil {
@@ -126,6 +131,7 @@ func TestDecisionModelReferenceIsExactObject(t *testing.T) {
 		}
 	}
 }
+
 func TestDecisionModelCanonicalExport(t *testing.T) {
 	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-4B", "      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback\n"))
 	document := CanonicalConfigFromRouterConfig(cfg)

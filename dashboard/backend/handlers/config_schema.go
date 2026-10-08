@@ -30,7 +30,7 @@ func ConfigSchemaHandler(routerAPIURL string, credentialProvider routerauth.Cred
 			return
 		}
 
-		if strings.TrimSpace(routerAPIURL) != "" && !instanceEngineActive(r.Context()) {
+		if strings.TrimSpace(routerAPIURL) != "" {
 			served, _ := serveRuntimeConfigSchema(
 				w,
 				r,

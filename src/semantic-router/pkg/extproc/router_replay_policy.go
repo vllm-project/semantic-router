@@ -47,16 +47,6 @@ func applyReplayPrivacyEvidence(ctx *RequestContext, record *routerreplay.Routin
 	}
 }
 
-// omitReplayContent keeps a record's routing evidence, including which PII
-// types matched, and drops everything the request or response said.
-func omitReplayContent(record *routerreplay.RoutingRecord) {
-	record.RequestBody, record.RequestBodyTruncated = "", false
-	record.ResponseBody, record.ResponseBodyTruncated = "", false
-	record.Prompt, record.PromptTruncated = "", false
-	record.ToolDefinitions, record.ToolDefinitionsTruncated = "", false
-	record.ToolTrace = nil
-}
-
 func (r *OpenAIRouter) effectiveReplayConfigForRequest(_ *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
 	return r.Config.EffectiveRouterReplayConfig(decision)
 }

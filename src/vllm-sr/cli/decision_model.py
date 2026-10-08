@@ -96,6 +96,12 @@ def gpu_requirement_error(
     Attached runtimes own their hardware. Automatic device selection and model
     package requirements remain the runtime's responsibility.
     """
+    if deployment.get("replicas"):
+        for index, replica in enumerate(deployment["replicas"]):
+            error = gpu_requirement_error(replica, platform, local_host=local_host)
+            if error:
+                return f"replicas[{index}]: {error}"
+        return None
     if deployment.get("endpoint"):
         return None
     device = (deployment.get("device") or "auto").split(":", 1)[0]

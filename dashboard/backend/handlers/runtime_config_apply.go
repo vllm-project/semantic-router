@@ -55,9 +55,6 @@ func (e *runtimeConfigApplyError) Unwrap() error {
 var propagateConfig = propagateConfigToRuntime
 
 func applyWrittenConfig(configPath string, configDir string, previousData []byte, restoreOnFailure bool) (string, error) {
-	if instanceEngineActive(context.Background()) {
-		return "Configuration saved. Deploy Router mode to activate routing changes.", nil
-	}
 	err := propagateConfig(configPath, configDir)
 	if restart, ok := asRestartNeeded(err); ok {
 		return recordRestart(configPath, restart.detail)
@@ -72,11 +69,6 @@ func applyWrittenConfig(configPath string, configDir string, previousData []byte
 		return "", &runtimeConfigApplyError{applyErr: err}
 	}
 
-	if os.Getenv(instanceSocketEnv) != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		_, _, _ = instanceRequest(ctx, http.MethodPost, "/configuration-applied", []byte(`{}`))
-		cancel()
-	}
 	return "", nil
 }
 

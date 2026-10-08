@@ -25,9 +25,9 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B"},
 		{Provider: ModelRuntimeProvider, Artifact: "/models/kai", Device: "rocm:1", Profile: "shared_context"},
 		{Provider: ModelRuntimeProvider, Endpoint: "unix:///run/vllm-sr/kai.sock"},
-		{Provider: ModelRuntimeProvider, Endpoint: "http://decision-runtime:8100", Device: "cuda"},
+		{Provider: ModelRuntimeProvider, Endpoint: "http://decision-runtime:8100"},
 		{Provider: ModelRuntimeProvider, Endpoint: "http://shared-runtime:8100", ServedName: "vela-domain"},
-		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "xpu:0", Process: "encoders", Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"}},
+		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "xpu:0", Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"}},
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "mps", Input: ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}},
 	}
 	for _, deployment := range valid {
@@ -46,11 +46,9 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		"relative socket":       {Provider: ModelRuntimeProvider, Endpoint: "unix://run/x.sock"},
 		"negative budget":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{MaxTokens: -1}},
 		"bad overflow":          {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{Overflow: "drop"}},
-		"attached process":      {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Process: "encoders"},
+		"attached device":       {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cuda"},
 		"managed served name":   {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", ServedName: "x"},
-		"bad process":           {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Process: "../escape"},
 		"profile elsewhere":     {Provider: "http", ExternalModel: "x", Profile: "exact"},
-		"process elsewhere":     {Provider: "http", ExternalModel: "x", Process: "encoders"},
 		"served name elsewhere": {Provider: "http", ExternalModel: "x", ServedName: "x"},
 	}
 	for name, deployment := range invalid {

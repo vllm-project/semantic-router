@@ -11,9 +11,7 @@ from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.gateway_mode import GATEWAY_EXTPROC
 from cli.instance_setup import (
     attach_controller,
-    resume_engine,
     stop_managed_controller,
-    stop_managed_engine,
 )
 from cli.runtime_lifecycle import validate_startup_timeout
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
@@ -50,10 +48,6 @@ class ContainerBackend:
             source_config_file = kwargs.get("source_config_file")
         if runtime_config_file is None:
             runtime_config_file = kwargs.get("runtime_config_file")
-        if resume_engine(
-            source_config_file or config_file, env_vars, runtime_config_lock
-        ):
-            return
         with self._lifecycle_lock():
             start_vllm_sr(
                 config_file,
@@ -71,7 +65,7 @@ class ContainerBackend:
                 startup_timeout=startup_timeout,
                 gateway=gateway,
             )
-        # This control plane outlives Router and Engine containers. It has only
+        # This control plane changes capabilities in the persistent frontend. It has only
         # a group-restricted Unix socket, never a public Docker control port.
         attach_controller(
             source_config_file or config_file,
@@ -84,7 +78,6 @@ class ContainerBackend:
     def teardown(self) -> None:
         with self._lifecycle_lock():
             stop_managed_controller()
-            stop_managed_engine()
             stop_vllm_sr()
 
     @staticmethod

@@ -14,12 +14,13 @@ or a runtime you run yourself.
 
 The runtime is the `vllm-srun` package and command. Every router image ships
 it, and it is not published to PyPI: `vllm-sr` stays the only PyPI package.
-Engine mode (`vllm-sr serve MODEL`) runs the runtime in a container from the
-router image, so the CLI and Docker or Podman are all it needs:
+Engine mode (`vllm-sr serve --mode engine --model ARTIFACT`) runs the persistent
+instance frontend and its managed model workers with routing disabled. The
+CLI and Docker or Podman are all it needs:
 
 ```bash
 pip install vllm-sr
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --device cpu
 ```
 
 `--platform amd` or `--platform nvidia` runs the `vllm-sr-rocm` or

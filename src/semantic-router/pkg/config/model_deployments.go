@@ -22,9 +22,9 @@ type ModelDeployment struct {
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
 	// not manage (unix:///path, http://host:port or https://host:port).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
-	// Process groups managed model_runtime deployments into one runtime
-	// process; without it the Router runs one process per device.
-	Process string `yaml:"process,omitempty" json:"process,omitempty"`
+	// Replicas places independent workers for this logical resource. Omission
+	// uses the single device/endpoint placement above.
+	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
 	// ServedName selects the model on an attached runtime that serves several
 	// (default: the deployment name).
 	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
@@ -99,8 +99,9 @@ func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModel
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
+	d.Replicas = append([]ModelReplica(nil), d.Replicas...)
 	if d.Provider == ModelRuntimeProvider {
-		if d.Device == "" {
+		if d.Device == "" && len(d.Replicas) == 0 && d.Endpoint == "" {
 			d.Device = "auto"
 		}
 		if d.Profile == "" {
@@ -154,8 +155,8 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
-	if d.Profile != "" || d.Endpoint != "" || d.Process != "" || d.ServedName != "" {
-		return fmt.Errorf("profile, endpoint, process and served_name apply only to model_runtime deployments")
+	if d.Profile != "" || d.Endpoint != "" || len(d.Replicas) != 0 || d.ServedName != "" {
+		return fmt.Errorf("profile, endpoint, replicas and served_name apply only to model_runtime deployments")
 	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")
@@ -341,7 +342,12 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 	}
 	cloned := make(map[string]T, len(values))
 	for key, value := range values {
-		cloned[key] = value
+		if deployment, ok := any(value).(ModelDeployment); ok {
+			deployment.Replicas = append([]ModelReplica(nil), deployment.Replicas...)
+			cloned[key] = any(deployment).(T)
+		} else {
+			cloned[key] = value
+		}
 	}
 	return cloned
 }

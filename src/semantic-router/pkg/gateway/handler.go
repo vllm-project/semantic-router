@@ -27,8 +27,10 @@ type Serving struct {
 	// SystemOne serves native decision inference under this generation's own
 	// listener grant. It does not enter the Chat routing pipeline.
 	SystemOne http.Handler
-	Engine    routing.Engine
-	Upstream  Upstream
+	// RoutingDisabled preserves native inference while declining Chat and Responses.
+	RoutingDisabled bool
+	Engine          routing.Engine
+	Upstream        Upstream
 	// APIKeys, when set, are the only client keys the listener accepts.
 	APIKeys []string
 	// Models, when set, are the only request models the listener accepts;
@@ -151,6 +153,10 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 	}
 	if !newAPIKeys(serving.APIKeys).authorize(r) {
 		writeUnauthorized(w)
+		return
+	}
+	if serving.RoutingDisabled {
+		writeError(w, http.StatusNotFound, "routing_disabled", "Chat routing is disabled for this instance.")
 		return
 	}
 	ctx = routing.WithListenerModels(ctx, serving.Models)

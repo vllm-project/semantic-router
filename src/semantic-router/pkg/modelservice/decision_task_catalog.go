@@ -153,9 +153,11 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 			} else if status.Model != "" {
 				model = status.Model
 			}
-			response.Bindings = append(response.Bindings, TaskCatalogBinding{TaskID: consumer.task, Consumer: consumer.name, Recipe: string(recipe.Name),
+			response.Bindings = append(response.Bindings, TaskCatalogBinding{
+				TaskID: consumer.task, Consumer: consumer.name, Recipe: string(recipe.Name),
 				Deployment: binding.Deployment, Model: model, Source: source, Ready: status.Ready, Editable: true,
-				Path: append(append([]string(nil), path...), consumer.name), Binding: binding})
+				Path: append(append([]string(nil), path...), consumer.name), Binding: binding,
+			})
 		}
 	}
 	return response

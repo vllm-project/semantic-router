@@ -89,12 +89,12 @@ def test_device_admission_is_resource_based(monkeypatch):
     )
 
 
-def test_engine_mode_rejects_the_flag():
+def test_positional_engine_shortcut_is_removed():
     result = CliRunner().invoke(
         main, ["serve", "vllm-sr/Vela-2.0-0.3B", "--decision-model", "candidate"]
     )
     assert result.exit_code == 2
-    assert "--decision-model applies to the Router stack" in result.output
+    assert "unexpected extra argument" in result.output
 
 
 def test_serve_refuses_a_gpu_model_on_cpu_before_anything_changes(tmp_path):

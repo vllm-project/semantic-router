@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
@@ -10,22 +9,21 @@ import DecisionModelCatalog from './DecisionModelCatalog'
 import DecisionTaskBindings, { withDecisionTaskBinding } from './DecisionTaskBindings'
 import { useDecisionModelManagement } from './useDecisionModelManagement'
 import { useDecisionTasks } from './useDecisionTasks'
-import { useInstanceDeployment, type InstanceMode } from './useInstanceDeployment'
+import { useInstanceDeployment } from './useInstanceDeployment'
+import InstanceModePanel from './InstanceModePanel'
+import DecisionReplicaPanel from './DecisionReplicaPanel'
 import styles from './DecisionModelPage.module.css'
 
 export default function DecisionModelPage() {
   const { user } = useAuth()
   const { isReadonly, isLoading: accessLoading } = useReadonly()
   const instance = useInstanceDeployment()
-  const model = useDecisionModelManagement(instance.status?.observed_mode === 'engine')
+  const model = useDecisionModelManagement()
   const tasks = useDecisionTasks()
-  const [modeChoice, setModeChoice] = useState<InstanceMode | null>(null)
-  const [deployError, setDeployError] = useState<string | null>(null)
   const observedMode =
     instance.status?.observed_mode === 'unknown'
       ? model.status?.serving_mode
       : (instance.status?.observed_mode ?? model.status?.serving_mode)
-  const mode = modeChoice ?? (observedMode === 'engine' ? 'engine' : 'router')
   const writable = !isReadonly && !accessLoading && canWriteConfig(user)
   const savedLabel =
     DECISION_MODEL_OPTIONS.find((option) => option.name === model.savedModel)?.label ??
@@ -39,26 +37,11 @@ export default function DecisionModelPage() {
     observed?.repo?.split('/').slice(-1)[0] || instance.status?.model || observed?.served_name
   const operation = instance.status?.operation
   const phase = operation?.phase ?? model.status?.router_runtime?.phase ?? 'Not reported'
-  const deploy = async () => {
-    setDeployError(null)
-    try {
-      const next = await model.deploy()
-      if (next && instance.status?.can_switch)
-        await instance.deploy(mode, configuredDecisionDeployment(next))
-      else if (mode !== observedMode)
-        throw new Error(
-          instance.status?.unavailable_reason ||
-            'This instance is managed externally. Change its mode through its deployment owner.',
-        )
-    } catch (cause) {
-      setDeployError(cause instanceof Error ? cause.message : 'Deployment failed.')
-    }
-  }
   return (
     <ConfigPageManagerLayout
       eyebrow="Build / System One"
       title="Decision Models"
-      description="Choose the model and instance mode, understand supported tasks, and manage their bindings."
+      description="Manage decision models, runtime capacity and task bindings. Enable routing when you need it."
     >
       <div className={styles.page}>
         <div className={styles.toolbar}>
@@ -164,15 +147,13 @@ export default function DecisionModelPage() {
             </p>
           </details>
         </section>
+        <InstanceModePanel instance={instance} writable={writable && !model.deploying} />
         <section className={styles.panel} aria-labelledby="decision-model-choose-title">
           <DecisionModelCatalog
             model={model}
-            writable={writable && !instance.error}
-            mode={mode}
-            onModeChange={setModeChoice}
-            canSwitch={Boolean(instance.status?.can_switch && !instance.error)}
+            writable={writable}
             busy={instance.busy}
-            onDeploy={() => void deploy()}
+            onDeploy={() => void model.deploy().catch(() => {})}
             tasks={tasks.data}
           />
           {model.applyResult && (
@@ -180,12 +161,13 @@ export default function DecisionModelPage() {
               {model.applyResult.message}
             </p>
           )}
-          {(deployError || model.applyError) && (
+          {model.applyError && (
             <p className={styles.notice} role="alert">
-              {deployError || model.applyError}
+              {model.applyError}
             </p>
           )}
         </section>
+        <DecisionReplicaPanel model={model} writable={writable && !instance.busy} />
         <DecisionTaskBindings
           data={tasks.data}
           error={tasks.error}

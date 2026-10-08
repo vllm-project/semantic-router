@@ -23,39 +23,31 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		{
 			name:                      "default excludes config models",
 			includeConfiguredModels:   false,
-			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM"},
-			expectedModelResultLength: 3,
+			expectedModels:            []string{"vllm-sr/auto"},
+			expectedModelResultLength: 1,
 		},
 		{
 			name:                      "router option includes config models",
 			includeConfiguredModels:   true,
-			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedModelResultLength: 5,
+			expectedModels:            []string{"vllm-sr/auto", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedModelResultLength: 3,
 		},
 		{
 			name:   "entrypoint model names are exposed",
 			config: openAIModelsEntrypointTestConfig(),
 			expectedModels: []string{
-				"vllm-sr/auto",
-				"auto",
-				"MoM",
 				"vllm-sr/privacy",
 				"vllm-sr/default-alias",
 			},
-			expectedModelResultLength: 5,
+			expectedModelResultLength: 2,
 		},
 		{
-			name:   "direct looper models are exposed when decisions are configured",
+			name:   "algorithms do not publish implicit model names",
 			config: openAIModelsLooperTestConfig(),
 			expectedModels: []string{
 				"vllm-sr/auto",
-				"auto",
-				"MoM",
-				"vllm-sr/remom",
-				"vllm-sr/fusion",
-				"vllm-sr/flow",
 			},
-			expectedModelResultLength: 6,
+			expectedModelResultLength: 1,
 		},
 	}
 

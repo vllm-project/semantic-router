@@ -6,8 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type configDocument struct {

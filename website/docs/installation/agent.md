@@ -78,7 +78,7 @@ Playground output when requested.
 | Apply a hot-reloadable change | `vllm-sr config apply`, which plans again before applying |
 | Test routing logic | `vllm-sr route preview` |
 | Test the complete data path | `vllm-sr route probe` |
-| Serve a Router model alone | `vllm-sr serve MODEL` (engine mode) |
+| Serve a Router model alone | `vllm-sr serve --mode engine --model ARTIFACT` |
 
 The management origin, port 8080 on a local stack, serves health, discovery,
 configuration, and OpenAPI. The inference listener, port 8899, separately

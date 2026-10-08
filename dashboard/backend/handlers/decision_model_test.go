@@ -79,28 +79,22 @@ func TestDecisionModelRouterForwardingPreservesNativeContract(t *testing.T) {
 func TestDecisionModelEngineUsesOnlyKnownModel(t *testing.T) {
 	var posted string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case decisionModelDiagnosticPath:
-			http.NotFound(w, r)
-		case "/health":
-			_, _ = io.WriteString(w, `{"api_version":"2.1.0","status":"ready"}`)
-		case "/openapi.yaml":
-			_, _ = io.WriteString(w, "openapi: 3.0.3\ninfo:\n  title: vLLM Semantic Router Model Runtime\n  version: 2.1.0\npaths:\n  /v1/models:\n    get: {}\n  /v1/systemone:\n    post: {}\n")
-		case "/v1/models":
-			_, _ = io.WriteString(w, `{"api_version":"2.1.0","object":"list","limits":{"max_bundle_tasks":64,"max_request_bytes":8388608},"data":[{"id":"selected","object":"model","family":"vela2","surfaces":["decisions"],"question_types":["choice","noul","score","set","span"],"ready":true}]}`)
-		case "/v1/systemone":
-			body, _ := io.ReadAll(r.Body)
-			posted = string(body)
-			_, _ = io.WriteString(w, decisionTestResponse)
-		default:
+		if r.URL.Path != decisionModelDiagnosticPath {
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}
+		if r.Method == http.MethodGet {
+			_, _ = io.WriteString(w, strings.Replace(decisionTestCapabilities, `{"deployments":`, `{"serving_mode":"engine","deployments":`, 1))
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		posted = string(body)
+		_, _ = io.WriteString(w, decisionTestResponse)
 	}))
 	defer upstream.Close()
 	handler := DecisionModelHandler(upstream.URL)
 	response := httptest.NewRecorder()
 	handler(response, httptest.NewRequest(http.MethodPost, "/api/decision-model/test", strings.NewReader(decisionTestBody)))
-	if response.Code != 200 || !strings.Contains(posted, `"model":"selected"`) || strings.Contains(posted, "unselected") || strings.Contains(posted, `"deployment"`) {
+	if response.Code != 200 || !strings.Contains(posted, `"deployment":"selected"`) || !strings.Contains(posted, `"request"`) {
 		t.Fatalf("status=%d posted=%s body=%s", response.Code, posted, response.Body.String())
 	}
 	response = httptest.NewRecorder()

@@ -56,7 +56,7 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 	lease := manager.Published()
 	waitReady(t, lease, "domain")
 	waitReady(t, lease, "guard")
-	if got := processes(t, lease); got["domain"] != "cpu-0" || got["guard"] != "cpu-1" {
+	if got := processes(t, lease); got["domain"] == got["guard"] || got["domain"] == "" {
 		t.Fatalf("each auto model gets a CPU process of its own: %v", got)
 	}
 	for _, name := range []string{"domain", "guard"} {
@@ -65,7 +65,7 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(data), `"device": "cpu"`) || group.plan.threads != 4 {
+		if !strings.Contains(string(data), `"device": "cpu"`) || group.plan.threads != 2 {
 			t.Fatalf("%s runs on the CPU with a thread share of 8 cores (threads %d): %s", name, group.plan.threads, data)
 		}
 	}
@@ -78,7 +78,7 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 	}
 }
 
-func TestManagerKeepsOneAutoProcessWhenTheDeviceQueryFails(t *testing.T) {
+func TestManagerKeepsIndependentAutoProcessesWhenTheDeviceQueryFails(t *testing.T) {
 	manager, queries := fakeAutoManager(t, "", 8)
 	lease, err := manager.Acquire(runtimeConfig(autoEncoders()))
 	if err != nil {
@@ -87,8 +87,8 @@ func TestManagerKeepsOneAutoProcessWhenTheDeviceQueryFails(t *testing.T) {
 	waitReady(t, lease, "domain")
 	waitReady(t, lease, "guard")
 	got := processes(t, lease)
-	if got["domain"] != autoDevice || got["guard"] != autoDevice || lease.members["domain"].group.plan.threads != 0 {
-		t.Fatalf("an unresolved auto keeps one process for every auto deployment: %v", got)
+	if got["domain"] == got["guard"] || got["domain"] == "" || lease.members["domain"].group.plan.threads != 0 {
+		t.Fatalf("an unresolved auto keeps independent processes: %v", got)
 	}
 	extra := map[string]config.ModelDeployment{"pii": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII"}}
 	if _, err := manager.AcquireDeployments(extra); err != nil {

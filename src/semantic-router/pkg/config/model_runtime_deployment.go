@@ -20,7 +20,6 @@ var (
 	modelRuntimeProfile  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 	modelRuntimeDevice   = regexp.MustCompile(`^[a-z][a-z0-9_]*(:[0-9]+)?$`)
 	modelRuntimeRevision = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	modelRuntimeProcess  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 	hubRepositoryID      = regexp.MustCompile(`^[A-Za-z0-9][\w.-]*/[\w.-]+$`)
 )
 
@@ -31,7 +30,15 @@ func (d ModelDeployment) IsModelRuntime() bool {
 
 // Managed reports whether the Router starts and supervises the runtime process.
 func (d ModelDeployment) Managed() bool {
-	return d.IsModelRuntime() && strings.TrimSpace(d.Endpoint) == ""
+	if !d.IsModelRuntime() {
+		return false
+	}
+	for _, placement := range d.Placements() {
+		if placement.Endpoint == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // ServedModel names the model a consumer of the deployment called name runs:
@@ -78,6 +85,10 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 				mark(name)
 			}
 		}
+	}
+	if !cfg.RoutingEnabled() {
+		mark("")
+		return used
 	}
 	scan := func(signals Signals, decisions []Decision) {
 		for _, rule := range signals.DecisionRules {
@@ -233,29 +244,17 @@ func (d ModelDeployment) validateModelRuntime() error {
 	default:
 		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
 	}
-	if !modelRuntimeDevice.MatchString(d.Device) {
-		return fmt.Errorf("device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1")
-	}
 	if !modelRuntimeProfile.MatchString(d.Profile) {
 		return fmt.Errorf("profile must be a profile name, such as exact or batching")
 	}
 	if d.Revision != "" && !modelRuntimeRevision.MatchString(d.Revision) {
 		return fmt.Errorf("revision must be a 40-hex commit")
 	}
-	if strings.TrimSpace(d.Endpoint) != "" {
-		if d.Process != "" {
-			return fmt.Errorf("process groups apply only to managed deployments; an attached endpoint is one process")
-		}
-		if d.ServedName != "" && (strings.TrimSpace(d.ServedName) != d.ServedName || strings.ContainsAny(d.ServedName, "\x00\n")) {
-			return fmt.Errorf("served_name must be a trimmed model name")
-		}
-		return validateModelRuntimeEndpoint(d.Endpoint)
+	if err := d.validateReplicas(); err != nil {
+		return err
 	}
-	if d.ServedName != "" {
-		return fmt.Errorf("served_name selects a model on an attached endpoint; a managed deployment is served under its own name")
-	}
-	if d.Process != "" && !modelRuntimeProcess.MatchString(d.Process) {
-		return fmt.Errorf("process must be a short name of letters, digits, '.', '_' or '-'")
+	if !d.Managed() && len(d.Replicas) == 0 {
+		return nil
 	}
 	artifact := strings.TrimSpace(d.Artifact)
 	if artifact == "" {

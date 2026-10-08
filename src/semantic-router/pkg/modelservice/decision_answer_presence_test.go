@@ -1,8 +1,9 @@
 package modelservice
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
 func TestDecisionMissingValueNeverDecodesAsZero(t *testing.T) {

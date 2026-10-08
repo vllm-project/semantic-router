@@ -840,8 +840,9 @@ export interface CanonicalModelDeployment {
   input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
   profile?: string
   endpoint?: string
-  process?: string
+  replicas?: Array<{ device?: string; endpoint?: string; served_name?: string }>
   served_name?: string
+  public_name?: string
 }
 
 export interface CanonicalModelCatalogConfig {

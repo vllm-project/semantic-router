@@ -37,13 +37,7 @@ const colors = {
     borderRadius: 10,
   },
 }
-export default function DecisionTaskMonitoring({
-  refreshedAt,
-  engine,
-}: {
-  refreshedAt: Date | null
-  engine: boolean
-}) {
+export default function DecisionTaskMonitoring({ refreshedAt }: { refreshedAt: Date | null }) {
   const { user } = useAuth()
   const catalog = useDecisionTasks()
   const [deploymentChoice, setDeployment] = useState('')
@@ -70,10 +64,9 @@ export default function DecisionTaskMonitoring({
   const taskId = task?.id ?? ''
   useEffect(() => {
     setSnapshot(empty)
-  }, [name, taskId, timeWindow, engine])
+  }, [name, taskId, timeWindow])
   useEffect(() => {
-    if (!name || !taskId || engine || !canReadMetrics || document.visibilityState === 'hidden')
-      return
+    if (!name || !taskId || !canReadMetrics || document.visibilityState === 'hidden') return
     const controller = new AbortController()
     setLoading(true)
     void withRequestTimeout(
@@ -91,7 +84,7 @@ export default function DecisionTaskMonitoring({
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [name, taskId, timeWindow, refreshedAt, engine, canReadMetrics])
+  }, [name, taskId, timeWindow, refreshedAt, canReadMetrics])
   const current = snapshot.points[snapshot.points.length - 1]
   const hasSamples = snapshot.points.some((point) => point.calls != null)
   return (
@@ -133,12 +126,7 @@ export default function DecisionTaskMonitoring({
         />
       </div>
       {catalog.error && <p className={styles.notice}>{catalog.error}</p>}
-      {engine ? (
-        <p className={styles.muted}>
-          Router task metrics are paused in Engine mode. Native SystemOne requests remain available
-          in Decision Playground.
-        </p>
-      ) : !canReadMetrics ? (
+      {!canReadMetrics ? (
         <p className={styles.muted}>Your role does not include monitoring access.</p>
       ) : (
         <>

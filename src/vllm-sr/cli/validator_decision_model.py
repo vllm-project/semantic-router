@@ -20,14 +20,26 @@ MODEL_RUNTIME_PROVIDER = "model_runtime"
 MODEL_RUNTIME_PROFILE = re.compile(r"^[a-z][a-z0-9_]*$")
 MODEL_RUNTIME_DEVICE = re.compile(r"^[a-z][a-z0-9_]*(:[0-9]+)?$")
 MODEL_RUNTIME_REVISION = re.compile(r"^[0-9a-f]{40}$")
-MODEL_RUNTIME_PROCESS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 HUB_REPOSITORY_ID = re.compile(r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
 INPUT_OVERFLOWS = ("reject", "truncate", "window")
 MIN_SELECTOR_CANDIDATES = 2
 MAX_SELECTOR_CANDIDATES = 255
+MAX_MODEL_REPLICAS = 64
+
+
+def public_model_name(deployment: dict) -> str:
+    artifact = deployment.get("artifact") or ""
+    return deployment.get("public_name") or (
+        artifact
+        if not artifact.startswith(("models/", "./", "../"))
+        and HUB_REPOSITORY_ID.fullmatch(artifact)
+        else ""
+    )
 
 
 def model_runtime_deployment_error(deployment: dict) -> str | None:
+    if "process" in deployment:
+        return "process is retired; use replicas for independent model workers"
     public_name = deployment.get("public_name") or ""
     if public_name and (
         public_name.strip() != public_name
@@ -43,34 +55,42 @@ def model_runtime_deployment_error(deployment: dict) -> str | None:
         return "input.max_tokens must not be negative"
     if (budget.get("overflow") or "reject") not in INPUT_OVERFLOWS:
         return "input.overflow must be reject, truncate or window"
-    if not MODEL_RUNTIME_DEVICE.match(deployment.get("device") or "auto"):
-        return "device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1"
     if not MODEL_RUNTIME_PROFILE.match(deployment.get("profile") or "exact"):
         return "profile must be a profile name, such as exact or batching"
     revision = deployment.get("revision") or ""
     if revision and not MODEL_RUNTIME_REVISION.match(revision):
         return "revision must be a 40-hex commit"
-    endpoint = (deployment.get("endpoint") or "").strip()
-    served_name = deployment.get("served_name") or ""
-    process = deployment.get("process") or ""
-    if endpoint:
-        if process:
-            return (
-                "process groups apply only to managed deployments; "
-                "an attached endpoint is one process"
-            )
-        if served_name and (
-            served_name.strip() != served_name or any(c in served_name for c in "\0\n")
-        ):
-            return "served_name must be a trimmed model name"
-        return _endpoint_error(endpoint)
-    if served_name:
-        return (
-            "served_name selects a model on an attached endpoint; "
-            "a managed deployment is served under its own name"
-        )
-    if process and not MODEL_RUNTIME_PROCESS.match(process):
-        return "process must be a short name of letters, digits, '.', '_' or '-'"
+    replicas = deployment.get("replicas")
+    if replicas is not None and not isinstance(replicas, list):
+        return "replicas must be a list"
+    if replicas:
+        if len(replicas) > MAX_MODEL_REPLICAS:
+            return f"replicas may contain at most {MAX_MODEL_REPLICAS} workers"
+        if any(deployment.get(key) for key in ("device", "endpoint", "served_name")):
+            return "replicas cannot be combined with top-level device, endpoint or served_name"
+        attached = set()
+        for index, replica in enumerate(replicas):
+            if not isinstance(replica, dict) or set(replica) - {
+                "device",
+                "endpoint",
+                "served_name",
+            }:
+                return f"replicas[{index}] may contain only device, endpoint and served_name"
+            message = _placement_error(replica)
+            if message:
+                return f"replicas[{index}]: {message}"
+            endpoint = replica.get("endpoint") or ""
+            if endpoint:
+                identity = (endpoint.rstrip("/"), replica.get("served_name") or "")
+                if identity in attached:
+                    return "duplicate attached replica endpoint and served_name"
+                attached.add(identity)
+    else:
+        message = _placement_error(deployment)
+        if message:
+            return message
+        if deployment.get("endpoint"):
+            return None
     artifact = (deployment.get("artifact") or "").strip()
     if not artifact:
         return (
@@ -82,6 +102,26 @@ def model_runtime_deployment_error(deployment: dict) -> str | None:
         return "artifact must be a Hub repository ID or an absolute package path"
     if absolute and revision:
         return "revision applies only to Hub repositories"
+    return None
+
+
+def _placement_error(placement: dict) -> str | None:
+    device = placement.get("device") or "auto"
+    if not isinstance(device, str) or not MODEL_RUNTIME_DEVICE.fullmatch(device):
+        return "device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1"
+    endpoint = placement.get("endpoint") or ""
+    served_name = placement.get("served_name") or ""
+    if endpoint:
+        if placement.get("device"):
+            return "attached endpoints cannot set device"
+        if served_name and (
+            served_name.strip() != served_name
+            or any(c in served_name for c in "\0\r\n")
+        ):
+            return "served_name must be a trimmed model name"
+        return _endpoint_error(endpoint)
+    if served_name:
+        return "served_name selects a model on an attached endpoint"
     return None
 
 
@@ -257,10 +297,7 @@ def validate_systemone_listener_models(
     """Check the separate native API scope without borrowing Chat permissions."""
     identities = {}
     for key, deployment in deployments.items():
-        public_name = deployment.get("public_name") or ""
-        artifact = deployment.get("artifact") or ""
-        if not public_name and HUB_REPOSITORY_ID.fullmatch(artifact):
-            public_name = artifact
+        public_name = public_model_name(deployment)
         if public_name:
             identities.setdefault(public_name, []).append((key, deployment))
     errors = []

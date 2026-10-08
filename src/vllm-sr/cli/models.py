@@ -2717,12 +2717,22 @@ class UserConfig(BaseModel):
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
+    @property
+    def routing_enabled(self) -> bool:
+        router = (self.global_ or {}).get("router") or {}
+        enabled = router.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("global.router.enabled must be a boolean")
+        return enabled
+
     @model_validator(mode="after")
     def validate_classifier_selectors(self):
         # Global serving defaults are available only at document scope. Do not
         # reject a valid inherited selector while parsing a child profile.
         from cli.model_runtime_defaults import iter_effective_routing_profiles
 
+        if not self.routing_enabled:
+            return self
         for _, profile in iter_effective_routing_profiles(self):
             _validate_unbound_classifier_selectors(profile)
         return self

@@ -1,8 +1,9 @@
 package modelservice
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {

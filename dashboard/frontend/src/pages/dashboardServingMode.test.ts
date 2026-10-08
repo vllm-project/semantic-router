@@ -5,11 +5,11 @@ describe('reported serving mode', () => {
   it('describes the identified Router and engine separately', () => {
     expect(describeServingMode('router')).toEqual({
       label: 'Router mode',
-      description: 'Routes requests through configured recipes.',
+      description: 'Serves System One and routes Chat through configured recipes.',
     })
     expect(describeServingMode('engine')).toEqual({
       label: 'Engine mode',
-      description: 'Serves model inference APIs directly.',
+      description: 'Serves System One with routing disabled.',
     })
   })
 

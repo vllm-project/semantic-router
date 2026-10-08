@@ -152,7 +152,6 @@ func TestReachableRoutingRecipesIncludesAutoDefaultAndEntrypointRecipes(t *testi
 
 func TestReachableRoutingRecipesAlwaysIncludesDefault(t *testing.T) {
 	cfg := &RouterConfig{
-
 		Recipes: []RoutingRecipe{{Name: DefaultRecipeName}},
 	}
 	if got := cfg.ReachableRoutingRecipes(); len(got) != 1 || got[0].Name != DefaultRecipeName {

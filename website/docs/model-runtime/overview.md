@@ -15,7 +15,8 @@ The runtime is not where your chat models run. The models that answer your
 users stay behind your providers (vLLM, Ollama, a hosted API); the runtime
 serves the small models the router consults about each request. It runs as
 `vllm-srun` processes inside the router container, or in a container of its
-own when you start it with `vllm-sr serve <model>` (engine mode).
+own with `vllm-sr serve --mode engine --model <artifact>`. The same frontend
+and model pool stay available when routing is enabled in Router mode.
 
 You usually do not have to do anything for this to work. When a feature needs
 a model, the router downloads it, checks every file, starts the runtime and
@@ -29,7 +30,7 @@ feature reports "unknown" and your routes fall back the way you configured.
 | --- | --- | --- |
 | Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you; `vllm-sr serve --platform amd` or `--platform nvidia` puts its models on the GPU. | [Run it with the router](./deploy.md) |
 | Share the models between routers, or run them on another machine | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
-| Call the models from your own code | Run `vllm-sr serve <model>` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
+| Call the models from your own code | Run `vllm-sr serve --mode engine --model ARTIFACT` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
 
 ## What it can serve
 

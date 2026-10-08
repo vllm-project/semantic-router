@@ -1,5 +1,5 @@
 {
-  "case": "flow-alias-no-route",
+  "case": "unpublished-flow-model",
   "phases": [
     {
       "phase": "request_headers",
@@ -34,7 +34,7 @@
         },
         {
           "name": "x-request-id",
-          "value": "parity-flow-alias-no-route"
+          "value": "parity-unpublished-flow-model"
         }
       ],
       "effect": {
@@ -83,7 +83,7 @@
               }
             ]
           },
-          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"no_route\",\"message\":\"no route matched the request\",\"param\":null}}"
+          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"message\":\"the requested model is not available\",\"param\":null}}"
         }
       }
     }
@@ -109,12 +109,10 @@
       },
       {
         "name": "content-length",
-        "value": "114"
+        "value": "129"
       }
     ],
-    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"no_route\",\"message\":\"no route matched the request\",\"param\":null}}"
+    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"message\":\"the requested model is not available\",\"param\":null}}"
   },
-  "evidence": {
-    "recipe": "default"
-  }
+  "evidence": {}
 }

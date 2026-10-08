@@ -54,7 +54,7 @@ recipes:
 entrypoints:
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
-  - model_names: ["vllm-sr/default-alias"]
+  - model_names: ["vllm-sr/auto", "vllm-sr/default-alias"]
     recipe: default
 providers:
   defaults:

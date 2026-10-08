@@ -205,7 +205,6 @@ describe('Decision runtime canonical mutations', () => {
             revision: 'a'.repeat(40),
             device: 'rocm:1',
             profile: 'batching',
-            process: 'shared',
             input: { max_tokens: 2048, overflow: 'window' },
           },
         },
@@ -226,7 +225,6 @@ describe('Decision runtime canonical mutations', () => {
       revision: 'a'.repeat(40),
       device: 'rocm:0',
       profile: 'batching',
-      process: 'shared',
       input: { max_tokens: 2048, overflow: 'window' },
     })
   })

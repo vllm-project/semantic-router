@@ -159,10 +159,10 @@ def test_serve_help_lists_the_option_groups():
     result = CliRunner().invoke(main, ["serve", "--help"])
     assert result.exit_code == 0
     for section in (
-        "Router options (docker and kubernetes targets):",
+        "Instance configuration (docker and kubernetes targets):",
         "Docker target:",
         "Kubernetes target:",
-        "Engine mode (vllm-sr serve MODEL):",
+        "Instance and model options:",
     ):
         assert section in result.output
     assert "--gateway [standalone|extproc]" in result.output

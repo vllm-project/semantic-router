@@ -5,16 +5,22 @@ package modelservice
 // the resulting question still compiles through CompileTask.
 func BuiltinTasks() []TaskDefinition {
 	choice := func(id, title, instructions string, full bool, options ...Choice) TaskDefinition {
-		return TaskDefinition{ID: id, Title: title, Description: instructions, Stage: "request", Input: "text", Output: "choice", FullInput: full,
-			Question: Question{ID: id, Type: "choice", Instructions: instructions, Choices: options, Truncate: !full}}
+		return TaskDefinition{
+			ID: id, Title: title, Description: instructions, Stage: "request", Input: "text", Output: "choice", FullInput: full,
+			Question: Question{ID: id, Type: "choice", Instructions: instructions, Choices: options, Truncate: !full},
+		}
 	}
 	noul := func(id, title, instructions, stage, input string) TaskDefinition {
-		return TaskDefinition{ID: id, Title: title, Description: instructions, Stage: stage, Input: input, Output: "noul", FullInput: true,
-			Question: Question{ID: id, Type: "noul", Instructions: instructions}}
+		return TaskDefinition{
+			ID: id, Title: title, Description: instructions, Stage: stage, Input: input, Output: "noul", FullInput: true,
+			Question: Question{ID: id, Type: "noul", Instructions: instructions},
+		}
 	}
 	labels := func(id, title, instructions, kind, stage, input string, options []Choice) TaskDefinition {
-		return TaskDefinition{ID: id, Title: title, Description: instructions, Stage: stage, Input: input, Output: kind, FullInput: true,
-			Question: Question{ID: id, Type: kind, Instructions: instructions, Labels: options}}
+		return TaskDefinition{
+			ID: id, Title: title, Description: instructions, Stage: stage, Input: input, Output: kind, FullInput: true,
+			Question: Question{ID: id, Type: kind, Instructions: instructions, Labels: options},
+		}
 	}
 	tasks := []TaskDefinition{
 		choice("domain", "Subject area", "Which subject area is this request about?", false,
@@ -48,8 +54,10 @@ func BuiltinTasks() []TaskDefinition {
 			Choice{"concise", "a short direct answer"}, Choice{"detailed", "a detailed explanation with examples"}),
 		choice("classifier", "Custom classification", "Which category best describes the request?", false,
 			Choice{"coding", "writing, reviewing or explaining code"}, Choice{"other", "another kind of request"}),
-		{ID: "complexity", Title: "Task difficulty", Description: "How difficult is this request to solve correctly?", Stage: "request", Input: "text", Output: "score",
-			Question: Question{ID: "complexity", Type: "score", Instructions: "How difficult is this request to solve correctly?", Levels: []string{"straightforward retrieval or formatting", "several steps of reasoning", "advanced reasoning or specialized expertise"}, Truncate: true}},
+		{
+			ID: "complexity", Title: "Task difficulty", Description: "How difficult is this request to solve correctly?", Stage: "request", Input: "text", Output: "score",
+			Question: Question{ID: "complexity", Type: "score", Instructions: "How difficult is this request to solve correctly?", Levels: []string{"straightforward retrieval or formatting", "several steps of reasoning", "advanced reasoning or specialized expertise"}, Truncate: true},
+		},
 		labels("safety_categories", "Harm categories", "Which harmful categories apply to this request?", "set", "request", "text", []Choice{{"violence", "assistance with violence"}, {"fraud", "fraud or deception"}, {"self_harm", "self-harm assistance"}}),
 		noul("pii_presence", "Personal data present", "Does any part of the input contain personal or sensitive identifying information?", "request", "text"),
 		labels("pii_categories", "Personal data categories", "Which personal-data categories occur in the input?", "set", "request", "text", PIICategoryLabels()),
@@ -99,11 +107,17 @@ func BuiltinTask(id string) (TaskDefinition, bool) {
 // A positive presence verdict also covers personal information outside them.
 func PIICategoryLabels() []Choice {
 	return []Choice{
-		{"PERSON", "a person's name"}, {"EMAIL_ADDRESS", "an email address"}, {"PHONE_NUMBER", "a telephone number"},
-		{"US_SSN", "a US social security number"}, {"CREDIT_CARD", "a credit or debit card number"},
-		{"LOCATION", "a private physical address or identifying location"}, {"IP_ADDRESS", "an IP address"},
-		{"DATE_TIME", "a date or time identifying a person"}, {"US_DRIVER_LICENSE", "a US driving license number"},
-		{"US_PASSPORT", "a US passport number"}, {"IBAN_CODE", "an international bank account number"},
+		{"PERSON", "a person's name"},
+		{"EMAIL_ADDRESS", "an email address"},
+		{"PHONE_NUMBER", "a telephone number"},
+		{"US_SSN", "a US social security number"},
+		{"CREDIT_CARD", "a credit or debit card number"},
+		{"LOCATION", "a private physical address or identifying location"},
+		{"IP_ADDRESS", "an IP address"},
+		{"DATE_TIME", "a date or time identifying a person"},
+		{"US_DRIVER_LICENSE", "a US driving license number"},
+		{"US_PASSPORT", "a US passport number"},
+		{"IBAN_CODE", "an international bank account number"},
 	}
 }
 

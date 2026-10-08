@@ -1,4 +1,3 @@
-import { engineModelInventory } from './decisionRuntimeInventory'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SystemStatus } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
@@ -28,7 +27,7 @@ async function fetchSnapshot<T>(path: string, signal: AbortSignal): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function useDecisionModelManagement(engine = false) {
+export function useDecisionModelManagement() {
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [global, setGlobal] = useState<CanonicalGlobalConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -111,11 +110,11 @@ export function useDecisionModelManagement(engine = false) {
       ...(readConfiguration ? [readSavedConfiguration()] : []),
       observe<SystemStatus>('/api/status', 'Service status', setStatus),
       observe<ModelRuntimeInventory>(
-        engine ? '/api/instance/models' : '/api/router/api/v1/inventory/model-runtime',
+        '/api/router/api/v1/inventory/model-runtime',
         'Runtime deployments',
-        (value) => setInventory(value && engine ? engineModelInventory(value) : value),
+        setInventory,
       ),
-      ...(engine ? [] : [readActivation()]),
+      readActivation(),
     ]).finally(() => {
       window.clearTimeout(timeout)
       mounted.signal.removeEventListener('abort', cancel)
@@ -124,7 +123,7 @@ export function useDecisionModelManagement(engine = false) {
     setUpdatedAt(new Date())
     setLoading(false)
     setRefreshing(false)
-  }, [engine])
+  }, [])
   const request = useMemo(() => createVisibilityAwareRequest(refreshSnapshot), [refreshSnapshot])
 
   useEffect(() => {

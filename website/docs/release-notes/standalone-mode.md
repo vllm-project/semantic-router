@@ -148,23 +148,20 @@ needs a root `vllm-sr serve`:
   once; `vllm-sr serve` prints the command. See
   [Security Hardening](../installation/security-hardening#recipe-store-permissions).
 
-## Engine mode runs in a container
+## Engine mode uses the same instance frontend
 
-`vllm-sr serve MODEL` runs the model runtime in the foreground, in a container
-from the router image of `--platform` (`vllm-sr`, `vllm-sr-rocm` or
-`vllm-sr-cuda`), so `pip install vllm-sr` and Docker or Podman are all it needs.
+`vllm-sr serve --mode engine --model ARTIFACT` runs the frontend, Dashboard and
+managed model pool using the selected platform image. It sets
+`global.router.enabled: false`; `--mode router` re-enables the saved routing
+configuration. Omitting `--mode` preserves the active setting.
 
-- `--host` and `--port` say where the host publishes the runtime (default
-  `127.0.0.1:8100`).
-- Local package directories are mounted read-only, and downloads persist in
-  `~/.cache/vllm-sr/models` (`VLLM_SR_ENGINE_CACHE_DIR` moves it).
-- `--device` takes what the image runs: `cpu`, `rocm[:N]` with `--platform amd`,
-  `cuda[:N]` with `--platform nvidia`, or a plugin's accelerator in an image
-  that has the plugin.
-- `--image`, `--image-pull-policy`, `--container-runtime` and `--log-level`
-  apply to engine mode too.
-- `--profile` names the kubernetes deployment profile only; engine mode's
-  numerics profile is `--runtime-profile`. `--uds` is gone.
+- Native System One and decision requests use explicit listener model grants
+  and the listener's API keys. Chat model permissions stay separate.
+- Configure listener addresses and ports, multiple logical deployments and
+  replicas in the canonical `--config` document.
+- `--device`, `--revision` and `--runtime-profile` configure `--model`.
+- Worker-level APIs such as classify, embeddings and rerank remain on
+  `vllm-srun`; they are not automatically public frontend endpoints.
 
 ## Looper calls its models from the Router
 

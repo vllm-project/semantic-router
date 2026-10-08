@@ -38,6 +38,9 @@ type Head struct {
 // encoder that reads them in one sequence does: a Choice question's first
 // option gets 0.7 less 0.05 for every other question asked with it.
 type Model struct {
+	Repo           string
+	Revision       string
+	ModelSHA256    string
 	ID             string
 	Heads          []Head
 	Embedding      *Embedder
@@ -287,7 +290,10 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
 	device, dtype, profile := model.Device, "float32", "exact"
 	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens, MaxInputs: &maxInputs}
-	card := api.ModelCard{Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
+	if model.ModelSHA256 != "" {
+		sha = model.ModelSHA256
+	}
+	card := api.ModelCard{Repo: &model.Repo, Revision: &model.Revision, Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
 	switch {
 	case model.Embedding != nil:
 		card.Surfaces, card.Embedding = []string{"embeddings"}, embeddingCard(model.Embedding)

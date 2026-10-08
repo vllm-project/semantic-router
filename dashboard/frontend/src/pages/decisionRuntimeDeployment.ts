@@ -146,7 +146,7 @@ export function withDecisionRuntimeDeployment(
           provider: 'model_runtime',
           artifact: request.entry.id,
           ...(existing ? {} : { revision: request.entry.revision }),
-          device: request.device,
+          ...(existing?.replicas?.length ? {} : { device: request.device }),
         },
       },
     },

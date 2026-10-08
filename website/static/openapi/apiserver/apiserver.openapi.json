@@ -15293,6 +15293,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
                           "family": {
                             "type": "string"
                           },
@@ -18972,6 +18975,197 @@
         "x-vllm-sr-visibility": "advanced"
       }
     },
+    "/api/v1/instance": {
+      "get": {
+        "summary": "Read the serving frontend capability mode and default native deployment",
+        "description": "Read the serving frontend capability mode and default native deployment",
+        "operationId": "get_api_v1_instance",
+        "tags": [
+          "diagnostics"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active frontend state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active_deployment": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "observed_mode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "observed_mode"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config",
+        "x-vllm-sr-plane": "diagnostic",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "advanced"
+      }
+    },
     "/api/v1/inventory/classifier": {
       "get": {
         "summary": "Get classifier information and status (secrets redacted without secret_view)",
@@ -19503,6 +19697,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "desired_replicas": {
+                            "type": "integer"
+                          },
                           "device": {
                             "type": "string"
                           },
@@ -19583,8 +19780,56 @@
                           "ready": {
                             "type": "boolean"
                           },
+                          "ready_replicas": {
+                            "type": "integer"
+                          },
                           "reason": {
                             "type": "string"
+                          },
+                          "replicas": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "device": {
+                                  "type": "string"
+                                },
+                                "estimated_work": {
+                                  "type": "integer"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "inflight": {
+                                  "type": "integer"
+                                },
+                                "managed": {
+                                  "type": "boolean"
+                                },
+                                "ready": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "restarts": {
+                                  "type": "integer"
+                                },
+                                "state": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "managed",
+                                "ready",
+                                "state",
+                                "inflight",
+                                "estimated_work",
+                                "restarts"
+                              ]
+                            }
                           },
                           "repo": {
                             "type": "string"
@@ -19629,6 +19874,8 @@
                           }
                         },
                         "required": [
+                          "desired_replicas",
+                          "ready_replicas",
                           "name",
                           "managed",
                           "process",
@@ -55885,11 +56132,15 @@
                     "service": {
                       "type": "string"
                     },
+                    "serving_mode": {
+                      "type": "string"
+                    },
                     "status": {
                       "type": "string"
                     }
                   },
                   "required": [
+                    "serving_mode",
                     "status",
                     "service"
                   ]

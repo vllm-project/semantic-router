@@ -74,14 +74,14 @@ def status(ctx):
 @click.option(
     "--deployment",
     default=None,
-    help="Configured model deployment (required for Engine).",
+    help="Configured model deployment; omit to preserve the selected model.",
 )
 @click.option(
     "--request-id", default=None, help="Reuse this ID to safely retry an operation."
 )
 @click.pass_context
 def deploy(ctx, mode, deployment, request_id):
-    """Submit a rollback-protected data-plane deployment."""
+    """Publish a rollback-protected frontend capability generation."""
     try:
         ensure_controller(ctx.obj["instance_directory"])
         state = controller_request(

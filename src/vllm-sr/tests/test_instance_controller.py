@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+import yaml
 from cli.commands.instance import instance
 from cli.instance_controller import ControllerHandler, ControllerServer
 from cli.instance_paths import (
@@ -83,7 +84,7 @@ def test_unix_controller_serves_status_and_bounded_native_requests(tmp_path):
             controller_request(directory, "/systemone", {"url": "http://untrusted"})
         with pytest.raises(ValueError, match="rejected"):
             controller_request(
-                directory, "/deploy", {"mode": "engine", "request_id": "x"}
+                directory, "/deploy", {"mode": "invalid", "request_id": "x"}
             )
     finally:
         server.shutdown()
@@ -167,146 +168,120 @@ def test_preparation_failure_leaves_previous_desire(tmp_path):
     assert state["operation"]["phase"] == "failed"
 
 
-def test_engine_uses_canonical_catalog_and_rejects_external_owner(tmp_path):
-    layout = resolve_runtime_stack()
-    manifest = {"layout": layout.__dict__, "runtime": "docker", "config": "config.yaml"}
-    backend = ContainerInstanceBackend(manifest, tmp_path)
-    backend.acquire = lambda: None
-    backend.release = lambda: None
-    backend.observe = lambda: {"observed_mode": "router"}
-    backend.inspect = lambda _name: None
-    resource = {"provider": "model_runtime", "artifact": "vllm-sr/example"}
-    config = SimpleNamespace(
-        global_={"model_catalog": {"deployments": {"primary": resource}}}
-    )
-    with patch("cli.instance_runtime.parse_user_config", return_value=config):
-        plan = backend.prepare("engine", "primary", "id")
-        assert plan["resource"] == resource
-        resource["endpoint"] = "http://external.invalid"
-        with pytest.raises(ValueError, match="externally owned"):
-            backend.prepare("engine", "primary", "id")
-
-
-def test_engine_command_preserves_gpu_scope_and_uses_private_port(
-    tmp_path, monkeypatch
-):
-    layout = resolve_runtime_stack()
-    manifest = {
-        "layout": layout.__dict__,
-        "runtime": "docker",
-        "router_image": "sha256:pinned",
-        "models_dir": str(tmp_path),
-        "env": {"VLLM_SR_PLATFORM": "amd"},
-    }
-    backend = ContainerInstanceBackend(manifest, tmp_path)
-    monkeypatch.setenv("VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES", "7")
-    plan = {
-        "deployment": "primary",
-        "resource": {
-            "artifact": "vllm-sr/example",
-            "public_name": "friendly-public-id",
-            "provider": "model_runtime",
-            "device": "rocm",
-        },
-        "engine_models": "engine-one.yaml",
-    }
-    with patch(
-        "cli.instance_runtime.subprocess.run",
-        return_value=SimpleNamespace(returncode=0),
-    ) as run:
-        backend.start_engine(plan)
-    command = run.call_args.args[0]
-    assert "127.0.0.1::8100" in command
-    assert "ROCR_VISIBLE_DEVICES=7" in command
-    assert "--detach" in command and "--rm" not in command
-    assert "sha256:pinned" in command and "vllm-srun" in command
-    assert "unless-stopped" in command
-    assert "vllm-sr.model=vllm-sr/example" in command
-    assert "vllm-sr.model=friendly-public-id" not in command
-    assert (tmp_path / "engine-one.yaml").stat().st_mode & 0o077 == 0
-
-
-def test_container_failure_restores_known_router_config_and_leaves_dashboard(tmp_path):
-    layout = resolve_runtime_stack()
-    active = tmp_path / "active.yaml"
-    active.write_text("pending-new-config")
-    known = tmp_path / "router-ready.yaml"
-    known.write_text("known-running-config")
-    manifest = {
-        "layout": layout.__dict__,
-        "runtime": "docker",
-        "config": str(active),
-        "state_root": str(tmp_path),
-        "env": {},
-    }
-    backend = ContainerInstanceBackend(manifest, tmp_path)
-    containers = {
-        "router-old": {
-            "Id": "router-old",
-            "Name": "/" + layout.router_container_name,
-            "State": {"Running": True},
-            "Config": {"Labels": {}},
-        },
-        "dashboard": {
-            "Id": "dashboard",
-            "Name": "/" + layout.dashboard_container_name,
-            "State": {"Running": True},
-            "Config": {"Labels": {}},
-        },
-    }
-
-    def inspect(name):
-        for item in containers.values():
-            if name in {item["Id"], item["Name"].lstrip("/")}:
-                return copy.deepcopy(item)
-        return None
-
-    def command(operation, *args, **_kwargs):
-        if operation == "stop":
-            containers[args[-1]]["State"]["Running"] = False
-        elif operation == "rename":
-            containers[args[0]]["Name"] = "/" + args[1]
-        elif operation == "start":
-            containers[args[0]]["State"]["Running"] = True
-        elif operation == "rm":
-            del containers[args[-1]]
-        return SimpleNamespace(returncode=0)
-
-    def failed_start(plan):
-        containers["engine-new"] = {
-            "Id": "engine-new",
-            "Name": "/" + backend.engine_name,
-            "State": {"Running": True},
-            "Config": {"Labels": {"vllm-sr.operation": plan["operation"]}},
-        }
-        raise RuntimeError("startup failed")
-
-    backend.inspect, backend.command = inspect, command
-    backend.acquire = lambda: None
-    backend.release = lambda: None
-    backend.wait_ready = lambda _mode: None
-    backend.start_engine = failed_start
-    config = SimpleNamespace(
-        global_={
+def frontend_backend(tmp_path):
+    document = {
+        "version": "v0.3",
+        "routing": {"decisions": [{"name": "kept-router-policy"}]},
+        "global": {
+            "router": {"enabled": True},
             "model_catalog": {
+                "system": {"decision_model": {"deployment": "primary"}},
                 "deployments": {
-                    "primary": {
-                        "provider": "model_runtime",
-                        "artifact": "vllm-sr/example",
-                    }
-                }
-            }
-        }
+                    "primary": {"provider": "model_runtime", "artifact": "example/vela"}
+                },
+            },
+        },
+    }
+    backend = ContainerInstanceBackend(
+        {"layout": vars(resolve_runtime_stack()), "runtime": "docker"}, tmp_path
     )
-    with patch("cli.instance_runtime.parse_user_config", return_value=config):
-        state = request(InstanceController(tmp_path, backend))
-    assert state["operation"]["rolled_back"]
-    assert containers["router-old"]["State"]["Running"]
-    assert containers["dashboard"]["State"]["Running"]
-    assert containers["dashboard"]["Name"] == "/" + layout.dashboard_container_name
-    assert "engine-new" not in containers
-    assert active.read_text() == "known-running-config"
-    assert next(tmp_path.glob("failed-*.yaml")).read_text() == "pending-new-config"
+    backend.acquire = lambda: None
+    backend.release = lambda: None
+    state = {"document": document, "mode": "router", "failed": False, "calls": []}
+
+    def api(path, payload=None, **kwargs):
+        state["calls"].append((path, payload, kwargs))
+        if path == "/api/v1/config":
+            if payload is None:
+                kwargs["response_headers"]["ETag"] = '"current"'
+                return 200, json.dumps(state["document"]).encode()
+            state["document"] = yaml.safe_load(payload["yaml"])
+            if state["failed"]:
+                state["failed"] = False
+                return 200, b'{"activation_status":"failed"}'
+            state["mode"] = (
+                "router"
+                if state["document"]["global"]["router"]["enabled"]
+                else "engine"
+            )
+            return 200, b'{"activation_status":"active"}'
+        if path == "/api/v1/instance":
+            return (
+                200,
+                json.dumps(
+                    {
+                        "observed_mode": state["mode"],
+                        "active_deployment": "primary",
+                        "model": "example/vela",
+                    }
+                ).encode(),
+            )
+        if path == "/api/v1/config/hash":
+            return 200, b'{"activation_status":"active"}'
+        if path == "/api/v1/diagnostics/models/systemone":
+            return (
+                200,
+                b'{"deployments":[{"id":"primary","artifact":"example/vela","ready":true,"surfaces":["decisions"]}]}',
+            )
+        raise AssertionError(path)
+
+    backend.api = api
+    return backend, state
+
+
+def test_mode_only_publication_preserves_models_routing_and_container_lifetime(
+    tmp_path,
+):
+    backend, state = frontend_backend(tmp_path)
+    before = copy.deepcopy(state["document"])
+    with patch("subprocess.run") as containers:
+        controller = InstanceController(tmp_path, backend)
+        result = request(controller, deployment=None)
+        assert result["operation"]["phase"] == "ready"
+        assert result["active_deployment"] == "primary"
+        assert result["observed_mode"] == "engine"
+        assert state["document"]["routing"] == before["routing"]
+        assert (
+            state["document"]["global"]["model_catalog"]
+            == before["global"]["model_catalog"]
+        )
+        request(controller, request_id="back", mode="router", deployment=None)
+        assert state["document"] == before
+        containers.assert_not_called()
+    assert all(path.startswith("/api/v1/") for path, _, _ in state["calls"])
+
+
+def test_failed_generation_restores_previous_config_without_container_cutover(tmp_path):
+    backend, state = frontend_backend(tmp_path)
+    before = copy.deepcopy(state["document"])
+    state["failed"] = True
+    with patch("subprocess.run") as containers:
+        result = request(InstanceController(tmp_path, backend))
+        containers.assert_not_called()
+    assert result["operation"]["rolled_back"] is True
+    assert result["observed_mode"] == "router"
+    assert state["document"] == before
+    for name in ["candidate", "previous"]:
+        assert next(tmp_path.glob(name + "-*.json")).stat().st_mode & 0o077 == 0
+
+
+def test_recovery_does_not_overwrite_a_concurrent_configuration_editor(tmp_path):
+    backend, state = frontend_backend(tmp_path)
+    plan = backend.prepare("engine", None, "recovery")
+    state["document"]["global"]["router"]["some_new_setting"] = "another writer"
+    with pytest.raises(RuntimeError, match="Configuration changed"):
+        backend.rollback(plan)
+    assert state["document"]["global"]["router"]["some_new_setting"] == "another writer"
+
+
+def test_engine_selects_external_deployment_without_owning_its_process(tmp_path):
+    backend, state = frontend_backend(tmp_path)
+    resource = state["document"]["global"]["model_catalog"]["deployments"]["primary"]
+    resource["endpoint"] = "http://owned-by-operator.invalid"
+    plan = backend.prepare("engine", "primary", "external")
+    assert plan["resource"] == resource
+    with pytest.raises(ValueError, match="configured"):
+        backend.prepare("engine", "missing", "unknown")
 
 
 def test_old_request_id_does_not_restart_after_later_operation(tmp_path):
@@ -319,33 +294,17 @@ def test_old_request_id_does_not_restart_after_later_operation(tmp_path):
     assert controller.status()["desired_mode"] == "router"
 
 
-def test_engine_public_request_never_substitutes_active_model(tmp_path):
-    backend = ContainerInstanceBackend(
-        {"layout": vars(resolve_runtime_stack()), "runtime": "docker"}, tmp_path
-    )
-    backend.observe = lambda: {
-        "observed_mode": "engine",
-        "active_deployment": "kai",
-        "model": "example/kai",
+def test_public_request_preserves_exact_deployment_and_artifact_guard(tmp_path):
+    backend, state = frontend_backend(tmp_path)
+    payload = {
+        "deployment": "vela",
+        "expected_artifact": "example/vela",
+        "request": {"questions": []},
     }
-    backend.endpoint = lambda _mode: ("http://127.0.0.1:1234", {})
-    with patch("cli.instance_runtime.bounded_request") as invoke:
-        assert (
-            backend.native("/systemone", {"deployment": "vela", "request": {}})[0]
-            == 503
-        )
-        assert (
-            backend.native(
-                "/systemone",
-                {
-                    "deployment": "kai",
-                    "expected_artifact": "example/vela",
-                    "request": {},
-                },
-            )[0]
-            == 409
-        )
-        invoke.assert_not_called()
+    backend.native("/systemone", payload)
+    path, forwarded, _ = state["calls"][-1]
+    assert path == "/api/v1/diagnostics/models/systemone"
+    assert forwarded == payload
 
 
 def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
@@ -417,3 +376,10 @@ def test_instance_attach_and_models_use_supported_controller_commands(tmp_path):
         result = CliRunner().invoke(instance, [*arguments, "models"])
         assert result.exit_code == 0, result.output
         assert invoke.call_args.args[1] == "/models"
+
+
+def test_initial_engine_controller_preserves_already_serving_mode(tmp_path):
+    backend = Backend()
+    backend.mode = "engine"
+    state = InstanceController(tmp_path, backend).status()
+    assert state["desired_mode"] == state["observed_mode"] == "engine"

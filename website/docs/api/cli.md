@@ -73,7 +73,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr instance`](#vllm-sr-instance) | Manage the Router/Engine mode of an existing local instance. |
 | [`vllm-sr instance attach`](#vllm-sr-instance-attach) | Attach control to an existing canonical local stack after an image rollout. |
 | [`vllm-sr instance controller`](#vllm-sr-instance-controller) | Run the persistent controller in a host service supervisor. |
-| [`vllm-sr instance deploy`](#vllm-sr-instance-deploy) | Submit a rollback-protected data-plane deployment. |
+| [`vllm-sr instance deploy`](#vllm-sr-instance-deploy) | Publish a rollback-protected frontend capability generation. |
 | [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
 | [`vllm-sr instance status`](#vllm-sr-instance-status) | Print desired/observed mode and durable operation state. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
@@ -1003,12 +1003,12 @@ Run the persistent controller in a host service supervisor.
 Usage: vllm-sr instance deploy [OPTIONS]
 ```
 
-Submit a rollback-protected data-plane deployment.
+Publish a rollback-protected frontend capability generation.
 
 | Parameter | Description |
 | --- | --- |
 | `--mode CHOICE` | [required] Choices: router, engine. |
-| `--deployment TEXT` | Configured model deployment (required for Engine). |
+| `--deployment TEXT` | Configured model deployment; omit to preserve the selected model. |
 | `--request-id TEXT` | Reuse this ID to safely retry an operation. |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -1402,7 +1402,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 ## `vllm-sr serve` {#vllm-sr-serve}
 
 ```text
-Usage: vllm-sr serve [OPTIONS] [MODEL]...
+Usage: vllm-sr serve [OPTIONS]
 ```
 
 Start vLLM Semantic Router.
@@ -1488,38 +1488,28 @@ VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 ```
 
 ```text
-ENGINE MODE:
+INSTANCE MODES:
 ```
 
 ```text
-vllm-sr serve MODEL [MODEL ...] [--revision SHA] [--device DEVICE]
-              [--platform PLATFORM] [--host HOST] [--port N]
-              [--runtime-profile PROFILE]
-vllm-sr serve --models models.yaml [--host HOST] [--port N]
+vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B
+vllm-sr serve --mode router
 ```
 
-Serves router models with the built-in model runtime instead of starting the
-Router: decision models (POST /v1/decisions), classifiers (/v1/classify),
-embedders (/v1/embeddings) and rerankers (/v1/rerank), with /v1/bundle,
-/v1/models, /health and /metrics. The runtime runs in the foreground in a
-container from the platform's router image (vllm-sr, vllm-sr-rocm with
---platform amd, vllm-sr-cuda with --platform nvidia), and the host publishes
-its port on --host and --port (default 127.0.0.1:8100). Ctrl-C stops it.
+Both modes run the same frontend, Dashboard, model management and native APIs.
+Engine mode disables recipe routing with global.router.enabled=false. Router
+mode enables it again without discarding saved routing configuration. Omitting
+--mode keeps the saved setting (routing is enabled by default).
 
-MODEL is a Hub repository, a built-in model name or a local package directory,
-which the container reads through a read-only mount; MODEL@REVISION pins a
-revision, and several MODELs share one process. --models lists models with
-their own name, revision, device and profile. --device takes what the image
-runs: cpu, rocm[:N] on amd, cuda[:N] on nvidia, or a plugin's accelerator in
-an image that has the plugin. --runtime-profile selects the numerics profile:
-exact (default, identical to the released package), shared_context, batching,
-max_speed, or one a plugin installs. Downloads persist in
-~/.cache/vllm-sr/models (VLLM_SR_ENGINE_CACHE_DIR moves it). Router mode starts
-managed runtimes itself for model_runtime deployments in the config.
+--model configures the selected logical deployment; --decision-model selects
+its deployment key. Multiple models and replicas belong in --config under
+global.model_catalog.deployments. Listener addresses, ports, API keys and
+System One model grants also belong in the canonical config.
 
 | Parameter | Description |
 | --- | --- |
-| `[MODEL]...` | Optional argument. Type: text. Accepts multiple values. |
+| `--mode CHOICE` | Enable or disable routing in the same instance; preserve saved configuration. Choices: router, engine. |
+| `--model ARTIFACT` | Configure the selected logical deployment with this model artifact. |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
 | `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:latest) |
@@ -1542,12 +1532,9 @@ managed runtimes itself for model_runtime deployments in the config.
 | `--chart-dir TEXT` | Path to Helm chart directory (kubernetes target only; default: ./deploy/helm/semantic-router, else the published chart for this version) |
 | `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
-| `--models TEXT` | Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile. |
-| `--revision TEXT` | Engine mode: 40-hex revision of a single MODEL. |
-| `--device TEXT` | Engine mode: auto (default), cpu, rocm[:N] with --platform amd, cuda[:N] with --platform nvidia, or a plugin's accelerator. |
-| `--host TEXT` | Engine mode: host address the runtime's port is published on (default 127.0.0.1). |
-| `--port INTEGER RANGE` | Engine mode: host port the runtime is published on (default 8100).  [1&lt;=x&lt;=65535] |
-| `--runtime-profile PROFILE` | Engine mode: the runtime's numerics profile (default exact; vllm-srun plugins lists the installed ones). |
+| `--revision TEXT` | Pinned 40-hex revision for --model. |
+| `--device TEXT` | Model placement: auto (default), cpu, rocm[:N] with --platform amd, cuda[:N] with --platform nvidia, or a plugin's accelerator. |
+| `--runtime-profile PROFILE` | Model runtime numerics profile (default exact; vllm-srun plugins lists the installed ones). |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}

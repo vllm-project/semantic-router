@@ -7,7 +7,7 @@ func taskBindingConfig() *RouterConfig {
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"vela-domain": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu"},
 		"vela-pii": {
-			Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "cpu", Process: "privacy",
+			Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "cpu",
 			Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"},
 		},
 		"vela-factcheck": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-FactCheck"},
@@ -27,7 +27,7 @@ func TestModelRuntimeServesTaskBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec, ok := plan.Lookup(DefaultRecipeName, "pii_classifier")
-	if !ok || !spec.Deployment.IsModelRuntime() || spec.Deployment.Input.Overflow != "window" || spec.Deployment.Process != "privacy" {
+	if !ok || !spec.Deployment.IsModelRuntime() || spec.Deployment.Input.Overflow != "window" {
 		t.Fatalf("pii binding = %+v", spec)
 	}
 	cfg := taskBindingConfig()

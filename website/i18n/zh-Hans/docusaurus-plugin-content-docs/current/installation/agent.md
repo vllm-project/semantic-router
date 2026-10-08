@@ -56,7 +56,7 @@ Agent 使用的契约与 CLI 和控制面板相同。需要控制面板验证时
 | 应用可热重载的变更 | `vllm-sr config apply`，执行前会重新规划 |
 | 测试路由逻辑 | `vllm-sr route preview` |
 | 测试完整数据路径 | `vllm-sr route probe` |
-| 单独运行一个 Router 模型 | `vllm-sr serve MODEL`（引擎模式） |
+| 单独运行一个 Router 模型 | `vllm-sr serve --mode engine --model ARTIFACT`（引擎模式） |
 
 管理源（本地栈的 8080 端口）提供健康检查、发现、配置和 OpenAPI。推理监听器（8899 端口）单独提供[受支持的推理协议](protocol-compatibility)。Agent 必须分别发现两者，而不能从其中一个推断另一个。
 

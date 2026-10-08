@@ -1903,6 +1903,8 @@ recipes:
 
 global:
   router:
+    # Engine mode keeps native serving and disables routing consumers.
+    enabled: true
     config_source: file
     strategy: priority
     list_backend_models: true
@@ -2489,7 +2491,7 @@ global:
         profile: exact
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
-      # engine started elsewhere with `vllm-sr serve <hf-model>`.
+      # worker started elsewhere with `vllm-srun serve <hf-model>`.
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
@@ -2514,6 +2516,17 @@ global:
         input:
           max_tokens: 4096
           overflow: reject
+      # Unbound example pool: only deployments used by a task or listener load.
+      decision-replicas:
+        provider: model_runtime
+        public_name: decision-replicas
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        profile: exact
+        replicas:
+          - device: cpu
+          - endpoint: http://decision-worker:8100
+            served_name: decision-kai
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro

@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"math"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestDecisionClassifierAndPreferenceUseSharedTaskWithoutFamilyGate(t *testin
 	rules := []config.PreferenceRule{{Name: "concise", Threshold: .7}, {Name: "detailed"}}
 	models.cfg.PreferenceRules = rules
 	owner := &Classifier{Config: models.cfg, models: models}
-	if err := owner.initializePreferenceClassifier(); err != nil || owner.preferenceClassifier == nil || owner.preferenceClassifier.judgment == nil {
+	if err = owner.initializePreferenceClassifier(); err != nil || owner.preferenceClassifier == nil || owner.preferenceClassifier.judgment == nil {
 		t.Fatalf("default preference failed to prepare judgment: %v", err)
 	}
 	judgment, err := prepareDecisionPreference(models, rules)
@@ -146,5 +147,44 @@ func TestDecisionComplexityPreservesThresholdScaleWithoutEmbedding(t *testing.T)
 		if result.Difficulty != "easy" || result.ConfidenceReported {
 			t.Fatal(result)
 		}
+	}
+}
+
+func TestDecisionSafetyPreservesPublishedBinaryQuestion(t *testing.T) {
+	models, services := preparedJudgmentModels(t)
+	classifier, err := prepareDecisionSafety(models, "safety.unsafe", []string{"safe", "unsafe"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = classifier.Classify(t.Context(), "input"); err != nil {
+		t.Fatal(err)
+	}
+	want := modelservice.Question{
+		ID: "safety.unsafe:p_harm", Type: "choice", Instructions: "Is this request harmful?",
+		Choices: []modelservice.Choice{
+			{Key: "safe", Description: "a benign request that does not violate any safety policy"},
+			{Key: "unsafe", Description: "a request that violates a safety policy or seeks harmful assistance"},
+		},
+	}
+	if len(services.requests) != 1 || !reflect.DeepEqual(services.requests[0].Questions, []modelservice.Question{want}) {
+		t.Fatalf("published safety question changed: %+v", services.requests)
+	}
+	if classifier.(*decisionLabelClassifier).judgment.plan.Definition.ID != "safety" {
+		t.Fatal("wire question identity must not replace the shared semantic task identity")
+	}
+}
+
+func TestDecisionSafetyRetainsCustomLabels(t *testing.T) {
+	models, services := preparedJudgmentModels(t)
+	classifier, err := prepareDecisionSafety(models, "safety.policy", []string{"allowed", "restricted"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = classifier.Classify(t.Context(), "input"); err != nil {
+		t.Fatal(err)
+	}
+	question := services.requests[0].Questions[0]
+	if question.ID != "safety.policy:safety" || !reflect.DeepEqual(question.Choices, []modelservice.Choice{{Key: "allowed", Description: "allowed"}, {Key: "restricted", Description: "restricted"}}) {
+		t.Fatalf("custom safety question changed: %+v", question)
 	}
 }

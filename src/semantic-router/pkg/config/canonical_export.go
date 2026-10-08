@@ -296,6 +296,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 	global := &CanonicalGlobal{
 		Router: CanonicalRouterGlobal{
+			Enabled:           cfg.RouterEnabled,
 			ConfigSource:      normalizedConfigSource(cfg.ConfigSource),
 			Strategy:          cfg.RoutingDefaults.Strategy,
 			ListBackendModels: cfg.ListBackendModels,

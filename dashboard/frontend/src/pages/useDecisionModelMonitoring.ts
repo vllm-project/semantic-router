@@ -1,4 +1,3 @@
-import { engineModelInventory } from './decisionRuntimeInventory'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SystemStatus } from '../utils/routerRuntime'
 import { responseErrorMessage } from './configPageRequestErrors'
@@ -7,7 +6,7 @@ import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 
 // Monitoring only reads operational state. Configuration and catalog loading
 // belong to their own pages and cannot delay the first runtime observation.
-export function useDecisionModelMonitoring(engine = false) {
+export function useDecisionModelMonitoring() {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [inventory, setInventory] = useState<ModelRuntimeInventory | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -49,9 +48,9 @@ export function useDecisionModelMonitoring(engine = false) {
     await Promise.all([
       observe<SystemStatus>('/api/status', 'Service status', setStatus),
       observe<ModelRuntimeInventory>(
-        engine ? '/api/instance/models' : '/api/router/api/v1/inventory/model-runtime',
+        '/api/router/api/v1/inventory/model-runtime',
         'Runtime deployments',
-        (value) => setInventory(value && engine ? engineModelInventory(value) : value),
+        setInventory,
       ).finally(() => {
         if (!mounted.signal.aborted) setLoading(false)
       }),
@@ -62,7 +61,7 @@ export function useDecisionModelMonitoring(engine = false) {
     if (mounted.signal.aborted) return
     setUpdatedAt(new Date())
     setRefreshing(false)
-  }, [engine])
+  }, [])
   const request = useMemo(() => createVisibilityAwareRequest(refreshSnapshot), [refreshSnapshot])
 
   useEffect(() => {

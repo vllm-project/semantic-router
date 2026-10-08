@@ -266,6 +266,7 @@ func (c *Classifier) applyUserFeedbackSignalResult(results *SignalResults, mu *s
 func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
 	c.evaluateReaskSignalContext(context.Background(), results, mu, currentUserText, priorUserMessages)
 }
+
 func (c *Classifier) evaluateReaskSignalContext(ctx context.Context, results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
 	names := c.applicableReaskRuleNames(currentUserText, priorUserMessages)
 	if len(names) == 0 {

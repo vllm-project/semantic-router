@@ -60,10 +60,14 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 		return nil, fmt.Errorf("unknown judgment task %s", taskID)
 	}
 	q := definition.Question
+	questionID := consumer + ":" + taskID
 	if question != nil {
 		q = *question
+		if q.ID != "" {
+			questionID = q.ID
+		}
 	}
-	q.ID = consumer + ":" + taskID
+	q.ID = questionID
 	plan, err := modelservice.CompileTask(definition, q, card)
 	if err != nil {
 		return nil, err

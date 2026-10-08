@@ -27,17 +27,18 @@ const (
 )
 
 // Manager owns the runtime processes of every router generation. Each
-// generation holds a Lease; processes are shared by composition and stop
-// when the last lease that uses them closes.
+// generation holds a Lease; unchanged logical workers keep their identities
+// across modes and generations, and stop after their last reference drains.
 type Manager struct {
-	mu         sync.Mutex
-	groups     map[string]*group
-	published  *Lease
-	runtimeDir string
-	command    []string
-	cacheDir   string
-	cores      int
-	closed     bool
+	mu              sync.Mutex
+	groups          map[string]*group
+	attachedClients map[string]*Client
+	published       *Lease
+	runtimeDir      string
+	command         []string
+	cacheDir        string
+	cores           int
+	closed          bool
 
 	autoOnce sync.Once
 	auto     string
@@ -81,7 +82,8 @@ func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployme
 		if g == nil {
 			started, err := m.startGroupLocked(plan)
 			if err != nil {
-				m.releaseLocked(lease.groups)
+				stopped := m.releaseLocked(lease.groups)
+				go stopGroups(stopped)
 				return nil, fmt.Errorf("model runtime process %s: %w", plan.name, err)
 			}
 			g = started
@@ -93,59 +95,54 @@ func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployme
 			lease.members[deployment] = member{group: g, served: g.models[model]}
 		}
 	}
+	lease.assemblePools(deployments)
 	return lease, nil
 }
 
 // extend adds one deployment to a lease in a process of its own.
 func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
-	single := map[string]config.ModelDeployment{name: deployment}
-	if err := refuseGPUOnlyOnCPU(single, m.resolveAuto(single)); err != nil {
+	added, err := m.AcquireDeployments(map[string]config.ModelDeployment{name: deployment})
+	if err != nil {
 		return err
 	}
-	plan := planProcesses(single, m.command, m.cacheDir, m.cores, m.resolveAuto(single))[0]
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return fmt.Errorf("model runtime manager is shut down")
-	}
 	lease.mu.Lock()
-	defer lease.mu.Unlock()
 	if _, ok := lease.members[name]; ok {
-		return nil
+		lease.mu.Unlock()
+		return added.Close()
 	}
-	g := m.groups[plan.key]
-	if g == nil {
-		started, err := m.startGroupLocked(plan)
-		if err != nil {
-			return fmt.Errorf("model runtime process %s: %w", plan.name, err)
-		}
-		g = started
-		m.groups[plan.key] = g
+	if lease.closed {
+		lease.mu.Unlock()
+		_ = added.Close()
+		return ErrUnavailable
 	}
-	g.refs++
-	lease.groups = append(lease.groups, g)
-	lease.members[name] = member{group: g, served: g.models[plan.members[name]]}
-	logging.ComponentWarnEvent("model_runtime", "deployment_outside_generation_plan", map[string]interface{}{
-		"deployment": name, "process": plan.name,
-	})
+	lease.groups = append(lease.groups, added.groups...)
+	lease.members[name] = added.members[name]
+	added.groups = nil
+	lease.mu.Unlock()
+	logging.ComponentWarnEvent("model_runtime", "deployment_outside_generation_plan", map[string]interface{}{"deployment": name})
 	return nil
 }
 
 // resolveAuto returns the device that managed deployments on auto are planned
 // on: the runtime's answer, asked the first time one is planned and kept for
 // the manager's lifetime, so plans stay stable. It is empty when the runtime
-// could not answer; those deployments then share one process.
+// could not answer; each worker then resolves auto during its own startup.
 func (m *Manager) resolveAuto(deployments map[string]config.ModelDeployment) string {
 	for _, deployment := range deployments {
-		deployment = deployment.WithDefaults()
-		if !deployment.Managed() || deployment.Device != autoDevice {
+		needsAuto := false
+		for _, placement := range deployment.Placements() {
+			if placement.Endpoint == "" && placement.Device == autoDevice {
+				needsAuto = true
+			}
+		}
+		if !deployment.IsModelRuntime() || !needsAuto {
 			continue
 		}
 		m.autoOnce.Do(func() {
 			device, err := queryAutoDevice(m.command)
 			if err != nil {
 				logging.ComponentWarnEvent("model_runtime", "auto_device_unresolved", map[string]interface{}{
-					"error": err.Error(), "fallback": "deployments on auto share one process",
+					"error": err.Error(), "fallback": "each auto worker resolves placement at startup",
 				})
 				return
 			}
@@ -159,9 +156,17 @@ func (m *Manager) resolveAuto(deployments map[string]config.ModelDeployment) str
 
 func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 	if plan.endpoint != "" {
-		client, err := NewClient(plan.endpoint)
-		if err != nil {
-			return nil, err
+		if m.attachedClients == nil {
+			m.attachedClients = make(map[string]*Client)
+		}
+		client := m.attachedClients[plan.endpoint]
+		if client == nil {
+			var err error
+			client, err = NewClient(plan.endpoint)
+			if err != nil {
+				return nil, err
+			}
+			m.attachedClients[plan.endpoint] = client
 		}
 		g := newGroup(plan, client, false)
 		g.start()
@@ -188,7 +193,7 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 	g := newGroup(plan, client, true)
 	g.modelsFile = modelsFile
 	g.supervisor = &supervisor{
-		process: plan.name, deployments: plan.deployments(), socket: socket, env: os.Environ(),
+		process: plan.name, deployments: []string{plan.logical}, socket: socket, env: os.Environ(),
 		command: managedCommand(m.command, socket, modelsFile, m.cacheDir, plan.threads), onExit: g.processExited,
 	}
 	g.start()

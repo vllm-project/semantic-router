@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -79,7 +80,12 @@ func TestSystemOneRetainsDeploymentAndPreservesNativeResponse(t *testing.T) {
 	}
 	close(finish)
 	result := <-done
-	if result.Status != 200 || string(result.Body) != native || result.ServerTiming == "" {
+	var expected, actual map[string]any
+	if json.Unmarshal([]byte(native), &expected) != nil || json.Unmarshal(result.Body, &actual) != nil {
+		t.Fatal("invalid native response")
+	}
+	expected["model"] = "test-systemone"
+	if result.Status != 200 || !reflect.DeepEqual(expected, actual) || result.ServerTiming == "" {
 		t.Fatalf("result=%+v", result)
 	}
 	manager.mu.Lock()

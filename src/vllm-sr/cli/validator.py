@@ -550,6 +550,10 @@ def validate_user_config(
         log.info("Validating user configuration...")
 
     errors = []
+    if not config.routing_enabled:
+        # Engine mode keeps dormant routing configuration without constructing
+        # its classifiers, algorithms or plugin dependencies.
+        return validate_model_runtime_references(config)
 
     errors.extend(validate_recipe_contracts(config))
 

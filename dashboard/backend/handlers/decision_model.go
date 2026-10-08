@@ -10,10 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
-	runtimeapi "github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
 const (
@@ -48,7 +45,7 @@ type decisionModelTransport struct {
 	client   *http.Client
 }
 
-// DecisionModelHandler only calls the configured Router/Engine. A request names
+// DecisionModelHandler only calls the configured frontend. A request names
 // a published deployment or served model ID, never a target URL or socket path.
 func DecisionModelHandler(upstream string, providers ...routerauth.CredentialProvider) http.HandlerFunc {
 	transport := decisionModelTransport{upstream: strings.TrimRight(upstream, "/"), client: &http.Client{Timeout: 35 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
@@ -122,36 +119,14 @@ func (t decisionModelTransport) serveHTTP(w http.ResponseWriter, r *http.Request
 		decisionModelError(w, 422, "unsupported_surface", "The selected model does not serve System One questions")
 		return
 	}
-	path := decisionModelDiagnosticPath
 	body, err := json.Marshal(request)
-	if capabilities.ServingMode == servingModeEngine {
-		path = "/v1/systemone"
-		var native map[string]json.RawMessage
-		if json.Unmarshal(request.Request, &native) != nil || native == nil {
-			decisionModelError(w, 400, "invalid_request", "The native request must be a JSON object")
-			return
-		}
-		native["model"], _ = json.Marshal(selected.Model)
-		body, err = json.Marshal(native)
-	}
 	if err != nil {
 		decisionModelError(w, 400, "invalid_request", "Unable to encode request")
 		return
 	}
 	executionCtx, executionCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer executionCancel()
-	var response *decisionModelResponse
-	var data []byte
-	if capabilities.ServingMode == servingModeEngine && instanceEngineActive(executionCtx) {
-		body, err = json.Marshal(request)
-		if err == nil {
-			var code int
-			code, data, err = instanceRequest(executionCtx, http.MethodPost, "/systemone", body)
-			response = &decisionModelResponse{StatusCode: code, Header: make(http.Header)}
-		}
-	} else {
-		response, data, err = t.request(executionCtx, http.MethodPost, path, body)
-	}
+	response, data, err := t.request(executionCtx, http.MethodPost, decisionModelDiagnosticPath, body)
 	if err != nil {
 		decisionModelTransportError(w, err)
 		return
@@ -202,13 +177,6 @@ func (t decisionModelTransport) request(ctx context.Context, method, path string
 
 func (t decisionModelTransport) capabilities(ctx context.Context) (decisionModelCapabilities, error) {
 	result := decisionModelCapabilities{ServingMode: servingModeRouter, TimeoutMS: 30000, Deployments: []decisionModelDeployment{}}
-	if instanceEngineActive(ctx) {
-		code, body, err := instanceRequest(ctx, http.MethodGet, "/models", nil)
-		if err != nil {
-			return result, err
-		}
-		return engineDecisionCapabilities(code, body)
-	}
 	response, body, err := t.request(ctx, http.MethodGet, decisionModelDiagnosticPath, nil)
 	if err != nil {
 		return result, err
@@ -222,99 +190,7 @@ func (t decisionModelTransport) capabilities(ctx context.Context) (decisionModel
 	if response.StatusCode != 404 {
 		return result, errors.New("runtime capability discovery failed")
 	}
-	// A missing Router route is not proof of Engine mode. Confirm the versioned
-	// Model Runtime identity before calling its native model and inference APIs.
-	if !t.isEngine(ctx) {
-		if ctx.Err() != nil {
-			return result, ctx.Err()
-		}
-		return result, errDecisionModelUnsupported
-	}
-	response, body, err = t.request(ctx, http.MethodGet, "/v1/models", nil)
-	if err != nil {
-		return result, err
-	}
-	return engineDecisionCapabilities(response.StatusCode, body)
-}
-
-func engineDecisionCapabilities(code int, body []byte) (decisionModelCapabilities, error) {
-	result := decisionModelCapabilities{ServingMode: servingModeEngine, TimeoutMS: 30000, Deployments: []decisionModelDeployment{}}
-	var models runtimeapi.ModelList
-	if code != 200 || json.Unmarshal(body, &models) != nil {
-		return result, errors.New("model inventory unavailable")
-	}
-	result.ServingMode = servingModeEngine
-	for _, card := range models.Data {
-		item := decisionModelDeployment{ID: card.Id, Model: card.Id, Ready: card.Ready, Family: card.Family, Surfaces: card.Surfaces, QuestionTypes: []string{}}
-		if card.Repo != nil {
-			item.Repo = *card.Repo
-		}
-		decisions := false
-		for _, surface := range card.Surfaces {
-			if surface == "decisions" {
-				decisions = true
-			}
-		}
-		if decisions {
-			item.QuestionTypes = []string{"choice", "score", "noul"}
-			if card.QuestionTypes != nil && len(*card.QuestionTypes) > 0 {
-				item.QuestionTypes = *card.QuestionTypes
-			}
-		} else {
-			item.UnavailableReason = "This model does not serve System One questions"
-		}
-		if !card.Ready {
-			item.UnavailableReason = "Model is not ready"
-		}
-		if card.Presets != nil {
-			item.Presets = *card.Presets
-		}
-		if card.Limits != nil {
-			if card.Limits.MaxInputTokens != nil {
-				item.MaxInputTokens = *card.Limits.MaxInputTokens
-			}
-			if card.Limits.MaxScanTokens != nil {
-				item.MaxScanTokens = *card.Limits.MaxScanTokens
-			}
-		}
-		result.Deployments = append(result.Deployments, item)
-	}
-	return result, nil
-}
-
-func (t decisionModelTransport) isEngine(ctx context.Context) bool {
-	response, body, err := t.request(ctx, http.MethodGet, "/health", nil)
-	if err != nil || response.StatusCode != 200 && response.StatusCode != 503 {
-		return false
-	}
-	var health struct {
-		APIVersion string `json:"api_version"`
-		Status     string `json:"status"`
-	}
-	if json.Unmarshal(body, &health) != nil || !engineAPIVersion.MatchString(health.APIVersion) {
-		return false
-	}
-	response, body, err = t.request(ctx, http.MethodGet, "/openapi.yaml", nil)
-	if err != nil || response.StatusCode != 200 {
-		return false
-	}
-	var contract struct {
-		OpenAPI string `yaml:"openapi"`
-		Info    struct {
-			Title   string `yaml:"title"`
-			Version string `yaml:"version"`
-		} `yaml:"info"`
-		Paths map[string]map[string]any `yaml:"paths"`
-	}
-	if yaml.Unmarshal(body, &contract) != nil || !strings.HasPrefix(contract.OpenAPI, "3.") || contract.Info.Title != "vLLM Semantic Router Model Runtime" || contract.Info.Version != health.APIVersion {
-		return false
-	}
-	for path, method := range map[string]string{"/v1/systemone": "post", "/v1/models": "get"} {
-		if _, ok := contract.Paths[path][method]; !ok {
-			return false
-		}
-	}
-	return true
+	return result, errDecisionModelUnsupported
 }
 
 var errDecisionModelUnsupported = errors.New("system one diagnostic API unavailable")
@@ -322,7 +198,7 @@ var errDecisionModelUnsupported = errors.New("system one diagnostic API unavaila
 func decisionModelTransportError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errDecisionModelUnsupported):
-		decisionModelError(w, 503, "unsupported_runtime", "Update the Router to enable System One testing, or connect a compatible Model Engine")
+		decisionModelError(w, 503, "unsupported_runtime", "The configured frontend does not expose System One testing")
 	case errors.Is(err, context.DeadlineExceeded):
 		decisionModelError(w, 504, "deadline_exceeded", "The System One request exceeded its deadline")
 	case errors.Is(err, context.Canceled):

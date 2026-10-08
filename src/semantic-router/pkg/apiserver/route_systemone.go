@@ -38,6 +38,7 @@ func (SystemOneDiagnosticRequest) JSONWire() any {
 }
 
 type SystemOneDeployment struct {
+	Artifact          string   `json:"artifact,omitempty"`
 	ID                string   `json:"id"`
 	Model             string   `json:"model"`
 	Ready             bool     `json:"ready"`
@@ -57,6 +58,7 @@ type SystemOneCapabilities struct {
 
 func apiSystemOneRoutes() []apiRoute {
 	return []apiRoute{
+		managedRoute(EndpointMetadata{Path: apiRootPath + "/instance", Method: http.MethodGet, Description: "Read the serving frontend capability mode and default native deployment"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleInstanceStatus, jsonResponse[InstanceStatus](http.StatusOK, "Active frontend state")),
 		managedRoute(EndpointMetadata{Path: apiDiagnosticsPath + "/models/tasks", Method: http.MethodGet, Description: "List shared judgment task templates, structural model capabilities and binding provenance"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleDecisionTasks, jsonResponse[modelservice.TaskCatalogResponse](200, "Task templates, capabilities and effective bindings")),
 		managedRoute(EndpointMetadata{Path: systemOneDiagnosticPath, Method: http.MethodGet, Description: "List published model deployments and their native System One question capabilities"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleSystemOneCapabilities, jsonResponse[SystemOneCapabilities](200, "Published deployment capabilities")),
 		managedRoute(EndpointMetadata{Path: systemOneDiagnosticPath, Method: http.MethodPost, Description: "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneDiagnostic, strictJSONBodyFor[SystemOneDiagnosticRequest](), jsonResponse[api.DecisionResponse](200, "Native System One response; per-question errors are preserved"), errorResponses(400, 404, 409, 413, 422, 429, 500, 502, 503, 504)),
@@ -67,7 +69,7 @@ func (s *ClassificationAPIServer) handleSystemOneCapabilities(w http.ResponseWri
 	response := SystemOneCapabilities{Deployments: []SystemOneDeployment{}}
 	if manager := modelservice.DefaultManager(); manager != nil {
 		for _, status := range manager.Statuses() {
-			item := SystemOneDeployment{ID: status.Name, Model: status.Model, Ready: status.Ready, QuestionTypes: []string{}, Surfaces: []string{}}
+			item := SystemOneDeployment{ID: status.Name, Model: status.Model, Artifact: status.Artifact, Ready: status.Ready, QuestionTypes: []string{}, Surfaces: []string{}}
 			if !status.Ready {
 				item.UnavailableReason = "Deployment is not ready"
 			}
@@ -147,4 +149,27 @@ func writeSystemOneError(w http.ResponseWriter, status int, code, message string
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code, "message": message}})
+}
+
+// InstanceStatus describes the active snapshot, never a pending saved document.
+type InstanceStatus struct {
+	ObservedMode     string `json:"observed_mode"`
+	ActiveDeployment string `json:"active_deployment,omitempty"`
+	Model            string `json:"model,omitempty"`
+}
+
+func (s *ClassificationAPIServer) handleInstanceStatus(w http.ResponseWriter, _ *http.Request) {
+	state := InstanceStatus{ObservedMode: "unknown"}
+	if snapshot := s.activeConfigSnapshot(); snapshot != nil {
+		cfg := snapshot.Config()
+		state.ObservedMode = "engine"
+		if cfg.RoutingEnabled() {
+			state.ObservedMode = "router"
+		}
+		name, deployment, ok, err := cfg.DecisionModelDeployment()
+		if err == nil && ok {
+			state.ActiveDeployment, state.Model = name, deployment.Artifact
+		}
+	}
+	s.writeJSONResponse(w, http.StatusOK, state)
 }

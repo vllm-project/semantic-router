@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -65,6 +66,13 @@ func prepareDecisionSafety(models *classifierModelRuntime, consumer string, labe
 		} else {
 			question.Choices = append(question.Choices, choice)
 		}
+	}
+	// Keep the published binary safety question byte-for-byte: its option
+	// descriptions are semantic input, not merely display labels.
+	if !multiLabel && slices.Equal(labels, []string{"safe", "unsafe"}) {
+		definition, _ := modelservice.BuiltinTask("safety")
+		question = definition.Question
+		question.ID = consumer + ":p_harm"
 	}
 	judgment, err := newDecisionJudgment(models, consumer, id, &question)
 	if err != nil || judgment == nil {

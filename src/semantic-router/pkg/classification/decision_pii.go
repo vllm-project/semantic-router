@@ -69,7 +69,7 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 	}
 	// Existing span models and explicit token contracts keep the precise path.
 	spec, explicit := models.plan.Lookup(models.recipe, "pii_classifier")
-	if judgment.card.Answers("span") && !(explicit && spec.Binding.Contract == config.DecisionTaskContract) {
+	if judgment.card.Answers("span") && (!explicit || spec.Binding.Contract != config.DecisionTaskContract) {
 		return nil, nil
 	}
 	if explicitSpanBinding(models, "pii_classifier") {

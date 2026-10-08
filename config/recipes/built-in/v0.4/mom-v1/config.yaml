@@ -2808,8 +2808,7 @@ recipes:
           default_max_tokens: 8192
 - name: vault
   description: Keep private traffic inside the assigned deployment boundary, with
-    client tools, memory, response caching, and Responses writes disabled. Replay
-    capture follows the shared service and decision settings.
+    tools and Router content storage disabled.
   routing:
     strategy: priority
     candidate_requirements:
@@ -3300,6 +3299,8 @@ recipes:
       - kind: retention
         retention:
           drop: true
+    data_policy:
+      replay: true
     model_bindings:
       classifier.content-risk:
         deployment: hazard

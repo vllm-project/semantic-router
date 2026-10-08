@@ -199,8 +199,8 @@ func (c *RouterConfig) RecipeForRoutingModel(modelName string) (*RoutingRecipe, 
 }
 
 // ReachableRoutingRecipes returns the profiles that a request-facing routing
-// model can select. The default profile is reachable through configured auto or
-// direct-looper aliases; named profiles are reachable only through entrypoints.
+// model can select through effective entrypoints. The built-in default mapping
+// applies when no explicit default mapping replaces it.
 // Startup resource discovery should use this view instead of treating every
 // declared recipe as request reachable.
 func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {

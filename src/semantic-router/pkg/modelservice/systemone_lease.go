@@ -21,16 +21,31 @@ func (l *Lease) SystemOne(ctx context.Context, deployment string, body json.RawM
 		m.mu.Unlock()
 		return SystemOneResult{}, ErrUnavailable
 	}
-	member, err := l.call(deployment)
+	selected, err := l.call(deployment)
 	if err != nil {
 		m.mu.Unlock()
 		return SystemOneResult{}, err
 	}
-	member.group.refs++
+	retained := retainMemberLocked(selected)
 	m.mu.Unlock()
-	defer m.release([]*group{member.group})
+	defer m.release(retained)
 	started := time.Now()
-	result, timing, err := member.group.client.systemOne(ctx, member.served.name, body)
-	l.observe(member, deployment, "decisions", started, timing, err)
+	result, timing, err := selected.client().systemOne(ctx, selected.served.name, body)
+	l.observe(selected, deployment, "decisions", started, timing, err)
 	return result, err
+}
+
+// Caller holds Manager.mu, pinning candidates while an exchange is assembled.
+func retainMemberLocked(selected member) []*group {
+	groups := []*group{selected.group}
+	if selected.pool != nil {
+		groups = nil
+		for _, worker := range selected.pool.workers {
+			groups = append(groups, worker.member.group)
+		}
+	}
+	for _, g := range groups {
+		g.refs++
+	}
+	return groups
 }

@@ -292,7 +292,7 @@ def test_decision_type_requires_its_configuration():
     [
         ({"artifact": "vllm-sr/Decision-2.0-Kai-0.6B"}, None),
         ({"endpoint": "unix:///run/vllm-sr/runtime.sock"}, None),
-        ({"endpoint": "http://runtime:8100", "device": "rocm:1"}, None),
+        ({"endpoint": "http://runtime:8100", "device": "rocm:1"}, "cannot set device"),
         ({"artifact": "/models/kai", "profile": "batching"}, None),
         ({"artifact": "./models/kai"}, "Hub repository ID or an absolute"),
         ({"artifact": "/models/kai", "revision": REVISION}, "only to Hub"),
@@ -304,12 +304,12 @@ def test_decision_type_requires_its_configuration():
         ({"artifact": "vllm-sr/x", "input": {"overflow": "truncate"}}, None),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "cut"}}, "input.overflow"),
         ({"artifact": "vllm-sr/x", "input": {"max_tokens": -1}}, "not be negative"),
-        ({"artifact": "vllm-sr/x", "process": "decisions"}, None),
-        ({"artifact": "vllm-sr/x", "process": "-bad name"}, "short name"),
+        ({"artifact": "vllm-sr/x", "process": "decisions"}, "retired"),
+        ({"artifact": "vllm-sr/x", "process": "-bad name"}, "retired"),
         ({"artifact": "vllm-sr/x", "served_name": "kai"}, "attached endpoint"),
         ({"endpoint": "http://runtime:8100", "served_name": "kai"}, None),
         ({"endpoint": "http://runtime:8100", "served_name": " kai"}, "trimmed"),
-        ({"endpoint": "http://runtime:8100", "process": "x"}, "managed"),
+        ({"endpoint": "http://runtime:8100", "process": "x"}, "retired"),
         ({"endpoint": "tcp://runtime:8100"}, "unix://, http:// or https://"),
         ({"endpoint": "unix://relative.sock"}, "absolute socket path"),
         ({}, "requires artifact"),
@@ -409,3 +409,61 @@ def test_decision_window_input_is_a_supported_scan_budget():
         "overflow": "window",
     }
     assert _errors(document) == []
+
+
+@pytest.mark.parametrize(
+    "replicas",
+    [
+        [],
+        [{"device": "cpu"}],
+        [{"device": "rocm:0"}, {"device": "rocm:0"}],
+        [
+            {"endpoint": "http://worker:8100", "served_name": "first"},
+            {"endpoint": "http://worker:8100", "served_name": "second"},
+        ],
+    ],
+)
+def test_replicas_share_one_logical_artifact(replicas):
+    assert (
+        model_runtime_deployment_error(
+            {"provider": "model_runtime", "artifact": "org/judge", "replicas": replicas}
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "updates,message",
+    [
+        ({"replicas": {}}, "must be a list"),
+        ({"replicas": [{}] * 65}, "at most 64"),
+        ({"replicas": [{}], "device": "cpu"}, "top-level"),
+        ({"replicas": [{"artifact": "other/model"}]}, "only device"),
+        ({"replicas": [{"endpoint": "http://worker:8100"}] * 2}, "duplicate attached"),
+        (
+            {
+                "replicas": [
+                    {"endpoint": "http://worker:8100"},
+                    {"endpoint": "http://worker:8100/"},
+                ]
+            },
+            "duplicate attached",
+        ),
+        (
+            {
+                "replicas": [
+                    {"endpoint": "http://worker:8100", "served_name": "bad\rname"}
+                ]
+            },
+            "trimmed model name",
+        ),
+        (
+            {"replicas": [{"endpoint": "http://worker:8100", "device": "cpu"}]},
+            "cannot set device",
+        ),
+    ],
+)
+def test_invalid_replica_placements_fail(updates, message):
+    assert message in model_runtime_deployment_error(
+        {"provider": "model_runtime", "artifact": "org/judge", **updates}
+    )

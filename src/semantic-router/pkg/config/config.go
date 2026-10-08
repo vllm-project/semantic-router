@@ -253,12 +253,19 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
+	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
 	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
 	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
 	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
 	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+}
+
+// RoutingEnabled controls the recipe pipeline independently of the frontend
+// and its model deployments. Omission preserves the default Router mode.
+func (c *RouterConfig) RoutingEnabled() bool {
+	return c != nil && (c.RouterEnabled == nil || *c.RouterEnabled)
 }
 
 // SkipProcessingConfig gates the x-vsr-skip-processing request header.

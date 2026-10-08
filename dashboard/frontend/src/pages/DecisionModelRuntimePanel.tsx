@@ -12,18 +12,17 @@ import DecisionModelMonitoringCharts, {
 } from './DecisionModelMonitoringCharts'
 import { useDecisionModelMetrics } from './useDecisionModelMetrics'
 import styles from './DecisionModelPage.module.css'
+import DecisionReplicaStatus from './DecisionReplicaStatus'
 
 const shown = (value?: string) => value?.trim() || 'Not reported'
 
 export default function DecisionModelRuntimePanel({
   inventory,
   refreshedAt,
-  engineOnly,
   loading,
 }: {
   inventory: ModelRuntimeInventory | null
   refreshedAt: Date | null
-  engineOnly: boolean | null
   loading: boolean
 }) {
   const { user } = useAuth()
@@ -35,7 +34,7 @@ export default function DecisionModelRuntimePanel({
   const metrics = useDecisionModelMetrics(
     deployment ? [deployment.name] : [],
     refreshedAt,
-    canReadMetrics && engineOnly === false,
+    canReadMetrics,
     timeWindow,
   )
   const points = deployment ? decisionModelChartPoints(metrics.series, deployment.name) : []
@@ -70,10 +69,6 @@ export default function DecisionModelRuntimePanel({
       {!canReadMetrics ? (
         <p className={styles.notice}>
           Viewing model statistics requires observability read access.
-        </p>
-      ) : engineOnly ? (
-        <p className={styles.notice}>
-          Router call statistics are unavailable in standalone engine mode.
         </p>
       ) : metrics.unavailable.length > 0 ? (
         <p className={styles.notice}>
@@ -156,10 +151,11 @@ export default function DecisionModelRuntimePanel({
             </div>
             <div>
               <dt>Ownership</dt>
-              <dd>{deployment.managed ? 'Managed by router' : 'External deployment'}</dd>
+              <dd>{deployment.managed ? 'Managed worker' : 'External deployment'}</dd>
             </div>
           </dl>
-          {canReadMetrics && engineOnly === false && (
+          <DecisionReplicaStatus deployment={deployment} />
+          {canReadMetrics && (
             <>
               <div className={styles.metricsCaption}>
                 <span>

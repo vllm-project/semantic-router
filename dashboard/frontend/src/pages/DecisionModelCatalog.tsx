@@ -3,7 +3,6 @@ import { DECISION_MODEL_OPTIONS } from './decisionModelSupport'
 import { DECISION_PROVIDERS } from './decisionRuntimeCatalog'
 import type { useDecisionModelManagement } from './useDecisionModelManagement'
 import type { DecisionTasks } from './useDecisionTasks'
-import type { InstanceMode } from './useInstanceDeployment'
 import SystemOneSelect from './SystemOneSelect'
 import styles from './DecisionModelCatalog.module.css'
 import pageStyles from './DecisionModelPage.module.css'
@@ -11,24 +10,12 @@ import pageStyles from './DecisionModelPage.module.css'
 interface Props {
   model: ReturnType<typeof useDecisionModelManagement>
   writable: boolean
-  mode: InstanceMode
-  onModeChange: (mode: InstanceMode) => void
-  canSwitch: boolean
   busy: boolean
   onDeploy: () => void
   tasks: DecisionTasks | null
 }
 const pageSize = 6
-export default function DecisionModelCatalog({
-  model,
-  writable,
-  mode,
-  onModeChange,
-  canSwitch,
-  busy,
-  onDeploy,
-  tasks,
-}: Props) {
+export default function DecisionModelCatalog({ model, writable, busy, onDeploy, tasks }: Props) {
   const [search, setSearch] = useState('')
   const [family, setFamily] = useState('all')
   const [capability, setCapability] = useState('all')
@@ -58,28 +45,10 @@ export default function DecisionModelCatalog({
           <span className={styles.eyebrow}>Model library</span>
           <h2 id="decision-model-choose-title">Choose a decision model</h2>
           <p className={styles.help}>
-            Select a model and instance mode. Explicit task bindings remain unchanged.
+            Select the default model for decision tasks. Explicit task bindings remain unchanged.
           </p>
         </div>
         <span className={styles.catalogCount}>{options.length} models</span>
-      </div>
-      <div className={styles.modePicker} role="group" aria-label="Instance mode">
-        {(['router', 'engine'] as const).map((value) => (
-          <button
-            type="button"
-            key={value}
-            aria-pressed={mode === value}
-            disabled={!canSwitch || disabled}
-            onClick={() => onModeChange(value)}
-          >
-            <strong>{value === 'router' ? 'Router mode' : 'Engine mode'}</strong>
-            <span>
-              {value === 'router'
-                ? 'Route Chat requests and serve System One questions.'
-                : 'Serve System One questions. Retain routing configuration for later.'}
-            </span>
-          </button>
-        ))}
       </div>
       <div className={styles.filters}>
         <label className={styles.searchField}>
@@ -199,8 +168,7 @@ export default function DecisionModelCatalog({
           <span className={styles.eyebrow}>Ready to deploy</span>
           <strong>{selected?.label ?? model.selectedModel ?? 'Choose a model'}</strong>
           <p className={styles.help}>
-            {mode === 'router' ? 'Router' : 'Engine'} mode · Native questions:{' '}
-            {selected?.questionTypes.join(', ') || 'Not reported'}
+            Native questions: {selected?.questionTypes.join(', ') || 'Not reported'}
           </p>
         </div>
         {projection && (
@@ -225,9 +193,7 @@ export default function DecisionModelCatalog({
             <>
               <strong>{selected?.label ?? model.selectedModel}</strong>
               <small>
-                {mode === 'engine'
-                  ? 'Chat routing pauses; your Router configuration is retained. Native API access follows the configured listener model grants.'
-                  : 'Tasks using the default will use this model.'}
+                Tasks using the default will use this model. Instance mode stays unchanged.
               </small>
             </>
           ) : (

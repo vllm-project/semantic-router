@@ -16,12 +16,12 @@ func PublicSystemOneHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
-			http.Error(w, "Configuration unavailable", 503)
+			http.Error(w, "Configuration unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		cfg, err := routerconfig.ParseYAMLBytes(data)
 		if err != nil {
-			http.Error(w, "Configuration unavailable", 503)
+			http.Error(w, "Configuration unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		listener, err := systemone.SelectListener(cfg.Listeners, os.Getenv("VLLM_SR_SYSTEMONE_LISTENER"))

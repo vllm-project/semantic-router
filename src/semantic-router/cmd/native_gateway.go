@@ -200,25 +200,30 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 	if err != nil {
 		return gateway.Serving{}, nil, err
 	}
-	set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
-	if !ok {
-		lease.Release()
-		return gateway.Serving{}, nil, errors.New("the serving configuration has no upstream set")
-	}
 	cfg := lease.Snapshot.Config()
 	nativeListener, _ := systemone.SelectListener(cfg.Listeners, listener)
-	return gateway.Serving{
+	models, _ := lease.Snapshot.Part(configsnapshot.ComponentModelService).(*extproc.FrontendModels)
+	serving := gateway.Serving{
 		SystemOne: systemone.Handler(cfg, nativeListener, func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
-			result, err := lease.Router.SystemOne(ctx, deployment, body)
+			result, err := models.SystemOne(ctx, deployment, body)
 			return result.Status, result.Body, err
 		}),
-		Engine:          routing.NewEngine(lease.Router, s.engine),
-		Upstream:        set,
+		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		Models:          listenerModels(cfg, listener),
 		IdentityHeaders: []string{cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader()},
 		TrustIdentity:   listenerIdentityTrust(cfg, listener),
-	}, lease.Release, nil
+	}
+	if cfg.RoutingEnabled() {
+		set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
+		if !ok || lease.Router == nil {
+			lease.Release()
+			return gateway.Serving{}, nil, errors.New("the serving configuration has no routing pipeline")
+		}
+		serving.Engine = routing.NewEngine(lease.Router, s.engine)
+		serving.Upstream = set
+	}
+	return serving, lease.Release, nil
 }
 
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
@@ -268,6 +273,9 @@ func upstreamPart(mode config.GatewayMode) configsnapshot.PartBuilder {
 		Component: configsnapshot.ComponentUpstream,
 		Build: func(_ context.Context, candidate *configsnapshot.Snapshot, previous configsnapshot.Part) (configsnapshot.Part, error) {
 			prev, _ := previous.(*upstream.Set)
+			if !candidate.Config().RoutingEnabled() {
+				return upstream.New(upstream.Topology{}, upstream.Options{})
+			}
 			set, err := buildUpstream(mode, candidate.Config(), prev)
 			if err != nil && mode != config.GatewayStandalone {
 				// Envoy carries the client traffic and accepts backends the

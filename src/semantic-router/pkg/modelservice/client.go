@@ -21,8 +21,10 @@ const DefaultBundleTasks = 64
 
 // Client calls one runtime through the generated contract client.
 type Client struct {
-	endpoint string
-	api      *api.ClientWithResponses
+	endpoint   string
+	base       string
+	httpClient api.HttpRequestDoer
+	api        *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
 	bundleTasks atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
@@ -41,11 +43,12 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{endpoint: endpoint, api: generated}
+	client := &Client{endpoint: endpoint, base: base, httpClient: httpClient, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
 	client.apiMinor.Store(-1)
 	return client, nil

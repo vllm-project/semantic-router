@@ -6,16 +6,14 @@ import (
 	"strconv"
 )
 
-// A runtime process runs every model's forward on one device thread, so the
-// models of one CPU process run one after another. The router therefore
-// spreads CPU models over processes and sizes each process's threads to an
-// equal share of its cores, rounded up: a request stage's models run in
-// parallel, and the cores of a process that is idle serve the busy ones.
-// Pinning processes to disjoint cores measured slower, because the share of a
-// rarely used model then idles.
+// CPU workers have stable thread budgets so changing Router consumers does not
+// change process identity. Every logical deployment remains an independent
+// process; the concurrency budget below sizes threads rather than grouping
+// models into a process. It is derived only from host capacity and operator
+// configuration, never from the current routing mode.
 const (
-	// CPUProcessesEnv caps the processes CPU models are spread over
-	// (default: one per model, at most one per minCPUThreads cores).
+	// CPUProcessesEnv sets the CPU concurrency budget used to size each
+	// worker's threads (default: one slot per minCPUThreads cores).
 	CPUProcessesEnv = "VLLM_SRUN_CPU_PROCESSES"
 	minCPUThreads   = 2
 )

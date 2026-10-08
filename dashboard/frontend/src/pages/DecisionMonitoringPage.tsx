@@ -1,4 +1,3 @@
-import { useInstanceDeployment } from './useInstanceDeployment'
 import DecisionTaskMonitoring from './DecisionTaskMonitoring'
 import { Link } from 'react-router-dom'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -7,9 +6,7 @@ import { useDecisionModelMonitoring } from './useDecisionModelMonitoring'
 import styles from './DecisionModelPage.module.css'
 
 export default function DecisionMonitoringPage() {
-  const instance = useInstanceDeployment()
-  const engine = instance.status?.observed_mode === 'engine'
-  const runtime = useDecisionModelMonitoring(engine)
+  const runtime = useDecisionModelMonitoring()
 
   return (
     <ConfigPageManagerLayout
@@ -47,11 +44,10 @@ export default function DecisionMonitoringPage() {
             ))}
           </div>
         )}
-        <DecisionTaskMonitoring refreshedAt={runtime.updatedAt} engine={engine} />
+        <DecisionTaskMonitoring refreshedAt={runtime.updatedAt} />
         <DecisionModelRuntimePanel
           inventory={runtime.inventory}
           refreshedAt={runtime.updatedAt}
-          engineOnly={engine || (runtime.status ? runtime.status.serving_mode === 'engine' : null)}
           loading={runtime.loading}
         />
       </div>

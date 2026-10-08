@@ -20,8 +20,8 @@ from cli.commands.runtime_config_mutation import (
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
-from cli.commands.runtime_engine import ENGINE_HELP, run_engine_mode
 from cli.commands.runtime_help import SERVE_HELP
+from cli.commands.runtime_mode_config import MODE_HELP, validate_model_options
 from cli.commands.runtime_serve_config import (
     _prepare_effective_serve_config,
     validate_decision_model_flag,
@@ -36,7 +36,6 @@ from cli.commands.runtime_support import (
     validate_setup_mode_flags,
 )
 from cli.commands.serve_options import (
-    MODE_ENGINE,
     GroupedServeCommand,
     reject_envoy_options,
     reject_misplaced_options,
@@ -246,6 +245,8 @@ def _execute_serve(
     startup_timeout: int | None = None,
     gateway: str | None = None,
     decision_model: str | None = None,
+    mode: str | None = None,
+    model_options: dict | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
@@ -285,6 +286,8 @@ def _execute_serve(
                 minimal=minimal,
                 readonly=readonly,
                 decision_model=decision_model,
+                mode=mode,
+                model_options=model_options,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -331,8 +334,19 @@ def _execute_serve(
             runtime_lock.close()
 
 
-@click.command(cls=GroupedServeCommand, help=SERVE_HELP + ENGINE_HELP)
-@click.argument("model", nargs=-1, required=False)
+@click.command(cls=GroupedServeCommand, help=SERVE_HELP + MODE_HELP)
+@click.option(
+    "--mode",
+    type=click.Choice(["router", "engine"]),
+    default=None,
+    help="Enable or disable routing in the same instance; preserve saved configuration.",
+)
+@click.option(
+    "--model",
+    default=None,
+    metavar="ARTIFACT",
+    help="Configure the selected logical deployment with this model artifact.",
+)
 @click.option(
     "--config",
     default="config.yaml",
@@ -488,46 +502,28 @@ def _execute_serve(
         "Repeat for multiple names; NAME=value is rejected."
     ),
 )
-@click.option(
-    "--models",
-    "models_file",
-    default=None,
-    help="Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile.",
-)
-@click.option(
-    "--revision", default=None, help="Engine mode: 40-hex revision of a single MODEL."
-)
+@click.option("--revision", default=None, help="Pinned 40-hex revision for --model.")
 @click.option(
     "--device",
     default=None,
     help=(
-        "Engine mode: auto (default), cpu, rocm[:N] with --platform amd, "
+        "Model placement: auto (default), cpu, rocm[:N] with --platform amd, "
         "cuda[:N] with --platform nvidia, or a plugin's accelerator."
     ),
-)
-@click.option(
-    "--host",
-    default=None,
-    help="Engine mode: host address the runtime's port is published on (default 127.0.0.1).",
-)
-@click.option(
-    "--port",
-    type=click.IntRange(1, 65535),
-    default=None,
-    help="Engine mode: host port the runtime is published on (default 8100).",
 )
 @click.option(
     "--runtime-profile",
     default=None,
     metavar="PROFILE",
     help=(
-        "Engine mode: the runtime's numerics profile (default exact; "
+        "Model runtime numerics profile (default exact; "
         "vllm-srun plugins lists the installed ones)."
     ),
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
-    model: tuple[str, ...],
+    model: str | None,
+    mode: str | None,
     config: str,
     replace_active_config: bool,
     image: str | None,
@@ -551,36 +547,18 @@ def serve(
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
     startup_timeout: int | None,
-    models_file: str | None,
     revision: str | None,
     device: str | None,
-    host: str | None,
-    port: int | None,
     runtime_profile: str | None,
 ) -> None:
     ctx = click.get_current_context()
-    if model or models_file:
-        reject_misplaced_options(ctx, MODE_ENGINE)
-        # Engine mode runs a container on this host: the docker target's rules.
-        _validate_target_platform(TARGET_DOCKER, platform)
-        run_engine_mode(
-            ctx,
-            model,
-            models_file=models_file,
-            revision=revision,
-            device=device,
-            host=host,
-            port=port,
-            runtime_profile=runtime_profile,
-            log_level=log_level,
-            platform=_platform_hint(platform),
-            image=image,
-            image_pull_policy=image_pull_policy,
-            container_runtime=resolve_container_runtime(
-                ctx, container_runtime, runtime
-            ),
-        )
-        return
+    model_options = validate_model_options(
+        model=model,
+        revision=revision,
+        device=device,
+        runtime_profile=runtime_profile,
+        platform=_platform_hint(platform),
+    )
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
     reject_envoy_options(ctx, resolve_gateway(gateway))
@@ -607,6 +585,8 @@ def serve(
         startup_timeout,
         gateway,
         decision_model=decision_model,
+        mode=mode,
+        model_options=model_options,
     )
 
 

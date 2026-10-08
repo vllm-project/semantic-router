@@ -207,20 +207,21 @@ message. GPU support through the host is tracked in
 
 ## Options of `vllm-sr serve`
 
-`vllm-sr serve --help` lists the options in groups. Each group applies to some
-of the three ways `serve` runs: the Router on the docker target, the Router on
-the kubernetes target, and engine mode (`vllm-sr serve MODEL`, the model
-runtime in a container). An option used where its group does not apply is an
-error that says where it applies.
+`vllm-sr serve --help` groups options by deployment target. Router and Engine
+run the same instance frontend: `--mode engine` disables routing, while
+`--mode router` re-enables the saved routing configuration. Both retain model
+management, Dashboard and the explicitly published System One API.
 
 | Group | Applies to | Options |
 | --- | --- | --- |
-| Common options | docker, kubernetes, engine mode | `--platform`, `--image`, `--log-level` |
-| Router options | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm` |
-| Container options | docker, engine mode | `--image-pull-policy`, `--container-runtime` |
+| Instance and models | docker, kubernetes | `--mode`, `--model`, `--revision`, `--device`, `--runtime-profile`, `--platform`, `--image`, `--log-level` |
+| Instance configuration | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm`, `--decision-model` |
+| Container options | docker | `--image-pull-policy`, `--container-runtime` |
 | Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env` |
 | Kubernetes target | kubernetes | `--namespace`, `--context`, `--profile`, `--chart-dir` |
-| Engine mode | engine mode | `--models`, `--revision`, `--device`, `--host`, `--port`, `--runtime-profile` |
+
+Multiple models, replica placement, listener ports and API grants use the
+canonical config. Model resource flags require `--model`.
 
 `--container-runtime` (`docker` or `podman`) replaces `--runtime`, which works
 for this release only, on `serve`, `status`, `logs`, `stop` and `dashboard`.

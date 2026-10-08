@@ -16,7 +16,6 @@ func TestModelRuntimeEmbeddingDeploymentsFollowConsumerOwnership(t *testing.T) {
 		return DecisionPlugin{Type: kind, Configuration: MustStructuredPayload(map[string]any{"enabled": enabled})}
 	}
 	namedPlugin := func(cfg *RouterConfig, kind string, reachable bool) {
-
 		cfg.Recipes = []RoutingRecipe{{Name: DefaultRecipeName}, {Name: "named", Profile: RoutingProfile{
 			Decisions: []Decision{{Plugins: []DecisionPlugin{plugin(kind, true)}}},
 		}}}

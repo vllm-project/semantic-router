@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func instanceTestSocket(t *testing.T, handler http.Handler) {
@@ -19,7 +20,7 @@ func instanceTestSocket(t *testing.T, handler http.Handler) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := &http.Server{Handler: handler}
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second}
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() { _ = server.Close() })
 	t.Setenv(instanceSocketEnv, socket)
@@ -94,29 +95,33 @@ func TestInstanceMissingControllerNeverClaimsManagedOrEngine(t *testing.T) {
 	}
 }
 
-func TestInstanceEngineUsesNativeCapabilitiesAndInference(t *testing.T) {
+func TestInstanceEngineUsesPersistentFrontendForInference(t *testing.T) {
 	instanceTestSocket(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/status":
-			_, _ = io.WriteString(w, `{"observed_mode":"engine"}`)
-		case "/models":
-			_, _ = io.WriteString(w, `{"object":"list","data":[{"id":"primary","ready":true,"family":"decision2","surfaces":["decisions"],"question_types":["choice","score","noul","classification","set"]}]}`)
-		case "/systemone":
-			var request map[string]json.RawMessage
-			_ = json.NewDecoder(r.Body).Decode(&request)
-			if string(request["deployment"]) != `"primary"` {
-				t.Error("deployment lost")
-			}
-			_, _ = io.WriteString(w, `{"answers":{"q":{"answer":"yes"}},"spans":{},"sets":{}}`)
-		default:
-			t.Errorf("unexpected controller route %s", r.URL.Path)
-			http.NotFound(w, r)
+		if r.URL.Path != "/status" {
+			t.Errorf("inference reached controller: %s", r.URL.Path)
 		}
+		_, _ = io.WriteString(w, `{"observed_mode":"engine"}`)
 	}))
-	handler := DecisionModelHandler("http://unreachable.invalid")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/diagnostics/models/systemone" {
+			t.Errorf("unexpected frontend route %s", r.URL.Path)
+		}
+		if r.Method == http.MethodGet {
+			_, _ = io.WriteString(w, `{"deployments":[{"id":"primary","ready":true,"model":"example/vela","surfaces":["decisions"],"question_types":["noul"]}]}`)
+			return
+		}
+		var request map[string]json.RawMessage
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		if string(request["deployment"]) != `"primary"` {
+			t.Error("deployment lost")
+		}
+		_, _ = io.WriteString(w, `{"answers":{"q":{"answer":"yes"}},"spans":{},"sets":{}}`)
+	}))
+	defer upstream.Close()
+	handler := DecisionModelHandler(upstream.URL)
 	response := httptest.NewRecorder()
 	handler(response, httptest.NewRequest("GET", "/api/decision-model/capabilities", nil))
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `"serving_mode":"engine"`) || !strings.Contains(response.Body.String(), `"classification"`) {
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"primary"`) {
 		t.Fatal(response.Body.String())
 	}
 	response = httptest.NewRecorder()

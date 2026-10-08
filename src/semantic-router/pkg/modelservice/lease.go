@@ -15,32 +15,37 @@ import (
 // the exits of its managed process; an attached endpoint has none. Artifact is
 // the model a managed process loads; an attached endpoint names none.
 type DeploymentStatus struct {
-	Name     string     `json:"name"`
-	Managed  bool       `json:"managed"`
-	Endpoint string     `json:"endpoint"`
-	Process  string     `json:"process"`
-	Model    string     `json:"model"`
-	Artifact string     `json:"artifact,omitempty"`
-	Ready    bool       `json:"ready"`
-	State    string     `json:"state"`
-	Reason   string     `json:"reason,omitempty"`
-	Restarts int        `json:"restarts"`
-	Card     *ModelCard `json:"card,omitempty"`
+	DesiredReplicas int             `json:"desired_replicas"`
+	ReadyReplicas   int             `json:"ready_replicas"`
+	Replicas        []ReplicaStatus `json:"replicas,omitempty"`
+	Name            string          `json:"name"`
+	Managed         bool            `json:"managed"`
+	Endpoint        string          `json:"endpoint"`
+	Process         string          `json:"process"`
+	Model           string          `json:"model"`
+	Artifact        string          `json:"artifact,omitempty"`
+	Ready           bool            `json:"ready"`
+	State           string          `json:"state"`
+	Reason          string          `json:"reason,omitempty"`
+	Restarts        int             `json:"restarts"`
+	Card            *ModelCard      `json:"card,omitempty"`
 }
 
 // Lease is one router generation's view of its model_runtime deployments.
 // It holds a reference to every process the generation uses, so a reload
-// with the same composition shares the running processes and one with a new
-// composition starts new ones without disturbing the previous generation.
+// reuses unchanged logical workers and retains old workers until their last
+// generation and accepted exchanges release them.
 type Lease struct {
 	manager   *Manager
 	mu        sync.RWMutex
 	members   map[string]member
 	groups    []*group
 	closeOnce sync.Once
+	closed    bool
 }
 
 type member struct {
+	pool   *replicaPool
 	group  *group
 	served *servedModel
 }
@@ -52,6 +57,9 @@ func (l *Lease) Deployments() []string {
 	}
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+	if l.closed {
+		return nil
+	}
 	names := make([]string, 0, len(l.members))
 	for name := range l.members {
 		names = append(names, name)
@@ -79,6 +87,7 @@ func (l *Lease) Close() error {
 		l.mu.Lock()
 		groups := l.groups
 		l.groups = nil
+		l.closed = true
 		l.mu.Unlock()
 		l.manager.release(groups)
 	})
@@ -96,9 +105,19 @@ func (l *Lease) Statuses() []DeploymentStatus {
 	var statuses []DeploymentStatus
 	for _, g := range groups {
 		for _, status := range g.status() {
-			if _, ok := l.lookup(status.Name); ok {
+			if selected, ok := l.lookup(status.Name); ok && selected.pool == nil {
+				status.DesiredReplicas = 1
+				if status.Ready {
+					status.ReadyReplicas = 1
+				}
 				statuses = append(statuses, status)
 			}
+		}
+	}
+	for _, name := range l.Deployments() {
+		selected, _ := l.lookup(name)
+		if selected.pool != nil {
+			statuses = append(statuses, selected.pool.status())
 		}
 	}
 	sort.Slice(statuses, func(i, j int) bool { return statuses[i].Name < statuses[j].Name })
@@ -110,6 +129,9 @@ func (l *Lease) Card(ctx context.Context, deployment string) (ModelCard, error) 
 	m, ok := l.lookup(deployment)
 	if !ok {
 		return ModelCard{}, ErrUnknownDeployment
+	}
+	if m.pool != nil {
+		return m.pool.card(ctx)
 	}
 	return m.group.waitCard(ctx, m.served.name)
 }
@@ -126,7 +148,7 @@ func (l *Lease) WaitManaged(ctx context.Context) error {
 	l.mu.RLock()
 	managed := make(map[string]member, len(l.members))
 	for name, m := range l.members {
-		if m.group.managed {
+		if m.group.managed || m.pool != nil && m.pool.declaration.Managed() {
 			managed[name] = m
 		}
 	}
@@ -147,7 +169,12 @@ func (l *Lease) WaitManaged(ctx context.Context) error {
 	results := make(chan error, len(managed))
 	for name, m := range managed {
 		go func() {
-			_, err := m.group.waitCard(ctx, m.served.name)
+			var err error
+			if m.pool != nil {
+				_, err = m.pool.card(ctx)
+			} else {
+				_, err = m.group.waitCard(ctx, m.served.name)
+			}
 			switch {
 			case errors.Is(err, context.DeadlineExceeded):
 				err = fmt.Errorf("model_runtime deployment %q did not become ready%s: %w", name, bound, err)
@@ -173,6 +200,9 @@ func (l *Lease) lookup(deployment string) (member, bool) {
 	}
 	l.mu.RLock()
 	m, ok := l.members[deployment]
+	if l.closed {
+		ok = false
+	}
 	l.mu.RUnlock()
 	return m, ok
 }
@@ -184,6 +214,9 @@ func (l *Lease) call(deployment string) (member, error) {
 	if !ok {
 		requestsTotal.WithLabelValues(deployment, ErrorReason(ErrUnknownDeployment)).Inc()
 		return member{}, ErrUnknownDeployment
+	}
+	if m.pool != nil {
+		m.pool.readyWorkers()
 	}
 	if !m.served.ready.Load() {
 		requestsTotal.WithLabelValues(deployment, ErrorReason(ErrUnavailable)).Inc()
@@ -199,7 +232,13 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 	if errors.Is(err, ErrFailed) {
 		// A transport failure may mean the process died: probe now rather
 		// than at the next slow poll.
-		m.group.requestProbe()
+		if m.pool != nil {
+			for _, w := range m.pool.workers {
+				w.member.group.requestProbe()
+			}
+		} else {
+			m.group.requestProbe()
+		}
 	}
 }
 
@@ -215,7 +254,7 @@ func (l *Lease) Decide(ctx context.Context, deployment string, request Request) 
 	if InBundle(ctx) {
 		started := time.Now()
 		request.Model = m.served.name
-		response, timing, decideErr := m.group.client.decide(ctx, request, cache, deployment)
+		response, timing, decideErr := m.client().decide(ctx, request, cache, deployment)
 		l.observe(m, deployment, "decisions", started, timing, decideErr)
 		return response, decideErr
 	}
@@ -229,7 +268,7 @@ func (l *Lease) Decide(ctx context.Context, deployment string, request Request) 
 	}
 	started := time.Now()
 	request.Model = m.served.name
-	response, timing, err := m.group.client.decide(ctx, request, nil, "")
+	response, timing, err := m.client().decide(ctx, request, nil, "")
 	l.observe(m, deployment, "decisions", started, timing, err)
 	if err == nil && cache != nil {
 		cacheTotal.WithLabelValues(deployment, "miss").Inc()
@@ -256,7 +295,7 @@ func (l *Lease) Classify(ctx context.Context, deployment string, request Classif
 		}
 	}
 	started := time.Now()
-	response, timing, err := m.group.client.classify(ctx, m.served.name, request)
+	response, timing, err := m.client().classify(ctx, m.served.name, request)
 	l.observe(m, deployment, "classify", started, timing, err)
 	if err == nil && cache != nil {
 		cacheTotal.WithLabelValues(deployment, "miss").Inc()
@@ -274,7 +313,7 @@ func (l *Lease) Embed(ctx context.Context, deployment string, request EmbedReque
 		return EmbedResponse{}, err
 	}
 	started := time.Now()
-	response, timing, err := m.group.client.embed(ctx, m.served.name, request)
+	response, timing, err := m.client().embed(ctx, m.served.name, request)
 	l.observe(m, deployment, "embeddings", started, timing, err)
 	return response, err
 }
@@ -286,7 +325,7 @@ func (l *Lease) Rerank(ctx context.Context, deployment string, request RerankReq
 		return RerankResponse{}, err
 	}
 	started := time.Now()
-	response, timing, err := m.group.client.rerank(ctx, m.served.name, request)
+	response, timing, err := m.client().rerank(ctx, m.served.name, request)
 	l.observe(m, deployment, "rerank", started, timing, err)
 	return response, err
 }
@@ -308,4 +347,11 @@ func complete(response Response) bool {
 		}
 	}
 	return len(response.Answers) > 0
+}
+
+func (m member) client() *Client {
+	if m.pool != nil {
+		return m.pool.client
+	}
+	return m.group.client
 }

@@ -1,72 +1,82 @@
 # Managed instance modes
 
-`vllm-sr serve --config config.yaml` attaches a host controller after a successful
-local Docker or Podman startup with Dashboard enabled. It preserves Dashboard,
-Router configuration, model caches and external inference services while an
-operator changes the local data plane. Kubernetes and externally owned instances
-remain owned by their deployment system and do not offer local mode switching.
+The frontend stays running in both modes. `global.router.enabled` defaults to
+`true`: Router mode adds the recipe routing pipeline and Chat/Responses access;
+Engine mode sets it to `false` and serves native System One inference without
+constructing recipe classifiers or upstream pools. Saved routing configuration,
+listeners, Dashboard and model workers are retained. Mode and model placement
+are independent: one logical deployment may use one worker or a replica pool.
 
 ```bash
+vllm-sr serve --mode engine --model vllm-sr/Vela-2.0-4B
 vllm-sr instance --config config.yaml status
 vllm-sr instance --config config.yaml models
-vllm-sr instance --config config.yaml deploy --mode engine --deployment primary --request-id engine-1
+vllm-sr instance --config config.yaml deploy --mode engine --request-id engine-1
 vllm-sr instance --config config.yaml deploy --mode router --request-id router-1
 ```
 
-Engine selects a declared `global.model_catalog.deployments` resource. It serves
-native System One questions, without running Chat routing or a recipe. Router
-mode runs the preserved Router configuration and can also publish System One.
-Saving configuration while Engine runs does not start Router; explicitly deploy
-Router mode to activate that configuration.
+Omitting `--deployment` preserves the default model. Providing a configured
+resource key selects that resource through
+`global.model_catalog.system.decision_model.deployment`. Mode changes publish a
+canonical configuration generation in the same frontend; they do not replace
+containers or change listener grants. `serve --mode engine` can create a minimal
+canonical configuration without Chat backends or routing YAML. Ordinary `serve`
+and health repair preserve the saved `global.router.enabled` value.
 
 Both modes expose `POST /v1/systemone`, its native alias `POST /v1/decisions`, and
-`GET /v1/systemone/models` through Dashboard's stable inference bridge. These
-routes use the selected listener's `api_keys` and its separate, explicit
-`systemone.models` grants. Chat `listener.models` grants do not grant System One
-access. Public model names are deployment `public_name` values or Hub artifact
-IDs; local artifacts require an explicit public name. With multiple listeners,
-set `VLLM_SR_SYSTEMONE_LISTENER` to the intended listener when starting Dashboard.
-Discovery describes publication, while `instance models` describes actual
-readiness. A granted model that is not active in Engine returns unavailable;
-deploying another model never automatically widens a grant.
+`GET /v1/systemone/models` on the standalone frontend. Dashboard can provide an
+optional stable bridge but is not required for inference. These routes use the
+listener's `api_keys` and separate, explicit `systemone.models` grant. Chat
+`listener.models` does not grant System One access. Public IDs are deployment
+`public_name` values or Hub artifact IDs; local artifacts require a public name.
+The frontend uses its generation's retained model lease, independently of the
+optional Router pipeline. A mode change cannot redirect a pinned native request
+to a new deployment. Multiple listeners never union their publication scopes.
 
-Status reports desired mode separately from observed mode and the operation's
-phase. It does not infer Router mode from a failed health probe. A repeated
-request ID returns the recorded operation; a new ID can redeploy the same mode.
-Readiness checks use actual model cards. A failed cutover restores retained
-containers and the last working Router configuration. Interrupted operations
-are recovered from the private journal before another operation is admitted.
-No config hash or generation equality is a deployment gate.
+Discovery describes the explicit publication grant; `instance models` describes
+actual readiness. Deploying or scaling a model never widens a grant. Under Engine
+mode Chat, Responses and Chat model discovery are disabled. Worker-level classify,
+embedding, rerank and bundle APIs remain worker APIs, not new public frontend
+routes. Explicitly enabled global stores remain frontend-owned management
+services; each holds only its own embedding consumer, independent of dormant
+recipe signals. Minimal Engine configurations do not enable these stores.
 
-The controller runs as the CLI user. Private state is stored under
-`$XDG_STATE_HOME/vllm-sr/instances` (default `~/.local/state/vllm-sr/instances`).
-Only its dedicated Unix socket directory is mounted read-only into Dashboard;
-the Docker socket, controller manifest and journal are not mounted there.
-Retain this host state and the same stack/config/state environment on restart.
-For a host service supervisor, run the foreground command with the same user
-and environment:
+The local Docker/Podman CLI attaches a host controller after startup with
+Dashboard. `GET /api/instance` reports desired mode, observed active-snapshot
+mode, active deployment, ownership and durable operation state.
+`POST /api/instance/deploy` accepts only `mode`, optional `deployment`, and a
+bounded `request_id`. It applies configuration through the authenticated canonical
+management API. A repeated request ID returns the original operation.
+
+A rejected candidate leaves the active generation serving. The controller
+restores its previous canonical document when recovery is needed, using the
+same API's compare-and-swap guard so another editor's changes are never
+silently overwritten. Interrupted operations recover from the private journal
+before accepting more work. Hash/generation equality is not an operation gate;
+active mode, selected deployment and actual model readiness are verified.
+
+Private state lives under `$XDG_STATE_HOME/vllm-sr/instances` (default
+`~/.local/state/vllm-sr/instances`). Only the restricted Unix socket directory is
+mounted read-only into Dashboard; no Docker socket, manifest or journal is
+exposed there. Retain host state and the same stack/config environment across
+controller restarts. A host supervisor can run:
 
 ```bash
 vllm-sr instance --config config.yaml controller
 ```
 
-Normal `serve` and health repair preserve an intentional Engine mode. An
-external health timer should observe nonterminal operations without starting
-containers; in Engine mode it should inspect `instance models` for ready native
-cards. The controller preserves prior containers for rollback; operators may
-remove retained rollback containers after verifying a deployment.
+Kubernetes and externally owned frontends remain owned by their deployment
+system; Dashboard does not claim permission to control their host. Attached
+external model workers retain their own owner even in a locally managed pool.
 
-An operator who uses the canonical lower-level container startup helper during
-an image rollout must attach the controller after readiness, with the same stack
-and state environment used for startup:
+An image rollout using the canonical lower-level startup helper attaches the
+controller after readiness with the actual runtime configuration and gateway:
 
 ```bash
 vllm-sr instance --config config.yaml attach --runtime-config /path/to/active/runtime-config.yaml --gateway standalone
 ```
 
-`--runtime-config` must be the actual active config path and `--gateway` the
-deployed Router gateway mode. This captures the running containers' immutable
-image IDs; it does not start another data plane. After replacing the CLI package,
-restart an idle controller through its host supervisor so future operations use
-the new installed code. No browser request can supply a host command, image,
-filesystem path or upstream URL to the controller.
+After changing the installed CLI package, restart an idle controller through its
+host supervisor. No browser request supplies an image, command, host path or
+upstream URL. External health repair should wait while an operation is active;
+it can check `instance models` for native readiness in either mode.

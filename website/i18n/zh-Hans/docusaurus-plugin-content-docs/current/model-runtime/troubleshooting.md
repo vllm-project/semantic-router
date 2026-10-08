@@ -103,7 +103,7 @@ curl -s localhost:8080/startup-status
 | a file hash does not match | 下载已损坏或仓库发生了变化。从缓存中删除该模型后重新启动。 |
 | a revision is required | 非内置仓库需要用 40 位 commit 设置 `revision`。 |
 | access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。 |
-| does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或给该模型单独的 `process`。 |
+| does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或把副本分配到不同 GPU。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
 | no family recognizes the package | 不支持该模型的架构。见[选择模型](model-runtime/choose-a-model.md#your-own-models)。 |

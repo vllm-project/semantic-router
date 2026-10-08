@@ -54,7 +54,7 @@ class InstanceConflictError(ValueError):
 class InstanceController:
     """Serializes lifecycle changes; the journal is written before any cutover.
 
-    The backend owns canonical container operations and the runtime config lock.
+    The backend applies canonical frontend generations with guarded publication.
     This owner never interprets a client path, command, image or endpoint.
     """
 
@@ -63,11 +63,15 @@ class InstanceController:
         self.path = directory / "state.json"
         self.lock = threading.RLock()
         self.worker: threading.Thread | None = None
-        self.state = (
-            json.loads(self.path.read_text())
-            if self.path.exists()
-            else {"desired_mode": "router", "operation": None}
-        )
+        if self.path.exists():
+            self.state = json.loads(self.path.read_text())
+        else:
+            observed = backend.observe()
+            self.state = {
+                "desired_mode": observed.get("observed_mode", "unknown"),
+                "deployment": observed.get("active_deployment"),
+                "operation": None,
+            }
 
     def status(self) -> dict:
         with self.lock:
@@ -101,8 +105,6 @@ class InstanceController:
             or len(deployment) > MAX_DEPLOYMENT_LENGTH
         ):
             raise ValueError("deployment must identify a configured model deployment")
-        if mode == "engine" and not deployment:
-            raise ValueError("Engine mode requires a configured deployment")
         with self.lock:
             completed = self.state.get("requests", {}).get(request_id)
             if completed:

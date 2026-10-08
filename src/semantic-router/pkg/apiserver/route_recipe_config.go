@@ -449,6 +449,7 @@ func recipeEntrypointSource(doc map[string]any, recipeName string) routerconfig.
 	}
 	return routerconfig.EntrypointExplicit
 }
+
 func effectiveRecipeEntrypointNames(doc map[string]any, recipeName string) []string {
 	names := recipeEntrypointNames(doc, recipeName)
 	if recipeName == string(routerconfig.DefaultRecipeName) && len(names) == 0 {

@@ -70,20 +70,15 @@ class ControllerHandler(BaseHTTPRequestHandler):
                 raise ValueError("Request must be an object")
             if self.path == "/deploy":
                 self.send_json(202, self.server.controller.submit(payload))
-            elif self.path in {"/shutdown", "/configuration-applied"}:
+            elif self.path == "/shutdown":
                 with self.server.controller.lock:
                     operation = self.server.controller.state.get("operation") or {}
                     if operation.get("phase") not in {None, "ready", "failed"}:
                         raise InstanceConflictError(
                             "An instance operation is in progress"
                         )
-                    if self.path == "/configuration-applied":
-                        self.server.controller.backend.checkpoint()
                     self.send_json(200, {"ok": True})
-                    if self.path == "/shutdown":
-                        threading.Thread(
-                            target=self.server.shutdown, daemon=True
-                        ).start()
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
             elif self.path == "/systemone":
                 if (
                     set(payload) - {"deployment", "request", "expected_artifact"}

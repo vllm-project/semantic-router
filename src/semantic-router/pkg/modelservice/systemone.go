@@ -42,37 +42,52 @@ func (m *Manager) SystemOneForArtifact(ctx context.Context, deployment, expected
 		m.mu.Unlock()
 		return SystemOneResult{}, ErrUnavailable
 	}
-	member, err := lease.call(deployment)
+	selected, err := lease.call(deployment)
 	if err != nil {
 		m.mu.Unlock()
 		return SystemOneResult{}, err
 	}
 	if expectedArtifact != "" {
 		artifact := ""
-		for _, entry := range member.group.plan.models {
-			if entry.Name == member.served.name {
+		if selected.pool != nil {
+			artifact = selected.pool.declaration.Artifact
+			if !selected.pool.declaration.Managed() {
+				selected.pool.mu.Lock()
+				artifact = ""
+				if selected.pool.baseline != nil {
+					artifact = selected.pool.baseline.Repo
+				}
+				selected.pool.mu.Unlock()
+			}
+		}
+		var entries []modelEntry
+		if selected.pool == nil {
+			entries = selected.group.plan.models
+		}
+		for _, entry := range entries {
+			if entry.Name == selected.served.name {
 				artifact = entry.Model
 				break
 			}
 		}
-		if artifact == "" && !member.group.managed {
-			member.group.mu.Lock()
-			if member.served.card != nil {
-				artifact = member.served.card.Repo
+		if artifact == "" && selected.pool == nil && !selected.group.managed {
+			selected.group.mu.Lock()
+			if selected.served.card != nil {
+				artifact = selected.served.card.Repo
 			}
-			member.group.mu.Unlock()
+			selected.group.mu.Unlock()
 		}
 		if artifact != expectedArtifact {
 			m.mu.Unlock()
 			return SystemOneResult{}, ErrSystemOneArtifactChanged
 		}
 	}
-	member.group.refs++
+	retained := retainMemberLocked(selected)
 	m.mu.Unlock()
-	defer m.release([]*group{member.group})
+	defer m.release(retained)
 	started := time.Now()
-	result, timing, err := member.group.client.systemOne(ctx, member.served.name, body)
-	lease.observe(member, deployment, "decisions", started, timing, err)
+	result, timing, err := selected.client().systemOne(ctx, selected.served.name, body)
+	lease.observe(selected, deployment, "decisions", started, timing, err)
 	return result, err
 }
 
@@ -88,13 +103,7 @@ func (c *Client) systemOne(ctx context.Context, model string, body json.RawMessa
 	if err != nil {
 		return SystemOneResult{}, exchangeTiming{}, err
 	}
-	base, client, err := newHTTPClient(c.endpoint)
-	if err != nil {
-		return SystemOneResult{}, exchangeTiming{}, err
-	}
-	defer client.CloseIdleConnections()
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	generated, err := api.NewClient(base, api.WithHTTPClient(client))
+	generated, err := api.NewClient(c.base, api.WithHTTPClient(c.httpClient))
 	if err != nil {
 		return SystemOneResult{}, exchangeTiming{}, err
 	}

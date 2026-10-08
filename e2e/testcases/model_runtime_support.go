@@ -31,18 +31,13 @@ const (
 	mrAttachedVela2       = "attached-vela2"
 	mrOfflineDeployment   = "decision-offline"
 	mrAttachedService     = "model-runtime-attached"
-	mrDecisionsProcess    = "decisions"
-	mrDeviceProcess       = "cpu"
 	mrReadyTimeout        = 5 * time.Minute
 	mrRequestTimeout      = 60 * time.Second
 )
 
 var (
 	// Sorted, as the lifecycle case compares it with each process's models.
-	mrDeviceGroup = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
-	// The device group's deployments on device auto, which the node without a
-	// GPU resolves to the CPU.
-	mrAutoDeployments     = []string{mrEmbeddingDeployment}
+	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
 	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback, mrAttachedVela2}
 )

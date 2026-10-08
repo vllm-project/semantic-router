@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 from cli.bootstrap import is_setup_mode_config
+from cli.commands.runtime_mode_config import apply_instance_options
 from cli.commands.runtime_observability import (
     reconcile_runtime_tracing,
     recover_runtime_tracing_projection,
@@ -148,6 +149,8 @@ def _prepare_docker_runtime_config(
     minimal: bool = False,
     readonly: bool = False,
     decision_model: str | None = None,
+    mode: str | None = None,
+    model_options: dict | None = None,
 ):
     stack_layout = resolve_runtime_stack()
     state_root_dir = Path(resolve_state_root_dir(str(config_path)))
@@ -222,6 +225,18 @@ def _prepare_docker_runtime_config(
             source_candidate_selected = active_bytes == effective_config_bytes or (
                 _same_document(active_bytes, effective_config_bytes)
             )
+        candidate = yaml.safe_load(effective_config_path.read_bytes()) or {}
+        if apply_instance_options(
+            candidate,
+            mode=mode,
+            model_options=model_options,
+            decision_model=decision_model,
+        ):
+            candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
+            _prepare_runtime_config_replacement(
+                candidate_bytes, stack_layout, minimal=minimal, readonly=readonly
+            )
+            _atomic_write_private_bytes(effective_config_path, candidate_bytes)
         setup_mode = is_setup_mode_config(effective_config_path)
         if decision_model and setup_mode:
             log.warning(
@@ -275,6 +290,8 @@ def _prepare_effective_serve_config(
     minimal: bool = False,
     readonly: bool = False,
     decision_model: str | None = None,
+    mode: str | None = None,
+    model_options: dict | None = None,
 ):
     """Prepare the target-specific active config and its optional runtime lock."""
 
@@ -297,6 +314,8 @@ def _prepare_effective_serve_config(
             minimal=minimal,
             readonly=readonly,
             decision_model=decision_model,
+            mode=mode,
+            model_options=model_options,
         )
         return effective_path, setup_mode, runtime_lock, None
 
@@ -308,6 +327,12 @@ def _prepare_effective_serve_config(
         source_setup_mode,
         platform,
         materialize_local_runtime=False,
+    )
+    apply_instance_options(
+        effective_config_document,
+        mode=mode,
+        model_options=model_options,
+        decision_model=decision_model,
     )
     if decision_model:
         set_decision_model(effective_config_document, decision_model)

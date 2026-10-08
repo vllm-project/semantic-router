@@ -71,7 +71,7 @@ export function useInstanceDeployment() {
       document.removeEventListener('visibilitychange', visibleRefresh)
     }
   }, [refresh])
-  const deploy = async (mode: InstanceMode, deployment: string) => {
+  const deploy = async (mode: InstanceMode, deployment?: string) => {
     if (submitting) return
     setSubmitting(true)
     setError(null)

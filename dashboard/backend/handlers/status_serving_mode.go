@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
@@ -19,10 +16,7 @@ const (
 	servingModeUnknown  = "unknown"
 	servingProbeTimeout = 2 * time.Second
 	servingHealthLimit  = 64 << 10
-	servingOpenAPILimit = 128 << 10
 )
-
-var engineAPIVersion = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 type servingHealthProbe struct {
 	mode    string
@@ -57,67 +51,20 @@ func probeServingHealth(upstream string, providers ...routerauth.CredentialProvi
 		return probe
 	}
 	var health struct {
-		Service    string          `json:"service"`
-		Status     string          `json:"status"`
-		APIVersion string          `json:"api_version"`
-		Reason     json.RawMessage `json:"reason"`
-		Model      json.RawMessage `json:"model"`
+		ServingMode string `json:"serving_mode"`
+		Service     string `json:"service"`
+		Status      string `json:"status"`
 	}
 	if json.Unmarshal(body, &health) != nil {
 		return probe
 	}
 	if probe.healthy && health.Service == "classification-api" && health.Status == "healthy" {
-		probe.mode = servingModeRouter
-		return probe
-	}
-	if !engineAPIVersion.MatchString(health.APIVersion) || len(health.Reason) == 0 || len(health.Model) == 0 {
-		return probe
-	}
-	switch health.Status {
-	case "starting", "loading", "warming", "ready", "failed", "degraded":
-	default:
-		return probe
-	}
-	if !isModelEngineAPI(upstream, health.APIVersion, providers...) {
-		return probe
-	}
-	probe.mode, probe.state = servingModeEngine, health.Status
-	return probe
-}
-
-// The health shape alone is not a unique identity. Confirm the runtime's
-// versioned API contract before describing an arbitrary healthy API as Engine.
-func isModelEngineAPI(upstream, version string, providers ...routerauth.CredentialProvider) bool {
-	response, err := routerManagementGET(upstream+"/openapi.yaml", servingProbeTimeout, providers...)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return false
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, servingOpenAPILimit+1))
-	if err != nil || len(body) > servingOpenAPILimit {
-		return false
-	}
-	var contract struct {
-		OpenAPI string `yaml:"openapi"`
-		Info    struct {
-			Title   string `yaml:"title"`
-			Version string `yaml:"version"`
-		} `yaml:"info"`
-		Paths map[string]map[string]any `yaml:"paths"`
-	}
-	if yaml.Unmarshal(body, &contract) != nil || !strings.HasPrefix(contract.OpenAPI, "3.") ||
-		contract.Info.Title != "vLLM Semantic Router Model Runtime" || contract.Info.Version != version {
-		return false
-	}
-	for path, method := range map[string]string{"/health": "get", "/v1/models": "get", "/v1/decisions": "post"} {
-		if _, exists := contract.Paths[path][method]; !exists {
-			return false
+		switch health.ServingMode {
+		case servingModeRouter, servingModeEngine:
+			probe.mode, probe.state = health.ServingMode, "ready"
 		}
 	}
-	return true
+	return probe
 }
 
 func collectModelEngineStatus(upstream, deploymentType, component string, probe servingHealthProbe) SystemStatus {

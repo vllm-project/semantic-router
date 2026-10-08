@@ -9,7 +9,6 @@ import socket
 import subprocess
 import sys
 import time
-import uuid
 from contextlib import suppress
 from dataclasses import asdict
 from pathlib import Path
@@ -21,7 +20,6 @@ from cli.instance_paths import (
     instance_control_directory,
     prepare_instance_control_directory,
 )
-from cli.instance_runtime import copy_private
 from cli.instance_state import write_private_json
 from cli.runtime_stack import resolve_runtime_stack
 
@@ -147,7 +145,6 @@ def attach_controller(source, config, env, gateway, startup_timeout):
         **images,
     }
     write_private_json(directory / "manifest.json", manifest)
-    copy_private(paths["effective_config_path"], directory / "router-ready.yaml")
     ensure_controller(directory)
 
 
@@ -172,70 +169,3 @@ def stop_managed_controller():
             with suppress(FileNotFoundError, ConnectionRefusedError):
                 controller_request(directory, "/shutdown", {"stop": True})
             return
-
-
-def stop_managed_engine():
-    layout = resolve_runtime_stack()
-    runtime = get_container_runtime()
-    name = f"{layout.stack_name}-systemone-engine"
-    inspected = subprocess.run(
-        [runtime, "inspect", name], capture_output=True, timeout=10, check=False
-    )
-    if inspected.returncode:
-        return
-    container = json.loads(inspected.stdout)[0]
-    if not (container.get("Config", {}).get("Labels") or {}).get("vllm-sr.operation"):
-        raise RuntimeError("Engine container is not owned by the instance controller")
-    stopped = subprocess.run(
-        [runtime, "stop", "--time", "30", container["Id"]],
-        capture_output=True,
-        timeout=60,
-        check=False,
-    )
-    if stopped.returncode:
-        raise RuntimeError("Managed Engine could not be stopped")
-
-
-def resume_engine(source, env, runtime_config_lock=None):
-    """Ordinary serve/health repair preserves a persisted Engine-mode choice."""
-    directory = instance_directory(source, env)
-    state_path = directory / "state.json"
-    if not state_path.exists():
-        return False
-    state = json.loads(state_path.read_text())
-    if state.get("desired_mode") != "engine":
-        return False
-    # Preparation handed the CLI a config lock. The host controller takes that
-    # same lock in its own process, so release the handoff before submitting.
-    if runtime_config_lock is not None:
-        runtime_config_lock.close()
-    status = ensure_controller(directory)
-    operation = status.get("operation") or {}
-    if operation.get("phase") not in {None, "ready", "failed"}:
-        raise RuntimeError("An instance operation is already in progress")
-    status = controller_request(
-        directory,
-        "/deploy",
-        {
-            "mode": "engine",
-            "deployment": state["deployment"],
-            "request_id": uuid.uuid4().hex,
-        },
-    )
-    timeout = json.loads((directory / "manifest.json").read_text()).get(
-        "startup_timeout", 600
-    )
-    deadline = time.monotonic() + timeout + 60
-    while time.monotonic() < deadline:
-        phase = (status.get("operation") or {}).get("phase")
-        if phase == "ready":
-            return True
-        if phase == "failed":
-            raise RuntimeError(
-                "Engine redeployment failed; previous instance was restored when possible"
-            )
-        time.sleep(1)
-        status = controller_request(directory, "/status")
-    raise RuntimeError(
-        "Engine redeployment is still in progress; inspect instance status"
-    )

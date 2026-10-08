@@ -3,7 +3,7 @@ import { responseErrorMessage } from './configPageRequestErrors'
 export interface ModelRuntimeDeployment {
   name: string
   managed: boolean
-  process: string
+  process?: string
   served_name: string
   ready: boolean
   state: string
@@ -17,6 +17,19 @@ export interface ModelRuntimeDeployment {
   device?: string
   profile?: string
   engine?: string
+  desired_replicas?: number
+  ready_replicas?: number
+  replicas?: Array<{
+    id: string
+    managed: boolean
+    device?: string
+    ready: boolean
+    state: string
+    reason?: string
+    inflight: number
+    estimated_work: number
+    restarts: number
+  }>
 }
 
 export interface ModelRuntimeInventory {
@@ -75,7 +88,7 @@ export function decisionModelRuntimeState(
 ): string {
   const observed = inventory?.deployments.find((entry) => entry.name === deployment)
   if (!observed) return 'Not reported'
-  return observed.ready && observed.state === 'ready' ? 'Ready' : 'Needs attention'
+  return observed.ready ? (observed.state === 'degraded' ? 'Degraded capacity' : 'Ready') : 'Needs attention'
 }
 
 export function decisionActivationLabel(activation: DecisionModelActivation | null): string {
