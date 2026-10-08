@@ -15,6 +15,7 @@ import math
 from abc import abstractmethod
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, Generic
 
 from ..errors import INVALID_QUESTION, RuntimeServiceError
@@ -112,7 +113,7 @@ def join_states(
     is valid is refused, as ``refuse_unanswerable`` refuses one about one state.
     """
     for status, body in outcomes:
-        if status != 200:
+        if status != HTTPStatus.OK:
             return status, body
     answers = [
         (question_id, answer)
@@ -134,7 +135,7 @@ def join_states(
     response["states"] = {
         name: body for name, (_, body) in zip(names, outcomes[1:], strict=True)
     }
-    return 200, response
+    return HTTPStatus.OK, response
 
 
 def well_formed(answer: dict[str, Any]) -> bool:
