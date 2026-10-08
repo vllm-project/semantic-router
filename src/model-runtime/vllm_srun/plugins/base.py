@@ -630,7 +630,9 @@ class SurfaceRequest:
 
     ``body`` is the JSON body; the runtime has checked its top-level fields
     and parsed the generic options (deadline, profile, return_meta). The
-    family validates everything else in ``plan_surface``.
+    family validates everything else in ``plan_surface``. ``part`` marks one
+    state of a decisions request with several (``states``): only the whole
+    request is refused when none of its questions is valid.
     """
 
     surface: str
@@ -639,6 +641,7 @@ class SurfaceRequest:
     profile: str
     return_meta: bool
     received: float
+    part: bool = False
 
     @property
     def options(self) -> dict[str, Any]:

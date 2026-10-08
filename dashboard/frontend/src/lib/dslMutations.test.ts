@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { serializeFields, updateRoute, updateSignal } from './dslMutations'
+import type { BoolExprNode } from '@/types/dsl'
+
+import { serializeBoolExpr, serializeFields, updateRoute, updateSignal } from './dslMutations'
 
 describe('DSL string literals written by Builder mutations', () => {
   it('escapes quotes, backslashes, and newlines in field values', () => {
@@ -46,5 +48,49 @@ describe('DSL string literals written by Builder mutations', () => {
       String.raw`ROUTE support (description = "Answers \"how do I\" questions") {`,
     )
     expect(updated).toContain(String.raw`MODEL "model \"a\"" (effort = "high")`)
+  })
+})
+
+describe('route conditions written by the Builder route form', () => {
+  const pos = { Line: 1, Column: 1 }
+  const keyword = (signalName: string): BoolExprNode => ({
+    type: 'signal_ref',
+    signalType: 'keyword',
+    signalName,
+    pos,
+  })
+  const and = (left: BoolExprNode, right: BoolExprNode): BoolExprNode => ({
+    type: 'and',
+    left,
+    right,
+    pos,
+  })
+  const or = (left: BoolExprNode, right: BoolExprNode): BoolExprNode => ({
+    type: 'or',
+    left,
+    right,
+    pos,
+  })
+  const not = (expr: BoolExprNode): BoolExprNode => ({ type: 'not', expr, pos })
+
+  it('keeps the AND group a NOT applies to', () => {
+    expect(
+      serializeBoolExpr(
+        and(
+          keyword('legal_terms'),
+          not(and(keyword('opinion_request'), not(keyword('risk_markers')))),
+        ),
+      ),
+    ).toBe(
+      'keyword("legal_terms") AND NOT (keyword("opinion_request") AND NOT keyword("risk_markers"))',
+    )
+  })
+
+  it('writes other NOT operands as before', () => {
+    expect(serializeBoolExpr(not(keyword('a')))).toBe('NOT keyword("a")')
+    expect(serializeBoolExpr(not(or(keyword('a'), keyword('b'))))).toBe(
+      'NOT (keyword("a") OR keyword("b"))',
+    )
+    expect(serializeBoolExpr(not(not(keyword('a'))))).toBe('NOT NOT keyword("a")')
   })
 })
