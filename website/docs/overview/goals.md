@@ -83,5 +83,5 @@ vLLM Semantic Router is designed around five goals:
 
 Read the [System Overview](semantic-router-overview) for the components and
 request lifecycle, then see [Use Cases](use-cases) for concrete routing
-patterns and the [agent harness guide](/docs/installation/agent-harness) for
+patterns and the [agent harness guide](../installation/agent-harness) for
 integration.

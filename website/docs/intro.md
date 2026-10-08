@@ -54,7 +54,7 @@ and capacity.
 ## Start here
 
 - [Run the Quickstart](/docs/installation).
-- [Connect an agent harness](/docs/installation/agent-harness).
+- [Connect an agent harness](installation/agent-harness).
 - Explore [use cases](overview/use-cases).
 - Read the [System Overview](overview/semantic-router-overview) and
   [Routing Pipeline](overview/signal-driven-decisions).

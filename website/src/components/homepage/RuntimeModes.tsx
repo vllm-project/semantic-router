@@ -103,7 +103,7 @@ export default function RuntimeModes(): React.JSX.Element {
               </div>
 
               <div className={styles.commandBlock}>
-                <Link className={styles.channelBadge} to="/docs/installation">
+                <Link className={styles.channelBadge} to="/docs/next/installation">
                   <Translate id="homepage.runtimeModes.devChannel">Development channel</Translate>
                 </Link>
                 <pre className={styles.command}><code>vllm-sr serve --gateway standalone</code></pre>
@@ -121,11 +121,11 @@ export default function RuntimeModes(): React.JSX.Element {
               </div>
 
               <footer className={styles.modeFooter}>
-                <Link to="/docs/installation">
+                <Link to="/docs/next/installation">
                   <Translate id="homepage.runtimeModes.router.cta">Run the Router</Translate>
                   <span aria-hidden="true"> →</span>
                 </Link>
-                <Link to="/docs/installation/gateway-modes">
+                <Link to="/docs/next/installation/gateway-modes">
                   <Translate id="homepage.runtimeModes.router.gatewayCta">Compare gateway modes</Translate>
                 </Link>
               </footer>
@@ -204,7 +204,7 @@ export default function RuntimeModes(): React.JSX.Element {
               </div>
 
               <div className={styles.commandBlock}>
-                <Link className={styles.channelBadge} to="/docs/installation">
+                <Link className={styles.channelBadge} to="/docs/next/installation">
                   <Translate id="homepage.runtimeModes.devChannel">Development channel</Translate>
                 </Link>
                 <pre className={styles.command}><code>vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100</code></pre>
@@ -224,11 +224,11 @@ export default function RuntimeModes(): React.JSX.Element {
               </div>
 
               <footer className={styles.modeFooter}>
-                <Link to="/docs/model-runtime/quickstart">
+                <Link to="/docs/next/model-runtime/quickstart">
                   <Translate id="homepage.runtimeModes.engine.cta">Run the Engine</Translate>
                   <span aria-hidden="true"> →</span>
                 </Link>
-                <Link to="/docs/model-runtime/overview">
+                <Link to="/docs/next/model-runtime/overview">
                   <Translate id="homepage.runtimeModes.engine.modelsCta">Explore the model runtime</Translate>
                 </Link>
               </footer>
