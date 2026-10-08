@@ -83,6 +83,7 @@ func (r *OpenAIRouter) executeLooperGraph(
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},
 	})
 	if err != nil {
+		logLooperCallBudgetExhaustion(err, outcome, decision, reqCtx)
 		return nil, r.looperExecutionErrorResponse(looperStepError(err), originalModel, decision, reqCtx)
 	}
 	resp, ok := looper.ResponseValue.In(outcome.Values)
@@ -99,6 +100,31 @@ func (r *OpenAIRouter) executeLooperGraph(
 		"hops":           outcome.Hops,
 	})
 	return resp, nil
+}
+
+// logLooperCallBudgetExhaustion records the typed, content-free diagnostic for
+// a run that stopped at the per-request call budget: the decision, the
+// algorithm, the limit, and the hop count actually observed. It logs nothing
+// for other failures.
+func logLooperCallBudgetExhaustion(err error, outcome *graph.Outcome, decision *config.Decision, reqCtx *RequestContext) {
+	if !errors.Is(err, graph.ErrHopLimit) {
+		return
+	}
+	observed := 0
+	if outcome != nil {
+		observed = outcome.Hops
+	}
+	algorithm := ""
+	if decision.Algorithm != nil {
+		algorithm = decision.Algorithm.Type
+	}
+	logging.ComponentErrorEvent("extproc", "looper_call_budget_exhausted", map[string]interface{}{
+		"request_id": reqCtx.RequestID,
+		"decision":   decision.Name,
+		"algorithm":  algorithm,
+		"limit":      config.MaxUpstreamCallsPerRequest,
+		"observed":   observed,
+	})
 }
 
 // looperStepError is the algorithm's own error, which the client response
