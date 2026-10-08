@@ -285,6 +285,57 @@ func TestBeforeItsQuestionsAreSentACallerKeepsItsOwnDeadline(t *testing.T) {
 	}
 }
 
+// lateTimer is a context whose deadline passes before its timer fires and
+// reports it, as a loaded process's timers may.
+type lateTimer struct {
+	context.Context
+	deadline time.Time
+	done     chan struct{}
+}
+
+func (c lateTimer) Deadline() (time.Time, bool) { return c.deadline, true }
+func (c lateTimer) Done() <-chan struct{}       { return c.done }
+
+func (c lateTimer) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+
+func TestACallItsExchangesDeadlineCutsShortFailsAtItsCallersDeadline(t *testing.T) {
+	runtime := runtimetest.New(jointVela2("vela"), classifyHead("guard"))
+	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela", "guard"}})
+	runtime.SetDelay(500 * time.Millisecond)
+	calls := map[string]func(ctx context.Context) error{
+		"decisions": func(ctx context.Context) error {
+			_, err := lease.Decide(ctx, "vela", Request{State: "cut short", Questions: []Question{choiceQuestion("safety")}})
+			return err
+		},
+		"classify": func(ctx context.Context) error {
+			_, err := lease.Classify(ctx, "guard", classifyText("cut short"))
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			var mine error
+			_, errs := runStage(DefaultBundleWindow, asker{deployments: []string{"vela"}, ask: func(ctx context.Context) error {
+				late := lateTimer{Context: ctx, deadline: time.Now().Add(50 * time.Millisecond), done: make(chan struct{})}
+				time.AfterFunc(150*time.Millisecond, func() { close(late.done) })
+				err := call(late)
+				mine = late.Err()
+				return err
+			}})
+			if !errors.Is(errs[0], context.DeadlineExceeded) || !errors.Is(mine, context.DeadlineExceeded) {
+				t.Fatalf("the caller fails once its own deadline says so (%v), not before (%v)", errs[0], mine)
+			}
+		})
+	}
+}
+
 func TestTheStageCountsEveryDecisionsCallAfterItsFirst(t *testing.T) {
 	deployment := fmt.Sprintf("vela-%d", time.Now().UnixNano())
 	runtime := runtimetest.New(jointVela2(deployment))
