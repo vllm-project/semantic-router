@@ -213,22 +213,6 @@ all five entrypoints and all 315 authored probes; counts are checked against the
 discovered inventory rather than used to select a smaller sample. These fixtures
 do not measure backend LLM quality or call external providers.
 
-### Known-issue waiver on CPU
-
-On a 4-vCPU CPU runner, Vela 2.0 0.3B reads every token of a long-context
-input, so a few long-context probes can outlast the routing preview's deadline
-until [#4706](https://github.com/vllm-project/semantic-router/issues/4706)
-bounds that read. The CPU runner passes `--cpu-known-issue-waivers`, which
-waives exactly one outcome on exactly the probes that
-`tools/calibration/recipe/recipe_conformance_waivers.py` names: the preview's
-504 `REQUEST_TIMEOUT`, or a response at the deadline whose only failures are
-signal evaluations that the deadline cut short. A misroute, any other error,
-and a timeout on any other probe still fail. A waived probe leaves the pass
-rates, stays in the report, and appears in the summary's Known-issue waivers
-section. The CI plan records the same probe list for the `recipe-conformance`
-verification, whose receipt then reads `qualified-with-waiver`. Remove the
-waiver with #4706; the named probes must then pass without it.
-
 Each invocation owns an isolated stack and runtime directory under
 `.agent-harness/recipe-conformance-runtime/`; logs and reports are collected
 before that stack is stopped. Configured bearer credentials are supplied to

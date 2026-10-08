@@ -26,6 +26,9 @@ on the CPU latency.
   host, 0.4% of requests sent one question in a second call.
 - **Restore:** one block brings back every Vela 1.0 specialist, and one line
   any single signal ([below](#restore-the-vela-10-specialists)).
+- **Other sizes:** [vela2-decision-model-sizes.md](vela2-decision-model-sizes.md)
+  measures the 0.8B, 4B and 9B the same way, as the decision model
+  (`global.model_catalog.system.decision_model`).
 
 - **Date:** 2026-10-07.
 - **Machine:** AMD EPYC 9575F, CPU only. The accuracy runs and the latency

@@ -11,9 +11,8 @@ func ValidatePIIWindow(cfg *RouterConfig) error {
 			return fmt.Errorf("classifier.pii binding names an unknown deployment")
 		}
 		if pii.Window == nil {
-			if deployment.Input.Overflow == "window" {
-				return fmt.Errorf("classifier.pii window overflow requires window geometry")
-			}
+			// A head deployment that reads in windows without geometry fails
+			// preparation; a question deployment's window is its scan budget.
 			return nil
 		}
 		return pii.ValidateBoundWindow(deployment)

@@ -42,6 +42,9 @@ BAND_BLOCK = 128
 # Row width from which local layers attend in query blocks, by device type (Vela 307M,
 # FP32): dense masked SDPA is faster below, on 16 EPYC cores and on MI325X.
 BAND_FROM = {"cpu": 1024, "cuda": 2048}
+# Query tokens one CPU SDPA call of local attention reads: the keys, values and
+# mask it copies for them stay this small on rows of any length.
+BAND_CALL_TOKENS = 4096
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
 # cos / sin per layer type for each grid width of a layout.
 Rotary = dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]]
@@ -261,27 +264,59 @@ def banded_attention(
     blocks: Band,
     scale: float,
 ) -> torch.Tensor:
-    """Local attention of ``[rows, heads, width, dim]`` inputs, O(width * (block + 2 window))."""
+    """Local attention of ``[rows, heads, width, dim]`` inputs, O(width * (block + 2 window)).
+
+    On the CPU, query blocks run ``BAND_CALL_TOKENS`` at a time: each SDPA call
+    copies its blocks' keys, values and mask, so a call's copies stay that small
+    on any row. Every block is its own SDPA problem, so the result is the same.
+    """
     rows, heads, width, dim = query.shape
-    count, span = blocks.mask.shape[2], blocks.mask.shape[-1]
-    tail = count * blocks.block - width
-    pad = (0, 0, blocks.window, tail + blocks.window)
+    count, block = blocks.mask.shape[2], blocks.block
+    step = count if query.device.type != "cpu" else max(1, BAND_CALL_TOKENS // block)
+    if step >= count:
+        return _band_call(kernels, query, key, value, blocks, scale, 0, count)
+    out = query.new_empty(rows, heads, width, dim)
+    for first in range(0, count, step):
+        last = min(count, first + step)
+        out[:, :, first * block : last * block] = _band_call(
+            kernels, query, key, value, blocks, scale, first, last
+        )
+    return out
+
+
+def _band_call(
+    kernels: KernelSet,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    blocks: Band,
+    scale: float,
+    first: int,
+    last: int,
+) -> torch.Tensor:
+    """One SDPA call over query blocks ``[first, last)``: their rows of the output."""
+    rows, heads, width, dim = query.shape
+    span, block, window = blocks.mask.shape[-1], blocks.block, blocks.window
+    start, stop, count = first * block, min(width, last * block), last - first
+    q = F.pad(query[:, :, start:stop], (0, 0, 0, count * block - (stop - start)))
+    # Block b reads keys [b * block - window, (b + 1) * block + window), zeros outside the row.
+    low, high = start - window, last * block + window
+    keys = (max(0, -low), max(0, high - width))
+    k = F.pad(key[:, :, max(0, low) : min(width, high)], (0, 0, *keys))
+    v = F.pad(value[:, :, max(0, low) : min(width, high)], (0, 0, *keys))
     # Heads and blocks fold into one batch axis: fused SDPA kernels take 4-D inputs only.
     folded = (rows, heads * count)
-    q = F.pad(query, (0, 0, 0, tail)).reshape(*folded, blocks.block, dim)
-    k = F.pad(key, pad).unfold(2, span, blocks.block).transpose(-1, -2)
-    v = F.pad(value, pad).unfold(2, span, blocks.block).transpose(-1, -2)
-    mask = blocks.mask.expand(rows, heads, count, blocks.block, span)
+    mask = blocks.mask[:, :, first:last].expand(rows, heads, count, block, span)
     out: torch.Tensor = kernels("sdpa")(
-        q,
-        k.reshape(*folded, span, dim),
-        v.reshape(*folded, span, dim),
-        mask.reshape(*folded, blocks.block, span),
+        q.reshape(*folded, block, dim),
+        k.unfold(2, span, block).transpose(-1, -2).reshape(*folded, span, dim),
+        v.unfold(2, span, block).transpose(-1, -2).reshape(*folded, span, dim),
+        mask.reshape(*folded, block, span),
         scale=scale,
         is_causal=False,
         enable_gqa=False,
     )
-    return out.reshape(rows, heads, count * blocks.block, dim)[:, :, :width]
+    return out.reshape(rows, heads, count * block, dim)[:, :, : stop - start]
 
 
 @dataclass(frozen=True)

@@ -90,7 +90,8 @@ models:
 ```
 
 Each entry takes `model` (required), `revision`, `name`, `device`, `profile`,
-`engine`, `family`, `memory_budget_gib` and `options` (family options). The
+`engine`, `family`, `memory_budget_gib` and `options` (family options; a
+Vela 2.0 model takes `max_scan_tokens`, its [scan budget](#long-inputs)). The
 router writes this file for the processes it manages.
 
 ## HTTP API
@@ -145,6 +146,58 @@ A request that cannot be served at all returns an HTTP error with
 model does not serve that endpoint), 429 `overloaded`, 503 `not_ready`. A
 failed item of a request (one input or one question) carries its own error
 code and never fails the others.
+
+### Long inputs
+
+A model reads at most its token budget of an input: `options.max_tokens`, at
+most the model's `max_input_tokens`. The runtime tokenizes a longer input only
+as far as that budget decides the answer, so the memory and time an input
+costs follow its budget, not its length:
+
+- It cuts the text before a word boundary (whitespace, punctuation, a symbol,
+  or a Chinese, Japanese or Korean character) and keeps the tokens of the
+  words before the cut. In a run with no boundary the tokenizer splits at,
+  such as base64, hex, or Chinese without spaces in a tokenizer that splits
+  words only at spaces, it cuts before a letter or digit and keeps the tokens
+  that end 1,024 characters before the cut.
+- Under `reject`, a text longer than its budget times the most characters one
+  of the model's tokens covers fails without being tokenized.
+
+These are the tokens that reading the whole text gives, so the answer is the
+same. The runtime checks each kind of cut on probe texts the first time it
+uses a tokenizer and reads whole texts where a cut fails the check. A
+tokenizer that drops or folds characters, as WordPiece drops whitespace and
+reads a word of more than 100 characters as one unknown token, never cuts
+inside a run: it reads such a run whole, which costs little because the run is
+a few tokens. The usage of an input read in part counts the tokens read, which
+exceed the budget, and adds `"tokens_lower_bound": true`.
+
+A model that reads an input in windows reads it up to a scan budget, in
+tokens. Classify with `overflow: window` reads at most `max_tokens`. A
+Vela 2.0 question reads a long state part whole, in windows, up to its card's
+`limits.max_scan_tokens`: four inputs on a CPU (32,768 tokens for Vela 2.0
+0.3B) and 32 on a GPU. A decisions request's `options.max_tokens`, or the
+models-file option `max_scan_tokens`, sets another. A question with
+`overflow: truncate` reads only the part's first `limits.truncate_tokens`
+instead: one input on a CPU, one forward. Questions of both kinds share their
+model input, as they would without `overflow`, unless a part has to be read
+in windows. An input over its scan budget fails instead of being read:
+
+| Item error | Meaning |
+| --- | --- |
+| `max_length_exceeded` | The input has more tokens than its budget under `reject`. |
+| `scan_budget_exceeded` | The input is one the model reads in windows, and it has more tokens than its scan budget. None of it was read. |
+
+The only byte limit is `--max-request-bytes`, on a request as a whole.
+
+The router reads a long request through Vela 2.0 in two ways. A routing
+question (domain, fact check, feedback, modality, decision questions and the
+decision model selector) truncates. A safety question (prompt guard, safety,
+PII and hallucination) reads it whole, up to the model's scan budget or the
+deployment's `input.max_tokens` with `overflow: window`. Content past it, or
+a safety scan that misses the signals' deadline
+(`global.model_catalog.signal_timeout_ms`), was not read: a jailbreak or PII
+rule matches it as `unscanned` unless its module sets `on_unscanned: allow`.
 
 ### Classify
 
@@ -326,7 +379,9 @@ answers match.
 | `provider: model_runtime` | deployment | The model runs in the model runtime. |
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
 | `device`, `profile` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
-| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. |
+| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). |
+| `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
+| `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |
 | `process` | deployment | Managed deployments with the same name share a process. |
 | `endpoint`, `served_name` | deployment | Attach to a runtime you run. |
 | `deployment`, `contract`, `head` | binding | Which deployment a feature uses, the answer type it reads and an optional head name. |

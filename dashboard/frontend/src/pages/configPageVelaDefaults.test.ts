@@ -9,16 +9,8 @@ import {
 
 describe('Vela defaults and explicit legacy models', () => {
   it('keeps the fallback editor defaults aligned with the Vela 2.0 0.3B defaults', () => {
-    expect(DEFAULT_SECTIONS.system_models).toMatchObject({
-      domain_classifier: 'models/Vela-2.0-0.3B',
-      pii_classifier: 'models/Vela-2.0-0.3B',
-      fact_check_classifier: 'models/Vela-2.0-0.3B',
-      feedback_detector: 'models/Vela-2.0-0.3B',
-      prompt_guard: 'models/Vela-2.0-0.3B',
-      hallucination_detector: 'models/Vela-2.0-0.3B',
-    })
-    expect(DEFAULT_SECTIONS.system_models).not.toHaveProperty('safety')
-    expect(DEFAULT_SECTIONS.system_models).not.toHaveProperty('hazard')
+    // The modules follow the decision model; a per-module line would pin one.
+    expect(DEFAULT_SECTIONS.system_models).toEqual({ decision_model: 'Vela-2.0-0.3B' })
     expect(DEFAULT_SECTIONS.hallucination_mitigation).toMatchObject({
       fact_check: { threshold: 0.93 },
       detector: {

@@ -31,7 +31,7 @@ type ModalityDetectorConfig struct {
 // should be routed to an AR (text) model, a Diffusion (image) model, or both.
 type ModalityDetectionConfig struct {
 	// Method specifies the detection strategy: "classifier", "keyword", or "hybrid" (default).
-	//   - "classifier": Use the ML classifier only — classifier.model_path, Vela 2.0 0.3B by default
+	//   - "classifier": Use the ML classifier only — classifier.model_path, the decision model by default
 	//   - "keyword":    Use keyword pattern matching only — requires keywords list
 	//   - "hybrid":     Classifier primary + keyword fallback — requires at least one of the above
 	Method string `json:"method,omitempty" yaml:"method,omitempty"`
@@ -64,7 +64,7 @@ type ModalityDetectionConfig struct {
 type ModalityClassifierConfig struct {
 	MaxSequenceLength int `json:"max_sequence_length,omitempty" yaml:"max_sequence_length,omitempty"`
 	// ModelPath is the modality classifier's model: a built-in model or a
-	// package directory. Empty runs Vela 2.0 0.3B.
+	// package directory. Empty runs the decision model.
 	ModelPath string `json:"model_path,omitempty" yaml:"model_path,omitempty"`
 
 	// UseCPU forces CPU inference even when GPU is available.
@@ -81,11 +81,11 @@ func (c *ModalityDetectionConfig) GetMethod() string {
 	return c.Method
 }
 
-// ClassifierModel returns the model the modality classifier runs and whether
-// it runs on CPU: classifier.model_path, else Vela 2.0 0.3B for the
-// classifier method or a classifier block that names no model. ok is false
-// when the detector runs no classifier.
-func (c *ModalityDetectionConfig) ClassifierModel() (path string, useCPU bool, ok bool) {
+// classifierModel returns the model the modality classifier runs and whether
+// it runs on CPU: classifier.model_path, else defaultModel for the classifier
+// method or a classifier block that names no model. ok is false when the
+// detector runs no classifier.
+func (c *ModalityDetectionConfig) classifierModel(defaultModel string) (path string, useCPU bool, ok bool) {
 	if c == nil || c.Method == ModalityDetectionKeyword {
 		return "", false, false
 	}
@@ -93,12 +93,19 @@ func (c *ModalityDetectionConfig) ClassifierModel() (path string, useCPU bool, o
 		if path := strings.TrimSpace(c.Classifier.ModelPath); path != "" {
 			return path, c.Classifier.UseCPU, true
 		}
-		return Vela2SignalModel, c.Classifier.UseCPU, true
+		return defaultModel, c.Classifier.UseCPU, true
 	}
 	if c.Method == ModalityDetectionClassifier {
-		return Vela2SignalModel, true, true
+		return defaultModel, true, true
 	}
 	return "", false, false
+}
+
+// ModalityClassifierModel returns the model the modality classifier runs and
+// whether it runs on CPU: classifier.model_path, else the decision model's.
+// ok is false when the detector runs no classifier.
+func (c *RouterConfig) ModalityClassifierModel() (path string, useCPU bool, ok bool) {
+	return c.ModalityDetector.classifierModel(c.DecisionModelSpec().Modality)
 }
 
 // GetConfidenceThreshold returns the configured confidence threshold.
@@ -124,7 +131,7 @@ func (c *ModalityDetectionConfig) GetLowerThresholdRatio() float32 {
 // Validate validates the modality detection configuration.
 // It ensures that:
 //   - Method (if set) is one of "classifier", "keyword", or "hybrid"
-//   - For "classifier": the classifier runs classifier.model_path, or Vela 2.0 0.3B without one
+//   - For "classifier": the classifier runs classifier.model_path, or the decision model without one
 //   - For "keyword": At least one keyword must be configured
 //   - For "hybrid": At least one of Classifier or Keywords must be configured
 //   - ConfidenceThreshold (if set) is in the range (0, 1]
