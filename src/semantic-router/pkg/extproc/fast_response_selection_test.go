@@ -18,14 +18,12 @@ import (
 )
 
 func immediateResponseTestConfig() *config.RouterConfig {
-	replay := false
 	return &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			CandidateRequirements: &config.CandidateRequirements{
 				Capabilities: config.CandidateCapabilitiesDeclared,
 				Context:      config.CandidateContextKnownLimits,
 			},
-			DataPolicy: &config.RoutingDataPolicy{Replay: &replay},
 			Decisions: []config.Decision{{
 				Name: "immediate", Priority: 1,
 				Plugins: []config.DecisionPlugin{{

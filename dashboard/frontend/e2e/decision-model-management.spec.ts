@@ -629,3 +629,336 @@ test.describe('System One model management and monitoring', () => {
     expect(fixture.metricsRequests).toEqual([])
   })
 })
+
+async function mockDecisionRuntimeCatalog(
+  page: Page,
+  options: {
+    readonly?: boolean
+    noConsumers?: boolean
+    applyStatus?: 'success' | 'restart_required' | 'persisted' | 'failed'
+  } = {},
+) {
+  const fixture = await mockDecisionModelManager(page, options)
+  const config = {
+    version: 'v0.3',
+    global: {
+      model_catalog: {
+        system: { decision_model: 'Vela-2.0-4B', pii_classifier: 'models/custom-pii' },
+        deployments: {} as Record<string, unknown>,
+        admission: { shared: { max_inflight: 4 } },
+      },
+      services: { opaque_secret: 'test-preserved-secret' },
+    },
+    providers: { models: [{ name: 'answer', api_key: 'test-provider-secret' }] },
+    routing: {
+      signals: {
+        decision: options.noConsumers
+          ? []
+          : [{ name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } }],
+      },
+      decisions: [],
+      replay: { opaque_future_flag: true },
+    },
+    recipes: [
+      {
+        name: 'research',
+        routing: {
+          signals: {
+            decision: options.noConsumers
+              ? []
+              : [
+                  {
+                    name: 'difficulty',
+                    deployment: 'existing',
+                    question: {
+                      type: 'score',
+                      instructions: 'Difficulty?',
+                      levels: ['easy', 'hard'],
+                    },
+                  },
+                  {
+                    name: 'entities',
+                    question: {
+                      type: 'span',
+                      instructions: 'Extract',
+                      labels: [{ key: 'person' }],
+                    },
+                  },
+                ],
+          },
+          decisions: options.noConsumers
+            ? []
+            : [
+                {
+                  name: 'pick',
+                  algorithm: {
+                    type: 'decision',
+                    decision: {
+                      instructions: 'Which model?',
+                      candidates: { answer: 'General model' },
+                    },
+                  },
+                  modelRefs: [{ model: 'answer' }],
+                },
+              ],
+        },
+      },
+    ],
+    entrypoints: [{ model_names: ['research'], recipe: 'research' }],
+  }
+  const requests: (typeof config)[] = []
+  let ready = false
+  await page.route('**/api/router/config/global', (route) => route.fulfill({ json: config.global }))
+  await page.route('**/api/router/config/all', (route) => route.fulfill({ json: config }))
+  await page.route('**/api/router/config/update', async (route) => {
+    const body = route.request().postDataJSON() as typeof config
+    requests.push(body)
+    if (options.applyStatus === 'failed')
+      return route.fulfill({
+        status: 500,
+        body: 'Runtime preparation failed: unavailable GPU memory.',
+      })
+    Object.assign(config, body)
+    return route.fulfill({
+      status: options.applyStatus && options.applyStatus !== 'success' ? 202 : 200,
+      json: {
+        status: options.applyStatus ?? 'success',
+        ...(options.applyStatus === 'restart_required'
+          ? { message: 'Configuration saved. Restart the service to activate.' }
+          : {}),
+      },
+    })
+  })
+  await page.route('**/api/router/api/v1/inventory/model-runtime', (route) =>
+    route.fulfill({
+      json: {
+        deployments: Object.keys(config.global.model_catalog.deployments)
+          .filter(() => ready)
+          .map((name) => ({
+            name,
+            ready: true,
+            state: 'ready',
+            managed: true,
+            family: 'decision2',
+            restarts: 0,
+          })),
+      },
+    }),
+  )
+  return {
+    ...fixture,
+    config,
+    runtimeRequests: requests,
+    activateRuntime: () => {
+      ready = true
+    },
+  }
+}
+
+test.describe('Decision model catalog and deployment bindings', () => {
+  test('browses all released families with logos and filters capabilities without loading Model Hub', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page)
+    const catalogRequests: string[] = []
+    page.on('request', (request) => {
+      if (request.url().includes('/api/models/catalog')) catalogRequests.push(request.url())
+    })
+    await page.goto('/decision-model')
+    await expect(page.getByRole('radio', { name: /Vela 2.0 4B/ })).toBeChecked()
+    await expect(page.getByRole('article')).toHaveCount(13)
+    await page.screenshot({
+      path: '../../.agent-harness/decision-model-dashboard/decision-catalog-desktop.png',
+      fullPage: true,
+    })
+    await expect(
+      page
+        .getByRole('article', { name: 'Decision-2.0-Kai-0.6B', exact: true })
+        .getByRole('img', { name: 'vLLM Semantic Router' }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: /^Decision 1.0/ }).click()
+    await expect(page.getByRole('article')).toHaveCount(7)
+    await page.getByRole('textbox', { name: 'Search decision models' }).fill('Lex')
+    await expect(page.getByRole('article')).toHaveCount(1)
+    await expect(page.getByRole('article', { name: 'Decision-1.0-Lex-0.6B' })).toContainText(
+      'ModernBERT',
+    )
+    await page.getByRole('textbox', { name: 'Search decision models' }).clear()
+    await page.getByRole('button', { name: /^All families/ }).click()
+    await page.getByRole('combobox', { name: 'Question capability' }).click()
+    await page.getByRole('option', { name: 'span', exact: true }).click()
+    await expect(page.getByRole('article')).toHaveCount(0)
+    await expect(page.getByRole('radio')).toHaveCount(4)
+    expect(fixture.metricsRequests).toHaveLength(0)
+    expect(catalogRequests).toHaveLength(0)
+  })
+
+  test('keeps unrelated embedding deployments out of the decision runtime binding view', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page)
+    fixture.config.global.model_catalog.deployments = {
+      embeddings: { provider: 'model_runtime', artifact: 'team/embedding-model' },
+      reranker: { provider: 'model_runtime', artifact: 'team/reranker-model' },
+      existing: { provider: 'model_runtime', artifact: 'team/custom-decision-model' },
+      unbound: { provider: 'model_runtime', artifact: 'vllm-sr/Decision-2.0-Kai-0.6B' },
+    }
+    await page.goto('/decision-model')
+    const configured = page.getByRole('region', { name: 'Configured runtimes' })
+    await expect(configured).toContainText('team/custom-decision-model')
+    await expect(configured).toContainText('research / difficulty')
+    await expect(configured).toContainText('Saved · no decision binding')
+    await expect(configured).not.toContainText('team/embedding-model')
+    await expect(configured).not.toContainText('team/reranker-model')
+    await expect(configured).not.toContainText('Bind a consumer to activate')
+  })
+
+  test('atomically deploys a pinned Decision 2.0 runtime for one recipe while preserving the Vela default and credentials', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page)
+    await page.goto('/decision-model')
+    await page
+      .getByRole('article', { name: 'Decision-2.0-Kai-0.6B', exact: true })
+      .getByRole('button', { name: 'Configure' })
+      .click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('textbox', { name: 'Deployment name' }).fill('research-decider')
+    await dialog.getByRole('combobox', { name: 'Deployment consumer' }).click()
+    await expect(dialog.getByRole('option', { name: /entities/ })).toHaveCount(0)
+    await dialog.getByRole('option', { name: /research \/ difficulty/ }).click()
+    await expect(dialog).toContainText('existing → research-decider')
+    fixture.config.global.services.opaque_secret = 'test-updated-secret'
+    await dialog.getByRole('button', { name: 'Deploy and bind model' }).click()
+    await expect(dialog.getByRole('status')).toContainText('Configuration applied')
+    expect(fixture.runtimeRequests).toHaveLength(1)
+    const payload = fixture.runtimeRequests[0]
+    expect(payload.global.model_catalog.system).toEqual({
+      decision_model: 'Vela-2.0-4B',
+      pii_classifier: 'models/custom-pii',
+    })
+    expect(payload.global.model_catalog.deployments['research-decider']).toEqual({
+      provider: 'model_runtime',
+      artifact: 'vllm-sr/Decision-2.0-Kai-0.6B',
+      revision: 'cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764',
+      device: 'auto',
+    })
+    expect(payload.recipes[0].routing.signals.decision[0].deployment).toBe('research-decider')
+    expect(payload.routing.signals.decision[0]).not.toHaveProperty('deployment')
+    expect(payload.recipes[0].routing.signals.decision[1].question.type).toBe('span')
+    expect(payload.global.services.opaque_secret).toBe('test-updated-secret')
+    expect(payload.providers.models[0].api_key).toBe('test-provider-secret')
+    expect(payload.routing.replay).toEqual({ opaque_future_flag: true })
+    await dialog.getByRole('button', { name: 'Close deployment dialog' }).click()
+    const configured = page.getByRole('region', { name: 'Configured runtimes' })
+    await expect(configured).toContainText('Not reported')
+    fixture.activateRuntime()
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect(configured).toContainText('Ready')
+  })
+
+  test('saves an unbound Decision 1.0 honestly and keeps a question-creation path open', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page, { noConsumers: true })
+    await page.goto('/decision-model')
+    await page
+      .getByRole('article', { name: 'Decision-1.0-Lex-0.6B', exact: true })
+      .getByRole('button', { name: 'Configure' })
+      .click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('No compatible consumers yet')
+    await expect(dialog.getByRole('link', { name: /Open Signals/ })).toHaveAttribute(
+      'target',
+      '_blank',
+    )
+    await dialog.getByRole('button', { name: 'Save configuration', exact: true }).click()
+    await expect(dialog.getByRole('status')).toContainText('Saved without activation')
+    await expect(dialog.getByRole('status')).not.toContainText('Ready')
+    expect(fixture.runtimeRequests[0].routing.signals.decision).toEqual([])
+    await dialog.getByRole('button', { name: 'Close deployment dialog' }).click()
+    await expect(page.getByRole('region', { name: 'Configured runtimes' })).toContainText(
+      'Saved · no decision binding',
+    )
+  })
+
+  test('binds a decision selector and exposes deferred activation without claiming readiness', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page, { applyStatus: 'restart_required' })
+    await page.goto('/decision-model')
+    await page
+      .getByRole('article', { name: 'Decision-1.0-Kai-0.6B', exact: true })
+      .getByRole('button', { name: 'Configure' })
+      .click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('combobox', { name: 'Deployment consumer' }).click()
+    await dialog.getByRole('option', { name: /research \/ pick/ }).click()
+    await dialog.getByRole('button', { name: 'Deploy and bind model' }).click()
+    await expect(dialog.getByRole('status')).toContainText('Restart required')
+    expect(fixture.runtimeRequests[0].recipes[0].routing.decisions[0].algorithm.decision).toEqual({
+      instructions: 'Which model?',
+      candidates: { answer: 'General model' },
+      deployment: 'decision-1-0-kai-0-6b',
+    })
+  })
+
+  test('revalidates consumer compatibility against a fresh snapshot before any write', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page)
+    await page.goto('/decision-model')
+    await page
+      .getByRole('article', { name: 'Decision-2.0-Kai-0.6B', exact: true })
+      .getByRole('button', { name: 'Configure' })
+      .click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('combobox', { name: 'Deployment consumer' }).click()
+    await dialog.getByRole('option', { name: /Default routing \/ task/ }).click()
+    fixture.config.routing.signals.decision[0].question.type = 'span'
+    await dialog.getByRole('button', { name: 'Deploy and bind model' }).click()
+    await expect(dialog.getByRole('alert')).toContainText('no longer compatible')
+    expect(fixture.runtimeRequests).toHaveLength(0)
+  })
+
+  test('allows readonly model inspection but no configuration mutation', async ({ page }) => {
+    const fixture = await mockDecisionRuntimeCatalog(page, { readonly: true })
+    await page.goto('/decision-model')
+    await page
+      .getByRole('article', { name: 'Decision-2.0-Kai-0.6B', exact: true })
+      .getByRole('button', { name: 'View model' })
+      .click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('textbox', { name: 'Deployment name' })).toBeDisabled()
+    await expect(dialog.getByRole('combobox', { name: 'Deployment consumer' })).toBeDisabled()
+    await expect(
+      dialog.getByRole('button', { name: 'Save configuration', exact: true }),
+    ).toBeDisabled()
+    expect(fixture.runtimeRequests).toHaveLength(0)
+  })
+
+  test('keeps the catalog and deployment dialog usable at mobile width', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await mockDecisionRuntimeCatalog(page)
+    await page.goto('/decision-model')
+    await page.getByRole('button', { name: /^Decision 2.0/ }).click()
+    await page
+      .getByRole('article', { name: 'Decision-2.0-Kai-0.6B', exact: true })
+      .getByRole('button', { name: 'Configure' })
+      .click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await dialog.getByRole('combobox', { name: 'Deployment consumer' }).click()
+    await dialog.getByRole('option', { name: /Default routing \/ task/ }).click()
+    await expect(dialog.getByRole('button', { name: 'Deploy and bind model' })).toBeInViewport()
+    await page.screenshot({
+      path: '../../.agent-harness/decision-model-dashboard/decision-catalog-mobile.png',
+      fullPage: true,
+    })
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+  })
+})

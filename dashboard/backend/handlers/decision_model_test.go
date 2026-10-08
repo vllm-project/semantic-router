@@ -18,6 +18,14 @@ const (
 	decisionTestResponse     = `{"model":"served","answers":{"z":{"type":"noul","noul":0.8},"a":{"type":"noul","error":"invalid_question","message":"unsupported"}},"spans":{"names":[{"start":0,"end":2,"text":"张三","label":"person","probability":0.9}]},"usage":{"input_tokens":5,"output_tokens":0}}`
 )
 
+type decisionModelCredentialProvider struct {
+	token string
+}
+
+func (provider decisionModelCredentialProvider) ManagementCredential() (string, error) {
+	return provider.token, nil
+}
+
 func TestDecisionModelRouterForwardingPreservesNativeContract(t *testing.T) {
 	var posts atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +50,7 @@ func TestDecisionModelRouterForwardingPreservesNativeContract(t *testing.T) {
 		_, _ = io.WriteString(w, decisionTestResponse)
 	}))
 	defer upstream.Close()
-	handler := DecisionModelHandler(upstream.URL, classifierProxyCredentialProvider{token: "trusted-management"})
+	handler := DecisionModelHandler(upstream.URL, decisionModelCredentialProvider{token: "trusted-management"})
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		path := "/api/decision-model/capabilities"
 		if method == http.MethodPost {
@@ -143,7 +151,7 @@ func TestDecisionModelDoesNotFollowRedirectsAndCancelsUpstream(t *testing.T) {
 	}))
 	defer upstream.Close()
 	response := httptest.NewRecorder()
-	DecisionModelHandler(upstream.URL, classifierProxyCredentialProvider{token: "secret"})(response, httptest.NewRequest(http.MethodGet, "/api/decision-model/capabilities", nil))
+	DecisionModelHandler(upstream.URL, decisionModelCredentialProvider{token: "secret"})(response, httptest.NewRequest(http.MethodGet, "/api/decision-model/capabilities", nil))
 	if response.Code != 502 || leaked.Load() != 0 || strings.Contains(response.Body.String(), upstream.URL) {
 		t.Fatalf("redirect/transport leaked: %d %s", response.Code, response.Body.String())
 	}

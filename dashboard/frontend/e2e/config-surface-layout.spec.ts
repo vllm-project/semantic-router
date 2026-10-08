@@ -114,97 +114,6 @@ model_catalog:
       use_cpu: true
 `;
 
-const taxonomyClassifierResponse = {
-  items: [
-    {
-      name: 'privacy_classifier',
-      type: 'taxonomy',
-      builtin: true,
-      managed: true,
-      editable: false,
-      threshold: 0.3,
-      security_threshold: 0.25,
-      description: 'Built-in privacy routing taxonomy',
-      source: {
-        path: 'knowledge_bases/privacy/',
-        taxonomy_file: 'taxonomy.json',
-      },
-      tiers: [
-        { name: 'privacy_policy', description: 'Sensitive company content' },
-        { name: 'frontier_reasoning', description: 'General frontier reasoning' },
-      ],
-      categories: [
-        {
-          name: 'proprietary_code',
-          tier: 'privacy_policy',
-          description: 'Internal code and repositories',
-          exemplars: ['Review our private codebase'],
-        },
-        {
-          name: 'general_research',
-          tier: 'frontier_reasoning',
-          description: 'Open research requests',
-          exemplars: ['Summarize this public paper'],
-        },
-      ],
-      tier_groups: {
-        privacy_categories: ['proprietary_code'],
-      },
-      signal_references: [
-        {
-          name: 'privacy_policy',
-          bind: {
-            kind: 'tier',
-            value: 'privacy_policy',
-          },
-        },
-      ],
-      bind_options: {
-        tiers: ['privacy_policy', 'frontier_reasoning'],
-        categories: ['proprietary_code', 'general_research'],
-      },
-    },
-    {
-      name: 'research_classifier',
-      type: 'taxonomy',
-      builtin: false,
-      managed: true,
-      editable: true,
-      threshold: 0.41,
-      security_threshold: 0.28,
-      description: 'Custom research classifier',
-      source: {
-        path: 'classifiers/custom/research_classifier/',
-        taxonomy_file: 'taxonomy.json',
-      },
-      tiers: [
-        { name: 'internal', description: 'Private research assets' },
-        { name: 'external', description: 'Public artifacts' },
-      ],
-      categories: [
-        {
-          name: 'lab_notes',
-          tier: 'internal',
-          description: 'Private notes',
-          exemplars: ['Review our lab notes'],
-        },
-        {
-          name: 'papers',
-          tier: 'external',
-          description: 'Published papers',
-          exemplars: ['Summarize this paper'],
-        },
-      ],
-      tier_groups: {},
-      signal_references: [],
-      bind_options: {
-        tiers: ['internal', 'external'],
-        categories: ['lab_notes', 'papers'],
-      },
-    },
-  ],
-};
-
 async function mockConfigSurface(page: Page) {
   await mockAuthenticatedAppShell(page, {
     settings: { platform: '', readonlyMode: false },
@@ -224,14 +133,6 @@ async function mockConfigSurface(page: Page) {
 
   await page.route('**/api/router/config/global/raw', async route => {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
-  });
-
-  await page.route('**/api/router/api/v1/storage/knowledge-bases', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(taxonomyClassifierResponse),
-    });
   });
 
   await page.route('**/api/status', async route => {
@@ -508,13 +409,13 @@ test.describe('Config surface layout regressions', () => {
     await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
   });
 
-  test('redirects the retired classifier route to the canonical knowledge base manager', async ({ page }) => {
+  test('falls back from the retired classifier route to Global Config', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1200 });
     await mockConfigSurface(page);
 
     await page.goto('/config/classifiers');
 
-    await expect(page).toHaveURL(/\/knowledge-bases\/bases$/);
-    await expect(page.getByRole('heading', { name: 'Knowledge Bases' })).toBeVisible();
+    await expect(page).toHaveURL(/\/config\/global-config$/);
+    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
   });
 });

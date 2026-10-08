@@ -87,6 +87,7 @@ type RouterConfig struct {
 	RoutingFragmentOnly bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
+	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
@@ -288,7 +289,6 @@ type InlineModels struct {
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
 	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
-	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals               `yaml:",inline"`
 	Projections           Projections              `yaml:"projections,omitempty"`

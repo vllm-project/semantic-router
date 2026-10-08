@@ -19,7 +19,6 @@ type LayoutRouteMenuItem = {
   reloadDocument?: boolean
   target?: '_blank'
   matchMode?: 'exact' | 'prefix'
-  activePathPattern?: RegExp
 }
 
 type LayoutConfigMenuItem = {
@@ -199,40 +198,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
       },
     ],
   },
-  {
-    key: 'knowledge',
-    label: 'Knowledge Base',
-    description: 'Bring governed context into signal extraction and route policy.',
-    sections: [
-      {
-        title: 'Knowledge Base',
-        description: 'Manage the retrieval inventory used by knowledge signals.',
-        items: [
-          {
-            kind: 'route',
-            label: 'Bases',
-            icon: 'database',
-            to: '/knowledge-bases/bases',
-            activePathPattern: /^\/knowledge-bases\/[^/]+\/map\/?$/,
-          },
-          { kind: 'route', label: 'Groups', icon: 'database', to: '/knowledge-bases/groups' },
-          { kind: 'route', label: 'Labels', icon: 'label', to: '/knowledge-bases/labels' },
-        ],
-      },
-    ],
-  },
-  {
-    key: 'integrations',
-    label: 'Integration',
-    description: 'Connect external capabilities to the routing workspace.',
-    sections: [
-      {
-        title: 'Integrations',
-        description: 'Extend the control plane with tools.',
-        items: [{ kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' }],
-      },
-    ],
-  },
 ]
 
 export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
@@ -307,6 +272,11 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         ],
       },
       {
+        title: 'Integrations',
+        description: 'Extend the control plane with external tools.',
+        items: [{ kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' }],
+      },
+      {
         title: 'Access',
         description: 'Administer dashboard identities and roles.',
         items: [{ kind: 'route', label: 'Users', icon: 'user', to: '/users' }],
@@ -323,10 +293,6 @@ export function isLayoutMenuItemActive(
 ): boolean {
   if (item.kind === 'config') {
     return isConfigPage && configSection === item.configSection
-  }
-
-  if (item.activePathPattern?.test(pathname)) {
-    return true
   }
 
   return item.matchMode === 'prefix' ? pathname.startsWith(item.to) : pathname === item.to

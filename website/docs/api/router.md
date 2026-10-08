@@ -289,8 +289,11 @@ hold explanations describe what protection would have done; the selected model
 and route history still describe actual dispatch. Protection's `candidate_models`
 lists eligible models independently of their scores; an unrecorded score appears
 as `—`, while a recorded zero remains zero. Missing identity or evidence
-is displayed explicitly. A recipe's `data_policy.replay: false` prevents its
-requests from appearing in Replay, including rejected requests.
+is displayed explicitly. Replay capture uses `global.services.router_replay`
+defaults and the selected decision's `router_replay` plugin overrides. Rejected
+requests without a selected decision use the global defaults.
+`capture_personal_data: false` retains routing evidence but suppresses content
+when personal data is detected or PII evidence is unavailable.
 
 ### Configured-rate cost estimates
 

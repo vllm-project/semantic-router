@@ -1,14 +1,9 @@
 import React from 'react'
 import { Navigate, Route } from 'react-router-dom'
 import AppShellLayout from './AppShellLayout'
-import {
-  ConfigSectionRoute,
-  KnowledgeBaseRoute,
-  LegacyTaxonomyRedirect,
-} from './ConfigSectionRoutes'
+import { ConfigSectionRoute } from './ConfigSectionRoutes'
 import {
   fallbackRouteTarget,
-  redirectRouteDefinitions,
   shellRouteDefinitions,
   type ShellRouteDefinition,
   type ShellRoutePage,
@@ -26,7 +21,6 @@ import {
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
-  loadKnowledgeMapPage,
   loadLogsPage,
   loadMLSetupPage,
   loadModelHubPage,
@@ -159,21 +153,6 @@ export const renderAuthenticatedAppRoutes = ({
     ))}
     <Route path="/config" element={<ConfigSectionRoute />} />
     <Route path="/config/:section" element={<ConfigSectionRoute />} />
-    {redirectRouteDefinitions.map((route) => (
-      <Route key={route.path} path={route.path} element={<Navigate to={route.to} replace />} />
-    ))}
-    <Route
-      path="/knowledge-bases/:name/map"
-      element={
-        canAccessDashboardPath(user, '/knowledge-bases/map') ? (
-          <RecoverableLazyRoute loader={loadKnowledgeMapPage} routeLabel="Knowledge map" />
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
-      }
-    />
-    <Route path="/knowledge-bases/:view" element={<KnowledgeBaseRoute />} />
-    <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
     <Route
       path="/playground/fullscreen"
       element={

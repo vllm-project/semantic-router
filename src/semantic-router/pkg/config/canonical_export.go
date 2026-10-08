@@ -55,7 +55,6 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	return CanonicalRouting{
 		ModelBindings:         cloneModelMap(cfg.ModelBindings),
 		CandidateRequirements: cfg.CandidateRequirements.Clone(),
-		DataPolicy:            cfg.DataPolicy.Clone(),
 		ModelCards:            routingModelsFromRouterConfig(cfg),
 		Signals:               canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
 		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
@@ -298,7 +297,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	global := &CanonicalGlobal{
 		Router: CanonicalRouterGlobal{
 			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
-			Strategy:                  cfg.Strategy,
+			Strategy:                  cfg.RoutingDefaults.Strategy,
 			AutoModelName:             cfg.AutoModelName,
 			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
 			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
@@ -311,7 +310,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
-			Fallback:       cfg.Fallback.Clone(),
+			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,

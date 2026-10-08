@@ -34,6 +34,37 @@ function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: Route
 }
 
 describe('router defaults structured schemas', () => {
+  it('edits global Replay capture defaults without losing explicit false or zero values', () => {
+    const replay = {
+      enabled: true,
+      store_backend: 'memory',
+      capture_request_body: false,
+      capture_response_body: true,
+      capture_personal_data: false,
+      max_body_bytes: 0,
+      max_tool_trace_steps: 0,
+    }
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: { router_replay: replay },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const card = cards.find((item) => item.key === 'router_replay')!
+    expect(card.editFields.map((field) => field.name)).toEqual(
+      expect.arrayContaining([
+        'capture_request_body',
+        'capture_response_body',
+        'capture_personal_data',
+      ]),
+    )
+    expect(card.save(card.editData)).toMatchObject({
+      services: { router_replay: replay },
+    })
+  })
+
   it('normalizes typed lists and objects while preserving advanced keys', () => {
     const normalized = normalizeRouterStructuredFields('router_core', {
       auto_model_names: [' vllm-sr/auto ', 'MoM'],
@@ -318,14 +349,13 @@ describe('router defaults structured schemas', () => {
     )
   })
 
-  it('surfaces every current canonical global capability from the generated schema', () => {
+  it('surfaces canonical global capabilities while leaving KBs to the raw config', () => {
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: {
         management_api: { bind_address: '127.0.0.1', port: 8080 },
         startup_status: { store_backend: 'redis' },
         complexity: { backend: { base_url: 'http://classifier' } },
-        knowledge_bases: [{ name: 'docs' }],
         admission: { default: { max_concurrency: 8 } },
       },
       routerDefaults: null,
@@ -335,13 +365,7 @@ describe('router defaults structured schemas', () => {
     })
 
     expect(cards.map((card) => card.key)).toEqual(
-      expect.arrayContaining([
-        'management_api',
-        'startup_status',
-        'complexity',
-        'knowledge_bases',
-        'admission',
-      ]),
+      expect.arrayContaining(['management_api', 'startup_status', 'complexity', 'admission']),
     )
     expect(
       cards.find((card) => card.key === 'management_api')?.editFields.map((field) => field.name),
@@ -350,17 +374,15 @@ describe('router defaults structured schemas', () => {
       cards.find((card) => card.key === 'complexity')?.editFields.map((field) => field.name),
     ).toEqual(expect.arrayContaining(['prototype_scoring', 'backend']))
 
-    const knowledgeBases = cards.find((card) => card.key === 'knowledge_bases')
-    expect(knowledgeBases?.save({ items: [{ name: 'docs' }, { name: 'runbooks' }] })).toEqual({
-      model_catalog: { kbs: [{ name: 'docs' }, { name: 'runbooks' }] },
-    })
     const admission = cards.find((card) => card.key === 'admission')
     expect(admission?.save({ value: { default: { max_concurrency: 16 } } })).toEqual({
       model_catalog: { admission: { default: { max_concurrency: 16 } } },
     })
 
     const renderedPaths = new Set(cards.map((card) => card.path.join('.')))
+    expect(renderedPaths).not.toContain('model_catalog.kbs')
     for (const section of ROUTER_CONFIG_EXTENSION.global_sections) {
+      if (section.path.join('.') === 'model_catalog.kbs') continue
       expect(renderedPaths).toContain(section.path.join('.'))
     }
   })

@@ -68,6 +68,13 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     store_backend: 'memory',
     ttl_seconds: 2592000,
     async_writes: false,
+    capture_request_body: true,
+    capture_response_body: true,
+    capture_personal_data: true,
+    max_records: 10000,
+    max_body_bytes: 4096,
+    max_tool_trace_bytes: 0,
+    max_tool_trace_steps: 100,
   } satisfies RouterReplayConfig,
   authz: {
     fail_open: false,
@@ -163,7 +170,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
   complexity: {},
   external_models: [],
-  knowledge_bases: [],
   admission: {},
   // Every module follows the decision model unless a line binds it.
   system_models: {
@@ -258,7 +264,7 @@ export const SECTION_META: Record<
     title: 'Router Replay',
     eyebrow: 'Services',
     description:
-      'Persistence policy for replay records written by replay-enabled decision plugins.',
+      'Shared Replay storage and capture defaults. Each decision can override capture settings through its Replay plugin.',
   },
   authz: {
     title: 'Authorization',
@@ -332,11 +338,6 @@ export const SECTION_META: Record<
     title: 'External Models',
     eyebrow: 'Model Catalog',
     description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
-  },
-  knowledge_bases: {
-    title: 'Knowledge Bases',
-    eyebrow: 'Model Catalog',
-    description: 'Canonical knowledge-base definitions available to KB-aware routing signals.',
   },
   admission: {
     title: 'Model Admission',

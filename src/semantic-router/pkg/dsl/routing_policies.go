@@ -37,13 +37,6 @@ func applyRoutingPolicies(prog *Program, fields map[string]Value) error {
 		}
 		prog.CandidateRequirements = policy
 	}
-	if value, exists := fields["data_policy"]; exists {
-		policy, err := parseRoutingPolicy[config.RoutingDataPolicy](value)
-		if err != nil {
-			return fmt.Errorf("data_policy: %w", err)
-		}
-		prog.DataPolicy = policy
-	}
 	return nil
 }
 
@@ -57,15 +50,5 @@ func (d *decompiler) decompileRoutingPolicies() {
 			fields["context"] = policy.Context
 		}
 		d.write("  candidate_requirements: %s\n", formatPluginConfigValue(fields))
-	}
-	if policy := d.cfg.DataPolicy; policy != nil {
-		fields := map[string]interface{}{}
-		if policy.Replay != nil {
-			fields["replay"] = *policy.Replay
-		}
-		if policy.ReplayPersonalData != nil {
-			fields["replay_personal_data"] = *policy.ReplayPersonalData
-		}
-		d.write("  data_policy: %s\n", formatPluginConfigValue(fields))
 	}
 }

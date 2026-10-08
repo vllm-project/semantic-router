@@ -108,9 +108,7 @@ export function canAccessDashboardPath(
     normalizedPath.startsWith('/builder') ||
     normalizedPath.startsWith('/models') ||
     normalizedPath.startsWith('/decision-model') ||
-    normalizedPath.startsWith('/config') ||
-    normalizedPath.startsWith('/knowledge-bases') ||
-    normalizedPath.startsWith('/taxonomy')
+    normalizedPath.startsWith('/config')
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)
   }

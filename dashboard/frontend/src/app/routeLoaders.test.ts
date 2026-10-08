@@ -21,7 +21,14 @@ describe('lazy route pages', () => {
 
 describe('route preloading', () => {
   it('ignores paths outside the dashboard route registry', () => {
-    expect(preloadDashboardRoute('/not-a-dashboard-route')).toBeUndefined()
+    for (const path of [
+      '/not-a-dashboard-route',
+      '/knowledge-bases/bases',
+      '/knowledge-bases/privacy_kb/map',
+      '/taxonomy',
+    ]) {
+      expect(preloadDashboardRoute(path)).toBeUndefined()
+    }
   })
 
   it('deduplicates repeated route preload requests', () => {

@@ -4,9 +4,14 @@ import "fmt"
 
 func applyRawRouting(prog *Program, raw *rawRoutingDecl) []error {
 	fields := entriesToMap(raw.Fields)
+	for name := range fields {
+		if name != "strategy" && name != "model_bindings" && name != "candidate_requirements" {
+			return []error{fmt.Errorf("%s: unknown ROUTING field %q", posFromLexer(raw.Pos), name)}
+		}
+	}
 	strategy, ok := getStringField(fields, "strategy")
-	if !ok && fields["model_bindings"] == nil && fields["candidate_requirements"] == nil && fields["data_policy"] == nil {
-		return []error{fmt.Errorf("%s: ROUTING requires strategy, model_bindings, candidate_requirements, or data_policy", posFromLexer(raw.Pos))}
+	if !ok && fields["model_bindings"] == nil && fields["candidate_requirements"] == nil {
+		return []error{fmt.Errorf("%s: ROUTING requires strategy, model_bindings, or candidate_requirements", posFromLexer(raw.Pos))}
 	}
 	if err := applyRoutingPolicies(prog, fields); err != nil {
 		return []error{fmt.Errorf("%s: ROUTING %w", posFromLexer(raw.Pos), err)}

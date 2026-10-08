@@ -44,15 +44,24 @@ describe('layout navigation route matching', () => {
     )
   })
 
-  it('maps named knowledge-map routes back to the Knowledge category and Bases entry', () => {
-    const pathname = '/knowledge-bases/customer-support/map'
-    const basesItem = BUILD_MENU_CATEGORIES.find((category) => category.key === 'knowledge')
-      ?.sections.flatMap((section) => section.items)
-      .find((item) => item.kind === 'route' && item.label === 'Bases')
-
-    expect(basesItem).toBeDefined()
-    expect(isLayoutMenuItemActive(basesItem!, pathname, false)).toBe(true)
-    expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
+  it('places MCP under System and omits the retired knowledge navigation', () => {
+    expect(BUILD_MENU_CATEGORIES.map((category) => category.key)).toEqual([
+      'routing',
+      'system-one',
+      'outcomes',
+    ])
+    const integration = OPERATE_MENU_CATEGORIES.find(
+      (category) => category.key === 'platform-access',
+    )?.sections.find((section) => section.title === 'Integrations')
+    expect(integration?.items).toEqual([
+      { kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' },
+    ])
+    expect(findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/config/mcp', true, 'mcp')).toBe(
+      'platform-access',
+    )
+    expect(
+      findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/config/mcp', true, 'mcp'),
+    ).toBeUndefined()
   })
 
   it('keeps backend Models and Mixture-of-Models in the first Routing column', () => {

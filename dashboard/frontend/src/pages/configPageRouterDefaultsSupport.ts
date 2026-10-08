@@ -69,7 +69,8 @@ interface RouterSectionContext {
 export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
   router: {
     title: 'Router',
-    description: 'Core router-engine controls, startup behavior, and model-selection strategy.',
+    description:
+      'Router controls and shared routing defaults. Each recipe can override its own strategy and fallback.',
   },
   services: {
     title: 'Services',
@@ -249,7 +250,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
     case 'router_core':
       return [
         { label: 'Config source', value: stringOrFallback(section?.config_source, 'file') },
-        { label: 'Strategy', value: stringOrFallback(section?.strategy) },
+        { label: 'Default strategy', value: stringOrFallback(section?.strategy, 'priority') },
         { label: 'Auto model name', value: stringOrFallback(section?.auto_model_name) },
         {
           label: 'Auto model aliases',
@@ -417,8 +418,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         },
       ]
     }
-    case 'knowledge_bases':
-      return [{ label: 'Knowledge bases', value: `${Array.isArray(data) ? data.length : 0}` }]
     case 'admission':
       return [{ label: 'Policies', value: `${section ? Object.keys(section).length : 0}` }]
     case 'complexity':
@@ -595,9 +594,10 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         },
         {
           name: 'strategy',
-          label: 'Routing Strategy',
-          type: 'text',
-          placeholder: 'static, router_dc, automix...',
+          label: 'Default Decision Strategy',
+          type: 'select',
+          options: ['priority', 'confidence'],
+          description: 'Used when a recipe omits strategy. Priority is the built-in default.',
         },
         {
           name: 'auto_model_name',
@@ -637,6 +637,15 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'router_replay':
       return [
         { name: 'enabled', label: 'Enable Router Replay', type: 'boolean' },
+        { name: 'capture_request_body', label: 'Capture request bodies', type: 'boolean' },
+        { name: 'capture_response_body', label: 'Capture response bodies', type: 'boolean' },
+        {
+          name: 'capture_personal_data',
+          label: 'Capture personal data',
+          type: 'boolean',
+          description:
+            'When off, Replay keeps route metadata but omits content when PII is detected or detection is unavailable. A decision can override this default.',
+        },
         {
           name: 'store_backend',
           label: 'Store Backend',
@@ -1015,15 +1024,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   if (key === 'external_models') {
     return curated
   }
-  if (key === 'knowledge_bases') {
-    return [
-      generatedRouterValueField(
-        ['global', ...CURATED_ROUTER_SECTIONS[key].path],
-        'items',
-        'Knowledge Bases',
-      ),
-    ]
-  }
   if (key === 'admission') {
     return [
       generatedRouterValueField(
@@ -1052,7 +1052,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'clear_route_cache') {
     return { value: Boolean(data) }
   }
-  if (key === 'external_models' || key === 'knowledge_bases') {
+  if (key === 'external_models') {
     return { items: Array.isArray(data) ? data : cloneDefaultSection(key) }
   }
   if (key === 'admission') {
@@ -1139,7 +1139,7 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
       Boolean(data.value),
     ) as Partial<ConfigData>
   }
-  if (key === 'external_models' || key === 'knowledge_bases') {
+  if (key === 'external_models') {
     return buildNestedPatch(
       CURATED_ROUTER_SECTIONS[key].path,
       Array.isArray(data.items) ? data.items : [],
@@ -1251,6 +1251,8 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     Object.values(CURATED_ROUTER_SECTIONS).map(({ path }) => path.join('.')),
   )
   const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
+    // KB management is not a Dashboard surface; the canonical schema and raw editor retain it.
+    .filter((surface) => surface.path.join('.') !== 'model_catalog.kbs')
     .filter((surface) => !curatedPaths.has(surface.path.join('.')))
     .map((surface) => {
       const schemaPath = ['global', ...surface.path]

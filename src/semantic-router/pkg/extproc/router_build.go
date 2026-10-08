@@ -329,30 +329,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	})
 	components.shadowDispatcher = newShadowDispatcher()
 	components.resources.add(components.shadowDispatcher.Close)
-	fallbackPolicy := fallback.DefaultPolicy()
-	if cfg.Fallback != nil {
-		fallbackPolicy = cfg.Fallback.WithDefaults()
-	}
-	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
-	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
-
-	breakersByPolicy := map[fallback.CircuitBreakerConfig]*fallback.BackendCircuitBreaker{
-		fallbackPolicy.CircuitBreaker: components.fallbackCircuitBreaker,
-	}
-
-	components.recipeFallbackOrchestrators = make(map[config.RecipeName]*fallback.Orchestrator, len(cfg.Recipes))
-	for _, recipe := range cfg.Recipes {
-		recipePolicy := fallbackPolicy
-		if recipe.Profile.Fallback != nil {
-			recipePolicy = recipe.Profile.Fallback.Inherit(fallbackPolicy).WithDefaults()
-		}
-		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
-		if !ok {
-			breaker = fallback.NewBackendCircuitBreaker(recipePolicy.CircuitBreaker)
-			breakersByPolicy[recipePolicy.CircuitBreaker] = breaker
-		}
-		components.recipeFallbackOrchestrators[recipe.Name] = fallback.NewOrchestrator(recipePolicy, breaker)
-	}
+	components.buildFallbackRuntime()
 	var replayReaderForLookup store.Reader
 	if components.replayRecorder != nil {
 		replayReaderForLookup = components.replayRecorder.Reader()
@@ -402,6 +379,34 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	}
 
 	return components, nil
+}
+
+func (components *routerComponents) buildFallbackRuntime() {
+	cfg := components.cfg
+	fallbackPolicy := fallback.DefaultPolicy()
+	if cfg.RoutingDefaults.Fallback != nil {
+		fallbackPolicy = cfg.RoutingDefaults.Fallback.WithDefaults()
+	}
+	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
+	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
+
+	breakersByPolicy := map[fallback.CircuitBreakerConfig]*fallback.BackendCircuitBreaker{
+		fallbackPolicy.CircuitBreaker: components.fallbackCircuitBreaker,
+	}
+
+	components.recipeFallbackOrchestrators = make(map[config.RecipeName]*fallback.Orchestrator, len(cfg.Recipes))
+	for _, recipe := range cfg.Recipes {
+		recipePolicy := fallback.DefaultPolicy()
+		if recipe.Profile.Fallback != nil {
+			recipePolicy = recipe.Profile.Fallback.WithDefaults()
+		}
+		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
+		if !ok {
+			breaker = fallback.NewBackendCircuitBreaker(recipePolicy.CircuitBreaker)
+			breakersByPolicy[recipePolicy.CircuitBreaker] = breaker
+		}
+		components.recipeFallbackOrchestrators[recipe.Name] = fallback.NewOrchestrator(recipePolicy, breaker)
+	}
 }
 
 func (components *routerComponents) buildEarlyResources() error {

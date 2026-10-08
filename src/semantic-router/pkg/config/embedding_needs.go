@@ -71,9 +71,6 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 		}
 		needed[model] = true
 	}
-	if cfg.ModelSelection.Enabled && cfg.ModelSelection.ML.ModelsPath != "" {
-		needed[primary] = true
-	}
 	for _, decision := range cfg.Decisions {
 		if algorithm := decision.Algorithm; algorithm != nil {
 			switch algorithm.Type {

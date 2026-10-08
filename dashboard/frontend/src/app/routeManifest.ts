@@ -24,11 +24,6 @@ export interface ShellRouteDefinition {
   hideAccountControl?: boolean
 }
 
-export interface RedirectRouteDefinition {
-  path: string
-  to: string
-}
-
 export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/dashboard', page: 'dashboard' },
   { path: '/decision-model', page: 'decision-model' },
@@ -52,11 +47,6 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/builder', page: 'builder' },
   { path: '/config/reference', page: 'config-reference' },
   { path: '/users', page: 'users' },
-]
-
-export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
-  { path: '/knowledge-bases', to: '/knowledge-bases/bases' },
-  { path: '/taxonomy', to: '/knowledge-bases/bases' },
 ]
 
 export const fallbackRouteTarget = (setupMode: boolean): string =>

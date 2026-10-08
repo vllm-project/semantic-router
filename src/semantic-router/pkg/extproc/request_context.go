@@ -380,9 +380,11 @@ type RequestContext struct {
 	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
-	PIIDetected bool     // True if PII was detected
-	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
-	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+	// PIIContentVerified means the classifier fully scanned the available text without PII.
+	PIIContentVerified bool
+	PIIDetected        bool     // True if PII was detected
+	PIIEntities        []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
@@ -404,8 +406,8 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
-	// RouterReplayContentOmitted keeps the content of a request with personal
-	// data out of its replay record under routing.data_policy.replay_personal_data.
+	// RouterReplayContentOmitted prevents later response/tool capture from
+	// reintroducing content omitted by the resolved Replay capture policy.
 	RouterReplayContentOmitted bool
 
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin

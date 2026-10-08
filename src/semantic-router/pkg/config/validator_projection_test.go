@@ -365,8 +365,11 @@ routing:
   signals:
     structure:
       - name: many_questions
-        operator: OR
-        patterns: ["\\?"]
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: "\\?"
   projections:
     scores:
       - name: workload_pressure

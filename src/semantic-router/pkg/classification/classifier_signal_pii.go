@@ -86,6 +86,29 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 		c.evaluatePIIRule(rules[i], piiText, nonUserMessages, piiCache, start, results, mu)
 	})
 
+	// Replay needs stronger evidence than a non-matching routing rule: an
+	// allow-list or on_error: allow must not certify content as PII-free.
+	verified := len(rules) > 0 && len(pieces) > 0
+	for _, result := range classified {
+		if result.err != nil {
+			verified = false
+		}
+	}
+	for _, content := range nonUserMessages {
+		if content != "" {
+			if _, scanned := contentSeen[content]; !scanned {
+				verified = false
+			}
+		}
+	}
+	for _, rule := range rules {
+		entities, failed := c.collectPIIEntityTypes(uniqueContents, rule.Name, rule.Threshold, piiCache)
+		if failed || len(entities) > 0 {
+			verified = false
+		}
+	}
+	results.PIIContentVerified = verified
+
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 	results.Metrics.PII.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

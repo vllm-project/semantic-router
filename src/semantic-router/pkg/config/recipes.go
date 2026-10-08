@@ -41,7 +41,6 @@ func (s RoutingStrategy) Validate() error {
 // on RouterConfig.
 type RoutingProfile struct {
 	CandidateRequirements *CandidateRequirements
-	DataPolicy            *RoutingDataPolicy
 	ModelBindings         map[string]ModelBinding
 	Signals               Signals
 	Projections           Projections
@@ -159,7 +158,6 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 		Profile: RoutingProfile{
 			ModelBindings:         cloneModelMap(c.ModelBindings),
 			CandidateRequirements: c.CandidateRequirements.Clone(),
-			DataPolicy:            c.DataPolicy.Clone(),
 			Signals:               c.Signals,
 			Projections:           c.Projections,
 			Decisions:             c.Decisions,
@@ -284,7 +282,6 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped.IntelligentRouting = IntelligentRouting{
 		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
 		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
-		DataPolicy:            recipe.Profile.DataPolicy.Clone(),
 		Signals:               recipe.Profile.Signals,
 		Projections:           recipe.Profile.Projections,
 		Decisions:             recipe.Profile.Decisions,

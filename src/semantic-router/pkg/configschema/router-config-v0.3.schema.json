@@ -1049,9 +1049,6 @@
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
-        },
         "model_bindings": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelBinding"
@@ -1135,9 +1132,6 @@
       "properties": {
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
-        },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
         },
         "model_bindings": {
           "additionalProperties": {
@@ -6201,6 +6195,27 @@
     },
     "RouterReplayConfig": {
       "properties": {
+        "capture_request_body": {
+          "type": "boolean"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_personal_data": {
+          "type": "boolean"
+        },
+        "max_records": {
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_steps": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6255,6 +6270,9 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
+        "capture_personal_data": {
+          "type": "boolean"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6362,18 +6380,6 @@
         },
         "key_prefix": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "RoutingDataPolicy": {
-      "properties": {
-        "replay": {
-          "type": "boolean"
-        },
-        "replay_personal_data": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,

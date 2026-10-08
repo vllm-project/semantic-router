@@ -132,11 +132,14 @@ head. Only types that identify a person count: names, contact details,
 addresses, identity and account numbers. Places, organizations, dates,
 titles, domain names and nationality, religious or political group names do
 not count on their own, so "What is the capital of France?" is not personal
-data. Personal data changes no route, but `routing.data_policy.replay_personal_data:
-false` keeps such a request's content out of Router Replay: when Replay is
+data. Personal data changes no route. The standalone YAML sets
+`global.services.router_replay.capture_personal_data: false` to keep such a
+request's content out of Router Replay. When Replay is
 enabled, its record keeps the route, model, signals and detected PII types,
 and no request or response body, prompt or tool trace. The recipe itself does
-not enable Replay.
+not enable Replay. Content is also omitted if the PII detector is unavailable.
+When importing only the routing recipe into another deployment, that operator
+chooses its global capture defaults; the recipe does not override them.
 
 Locating personal data is the largest part of the decision model's cost on
 long inputs. The span head reads the whole latest user turn in windows, while
@@ -150,8 +153,9 @@ decision call took these median times without and with the PII question:
 | 16K tokens | 0.53 s | 1.75 s |
 
 A deployment that keeps Router Replay off can remove the `personal_data` rule
-to save that time. Replay then has no detector to keep personal data out, so
-keep the rule whenever Replay is on.
+to save that time. With personal-data capture disabled, an absent or unavailable
+detector suppresses all content conservatively. Keep the rule when you want
+Replay to capture requests verified free of personal data.
 
 Prompt attacks and unsafe requests receive a fixed reply without reaching any
 model. The guard thresholds favor precision, because role-play and code

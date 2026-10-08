@@ -428,6 +428,13 @@ export interface RouterReplayConfig {
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
+  capture_request_body?: boolean
+  capture_response_body?: boolean
+  capture_personal_data?: boolean
+  max_records?: number
+  max_body_bytes?: number
+  max_tool_trace_bytes?: number
+  max_tool_trace_steps?: number
 }
 
 export interface MemoryMilvusConfig {
@@ -826,7 +833,21 @@ export interface CanonicalModelModulesConfig {
   modality_detector?: ModalityDetectorConfig
 }
 
+export interface CanonicalModelDeployment {
+  artifact?: string
+  revision?: string
+  external_model?: string
+  provider?: string
+  device?: string
+  input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
+  profile?: string
+  endpoint?: string
+  process?: string
+  served_name?: string
+}
+
 export interface CanonicalModelCatalogConfig {
+  deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
   external?: ExternalModelConfig[]

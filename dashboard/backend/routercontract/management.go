@@ -47,9 +47,7 @@ func buildManagementPolicies() []ManagementPolicy {
 		"/api/v1/diagnostics/models",
 		"/api/v1/storage/response-cache/capabilities", "/api/v1/storage/response-cache/health", "/api/v1/storage/response-cache/stats",
 		"/api/v1/plugins/context_compression/capabilities", "/api/v1/plugins/context_compression/health",
-		"/api/v1/observability/plugins/context_compression/stats",
-		"/api/v1/storage/knowledge-bases", "/api/v1/storage/knowledge-bases/{name}",
-		"/api/v1/storage/knowledge-bases/{name}/map/metadata", "/api/v1/storage/knowledge-bases/{name}/map/data.ndjson")
+		"/api/v1/observability/plugins/context_compression/stats")
 	add(http.MethodGet, replayRead, false,
 		"/api/v1/observability/replays", "/api/v1/observability/replays/aggregate", "/api/v1/observability/replays/trajectory", "/api/v1/observability/replays/{id}", "/api/v1/observability/audit")
 	add(http.MethodPost, feedbackSubmit, true, "/api/v1/observability/outcomes")
@@ -63,9 +61,7 @@ func buildManagementPolicies() []ManagementPolicy {
 		"/api/v1/diagnostics/classify/intent", "/api/v1/diagnostics/classify/pii", "/api/v1/diagnostics/classify/security", "/api/v1/diagnostics/classify/fact-check", "/api/v1/diagnostics/classify/user-feedback", "/api/v1/diagnostics/classify/combined", "/api/v1/diagnostics/classify/batch",
 		"/api/v1/diagnostics/nli", "/api/v1/diagnostics/embeddings", "/api/v1/diagnostics/similarity", "/api/v1/diagnostics/similarity/batch")
 	addAll(http.MethodPost, []string{evaluationRun, configRead}, false, "/api/v1/plugins/rag/preview", "/api/v1/plugins/tools/preview", "/api/v1/plugins/tool_selection/preview")
-	add(http.MethodPost, configWrite, true, "/api/v1/storage/response-cache/invalidate", "/api/v1/storage/response-cache/flush", "/api/v1/storage/context-recovery/invalidate", "/api/v1/storage/knowledge-bases")
-	add(http.MethodPut, configWrite, true, "/api/v1/storage/knowledge-bases/{name}")
-	add(http.MethodDelete, configWrite, true, "/api/v1/storage/knowledge-bases/{name}")
+	add(http.MethodPost, configWrite, true, "/api/v1/storage/response-cache/invalidate", "/api/v1/storage/response-cache/flush", "/api/v1/storage/context-recovery/invalidate")
 	return policies
 }
 

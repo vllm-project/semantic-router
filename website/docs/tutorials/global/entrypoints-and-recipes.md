@@ -91,6 +91,19 @@ recipes:
             - model: accurate-model
 ```
 
+Shared strategy and fallback defaults live in `global.router`. Top-level
+`routing` is the default recipe, not a parent of named recipes. Each
+`recipes[].routing` resolves missing strategy and fallback fields directly from
+the global defaults, then a decision may override its own effective fallback.
+A sparse override such as `fallback: {enabled: false}` changes only that field;
+it does not discard shared timeout or retry settings. Direct and passthrough
+requests use the global fallback policy. The runtime default strategy is
+`priority`.
+
+Replay follows a separate service contract: shared capture defaults live in
+`global.services.router_replay`, with explicit overrides in each decision's
+`router_replay` plugin. Recipes do not add another Replay inheritance layer.
+
 Clients can discover entrypoint names through `/v1/models`. Routed responses
 include `x-vsr-selected-recipe`, so operators can confirm which policy handled
 a request without exposing the backend selection contract to the client.

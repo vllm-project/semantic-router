@@ -133,6 +133,16 @@ domains:
       - tools/codegen/embed_generated_index.py
       - tools/make/docs.mk
       - tools/make/golang.mk
+      - tools/make/dashboard.mk
+      - src/model-runtime/vllm_srun/registry/tables/decision1.py
+      - src/model-runtime/vllm_srun/registry/tables/decision2.py
+      - src/model-runtime/vllm_srun/registry/tables/common.py
+      - src/model-runtime/vllm_srun/systemone.py
+      - src/model-runtime/vllm_srun/families/decision1/family.py
+      - src/model-runtime/vllm_srun/families/decision1/questions.py
+      - src/model-runtime/vllm_srun/families/decision2/family.py
+      - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
+      - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - website/docs/api/apiserver.md
       - website/static/openapi/apiserver/**

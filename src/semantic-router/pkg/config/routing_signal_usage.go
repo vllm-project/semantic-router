@@ -27,14 +27,14 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 
 	if len(c.Recipes) > 0 {
 		for i := range c.Recipes {
-			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+			if c.ConfigForRecipe(&c.Recipes[i]).profileUsesSignalType(normalizedType) {
 				return true
 			}
 		}
 		return false
 	}
 
-	return profileUsesSignalType(c.Decisions, c.Projections, c.DataPolicy, c.PIIRules, normalizedType)
+	return c.profileUsesSignalType(normalizedType)
 }
 
 // UsesSignalTypeInReachableRouting reports whether a request-reachable routing
@@ -51,28 +51,20 @@ func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool 
 		return false
 	}
 	if c.RoutingScope != "" {
-		return profileUsesSignalType(c.Decisions, c.Projections, c.DataPolicy, c.PIIRules, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	if len(c.Recipes) == 0 {
 		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
 			return false
 		}
-		return profileUsesSignalType(c.Decisions, c.Projections, c.DataPolicy, c.PIIRules, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	for _, recipe := range c.ReachableRoutingRecipes() {
-		if recipeUsesSignalType(recipe, normalizedType) {
+		if c.ConfigForRecipe(recipe).profileUsesSignalType(normalizedType) {
 			return true
 		}
 	}
 	return false
-}
-
-func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
-	if recipe == nil {
-		return false
-	}
-	profile := recipe.Profile
-	return profileUsesSignalType(profile.Decisions, profile.Projections, profile.DataPolicy, profile.Signals.PIIRules, signalType)
 }
 
 func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
@@ -401,11 +393,11 @@ func collectSignalNames(node *RuleNode, signalType string) []string {
 	return names
 }
 
-// profileUsesSignalType adds the signals a routing profile's data policy reads
-// to those its decisions use: a personal-data replay limit reads PII.
-func profileUsesSignalType(decisions []Decision, projections Projections, policy *RoutingDataPolicy, piiRules []PIIRule, signalType string) bool {
-	if signalType == SignalTypePII && asksPIIForDataPolicy(policy, piiRules) {
+// profileUsesSignalType includes Replay's evidence dependency in addition to
+// decision and projection inputs.
+func (c *RouterConfig) profileUsesSignalType(signalType string) bool {
+	if signalType == SignalTypePII && c.ReplayNeedsPIIEvidence() {
 		return true
 	}
-	return decisionsUseSignalType(decisions, projections, signalType)
+	return decisionsUseSignalType(c.Decisions, c.Projections, signalType)
 }

@@ -70,7 +70,7 @@ when changing sr-bench UI or workflows. `dashboard-check` runs, in order:
 | Step | What it covers |
 | --- | --- |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
-| `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
+| `dashboard-type-check` | TypeScript type checking (frontend) |
 | `dashboard-test-frontend` | Frontend unit tests |
 | `dashboard-test-backend` | Go test inventory and JSON test evidence on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
@@ -320,14 +320,31 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 
 ## Router contract access
 
+**System → Platform & Access → Integrations** opens MCP Servers. MCP keeps its
+existing read and management permissions.
+
 ### Decision models
 
 **Build → System One** contains three independent pages:
 **Decision Models**, **Decision Playground**, and **Decision Monitoring**.
 Decision Models at `/decision-model` selects and deploys the router's decision
-model. Saved configuration, activation and readiness are separate states. Changing a selection preserves explicit signal
-bindings; the default remains Vela-2.0-0.3B. **System → Runtime → Models → Model
-Hub** contains the model catalog.
+models. Search and filter the provider catalog by family or question capability.
+Vela controls built-in router intelligence; the default remains Vela-2.0-0.3B.
+Decision 1.0 and 2.0 are separate custom runtimes for Choice, Score and Noul
+questions or decision selectors. Their deployment dialog saves a pinned
+declaration and an explicitly selected consumer binding in one canonical config
+update. It preserves the Vela default, other bindings and existing runtime tuning.
+Saving an unbound declaration does not start a model. Saved configuration,
+activation and observed readiness remain separate states. Configuration readers
+can inspect the catalog but cannot deploy. **System → Runtime → Models → Model
+Hub** contains the broader backend model catalog.
+
+The lightweight Decision catalog is generated from the canonical model-runtime
+registry and family capabilities without importing ML dependencies. Run
+`make decision-runtime-catalog-generate` after changing its source tables;
+`make decision-runtime-catalog-check` rejects stale projections in the generated
+contract and pre-commit gates. Production frontend builds consume the checked-in
+projection without requiring Python or downloading models.
 
 Decision Monitoring at `/decision-model/monitoring` charts runtime traffic,
 unsuccessful calls, latency and result-cache behavior using Prometheus samples for each deployment. Select a
@@ -385,7 +402,6 @@ Browser
 - [`backend/handlers/`](backend/handlers/) implements control-plane workflows.
 - [`backend/recipe/`](backend/recipe/) validates and materializes Recipe
   packages.
-- [`wizmap/`](wizmap/) builds the embedded knowledge-map view.
 
 Keep detailed user workflows in the website and keep this README focused on
 developing and operating the Dashboard itself.

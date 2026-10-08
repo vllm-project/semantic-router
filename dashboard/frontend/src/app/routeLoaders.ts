@@ -15,7 +15,6 @@ export const loadSystemOnePlaygroundPage = () => import('../pages/SystemOnePlayg
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
 export const loadInsightsRecordPage = () => import('../pages/InsightsRecordPage')
-export const loadKnowledgeMapPage = () => import('../pages/KnowledgeMapPage')
 export const loadLogsPage = () => import('../pages/LogsPage')
 export const loadMLSetupPage = () => import('../pages/MLSetupPage')
 export const loadMonitoringPage = () => import('../pages/MonitoringPage')
@@ -24,7 +23,6 @@ export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFul
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
 export const loadStatusPage = () => import('../pages/StatusPage')
-export const loadTaxonomyPage = () => import('../pages/TaxonomyPage')
 export const loadTopologyPage = () => import('../pages/TopologyPage')
 export const loadTracingPage = () => import('../pages/TracingPage')
 export const loadUsersPage = () => import('../pages/UsersPage')
@@ -56,11 +54,6 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
     load: loadConfigSchemaReferencePage,
   },
   { matches: (pathname) => pathname.startsWith('/config'), load: loadConfigPage },
-  {
-    matches: (pathname) => /^\/knowledge-bases\/[^/]+\/map\/?$/.test(pathname),
-    load: loadKnowledgeMapPage,
-  },
-  { matches: (pathname) => pathname.startsWith('/knowledge-bases'), load: loadTaxonomyPage },
   { matches: (pathname) => pathname.startsWith('/topology'), load: loadTopologyPage },
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },

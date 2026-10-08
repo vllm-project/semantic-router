@@ -69,7 +69,6 @@ def _recipe_name_contract(
     errors: list[ValidationError] = []
     top_level_has_profile = bool(
         config.routing.candidate_requirements is not None
-        or config.routing.data_policy is not None
         or config.routing.model_bindings
         or config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
         or config.routing.projections.model_dump(
@@ -283,26 +282,6 @@ def validate_recipe_contracts(config: UserConfig) -> list[ValidationError]:
     reserved_models, alias_errors = _reserved_routing_models(config)
     errors.extend(alias_errors)
     errors.extend(_validate_entrypoints(config, recipe_names, reserved_models))
-    errors.extend(_personal_data_replay_errors(config))
-    return errors
-
-
-def _personal_data_replay_errors(config: UserConfig) -> list[ValidationError]:
-    """A personal-data replay limit needs a PII signal that can trigger it."""
-    errors = []
-    for name, profile in iter_routing_profiles(config):
-        policy = profile.data_policy
-        if policy is None or policy.replay_personal_data is not False:
-            continue
-        if not profile.signals.pii:
-            prefix = "routing" if name == "default" else f"recipes.{name}.routing"
-            errors.append(
-                ValidationError(
-                    "replay_personal_data: false needs a routing.signals.pii rule "
-                    "to detect personal data",
-                    field=f"{prefix}.data_policy.replay_personal_data",
-                )
-            )
     return errors
 
 

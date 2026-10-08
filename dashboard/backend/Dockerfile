@@ -39,14 +39,6 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
-WORKDIR /app/wizmap
-COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --include=dev
-COPY dashboard/wizmap/ ./
-RUN npm run build -- --outDir /app/wizmap-dist
-
 # Stage 2: Build backend with Go
 FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
@@ -134,7 +126,6 @@ WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /workspace/dashboard/frontend/dist /app/frontend
-COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 # Public version metadata is imported by the nonroot Python catalog exporter.
 # Do not inherit restrictive permissions from a caller's build context.

@@ -1825,6 +1825,7 @@ func TestFallbackRecipeCircuitBreakerConfigApplied(t *testing.T) {
 		},
 	}
 	cfg.Fallback = &globalPolicy
+	cfg.RoutingDefaults.Fallback = &globalPolicy
 
 	components, err := buildRouterComponents(cfg)
 	if err != nil {

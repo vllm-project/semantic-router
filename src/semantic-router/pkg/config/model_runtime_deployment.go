@@ -153,7 +153,15 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return false
 	}
 	if scope == GlobalModelScope {
-		return name == "embedding" && len(EmbeddingModelsNeeded(scoped, scoped.primaryEmbeddingModel(), true)) > 0
+		if name != "embedding" {
+			return false
+		}
+		// Recipe bindings may override the global default. Only shared services
+		// can activate the global owner directly; inherited recipe bindings are
+		// accounted for in their own scopes.
+		services := scoped.ConfigForGlobalModelServices()
+		primary := services.primaryEmbeddingModel()
+		return EmbeddingModelsNeeded(services, primary, true)[primary]
 	}
 	switch name {
 	case "domain_classifier":
@@ -174,7 +182,8 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return scoped.NeedsHallucinationDetectorForRouting() ||
 			(scoped.ownsDefaultAPIConsumer() && scoped.HallucinationMitigation.Enabled)
 	case "embedding":
-		return len(EmbeddingModelsNeeded(scoped, scoped.primaryEmbeddingModel(), false)) > 0
+		primary := scoped.primaryEmbeddingModel()
+		return EmbeddingModelsNeeded(scoped, primary, false)[primary]
 	case RAGRerankerConsumer:
 		return scoped.NeedsRAGReranker()
 	}

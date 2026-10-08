@@ -6,7 +6,7 @@ import { getRouterModelStateLabel } from '../utils/routerRuntime'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import { buildIntelligenceRoutingScopes } from './dashboardRouterIntelligenceSupport'
 import { decisionActivationLabel, decisionModelRuntimeState } from './decisionModelManagement'
-import { DECISION_MODEL_OPTIONS } from './decisionModelSupport'
+import DecisionModelCatalog from './DecisionModelCatalog'
 import { useDecisionModelManagement } from './useDecisionModelManagement'
 import styles from './DecisionModelPage.module.css'
 
@@ -121,63 +121,7 @@ export default function DecisionModelPage() {
         </section>
 
         <section className={styles.panel} aria-labelledby="decision-model-choose-title">
-          <h2 id="decision-model-choose-title">Choose a decision model</h2>
-          <p className={styles.muted}>
-            Built-in signals, custom questions, and decision selectors use this model unless they
-            name another deployment or binding.
-          </p>
-          {engineOnly && (
-            <p className={styles.notice}>
-              This deployment is a standalone engine. Router decision-model settings do not manage
-              the standalone engine; model deployment controls are unavailable here.
-            </p>
-          )}
-          <fieldset
-            className={styles.options}
-            disabled={!writable || model.deploying || !model.global}
-          >
-            <legend className={styles.srOnly}>Decision model selection</legend>
-            {DECISION_MODEL_OPTIONS.map((option) => (
-              <label
-                key={option.name}
-                className={`${styles.option} ${model.selectedModel === option.name ? styles.selected : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="decision-model"
-                  value={option.name}
-                  checked={model.selectedModel === option.name}
-                  onChange={() => model.selectModel(option.name)}
-                />
-                <span>
-                  <strong>{option.label}</strong>
-                  <span className={styles.hardware}>{option.hardware}</span>
-                  <span>{option.summary}</span>
-                  {model.savedModel === option.name && <em>Saved configuration</em>}
-                  {model.selectedModel === option.name && model.savedModel !== option.name && (
-                    <em>Selected · not saved</em>
-                  )}
-                </span>
-              </label>
-            ))}
-          </fieldset>
-          <div className={styles.deployBar}>
-            <p className={styles.muted}>
-              {engineOnly
-                ? 'Connect this Dashboard to a router to manage its decision model.'
-                : writable
-                  ? 'Saves the selected model and requests runtime activation. Existing signal overrides stay unchanged.'
-                  : 'This session can inspect decision models. Configuration write access is required to deploy.'}
-            </p>
-            <button
-              className={styles.primary}
-              type="button"
-              disabled={!writable || model.deploying || !model.global || !model.selectedModel}
-              onClick={() => void model.deploy()}
-            >
-              {model.deploying ? 'Deploying…' : 'Deploy selected model'}
-            </button>
-          </div>
+          <DecisionModelCatalog model={model} writable={writable} engineOnly={engineOnly} />
           {model.applyResult && (
             <div className={styles.notice} role="status">
               <strong>

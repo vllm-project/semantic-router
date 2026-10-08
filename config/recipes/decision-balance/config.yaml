@@ -90,8 +90,6 @@ evaluation:
           text-only mean at xhigh (0.652) scaled by Qwen3.8-27B's medium-to-xhigh
           ratio (0.493 / 0.622).
 routing:
-  data_policy:
-    replay_personal_data: false
   modelCards:
     - name: zai/glm-5.3-flash
       description: >-
@@ -543,6 +541,9 @@ routing:
       algorithm:
         type: static
 global:
+  services:
+    router_replay:
+      capture_personal_data: false
   router:
     auto_model_names:
       - vllm-sr/auto

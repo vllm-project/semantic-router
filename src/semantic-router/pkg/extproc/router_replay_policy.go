@@ -5,56 +5,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-// replayConfigForRequest resolves the standing policy independently of a
-// matched decision. Shared runtime services retain their existing settings.
-func (r *OpenAIRouter) replayConfigForRequest(ctx *RequestContext) *config.RouterConfig {
-	if r == nil || r.Config == nil {
-		return nil
-	}
-	if ctx != nil {
-		if recipe := ctx.Routing.SelectedRecipe(); recipe != nil {
-			return r.Config.ConfigForRecipe(recipe)
-		}
-		if ctx.Routing.IsPassthrough() {
-			// A concrete backend request does not select the default recipe.
-			unscoped := *r.Config
-			unscoped.DataPolicy = nil
-			return &unscoped
-		}
-	}
-	return r.Config
-}
-
-func (r *OpenAIRouter) replayAllowedForRequest(ctx *RequestContext) bool {
-	if r == nil {
-		return false
-	}
-	if ctx != nil {
-		if recipe := ctx.Routing.SelectedRecipe(); recipe != nil {
-			return recipe.Profile.DataPolicy.ReplayAllowed()
-		}
-		if ctx.Routing.IsPassthrough() {
-			return true
-		}
-	}
-	return r.Config == nil || r.Config.DataPolicy.ReplayAllowed()
-}
-
-// personalDataReplayAllowed reports whether the request's routing profile
-// lets replay keep the content of a request in which a PII signal matched.
+// personalDataReplayAllowed uses the resolved request policy and verified PII
+// evidence. Missing or incomplete detection never implies personal-data-free.
 func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
-	if r == nil {
+	if ctx == nil {
 		return false
 	}
-	if ctx != nil {
-		if recipe := ctx.Routing.SelectedRecipe(); recipe != nil {
-			return recipe.Profile.DataPolicy.ReplayPersonalDataAllowed()
-		}
-		if ctx.Routing.IsPassthrough() {
-			return true
-		}
+	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
+		return true
 	}
-	return r.Config == nil || r.Config.DataPolicy.ReplayPersonalDataAllowed()
+	// Tool schemas are captured but are not read by the text PII classifier.
+	if ctx.SemanticRequest != nil && len(ctx.SemanticRequest.Tools) > 0 {
+		return false
+	}
+	return ctx.PIIContentVerified && !ctx.PIIDetected
 }
 
 // omitReplayContent keeps a record's routing evidence, including which PII
@@ -67,18 +31,12 @@ func omitReplayContent(record *routerreplay.RoutingRecord) {
 	record.ToolTrace = nil
 }
 
-func (r *OpenAIRouter) effectiveReplayConfigForRequest(ctx *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
-	if !r.replayAllowedForRequest(ctx) {
-		return nil
-	}
-	return r.replayConfigForRequest(ctx).EffectiveRouterReplayConfig(decision)
+func (r *OpenAIRouter) effectiveReplayConfigForRequest(_ *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
+	return r.Config.EffectiveRouterReplayConfig(decision)
 }
 
 // Startup has recipe-qualified decision references but no request context.
 // Resolve each profile before considering a shared or isolated store.
 func replayConfigForDecisionRef(cfg *config.RouterConfig, ref config.RoutingDecisionRef) *config.RouterReplayPluginConfig {
-	if recipe, ok := cfg.RecipeByName(ref.Recipe); ok {
-		cfg = cfg.ConfigForRecipe(recipe)
-	}
 	return cfg.EffectiveRouterReplayConfig(ref.Decision)
 }

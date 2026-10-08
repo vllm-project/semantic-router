@@ -1240,26 +1240,22 @@ class HallucinationPluginConfig(BaseModel):
 
 
 class RouterReplayPluginConfig(BaseModel):
-    """Configuration for router_replay plugin.
+    """Decision overrides for global.services.router_replay capture defaults.
 
-    The router_replay plugin captures routing decisions and payload snippets
-    for later debugging and replay. Records are stored in memory and accessible
-    via the /api/v1/observability/replays API endpoint.
+    Omitted fields inherit the shared service policy. Explicit false and zero
+    remain present so a decision can disable capture or remove a trace limit.
     """
 
-    enabled: bool = True
-    max_records: int = Field(
-        default=10000,
-        gt=0,
-        description="Maximum records in memory (must be > 0, default: 10000)",
-    )
-    capture_request_body: bool = True  # Capture request payloads
-    capture_response_body: bool = True  # Capture response payloads
-    max_body_bytes: int = Field(
-        default=4096,
-        gt=0,
-        description="Max bytes to capture per body (must be > 0, default: 4096)",
-    )
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    capture_request_body: Optional[StrictBool] = None
+    capture_response_body: Optional[StrictBool] = None
+    capture_personal_data: Optional[StrictBool] = None
+    max_records: Optional[int] = Field(default=None, ge=0)
+    max_body_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
 
 
 # Headers that carry a credential on the primary path. A shadow copy never
@@ -2582,19 +2578,6 @@ class CandidateRequirements(BaseModel):
     context: Optional[Literal["known_limits"]] = None
 
 
-class RoutingDataPolicy(BaseModel):
-    """Standing recipe restrictions; false replay cannot be enabled by a decision.
-
-    replay_personal_data false keeps replay records of requests in which a PII
-    signal matched, but without their content.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    replay: Optional[StrictBool] = None
-    replay_personal_data: Optional[StrictBool] = None
-
-
 class Routing(BaseModel):
     """Canonical routing block."""
 
@@ -2603,7 +2586,6 @@ class Routing(BaseModel):
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
@@ -2647,7 +2629,6 @@ class RecipeRouting(BaseModel):
 
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)

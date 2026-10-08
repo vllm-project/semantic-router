@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -136,10 +137,12 @@ class HarnessMakeContractTests(unittest.TestCase):
             "agent-skill-check",
             "docs-generated-check",
             "docs-crd-check",
+            "decision-runtime-catalog-check",
         ):
             self.assertIn(dependency, check)
         generate = target_block("generated-contract-generate", docs_make)
         self.assertIn("config-schema-generate", generate)
+        self.assertIn("decision-runtime-catalog-generate", generate)
         self.assertLess(
             generate.index("api-docs-generate"), generate.index("agent-skill-sync")
         )
@@ -160,6 +163,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "config-schema-check",
             "api-docs-check",
             "docs-crd-check",
+            "decision-runtime-catalog-check",
         ):
             self.assertIn(target, commands)
         self.assertTrue(
@@ -177,6 +181,57 @@ class HarnessMakeContractTests(unittest.TestCase):
                 for step in core["jobs"]["test-and-build"]["steps"]
             ),
             "generated contracts have one quality owner; core must not rerun them",
+        )
+
+    def test_decision_runtime_projection_checks_each_canonical_source(self) -> None:
+        hook = local_hook("decision-runtime-catalog-generated")
+        self.assertEqual(hook["entry"], "make decision-runtime-catalog-check")
+        self.assertFalse(hook["pass_filenames"])
+        for source in (
+            "src/model-runtime/vllm_srun/registry/tables/decision1.py",
+            "src/model-runtime/vllm_srun/registry/tables/decision2.py",
+            "src/model-runtime/vllm_srun/registry/tables/common.py",
+            "src/model-runtime/vllm_srun/systemone.py",
+            "src/model-runtime/vllm_srun/families/decision1/family.py",
+            "src/model-runtime/vllm_srun/families/decision1/questions.py",
+            "src/model-runtime/vllm_srun/families/decision2/family.py",
+            "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
+            "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
+        ):
+            with self.subTest(source=source):
+                self.assertIsNotNone(re.search(hook["files"], source))
+        self.assertIsNone(
+            re.search(hook["files"], "src/model-runtime/vllm_srun/server.py")
+        )
+        result = subprocess.run(
+            ["make", "-n", "decision-runtime-catalog-check"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertIn(
+            "python3 dashboard/frontend/scripts/generate-decision-runtime-catalog.py --check",
+            result.stdout,
+        )
+        for dependency in ("npm ci", "pip install", "uv sync", "docker build"):
+            self.assertNotIn(dependency, result.stdout)
+        generated = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/check-generated.yml").read_text()
+        )["jobs"]["generated"]
+        checks = [step.get("run", "") for step in generated["steps"]]
+        self.assertTrue(
+            any(
+                command.startswith("make ")
+                and "decision-runtime-catalog-check" in command.split()
+                for command in checks
+            )
+        )
+        self.assertTrue(
+            any(
+                "--check decision-runtime-catalog-check" in command
+                for command in checks
+            )
         )
 
     def test_reference_drift_is_checked_even_for_docs_only_changes(self) -> None:
@@ -364,10 +419,9 @@ class HarnessMakeContractTests(unittest.TestCase):
                     if "npm " in line:
                         self.assertNotIn("2>/dev/null", line)
 
-        for target in ("dashboard-frontend-deps", "dashboard-wizmap-deps"):
-            block = target_block(target, DASHBOARD_MAKE)
-            self.assertIn("npm ci", block)
-            self.assertNotIn("npm install", block)
+        block = target_block("dashboard-frontend-deps", DASHBOARD_MAKE)
+        self.assertIn("npm ci", block)
+        self.assertNotIn("npm install", block)
         combined = subprocess.run(
             [
                 "make",
@@ -381,7 +435,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             text=True,
             check=True,
         ).stdout
-        self.assertEqual(combined.count("npm ci"), 2)
+        self.assertEqual(combined.count("npm ci"), 1)
         self.assertNotIn("npm install", combined)
 
     def test_dashboard_backend_tests_use_the_installed_cli_environment(self) -> None:

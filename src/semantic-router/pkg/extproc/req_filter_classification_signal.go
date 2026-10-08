@@ -160,6 +160,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 		ctx.JailbreakScoreAvailable = signals.JailbreakScoreAvailable
 		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
+	ctx.PIIContentVerified = signals.PIIContentVerified
 	if signals.PIIDetected {
 		ctx.PIIDetected = signals.PIIDetected
 		ctx.PIIEntities = signals.PIIEntities

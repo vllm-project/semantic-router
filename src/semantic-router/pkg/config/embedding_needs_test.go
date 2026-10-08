@@ -56,13 +56,21 @@ func TestEmbeddingModelsNeededMLDefaultsAndInactiveConfig(t *testing.T) {
 	}
 }
 
-func TestEmbeddingModelsNeededKeepsConfiguredPrimaryWarmup(t *testing.T) {
+func TestEmbeddingModelsNeededIgnoresUnusedMLArtifacts(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.ModelSelection.Enabled = true
 	cfg.ModelSelection.ML.ModelsPath = "models/ml"
 	cfg.ModelSelection.ML.ModelType = "qwen3"
-	if got := EmbeddingModelsNeeded(cfg, "mmbert", true); !maps.Equal(got, map[string]bool{"mmbert": true}) {
-		t.Fatalf("configured primary warmup changed without an ML decision: %v", got)
+	if got := EmbeddingModelsNeeded(cfg, "mmbert", true); len(got) != 0 {
+		t.Fatalf("unused ML artifacts provisioned an embedding: %v", got)
+	}
+	cfg.Decisions = []Decision{{Algorithm: &AlgorithmConfig{Type: "knn"}}}
+	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); !maps.Equal(got, map[string]bool{"qwen3": true}) {
+		t.Fatalf("active ML should prepare only its configured embedding: %v", got)
+	}
+	cfg.AutoModelNames = []string{}
+	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); len(got) != 0 {
+		t.Fatalf("unreachable ML decision provisioned an embedding: %v", got)
 	}
 }
 

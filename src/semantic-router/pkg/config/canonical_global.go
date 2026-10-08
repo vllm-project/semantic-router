@@ -276,6 +276,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 }
 
 func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal) {
+	cfg.RoutingDefaults = RoutingDefaults{Strategy: router.Strategy, Fallback: router.Fallback.Clone()}
 	cfg.ConfigSource = router.ConfigSource
 	cfg.Strategy = router.Strategy
 	cfg.AutoModelName = router.AutoModelName
@@ -291,9 +292,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
-	if router.Fallback != nil && cfg.Fallback == nil {
-		cfg.Fallback = router.Fallback.Clone()
-	}
+	cfg.Fallback = router.Fallback.Clone()
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

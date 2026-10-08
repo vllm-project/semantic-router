@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   fallbackRouteTarget,
-  redirectRouteDefinitions,
   shellRouteDefinitions,
 } from './routeManifest'
 
@@ -35,17 +34,6 @@ describe('dashboard route manifest', () => {
     expect(shellRouteDefinitions).toContainEqual({
       path: '/decision-model/monitoring',
       page: 'decision-model-monitoring',
-    })
-  })
-
-  it('keeps legacy redirects pointed at canonical dashboard routes', () => {
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/knowledge-bases',
-      to: '/knowledge-bases/bases',
-    })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/taxonomy',
-      to: '/knowledge-bases/bases',
     })
   })
 

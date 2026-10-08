@@ -333,7 +333,7 @@ in Secrets rather than ConfigMaps or Helm values. See
 ## Entrypoints and recipes
 
 An entrypoint maps one or more public model aliases to a recipe. A recipe owns
-its signal, projection, decision, algorithm, plugin, cache, replay, learning,
+its signal, projection, decision, algorithm, plugin, cache, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
@@ -343,6 +343,15 @@ classifier module to cap one upstream classifier response.
 In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
+
+`global.router.strategy` and `global.router.fallback` provide shared defaults.
+Top-level `routing` configures the default recipe only; each named
+`recipes[].routing` resolves its own strategy and fallback independently from
+`global.router`. Named recipes never inherit the default recipe's routing
+settings. A decision's fallback overrides its own recipe's effective fallback.
+Sparse overrides such as `fallback: {enabled: false}` preserve the remaining
+shared defaults in both default and named recipes. The runtime strategy default
+is `priority`.
 
 If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
@@ -354,17 +363,15 @@ and migration. See
 [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
 
-### Recipe-wide candidate and replay policies
+### Recipe candidate requirements
 
-Set these independently optional policies inside the default or a named recipe's
+Set optional candidate requirements inside the default or a named recipe's
 `routing` block:
 
 ```yaml
 candidate_requirements:
   capabilities: declared
   context: known_limits
-data_policy:
-  replay: false
 ```
 
 `capabilities: declared` requires the assigned model to declare support for the
@@ -429,26 +436,33 @@ reports `execution_required` because it does not have the complete provider
 request. Automatic budgets currently support text and tool requests, excluding
 multimodal input, provider truncation, LoRA, Looper, and shadow dispatch.
 
-A recipe's `replay: false` prevents router replay capture even if a decision tries
-to enable it, including requests rejected before a decision is available. Absent
-or true adds no restriction to the existing global and decision configuration.
-`replay_personal_data: false` keeps capturing the routing evidence of a request
-in which one of the recipe's PII signals matched, but none of its content; it
-needs a `routing.signals.pii` rule.
-This field does not control other stores, logs, or backend retention. Operators
-must assign deployments that meet their privacy requirements.
-
 For multi-factor selection, `latency_metric: ttft` compares time to first token;
 `tpot` compares time per output token. Omission preserves the existing TPOT-then-TTFT
 fallback. Pair the metric with explicit quality evidence and a lexicographic
 objective when quality is a floor rather than a score to trade away.
 
 Discover the current contract with
-`vllm-sr config schema --section routing.candidate_requirements` and
-`vllm-sr config schema --section routing.data_policy`.
-DSL `ROUTING` blocks support the same objects. Kubernetes CRD emission preserves
-these policies for the default routing profile; named recipes and entrypoints
+`vllm-sr config schema --section routing.candidate_requirements`.
+DSL `ROUTING` blocks support the same object. Kubernetes CRD emission preserves
+these requirements for the default routing profile; named recipes and entrypoints
 require canonical YAML and are rejected by CRD emission rather than discarded.
+
+### Replay capture defaults and decision overrides
+
+`global.services.router_replay` owns shared storage, retention, enablement and
+capture defaults. A decision's `router_replay` plugin overrides only explicitly
+configured capture fields. Omitted fields inherit; `enabled: false` disables
+capture for that decision, while `enabled: true` can opt in when the global
+default is disabled. There is no `routing.data_policy` or recipe-level Replay
+configuration.
+
+Set `capture_personal_data: false` globally or in the decision plugin to retain
+routing evidence while omitting content when PII is detected or its status is
+unknown. Missing PII detectors suppress content conservatively rather than
+preventing startup. Rejected requests without a selected decision use global
+capture defaults. These controls do not govern other stores or backend retention.
+See [Router Replay](../tutorials/plugin/router-replay) for the complete fields and
+examples, or inspect `vllm-sr config schema --section global.services.router_replay`.
 
 ## Configuration workflows
 

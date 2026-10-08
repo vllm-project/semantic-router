@@ -382,7 +382,7 @@ func TestRouterAPIProxyExposesRuntimeInventoryAndDocumentation(t *testing.T) {
 	}
 }
 
-func TestRouterAPIProxyExposesKnowledgeBaseActivationHash(t *testing.T) {
+func TestRouterAPIProxyExposesConfigurationActivationHash(t *testing.T) {
 	t.Parallel()
 	const snapshot = `{"activation_status":"pending","active_runtime_hash":"old","generated_runtime_hash":"candidate"}`
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
