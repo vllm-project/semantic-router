@@ -73,6 +73,7 @@ class WorkItem(Protocol):
 
 ItemT = TypeVar("ItemT", bound=WorkItem)
 ResultT = TypeVar("ResultT")
+ModuleT = TypeVar("ModuleT", bound="torch.nn.Module")
 # A plan's results: one per item in order, ``DEADLINE`` for an item that
 # expired while others were cached, or ``DEADLINE`` for the whole plan.
 Results = list[ResultT | Expired] | Expired
@@ -431,7 +432,7 @@ class EngineModel(ABC):
         """Most tokens one forward may hold on this device's kernels; None when they set no limit."""
         return None
 
-    def place(self, module: torch.nn.Module) -> torch.nn.Module:
+    def place(self, module: ModuleT) -> ModuleT:
         """A family's own module (a head) on this device, laid out as the backbone is."""
         return module.to(self.device)
 

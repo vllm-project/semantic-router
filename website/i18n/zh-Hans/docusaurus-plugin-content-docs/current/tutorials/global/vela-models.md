@@ -74,9 +74,9 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
-内置 Domain、Guard、Safety、PII、FactCheck、Feedback 和语义 Embedding 默认使用 Vela。参考配置还选择了 Vela Modality、Hazard 和 Reranker。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
+未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 Vela 2.0 0.3B 上运行，每个请求只调用一次（见[选择模型](model-runtime/choose-a-model.md#vela-20)）。语义 Embedding、Hazard 和 Reranker 使用 Vela 1.0；在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可恢复它。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
 
-默认阈值为 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
+运行 Vela 1.0 任务模型且未设置阈值的模块使用 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
 
 输入预算由部署选择。模块的 `max_sequence_length: 0` 保留保守的 512-token 策略；Embedding 默认采用 22 层、768 维和 `full_context: false`。显式模型绑定可设置最多 **32,768 tokens**（含特殊 token）及 `overflow: reject`，超限输入会被拒绝，不会静默缩短。
 

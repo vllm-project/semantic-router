@@ -65,7 +65,11 @@ func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
 
 // AcquireDeployments returns a lease on an explicit set of deployments.
 func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
-	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, m.resolveAuto(deployments))
+	auto := m.resolveAuto(deployments)
+	if err := refuseGPUOnlyOnCPU(deployments, auto); err != nil {
+		return nil, err
+	}
+	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, auto)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -95,6 +99,9 @@ func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployme
 // extend adds one deployment to a lease in a process of its own.
 func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
 	single := map[string]config.ModelDeployment{name: deployment}
+	if err := refuseGPUOnlyOnCPU(single, m.resolveAuto(single)); err != nil {
+		return err
+	}
 	plan := planProcesses(single, m.command, m.cacheDir, m.cores, m.resolveAuto(single))[0]
 	m.mu.Lock()
 	defer m.mu.Unlock()

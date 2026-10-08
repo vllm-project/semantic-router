@@ -772,6 +772,9 @@
             "$ref": "#/$defs/AdmissionConfig"
           },
           "type": "object"
+        },
+        "signal_timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -834,6 +837,9 @@
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -900,6 +906,9 @@
           "type": "array"
         },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -1383,6 +1392,9 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "type": "string"
+        },
         "safety": {
           "type": "string"
         },
@@ -1894,6 +1906,12 @@
         "adaptations": {
           "$ref": "#/$defs/DecisionAdaptationsConfig"
         },
+        "reliability": {
+          "$ref": "#/$defs/DecisionReliability"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackOverride"
+        },
         "plugins": {
           "items": {
             "$ref": "#/$defs/DecisionPlugin"
@@ -2358,6 +2376,57 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionReliability": {
+      "properties": {
+        "total_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "retry_on": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -2674,6 +2743,44 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackOverride": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3362,6 +3469,39 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "tls": {
+          "$ref": "#/$defs/ListenerTLS"
+        },
+        "identity": {
+          "$ref": "#/$defs/ListenerIdentity"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerIdentity": {
+      "properties": {
+        "trust_headers": {
+          "type": "boolean"
+        },
+        "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerTLS": {
+      "properties": {
+        "cert_file": {
+          "type": "string"
+        },
+        "key_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -5077,6 +5217,42 @@
         },
         "health_check_timeout": {
           "type": "string"
+        },
+        "connect_timeout": {
+          "type": "string"
+        },
+        "total_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
+        },
+        "retry_budget_percent": {
+          "type": "number"
+        },
+        "retry_budget_min_concurrency": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -8109,6 +8285,15 @@
         "path": [
           "model_catalog",
           "admission"
+        ]
+      },
+      {
+        "key": "signal_timeout_ms",
+        "layer": "model_catalog",
+        "display_name": "Signal Timeout Ms",
+        "path": [
+          "model_catalog",
+          "signal_timeout_ms"
         ]
       }
     ]

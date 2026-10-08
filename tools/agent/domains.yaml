@@ -336,6 +336,7 @@ domains:
         - tools/docker/Dockerfile.extproc
         - src/vllm-sr/cli/core.py
         - src/vllm-sr/cli/commands/runtime*.py
+        - src/vllm-sr/cli/commands/serve_options.py
         - src/vllm-sr/cli/container_*.py
         - src/vllm-sr/cli/runtime_*.py
         - src/vllm-sr/cli/config_generator.py
@@ -343,9 +344,28 @@ domains:
         - src/vllm-sr/cli/catalog_provider_projection.py
         - src/vllm-sr/cli/envoy_backend_pool.py
         - src/vllm-sr/cli/deployment_backend.py
+        - src/vllm-sr/cli/gateway_mode.py
         - src/vllm-sr/cli/templates/envoy*.yaml
+        - src/vllm-sr/start-router.sh
+        # The live suite serves standalone mode from the Router image.
+        - src/semantic-router/cmd/native_gateway.go
+        - src/semantic-router/pkg/gateway/**
         - e2e/testing/vllm-sr-cli/**
         - tools/make/docker.mk
+
+  # The CLI unit suite parses these Router configs against the schema the CLI
+  # bundles. Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-reference-configs:
+    owner: vllm-sr-cli
+    paths:
+      - config/config.yaml
+      - config/recipes/balance/config.yaml
+      - config/recipes/vela-amd/config.yaml
+      - config/recipes/built-in/**
+      - e2e/config/config.memory-user.yaml
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
 
   model-runtime:
     owner: model-runtime
@@ -354,12 +374,6 @@ domains:
       - tools/make/model-runtime.mk
     checks: [make model-runtime-test, make model-runtime-client-check]
     verifications: [model-runtime, generated-contracts, cli-package]
-
-  fleet-sim:
-    owner: fleet-sim
-    paths: [src/fleet-sim/**]
-    checks: [make vllm-sr-sim-test]
-    verifications: [fleet-sim]
 
   dashboard:
     owner: dashboard
@@ -573,7 +587,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, fleet-sim, training, learning-tools, harness-tools, onnx-artifacts]
+    verifications: [cli-unit, training, learning-tools, harness-tools, onnx-artifacts]
 
   runtime-evidence:
     owner: maintainers
@@ -611,29 +625,14 @@ images:
       - dashboard/**/Dockerfile*
       - tools/docker/Dockerfile.dashboard
     publish_paths: [dashboard/**]
-  # The router images are targets of tools/docker/Dockerfile.extproc.
-  extproc:
-    pr_paths: [tools/docker/Dockerfile.extproc]
-    publish_paths:
-      - src/semantic-router/**
-      - src/model-runtime/**
-      - config/**
-      - tools/docker/Dockerfile.extproc
-      - .dockerignore
-  extproc-rocm:
-    pr_paths: [tools/docker/Dockerfile.extproc]
-    publish_paths:
-      - src/semantic-router/**
-      - src/model-runtime/**
-      - config/**
-      - tools/docker/Dockerfile.extproc
-      - .dockerignore
   operator:
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
   operator-bundle:
     pr_paths: [deploy/operator/bundle.Dockerfile]
     publish_paths: [deploy/operator/**]
+  # The router images, one target of tools/docker/Dockerfile.extproc per
+  # accelerator. They serve the CLI stack, the Helm chart and the Operator.
   vllm-sr:
     pr_paths:
       - tools/docker/Dockerfile.extproc
@@ -676,9 +675,6 @@ images:
       - tools/test/services/provider-mocker/Dockerfile
       - tools/test/services/provider-mocker/requirements.txt
       - tools/test/services/provider-mocker/provider_mocker/**
-  vllm-sr-sim:
-    pr_paths: [src/fleet-sim/Dockerfile]
-    publish_paths: [src/fleet-sim/**]
   model-runtime:
     verification_paths:
       - src/model-runtime/**
@@ -688,6 +684,19 @@ images:
     publish_paths: []
 
 profiles:
+  standalone:
+    display_name: Standalone Router
+    owner: e2e
+    coverage_role: helm-default-standalone-chat-models-fallback-rollout
+    selection: pr
+    paths:
+      - e2e/profiles/standalone/**
+      - e2e/testcases/standalone_gateway.go
+      - e2e/testcases/routing_error_codes.go
+      - deploy/helm/semantic-router/templates/**
+      - deploy/helm/semantic-router/values.yaml
+      - src/semantic-router/pkg/gateway/**
+      - src/semantic-router/cmd/native_gateway*.go
   istio:
     display_name: Istio Gateway
     owner: e2e

@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -167,24 +166,40 @@ var modelBackedSignalTypes = map[string]bool{
 	config.SignalTypePreference:   true,
 }
 
-func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, bundle *modelservice.Bundle, wg *sync.WaitGroup) {
+// stageBundle is the part of a request bundle the dispatchers use.
+type stageBundle interface {
+	Join() (leave func())
+}
+
+// runSignalDispatchers joins every model-backed participant before it starts
+// any: a participant that parks its call at once must not find the others not
+// yet joined, which would flush the bundle without their calls.
+func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, bundle stageBundle, wg *sync.WaitGroup) {
+	type run struct {
+		dispatch signalDispatch
+		leave    func()
+	}
+	runs := make([]run, 0, len(dispatchers))
 	for _, d := range dispatchers {
 		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
 			leave := func() {}
 			if modelBackedSignalTypes[d.signalType] {
 				leave = bundle.Join()
 			}
-			wg.Add(1)
-			go func(dispatch signalDispatch) {
-				defer wg.Done()
-				defer leave()
-				dispatch.evaluate()
-			}(d)
+			runs = append(runs, run{dispatch: d, leave: leave})
 			continue
 		}
 
 		if !isSignalTypeUsed(usedSignals, d.signalType) {
 			logging.Debugf("[Signal Computation] %s signal not used in any decision, skipping evaluation", d.name)
 		}
+	}
+	for _, r := range runs {
+		wg.Add(1)
+		go func(r run) {
+			defer wg.Done()
+			defer r.leave()
+			r.dispatch.evaluate()
+		}(r)
 	}
 }

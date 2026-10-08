@@ -130,7 +130,7 @@ unavailable while the router restarts it; the other models keep answering.
 Start a runtime anywhere the router can reach, then point a deployment at it:
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B vllm-sr/Vela-1.0-Encoder-307M-PII --device rocm:0 --host 0.0.0.0 --port 8100
+vllm-sr serve vllm-sr/Decision-2.0-Lux-9B vllm-sr/Vela-1.0-Encoder-307M-PII --platform amd --device rocm:0 --host 0.0.0.0 --port 8100
 ```
 
 ```yaml
@@ -166,9 +166,13 @@ share of the cores as `--threads`.
 
 The router image already contains the CPU runtime, so managed deployments work
 in any cluster. The ROCm router image,
-`ghcr.io/vllm-project/semantic-router/extproc-rocm`, contains the runtime with
-PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
-deployment, and the router runs that model on the GPU itself.
+`ghcr.io/vllm-project/semantic-router/vllm-sr-rocm`, contains the runtime with
+PyTorch for ROCm, and `vllm-sr-cuda` the runtime with PyTorch for CUDA: give
+the router pod a GPU (`amd.com/gpu` or `nvidia.com/gpu` in its resource
+limits) and set `device: rocm:0` or `device: cuda:0` on a deployment, and the
+router runs that model on the GPU itself. `vllm-sr serve --target kubernetes
+--platform amd|nvidia` writes the image and the GPU limit into the chart's
+values for you.
 
 On first start the runtime downloads the models a router uses into its model
 volume (`/app/models`, the chart's `persistence` claim, 10 GiB by default).
@@ -206,7 +210,7 @@ spec:
     spec:
       containers:
         - name: runtime
-          image: ghcr.io/vllm-project/semantic-router/extproc-rocm:latest
+          image: ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest
           command: ["vllm-srun"]
           args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
           resources:
@@ -234,20 +238,38 @@ loaded and passed its self-check.
 
 ## When a model is not ready
 
-At startup the router waits until the task models its routes use have
-loaded: domain, PII, guard, safety, fact-check, feedback and hallucination
-models, and your own classifiers. If one of them fails to load, the router
-does not start, and its log names the model and the reason (see
-[Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)). This
-holds for an attached runtime too, so start it before the router. Decision
-models do not hold up the start: until one answers, its signals are unknown.
+The router serves a configuration only once the models it runs for it have
+loaded. At startup it waits for every deployment it manages: the task models
+its routes use (domain, PII, guard, safety, fact-check, feedback and
+hallucination models, and your own classifiers) and the decision models that
+`decision` signals and the `decision` selection algorithm ask. It also waits
+for the task models of an attached runtime, so start that runtime before the
+router. While it waits, `/health` answers and `/ready` returns `503`;
+`/startup-status` lists each managed deployment with its state (`starting`,
+`loading`, `warming`, `ready`, ...), and `vllm-sr serve` prints the ones it
+still waits for. The wait, a first download included, is bounded by
+`VLLM_SRUN_READY_TIMEOUT` (10 minutes by default). If a model fails to load or
+is not ready in time, the router does not start; its log and its last startup
+status (`phase: error`) name the deployment and the reason (see
+[Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)).
+
+The router does not wait for a decision model on an attached runtime, which has
+a lifecycle of its own: until it answers, its signals are unknown. A deployment
+that the configuration declares but that nothing uses is never started and does
+not hold up the start.
+
+A configuration reload or `vllm-sr config apply` that adds a model waits the
+same way while the previous configuration keeps serving. `/ready` stays `200`,
+`GET /api/v1/config/hash` reports the activation as `pending`, and the new
+configuration serves once its models are ready. If one fails to load, the
+reload is rejected and the previous configuration serves on.
 
 Once the router is serving, requests never wait for a model that cannot
 answer:
 
 | Situation | What a feature sees |
 | --- | --- |
-| The model is still downloading or loading | Unknown |
+| An attached runtime's decision model is still downloading or loading | Unknown |
 | The answer arrives after the feature's timeout | Unknown |
 | The runtime is overloaded | Unknown |
 | The runtime process crashed | Unknown until the router has restarted it (back-off from 1 s to 60 s) |

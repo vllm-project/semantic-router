@@ -44,8 +44,8 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 	case "feedback_detector":
 		return local(consumer, c.FeedbackDetector.ModelID, c.FeedbackDetector.UseCPU)
 	case "modality_detector":
-		if classifier := c.ModalityDetector.Classifier; classifier != nil {
-			return local(consumer, classifier.ModelPath, classifier.UseCPU)
+		if model, useCPU, ok := c.ModalityClassifierModel(); ok {
+			return local(consumer, model, useCPU)
 		}
 	case "hallucination_detector":
 		if c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendLocal {
@@ -74,31 +74,56 @@ func (c *RouterConfig) recipeScope() RecipeName {
 
 // ImplicitTaskDeployment resolves a consumer that no binding declares to the
 // model_runtime deployment of its module's model: the deployment's name and
-// its definition. ok is false when the module names no local model.
+// its definition. ok is false when the module names no local model. Modules
+// that name one shared built-in model (Vela 2.0) on one device share its
+// deployment, named after the model.
 func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, deployment ModelDeployment, ok bool, err error) {
 	module, ok := c.implicitModule(consumer)
 	if !ok {
 		return "", ModelDeployment{}, false, nil
 	}
 	deployment, err = ImplicitModelRuntimeDeployment(module.model, module.useCPU)
+	if spec := GetModelByPath(module.model); spec != nil && spec.SharedDeployment {
+		return sharedDeploymentName(spec, deployment.Device), deployment, true, err
+	}
 	return ImplicitDeploymentPrefix + module.module, deployment, true, err
+}
+
+// sharedDeploymentName names the implicit deployment of a shared built-in
+// model on a device: "@Vela-2.0-0.3B" on CPU, "@Vela-2.0-0.3B/auto" elsewhere.
+func sharedDeploymentName(spec *ModelSpec, device string) string {
+	name := ImplicitDeploymentPrefix + strings.TrimPrefix(spec.LocalPath, "models/")
+	if device != "cpu" {
+		name += "/" + device
+	}
+	return name
 }
 
 // ImplicitModelRuntimeDeployment resolves a module's model reference to the
 // model_runtime deployment that serves it: a built-in model (a registry path
 // or alias) at its pinned revision, or a local package directory. It runs on
-// CPU when useCPU, else on the best available device.
+// CPU when useCPU, else on the best available device; a built-in model runs
+// its registered CPU profile on CPU, every other deployment exact. A model
+// that requires a GPU runs on the best available device whatever useCPU says;
+// the model runtime manager refuses it on a host without a GPU.
 func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment, error) {
 	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact"}
+	reference := strings.TrimSpace(model)
+	spec := GetModelByPath(reference)
+	if spec != nil && spec.RequiresGPU {
+		useCPU = false
+	}
 	if useCPU {
 		deployment.Device = "cpu"
 	}
-	reference := strings.TrimSpace(model)
-	if spec := GetModelByPath(reference); spec != nil {
+	if spec != nil {
 		if !servedBuiltIn(spec) {
 			return ModelDeployment{}, fmt.Errorf("model %q has no model_runtime family; run `vllm-sr config migrate` to move to its Vela 1.0 replacement", reference)
 		}
 		deployment.Artifact, deployment.Revision = spec.RepoID, spec.Revision
+		if useCPU && spec.CPUProfile != "" {
+			deployment.Profile = spec.CPUProfile
+		}
 		return deployment, nil
 	}
 	if reference == "" {
@@ -118,7 +143,8 @@ func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment,
 // servedBuiltIn reports whether the runtime's built-in table serves a
 // registry model; earlier aliases have Vela 1.0 replacements.
 func servedBuiltIn(spec *ModelSpec) bool {
-	return strings.HasPrefix(spec.RepoID, "vllm-sr/Vela-1.0-") || spec.RepoID == "Qwen/Qwen3-Embedding-0.6B"
+	return strings.HasPrefix(spec.RepoID, "vllm-sr/Vela-1.0-") || strings.HasPrefix(spec.RepoID, "vllm-sr/Vela-2.0-") ||
+		spec.RepoID == "Qwen/Qwen3-Embedding-0.6B"
 }
 
 // implicitTaskDeploymentsInUse lists the implicit deployments of the active

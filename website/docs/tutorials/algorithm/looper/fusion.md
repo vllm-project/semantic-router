@@ -185,7 +185,6 @@ Direct Fusion slug registration:
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       fusion:
         model_names:
@@ -193,6 +192,8 @@ global:
 ```
 
 `global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
+
+Give every alias a name that no model uses. An alias that is also a model's name captures that model's requests: they evaluate only Fusion decisions, and one that matches none fails with [`no_route`](../../../api/router.md#routing-errors). The Router and `vllm-sr config validate` warn about such an alias.
 
 The judge model, analysis panel, analysis mode, sampling settings, concurrency,
 token and time budgets, quorum, templates, prompt version, trace visibility,

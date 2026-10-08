@@ -187,6 +187,7 @@ class Handler(BaseHTTPRequestHandler):
             "request_params",
             "capture_recipe",
             "native_limits",
+            "session_mode",
         }
         if any(set(t) - safe for t in data):
             raise ValueError("Server target registry contains unsupported fields")

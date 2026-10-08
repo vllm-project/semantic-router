@@ -79,6 +79,31 @@ global:
         contract: token_spans.v1
 ```
 
+### On Vela 2.0
+
+Vela 2.0 marks unsupported claims with its router span head, as a ready-made
+question about the answer. Bind `hallucination_detector` to a Vela 2.0
+deployment instead:
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      hallucination_detector:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+The model reads the whole answer and applies its own calibrated threshold, so
+the detector's `threshold` applies to Vela 1.0 Halu only. The same
+deployment can answer the request's [decision questions](model-runtime/guides/decisions.md) and
+its [PII question](model-runtime/guides/pii.md#on-vela-20).
+
 ## Check it
 
 ```bash

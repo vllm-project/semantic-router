@@ -3,8 +3,13 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,13 +24,6 @@ type fakeRuntimeTopology struct {
 	mu           sync.Mutex
 	inventory    runtimeTopologyInventory
 	inventoryErr error
-	applyErr     error
-	rollbackErr  error
-	commitErr    error
-	applied      []recipe.ActivationTopologyState
-	rolledBack   []recipe.ActivationTopologyState
-	committed    []recipe.ActivationTopologyState
-	credentials  []string
 }
 
 func (f *fakeRuntimeTopology) Inventory(context.Context) (runtimeTopologyInventory, error) {
@@ -34,200 +32,38 @@ func (f *fakeRuntimeTopology) Inventory(context.Context) (runtimeTopologyInvento
 	if f.inventoryErr != nil {
 		return runtimeTopologyInventory{}, f.inventoryErr
 	}
-	return runtimeTopologyInventory{
-		Storage:          append([]string(nil), f.inventory.Storage...),
-		ContainerRunning: cloneRunningInventory(f.inventory.ContainerRunning),
-	}, nil
+	return runtimeTopologyInventory{Storage: append([]string(nil), f.inventory.Storage...)}, nil
 }
 
-func TestManagedStoragePortInspectionFailsClosed(t *testing.T) {
-	tests := []struct {
-		name    string
-		payload string
-		wantErr string
-	}{
-		{
-			name: "loopback bindings",
-			payload: `{"network_mode":"default","publish_all_ports":false,` +
-				`"configured":{"6379/tcp":[{"HostIp":"127.0.0.1","HostPort":"6379"}]},` +
-				`"actual":{"6379/tcp":[{"HostIp":"::1","HostPort":"6379"}]}}`,
-		},
-		{
-			name:    "host network",
-			payload: `{"network_mode":"host","publish_all_ports":false,"configured":{},"actual":{}}`,
-			wantErr: "host network mode",
-		},
-		{
-			name: "container network namespace",
-			payload: `{"network_mode":"container:peer","publish_all_ports":false,` +
-				`"configured":{},"actual":{}}`,
-			wantErr: "container network mode",
-		},
-		{
-			name: "ipv4 loopback range",
-			payload: `{"network_mode":"default","publish_all_ports":false,` +
-				`"configured":{"6379/tcp":[{"HostIp":"127.12.34.56","HostPort":"6379"}]},` +
-				`"actual":{}}`,
-		},
-		{
-			name:    "publish all",
-			payload: `{"network_mode":"default","publish_all_ports":true,"configured":{},"actual":{}}`,
-			wantErr: "PublishAllPorts",
-		},
-		{
-			name: "configured wildcard",
-			payload: `{"network_mode":"default","publish_all_ports":false,` +
-				`"configured":{"5432/tcp":[{"HostIp":"0.0.0.0","HostPort":"5432"}]},"actual":{}}`,
-			wantErr: "configured published port",
-		},
-		{
-			name: "effective wildcard",
-			payload: `{"network_mode":"default","publish_all_ports":false,"configured":{},` +
-				`"actual":{"19530/tcp":[{"HostIp":"","HostPort":"19530"}]}}`,
-			wantErr: "actual published port",
-		},
-		{name: "malformed", payload: `{`, wantErr: "inspection is invalid"},
-		{name: "missing fields", payload: `{}`, wantErr: "inspection is invalid"},
+// runtimeCalls counts what an activation asked of the running containers.
+type runtimeCalls struct {
+	mu       sync.Mutex
+	applied  int
+	verified int
+}
+
+func (c *runtimeCalls) counts() (int, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.applied, c.verified
+}
+
+func TestEnvironmentTopologyReadsTheStorageServeStarted(t *testing.T) {
+	t.Setenv(managedStorageBackends, "redis, milvus")
+	inventory, err := environmentRuntimeTopology{}.Inventory(context.Background())
+	if err != nil || !reflect.DeepEqual(inventory.Storage, []string{"milvus", "redis"}) {
+		t.Fatalf("Inventory() = %#v, %v", inventory, err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateManagedStoragePortInspection([]byte(test.payload))
-			if test.wantErr == "" && err != nil {
-				t.Fatalf("validate inspection: %v", err)
-			}
-			if test.wantErr != "" && (err == nil || !strings.Contains(err.Error(), test.wantErr)) {
-				t.Fatalf("error = %v, want substring %q", err, test.wantErr)
-			}
-		})
+	t.Setenv(managedStorageBackends, "redis,unknown")
+	if _, err := (environmentRuntimeTopology{}).Inventory(context.Background()); err == nil {
+		t.Fatal("an unknown storage backend must not pass as inventory")
 	}
 }
 
-func TestManagedRouterManagementPortInspectionFailsClosed(t *testing.T) {
-	management := recipe.ActivationManagementListener{BindAddress: "0.0.0.0", Port: 8080, HostPort: 8080}
-	tests := []struct {
-		name    string
-		payload string
-		wantErr string
-	}{
-		{
-			name: "exact loopback publication",
-			payload: `{"network_mode":"vllm-sr-network","publish_all_ports":false,` +
-				`"configured":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"8080"}]},` +
-				`"actual":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"8080"}]}}`,
-		},
-		{
-			name: "configured wildcard",
-			payload: `{"network_mode":"vllm-sr-network","publish_all_ports":false,` +
-				`"configured":{"8080/tcp":[{"HostIp":"0.0.0.0","HostPort":"8080"}]},` +
-				`"actual":{"8080/tcp":[{"HostIp":"0.0.0.0","HostPort":"8080"}]}}`,
-			wantErr: "not loopback",
-		},
-		{
-			name: "actual mismatch",
-			payload: `{"network_mode":"vllm-sr-network","publish_all_ports":false,` +
-				`"configured":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"8080"}]},` +
-				`"actual":{"8080/tcp":[{"HostIp":"::1","HostPort":"8080"}]}}`,
-			wantErr: "do not match",
-		},
-		{
-			name: "wrong host port",
-			payload: `{"network_mode":"vllm-sr-network","publish_all_ports":false,` +
-				`"configured":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"18080"}]},` +
-				`"actual":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"18080"}]}}`,
-			wantErr: "does not match",
-		},
-		{
-			name:    "host network",
-			payload: `{"network_mode":"host","publish_all_ports":false,"configured":{},"actual":{}}`,
-			wantErr: "host network mode",
-		},
-		{
-			name:    "container namespace",
-			payload: `{"network_mode":"container:peer","publish_all_ports":false,"configured":{},"actual":{}}`,
-			wantErr: "container network mode",
-		},
-		{
-			name:    "publish all",
-			payload: `{"network_mode":"vllm-sr-network","publish_all_ports":true,"configured":{},"actual":{}}`,
-			wantErr: "PublishAllPorts",
-		},
-		{
-			name: "missing actual",
-			payload: `{"network_mode":"vllm-sr-network","publish_all_ports":false,` +
-				`"configured":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"8080"}]},"actual":{}}`,
-			wantErr: "actual Router management publication",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateManagedRouterPortInspection([]byte(test.payload), management)
-			if test.wantErr == "" && err != nil {
-				t.Fatalf("validate inspection: %v", err)
-			}
-			if test.wantErr != "" && (err == nil || !strings.Contains(err.Error(), test.wantErr)) {
-				t.Fatalf("error = %v, want substring %q", err, test.wantErr)
-			}
-		})
-	}
-}
-
-func TestManagedContainerNotFoundClassificationIsNarrow(t *testing.T) {
-	if !managedContainerInspectReportsNotFound([]byte("Error: No such container: missing")) {
-		t.Fatal("known no-such-container result was not classified as absent")
-	}
-	if managedContainerInspectReportsNotFound([]byte("permission denied")) {
-		t.Fatal("runtime permission failure must not be classified as absent")
-	}
-}
-
-func TestActivationPreviewRejectsUnsafeManagedStorageInventory(t *testing.T) {
+func TestStackRecreationIsConfirmedThenLeftToServe(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := testTopologyForManagedRuntime()
-	topology.inventoryErr = errors.New("managed redis storage is unsafe: wildcard binding")
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte { return raw })
-
-	plan, err := activator.Preview(context.Background(), activationRequest(summary))
-	if packageErrorCode(err) != recipe.ErrorManagedStorageIsolation || plan.PlanDigest != "" {
-		t.Fatalf("unsafe inventory preview plan=%#v err=%v", plan, err)
-	}
-}
-
-func (f *fakeRuntimeTopology) Apply(_ context.Context, state recipe.ActivationTopologyState, credential string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.applied = append(f.applied, state)
-	f.credentials = append(f.credentials, credential)
-	return f.applyErr
-}
-
-func (f *fakeRuntimeTopology) Rollback(_ context.Context, state recipe.ActivationTopologyState) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.rolledBack = append(f.rolledBack, state)
-	return f.rollbackErr
-}
-
-func (f *fakeRuntimeTopology) Commit(_ context.Context, state recipe.ActivationTopologyState) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.committed = append(f.committed, state)
-	return f.commitErr
-}
-
-func cloneRunningInventory(source map[string]bool) map[string]bool {
-	result := make(map[string]bool, len(source))
-	for key, value := range source {
-		result[key] = value
-	}
-	return result
-}
-
-func TestActivationPlanPreviewBindsExactConfirmationAndReconciles(t *testing.T) {
-	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
-		return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1))
-	})
+	calls := &runtimeCalls{}
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), movedListener, calls)
 	request := activationRequest(summary)
 	plan, err := activator.Preview(context.Background(), request)
 	if err != nil {
@@ -236,20 +72,75 @@ func TestActivationPlanPreviewBindsExactConfirmationAndReconciles(t *testing.T) 
 	if plan.Mode != recipe.ActivationModeStackRecreation || !plan.RequiresConfirmation || plan.PlanDigest == "" {
 		t.Fatalf("plan = %#v", plan)
 	}
+	effects := strings.Join(plan.Effects, "\n")
+	if !strings.Contains(effects, "the next `vllm-sr serve` recreates the managed Router and Envoy containers") {
+		t.Fatalf("effects = %q", effects)
+	}
 	if _, activationErr := activator.Activate(context.Background(), request); packageErrorCode(activationErr) != recipe.ErrorActivationConfirmation {
 		t.Fatalf("unconfirmed activation error = %v", activationErr)
 	}
-	request.ExpectedPlanDigest = plan.PlanDigest
-	request.ConfirmStackRecreation = true
-	result, err := activator.Activate(context.Background(), request)
+
+	result, err := activator.Activate(context.Background(), confirmed(request, plan))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.PlanDigest != plan.PlanDigest || result.Mode != recipe.ActivationModeStackRecreation || len(topology.applied) != 1 || len(topology.committed) != 1 {
-		t.Fatalf("result=%#v applied=%d committed=%d", result, len(topology.applied), len(topology.committed))
+	if result.Status != recipe.ActivationResultRestartRequired || result.Message != "Restart required: run `vllm-sr serve` to apply." ||
+		result.PlanDigest != plan.PlanDigest || result.Mode != recipe.ActivationModeStackRecreation {
+		t.Fatalf("result = %#v", result)
 	}
-	if _, _, err := store.Transaction(); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("transaction remains after commit: %v", err)
+	if applied, verified := calls.counts(); applied != 0 || verified != 0 {
+		t.Fatalf("a deferred activation touched the running containers: applied=%d verified=%d", applied, verified)
+	}
+	published := mustReadFile(t, configPath)
+	if !strings.Contains(string(published), "port: 9999") {
+		t.Fatal("the Recipe's config was not published")
+	}
+	assertPendingRestart(t, configPath, published, recipeRecreationDetail)
+	active, state, err := store.ActivationStatus()
+	if err != nil || state != recipe.ActivationActive || active.RecipeDigest != summary.RecipeDigest ||
+		active.RealizedConfigDigest != activationDigest(published) {
+		t.Fatalf("active=%#v state=%q err=%v", active, state, err)
+	}
+	assertNoActivationJournal(t, store)
+}
+
+func TestStandaloneStackRecreationNamesOnlyTheRouter(t *testing.T) {
+	t.Setenv("VLLM_SR_GATEWAY", "standalone")
+	store, summary, configPath := importedActivationFixture(t, "accuracy")
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), movedListener, nil)
+	plan, err := activator.Preview(context.Background(), activationRequest(summary))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Mode != recipe.ActivationModeStackRecreation ||
+		!strings.Contains(strings.Join(plan.Effects, "\n"), "recreates the managed Router container, which serves the listeners") {
+		t.Fatalf("plan = %#v", plan)
+	}
+	if listeners := plan.ListenersAfter; len(listeners) != 1 || listeners[0].Port != 9999 {
+		t.Fatalf("listeners = %#v, want the target listener", listeners)
+	}
+}
+
+func TestAddedStorageIsStartedByServe(t *testing.T) {
+	store, summary, configPath := importedActivationFixture(t, "accuracy")
+	activator := topologyTestActivator(store, configPath, &fakeRuntimeTopology{}, func(raw []byte) []byte {
+		return []byte(strings.Replace(string(raw), "global:\n", "global:\n  services:\n    response_api:\n      enabled: true\n      store_backend: redis\n      redis:\n        address: redis:6379\n", 1))
+	}, nil)
+	request := activationRequest(summary)
+	plan, err := activator.Preview(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Mode != recipe.ActivationModeStackRecreation || !reflect.DeepEqual(plan.Storage.Add, []string{"redis"}) ||
+		len(plan.Storage.Repair) != 0 {
+		t.Fatalf("storage plan = %#v", plan.Storage)
+	}
+	if !strings.Contains(strings.Join(plan.Effects, "\n"), "the next `vllm-sr serve` starts the storage the Recipe adds") {
+		t.Fatalf("effects = %q", plan.Effects)
+	}
+	result, err := activator.Activate(context.Background(), confirmed(request, plan))
+	if err != nil || result.Status != recipe.ActivationResultRestartRequired {
+		t.Fatalf("Activate() = %#v, %v", result, err)
 	}
 }
 
@@ -259,21 +150,15 @@ func TestActivationPlanRejectsManagementPortChangeBeforeJournal(t *testing.T) {
 	if err := writeActivationConfig(configPath, current); err != nil {
 		t.Fatal(err)
 	}
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), func(raw []byte) []byte {
 		return withManagedManagementListener(raw, 9090, "disabled")
-	})
+	}, nil)
 
 	plan, err := activator.Preview(context.Background(), activationRequest(summary))
 	if packageErrorCode(err) != recipe.ErrorActivationIncompatible || plan.PlanDigest != "" {
 		t.Fatalf("management port preview plan=%#v err=%v", plan, err)
 	}
-	if len(topology.applied) != 0 {
-		t.Fatal("management port incompatibility mutated topology")
-	}
-	if _, _, err := store.Transaction(); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("activation journal exists: %v", err)
-	}
+	assertNoActivationJournal(t, store)
 }
 
 func TestActivationPlanRejectsManagementBindChangeBeforeJournal(t *testing.T) {
@@ -282,34 +167,31 @@ func TestActivationPlanRejectsManagementBindChangeBeforeJournal(t *testing.T) {
 	if err := writeActivationConfig(configPath, current); err != nil {
 		t.Fatal(err)
 	}
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), func(raw []byte) []byte {
 		target := withManagedManagementListener(raw, 8080, "disabled")
 		return []byte(strings.Replace(string(target), "bind_address: 0.0.0.0", "bind_address: 127.0.0.1", 1))
-	})
+	}, nil)
 
 	plan, err := activator.Preview(context.Background(), activationRequest(summary))
 	if packageErrorCode(err) != recipe.ErrorActivationIncompatible || plan.PlanDigest != "" {
 		t.Fatalf("management bind preview plan=%#v err=%v", plan, err)
 	}
-	if len(topology.applied) != 0 {
-		t.Fatal("management bind incompatibility mutated topology")
-	}
-	if _, _, err := store.Transaction(); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("activation journal exists: %v", err)
-	}
+	assertNoActivationJournal(t, store)
 }
 
+// The management credential `vllm-sr serve` passes the Dashboard.
+const testManagementCredential = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" //nolint:gosec // Test fixture, not a credential.
+
 func TestActivationPlanRequiresRecreationForManagementAuthChange(t *testing.T) {
+	t.Setenv(recipe.ManagementCredentialEnv, testManagementCredential)
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
 	current := withManagedManagementListener(mustReadFile(t, configPath), 8080, "disabled")
 	if err := writeActivationConfig(configPath, current); err != nil {
 		t.Fatal(err)
 	}
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), func(raw []byte) []byte {
 		return withManagedManagementListener(raw, 8080, "bearer")
-	})
+	}, nil)
 
 	plan, err := activator.Preview(context.Background(), activationRequest(summary))
 	if err != nil {
@@ -321,6 +203,9 @@ func TestActivationPlanRequiresRecreationForManagementAuthChange(t *testing.T) {
 	if plan.ManagementBefore.Port != 8080 || plan.ManagementAfter.BindAddress != "0.0.0.0" {
 		t.Fatalf("management endpoints missing from plan: %#v", plan)
 	}
+	if !strings.Contains(strings.Join(plan.Effects, "\n"), "the recreated Router takes the target management listener and authentication boundary") {
+		t.Fatalf("effects = %q", plan.Effects)
+	}
 }
 
 func TestActivationPlanRejectsUnreachableManagedManagementBind(t *testing.T) {
@@ -330,13 +215,12 @@ func TestActivationPlanRejectsUnreachableManagedManagementBind(t *testing.T) {
 	if err := writeActivationConfig(configPath, current); err != nil {
 		t.Fatal(err)
 	}
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), func(raw []byte) []byte {
 		return []byte(strings.Replace(
 			string(withManagedManagementListener(raw, 8080, "disabled")),
 			"bind_address: 0.0.0.0", "bind_address: 127.0.0.1", 1,
 		))
-	})
+	}, nil)
 
 	plan, err := activator.Preview(context.Background(), activationRequest(summary))
 	if packageErrorCode(err) != recipe.ErrorActivationIncompatible || plan.PlanDigest != "" {
@@ -353,193 +237,133 @@ func TestManagedSplitIdentityRequiresReachableManagementBindDespiteStaleTargetUR
 	}
 }
 
-func TestActivationPlanRepairsStoppedRequiredStorage(t *testing.T) {
+func TestHotSwitchTheRouterRefusesOnlyForARestartIsLeftToServe(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := &fakeRuntimeTopology{inventory: runtimeTopologyInventory{
-		Storage: []string{"redis"},
-		ContainerRunning: map[string]bool{
-			managedContainerNameForService("router"): true,
-			managedContainerNameForService("envoy"):  true,
-			managedContainerNameForStorage("redis"):  false,
-		},
-	}}
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
-		return []byte(strings.Replace(string(raw), "global:\n", "global:\n  services:\n    response_api:\n      enabled: true\n      store_backend: redis\n      redis:\n        address: redis:6379\n", 1))
-	})
-	request := activationRequest(summary)
-	plan, err := activator.Preview(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
+	activator := topologyTestActivator(store, configPath, testTopologyForHotSwitch(), realizedMarker, nil)
+	activator.verifyRuntime = func(context.Context, string) error {
+		return &restartNeededError{detail: "listener http timeout changed"}
 	}
-	if plan.Mode != recipe.ActivationModeStackRecreation || !reflect.DeepEqual(plan.Storage.Repair, []string{"redis"}) || len(plan.Storage.Add) != 0 {
-		t.Fatalf("repair plan = %#v", plan)
+	plan, err := activator.Preview(context.Background(), activationRequest(summary))
+	if err != nil || plan.Mode != recipe.ActivationModeHotSwitch {
+		t.Fatalf("plan = %#v, %v", plan, err)
 	}
-	request.ExpectedPlanDigest, request.ConfirmStackRecreation = plan.PlanDigest, true
-	if _, err := activator.Activate(context.Background(), request); err != nil {
-		t.Fatal(err)
+	result, err := activator.Activate(context.Background(), activationRequest(summary))
+	if err != nil || result.Status != recipe.ActivationResultRestartRequired || result.Mode != recipe.ActivationModeHotSwitch {
+		t.Fatalf("Activate() = %#v, %v", result, err)
 	}
-	var repair *recipe.ActivationContainerTransition
-	for index := range topology.applied[0].Containers {
-		transition := &topology.applied[0].Containers[index]
-		if transition.Service == "redis" {
-			repair = transition
-		}
+	published := mustReadFile(t, configPath)
+	assertPendingRestart(t, configPath, published, "listener http timeout changed")
+	if _, state, _ := store.ActivationStatus(); state != recipe.ActivationActive {
+		t.Fatalf("activation state = %q, want active", state)
 	}
-	if repair == nil || repair.Action != "repair" || repair.WasRunning {
-		t.Fatalf("repair transition = %#v", repair)
+
+	again, err := activator.Activate(context.Background(), activationRequest(summary))
+	if err != nil || again.Status != recipe.ActivationResultRestartRequired {
+		t.Fatalf("repeated Activate() = %#v, %v", again, err)
 	}
+	assertNoActivationJournal(t, store)
 }
 
-func TestTopologyApplyFailureRestoresConfigPointerReachabilityAndJournal(t *testing.T) {
+func TestHotSwitchWithAChangedEnvoyConfigIsLeftToServe(t *testing.T) {
+	store, summary, configPath := importedActivationFixture(t, "accuracy")
+	calls := &runtimeCalls{}
+	activator := topologyTestActivator(store, configPath, testTopologyForHotSwitch(), realizedMarker, calls)
+	activator.applyRuntime = func(path, _ string) (string, error) {
+		return path, &restartNeededError{detail: envoyRestartDetail}
+	}
+	result, err := activator.Activate(context.Background(), activationRequest(summary))
+	if err != nil || result.Status != recipe.ActivationResultRestartRequired {
+		t.Fatalf("Activate() = %#v, %v", result, err)
+	}
+	if _, verified := calls.counts(); verified != 1 {
+		t.Fatalf("the Router's part was verified %d times, want 1", verified)
+	}
+	assertPendingRestart(t, configPath, mustReadFile(t, configPath), envoyRestartDetail)
+}
+
+func TestRollbackKeepsTheRestartTheRestoredConfigNeeded(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
 	previous := mustReadFile(t, configPath)
-	topology := testTopologyForManagedRuntime()
-	topology.applyErr = errors.New("replacement Envoy failed")
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
-		return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1))
-	})
-	request := activationRequest(summary)
-	plan, err := activator.Preview(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
+	activator := topologyTestActivator(store, configPath, testTopologyForHotSwitch(), realizedMarker, nil)
+	activator.verifyEnvoy = func(context.Context) error {
+		if bytes.Equal(mustReadFile(t, configPath), previous) {
+			return nil
+		}
+		return errors.New("the Recipe's Envoy is not ready")
 	}
-	request.ExpectedPlanDigest, request.ConfirmStackRecreation = plan.PlanDigest, true
-	if _, err := activator.Activate(context.Background(), request); packageErrorCode(err) != recipe.ErrorActivationFailed {
-		t.Fatalf("activation error = %v", err)
+	activator.applyRuntime = func(path, _ string) (string, error) {
+		if bytes.Equal(mustReadFile(t, path), previous) {
+			return path, &restartNeededError{detail: envoyRestartDetail}
+		}
+		return path, nil
 	}
-	if !bytes.Equal(previous, mustReadFile(t, configPath)) || len(topology.rolledBack) != 1 {
-		t.Fatal("topology failure did not restore config and containers")
+	if _, err := activator.Activate(context.Background(), activationRequest(summary)); packageErrorCode(err) != recipe.ErrorActivationFailed {
+		t.Fatalf("Activate() error = %v", err)
 	}
-	if _, state, err := store.ActivationStatus(); err != nil || state != recipe.ActivationNone {
-		t.Fatalf("activation status=%q err=%v", state, err)
+	if !bytes.Equal(previous, mustReadFile(t, configPath)) {
+		t.Fatal("the failed activation did not restore the previous config")
+	}
+	if _, err := os.Stat(pendingActivationPath(configPath, pendingActivationSuffix)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a rolled-back activation recorded a pending activation: %v", err)
+	}
+	if _, state, _ := store.ActivationStatus(); state != recipe.ActivationNone {
+		t.Fatalf("activation state = %q, want none", state)
+	}
+	assertNoActivationJournal(t, store)
+}
+
+func TestRecoveryLeavesContainerRecreatingJournalsToServe(t *testing.T) {
+	for _, name := range []string{"topology journal", "managed topology mode"} {
+		t.Run(name, func(t *testing.T) {
+			store, summary, configPath := importedActivationFixture(t, "accuracy")
+			previous := mustReadFile(t, configPath)
+			transaction, err := store.BeginActivation(summary.RecipeDigest, previous)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if name == "topology journal" {
+				topologyPath := filepath.Join(store.Root(), "transactions", transaction.ID, "topology.json")
+				if writeErr := os.WriteFile(topologyPath, []byte("{}\n"), 0o600); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+			} else {
+				markJournalTopologyManaged(t, store)
+			}
+			if writeErr := writeActivationConfig(configPath, append(append([]byte(nil), previous...), "# half applied\n"...)); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), realizedMarker, nil)
+
+			err = activator.Recover(context.Background())
+			packageErr, ok := recipe.AsPackageError(err)
+			if !ok || packageErr.Status != http.StatusConflict || packageErr.Safe != serveRecoversTopologyMsg {
+				t.Fatalf("Recover() error = %#v", err)
+			}
+			if _, _, err := store.Transaction(); err != nil {
+				t.Fatalf("the journal must stay for `vllm-sr serve`: %v", err)
+			}
+			if bytes.Equal(previous, mustReadFile(t, configPath)) {
+				t.Fatal("the Dashboard rolled back a transaction only `vllm-sr serve` may recover")
+			}
+		})
 	}
 }
 
-func TestTopologyRecoveryRollsBackPendingJournalFromTopologyWriteCrashWindow(t *testing.T) {
-	store, activator, topology, transaction, previous := managedTopologyRecoveryFixture(t)
-	overwriteActivationTransaction(t, store, transaction)
-
-	if err := activator.Recover(context.Background()); err != nil {
-		t.Fatalf("Recover(): %v", err)
-	}
-	if len(topology.rolledBack) != 1 || topology.rolledBack[0].TransactionID != transaction.ID {
-		t.Fatalf("rolled back topology = %#v", topology.rolledBack)
-	}
-	if !bytes.Equal(previous, mustReadFile(t, activator.configPath)) {
-		t.Fatal("recovery did not restore the previous runtime config")
-	}
-	if _, _, err := store.Transaction(); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("transaction remains after recovery: %v", err)
-	}
-}
-
-func TestTopologyRecoveryRetriesCrashWindowAfterRollbackFailure(t *testing.T) {
-	store, activator, topology, transaction, _ := managedTopologyRecoveryFixture(t)
-	overwriteActivationTransaction(t, store, transaction)
-	topology.rollbackErr = errors.New("container runtime temporarily unavailable")
-
-	if err := activator.Recover(context.Background()); packageErrorCode(err) != recipe.ErrorActivationRollback {
-		t.Fatalf("first Recover() error = %v", err)
-	}
-	current, _, err := store.Transaction()
-	if err != nil || current.State != recipe.ActivationInconsistent || current.TopologyMode != recipe.ActivationTopologyNone {
-		t.Fatalf("retry transaction = %#v, %v", current, err)
-	}
-	topology.rollbackErr = nil
-	if err := activator.Recover(context.Background()); err != nil {
-		t.Fatalf("retry Recover(): %v", err)
-	}
-	if len(topology.rolledBack) != 2 {
-		t.Fatalf("rollback attempts = %d, want 2", len(topology.rolledBack))
-	}
-	if _, _, err := store.Transaction(); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("transaction remains after retry: %v", err)
-	}
-}
-
-func TestTopologyRecoveryKeepsManagedMissingJournalFailClosed(t *testing.T) {
-	store, activator, topology, transaction, _ := managedTopologyRecoveryFixture(t)
-	if err := os.Remove(activationTopologyPath(store, transaction)); err != nil {
-		t.Fatal(err)
-	}
-
-	err := activator.Recover(context.Background())
-	if packageErrorCode(err) != recipe.ErrorActivationRollback {
-		t.Fatalf("Recover() error = %v", err)
-	}
-	if cause := errors.Unwrap(err); cause == nil || !strings.Contains(cause.Error(), "managed activation transaction is missing its topology journal") {
-		t.Fatalf("Recover() cause = %v", cause)
-	}
-	if len(topology.rolledBack) != 0 {
-		t.Fatal("missing managed topology must not attempt an inferred rollback")
-	}
-}
-
-func TestTopologyRecoveryKeepsPendingCorruptJournalFailClosed(t *testing.T) {
-	store, activator, topology, transaction, _ := managedTopologyRecoveryFixture(t)
-	overwriteActivationTransaction(t, store, transaction)
-	if err := os.WriteFile(activationTopologyPath(store, transaction), []byte("{\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	err := activator.Recover(context.Background())
-	if packageErrorCode(err) != recipe.ErrorActivationRollback {
-		t.Fatalf("Recover() error = %v", err)
-	}
-	if len(topology.rolledBack) != 0 {
-		t.Fatal("corrupt topology must not attempt rollback")
-	}
-}
-
-func TestTopologyCommitCleanupFailureRemainsDurableAndRecoveryFinalizes(t *testing.T) {
+func TestDeactivationThatRecreatesTheStackIsLeftToServe(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := testTopologyForManagedRuntime()
-	topology.commitErr = errors.New("backup cleanup interrupted")
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
-		return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1))
-	})
+	source := mustReadFile(t, configPath)
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), movedListener, nil)
 	request := activationRequest(summary)
-	plan, err := activator.Preview(context.Background(), request)
+	activationPlan, err := activator.Preview(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.ExpectedPlanDigest, request.ConfirmStackRecreation = plan.PlanDigest, true
-	if _, activationErr := activator.Activate(context.Background(), request); packageErrorCode(activationErr) != recipe.ErrorActivationConflict {
-		t.Fatalf("commit cleanup error = %v", activationErr)
-	}
-	transaction, _, err := store.Transaction()
-	if err != nil || transaction.State != "committing" {
-		t.Fatalf("transaction=%#v err=%v", transaction, err)
-	}
-	if _, err := store.ActivationTopology(transaction); err != nil {
-		t.Fatalf("topology journal was deleted before cleanup: %v", err)
-	}
-	topology.commitErr = nil
-	if err := activator.Recover(context.Background()); err != nil {
-		t.Fatalf("Recover(): %v", err)
-	}
-	if _, state, err := store.ActivationStatus(); err != nil || state != recipe.ActivationActive {
-		t.Fatalf("activation status=%q err=%v", state, err)
-	}
-}
-
-func TestDeactivationPreviewsConfirmsAndReconcilesTopology(t *testing.T) {
-	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
-		return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1))
-	})
-	activateRequest := activationRequest(summary)
-	activationPlan, err := activator.Preview(context.Background(), activateRequest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	activateRequest.ExpectedPlanDigest, activateRequest.ConfirmStackRecreation = activationPlan.PlanDigest, true
-	if _, activationErr := activator.Activate(context.Background(), activateRequest); activationErr != nil {
+	if _, activationErr := activator.Activate(context.Background(), confirmed(request, activationPlan)); activationErr != nil {
 		t.Fatal(activationErr)
 	}
 	deactivationPlan, err := activator.PreviewDeactivation(context.Background())
-	if err != nil || deactivationPlan.Mode != recipe.ActivationModeStackRecreation {
+	if err != nil || deactivationPlan.Mode != recipe.ActivationModeStackRecreation ||
+		deactivationPlan.Effects[0] != "restore the durable source runtime config" {
 		t.Fatalf("deactivation plan=%#v err=%v", deactivationPlan, err)
 	}
 	if _, deactivationErr := activator.Deactivate(context.Background()); packageErrorCode(deactivationErr) != recipe.ErrorActivationConfirmation {
@@ -548,139 +372,153 @@ func TestDeactivationPreviewsConfirmsAndReconcilesTopology(t *testing.T) {
 	result, err := activator.Deactivate(context.Background(), recipe.DeactivateRequest{
 		ExpectedPlanDigest: deactivationPlan.PlanDigest, ConfirmStackRecreation: true,
 	})
-	if err != nil || result.Mode != recipe.ActivationModeStackRecreation {
+	if err != nil || result.Status != recipe.ActivationResultRestartRequired || result.Mode != recipe.ActivationModeStackRecreation ||
+		result.PreviousRecipeDigest != summary.RecipeDigest {
 		t.Fatalf("Deactivate()=%#v err=%v", result, err)
 	}
-	if len(topology.applied) != 2 || len(topology.committed) != 2 {
-		t.Fatalf("topology calls applied=%d committed=%d", len(topology.applied), len(topology.committed))
+	restored := mustReadFile(t, configPath)
+	if !bytes.Equal(source, restored) {
+		t.Fatal("deactivation did not restore the source config")
+	}
+	assertPendingRestart(t, configPath, restored, recipeRestorationDetail)
+	if _, state, _ := store.ActivationStatus(); state != recipe.ActivationNone {
+		t.Fatalf("activation state = %q, want none", state)
 	}
 }
 
-func TestBearerActivationUsesPrivateScopedCredentialWithoutResponseLeak(t *testing.T) {
+func TestBearerActivationBindsTheCredentialServePassedWithoutWritingIt(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, withManagementBearer)
+	token := testManagementCredential
+	t.Setenv(recipe.ManagementCredentialEnv, token)
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), withManagementBearer, nil)
 	request := activationRequest(summary)
 	plan, err := activator.Preview(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertBearerActivationPlan(t, plan)
-	request.ExpectedPlanDigest, request.ConfirmStackRecreation = plan.PlanDigest, true
-	result, err := activator.Activate(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertPrivateManagementCredential(t, store, topology, result, configPath)
-}
-
-func assertBearerActivationPlan(t *testing.T, plan recipe.ActivationPlan) {
-	t.Helper()
-	if plan.ManagementAuth.ServiceRole != recipe.ManagementCredentialRole || !reflect.DeepEqual(plan.ManagementAuth.ServicePermissions, recipe.ManagementCredentialPermissions()) {
+	if plan.ManagementAuth.ServiceRole != recipe.ManagementCredentialRole ||
+		!reflect.DeepEqual(plan.ManagementAuth.ServicePermissions, recipe.ManagementCredentialPermissions()) {
 		t.Fatalf("auth plan=%#v", plan.ManagementAuth)
 	}
-}
-
-func assertPrivateManagementCredential(t *testing.T, store *recipe.Store, topology *fakeRuntimeTopology, result recipe.ActivateResult, configPath string) {
-	t.Helper()
-	token, err := store.ManagementCredential()
-	if err != nil || len(token) != 64 || len(topology.credentials) != 1 || topology.credentials[0] != token {
-		t.Fatalf("credential provisioning failed: err=%v", err)
+	result, err := activator.Activate(context.Background(), confirmed(request, plan))
+	if err != nil {
+		t.Fatal(err)
 	}
-	encoded := []byte(result.RecipeDigest + result.PlanDigest)
-	if bytes.Contains(encoded, []byte(token)) || bytes.Contains(mustReadFile(t, configPath), []byte(token)) {
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeConfig := mustReadFile(t, configPath)
+	if bytes.Contains(encoded, []byte(token)) || bytes.Contains(runtimeConfig, []byte(token)) {
 		t.Fatal("management credential leaked into response or runtime config")
 	}
-	credentialPath := filepath.Join(store.Root(), "credentials", "router-management.token")
-	info, err := os.Stat(credentialPath)
+	if !bytes.Contains(runtimeConfig, []byte("env: "+recipe.ManagementCredentialEnv)) {
+		t.Fatalf("runtime config does not bind the credential by name:\n%s", runtimeConfig)
+	}
+	err = filepath.WalkDir(store.Root(), func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		if bytes.Contains(mustReadFile(t, path), []byte(token)) {
+			t.Errorf("the Recipe store wrote the management credential to %s", path)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("credential mode=%v", info.Mode())
-	}
 }
 
-func TestBearerActivationUsesAuthoritativeRuntimeCredentialInsteadOfStaleStoreToken(t *testing.T) {
+func TestBearerActivationWithoutACredentialSaysWhoProvidesIt(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	persistedToken, err := store.EnsureManagementCredential()
-	if err != nil {
-		t.Fatal(err)
+	t.Setenv(recipe.ManagementCredentialEnv, "")
+	previous := mustReadFile(t, configPath)
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), withManagementBearer, nil)
+
+	_, err := activator.Preview(context.Background(), activationRequest(summary))
+	var packageErr *recipe.PackageError
+	if !errors.As(err, &packageErr) || packageErr.Code != recipe.ErrorActivationIncompatible ||
+		!strings.Contains(packageErr.Safe, "vllm-sr serve") {
+		t.Fatalf("Preview() error = %v, want an explanation that names vllm-sr serve", err)
 	}
-	runtimeToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	t.Setenv(recipe.ManagementCredentialEnv, runtimeToken)
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, withManagementBearer)
-	request := activationRequest(summary)
-	plan, err := activator.Preview(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
+	if _, state, _ := store.ActivationStatus(); state != recipe.ActivationNone {
+		t.Fatalf("activation state = %q, want none", state)
 	}
-	request.ExpectedPlanDigest, request.ConfirmStackRecreation = plan.PlanDigest, true
-	if _, err := activator.Activate(context.Background(), request); err != nil {
-		t.Fatal(err)
-	}
-	if len(topology.credentials) != 1 || topology.credentials[0] != runtimeToken {
-		t.Fatalf("activation credential = %q, want runtime credential", topology.credentials)
-	}
-	credentialPath := filepath.Join(store.Root(), "credentials", "router-management.token")
-	persistedAfter := strings.TrimSpace(string(mustReadFile(t, credentialPath)))
-	if persistedAfter != persistedToken {
-		t.Fatalf("persisted credential changed from %q to %q", persistedToken, persistedAfter)
+	if !bytes.Equal(mustReadFile(t, configPath), previous) {
+		t.Fatal("a refused activation changed the runtime config")
 	}
 }
 
-func topologyTestActivator(store *recipe.Store, configPath string, topology *fakeRuntimeTopology, realize func([]byte) []byte) *RecipeActivator {
+func TestRestartRequiredActivationResultIsAccepted(t *testing.T) {
+	if status := activationResultHTTPStatus(recipe.ActivationResultRestartRequired); status != http.StatusAccepted {
+		t.Fatalf("restart_required status = %d, want 202", status)
+	}
+	for _, status := range []string{"active", "inactive"} {
+		if code := activationResultHTTPStatus(status); code != http.StatusOK {
+			t.Fatalf("%s status = %d, want 200", status, code)
+		}
+	}
+}
+
+func assertPendingRestart(t *testing.T, configPath string, config []byte, detail string) {
+	t.Helper()
+	var record pendingActivationRecord
+	if err := json.Unmarshal(mustReadFile(t, pendingActivationPath(configPath, pendingActivationSuffix)), &record); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(config)
+	if record.Reason != activationReasonRestart || record.Detail != detail || record.ConfigSHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("pending activation = %#v, want reason restart, detail %q, the published config", record, detail)
+	}
+}
+
+func confirmed(request recipe.ActivateRequest, plan recipe.ActivationPlan) recipe.ActivateRequest {
+	request.ExpectedPlanDigest, request.ConfirmStackRecreation = plan.PlanDigest, true
+	return request
+}
+
+func movedListener(raw []byte) []byte {
+	return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1))
+}
+
+func realizedMarker(raw []byte) []byte {
+	return append(append([]byte(nil), raw...), "\n# realized recipe\n"...)
+}
+
+func topologyTestActivator(store *recipe.Store, configPath string, topology *fakeRuntimeTopology, realize func([]byte) []byte, calls *runtimeCalls) *RecipeActivator {
+	if calls == nil {
+		calls = &runtimeCalls{}
+	}
 	return NewRecipeActivator(RecipeActivatorOptions{
 		Store: store, ConfigPath: configPath, ConfigDir: filepath.Dir(configPath), Topology: topology,
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return realize(raw), nil },
-		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
-		VerifyRuntime: func(context.Context, string) error { return nil },
-		VerifyEnvoy:   func(context.Context) error { return nil },
+		ApplyRuntime: func(path, _ string) (string, error) {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.applied++
+			return path, nil
+		},
+		VerifyRuntime: func(context.Context, string) error {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.verified++
+			return nil
+		},
+		VerifyEnvoy: func(context.Context) error { return nil },
 	})
 }
 
-func managedTopologyRecoveryFixture(t *testing.T) (*recipe.Store, *RecipeActivator, *fakeRuntimeTopology, recipe.ActivationTransaction, []byte) {
+func markJournalTopologyManaged(t *testing.T, store *recipe.Store) {
 	t.Helper()
-	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	previous := mustReadFile(t, configPath)
-	topology := testTopologyForManagedRuntime()
-	activator := topologyTestActivator(store, configPath, topology, func(raw []byte) []byte {
-		return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1))
-	})
-	plan, err := activator.Preview(context.Background(), activationRequest(summary))
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := store.BeginActivation(summary.RecipeDigest, previous)
-	if err != nil {
-		t.Fatal(err)
-	}
-	state := topologyStateForPlan(plan, transaction, topology.inventory)
-	if err := store.WriteActivationTopology(transaction, state); err != nil {
-		t.Fatal(err)
-	}
-	return store, activator, topology, transaction, previous
-}
-
-func overwriteActivationTransaction(t *testing.T, store *recipe.Store, transaction recipe.ActivationTransaction) {
-	t.Helper()
-	if transaction.State != "pending" || transaction.TopologyMode != recipe.ActivationTopologyNone {
-		t.Fatalf("pre-topology transaction = %#v", transaction)
-	}
 	journalPath := filepath.Join(store.Root(), "activation-pending.json")
 	journal := mustReadFile(t, journalPath)
-	updated := bytes.Replace(journal, []byte(`"topology_mode": "managed"`), []byte(`"topology_mode": "none"`), 1)
+	updated := bytes.Replace(journal, []byte(`"topology_mode": "none"`), []byte(`"topology_mode": "managed"`), 1)
 	if bytes.Equal(updated, journal) {
-		t.Fatal("managed topology mode not found in activation journal")
+		t.Fatal("topology mode not found in activation journal")
 	}
 	if err := os.WriteFile(journalPath, updated, 0o600); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func activationTopologyPath(store *recipe.Store, transaction recipe.ActivationTransaction) string {
-	return filepath.Join(store.Root(), "transactions", transaction.ID, "topology.json")
 }
 
 func withManagedManagementListener(config []byte, port int, mode string) []byte {
@@ -697,16 +535,7 @@ func withManagedManagementListener(config []byte, port int, mode string) []byte 
 }
 
 func testTopologyForManagedRuntime() *fakeRuntimeTopology {
-	running := map[string]bool{}
-	for _, service := range []string{"router", "envoy"} {
-		running[managedContainerNameForService(service)] = true
-	}
-	for _, backend := range []string{"redis", "postgres", "milvus"} {
-		running[managedContainerNameForStorage(backend)] = true
-	}
-	return &fakeRuntimeTopology{inventory: runtimeTopologyInventory{
-		Storage: []string{"milvus", "postgres", "redis"}, ContainerRunning: running,
-	}}
+	return &fakeRuntimeTopology{inventory: runtimeTopologyInventory{Storage: []string{"milvus", "postgres", "redis"}}}
 }
 
 func packageErrorCode(err error) string {

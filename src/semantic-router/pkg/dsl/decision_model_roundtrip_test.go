@@ -26,6 +26,16 @@ func TestDecisionModelSignalAndAlgorithmRoundTrip(t *testing.T) {
 			Name: "difficulty", Deployment: "decision-kai", Predicate: &config.NumericPredicate{GTE: &threshold},
 			Question: config.DecisionQuestion{Type: "score", Instructions: "How hard?", Levels: []string{"easy", "medium", "hard"}},
 		},
+		{
+			Name: "topics", Deployment: "vela2", Predicate: &config.NumericPredicate{GTE: &threshold},
+			Question: config.DecisionQuestion{Type: "set", Instructions: "Which topics?", Threshold: &threshold, Labels: []config.DecisionChoice{
+				{Key: "billing", Description: "Payments"}, {Key: "shipping"},
+			}},
+		},
+		{
+			Name: "places", Deployment: "vela2",
+			Question: config.DecisionQuestion{Type: "span", Instructions: "Which spans name a place?", Head: "broad", Labels: []config.DecisionChoice{{Key: "city"}}},
+		},
 	}
 	cfg.Decisions = []config.Decision{{
 		Name:      "decision-route",

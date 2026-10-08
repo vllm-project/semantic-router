@@ -16,7 +16,7 @@ PREBUILT_RUNTIME_IMAGES ?= 0
 #   DOCKER_TAG=nightly-20260115    nightly build from a specific date
 #
 # Examples:
-#   make docker-build-extproc DOCKER_TAG=v0.4.0
+#   make docker-build-vllm-sr DOCKER_TAG=v0.4.0
 #   make docker-pull-release  DOCKER_TAG=v0.4.0
 # ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
@@ -31,24 +31,32 @@ PROVIDER_MOCKER_SCENARIO ?= default
 PROVIDER_MOCKER_MODEL ?= Model-A
 
 # Build all Docker images
-# Note: extproc-rocm is excluded because it is x86_64 only and carries the ROCm
-# PyTorch wheels. Build it explicitly with: make docker-build-extproc-rocm
+# Note: the GPU router images are excluded because they are x86_64 only and
+# carry the ROCm or CUDA PyTorch wheels. Build them explicitly with
+# make docker-build-vllm-sr-rocm or make docker-build-vllm-sr-cuda.
 docker-build-all: ## Build all Docker images
-docker-build-all: docker-build-extproc docker-build-provider-mocker docker-build-dashboard docker-build-precommit docker-build-vllm-sr-sim
+docker-build-all: docker-build-vllm-sr docker-build-provider-mocker docker-build-dashboard docker-build-precommit
 
-# Build extproc Docker image
-docker-build-extproc: ## Build extproc Docker image
-docker-build-extproc:
+# The router image for the CLI stack, the Helm chart and the Operator
+docker-build-vllm-sr: ## Build the vllm-sr router image (CPU)
+docker-build-vllm-sr:
 	@$(LOG_TARGET)
-	@echo "Building extproc Docker image..."
-	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
+	@echo "Building vllm-sr Docker image..."
+	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG) .
 
-# Build extproc-rocm Docker image (AMD GPU / ROCm, x86_64 only)
-docker-build-extproc-rocm: ## Build extproc-rocm Docker image (AMD GPU)
-docker-build-extproc-rocm:
+# The router image for AMD GPUs (ROCm, x86_64 only)
+docker-build-vllm-sr-rocm: ## Build the vllm-sr-rocm router image (AMD GPU)
+docker-build-vllm-sr-rocm:
 	@$(LOG_TARGET)
-	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm PyTorch)..."
-	@$(CONTAINER_RUNTIME) build --build-arg ACCELERATOR=rocm -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
+	@echo "Building vllm-sr-rocm Docker image (x86_64 only, ROCm PyTorch)..."
+	@$(CONTAINER_RUNTIME) build --build-arg ACCELERATOR=rocm -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG) .
+
+# The router image for NVIDIA GPUs (CUDA, x86_64 only)
+docker-build-vllm-sr-cuda: ## Build the vllm-sr-cuda router image (NVIDIA GPU)
+docker-build-vllm-sr-cuda:
+	@$(LOG_TARGET)
+	@echo "Building vllm-sr-cuda Docker image (x86_64 only, CUDA PyTorch)..."
+	@$(CONTAINER_RUNTIME) build --build-arg ACCELERATOR=cuda -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG) .
 
 # One shared deterministic backend; publishing is handled by its scoped CI job.
 docker-build-provider-mocker: ## Build the provider mocker, or reuse an explicitly supplied image
@@ -80,13 +88,6 @@ docker-build-vllm-sr-router:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-router Docker image..."
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_ROUTER_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(VLLM_SR_ROUTER_IMAGE) .
-
-# Build vllm-sr-sim Docker image
-docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
-docker-build-vllm-sr-sim:
-	@$(LOG_TARGET)
-	@echo "Building vllm-sr-sim Docker image..."
-	@$(CONTAINER_RUNTIME) build --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY) -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
 
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image
@@ -137,7 +138,6 @@ docker-pull-release:
 		echo "WARNING: pulling :latest — consider pinning with DOCKER_TAG=v<version> or DOCKER_TAG=nightly-YYYYMMDD"; \
 	fi
 	@echo "Pulling images at tag: $(DOCKER_TAG)"
-	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
 	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
 	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG)
 	@echo "All images pulled at $(DOCKER_TAG)"
@@ -151,23 +151,30 @@ docker-clean:
 	@echo "Docker cleanup completed"
 
 # Push Docker images (for CI/CD)
-# Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
+# Note: the GPU router images are excluded; push them explicitly with
+# make docker-push-vllm-sr-rocm or make docker-push-vllm-sr-cuda.
 docker-push-all: ## Push all Docker images
-docker-push-all: docker-push-extproc docker-push-dashboard docker-push-vllm-sr-sim
+docker-push-all: docker-push-vllm-sr docker-push-dashboard
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
 
-docker-push-extproc: ## Push extproc Docker image
-docker-push-extproc:
+docker-push-vllm-sr: ## Push the vllm-sr router image
+docker-push-vllm-sr:
 	@$(LOG_TARGET)
-	@echo "Pushing extproc Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
+	@echo "Pushing vllm-sr Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
 
-docker-push-extproc-rocm: ## Push extproc-rocm Docker image
-docker-push-extproc-rocm:
+docker-push-vllm-sr-rocm: ## Push the vllm-sr-rocm router image
+docker-push-vllm-sr-rocm:
 	@$(LOG_TARGET)
-	@echo "Pushing extproc-rocm Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG)
+	@echo "Pushing vllm-sr-rocm Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
+
+docker-push-vllm-sr-cuda: ## Push the vllm-sr-cuda router image
+docker-push-vllm-sr-cuda:
+	@$(LOG_TARGET)
+	@echo "Pushing vllm-sr-cuda Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
 
 docker-push-dashboard: ## Push dashboard Docker image
 docker-push-dashboard:
@@ -186,12 +193,6 @@ docker-push-vllm-sr-envoy:
 	@$(LOG_TARGET)
 	@echo "Skipping push for upstream-managed Envoy image: $(VLLM_SR_ENVOY_IMAGE)"
 
-docker-push-vllm-sr-sim: ## Push vllm-sr-sim Docker image
-docker-push-vllm-sr-sim:
-	@$(LOG_TARGET)
-	@echo "Pushing vllm-sr-sim Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG)
-
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
@@ -208,7 +209,6 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  VLLM_SR_ROUTER_IMAGE - router runtime image override (defaults to VLLM_SR_ROUTER_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_ENVOY_IMAGE - envoy runtime image override (defaults to VLLM_SR_ENVOY_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_DASHBOARD_IMAGE - dashboard runtime image override (defaults to VLLM_SR_DASHBOARD_IMAGE_DEFAULT)"
-	@echo "  VLLM_SR_SIM_PORT  - host port for the vllm-sr-sim service container"
 
 ##@ vLLM-SR (Semantic Router CLI)
 
@@ -237,11 +237,6 @@ VLLM_SR_TOPOLOGY_NORMALIZED := $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:
 VLLM_SR_DOCKERFILE ?= tools/docker/Dockerfile.extproc
 VLLM_SR_ACCELERATOR ?= cpu
 VLLM_SR_DASHBOARD_DOCKERFILE ?= dashboard/backend/Dockerfile
-VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
-VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
-VLLM_SR_SIM_DOCKERFILE ?= src/fleet-sim/Dockerfile
-VLLM_SR_SIM_DIR ?= src/fleet-sim
-VLLM_SR_SIM_PORT ?= 8810
 VLLM_SR_TEST_UPSTREAM_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE)
 SKIP_ROUTER_IMAGE_SOURCE := $(origin SKIP_ROUTER_IMAGE)
 SKIP_COMPAT_IMAGE_SOURCE := $(origin SKIP_COMPAT_IMAGE)
@@ -489,27 +484,6 @@ vllm-sr-start: vllm-sr-dev
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
 vllm-sr-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
-
-vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
-vllm-sr-sim-install-cli: harness-venv-install
-	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
-
-vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
-vllm-sr-sim-test: vllm-sr-sim-install-cli
-	@$(LOG_TARGET)
-	@cd $(VLLM_SR_SIM_DIR) && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest tests -v
-
-vllm-sr-sim-build: ## Build the vLLM-SR-Sim service image
-vllm-sr-sim-build:
-	@$(LOG_TARGET)
-	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_SIM_IMAGE) -f $(VLLM_SR_SIM_DOCKERFILE) .
-
-vllm-sr-sim-start: ## Start the vLLM-SR-Sim service container
-vllm-sr-sim-start: vllm-sr-sim-build
-	@$(LOG_TARGET)
-	@echo "Starting vLLM-SR-Sim service on http://localhost:$(VLLM_SR_SIM_PORT)"
-	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || true
-	@$(CONTAINER_RUNTIME) run -d --name $(VLLM_SR_SIM_CONTAINER) -p $(VLLM_SR_SIM_PORT):8000 $(VLLM_SR_SIM_IMAGE)
 
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
