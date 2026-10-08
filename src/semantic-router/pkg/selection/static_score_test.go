@@ -42,6 +42,28 @@ func TestStaticSelectorConfiguredScoreBoundary(t *testing.T) {
 	}
 }
 
+func TestStaticSelectorPartialScoresKeepOmittedCandidateDefault(t *testing.T) {
+	selector := NewStaticSelector(nil)
+	selector.InitializeFromConfig([]config.Category{{
+		CategoryMetadata: config.CategoryMetadata{Name: "business"},
+		ModelScores:      []config.ModelScore{{Model: "small", Score: 0.9}},
+	}})
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CategoryName:    "business",
+		DecisionName:    "business_route",
+		CandidateModels: []config.ModelRef{{Model: "small"}, {Model: "large"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AllScores["small"] != 0.9 || result.AllScores["large"] != 1 {
+		t.Fatalf("partial scores = %v, want small=0.9 and omitted large=1", result.AllScores)
+	}
+	if result.SelectedModel != "large" || result.Score != 1 {
+		t.Fatalf("selected %s (%v), want omitted large (1)", result.SelectedModel, result.Score)
+	}
+}
+
 func TestStaticSelectorConfiguredOneFromCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
