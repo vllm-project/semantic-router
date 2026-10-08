@@ -15,15 +15,21 @@ import { newModelFormData } from './configPageModelsSectionSupport'
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
     expectTypeOf<NonNullable<ProviderModel['api_format']>>().toEqualTypeOf<
-      'openai' | 'responses' | 'anthropic'
+      'openai' | 'responses' | 'anthropic' | 'speech'
     >()
 
     const models = [
       { name: 'chat', api_format: 'openai' },
       { name: 'responses', api_format: 'responses' },
       { name: 'messages', api_format: 'anthropic' },
+      { name: 'tts', api_format: 'speech' },
     ] satisfies ProviderModel[]
-    expect(models.map((model) => model.api_format)).toEqual(['openai', 'responses', 'anthropic'])
+    expect(models.map((model) => model.api_format)).toEqual([
+      'openai',
+      'responses',
+      'anthropic',
+      'speech',
+    ])
   })
 
   it('preserves every canonical backend target field', () => {

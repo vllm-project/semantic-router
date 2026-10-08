@@ -41,6 +41,7 @@ func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 		CapabilityMatchedStopSequence,
 		CapabilityImageGeneration,
 		CapabilitySamplingMinP, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
+		CapabilitySpeechGeneration,
 	)
 	names := all.Names()
 	seen := make(map[string]struct{}, len(names))

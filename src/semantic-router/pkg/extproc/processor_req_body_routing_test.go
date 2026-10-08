@@ -488,6 +488,8 @@ func routingTestRouterForFormat(format llmprotocol.WireFormat) (*OpenAIRouter, s
 		apiFormat = config.APIFormatAnthropic
 		providerType = "anthropic"
 		baseURL = "http://127.0.0.1:8000"
+	case llmprotocol.OpenAISpeechV1:
+		apiFormat = config.APIFormatSpeech
 	}
 	cfg := &config.RouterConfig{
 		BackendModels: config.BackendModels{

@@ -390,6 +390,8 @@ func apiFormatForProtocol(protocol string) (string, error) {
 		return APIFormatResponses, nil
 	case "anthropic/messages@1":
 		return APIFormatAnthropic, nil
+	case "openai/audio-speech@1":
+		return APIFormatSpeech, nil
 	default:
 		return "", fmt.Errorf("protocol %q has no runtime codec", protocol)
 	}

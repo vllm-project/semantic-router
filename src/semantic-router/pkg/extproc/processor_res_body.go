@@ -6,6 +6,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -27,6 +28,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	responseBody := v.ResponseBody.Body
 	if isUpstreamTransportError(ctx) {
 		return r.handleUpstreamTransportError(responseBody, ctx), nil
+	}
+	if ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		return r.handleSpeechResponseBody(ctx, completionLatency), nil
 	}
 
 	if ctx.IsStreamingResponse {
@@ -51,6 +55,16 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	}
 
 	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency), nil
+}
+
+// handleSpeechResponseBody forwards Speech API audio to the client unchanged.
+// Audio has no neutral response, so it skips decoding, the response cache and
+// response policy; the request still completes with zero token usage, and the
+// replay record closes without storing the audio.
+func (r *OpenAIRouter) handleSpeechResponseBody(ctx *RequestContext, completionLatency time.Duration) *ext_proc.ProcessingResponse {
+	r.reportNonStreamingUsage(ctx, completionLatency, responseUsageMetrics{})
+	r.attachRouterReplayResponse(ctx, nil, true)
+	return buildResponseBodyContinueResponse(nil, nil)
 }
 
 func contextRecoveryFailClosed(ctx *RequestContext) bool {

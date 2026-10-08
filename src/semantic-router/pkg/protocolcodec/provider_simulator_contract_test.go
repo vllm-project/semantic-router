@@ -111,6 +111,22 @@ func TestProviderSimulatorContractsTrackCodecInventories(t *testing.T) {
 	}
 }
 
+// The speech fixture has no JSON response or usage, so only its request
+// inventory tracks the codec.
+func TestProviderSimulatorSpeechContractTracksCodecInventory(t *testing.T) {
+	contract := readProviderSimulatorContracts(
+		t,
+		filepath.Join("..", "..", "..", "..", "tools", "test", "services", "provider-mocker", "provider_mocker", "schema_contract.json"),
+	)["openai_speech"]
+	if contract.SchemaRevision != "router-speech-fixture-v1" {
+		t.Fatalf("simulator schema revision = %q, want router-speech-fixture-v1", contract.SchemaRevision)
+	}
+	assertSimulatorFields(t, "request", contract.OfficialRequestFields, contract.ExtensionRequestFields, jsonFieldNames(reflect.TypeOf(speechRequestWire{})))
+	if !reflect.DeepEqual(sortedStrings(contract.RequiredRequestFields), fields("input")) {
+		t.Fatalf("required request fields = %v, want [input]", contract.RequiredRequestFields)
+	}
+}
+
 func assertProviderFieldTypes(t *testing.T, fields map[string][]string) {
 	t.Helper()
 	allowed := map[string]struct{}{

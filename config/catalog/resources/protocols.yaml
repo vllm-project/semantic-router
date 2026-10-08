@@ -34,3 +34,12 @@
       method: GET
       path: /v1/models
   capabilities: [chat, streaming, tools, usage]
+- id: openai/audio-speech@1
+  display_name: OpenAI Speech
+  wire_format: openai.speech.v1
+  default_base_path: /v1
+  operations:
+    - id: create
+      method: POST
+      path: /v1/audio/speech
+  capabilities: [speech_generation]

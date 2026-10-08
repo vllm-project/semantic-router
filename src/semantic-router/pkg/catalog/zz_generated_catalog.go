@@ -102135,6 +102135,22 @@ const builtInCatalogJSON = `{
         }
       ],
       "wire_format": "anthropic.messages.v1"
+    },
+    {
+      "capabilities": [
+        "speech_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Speech",
+      "id": "openai/audio-speech@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/audio/speech"
+        }
+      ],
+      "wire_format": "openai.speech.v1"
     }
   ],
   "providers": [
