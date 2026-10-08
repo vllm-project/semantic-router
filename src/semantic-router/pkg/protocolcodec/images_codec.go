@@ -63,9 +63,9 @@ type imagesDataWire struct {
 }
 
 type imagesErrorWire struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    string `json:"code"`
+	Message string          `json:"message"`
+	Type    string          `json:"type"`
+	Code    openAIErrorCode `json:"code"`
 }
 
 // DecodeRequest decodes a direct images-dialect client request into the
@@ -286,7 +286,7 @@ func (ImagesCodec) DecodeTransportError(body []byte, _ llmprotocol.Policy) (llmp
 			message = wire.Error.Message
 		}
 		if wire.Error.Code != "" {
-			code = wire.Error.Code
+			code = string(wire.Error.Code)
 		}
 	}
 	return llmprotocol.TransportError{

@@ -8,7 +8,6 @@ export type ShellRoutePage =
   | 'logs'
   | 'models'
   | 'monitoring'
-  | 'openclaw'
   | 'playground'
   | 'status'
   | 'topology'
@@ -46,7 +45,6 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/models', page: 'models' },
   { path: '/builder', page: 'builder' },
   { path: '/config/reference', page: 'config-reference' },
-  { path: '/openclaw', page: 'openclaw' },
   { path: '/users', page: 'users' },
 ]
 

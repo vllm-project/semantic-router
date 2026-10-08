@@ -1,14 +1,14 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType, DecisionModelSignal, SafetySignal } from '../types/config'
+import type {
+  DecisionConditionType,
+  DecisionModelSignal,
+  Listener,
+  SafetySignal,
+} from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
-export interface ListenerConfig {
-  name: string
-  address: string
-  port: number
-  timeout?: string
-}
+export type ListenerConfig = Listener
 
 export interface VLLMEndpoint {
   name: string
@@ -127,6 +127,17 @@ export interface ProviderReliability {
   health_check_path?: string
   health_check_interval?: string
   health_check_timeout?: string
+  connect_timeout?: string
+  total_timeout?: string
+  idle_timeout?: string
+  per_try_timeout?: string
+  first_byte_timeout?: string
+  retriable_status_codes?: number[]
+  retry_back_off_base?: string
+  retry_back_off_max?: string
+  retry_after_max?: string
+  retry_budget_percent?: number
+  retry_budget_min_concurrency?: number
 }
 
 export interface LoRAAdapter {
@@ -295,6 +306,8 @@ export interface DecisionConfig {
   algorithm?: Record<string, unknown>
   action?: { type: string; destination: string }
   adaptations?: Record<string, unknown>
+  reliability?: Record<string, unknown>
+  fallback?: Record<string, unknown>
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
   emits?: Array<Record<string, unknown>>
@@ -688,6 +701,9 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
+  decision_model?: string
+  safety?: string
+  hazard?: string
   prompt_guard?: string
   domain_classifier?: string
   pii_classifier?: string
@@ -1377,6 +1393,8 @@ export interface DecisionFormState {
   action: Record<string, unknown>
   algorithm?: Record<string, unknown>
   adaptations: Record<string, unknown>
+  reliability: Record<string, unknown>
+  fallback: Record<string, unknown>
   declarative: Record<string, unknown>
 }
 

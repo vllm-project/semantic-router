@@ -42,6 +42,9 @@ BAND_BLOCK = 128
 # Row width from which local layers attend in query blocks, by device type (Vela 307M,
 # FP32): dense masked SDPA is faster below, on 16 EPYC cores and on MI325X.
 BAND_FROM = {"cpu": 1024, "cuda": 2048}
+# Query tokens one CPU SDPA call of local attention reads: the keys, values and
+# mask it copies for them stay this small on rows of any length.
+BAND_CALL_TOKENS = 4096
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
 # cos / sin per layer type for each grid width of a layout.
 Rotary = dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]]
@@ -122,7 +125,7 @@ def yarn_frequencies(
         )
 
     low = max(math.floor(correction(beta_fast)), 0)
-    high = min(math.ceil(correction(beta_slow)), dim - 1)
+    high: float = min(math.ceil(correction(beta_slow)), dim - 1)
     if low == high:
         high += 0.001
     ramp = torch.clamp(
@@ -198,7 +201,7 @@ def attention_masks(
     rows: int,
     width: int,
     window: int,
-    device,
+    device: torch.device | str,
     local: bool = True,
 ) -> dict[str, torch.Tensor | None]:
     """Boolean SDPA masks per layer type, None where Transformers passes none.
@@ -237,7 +240,7 @@ def band(
     width: int,
     window: int,
     block: int,
-    device,
+    device: torch.device | str,
 ) -> Band:
     """The block mask of local attention over rows of ``width`` (built on the host)."""
     blocks = -(-width // block)
@@ -261,27 +264,59 @@ def banded_attention(
     blocks: Band,
     scale: float,
 ) -> torch.Tensor:
-    """Local attention of ``[rows, heads, width, dim]`` inputs, O(width * (block + 2 window))."""
+    """Local attention of ``[rows, heads, width, dim]`` inputs, O(width * (block + 2 window)).
+
+    On the CPU, query blocks run ``BAND_CALL_TOKENS`` at a time: each SDPA call
+    copies its blocks' keys, values and mask, so a call's copies stay that small
+    on any row. Every block is its own SDPA problem, so the result is the same.
+    """
     rows, heads, width, dim = query.shape
-    count, span = blocks.mask.shape[2], blocks.mask.shape[-1]
-    tail = count * blocks.block - width
-    pad = (0, 0, blocks.window, tail + blocks.window)
+    count, block = blocks.mask.shape[2], blocks.block
+    step = count if query.device.type != "cpu" else max(1, BAND_CALL_TOKENS // block)
+    if step >= count:
+        return _band_call(kernels, query, key, value, blocks, scale, 0, count)
+    out = query.new_empty(rows, heads, width, dim)
+    for first in range(0, count, step):
+        last = min(count, first + step)
+        out[:, :, first * block : last * block] = _band_call(
+            kernels, query, key, value, blocks, scale, first, last
+        )
+    return out
+
+
+def _band_call(
+    kernels: KernelSet,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    blocks: Band,
+    scale: float,
+    first: int,
+    last: int,
+) -> torch.Tensor:
+    """One SDPA call over query blocks ``[first, last)``: their rows of the output."""
+    rows, heads, width, dim = query.shape
+    span, block, window = blocks.mask.shape[-1], blocks.block, blocks.window
+    start, stop, count = first * block, min(width, last * block), last - first
+    q = F.pad(query[:, :, start:stop], (0, 0, 0, count * block - (stop - start)))
+    # Block b reads keys [b * block - window, (b + 1) * block + window), zeros outside the row.
+    low, high = start - window, last * block + window
+    keys = (max(0, -low), max(0, high - width))
+    k = F.pad(key[:, :, max(0, low) : min(width, high)], (0, 0, *keys))
+    v = F.pad(value[:, :, max(0, low) : min(width, high)], (0, 0, *keys))
     # Heads and blocks fold into one batch axis: fused SDPA kernels take 4-D inputs only.
     folded = (rows, heads * count)
-    q = F.pad(query, (0, 0, 0, tail)).reshape(*folded, blocks.block, dim)
-    k = F.pad(key, pad).unfold(2, span, blocks.block).transpose(-1, -2)
-    v = F.pad(value, pad).unfold(2, span, blocks.block).transpose(-1, -2)
-    mask = blocks.mask.expand(rows, heads, count, blocks.block, span)
-    out = kernels("sdpa")(
-        q,
-        k.reshape(*folded, span, dim),
-        v.reshape(*folded, span, dim),
-        mask.reshape(*folded, blocks.block, span),
+    mask = blocks.mask[:, :, first:last].expand(rows, heads, count, block, span)
+    out: torch.Tensor = kernels("sdpa")(
+        q.reshape(*folded, block, dim),
+        k.unfold(2, span, block).transpose(-1, -2).reshape(*folded, span, dim),
+        v.unfold(2, span, block).transpose(-1, -2).reshape(*folded, span, dim),
+        mask.reshape(*folded, block, span),
         scale=scale,
         is_causal=False,
         enable_gqa=False,
     )
-    return out.reshape(rows, heads, count * blocks.block, dim)[:, :, :width]
+    return out.reshape(rows, heads, count * block, dim)[:, :, : stop - start]
 
 
 @dataclass(frozen=True)
@@ -339,11 +374,17 @@ class Layout:
         """Each group with its slice of the layers' token-major values."""
         if len(self.groups) == 1:
             return [(self.groups[0], tokens)]
-        return list(zip(self.groups, tokens.split(self.sizes), strict=True))
+        return list(
+            zip(self.groups, torch.split(tokens, list(self.sizes)), strict=True)
+        )
 
 
 def padded_layout(
-    attention_mask: torch.Tensor | None, rows: int, width: int, window: int, device
+    attention_mask: torch.Tensor | None,
+    rows: int,
+    width: int,
+    window: int,
+    device: torch.device | str,
 ) -> Layout:
     """The layout of padded rows; reads ``attention_mask`` (any padding pattern) on the host."""
     key_valid = None
@@ -384,7 +425,7 @@ def length_groups(
 def packed_group(
     lengths: Sequence[int],
     window: int,
-    device,
+    device: torch.device | str,
     width: int,
     band_from: int,
     block: int,
@@ -417,7 +458,7 @@ def packed_group(
 def packed_layout(
     lengths: Sequence[int],
     window: int,
-    device,
+    device: torch.device | str,
     width: int | None = None,
     band_from: int | None = None,
     block: int = BAND_BLOCK,
@@ -482,7 +523,8 @@ class ModernBertEmbeddings(nn.Module):
         self.norm = layer_norm(config)
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
-        return self.norm(self.tok_embeddings(input_ids))
+        embeddings: torch.Tensor = self.norm(self.tok_embeddings(input_ids))
+        return embeddings
 
 
 class ModernBertAttention(nn.Module):
@@ -518,7 +560,8 @@ class ModernBertAttention(nn.Module):
             )
             for group, projected in layout.split(self.Wqkv(hidden_states))
         ]
-        return self.Wo(parts[0] if len(parts) == 1 else torch.cat(parts))
+        out: torch.Tensor = self.Wo(parts[0] if len(parts) == 1 else torch.cat(parts))
+        return out
 
     def attend(
         self,
@@ -567,7 +610,8 @@ class ModernBertMLP(nn.Module):
         self.Wo = nn.Linear(intermediate, hidden, bias=bias)
 
     def forward(self, hidden_states: torch.Tensor, kernels: KernelSet) -> torch.Tensor:
-        return self.Wo(kernels("geglu")(self.Wi(hidden_states), self.act))
+        out: torch.Tensor = self.Wo(kernels("geglu")(self.Wi(hidden_states), self.act))
+        return out
 
 
 class ModernBertLayer(nn.Module):
@@ -580,12 +624,19 @@ class ModernBertLayer(nn.Module):
         self.mlp = ModernBertMLP(config)
 
     def forward(
-        self, hidden_states, rotary: Rotary, layout: Layout, kernels: KernelSet
-    ):
+        self,
+        hidden_states: torch.Tensor,
+        rotary: Rotary,
+        layout: Layout,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         hidden_states = hidden_states + self.attn(
             self.attn_norm(hidden_states), rotary, self.kind, layout, kernels
         )
-        return hidden_states + self.mlp(self.mlp_norm(hidden_states), kernels)
+        out: torch.Tensor = hidden_states + self.mlp(
+            self.mlp_norm(hidden_states), kernels
+        )
+        return out
 
 
 class ModernBertBackbone(nn.Module):
@@ -615,7 +666,7 @@ class ModernBertBackbone(nn.Module):
     def packed(
         self,
         lengths: Sequence[int],
-        device,
+        device: torch.device | str,
         width: int | None = None,
         uniform: bool = False,
     ) -> Layout:
@@ -623,12 +674,18 @@ class ModernBertBackbone(nn.Module):
         return packed_layout(lengths, self.window, device, width, uniform=uniform)
 
     def padded(
-        self, attention_mask: torch.Tensor | None, rows: int, width: int, device
+        self,
+        attention_mask: torch.Tensor | None,
+        rows: int,
+        width: int,
+        device: torch.device | str,
     ) -> Layout:
         """The layout of padded ``[rows, width]`` rows (see ``padded_layout``)."""
         return padded_layout(attention_mask, rows, width, self.window, device)
 
-    def masked(self, valid: torch.Tensor, rows: int, width: int, device) -> Layout:
+    def masked(
+        self, valid: torch.Tensor, rows: int, width: int, device: torch.device | str
+    ) -> Layout:
         """Padded rows whose masks come from a device-side key mask, never read back (graphs)."""
         masks = attention_masks(valid, rows, width, self.window, device)
         return Layout((Group(rows, width, masks),))
@@ -654,7 +711,8 @@ class ModernBertBackbone(nn.Module):
 
         def exit_state(count: int, hidden: torch.Tensor) -> torch.Tensor:
             if count == self.num_layers or normalize_exits:
-                return self.final_norm(hidden)
+                normed: torch.Tensor = self.final_norm(hidden)
+                return normed
             return hidden
 
         if layout.order is not None:

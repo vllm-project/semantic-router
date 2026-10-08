@@ -51,6 +51,8 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// A request the Router cannot route carries a stable reason code (issue #4653)
+	"routing-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)

@@ -38,6 +38,7 @@ _SEMVER = re.compile(
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
+_PEP440_DEV = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\.dev(\d+)$")
 _CATALOG_VERSION = re.compile(r"^v\d+\.\d+$")
 _CATALOG_RESOURCE_VERSION = re.compile(r"^(?:latest|v\d+\.\d+)$")
 _SLUG = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
@@ -684,7 +685,17 @@ SemVerKey = tuple[int, int, int, int, SemVerPreRelease]
 def _version_tuple(value: str) -> SemVerKey | None:
     match = _SEMVER.fullmatch(value)
     if match is None:
-        return None
+        # A dev build (PEP 440 X.Y.Z.devN) precedes X.Y.Z, like a prerelease.
+        dev = _PEP440_DEV.fullmatch(value)
+        if dev is None:
+            return None
+        return (
+            int(dev.group(1)),
+            int(dev.group(2)),
+            int(dev.group(3)),
+            0,
+            ((1, "dev"), (0, int(dev.group(4)))),
+        )
     major, minor, patch, prerelease = match.groups()
     identifiers: list[tuple[int, int | str]] = []
     if prerelease is not None:

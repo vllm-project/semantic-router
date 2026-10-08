@@ -25,7 +25,7 @@ def run_resolver(**overrides: str) -> str:
 
 class DockerBuildArgumentTests(unittest.TestCase):
     def test_no_image_builds_model_bundles(self) -> None:
-        for image in ("extproc", "envoy", "vllm-sr"):
+        for image in ("envoy", "vllm-sr", "vllm-sr-rocm"):
             self.assertNotIn("VELA_OMNI", run_resolver(MATRIX_IMAGE=image))
 
     def test_router_images_pass_their_runtime_accelerator(self) -> None:

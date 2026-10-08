@@ -19,11 +19,12 @@ from starlette.routing import Route
 
 from ..errors import RuntimeServiceError
 from ..runtime import Runtime
+from ..timing import ServerTiming
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
 _SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
-API_VERSION = "2.0.0"
+API_VERSION = "2.2.0"
 # Recorded for a request whose client disconnected before its answer (nginx's code).
 CLIENT_CLOSED = 499
 
@@ -72,6 +73,12 @@ def respond_bundle(content: dict[str, Any]) -> Response:
         return JSON({**content, "results": results})
 
 
+def stamped(response: Response, timing: ServerTiming, started: float) -> Response:
+    """``response`` with its request's ``Server-Timing`` header; ``started`` is the handler's start."""
+    response.headers["server-timing"] = timing.header(time.perf_counter() - started)
+    return response
+
+
 def create_app(runtime: Runtime) -> Starlette:
     def observe(endpoint: str, status: int, started: float) -> None:
         runtime.metrics.requests.labels(endpoint=endpoint, status=str(status)).inc()
@@ -83,22 +90,28 @@ def create_app(runtime: Runtime) -> Starlette:
         async def handle(request: Request) -> Response:
             endpoint = request.url.path
             started = time.perf_counter()
+            timing = ServerTiming()
             status = 200
             try:
                 body, size = await _read_json(request, runtime.config.max_request_bytes)
+                timing.parse = time.perf_counter() - started
                 outcome = await until_disconnect(
-                    request, runtime.call(surface, body, size)
+                    request, runtime.call(surface, body, size, timing)
                 )
                 if outcome is None:
                     status = CLIENT_CLOSED
                     return Response(status_code=CLIENT_CLOSED)
                 status, response = outcome
+                serializing = time.perf_counter()
                 answer = respond(response, status)
+                timing.serialize = time.perf_counter() - serializing
                 status = answer.status_code
-                return answer
+                return stamped(answer, timing, started)
             except RuntimeServiceError as exc:
                 status = exc.status
-                return JSON(exc.body(), status_code=exc.status)
+                return stamped(
+                    JSON(exc.body(), status_code=exc.status), timing, started
+                )
             finally:
                 observe(endpoint, status, started)
 
@@ -106,20 +119,29 @@ def create_app(runtime: Runtime) -> Starlette:
 
     async def bundle(request: Request) -> Response:
         started = time.perf_counter()
+        timing = ServerTiming()
         status = 200
         try:
             body, size = await _read_json(request, runtime.config.max_request_bytes)
-            outcome = await until_disconnect(request, runtime.bundle(body, size))
+            timing.parse = time.perf_counter() - started
+            outcome = await until_disconnect(
+                request, runtime.bundle(body, size, timing)
+            )
             if outcome is None:
                 status = CLIENT_CLOSED
                 return Response(status_code=CLIENT_CLOSED)
             status, response = outcome
-            if status == HTTPStatus.OK:
-                return respond_bundle(response)
-            return respond(response, status)
+            serializing = time.perf_counter()
+            answer = (
+                respond_bundle(response)
+                if status == HTTPStatus.OK
+                else respond(response, status)
+            )
+            timing.serialize = time.perf_counter() - serializing
+            return stamped(answer, timing, started)
         except RuntimeServiceError as exc:
             status = exc.status
-            return JSON(exc.body(), status_code=exc.status)
+            return stamped(JSON(exc.body(), status_code=exc.status), timing, started)
         finally:
             observe(request.url.path, status, started)
 

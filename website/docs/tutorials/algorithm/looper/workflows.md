@@ -49,7 +49,6 @@ Register the direct model slug:
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       flow:
         model_names:
@@ -60,6 +59,15 @@ global:
           file:
             directory: .vllm-sr/flow-state
 ```
+
+Give every alias a name that no model uses. An alias that is also a model's
+name captures that model's traffic: every request for the model evaluates only
+workflows decisions, so the model can no longer be requested directly, and a
+request that matches no workflows decision fails with
+[`no_route`](../../../api/router.md#routing-errors). The Router still loads
+such a configuration, with a `looper_alias_shadows_model` warning that names the
+alias, whether `providers.models` serves it, and the decisions that route to it;
+`vllm-sr config validate` reports the same warning.
 
 Configure a dynamic Flow decision:
 
@@ -104,7 +112,8 @@ makes no model calls. An explicit planner override keeps that target and must
 pass the same stage checks; it is not replaced by another model on failure.
 If no eligible planner exists, the request fails closed. An explicit planner
 may be a separately configured helper outside the worker `modelRefs`, but must
-still have an operator-assigned backend. Worker calls remain constrained to
+still have an operator-assigned backend in `providers.models[].backend_refs`;
+without one, the configuration fails to load. Worker calls remain constrained to
 `modelRefs`; the executor rejects a plan that names a worker outside that list.
 Planner selection does not reduce a configured minimum of distinct successful
 workers.
@@ -159,7 +168,7 @@ routing:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
+| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution; use names that no model uses |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |

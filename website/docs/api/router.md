@@ -1,6 +1,8 @@
 # Router API
 
-The router data plane accepts model requests through an Envoy listener. In the
+The router data plane accepts model requests on the configured listeners. The
+Router serves them itself in standalone mode, the default; with
+`--gateway extproc`, Envoy serves them and calls the Router over ext_proc. In the
 standard local stack, the listener is `http://localhost:8899`; a recipe can
 choose a different address or port under `listeners`.
 
@@ -181,6 +183,33 @@ Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
+## Routing errors
+
+When the Router cannot route a request, it answers the request itself and calls
+no backend. The error uses the client's protocol. In OpenAI Chat Completions and
+Responses errors, `error.code` is a stable reason code and `error.message` a
+short message. Apart from the budget errors, the message names no model,
+decision, or request content:
+
+```json
+{"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
+```
+
+| Code | Status | `error.type` | Meaning |
+| --- | --- | --- | --- |
+| `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
+| `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. An auto alias or entrypoint falls back to `providers.defaults.model`; a Looper alias such as `vllm-sr/flow` evaluates only its algorithm's decisions and has no fallback. |
+| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
+| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
+| `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
+
+The Router logs each of these failures at `WARN`, under the request's
+`x-request-id`, with the code and its own reason: the model the request named,
+the recipe and decision it reached, and the error. Anthropic Messages clients
+get the same status and message in Anthropic's error envelope, which has no
+code field.
+
 ## Request budget errors
 
 With `candidate_requirements.context: known_limits`, the Router checks estimated
@@ -193,7 +222,7 @@ limits. If all candidates fail only the budget check, it returns HTTP 400:
 | `max_output_tokens_exceeded` | The requested output exceeds the configured model limit. |
 
 Missing capabilities, unknown limits, unavailable selection evidence, and mixed
-failures retain their existing selection-error behavior. Budget checks do not
+failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
 truncate requests by themselves; opt into
 [context compression](../tutorials/plugin/context-compression.md) when appropriate.
 
