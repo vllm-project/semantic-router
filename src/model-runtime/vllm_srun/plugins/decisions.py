@@ -17,6 +17,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Generic
 
+from ..errors import INVALID_QUESTION
 from .base import (
     Expired,
     ItemT,
@@ -53,6 +54,27 @@ class RequestPlan(Generic[ItemT]):
     items: Sequence[ItemT]
     errors: dict[str, dict[str, Any]]
     input_tokens: int
+
+
+def refuse_unanswerable(plan: RequestPlan[Any]) -> None:
+    """Fail a request whose questions are all invalid; nothing in it can be answered.
+
+    The ``ValueError`` becomes 400 invalid_request with every question's
+    reason. An invalid question among valid ones still fails alone, in its
+    answer.
+    """
+    if plan.items or len(plan.errors) < len(plan.question_ids):
+        return
+    if any(
+        plan.errors.get(question_id, {}).get("error") != INVALID_QUESTION
+        for question_id in plan.question_ids
+    ):
+        return
+    reasons = "; ".join(
+        f"{question_id}: {plan.errors[question_id].get('message', INVALID_QUESTION)}"
+        for question_id in plan.question_ids
+    )
+    raise ValueError(f"no question is valid ({reasons})")
 
 
 def well_formed(answer: dict[str, Any]) -> bool:
@@ -104,11 +126,24 @@ def compare_answers(
 
 
 class DecisionModel(LoadedModel[ItemT, ResultT]):
-    """A loaded model that serves ``/v1/decisions`` through ``plan`` and ``answer``."""
+    """A loaded model that serves ``/v1/decisions`` through ``plan`` and ``answer``.
+
+    ``scan_tokens`` is the most tokens of one state part the model reads in
+    windows (its card's ``max_scan_tokens``); None for a model that reads one
+    bounded input and rejects a longer one. A request's ``options.max_tokens``
+    overrides it, and only a model that has one takes that option.
+    """
+
+    scan_tokens: int | None = None
 
     @abstractmethod
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan[ItemT]:
-        """Validate and render every question; failures become per-question errors."""
+    def plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None = None
+    ) -> RequestPlan[ItemT]:
+        """Validate and render every question; failures become per-question errors.
+
+        ``scan`` is the request's scan budget, given only to a model with ``scan_tokens``.
+        """
 
     def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
         """The API answer for one rendered question (``finish_surface`` assembles them)."""
@@ -128,7 +163,17 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
             or any(not isinstance(key, str) or not key.strip() for key in questions)
         ):
             raise ValueError("questions must be a nonempty mapping of question IDs")
-        plan = self.plan(body["state"], questions)
+        scan = request.options.get("max_tokens")
+        if scan is not None:
+            if isinstance(scan, bool) or not isinstance(scan, int) or scan < 1:
+                raise ValueError("max_tokens must be a positive integer")
+            if self.scan_tokens is None:
+                raise ValueError(
+                    "max_tokens is the scan budget of a model that reads parts in"
+                    " windows; this model reads one bounded input and rejects a longer one"
+                )
+        plan = self.plan(body["state"], questions, scan)
+        refuse_unanswerable(plan)
         items: list[Any] = list(plan.items)
         return SurfacePlan(SURFACE, items, plan.input_tokens, plan)
 

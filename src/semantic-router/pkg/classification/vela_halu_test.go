@@ -8,6 +8,7 @@ import (
 
 func TestVelaHaluImplicitBindingKeepsTaskPolicy(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
+	cfg.HallucinationMitigation.HallucinationModel.ModelID = config.Vela1SystemModels().HallucinationDetector
 	models := consumerModelRuntime(nil)
 	models.cfg = &cfg
 	spec, err := models.localSpec("hallucination_detector", cfg.HallucinationMitigation.HallucinationModel.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, true)
@@ -25,5 +26,18 @@ func TestVelaHaluImplicitBindingKeepsTaskPolicy(t *testing.T) {
 	detector := &HallucinationDetector{config: &cfg.HallucinationMitigation.HallucinationModel}
 	if !detector.acceptSpan("09:00", .51, true) || !detector.acceptSpan("猫", .51, true) {
 		t.Fatal("default plugin policy swallowed a one-token hallucination")
+	}
+}
+
+func TestTheDefaultHallucinationDetectorSharesTheVela2Deployment(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	models := consumerModelRuntime(nil)
+	models.cfg = &cfg
+	spec, err := models.localSpec("hallucination_detector", cfg.HallucinationMitigation.HallucinationModel.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Binding.Deployment != "@Vela-2.0-0.3B" || spec.Deployment.Artifact != "vllm-sr/Vela-2.0-0.3B" || spec.Deployment.Profile != "max_speed" || spec.Deployment.Device != "cpu" {
+		t.Fatalf("the default detector asks the shared Vela 2.0 0.3B deployment: %+v", spec)
 	}
 }

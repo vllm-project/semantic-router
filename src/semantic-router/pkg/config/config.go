@@ -273,8 +273,12 @@ type InlineModels struct {
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
+	ModelSignalTimeoutMs    int                           `yaml:"model_signal_timeout_ms,omitempty"`
 	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
+	// DecisionModel is global.model_catalog.system.decision_model, resolved
+	// to its canonical name.
+	DecisionModel string `yaml:"decision_model,omitempty"`
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.

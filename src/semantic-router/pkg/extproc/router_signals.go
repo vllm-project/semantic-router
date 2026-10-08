@@ -16,10 +16,11 @@ import (
 
 // signalRuntime is the part of a router generation that extracts signals:
 // the model runtime deployments it leases and the embeddings, rerankers and
-// recipe classifiers built on them. When a configuration change leaves the
-// signals component's resources unchanged, the next generation shares this
-// runtime instead of building another, and the last generation that uses it
-// closes it.
+// recipe classifiers built on them. Building one waits until every
+// Router-managed deployment it leases is ready. When a configuration change
+// leaves the signals component's resources unchanged, the next generation
+// shares this runtime instead of building another, and the last generation
+// that uses it closes it.
 type signalRuntime struct {
 	// key identifies what the runtime was built from; empty until the
 	// configuration lifecycle names it, and never shared while empty.
@@ -57,6 +58,12 @@ func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) erro
 		}
 		s.modelLease, services = lease, lease
 		s.resources.add(lease.Close)
+		// Decision signals and the decision selector fail open while their
+		// model loads, so a generation that served before its Router-managed
+		// models are ready would route on unknown answers.
+		if err := lease.WaitManaged(context.Background()); err != nil {
+			return err
+		}
 	}
 	s.serving = serving.New(services, pool)
 

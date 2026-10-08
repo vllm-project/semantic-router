@@ -25,7 +25,7 @@
   },
   {
     "immediateResponse": {
-      "bodyText": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"invalid_request\",\"message\":\"invalid inference request\",\"param\":null}}",
+      "bodyText": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"message\":\"the requested model is not available\",\"param\":null}}",
       "headers": {
         "setHeaders": [
           {

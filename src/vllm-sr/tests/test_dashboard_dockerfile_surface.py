@@ -1,5 +1,4 @@
 import os
-import socket
 import stat
 import subprocess
 import sys
@@ -44,7 +43,7 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
 
     assert "FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm" in content
     assert (
-        "apt_get_install_with_retry ca-certificates curl docker.io git gosu libseccomp2 wget"
+        "apt_get_install_with_retry ca-certificates curl git gosu libseccomp2 wget"
         in content
     )
     assert (
@@ -66,17 +65,46 @@ def test_dashboard_dockerfile_exposes_an_immutable_source_revision_build_arg() -
     assert "ENV VLLM_SR_SOURCE_REVISION=${VLLM_SR_SOURCE_REVISION}" in content
 
 
-def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -> None:
+def test_dashboard_image_installs_no_container_runtime() -> None:
+    """The Dashboard holds no container runtime; `vllm-sr serve` owns the stack."""
+
+    dockerfile = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
+    installed = {
+        word
+        for line in dockerfile.splitlines()
+        if "apt_get_install_with_retry " in line
+        or "apt-get install" in line
+        or "apk add" in line
+        for word in line.split()
+    }
+    assert "gosu" in installed
+    assert not installed & {
+        "containerd",
+        "containerd.io",
+        "cri-tools",
+        "docker-ce",
+        "docker-ce-cli",
+        "docker-cli",
+        "docker.io",
+        "moby-cli",
+        "moby-engine",
+        "nerdctl",
+        "podman",
+        "runc",
+    }
+    assert "COPY --from=docker" not in dockerfile
+    entrypoint = DASHBOARD_ENTRYPOINT.read_text(encoding="utf-8")
+    helper = DASHBOARD_PERMISSION_HELPER.read_text(encoding="utf-8")
+    for removed in ("socket-gid", "CONTAINER_SOCKET", "docker.sock", "podman.sock"):
+        assert removed not in entrypoint
+        assert removed not in helper
+
+
+def test_dashboard_entrypoint_shares_state_before_dropping_root() -> None:
     content = DASHBOARD_ENTRYPOINT.read_text(encoding="utf-8")
 
     assert "PERMISSION_HELPER=/app/entrypoint_permissions.py" in content
     assert "DASHBOARD_PERMISSION_HELPER" not in content
-    assert (
-        'if CONTAINER_SOCKET_GID=$(python3 "$PERMISSION_HELPER" socket-gid '
-        '"$CONTAINER_SOCKET_PATH" 2>/dev/null); then' in content
-    )
-    assert 'add_nonroot_group_gid "$CONTAINER_SOCKET_GID"' in content
-    assert "continuing without socket access" in content
     assert "LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}" in content
     assert 'add_nonroot_group_gid "$LOG_SPOOL_GID"' in content
     assert "Invalid log spool group" in content
@@ -87,10 +115,27 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
     assert "safe_shared_path_gid" not in content
     assert "STATE_GID=65532" in content
     assert "ENVOY_STATE_GID=65532" in content
-    assert "RECIPE_STORE_GID=65532" in content
+    # The CLI's user reads and recovers the Recipe store through its own group.
+    assert "RECIPE_STORE_GID=${VLLM_SR_RECIPE_STORE_GID:-65532}" in content
+    assert "Invalid Recipe store group" in content
+    assert 'add_nonroot_group_gid "$RECIPE_STORE_GID"' in content
+    assert (
+        'python3 "$PERMISSION_HELPER" prepare-tree "$RECIPE_STORE_DIR" '
+        '"$RECIPE_STORE_GID"' in content
+    )
+    # The CLI owns the management credential: the copy an earlier Dashboard
+    # kept goes before the store is shared.
+    stale_credential = (
+        'python3 "$PERMISSION_HELPER" remove-stale-file \\\n'
+        '        "$RECIPE_STORE_DIR/credentials/router-management.token"'
+    )
+    assert stale_credential in content
+    assert content.index(stale_credential) < content.index(
+        'prepare-tree "$RECIPE_STORE_DIR"'
+    )
+    assert "--credential-relative-path" not in content
     assert "DATA_GID=65532" in content
     assert 'python3 "$PERMISSION_HELPER" prepare-tree' in content
-    assert "--credential-relative-path credentials/router-management.token" in content
     # Historical private evidence is not reopened or permission-normalized.
     assert "--exclude-path /app/data/evaluation" in content
     assert "EVALUATION_DATA_DIR" not in content
@@ -129,100 +174,6 @@ def test_dashboard_logs_handler_never_executes_a_container_runtime() -> None:
     assert '"os/exec"' not in content
     assert 'exec.Command("docker"' not in content
     assert 'exec.Command("podman"' not in content
-
-
-@LINUX_PERMISSION_HELPER
-def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
-    tmp_path: Path, monkeypatch
-) -> None:
-    # AF_UNIX paths are limited to roughly 108 bytes on Linux. Keep the leaf
-    # relative so the contract also runs from deeply nested workspace runtimes.
-    monkeypatch.chdir(tmp_path)
-    socket_path = Path("s")
-    runtime_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        runtime_socket.bind(str(socket_path))
-        socket_gid = os.getgid() or 65534
-        os.chown(socket_path, -1, socket_gid)
-        socket_path.chmod(0o660)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr
-        assert int(result.stdout.strip()) == socket_gid
-
-        socket_path.chmod(0o600)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "group read/write" in result.stderr
-
-        socket_path.chmod(0o666)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "must not grant other access" in result.stderr
-
-        socket_path.chmod(0o660)
-        socket_link = Path("socket-link")
-        socket_link.symlink_to(socket_path)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_link),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "must be a Unix socket" in result.stderr
-    finally:
-        runtime_socket.close()
-
-    ordinary = tmp_path / "ordinary-file"
-    ordinary.write_text("not a socket", encoding="utf-8")
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "socket-gid",
-            str(ordinary),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode != 0
-    assert "must be a Unix socket" in result.stderr
 
 
 @LINUX_PERMISSION_HELPER
@@ -270,8 +221,44 @@ def test_dashboard_permission_helper_rejects_recipe_store_symlink(
     assert result.returncode != 0
 
 
+def _permission_helper(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(DASHBOARD_PERMISSION_HELPER), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 @LINUX_PERMISSION_HELPER
-def test_dashboard_permission_helper_preserves_private_management_token(
+def test_dashboard_permission_helper_shares_the_recipe_store_with_the_cli_group(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "recipe-store"
+    object_dir = store / "objects" / "sha256" / ("0" * 64)
+    object_dir.mkdir(parents=True, mode=0o700)
+    config = object_dir / "config.yaml"
+    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.chmod(0o600)
+    pointer = store / "active.json"
+    pointer.write_text("{}", encoding="utf-8")
+    pointer.chmod(0o600)
+
+    result = _permission_helper("prepare-tree", str(store), str(os.getgid()))
+
+    assert result.returncode == 0, result.stderr
+    for path in (pointer, config):
+        assert path.stat().st_gid == os.getgid()
+        assert stat.S_IMODE(path.stat().st_mode) & 0o060 == 0o060
+    for path in (store, store / "objects", object_dir):
+        assert path.stat().st_gid == os.getgid()
+        mode = stat.S_IMODE(path.stat().st_mode)
+        assert mode & 0o070 == 0o070
+        assert mode & stat.S_ISGID
+
+
+@LINUX_PERMISSION_HELPER
+def test_dashboard_permission_helper_removes_the_stale_management_token(
     tmp_path: Path,
 ) -> None:
     store = tmp_path / "recipe-store"
@@ -280,30 +267,40 @@ def test_dashboard_permission_helper_preserves_private_management_token(
     token = credentials / "router-management.token"
     token.write_text("a" * 64, encoding="utf-8")
     token.chmod(0o600)
-    record = store / "active.json"
-    record.write_text("{}", encoding="utf-8")
-    record.chmod(0o600)
 
-    subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "prepare-tree",
-            str(store),
-            str(os.getgid()),
-            "--credential-relative-path",
-            "credentials/router-management.token",
-            "--credential-uid",
-            str(os.getuid()),
-            "--credential-gid",
-            str(os.getgid()),
-        ],
-        check=True,
+    result = _permission_helper("remove-stale-file", str(token))
+
+    assert result.returncode == 0, result.stderr
+    assert not credentials.exists()
+    # Nothing to remove is fine, as is a store that never had one.
+    assert _permission_helper("remove-stale-file", str(token)).returncode == 0
+
+    credentials.mkdir()
+    (credentials / "other").write_text("kept", encoding="utf-8")
+    token.write_text("a" * 64, encoding="utf-8")
+    assert _permission_helper("remove-stale-file", str(token)).returncode == 0
+    assert not token.exists()
+    assert (credentials / "other").read_text(encoding="utf-8") == "kept"
+
+
+@LINUX_PERMISSION_HELPER
+def test_dashboard_permission_helper_never_follows_a_stale_token_symlink(
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "router-management.token"
+    sentinel.write_text("sentinel", encoding="utf-8")
+    store = tmp_path / "recipe-store"
+    store.mkdir()
+    (store / "credentials").symlink_to(outside, target_is_directory=True)
+
+    result = _permission_helper(
+        "remove-stale-file", str(store / "credentials" / "router-management.token")
     )
 
-    assert stat.S_IMODE(token.stat().st_mode) == 0o600
-    assert stat.S_IMODE(record.stat().st_mode) == 0o660
-    assert stat.S_IMODE(credentials.stat().st_mode) & stat.S_ISGID
+    assert result.returncode != 0
+    assert sentinel.read_text(encoding="utf-8") == "sentinel"
 
 
 @LINUX_PERMISSION_HELPER

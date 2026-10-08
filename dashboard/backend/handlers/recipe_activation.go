@@ -265,12 +265,6 @@ func (a *RecipeActivator) publishActivation(ctx context.Context, plan recipe.Act
 	if err := revalidateRecipeMutation(ctx); err != nil {
 		return nil, nil, err
 	}
-	if plan.ManagementAuth.Mode == routerconfig.ManagementAuthModeBearer {
-		// The Router `vllm-sr serve` creates reads this credential.
-		if _, err := a.store.EnsureManagementCredential(); err != nil {
-			return nil, nil, err
-		}
-	}
 	if err := writeActivationConfig(a.configPath, config); err != nil {
 		return nil, nil, err
 	}
@@ -617,8 +611,11 @@ func validateActivationConfigDestination(path string) error {
 	return nil
 }
 
+// writeActivationTempFile stages the active config with the mode of every
+// config the Dashboard saves: `vllm-sr serve` reads it as its own user, and the
+// `.vllm-sr` directory, not the file, keeps other users out.
 func writeActivationTempFile(file *os.File, data []byte) error {
-	err := file.Chmod(0o600)
+	err := file.Chmod(0o644)
 	if err == nil {
 		_, err = file.Write(data)
 	}
@@ -753,4 +750,15 @@ func activationCommitIncomplete(cause error) error {
 
 func activationIncompatible(cause error) error {
 	return recipe.NewPackageError(recipe.ErrorActivationIncompatible, http.StatusConflict, "Recipe package is incompatible with the running stack.", cause)
+}
+
+// requireManagementCredential refuses a plan with bearer authentication when
+// the Dashboard has no management credential: the Router `vllm-sr serve`
+// creates for it would accept nothing from the Dashboard.
+func (a *RecipeActivator) requireManagementCredential(plan recipe.ActivationPlan) error {
+	if plan.ManagementAuth.Mode != routerconfig.ManagementAuthModeBearer || a.store.HasManagementCredential() {
+		return nil
+	}
+	return recipe.NewPackageError(recipe.ErrorActivationIncompatible, http.StatusConflict,
+		"This Recipe turns on bearer authentication for the Router management API, and the Dashboard has no management credential. Start the stack with `vllm-sr serve`, which provides it, or set "+recipe.ManagementCredentialEnv+" for both the Dashboard and the Router.", nil)
 }

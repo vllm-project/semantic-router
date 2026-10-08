@@ -293,12 +293,31 @@ def test_json_request_examples_follow_the_runtime_contract():
     examples = [block for block in _blocks("json") if block.title.startswith("POST ")]
 
     assert {block.title for block in examples} == {
-        f"POST {path}" for path in REQUEST_SCHEMAS if path != "/v1/decisions"
+        f"POST {path}" for path in REQUEST_SCHEMAS
     }
     for block in examples:
         _validate_request(
             block.title.removeprefix("POST "), json.loads(block.text), block.where
         )
+
+
+def test_reference_decision_responses_have_the_documented_shape():
+    responses = [
+        block
+        for block in _blocks("json")
+        if block.title == "Response" and "reference.md" in str(block.where)
+    ]
+    validator = _openapi_validator("DecisionResponse")
+
+    assert len(responses) >= 2
+    for block in responses:
+        # The examples omit usage; everything they show must conform.
+        problems = [
+            error.message
+            for error in validator.iter_errors(json.loads(block.text))
+            if error.validator != "required"
+        ]
+        assert problems == [], block.where
 
 
 def test_quickstart_response_example_has_the_documented_shape():
