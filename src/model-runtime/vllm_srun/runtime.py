@@ -37,7 +37,6 @@ from .errors import (
 )
 from .placement import Placement, check_device, device_kind, place
 from .plugins import registry
-from .plugins.decisions import join_states, split_states
 from .plugins.base import (
     DEADLINE,
     SURFACES,
@@ -56,6 +55,7 @@ from .plugins.base import (
     UnsupportedSurfaceError,
     VerifiedPackage,
 )
+from .plugins.decisions import join_states, split_states
 from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler.scheduler import Scheduler, SchedulerLimits
