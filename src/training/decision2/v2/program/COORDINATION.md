@@ -207,6 +207,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 16:18 — **`vela2-weights` → parent; cc `vela2-onecall`, `main-green`: START. Issue filed for acceptance: https://github.com/vllm-project/semantic-router/issues/4753 (labels `needs-acceptance`, `wg/router-models-inference-runtime`; please `/accept`). ONE PR to `main`, branch `xunzhuo/vela2-real-weights` from `main` `2fdf026ec`, worktree `vllm-sr-vela2-weights`. Node A claim: CPU cores 0–31 (NUMA node 0, load 0.16 at 16:17), no GPU, about 16:30–24:00.**
+  - **Baseline measured (Published Models on `main`, run 37734365543):** 12.6 min wall. The Vela 1.0 downloads take 2.7 min when the models cache misses, and the job then saves a 16.6 GB cache (about 1.7 min). The Vela 2.0 pinned files add 1.27 GB (0.3B) and 2.05 GB (0.8B).
+  - **Plan:**
+    - **Runner:** `run_model_tests.py` provisions the 0.3B (and the 0.8B if it fits) at the pinned revision into the runtime cache, serves it with `vllm-srun` on CPU offline, and points the Go tests at it.
+    - **Tests (`pkg/classification`):** the Router's built-in signal questions and one decision question of each type on a fixed corpus, against committed expected answers (cross-CPU tolerance, decisions with a margin). The fused path: one decisions call per stage, a request with history that sends two `states`, each state equal to the same questions asked alone, repeat runs identical. A revision and identity guard for Vela 2.0.
+    - **Parity:** `TestVela2RouterMatchesSystemOne` joins the job; its core exclusion moves from `external-vela2-runtime` to the Published Models profile.
+    - **0.8B:** measured on 4 pinned node A cores (download, load, per-request latency, job delta), then the PR's own CI on GitHub's 4-vCPU runners. Budget: at most 10 extra minutes on the job.
+    - **CI selection:** the runtime's Vela 2.0 family and table, the decision-model registry and defaults, and `pkg/modelservice`'s bundle and fusion files select `platform.models-cpu`.
+  - **Node A use:** exact mirrors of `main` and of my pushed commits, containers `vela2-weights-*`, everything under `/data/dev2/runs/vela2-weights/` and pinned to 0–31. Not touched: every GPU, the other cores, the shared builders, and anyone else's images, containers or data. I post the release.
+  - **Overlaps:** `vela2-onecall` is finished (#4745, #4748 merged); I add tests and CI wiring only, no `pkg/modelservice` production code. `main-green`'s `real_model_test.go` guard gets a Vela 2.0 counterpart; I don't change the Vela 1.0 tests.
+  - Scratch and handoff: `scratch/vela2-weights/`. No subagents.
+  — `vela2-weights`
+
 - 2026-10-08 15:12 — **`main-green` → parent: FINISHED. #4743 (issue #4742) merged as `ec74e51fc`. Node A claim (cores 0–31) RELEASED: no container, run dir or mirror of mine is left there. On node B I'm still waiting for your call on the leftovers listed in my 15:01 note; I haven't touched it since 13:41.**
   - **`main` head `42de88e31` (#4745 and this fix) on node A:**
     - `make test-models`: `success: true`, all 13 tests pass, and each test logs the Vela 1.0 package it loads.
