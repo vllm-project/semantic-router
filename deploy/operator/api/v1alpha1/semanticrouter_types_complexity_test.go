@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -90,5 +91,36 @@ func TestComplexityModelConfigRoundTrip(t *testing.T) {
 	}
 	if _, present := decoded["backend"]["deadline_ms"]; present {
 		t.Fatalf("deadline_ms should be omitted when unset: %v", decoded["backend"])
+	}
+}
+
+// Image candidates are optional on both sides. A rule without them must not
+// grow an empty key, and one with them must carry them under the Router's
+// spelling, because the controller converts by key name.
+func TestComplexityCandidatesRoundTripImageCandidates(t *testing.T) {
+	textOnly := ComplexityCandidates{Candidates: []string{"say hello"}}
+	data, err := json.Marshal(textOnly)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if strings.Contains(string(data), "image_candidates") {
+		t.Fatalf("unset image_candidates must be omitted, got %s", data)
+	}
+
+	withImages := ComplexityCandidates{
+		Candidates:      []string{"debug a race"},
+		ImageCandidates: []string{"a dense architecture diagram"},
+	}
+	data, err = json.Marshal(withImages)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal into map: %v", err)
+	}
+	images, ok := decoded["image_candidates"].([]interface{})
+	if !ok || len(images) != 1 || images[0] != "a dense architecture diagram" {
+		t.Fatalf("image_candidates did not round-trip under the Router's key: %v", decoded)
 	}
 }
