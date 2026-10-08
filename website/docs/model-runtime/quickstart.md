@@ -16,12 +16,12 @@ release; see the [release channel note](../installation/installation.md).
 
 ## 1. Install
 
-Install the CLI into a virtual environment:
+Install the development channel, which includes Engine mode, into the
+installer's isolated virtual environment. `--no-launch` leaves startup for
+the next step:
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install vllm-sr
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 ```
 
 The model runtime, the `vllm-srun` Python package, ships only inside the

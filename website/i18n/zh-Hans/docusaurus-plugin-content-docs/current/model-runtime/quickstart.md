@@ -18,12 +18,11 @@ translation:
 
 ## 1. 安装 {#1-install}
 
-把 CLI 装进一个虚拟环境：
+安装包含 Engine 模式的开发渠道，安装脚本会使用独立的虚拟环境。
+`--no-launch` 将启动留到下一步：
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install vllm-sr
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 ```
 
 模型运行时是 Python 包 `vllm-srun`，只随路由器镜像发布。`vllm-sr serve ARTIFACT --engine` 在 `vllm-sr`

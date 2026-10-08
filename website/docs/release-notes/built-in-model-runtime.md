@@ -16,10 +16,11 @@ The runtime is the `vllm-srun` package and command. Every router image ships
 it, and it is not published to PyPI: `vllm-sr` stays the only PyPI package.
 Engine mode (`vllm-sr serve ARTIFACT --engine`) runs the persistent
 instance frontend and its managed model workers with routing disabled. The
-CLI and Docker or Podman are all it needs:
+CLI and Docker or Podman are all it needs. To try this development version,
+install without automatically starting a stack, then start Engine mode:
 
 ```bash
-pip install vllm-sr
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 ```
 
