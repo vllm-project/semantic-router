@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "fb0eaf2bda63e7bf95bd88f5de6ed62588c0049b"
+  source_commit: "9995d68856b15ba944b16614d3e497a952691a10"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---

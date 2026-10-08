@@ -15,9 +15,10 @@ import math
 from abc import abstractmethod
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, Generic
 
-from ..errors import INVALID_QUESTION
+from ..errors import INVALID_QUESTION, RuntimeServiceError
 from .base import (
     Expired,
     ItemT,
@@ -75,6 +76,66 @@ def refuse_unanswerable(plan: RequestPlan[Any]) -> None:
         for question_id in plan.question_ids
     )
     raise ValueError(f"no question is valid ({reasons})")
+
+
+def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
+    """A request with further ``states`` as one request per state, its own first, and the states' names.
+
+    Every request has the original's model and options; None for a request
+    without ``states``. ``ValueError`` when ``states`` is malformed.
+    """
+    if not isinstance(body, dict) or "states" not in body:
+        return None
+    states = body["states"]
+    if not isinstance(states, dict):
+        raise ValueError("states must be an object of named states")
+    shared = {key: body[key] for key in ("model", "options") if key in body}
+    bodies = [{key: value for key, value in body.items() if key != "states"}]
+    names = []
+    for name, entry in states.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("every state in states needs a non-blank name")
+        if not isinstance(entry, dict) or set(entry) != {"state", "questions"}:
+            raise ValueError(f"states[{name!r}] must hold exactly state and questions")
+        bodies.append(
+            {**shared, "state": entry["state"], "questions": entry["questions"]}
+        )
+        names.append(name)
+    return bodies, names
+
+
+def join_states(
+    outcomes: list[tuple[int, dict[str, Any]]], names: list[str]
+) -> tuple[int, dict[str, Any]]:
+    """The response of a request with further ``states`` from the responses of its states, its own first.
+
+    The first failure answers the request. A request none of whose questions
+    is valid is refused, as ``refuse_unanswerable`` refuses one about one state.
+    """
+    for status, body in outcomes:
+        if status != HTTPStatus.OK:
+            return status, body
+    answers = [
+        (question_id, answer)
+        for _, body in outcomes
+        for question_id, answer in body.get("answers", {}).items()
+    ]
+    if answers and all(
+        answer.get("error") == INVALID_QUESTION for _, answer in answers
+    ):
+        reasons = "; ".join(
+            f"{question_id}: {answer.get('message', INVALID_QUESTION)}"
+            for question_id, answer in answers
+        )
+        error = RuntimeServiceError(
+            "invalid_request", f"no question is valid ({reasons})"
+        )
+        return error.status, error.body()
+    response = dict(outcomes[0][1])
+    response["states"] = {
+        name: body for name, (_, body) in zip(names, outcomes[1:], strict=True)
+    }
+    return HTTPStatus.OK, response
 
 
 def well_formed(answer: dict[str, Any]) -> bool:
@@ -173,7 +234,8 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
                     " windows; this model reads one bounded input and rejects a longer one"
                 )
         plan = self.plan(body["state"], questions, scan)
-        refuse_unanswerable(plan)
+        if not request.part:
+            refuse_unanswerable(plan)
         items: list[Any] = list(plan.items)
         return SurfacePlan(SURFACE, items, plan.input_tokens, plan)
 

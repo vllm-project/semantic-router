@@ -16,8 +16,8 @@ the evidence for each size's module thresholds.
   +0.153. The 0.8B is ahead on domain, prompt guard, safety, modality and
   hallucination (held out), and behind on PII. On every size, user
   feedback's fresh file (CrossWOZ) is the largest regression.
-- **Latency:** on a GPU a request takes 6.9 ms at the median on the 0.3B, 40.7 ms on the 0.8B, 56.8 ms on the 4B and 79.0 ms on the 9B, sequentially on one MI325X; at concurrency 16 one GPU serves about 146, 25, 17 and 12 requests per second. On a CPU the 0.8B is a
-  decoder: a request takes about 3.0 s at the median on 12 cores (0.32 requests per second), against 116 ms for the 0.3B measured beside it on the same NUMA node, and 79 ms in vela2-router-signals.md, where the 0.3B ran alone.
+- **Latency:** on a GPU a request takes 6.6 ms at the median on the 0.3B, 40.1 ms on the 0.8B, 55.2 ms on the 4B and 76.5 ms on the 9B, sequentially on one MI325X; at concurrency 16 one GPU serves about 154, 25, 18 and 13 requests per second. On a CPU the 0.8B is a
+  decoder: a request takes about 2.8 s at the median on 12 cores (0.33 requests per second), against 80 ms for the 0.3B on the same 68 inputs, as vela2-router-signals.md measured over all 539.
 - **One call per request:** on every size, each request of the A/B reached the
   model as one bundle with one decisions task.
 - **Thresholds:** each size has its own module thresholds; a module that sets
@@ -31,7 +31,9 @@ the evidence for each size's module thresholds.
   the router image recipe, `tools/docker/Dockerfile.extproc`: the ROCm image
   for the GPU arms (ROCm PyTorch 2.12.0, FLA 0.5.2, `causal-conv1d` 1.7.0)
   and the CPU image (PyTorch 2.10.0, MKL) for the CPU arms. The model runtime
-  is `main`'s.
+  is `main`'s. The latency arms ran again on this change rebased on `main`
+  `bf35e7f0d`, built the same way, because the first latency runs shared the
+  host with other jobs; the latency tables are the reruns.
 - **Models:** Vela 2.0 at the revisions the runtime pins: 0.3B `a3209a50`,
   0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163`. The Vela 1.0 arm and the
   0.3B's accuracy arm are vela2-router-signals.md's.
@@ -574,12 +576,13 @@ over the inputs. The `vela2` arm of `router_signal_ab.py config --set latency`
 with `--decision-model`.
 
 - **GPU:** the 539 inputs of `tools/router_latency.py corpus`, sequentially and
-  at concurrency 4 and 16. The four sizes ran at once, each with its own GPU
-  and 12 cores, for {"0_3b": 3, "0_8b": 3, "4b": 3, "9b": 3} rounds.
+  at concurrency 4 and 16. The sizes ran one at a time with nothing else on
+  the host, each on its own GPU and 12 cores, for {"0_3b": 3, "0_8b": 3, "4b": 3, "9b": 3} rounds.
 - **CPU:** every 8th input (68), once sequentially and once at concurrency 4
   per round after 5 warm-up requests, since the 0.8B takes seconds per request
-  on a CPU. The 0.3B (`max_speed`) and the 0.8B (`exact`) ran at once on 12
-  cores each of one NUMA node, for {"0_3b": 2, "0_8b": 2} rounds.
+  on a CPU. The 0.3B (`max_speed`) and the 0.8B (`exact`) ran one at a time
+  with nothing else on the host, each on 12 cores of one NUMA node, for
+  {"0_3b": 3, "0_8b": 3} rounds.
 - **Statistics:** the median of the rounds per metric, and the paired
   difference against the 0.3B per round with a 95% t interval.
 
@@ -587,52 +590,57 @@ GPU (`exact`):
 
 | Pass | Metric | 0.3B | 0.8B | 4B | 9B |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Sequential | p50 (ms) | 6.9 | 40.7 | 56.8 | 79.0 |
-| Sequential | p95 (ms) | 8.4 | 46.2 | 68.9 | 97.5 |
-| Sequential | requests per second | 139.8 | 24.1 | 16.9 | 12.1 |
-| Concurrency 4 | p50 (ms) | 26.3 | 158.2 | 231.2 | 316.4 |
-| Concurrency 4 | p95 (ms) | 32.4 | 184.1 | 260.2 | 359.5 |
-| Concurrency 4 | requests per second | 148.3 | 24.8 | 17.0 | 12.3 |
-| Concurrency 16 | p50 (ms) | 107.3 | 634.0 | 928.1 | 1,316.1 |
-| Concurrency 16 | p95 (ms) | 123.4 | 652.5 | 1,024.2 | 1,461.7 |
-| Concurrency 16 | requests per second | 146.3 | 25.1 | 17.1 | 12.1 |
+| Sequential | p50 (ms) | 6.6 | 40.1 | 55.2 | 76.5 |
+| Sequential | p95 (ms) | 7.4 | 41.3 | 66.6 | 93.5 |
+| Sequential | requests per second | 147.6 | 24.7 | 17.4 | 12.5 |
+| Concurrency 4 | p50 (ms) | 25.2 | 158.7 | 222.5 | 309.9 |
+| Concurrency 4 | p95 (ms) | 27.1 | 163.7 | 249.9 | 349.5 |
+| Concurrency 4 | requests per second | 157.3 | 25.1 | 17.6 | 12.6 |
+| Concurrency 16 | p50 (ms) | 102.7 | 639.7 | 906.4 | 1,265.3 |
+| Concurrency 16 | p95 (ms) | 110.2 | 653.6 | 1,001.2 | 1,409.0 |
+| Concurrency 16 | requests per second | 154.1 | 24.9 | 17.6 | 12.6 |
 
 Each size − the 0.3B on a GPU:
 
 | Pass | Metric | 0.8B − 0.3B | 4B − 0.3B | 9B − 0.3B |
 | --- | --- | ---: | ---: | ---: |
-| Sequential | p50 (ms) | +34.0 [+32.1, +35.9] | +49.4 [+46.8, +52.1] | +71.7 [+69.4, +74.1] |
-| Sequential | p95 (ms) | +39.1 [+29.6, +48.5] | +61.7 [+51.4, +72.1] | +90.4 [+82.0, +98.8] |
-| Sequential | requests per second | -115.1 [-123.3, -106.9] | -122.2 [-129.3, -115.0] | -127.0 [-134.3, -119.7] |
-| Concurrency 4 | p50 (ms) | +134.1 [+120.5, +147.7] | +214.9 [+156.5, +273.2] | +291.3 [+279.4, +303.1] |
-| Concurrency 4 | p95 (ms) | +164.0 [+103.0, +224.9] | +243.1 [+170.2, +316.0] | +333.0 [+300.9, +365.1] |
-| Concurrency 4 | requests per second | -124.4 [-134.7, -114.1] | -132.3 [-141.2, -123.5] | -136.5 [-144.6, -128.3] |
-| Concurrency 16 | p50 (ms) | +538.8 [+487.0, +590.5] | +867.4 [+615.9, +1,118.9] | +1,199.2 [+1,139.3, +1,259.0] |
-| Concurrency 16 | p95 (ms) | +545.4 [+451.4, +639.4] | +962.2 [+697.6, +1,226.7] | +1,330.8 [+1,291.5, +1,370.1] |
-| Concurrency 16 | requests per second | -121.0 [-121.4, -120.7] | -129.4 [-134.7, -124.0] | -133.6 [-136.4, -130.7] |
+| Sequential | p50 (ms) | +33.3 [+32.4, +34.2] | +48.5 [+48.4, +48.7] | +70.0 [+69.4, +70.5] |
+| Sequential | p95 (ms) | +36.7 [+24.3, +49.0] | +61.1 [+52.2, +69.9] | +88.8 [+76.3, +101.2] |
+| Sequential | requests per second | -122.6 [-125.3, -120.0] | -130.0 [-132.7, -127.4] | -134.9 [-137.6, -132.2] |
+| Concurrency 4 | p50 (ms) | +133.8 [+131.6, +136.0] | +197.3 [+197.0, +197.7] | +284.5 [+283.3, +285.8] |
+| Concurrency 4 | p95 (ms) | +136.3 [+134.7, +138.0] | +223.7 [+219.1, +228.3] | +322.7 [+320.7, +324.8] |
+| Concurrency 4 | requests per second | -132.3 [-133.2, -131.3] | -139.7 [-140.6, -138.9] | -144.7 [-145.5, -143.9] |
+| Concurrency 16 | p50 (ms) | +537.1 [+531.9, +542.3] | +804.0 [+800.4, +807.6] | +1,162.8 [+1,157.7, +1,167.9] |
+| Concurrency 16 | p95 (ms) | +543.8 [+540.8, +546.9] | +892.2 [+884.1, +900.3] | +1,298.8 [+1,292.7, +1,304.9] |
+| Concurrency 16 | requests per second | -130.0 [-134.0, -126.0] | -137.4 [-141.4, -133.4] | -142.4 [-146.3, -138.5] |
 
 CPU:
 
 | Pass | Metric | 0.3B | 0.8B |
 | --- | --- | ---: | ---: |
-| Sequential | p50 (ms) | 116.2 | 2,962.5 |
-| Sequential | p95 (ms) | 493.3 | 3,875.8 |
-| Sequential | requests per second | 6.2 | 0.3 |
-| Concurrency 4 | p50 (ms) | 439.0 | 11,179.8 |
-| Concurrency 4 | p95 (ms) | 645.9 | 18,314.8 |
-| Concurrency 4 | requests per second | 8.9 | 0.3 |
+| Sequential | p50 (ms) | 79.6 | 2,806.5 |
+| Sequential | p95 (ms) | 93.0 | 3,431.3 |
+| Sequential | requests per second | 12.1 | 0.3 |
+| Concurrency 4 | p50 (ms) | 318.5 | 11,447.0 |
+| Concurrency 4 | p95 (ms) | 456.5 | 19,715.2 |
+| Concurrency 4 | requests per second | 12.5 | 0.3 |
 
 The 0.8B − the 0.3B on a CPU:
 
 | Pass | Metric | 0.8B − 0.3B |
 | --- | --- | ---: |
-| Sequential | p50 (ms) | +2,846.2 [-1,945.2, +7,637.7] |
-| Sequential | p95 (ms) | +3,382.5 [-8,836.7, +15,601.7] |
-| Sequential | requests per second | -5.9 [-19.6, +7.8] |
-| Concurrency 4 | p50 (ms) | +10,740.8 [+1,876.5, +19,605.0] |
-| Concurrency 4 | p95 (ms) | +17,668.9 [+16,001.8, +19,335.9] |
-| Concurrency 4 | requests per second | -8.5 [-8.8, -8.3] |
+| Sequential | p50 (ms) | +2,721.7 [+2,657.1, +2,786.3] |
+| Sequential | p95 (ms) | +3,337.1 [+3,245.2, +3,429.0] |
+| Sequential | requests per second | -11.8 [-11.9, -11.6] |
+| Concurrency 4 | p50 (ms) | +11,119.9 [+10,764.8, +11,474.9] |
+| Concurrency 4 | p95 (ms) | +19,271.5 [+19,070.6, +19,472.3] |
+| Concurrency 4 | requests per second | -12.1 [-12.6, -11.5] |
 
+- **A stall on a CPU:** an earlier 0.8B run on the same build stalled in one
+  concurrency 4 pass. 12 of its 68 requests got no answer within the latency
+  tool's 120 s, and the Router logged its signal deadline for 11 of them. The
+  other passes of that run, and the three rounds above, ran without an error.
+  The cause isn't established yet.
 - **Hardware:** the 0.3B and 0.8B run on a CPU or a GPU; the 4B and 9B on a
   GPU only, with about 17 GB and 32 GB of GPU memory for their FP32 weights.
   The Router refuses a 4B or 9B decision model on a host without a GPU, and
