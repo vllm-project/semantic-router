@@ -101,6 +101,8 @@ func TestConfigYAMLNeverServesListenerKeysHiddenBehindYAMLIndirection(t *testing
 		"alias listener": "version: v0.3\nx-gated: &gated\n  name: a\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - *gated\n",
 		"merge key":      "version: v0.3\nx-gated: &gated\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - <<: *gated\n    name: b\n",
 		"duplicate key":  "version: v0.3\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [first]\n    api_keys: [" + listenerKeyFixture + "]\n",
+		"alias keys":     "version: v0.3\nx-keys: &keys [" + listenerKeyFixture + "]\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: *keys\n",
+		"alias key item": "version: v0.3\nx-key: &key " + listenerKeyFixture + "\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [*key]\n",
 	}
 	for name, document := range documents {
 		t.Run(name, func(t *testing.T) {

@@ -32,7 +32,10 @@ func withoutListenerAPIKeys(data []byte) ([]byte, error) {
 	if listeners := mappingValueNode(root, "listeners"); listeners != nil && listeners.Kind == yaml.SequenceNode {
 		removed := false
 		for _, listener := range listeners.Content {
-			for mappingValueNode(listener, "api_keys") != nil {
+			for value := mappingValueNode(listener, "api_keys"); value != nil; value = mappingValueNode(listener, "api_keys") {
+				if containsAliasNode(value) {
+					return nil, errListenerAPIKeysNotRedacted
+				}
 				deleteMappingValueNode(listener, "api_keys")
 				removed = true
 			}
@@ -57,4 +60,19 @@ func withoutListenerAPIKeys(data []byte) ([]byte, error) {
 		}
 	}
 	return redacted, nil
+}
+
+func containsAliasNode(node *yaml.Node) bool {
+	if node == nil {
+		return false
+	}
+	if node.Kind == yaml.AliasNode {
+		return true
+	}
+	for _, child := range node.Content {
+		if containsAliasNode(child) {
+			return true
+		}
+	}
+	return false
 }
