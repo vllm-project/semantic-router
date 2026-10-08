@@ -216,7 +216,7 @@ class DeploymentResultsTests(unittest.TestCase):
         self.assertNotIn("max-parallel", jobs["integration-test"]["strategy"])
         steps = jobs["checks"]["steps"]
         self.assertEqual(
-            sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
+            sum(step.get("uses") == "./.github/actions/setup-go-ci" for step in steps), 1
         )
         sections = {
             "Check Go Formatting": "dependencies",
