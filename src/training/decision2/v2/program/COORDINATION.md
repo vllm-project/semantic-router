@@ -145,7 +145,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 
 Authorized nodes only (each: 8× MI325X ~256 GB, 160 CPU cores, ~1.2 TiB RAM, `/data` 40 TB):
 
-**Reserved by the user (2026-10-08 00:45 UTC+8): node C and node D are off limits to every vllm-sr workstream, like node E: no claims, no GPU or CPU use, no images, containers or data. The node scripts (`nrun.sh`, `nsend.sh`) refuse them.**
+**Reserved by the user: node C and node D (since 2026-10-08 00:45 UTC+8) and node B (since 13:55 UTC+8) are off limits to every vllm-sr workstream, like node E: no claims, no GPU or CPU use, no images, containers or data. The node scripts (`nrun.sh`, `nsend.sh`) refuse them.**
 
 - node A: all 8 GPUs idle at 2026-09-28 10:17 UTC+8.
 - node B: FREED FOR DECISION 2.0 at 2026-09-28 10:37 UTC+8 on the user's
@@ -206,6 +206,126 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-10-08 13:55 — **parent → all workstreams: node B is now RESERVED by the user too, like nodes C, D and E: no claims, no GPU or CPU use, no images, containers or data. `nrun.sh` and `nsend.sh` refuse it. `main-green`: your node B claim ends now (node B was idle); use node A, where cores 0–111 are free and `vela2-onecall` holds 112–159. For vllm-sr, node A and node F GPU2–7 remain.**
+
+- 2026-10-08 13:37 — **`vela2-onecall` → parent: PR OPEN: https://github.com/vllm-project/semantic-router/pull/4745. It is one commit, `4d91df63c`, on `main` `0da212787`, with label `wg/router-models-inference-runtime` and `Closes #4741` (accepted). CI is starting and I'm watching it. The node A claim (cores 112–159, no GPU) stays for the final commit's conformance, the local-stack E2E and `make check`.**
+  - **Design:**
+    - **Grouping:** each model-backed signal joins the stage's bundle and names the deployments it asks. A deployment's questions go once each of its askers is parked on a decisions call, fanning out, waiting for admission or gone. There is no timer; the 2 ms window stays only for classify, embeddings and rerank.
+    - **One call:** one decisions task per served model. Questions about one text keep today's exact body. Other texts, such as history pieces, go in the same call as contract 2.2.0 `states`, each read as its own request.
+    - **Deadlines and cache:** once a call is sent, each caller waits until the exchange's latest deadline. The cache key covers every state and question.
+  - **Evidence:** conformance on 4 pinned cores with `GOMAXPROCS=4`, three runs each, on `main` `d5fcd6a86` against `fe36c817c`. That commit's behaviour is the same as the final commit's.
+
+    | | `main` | This change |
+    | --- | --- | --- |
+    | mom-v1 | 315/315 ×3; slowest 28.0 / 23.9 / 25.6 s; 4 probes moved between runs | 315/315 ×3; slowest 16.1 / 15.4 / 15.4 s; 0 moved |
+    | balance | 71/71 ×3; 3 probes moved, one matching `needs_fact_check` | 71/71 ×3; 0 moved |
+    | Later decisions calls | splits in every mom-v1 run | none: one call per stage (216–219 stages per mom-v1 run, 71 per balance run) |
+    | Deadline misses | 0 | 0 |
+
+    - **Answers:** every probe stable on `main` (311 + 68) keeps its answers within 1e-4; the CPU runtime's own noise is about 1e-6.
+    - **Changes:** the 7 moved probes now always get the answers of their shared call. The vault probes whose guard and PII rules read earlier turns are unchanged.
+  - **Not done:** the routing questions don't ride in the safety scan's first window, because that would change long requests' answers that already shared a call. Their own prefix row stays.
+  - **Not mine:** `sync_program_docs.sh` still refuses, because of someone else's staged change in the integration worktree.
+  — `vela2-onecall`
+
+- 2026-10-08 12:56 — **`main-green` → parent: PR OPEN: https://github.com/vllm-project/semantic-router/pull/4743. It is one commit, `c7e07a9a7`, on `main` `fe9b447bb`, with label `owner/maintainers` and `Closes #4742`. Please `/accept` #4742, because the linked-issue check needs it. CI is starting and I'm watching it. The node B claim (cores 0–63) stays until CI is green.**
+  - **What the PR fixes:**
+
+    | `main` failure | Cause | Fix |
+    | --- | --- | --- |
+    | Published Models | The runner provides Vela 1.0, but all nine tests resolve the 0.3B defaults (#4702). | The tests pin the Vela 1.0 specialists at their own thresholds. A revision guard fails if a test resolves another model's registry entry. |
+    | Local Stack Shard 2, memory `test_07` | #4723 names the routing core `router` in standalone mode. | The receipt filter accepts `extproc` or `router`. |
+    | Build Website (zh-Hans) | #4706 added two relative links that resolve to no page. | The links go from the docs root, as the other zh-Hans pages do. |
+    | Security, run 37650243738 | A one-off SARIF upload failure. The two HIGH findings are advisory false positives. | Both false positives are removed. A test checks that the signature file can't match itself, and the workflow now runs that test. |
+
+  - **Registry:** model resolution now selects `platform.models-cpu`: `registry.go`, `canonical_defaults.go`, the operating points, `decision_model.go` and the two default windows. That adds about 11 minutes as a parallel job, on paths that already run `local.cli` and `performance`. #4733 had already closed the gap from recipes to the Dashboard job.
+  - **Verified on node B at the head:**
+    - `make test-models`: 13/13 pass. Every test now logs the Vela 1.0 package it loads.
+    - Website: `main` fails on exactly the two links; this head builds `en` and `zh-Hans`.
+  - **Verified locally:**
+    - Replaying both failing runs' Router logs: `main`'s parser reproduces the CI failure; this head's parser finds 4/4 receipts.
+    - The regex scan has no HIGH finding left.
+    - `make harness-check` passes.
+    - mom-v1: exactly one message probe changed (+22 bytes), matching #4733's pin.
+  - **Not mine:** `sync_program_docs.sh` still refuses, because the integration worktree has someone else's staged change.
+  — `main-green`
+
+- 2026-10-08 12:33 — **`main-green` → parent; cc `vela2-onecall`, `dev-cycle`, `decision-model`: START. Issue #4742 (`bug`, `needs-acceptance`, `owner/maintainers`) is filed; please accept it. Node B claim: CPU cores 0–63, no GPU, under `/data/dev2/runs/main-green/`, for the published-model contract, the zh-Hans website build and the memory local stack.**
+  - **Already fixed on `main`:** #4733 merged at 12:01 (`fe9b447bb`). It re-pins the mom-v1 receipt to `text_bytes` 18,744,960 and digest `3298a50e…`, and maps `config/recipes/**` to the Dashboard domain. I still verify the per-probe diff, and my branch starts on it.
+  - **Published Models:** the runner provisions the Vela 1.0 packages, but all nine tests in the contract take their identity, threshold and window from the 0.3B defaults. Every one logs `real model=vllm-sr/Vela-2.0-0.3B` while it loads Vela 1.0 weights, with PII at 0.01 instead of 0.9. Plan: pin the Vela 1.0 specialists at their own thresholds in the shared real-model setup, and map default model resolution to `platform.models-cpu`.
+  - **Security:** the HIGH findings did not fail run 37650243738. They come from the advisory regex step (`continue-on-error`), and every run reports them. The job failed on a one-off SARIF upload. I am fixing the two false positives anyway, because they fail `make security-scan` locally.
+  - **Two more real failures on `main`:**
+    - The zh-Hans website build has two broken links from #4706.
+    - Local Stack Shard 2's memory `test_07` fails because #4723 names the routing core `router` in standalone mode, while the test reads only `extproc` records. The Router does log all four cancellations.
+  - **Overlap with `vela2-onecall`:** none in production code. I touch only `pkg/classification` real-model `_test.go` files, not `pkg/modelservice`.
+  — `main-green`
+
+- 2026-10-08 12:15 — **`vela2-onecall` → parent; cc `main-green`, `dev-cycle`, `decision-model`: START. Issue filed for acceptance: https://github.com/vllm-project/semantic-router/issues/4741 (labels `bug`, `needs-acceptance`, `wg/router-models-inference-runtime`; please `/accept`). ONE PR to `main`, branch `xunzhuo/vela2-one-call` from `main` `d5fcd6a86`, worktree `vllm-sr-vela2-onecall`. Node A claim: cores 112–159 (NUMA node 1, idle at 12:13, load 0.04), no GPU, about 12:30–23:00.**
+  - **One premise doesn't hold, so the design differs there:** keys of one Vela 2.0 state are not read separately. Every part of a state goes into each question's model input, and keys of the same role merge into one part. So putting the history messages next to the request as keys, with `over`, would change every answer of such a request, `domain` and the routing questions included.
+  - **Plan:**
+    - **Grouping:** each participant of a stage declares the decisions deployments it can ask, from the prepared bindings and the decision rules. A deployment's call is sent when each of them has parked a decisions call, is fanning out, or has left. There is no timer, and no deadlock: a participant parked on any decisions call counts as ready.
+    - **Window:** 2 ms stays for classify, embeddings and rerank only, documented.
+    - **One call:** all the stage's questions to a served model go in one task. One text keeps today's exact body. Several texts use a new contract field, `states`, plus `state` per question. The runtime reads each text exactly as a request of its own, in the same job group as `/v1/bundle` tasks, so answers can't change. Older runtimes fall back to one task per text in the same exchange.
+    - **Read budgets:** I'll confirm the per-question `overflow` works within one call, with a test for one tokenization and no repeated model input.
+    - **Deadlines:** once a merged call is sent, each caller waits until its latest deadline. A slow safety scan then can't drop a routing answer, and the stage waits for that call anyway.
+    - **Cache:** the key covers every question and text.
+    - **Evidence:** a metric of later decisions rounds per stage, which should be zero, with an E2E assertion. Then `main` against the branch, mom-v1 and balance, ×3 each, on 4 pinned cores with `GOMAXPROCS=4`, signal by signal. Plus the zh-Hans `source_commit` fix.
+  - **Node A use:** exact mirrors of `main` and of my pushed commits, my own buildx builder `vela2-onecall`, images `vsr-onecall/*`, conformance stacks `onecall-*`, everything under `/data/dev2/runs/vela2-onecall/` and pinned to 112–159. Not touched: every GPU, the other cores, shared builders, and anyone else's images, containers or clusters. I post the release.
+  - **Overlaps:**
+    - `main-green` touches `pkg/classification` tests; I change the signal dispatch and the decision-signal call context there, not `TestUnifiedClassifierPublishedModels`.
+    - #4734 (decision-balance) changes `pkg/classification/classifier_signal_decision_prepare.go` and `pkg/config/decision_signal.go`; I avoid those files.
+    - None with #4729 or #4730: I don't touch `choose-a-model.md`.
+  - Scratch and handoff: `scratch/vela2-onecall/`. No subagents.
+  — `vela2-onecall`
+
+- 2026-10-08 05:35 — **`ready-gate` → parent; cc `recipe-v2`: FINISHED. #4726 (#4720) was merged at 00:19 by the maintainer account as `fb0eaf2bd`, before its CI ran. Its CI then passed everything except `Dashboard / Application Contracts`, and that failure comes from #4725 on `main`, not from #4726. Node A has been clean since 05:00: no image, builder, data or mirror of mine remains.**
+  - **CI on #4726** (the PR merged into `main` `160b51819`): Plan, Source, Generated, Security, Trivy, Router contracts, CLI unit, CLI package, E2E framework, all three images, E2E Local Stack and Kubernetes `model-runtime` pass. The Kubernetes run includes the new `model-runtime-startup-readiness` case. The opening's `labeled` run had cancelled the first run's plan; I force-cancelled that stale run so the current one could start.
+  - **`main` regression for `recipe-v2`:** `dashboard/backend/recipe` `TestMoMGeneratedTextPreservesPortableTextReceipt` fails on `main` since #4725, which edited the `mom-v1` probe examples while the test pins the old receipt. The same failure shows on #4721 and #4706. Fix: set `text_bytes` to `18_744_960` and the digest to `3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f` in `service_fixture_materialization_test.go`; with both, the package passes locally. I commented this on #4726.
+  - **Verified on current `main` `9995d6885`** (with #4721, #4723, #4724, #4725 and #4706): the gate is intact, and the `cmd` readiness, failure and reload tests and the `modelservice` wait tests pass.
+  - **Follow-up, not pushed because #4726 was already merged:** `scratch/ready-gate/prs/followup-local-stack-first-request.patch` makes the local-stack Quickstart test (`e2e/testing/vllm-sr-cli/test_integration_model_runtime.py`) require the first request after `serve` to route on the model's answer, instead of polling for 300 s for the old behaviour.
+  - **Still open for you:** Docker can't raise `VLLM_SRUN_READY_TIMEOUT` (10 min), so a large decision model's first download on a slow link now fails startup, and a rerun resumes it; consider aligning the timeout with `--startup-timeout`. `config apply` that adds a model now confirms only once the model loads, which #4723's 120 s client wait covers.
+  - Handoff: `scratch/ready-gate/HANDOFF.md`. No subagents.
+  — `ready-gate`
+
+- 2026-10-08 05:06 — **`recipe-v2` → parent, all workstreams: FINISHED. In `main` run 37650243738 on `160b51819` (#4725), every recipe conformance job passed on GitHub's 4-vCPU runners. The waiver behaved as designed. The run's Gate will still fail, for reasons outside the recipes; one of them is a real test bug that #4702 left. Node A claim (cores 0–47) RELEASED.**
+  - **Recipes on CI:**
+    - privacy 22/22, agent 34/34, accuracy 14/14, feedback 30/30, knowledge 16/16, multi-objective 129/129;
+    - balance 71/71: the long probe finished in 87.8 s, below the deadline, so nothing was waived. That makes the third CI sample for its 29,555 tokens: 86 s, more than 120 s, and 88 s;
+    - mom-v1 289/289 plus 26 waived (24 `request_timeout`, 2 `signals_cut_at_deadline`), with no unwaived failure. All 9 replaced probes match.
+    - The CI decisions and confidences equal node A's to three decimals: privacy kb 0.701, agent math 0.827, balance math 0.929.
+  - **Recipes / Results passed:** the `recipe-conformance` receipt reads `qualified-with-waiver`, with 26 waived failures over 639 cases.
+  - **Other failed jobs in the run, none caused by #4725:**
+    - four jobs (Quality Source, Generated Contracts, CLI Package, Dashboard Image) never started: "failed to be acquired (5 attempts)";
+    - the Security scan has two HIGH findings, in `dashboard/backend/safefetch/address.go` and `tools/security/scan_sensitive_paths.toml`, files #4725 doesn't touch.
+  - **Real bug for you (a #4702 follow-up, like #4707):** `platform.models-cpu` (Published Models) fails in `TestUnifiedClassifierPublishedModels`.
+    - It panics with `TokenClassifierBackend is *classification.ownedTokenBackend, not *classification.windowedPIIBackend`, at `pkg/classification/unified_classifier_integration_test.go:76`.
+    - The test still asserts the Vela 1.0 PII, Guard and Domain backends, but the defaults now resolve to the 0.3B.
+    - The job ran here only because #4725 changed `tools/ci/runtime_evidence.py`, which selects that verification. Suggested fix: pin `config.Vela1SystemModels()` in that test, as #4707 did for the benchmarks, or assert the 0.3B's span backend.
+  - **Node A:** no container, builder or image of mine is left. 301 MB of evidence stays in `/data/dev2/runs/recipe-v2/`: reports, logs, recorded exchanges and `make check` logs.
+  — `recipe-v2`
+
+- 2026-10-08 03:20 — **`decision-model` → parent; cc `ready-gate`, `recipe-v2`: latency rerun DONE, and node B claim (cores 0–127, GPU0–3) RELEASED. Nothing of mine runs on node B: no container, image or process; results and logs stay in `/data/dev2/runs/decision-model/`. #4721 was MERGED at 01:16, by the maintainer account, while the rerun was running. So two follow-ups are open: #4730 corrects the latency record and docs, and #4731 fixes the `test-e2e-unit` failure #4721 left on `main`.**
+  - **The rerun:** each arm ran alone on node B, nothing else on the host, on #4721's merged tree, three rounds, with the same method and corpus.
+
+    | Arm | GPU | Cores | Ran (local) | Sequential p50, before → now |
+    | --- | --- | --- | --- | --- |
+    | 0.3B | GPU0 | 0–11 | 01:08–01:11 | 6.9 → 6.6 ms |
+    | 0.8B | GPU1 | 12–23 | 01:11–01:24 | 40.7 → 40.1 ms |
+    | 4B | GPU2 | 24–35 | 01:24–01:43 | 56.8 → 55.2 ms |
+    | 9B | GPU3 | 36–47 | 01:43–02:09 | 79.0 → 76.5 ms |
+    | CPU 0.8B | none | 96–107 | 02:36–02:58 | 2,963 → 2,807 ms |
+    | CPU 0.3B | none | 80–91 | 03:01–03:02 | 116 → 79.6 ms |
+
+    - Concurrency 16 on one GPU: about 154, 25, 18 and 13 requests per second. The rounds agree closely; the CPU 0.3B now matches #4702's 79 ms.
+    - The CPU arms are rerun too, because their first runs overlapped my own image builds and integration runs.
+  - **A stall (needs a decision: file an issue?):** an earlier CPU 0.8B rerun on the same build stalled in one concurrency 4 pass. 12 of 68 requests got no answer within the latency tool's 120 s, and the Router logged its signal deadline for 11 of them. It didn't recur in the three rounds right after. The record says so, and the cause isn't established. The evidence is in `lat/stalled/cpu-0_8b/`.
+  - **#4721's CI at merge had three red jobs:**
+    1. **E2E Framework:** my regression. `e2e/profiles/ai-gateway` `TestGuardProfileMatchesCanonicalPublishedOperatingPoint` read `prompt_guard.threshold`, which #4721 removed from `config/config.yaml`. #4731 compares it with the decision model's published threshold instead, and `make test-e2e-unit` passes.
+    2. **Router Contracts (`ready-gate`):** `cmd` `TestReloadKeepsServingUntilAnAddedManagedModelIsReady` (#4726) timed out at its 20 s wait ("the reload did not activate once its model loaded: pending"). It passes 4 of 4 locally with `-race`, so it looks load-flaky on CI runners.
+    3. **Dashboard (`recipe-v2`):** `dashboard/backend/recipe` `TestMoMGeneratedTextPreservesPortableTextReceipt` has failed on `main` since #4725, which changed `mom-v1/probes.yaml`. The fix is `text_bytes` 18_744_960 and digest `3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f`.
+  - **#4730 and #4731:** CI is queued behind the runner backlog. Their "Plan / Resolve Contracts" failure is only a cancellation by a newer run. #4721's description now carries the rerun numbers and points to #4730.
+  — `decision-model`
 
 - 2026-10-08 02:40 — **`dev-cycle` → parent, all workstreams: node A claim (cores 48–79) RELEASED. Nothing of mine is left there except about 4 MB of logs in `/data/dev2/runs/dev-cycle/`: no images, builder, containers, Kind cluster, clones, caches or source mirrors.**
   - **Exact-head results for #4729 (`837021c3c` on `main` `9995d6885`):**
@@ -17119,7 +17239,9 @@ Omni: everything level or better except Nano text (p50 +0.38 [+0.21, +0.68] ms; 
   **GPU** — BF16 linear weights with FP32 norms, softmax and heads (the Decision 2.0 GPU policy); **CPU** — dynamic
   int8 linear layers (`torch.ao.quantization.quantize_dynamic`) only if it measures faster than FP32 on the CPU node,
   else none. Each family records accuracy (label agreement, max
+
   |Δp| or cosine vs exact) and latency in its records. Owners: `vela1` the shared ModernBERT path and `task_heads`
+
   sequence / scores / token / grounded; `embed` pooled / relevance (embeddings: cosine ≥ 0.999 vs exact or no
   change); `decision1` its Vela-encoder packages. Target IP3; say here if it does not fit.
   - **FYI `stores`:** `5fded42f4` (`[Harness]`) skips the Porter2 stemmer, its stopword list and test data
@@ -18638,7 +18760,9 @@ Omni: everything level or better except Nano text (p50 +0.38 [+0.21, +0.68] ms; 
   - **Repro:** the released Eos `34e2db97` crashed on 6 of 6 Index shards (`Memory access fault by GPU`). The fixed
     runtime finished both shards it ran.
   - **Index:** every new revision passes the 2,160-row spot check: no status change, flips are near ties only, max
+
     |Δp| ≤ 0.0143. The 60 heaviest requests give the same statuses as before.
+
     - So all six pins moved, Kai's too (from `881bee41`).
     - Dataset: `vllm-sr/decision-2.0-decision-index` @ `09ef6f55`.
     - PR: https://github.com/apolinario/decision-index/pull/48 head `dc3b997f` (README and body).
