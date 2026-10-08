@@ -13,7 +13,7 @@ translation:
 然后让路由器用同一个模型做路由。
 
 你需要装有 Docker 或 Podman 的 Linux、macOS 或 WSL2、Python 3.10 或更新版本，以及几 GB 可用磁盘空间，
-用于路由器镜像和模型下载。不需要 GPU。engine 模式（`vllm-sr serve --mode engine --model ARTIFACT`）晚于 0.4.0 版本；
+用于路由器镜像和模型下载。不需要 GPU。engine 模式（`vllm-sr serve ARTIFACT --engine`）晚于 0.4.0 版本；
 见[发布渠道说明](../installation/installation.md)。
 
 ## 1. 安装 {#1-install}
@@ -26,27 +26,32 @@ python3 -m venv .venv
 pip install vllm-sr
 ```
 
-模型运行时是 Python 包 `vllm-srun`，只随路由器镜像发布。`vllm-sr serve --mode engine --model ARTIFACT` 在 `vllm-sr`
+模型运行时是 Python 包 `vllm-srun`，只随路由器镜像发布。`vllm-sr serve ARTIFACT --engine` 在 `vllm-sr`
 镜像中启动同一实例前端及受管理的模型worker，CLI 首次使用时拉取该镜像，所以你的机器上不用再装别的东西。在 GPU 主机上，
-`--platform amd` 或 `--platform nvidia` 选用 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像并把 GPU
+`--platform rocm` 或 `--platform cuda` 选用 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像并把 GPU
 透传进容器；在 macOS 上运行时只用 CPU，因为那里的容器拿不到 GPU。镜像携带发布时所用的 PyTorch
 构建，所以答案就是模型发布时的答案（见[选择模型](./choose-a-model.md#hardware)）。
+
+不加 `--engine`（简写 `-e`）的每次启动都使用 Router 模式，包括已保存的 Engine
+配置。MODEL 只修改默认判断模型的 artifact，保留已有副本位置和 profile；全新配置
+默认使用 Vela 2.0 0.3B。`--platform auto` 检查实际部署目标，可显式选择 `cpu`、`cuda`
+或 `rocm`；`--device-ids` 使用 Docker 主机 GPU 编号并遵守已有可见设备掩码。
 
 ## 2. 运行模型 {#2-serve-a-model}
 
 启动最小的决策模型 Decision 2.0 Kai。决策模型回答你用自然语言写下的问题。
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --device cpu
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 ```
 
 在 AMD GPU 上，用下面的命令在第一块 GPU 上运行同一个模型：
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --platform amd --device rocm:0
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-ids 0
 ```
 
-首次使用时 `vllm-sr-rocm` 镜像约需下载 6.5 GB。`rocm:N` 选择主机上的另一块 GPU。
+首次使用时 `vllm-sr-rocm` 镜像约需下载 6.5 GB。`--device-ids N` 选择另一块主机 GPU；canonical YAML 使用映射后的 `rocm:N` 运行时序号。
 
 CLI 启动持久运行的前端、Dashboard 和模型 worker。首次启动下载模型到实例的
 模型缓存，后续启动复用缓存。`vllm-sr status` 查看状态，`vllm-sr stop` 停止实例。
@@ -167,7 +172,7 @@ vllm-sr serve --config config.yaml
 Router 任务与直接 System One 请求使用同一 logical deployment（这里是 `primary`）
 即可共享模型池。切换 `global.router.enabled` 只改变路由能力，模型 worker 持续可用。
 将下面的新配置应用到此前 Engine 实例时，运行
-`vllm-sr serve --mode router --config config.yaml --replace-active-config`。
+`vllm-sr serve --config config.yaml --replace-active-config`。
 然后发送 Chat 请求查看选择的路由：
 
 ```bash

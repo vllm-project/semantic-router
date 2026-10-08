@@ -88,7 +88,6 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		{http.MethodPost, "/api/dsl/decompile", auth.PermConfigRead},
 		{http.MethodPost, "/api/dsl/format", auth.PermConfigRead},
 		{http.MethodGet, "/api/instance", auth.PermConfigRead},
-		{http.MethodPost, "/api/instance/deploy", auth.PermConfigDeploy},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
@@ -107,6 +106,9 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		if result != auth.RouteFound || policy.Permission != test.permission {
 			t.Errorf("%s %s: lookup=%v permission=%q, want %q", test.method, test.path, result, policy.Permission, test.permission)
 		}
+	}
+	if _, result := server.routePolicies.LookupRoutePolicy(http.MethodPost, "/api/instance/deploy"); result != auth.RouteNotFound {
+		t.Errorf("retired instance mode route lookup=%v", result)
 	}
 	rawGlobal := "/api/router/config/global/raw"
 	if policy, result := server.routePolicies.LookupRoutePolicy(http.MethodGet, rawGlobal); result != auth.RouteFound ||

@@ -194,7 +194,7 @@ without an override. Declare the resource once, then select its exact key.
 Omission selects the built-in `primary` deployment, Vela 2.0 0.3B on CPU:
 
 ```bash
-vllm-sr serve --decision-model primary --platform amd
+vllm-sr serve --platform rocm
 ```
 
 ```yaml
@@ -268,8 +268,8 @@ the record maps each to every size (for example `mom-v1`'s `prompt_attack`
 | Hardware | Status | Use |
 | --- | --- | --- |
 | CPU | Validated | Every router image runs models on CPU out of the box. |
-| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform amd` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
-| NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform nvidia` ships PyTorch for CUDA. |
+| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform rocm` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
+| NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform cuda` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
 | Apple silicon | CPU only in this release | On macOS the docker target runs the CPU image, because Docker's Linux VM gets no GPU. Host GPU support is tracked in [#4636](https://github.com/vllm-project/semantic-router/issues/4636). |
 

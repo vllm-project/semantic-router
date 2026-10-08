@@ -58,7 +58,7 @@ def test_kubernetes_values_carry_the_gateway_and_a_gpu_platform(tmp_path):
     assert "repository" not in standalone.get("image", {})
 
     amd = translate_config_to_helm_values(
-        str(config), gateway="extproc", platform="amd"
+        str(config), gateway="extproc", platform="rocm"
     )
     assert amd["gateway"] == {"mode": "extproc"}
     assert (
@@ -69,7 +69,7 @@ def test_kubernetes_values_carry_the_gateway_and_a_gpu_platform(tmp_path):
 
     nvidia = translate_config_to_helm_values(
         str(config),
-        platform="nvidia",
+        platform="cuda",
         image="registry.example/router:1",
         profile_values={"resources": {"limits": {"memory": "16Gi"}}},
     )
@@ -127,7 +127,7 @@ def test_common_options_serve_both_targets(captured_serve):
                 "--gateway",
                 "extproc",
                 "--platform",
-                "amd",
+                "rocm",
                 "--image",
                 "img:1",
                 "--minimal",

@@ -1,7 +1,7 @@
 """Shared fixtures for the CLI unit tests."""
 
 import pytest
-from cli import container_run_command, router_validation
+from cli import container_run_command, execution_platform, router_validation
 
 
 @pytest.fixture(autouse=True)
@@ -30,3 +30,25 @@ def _default_host_gateway(monkeypatch):
     monkeypatch.setattr(
         container_run_command, "_docker_default_bridge_available", lambda: True
     )
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_execution_target(monkeypatch):
+    """CLI unit tests never infer platform from the developer's hardware/cluster."""
+    monkeypatch.setattr(
+        execution_platform, "_host_devices", lambda: {"cuda": (), "rocm": ()}
+    )
+    monkeypatch.setattr(
+        execution_platform,
+        "_cluster_devices",
+        lambda context=None: {"cuda": (), "rocm": ()},
+    )
+    for name in (
+        "VLLM_SR_PLATFORM",
+        "DASHBOARD_PLATFORM",
+        "ROCR_VISIBLE_DEVICES",
+        "HIP_VISIBLE_DEVICES",
+        "CUDA_VISIBLE_DEVICES",
+        "VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES",
+    ):
+        monkeypatch.delenv(name, raising=False)

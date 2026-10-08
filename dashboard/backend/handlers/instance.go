@@ -59,38 +59,35 @@ func instanceEngineActive(ctx context.Context) bool {
 	return err == nil && code == http.StatusOK && json.Unmarshal(data, &state) == nil && state.ObservedMode == "engine"
 }
 
-// InstanceHandler keeps local lifecycle ownership distinct from process health.
-// Missing controllers and Kubernetes owners never pretend a mode change ran.
-func InstanceHandler(readonly bool) http.HandlerFunc {
+// InstanceHandler observes the lifecycle selected at startup. Mode changes
+// belong to the serving command, not the Dashboard control plane.
+func InstanceHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		path := "/status"
-		if r.URL.Path == "/api/instance/models" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "Instance mode is selected at startup", http.StatusMethodNotAllowed)
+			return
+		}
+		var path string
+		switch r.URL.Path {
+		case "/api/instance":
+			path = "/status"
+		case "/api/instance/models":
 			path = "/models"
+		default:
+			http.NotFound(w, r)
+			return
 		}
-		var body []byte
-		if r.Method == http.MethodPost {
-			if readonly {
-				http.Error(w, "Instance is read-only", http.StatusForbidden)
-				return
-			}
-			path = "/deploy"
-			var err error
-			body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
-			if err != nil {
-				http.Error(w, "Invalid instance request", http.StatusBadRequest)
-				return
-			}
-		}
-		code, data, err := instanceRequest(r.Context(), r.Method, path, body)
+		code, data, err := instanceRequest(r.Context(), http.MethodGet, path, nil)
 		if err != nil {
-			if r.Method == http.MethodGet && path == "/status" {
+			if path == "/status" {
 				ownership := "external"
 				if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
 					ownership = "kubernetes"
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"ownership": ownership, "controller_available": false, "can_switch": false, "observed_mode": "unknown", "operation": nil, "unavailable_reason": "Instance lifecycle is managed by its deployment owner"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"ownership": ownership, "controller_available": false, "observed_mode": "unknown", "operation": nil, "unavailable_reason": "Instance lifecycle is managed by its deployment owner"})
 				return
 			}
 			http.Error(w, "Instance controller unavailable", http.StatusServiceUnavailable)

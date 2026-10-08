@@ -489,7 +489,7 @@ class TestCLITargetRouting:
         built = []
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -544,7 +544,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -617,7 +617,7 @@ class TestCLITargetRouting:
         config_path = tmp_path / "config.yaml"
         source = {
             "version": "v0.3",
-            "listeners": [{"name": "http", "port": 8899}],
+            "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
             "global": {
                 "services": {},
                 "stores": {},
@@ -644,7 +644,15 @@ class TestCLITargetRouting:
 
         assert result.exit_code == 0, result.output
         assert Path(captured["config_file"]).resolve() == config_path.resolve()
-        assert captured["config_document"] == source
+        effective = captured["config_document"]
+        assert effective["global"]["services"] == {}
+        assert effective["global"]["stores"] == {}
+        assert effective["global"]["integrations"] == {"looper": {}}
+        assert effective["global"]["router"]["enabled"] is True
+        assert effective["global"]["model_catalog"]["system"]["decision_model"] == {
+            "deployment": "primary"
+        }
+        assert yaml.safe_load(config_path.read_text()) == source
         assert not (tmp_path / ".vllm-sr").exists()
 
     def test_k8s_overrides_never_publish_local_runtime_state(
@@ -652,11 +660,11 @@ class TestCLITargetRouting:
         monkeypatch,
         tmp_path,
     ):
-        monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
-        monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
+        monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
+        monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
         source = {
             "version": "v0.3",
-            "listeners": [{"name": "http", "port": 8899}],
+            "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
             "routing": {
                 "decisions": [{"name": "route", "algorithm": {"type": "multi_factor"}}]
             },
@@ -713,9 +721,9 @@ class TestCLITargetRouting:
     @pytest.mark.parametrize(
         ("override_args", "env_name", "env_value", "expected"),
         [
-            (["--platform", "amd"], None, None, "amd"),
-            ([], "VLLM_SR_PLATFORM", "nvidia", "nvidia"),
-            ([], "DASHBOARD_PLATFORM", "amd", "amd"),
+            (["--platform", "rocm"], None, None, "rocm"),
+            ([], "VLLM_SR_PLATFORM", "cuda", "cuda"),
+            ([], "DASHBOARD_PLATFORM", "rocm", "rocm"),
         ],
     )
     def test_kubernetes_gpu_platform_reaches_the_backend(
@@ -734,7 +742,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 

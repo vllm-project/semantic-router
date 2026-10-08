@@ -11,7 +11,7 @@ routing.
 
 You need Linux, macOS or WSL2 with Docker or Podman, Python 3.10 or newer, and
 a few gigabytes of free disk for the router image and the model download. No
-GPU is needed. Engine mode (`vllm-sr serve --mode engine --model ARTIFACT`) is newer than the 0.4.0
+GPU is needed. Engine mode (`vllm-sr serve ARTIFACT --engine`) is newer than the 0.4.0
 release; see the [release channel note](../installation/installation.md).
 
 ## 1. Install
@@ -25,10 +25,10 @@ pip install vllm-sr
 ```
 
 The model runtime, the `vllm-srun` Python package, ships only inside the
-router images. `vllm-sr serve --mode engine --model ARTIFACT` starts the instance frontend from the
+router images. `vllm-sr serve ARTIFACT --engine` starts the instance frontend from the
 `vllm-sr` image, which the CLI pulls on first use, so nothing else is
-installed on your machine. On a GPU host, `--platform amd` or
-`--platform nvidia` selects the `vllm-sr-rocm` or `vllm-sr-cuda` image and
+installed on your machine. On a GPU host, `--platform rocm` or
+`--platform cuda` selects the `vllm-sr-rocm` or `vllm-sr-cuda` image and
 passes the GPUs through; on macOS the runtime runs on the CPU, because
 containers there get no GPU. The images carry the release's own PyTorch build,
 so their answers are the ones the models were released with
@@ -40,17 +40,17 @@ Start Decision 2.0 Kai, the smallest decision model. A decision model answers
 questions you write in plain language.
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --device cpu
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 ```
 
 On an AMD GPU, the same model runs on the first GPU with:
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --platform amd --device rocm:0
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-ids 0
 ```
 
 The `vllm-sr-rocm` image is a 6.5 GB download on first use. `rocm:N` picks
-another GPU of the host.
+another GPU of the host in canonical YAML; `--device-ids N` selects a host GPU at startup.
 
 The CLI starts the persistent frontend, Dashboard and a managed model worker.
 The first start downloads the model into the instance model cache. Later starts
@@ -59,7 +59,10 @@ and `vllm-sr stop` to stop it.
 
 The initial Engine configuration publishes the selected model on the default
 listener. An existing config keeps its explicit `listeners[].systemone.models`
-allowlist and API keys; changing mode or selecting a model never broadens it.
+allowlist and API keys; restarting in another mode or selecting a model never
+broadens it. Every start without `--engine` uses Router mode; MODEL alone does
+not select Engine mode. Bare `vllm-sr serve` preserves the configured default
+judgment deployment, or initializes Vela 2.0 0.3B in a new configuration.
 In a second terminal, inspect the public native model list:
 
 ```bash
@@ -180,7 +183,7 @@ Use the same logical deployment key (`primary` in this example) when you want Ro
 to share the same model pool. The frontend keeps managed workers available
 when routing is toggled; `global.router.enabled` changes only routing.
 To activate this new authored config over the existing Engine state, run
-`vllm-sr serve --mode router --config config.yaml --replace-active-config`.
+`vllm-sr serve --config config.yaml --replace-active-config`.
 
 Send a request
 through the router and look at which route it took:

@@ -60,7 +60,7 @@ serves as many or more requests per second (see the design doc's
   group is an error that says where it applies.
 - The Router binary takes `-gateway standalone`. Its default stays `extproc`, so
   a manifest that runs it without the flag behaves as before.
-- On macOS, `--platform amd|nvidia` fails with a clear message: Docker's Linux VM
+- On macOS, `--platform rocm|cuda` fails with a clear message: Docker's Linux VM
   gets no GPU there, so the docker target runs the CPU image.
 - **Timeouts, retries and fallback, per model and per decision.**
   `providers.models[].reliability` gains connect, total, idle, per-try and
@@ -150,16 +150,17 @@ needs a root `vllm-sr serve`:
 
 ## Engine mode uses the same instance frontend
 
-`vllm-sr serve --mode engine --model ARTIFACT` runs the frontend, Dashboard and
+`vllm-sr serve ARTIFACT --engine` runs the frontend, Dashboard and
 managed model pool using the selected platform image. It sets
-`global.router.enabled: false`; `--mode router` re-enables the saved routing
-configuration. Omitting `--mode` preserves the active setting.
+`global.router.enabled: false`; starting again without `--engine` enables the
+saved routing configuration. Mode is selected at startup, not in Dashboard.
 
 - Native System One and decision requests use explicit listener model grants
   and the listener's API keys. Chat model permissions stay separate.
 - Configure listener addresses and ports, multiple logical deployments and
   replicas in the canonical `--config` document.
-- `--device`, `--revision` and `--runtime-profile` configure `--model`.
+- Positional MODEL, `--revision`, `--runtime-profile`, `-dp` and `--device-ids`
+  configure the default judgment deployment without changing listener grants.
 - Worker-level APIs such as classify, embeddings and rerank remain on
   `vllm-srun`; they are not automatically public frontend endpoints.
 

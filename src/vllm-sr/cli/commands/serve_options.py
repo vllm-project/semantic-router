@@ -37,10 +37,10 @@ SERVE_OPTION_GROUPS = (
             "platform",
             "image",
             "log_level",
-            "mode",
+            "engine",
             "model",
             "revision",
-            "device",
+            "data_parallel_size",
             "runtime_profile",
         ),
     ),
@@ -55,7 +55,6 @@ SERVE_OPTION_GROUPS = (
             "minimal",
             "readonly",
             "algorithm",
-            "decision_model",
         ),
     ),
     OptionGroup(
@@ -75,6 +74,7 @@ SERVE_OPTION_GROUPS = (
             "startup_timeout",
             "replace_active_config",
             "recipe_env_names",
+            "device_ids",
         ),
     ),
     OptionGroup(

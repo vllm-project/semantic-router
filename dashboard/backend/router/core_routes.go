@@ -48,9 +48,8 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 	registerStatusRoutes(mux, cfg, options.statusHandler, stackState(cfg, setupResolver), store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler(cfg.ReadonlyMode))
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler(cfg.ReadonlyMode))
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/instance/deploy", auth.PermConfigDeploy, "instance.deploy", auth.SensitivityOperational, auth.ResourceOwnerConfig, 16<<10, http.MethodPost), handlers.InstanceHandler(cfg.ReadonlyMode || !cfg.RuntimeConfigWritable))
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
 	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
 		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.AbsConfigPath))
 	}

@@ -20,9 +20,10 @@ its feature unknown instead of holding up the request.
 You use it whenever a configured feature needs a model; there is nothing to
 turn on. Configure it yourself to put a model on a GPU, to pin a different
 model, to place or scale its replicas, or to attach a shared external worker.
-Use `vllm-sr serve --mode engine --model ARTIFACT` to expose native System One
+Use `vllm-sr serve ARTIFACT --engine` to expose native System One
 requests through the same persistent frontend. Enable saved recipe routing
-with `--mode router`; workers and Dashboard remain available.
+by starting without `--engine`; the frontend and Dashboard remain available
+in both startup modes.
 
 ## Configuration
 

@@ -14,16 +14,16 @@ or a runtime you run yourself.
 
 The runtime is the `vllm-srun` package and command. Every router image ships
 it, and it is not published to PyPI: `vllm-sr` stays the only PyPI package.
-Engine mode (`vllm-sr serve --mode engine --model ARTIFACT`) runs the persistent
+Engine mode (`vllm-sr serve ARTIFACT --engine`) runs the persistent
 instance frontend and its managed model workers with routing disabled. The
 CLI and Docker or Podman are all it needs:
 
 ```bash
 pip install vllm-sr
-vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Kai-0.6B --device cpu
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 ```
 
-`--platform amd` or `--platform nvidia` runs the `vllm-sr-rocm` or
+`--platform rocm` or `--platform cuda` runs the `vllm-sr-rocm` or
 `vllm-sr-cuda` image with the GPUs passed through. The images carry the
 release's own PyTorch build, so their answers are byte-identical to the
 released model packages. See the

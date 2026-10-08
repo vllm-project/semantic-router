@@ -8,20 +8,20 @@ listeners, Dashboard and model workers are retained. Mode and model placement
 are independent: one logical deployment may use one worker or a replica pool.
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Vela-2.0-4B
+vllm-sr serve vllm-sr/Vela-2.0-4B --engine --platform rocm -dp 2 --device-ids 0,1
 vllm-sr instance --config config.yaml status
 vllm-sr instance --config config.yaml models
-vllm-sr instance --config config.yaml deploy --mode engine --request-id engine-1
-vllm-sr instance --config config.yaml deploy --mode router --request-id router-1
+# Restart with routing enabled, retaining model resources and routing policy.
+vllm-sr serve --config config.yaml
 ```
 
-Omitting `--deployment` preserves the default model. Providing a configured
-resource key selects that resource through
-`global.model_catalog.system.decision_model.deployment`. Mode changes publish a
-canonical configuration generation in the same frontend; they do not replace
-containers or change listener grants. `serve --mode engine` can create a minimal
-canonical configuration without Chat backends or routing YAML. Ordinary `serve`
-and health repair preserve the saved `global.router.enabled` value.
+`--engine` (`-e`) selects Engine mode at startup. Every invocation without it
+starts Router mode, including when the saved configuration previously disabled
+routing. MODEL replaces the configured default judgment deployment's artifact;
+unspecified profile and replica placement remain unchanged. Listener grants
+never widen. A new Engine configuration needs no Chat backends or routing YAML.
+Health repair observes the running instance's active mode; it does not issue a
+new user `serve` request or change that startup choice.
 
 Both modes expose `POST /v1/systemone`, its native alias `POST /v1/decisions`, and
 `GET /v1/systemone/models` on the standalone frontend. Dashboard can provide an
@@ -44,9 +44,15 @@ recipe signals. Minimal Engine configurations do not enable these stores.
 The local Docker/Podman CLI attaches a host controller after startup with
 Dashboard. `GET /api/instance` reports desired mode, observed active-snapshot
 mode, active deployment, ownership and durable operation state.
-`POST /api/instance/deploy` accepts only `mode`, optional `deployment`, and a
-bounded `request_id`. It applies configuration through the authenticated canonical
-management API. A repeated request ID returns the original operation.
+`GET /api/instance/models` reports model inventory. These Dashboard endpoints
+are read-only; there is no public mode deployment endpoint or `can_switch`
+capability. Model deployment and scaling use the canonical model resource
+configuration, independently of startup mode. `instance status` and `models`
+are the public CLI inspection commands.
+
+The host controller retains its private journal and bounded deployment
+transactions for lifecycle recovery. Its Unix socket is an internal control
+surface, not a browser mode-switch API.
 
 A rejected candidate leaves the active generation serving. The controller
 restores its previous canonical document when recovery is needed, using the

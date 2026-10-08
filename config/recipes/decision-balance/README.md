@@ -110,7 +110,7 @@ cross-validation on those samples.
   on each server.
 - GLM-5.3-Flash with a 1M-token context for the `long_context` decision.
 - A GPU for the Router: Vela-2.0-4B runs on a GPU only, so serve with
-  `--platform amd` or `--platform nvidia`.
+  `--platform rocm` or `--platform cuda`.
 - Backends that accept the reasoning controls above: top-level
   `reasoning_effort` with `chat_template_kwargs.enable_thinking` for Qwen3.8
   (`false` for the thinking-off `fast` lane), `chat_template_kwargs.reasoning_effort`
@@ -170,7 +170,7 @@ backend the route selects; all three models may see any request.
 
 ```bash
 vllm-sr config validate --config config/recipes/decision-balance/config.yaml
-vllm-sr serve --config config/recipes/decision-balance/config.yaml --platform amd
+vllm-sr serve --config config/recipes/decision-balance/config.yaml --platform rocm
 ```
 
 Point the three `backend_refs` endpoints at your servers first. Then send

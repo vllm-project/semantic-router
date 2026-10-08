@@ -14,24 +14,41 @@ This page lists the details the guides leave out. The design behind them is in
 Use Engine mode for native System One serving without Chat backends:
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Vela-2.0-0.3B
+vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 ```
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--mode router\|engine` | saved configuration, or Router | Set `global.router.enabled`. Both modes retain the same frontend and control plane. |
-| `--model ARTIFACT` | saved default, or Vela 2.0 0.3B | Select the default decision model. Creates a minimal canonical configuration when one does not exist. |
-| `--config FILE` | active configuration | Canonical configuration for listeners, model deployments, routing and replicas. |
-| `--platform` | `cpu` | Runtime image and GPU passthrough: `cpu`, `amd` or `nvidia`. |
-| `--image` | the platform's image | Use a specific local or published frontend image. |
+| `MODEL` | configured default, or Vela 2.0 0.3B | Override the default judgment deployment's artifact. Other deployments, backend LLMs and public grants stay as authored. |
+| `--engine`, `-e` | off | Start Engine mode. Every invocation without this flag starts Router mode, including a restart of a saved Engine configuration. |
+| `--config FILE` | `config.yaml` | Canonical listeners, deployments, task bindings and routing. Docker preserves the active configuration unless explicitly replaced. |
+| `--platform` | `auto` | Execution backend: `auto`, `cpu`, `cuda` or `rocm`. Automatic detection inspects the container host or the selected Kubernetes cluster. |
+| `--data-parallel-size`, `-dp` | existing placement, or one worker | Number of independent managed replicas of the default deployment. Writes the canonical `replicas` list. |
+| `--device-ids` | existing placement, or available GPUs | Docker host GPU indices. With `-dp N`, supply one ID to share that GPU or N IDs to use one per replica. This does not change GPU visibility. |
+| `--runtime-profile` | configured value, or `exact` | Numerical execution profile, independent of replica count and placement. |
+| `--revision` | configured pin, built-in release pin, or repository default | Optional advanced branch, tag or full commit. Resolved once before startup into the immutable commit stored in the active deployment and shared by all replicas. |
+| `--image` | platform image | Use a specific local or published frontend image. |
 | `--image-pull-policy` | `always` | `always`, `ifnotpresent` or `never`. |
 | `--container-runtime` | detected | `docker` or `podman`. |
 
-Configure worker devices, profiles and replicas in
-`global.model_catalog.deployments`; configure API ports and model grants in
-`listeners`. The default native API listener uses port `8899`. Existing
-listener grants are preserved when the selected model changes; selecting a
-model does not implicitly publish it.
+Omitting a model option preserves its configured value. Selecting a different
+artifact drops the previous artifact's revision, then resolves the new one.
+A local absolute package path has no Hub revision. Canonical YAML `revision`
+continues to require an immutable commit; branch and tag resolution is a CLI
+startup operation, not a per-request lookup.
+
+A new multi-GPU placement uses the first N available GPUs. If fewer are
+available, specify one `--device-ids` value to request colocated workers
+explicitly. Resizing an authored placement repeats its device order. An
+existing visibility mask is honored: for example, host GPU 7 maps to runtime
+ordinal 0 under `ROCR_VISIBLE_DEVICES=7`. Kubernetes uses pod allocation
+ordinals in canonical config and does not accept physical `--device-ids`.
+
+Listener ports and API grants belong in `listeners`; the initial native API
+listener uses port `8899`. Selecting a model never broadens an existing
+listener's public model grants. Dashboard reports the startup mode; changing
+mode requires another `serve` invocation. The former `--mode`, `--model`,
+`--decision-model` and `--device` serve flags have been removed.
 
 `vllm-srun serve` starts a worker directly with the full runtime protocol. It
 is the command used inside the images and needs an installed model runtime

@@ -1,4 +1,4 @@
-"""`vllm-sr serve --decision-model`, its config version, status and validation."""
+"""Configured judgment deployment identity, status and validation."""
 
 import json
 import subprocess
@@ -9,11 +9,9 @@ import yaml
 from cli import decision_model, runtime_lifecycle, runtime_service_status
 from cli.commands import runtime_config_mutation, runtime_paths, runtime_serve_config
 from cli.k8s_backend import K8sBackend
-from cli.main import main
 from cli.models import UserConfig
 from cli.runtime_stack import resolve_runtime_stack
 from cli.validator import validate_user_config
-from click.testing import CliRunner
 
 SOURCE = (
     "version: v0.3\nlisteners:\n- name: main\n  address: 0.0.0.0\n  port: 8888\n"
@@ -67,14 +65,14 @@ def test_device_admission_is_resource_based(monkeypatch):
         "artifact": "any/model",
         "device": "rocm:0",
     }
-    assert "requires --platform amd" in decision_model.gpu_requirement_error(
+    assert "requires --platform rocm" in decision_model.gpu_requirement_error(
         deployment, "cpu", local_host=True
     )
-    assert "no AMD GPU devices" in decision_model.gpu_requirement_error(
-        deployment, "amd", local_host=True
+    assert "no ROCM GPU devices" in decision_model.gpu_requirement_error(
+        deployment, "rocm", local_host=True
     )
     assert (
-        decision_model.gpu_requirement_error(deployment, "amd", local_host=False)
+        decision_model.gpu_requirement_error(deployment, "rocm", local_host=False)
         is None
     )
     assert (
@@ -89,25 +87,6 @@ def test_device_admission_is_resource_based(monkeypatch):
     )
 
 
-def test_positional_engine_shortcut_is_removed():
-    result = CliRunner().invoke(
-        main, ["serve", "vllm-sr/Vela-2.0-0.3B", "--decision-model", "candidate"]
-    )
-    assert result.exit_code == 2
-    assert "unexpected extra argument" in result.output
-
-
-def test_serve_refuses_a_gpu_model_on_cpu_before_anything_changes(tmp_path):
-    config = tmp_path / "config.yaml"
-    config.write_text(SOURCE)
-    result = CliRunner().invoke(
-        main, ["serve", "--config", str(config), "--decision-model", "gpu"]
-    )
-    assert result.exit_code != 0
-    assert "decision deployment device rocm requires --platform amd" in result.output
-    assert config.read_text() == SOURCE
-
-
 def _quiet_lifecycle(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle, "container_status_strict", lambda name: "exited"
@@ -120,39 +99,12 @@ def _quiet_lifecycle(monkeypatch):
     )
 
 
-def _prepare(source, decision=None, replace=False):
+def _prepare(source, replace=False):
     path, _setup, lock = runtime_serve_config._prepare_docker_runtime_config(
-        source, None, False, None, (), replace, decision_model=decision
+        source, None, False, "cpu", (), replace
     )
     lock.close()
     return path
-
-
-def test_the_flag_writes_a_config_version_that_later_starts_keep(tmp_path, monkeypatch):
-    _quiet_lifecycle(monkeypatch)
-    source = tmp_path / "config.yaml"
-    source.write_text(SOURCE)
-    active = _prepare(source)
-    assert "decision_model" not in active.read_text()
-
-    assert _prepare(source, "candidate") == active
-    assert _system(yaml.safe_load(active.read_text())) == {
-        "decision_model": {"deployment": "candidate"}
-    }
-    assert source.read_text() == SOURCE, "the user's config is never rewritten"
-
-    # A later start without the flag keeps the active config's decision model.
-    _prepare(source)
-    assert _system(yaml.safe_load(active.read_text()))["decision_model"] == {
-        "deployment": "candidate"
-    }
-    # Asking for the active model writes nothing.
-    before = active.read_bytes()
-    _prepare(source, "candidate")
-    assert active.read_bytes() == before
-    # --replace-active-config returns to the source config.
-    _prepare(source, replace=True)
-    assert "decision_model" not in active.read_text()
 
 
 def test_a_later_start_on_cpu_refuses_an_active_gpu_model(tmp_path, monkeypatch):
@@ -163,7 +115,7 @@ def test_a_later_start_on_cpu_refuses_an_active_gpu_model(tmp_path, monkeypatch)
     document = yaml.safe_load(active.read_text())
     decision_model.set_decision_model(document, "gpu")
     runtime_paths._atomic_write_private_bytes(active, yaml.safe_dump(document).encode())
-    with pytest.raises(ValueError, match="device rocm requires --platform amd"):
+    with pytest.raises(ValueError, match="device rocm requires --platform rocm"):
         _prepare(source)
 
 
@@ -262,14 +214,14 @@ def test_kubernetes_status_reads_the_live_config(monkeypatch, tmp_path):
 
 
 def test_gpu_platforms_put_the_safety_module_on_the_gpu(monkeypatch):
-    monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
+    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
+    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     config = {
         "global": {
             "model_catalog": {"modules": {"safety": {"safety": {"use_cpu": True}}}}
         }
     }
-    assert runtime_config_mutation.apply_platform_gpu_defaults(config, "amd")
+    assert runtime_config_mutation.apply_platform_gpu_defaults(config, "rocm")
     assert (
         config["global"]["model_catalog"]["modules"]["safety"]["safety"]["use_cpu"]
         is False

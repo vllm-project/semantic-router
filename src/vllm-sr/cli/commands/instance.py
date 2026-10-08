@@ -1,7 +1,6 @@
-"""Inspect or deploy one CLI-owned instance without replacing its Dashboard."""
+"""Inspect a CLI-owned instance and attach its private host controller."""
 
 import json
-import uuid
 
 import click
 
@@ -9,7 +8,6 @@ from cli.instance_controller import run
 from cli.instance_setup import (
     attach_controller,
     controller_request,
-    ensure_controller,
     instance_directory,
 )
 
@@ -23,13 +21,13 @@ from cli.instance_setup import (
 )
 @click.pass_context
 def instance(ctx, config_file):
-    """Manage the Router/Engine mode of an existing local instance."""
+    """Inspect the serving state of an existing local instance."""
     ctx.ensure_object(dict)
     ctx.obj["instance_directory"] = instance_directory(config_file)
     ctx.obj["instance_config_file"] = config_file
 
 
-@instance.command()
+@instance.command(hidden=True)
 @click.option(
     "--runtime-config", type=click.Path(exists=True, dir_okay=False), default=None
 )
@@ -69,36 +67,7 @@ def status(ctx):
         raise click.ClickException("No reachable local instance controller") from error
 
 
-@instance.command()
-@click.option("--mode", type=click.Choice(["router", "engine"]), required=True)
-@click.option(
-    "--deployment",
-    default=None,
-    help="Configured model deployment; omit to preserve the selected model.",
-)
-@click.option(
-    "--request-id", default=None, help="Reuse this ID to safely retry an operation."
-)
-@click.pass_context
-def deploy(ctx, mode, deployment, request_id):
-    """Publish a rollback-protected frontend capability generation."""
-    try:
-        ensure_controller(ctx.obj["instance_directory"])
-        state = controller_request(
-            ctx.obj["instance_directory"],
-            "/deploy",
-            {
-                "mode": mode,
-                "deployment": deployment,
-                "request_id": request_id or uuid.uuid4().hex,
-            },
-        )
-        click.echo(json.dumps(state))
-    except (OSError, ValueError, RuntimeError) as error:
-        raise click.ClickException(str(error)) from error
-
-
-@instance.command()
+@instance.command(hidden=True)
 @click.pass_context
 def controller(ctx):
     """Run the persistent controller in a host service supervisor."""

@@ -89,9 +89,9 @@ class HarnessMakeContractTests(unittest.TestCase):
         }
         for arguments, accelerator in (
             ((), "cpu"),
-            (("VLLM_SR_PLATFORM=amd",), "rocm"),
-            (("VLLM_SR_PLATFORM=nvidia",), "cuda"),
-            (("VLLM_SR_PLATFORM=amd", "VLLM_SR_ACCELERATOR=cpu"), "cpu"),
+            (("VLLM_SR_PLATFORM=rocm",), "rocm"),
+            (("VLLM_SR_PLATFORM=cuda",), "cuda"),
+            (("VLLM_SR_PLATFORM=rocm", "VLLM_SR_ACCELERATOR=cpu"), "cpu"),
         ):
             with self.subTest(arguments=arguments):
                 result = subprocess.run(
@@ -191,6 +191,9 @@ class HarnessMakeContractTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/registry/tables/decision1.py",
             "src/model-runtime/vllm_srun/registry/tables/decision2.py",
             "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela1.py",
+            "src/model-runtime/vllm_srun/registry/tables/omni.py",
+            "src/model-runtime/vllm_srun/registry/releases.generated.json",
             "src/model-runtime/vllm_srun/families/vela2/request.py",
             "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
             "src/model-runtime/vllm_srun/registry/tables/common.py",

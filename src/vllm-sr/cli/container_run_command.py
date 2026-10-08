@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from cli.consts import PLATFORM_AMD
+from cli.consts import PLATFORM_ROCM
 from cli.container_images import _normalize_platform
 from cli.utils import get_logger
 
@@ -39,7 +39,7 @@ def build_base_run_command(
 
 
 def append_amd_gpu_passthrough(cmd, normalized_platform):
-    if normalized_platform != PLATFORM_AMD:
+    if normalized_platform != PLATFORM_ROCM:
         return
 
     passthrough_enabled = os.getenv("VLLM_SR_AMD_GPU_PASSTHROUGH", "1").lower()
@@ -69,7 +69,7 @@ def append_amd_gpu_passthrough(cmd, normalized_platform):
 
     if missing_devices:
         log.warning(
-            "Platform 'amd' selected but missing AMD GPU devices on host: "
+            "Platform 'rocm' selected but missing AMD GPU devices on host: "
             f"{', '.join(missing_devices)}. Container may fall back to CPU."
         )
 
@@ -189,7 +189,7 @@ def append_env_vars(
 
 def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):
     if enable_amd_gpu:
-        append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_AMD))
+        append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_ROCM))
 
 
 def append_nvidia_gpu_passthrough(cmd, runtime: str):

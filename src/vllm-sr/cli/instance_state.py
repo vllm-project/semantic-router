@@ -83,7 +83,6 @@ class InstanceController:
         result.update(
             ownership="managed",
             controller_available=True,
-            can_switch="rollback" not in self.state,
         )
         return result
 

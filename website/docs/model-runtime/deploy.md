@@ -13,16 +13,16 @@ resources. Router and Engine are two capabilities of the same frontend:
 - **Router** additionally runs signals, decisions, algorithms and Chat routing.
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Vela-2.0-0.3B
-vllm-sr serve --config config.yaml --mode router
+vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve --config config.yaml
 ```
 
-The canonical setting is `global.router.enabled` (default `true`). Turning it
-off preserves the routing configuration but does not initialize its consumers
-or Chat backends. Mode changes publish configuration through the running
-frontend; they do not replace the frontend or unchanged model workers. The
-Dashboard and native API remain available in either mode. Listener keys and
-native model grants still apply.
+Startup sets `global.router.enabled`: every `serve` invocation without `-e`
+starts Router mode; `-e` starts Engine mode and preserves saved routing without
+initializing its consumers or Chat backends. Dashboard displays this startup
+mode and manages model deployments independently. It does not switch modes.
+The Dashboard and native API remain available in either mode. Listener keys
+and native model grants still apply.
 
 Model resources use either **managed** workers, which the frontend starts and
 supervises, or **attached** workers, whose lifecycle belongs to another owner.
@@ -97,6 +97,23 @@ A binding under `global.model_catalog.bindings` applies everywhere. A recipe
 can override it under its own `routing.model_bindings`.
 
 ## Place and scale replicas
+
+Use `-dp` to set the default deployment's independent worker count. Keep its
+numerical profile separate from placement:
+
+```bash
+# Two workers on one explicitly selected host GPU.
+vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
+# Two workers across two host GPUs.
+vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+```
+
+Without device IDs, a new GPU placement uses the first N available GPUs and
+refuses insufficient capacity; it does not silently place every worker on
+one card. Existing authored placements resize in their declared order.
+Specifying only MODEL preserves configured replicas and profile. These flags
+write the same canonical resource shown below; there is no separate DP state.
+For Kubernetes, use allocation ordinals in config instead of host IDs.
 
 Each managed replica has its own process. All replicas of a deployment use the
 same artifact, revision, profile and capabilities. A request's fused question
@@ -190,7 +207,7 @@ PyTorch for ROCm, and `vllm-sr-cuda` the runtime with PyTorch for CUDA: give
 the router pod a GPU (`amd.com/gpu` or `nvidia.com/gpu` in its resource
 limits) and set `device: rocm:0` or `device: cuda:0` on a deployment, and the
 router runs that model on the GPU itself. `vllm-sr serve --target kubernetes
---platform amd|nvidia` writes the image and the GPU limit into the chart's
+--platform rocm|cuda` writes the image and the GPU limit into the chart's
 values for you.
 
 On first start the runtime downloads the models a router uses into its model

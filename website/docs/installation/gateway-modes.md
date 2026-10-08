@@ -193,7 +193,7 @@ an Envoy-based gateway calls, see
 
 On macOS the docker target is CPU only: the built-in models run on the CPU in
 the arm64 image, because Apple's virtualization gives Docker's Linux VM no Metal
-or GPU compute. `--platform amd` and `--platform nvidia` fail there with a clear
+or GPU compute. `--platform rocm` and `--platform cuda` fail there with a clear
 message. GPU support through the host is tracked in
 [#4636](https://github.com/vllm-project/semantic-router/issues/4636).
 
@@ -208,20 +208,21 @@ message. GPU support through the host is tracked in
 ## Options of `vllm-sr serve`
 
 `vllm-sr serve --help` groups options by deployment target. Router and Engine
-run the same instance frontend: `--mode engine` disables routing, while
-`--mode router` re-enables the saved routing configuration. Both retain model
+run the same instance frontend: `--engine` (`-e`) disables routing at startup;
+every invocation without it starts Router mode and retains saved routing. Both retain model
 management, Dashboard and the explicitly published System One API.
 
 | Group | Applies to | Options |
 | --- | --- | --- |
-| Instance and models | docker, kubernetes | `--mode`, `--model`, `--revision`, `--device`, `--runtime-profile`, `--platform`, `--image`, `--log-level` |
-| Instance configuration | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm`, `--decision-model` |
+| Instance and models | docker, kubernetes | `MODEL`, `--engine`, `--revision`, `--data-parallel-size`, `--runtime-profile`, `--platform`, `--image`, `--log-level` |
+| Instance configuration | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm` |
 | Container options | docker | `--image-pull-policy`, `--container-runtime` |
-| Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env` |
+| Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env`, `--device-ids` |
 | Kubernetes target | kubernetes | `--namespace`, `--context`, `--profile`, `--chart-dir` |
 
 Multiple models, replica placement, listener ports and API grants use the
-canonical config. Model resource flags require `--model`.
+canonical config. Model resource flags update the configured default deployment;
+MODEL and all resource overrides are optional.
 
 `--container-runtime` (`docker` or `podman`) replaces `--runtime`, which works
 for this release only, on `serve`, `status`, `logs`, `stop` and `dashboard`.

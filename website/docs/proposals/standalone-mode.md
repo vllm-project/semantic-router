@@ -10,7 +10,7 @@ status: Implemented
 >
 > **Lifecycle update:** The original Engine CLI examples below describe the
 > earlier implementation. Current Engine and Router modes share one frontend
-> and model pool. Use `vllm-sr serve --mode engine --model ARTIFACT`; see
+> and model pool. Use `vllm-sr serve ARTIFACT --engine`; see
 > [the current Quickstart](../model-runtime/quickstart.md).
 
 ## Summary

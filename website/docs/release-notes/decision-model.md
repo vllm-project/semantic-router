@@ -19,7 +19,7 @@ global:
 ```
 
 ```bash
-vllm-sr serve --decision-model primary --platform amd
+vllm-sr serve --platform rocm
 ```
 
 ## What changes
@@ -27,8 +27,9 @@ vllm-sr serve --decision-model primary --platform amd
 - The binding contains only `deployment`; model identity, device, profile and
   endpoint belong to `global.model_catalog.deployments`. Keys are exact and
   case-sensitive. Scalar model names are rejected.
-- `serve --decision-model DEPLOYMENT` selects an already declared resource in
-  the active configuration. Later starts keep it; status reports its key.
+- `serve MODEL` changes the configured default deployment's artifact, preserving
+  its placement and profile unless explicit options override them. Select a
+  different deployment key in the canonical binding. Status reports that key.
 - Questions and selectors with no deployment use this default. Explicit task
   and question bindings override it without replacing the resource.
 - Available tasks come from native model capabilities. Family names do not

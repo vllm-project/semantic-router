@@ -150,7 +150,7 @@ standalone 模式中支持；在那之前它们同样需要 Envoy。
 ### macOS
 
 在 macOS 上 docker 目标只使用 CPU：内置模型在 arm64 镜像中以 CPU 运行，因为 Apple 的虚拟化不向 Docker 的 Linux
-虚拟机提供 Metal 或 GPU 计算。在那里使用 `--platform amd` 或 `--platform nvidia` 会以明确的错误信息失败。通过宿主机使用
+虚拟机提供 Metal 或 GPU 计算。在那里使用 `--platform rocm` 或 `--platform cuda` 会以明确的错误信息失败。通过宿主机使用
 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。
 
 - **在 CPU 上运行轻松：** 307M 的 Vela 任务模型（领域、PII、越狱与安全防护、embedding、重排）、Vela Omni Nano，以及
@@ -160,18 +160,22 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 
 ## `vllm-sr serve` 的选项
 
-`vllm-sr serve --help` 按组列出选项。每个组适用于 `serve` 三种运行方式中的若干种：docker 目标上的
-Router、kubernetes 目标上的 Router，以及 engine 模式（`vllm-sr serve MODEL`，在容器里运行模型运行时）。
-在组不适用的地方使用其中的选项会报错，并说明它适用于哪里。
+`vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
+两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
+不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
+profile 和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
 
-| 组 | 适用于 | 选项 |
-| --- | --- | --- |
-| 通用选项 | docker、kubernetes、engine 模式 | `--platform`、`--image`、`--log-level` |
-| Router 选项 | docker、kubernetes | `--config`、`--target`、`--gateway`、`--minimal`、`--readonly`、`--algorithm` |
-| 容器选项 | docker、engine 模式 | `--image-pull-policy`、`--container-runtime` |
-| Docker 目标 | docker | `--router-image`、`--envoy-image`（仅 `--gateway extproc`）、`--dashboard-image`、`--startup-timeout`、`--replace-active-config`、`--recipe-env` |
-| Kubernetes 目标 | kubernetes | `--namespace`、`--context`、`--profile`、`--chart-dir` |
-| Engine 模式 | engine 模式 | `--models`、`--revision`、`--device`、`--host`、`--port`、`--runtime-profile` |
+| 范围 | 选项 |
+| --- | --- |
+| 模型与运行 | `MODEL`、`--engine`、`--revision`、`--runtime-profile`、`--data-parallel-size` / `-dp` |
+| 平台 | `--platform auto/cpu/cuda/rocm`，auto 检查实际 Docker 主机或目标 Kubernetes 集群 |
+| Docker 设备 | `--device-ids` 使用主机编号，按已有可见掩码映射；一个编号允许同卡多副本，N 个编号对应 N 个副本 |
+| 配置 | `--config`、`--target`、`--gateway`、`--minimal`、`--readonly`、`--algorithm` |
+| Docker 部署 | `--image-pull-policy`、`--container-runtime`、`--router-image`、`--envoy-image`、`--dashboard-image`、`--startup-timeout`、`--replace-active-config`、`--recipe-env` |
+| Kubernetes 部署 | `--namespace`、`--context`、`--profile`、`--chart-dir` |
 
-`--container-runtime`（`docker` 或 `podman`）取代了 `--runtime`；在 `serve`、`status`、`logs`、`stop` 和
-`dashboard` 上，`--runtime` 仅在本版本中继续可用。
+Kubernetes 使用 pod 分配后的设备序号，通过 canonical replicas 请求 GPU 资源，
+不接受物理主机 `--device-ids`。模型 `--runtime-profile` 与部署 `--profile` 独立。
+`--revision` 可填分支、tag 或 commit，启动前只解析一次并记录不可变 SHA；内置模型
+省略时使用发布 pin。监听地址、端口和公开模型授权始终通过 config 控制。
+完整参数以 [CLI 参考](../api/cli.md) 为准。

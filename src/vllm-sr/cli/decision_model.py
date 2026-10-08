@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
+from cli.consts import PLATFORM_ROCM, PLATFORM_CUDA
 from cli.model_runtime_defaults import effective_model_deployments_document
 
 DEFAULT_DECISION_MODEL = "primary"
@@ -79,9 +79,9 @@ def set_decision_model(document: dict, name: str) -> bool:
 def host_has_gpu(platform: str) -> bool:
     """Whether this host exposes the GPU devices a --platform passes through."""
 
-    if platform == PLATFORM_AMD:
+    if platform == PLATFORM_ROCM:
         return os.path.exists("/dev/kfd") and os.path.exists("/dev/dri")
-    if platform == PLATFORM_NVIDIA:
+    if platform == PLATFORM_CUDA:
         return (
             os.path.exists("/dev/nvidiactl") or shutil.which("nvidia-smi") is not None
         )
@@ -105,7 +105,7 @@ def gpu_requirement_error(
     if deployment.get("endpoint"):
         return None
     device = (deployment.get("device") or "auto").split(":", 1)[0]
-    expected_platform = {"rocm": PLATFORM_AMD, "cuda": PLATFORM_NVIDIA}.get(device)
+    expected_platform = {"rocm": PLATFORM_ROCM, "cuda": PLATFORM_CUDA}.get(device)
     if expected_platform is None:
         return None
     if platform != expected_platform:

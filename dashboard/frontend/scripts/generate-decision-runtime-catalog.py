@@ -7,7 +7,9 @@ reject a stale projection without requiring torch, a GPU, or the model cache.
 
 import argparse
 import ast
+import importlib
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -16,6 +18,25 @@ OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.j
 BACKEND_OUTPUT = (
     ROOT / "src/semantic-router/pkg/modelservice/decision_catalog.generated.json"
 )
+RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
+
+
+def release_projection():
+    """Read the runtime's stdlib-only release tables, without loading plugins."""
+    sys.path.insert(0, str(RUNTIME.parent))
+    try:
+        releases = {}
+        for path in sorted((RUNTIME / "registry/tables").glob("*.py")):
+            if path.stem in {"__init__", "common"}:
+                continue
+            table = importlib.import_module(f"vllm_srun.registry.tables.{path.stem}")
+            for model in table.MODELS:
+                if model.repo_id in releases:
+                    raise ValueError(f"duplicate release: {model.repo_id}")
+                releases[model.repo_id] = model.revision
+        return dict(sorted(releases.items()))
+    finally:
+        sys.path.pop(0)
 
 
 def assignment(path, name):
@@ -157,12 +178,15 @@ def main():
     data = projection()
     content = json.dumps(data, indent=2) + "\n"
     backend = json.dumps(backend_projection(data), indent=2) + "\n"
+    releases = json.dumps(release_projection(), indent=2) + "\n"
     if args.check:
         if (
             not OUTPUT.exists()
             or json.loads(OUTPUT.read_text()) != json.loads(content)
             or not BACKEND_OUTPUT.exists()
             or json.loads(BACKEND_OUTPUT.read_text()) != json.loads(backend)
+            or not RELEASE_OUTPUT.exists()
+            or json.loads(RELEASE_OUTPUT.read_text()) != json.loads(releases)
         ):
             raise SystemExit(
                 "Decision runtime projection is stale; run dashboard/frontend/scripts/generate-decision-runtime-catalog.py"
@@ -170,6 +194,7 @@ def main():
     else:
         OUTPUT.write_text(content)
         BACKEND_OUTPUT.write_text(backend)
+        RELEASE_OUTPUT.write_text(releases)
 
 
 if __name__ == "__main__":

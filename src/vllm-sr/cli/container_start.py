@@ -16,8 +16,8 @@ from cli.config_generator import (
 from cli.consts import (
     DEFAULT_NOFILE_LIMIT,
     MIN_NOFILE_LIMIT,
-    PLATFORM_AMD,
-    PLATFORM_NVIDIA,
+    PLATFORM_ROCM,
+    PLATFORM_CUDA,
 )
 from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_compiler_cache, router_runtime_env
@@ -523,8 +523,8 @@ def _build_router_runtime_command(
         ],
         entrypoint=service_entrypoint,
         command_args=service_args,
-        enable_amd_gpu=normalized_platform == PLATFORM_AMD,
-        enable_nvidia_gpu=normalized_platform == PLATFORM_NVIDIA,
+        enable_amd_gpu=normalized_platform == PLATFORM_ROCM,
+        enable_nvidia_gpu=normalized_platform == PLATFORM_CUDA,
         # Never `run`: Router is the one container on both stack networks, and
         # the second one can only be attached to a container that already
         # exists. `router_data_network_commands` supplies the connect and the

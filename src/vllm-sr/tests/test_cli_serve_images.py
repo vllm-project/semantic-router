@@ -17,7 +17,7 @@ def _capture_serve_deployment(monkeypatch, tmp_path: Path):
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 1}]},
             },
             sort_keys=False,
         )

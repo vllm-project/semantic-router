@@ -39,7 +39,7 @@ For a runtime you start yourself, pass `--runtime-profile` (`--profile` to
 `vllm-srun serve`):
 
 ```bash
-vllm-sr serve --mode engine --model vllm-sr/Decision-2.0-Lux-9B --platform amd --device rocm:0 --runtime-profile shared_context
+vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --engine --platform rocm --device-ids 0 --runtime-profile shared_context
 ```
 
 A runtime started with an approximate profile still answers requests that ask

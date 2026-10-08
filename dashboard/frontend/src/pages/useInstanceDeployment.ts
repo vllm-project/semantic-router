@@ -9,7 +9,6 @@ export interface InstanceDeployment {
   active_deployment?: string
   deployment?: string
   model?: string
-  can_switch: boolean
   unavailable_reason?: string
   operation?: {
     id: string

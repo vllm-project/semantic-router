@@ -16,7 +16,7 @@ translation:
 
 运行时不是你的聊天模型运行的地方。回答用户的模型留在你的提供方后面（vLLM、Ollama、托管 API）；
 运行时提供的是路由器针对每个请求去询问的那些小模型。它以 `vllm-srun` 进程的形式运行在路由器容器内，
-或者在你用 `vllm-sr serve --mode engine --model ARTIFACT` 启动时由同一个实例前端管理（Engine 模式关闭路由）。
+或者在你用 `vllm-sr serve ARTIFACT --engine` 启动时由同一个实例前端管理（Engine 模式关闭路由）。
 
 通常你什么都不用做。某个功能需要模型时，路由器会下载模型、校验每个文件、
 启动运行时，并把请求文本发给它。路由所需的模型加载完成后，路由器才开始提供服务。
@@ -27,9 +27,9 @@ translation:
 
 | 你想要 | 这样做 | 阅读 |
 | --- | --- | --- |
-| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时；`vllm-sr serve --platform amd` 或 `--platform nvidia` 会把它的模型放到 GPU 上。 | [与路由器一起运行](model-runtime/deploy.md) |
+| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时；`vllm-sr serve --platform rocm` 或 `--platform cuda` 会把它的模型放到 GPU 上。 | [与路由器一起运行](model-runtime/deploy.md) |
 | 在多个路由器之间共享模型，或在另一台机器上运行它们 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](model-runtime/deploy.md#attach-to-a-runtime-you-run) |
-| 在自己的代码里调用模型 | 运行 `vllm-sr serve --mode engine --model ARTIFACT` 并发送 HTTP 请求。 | [快速开始](model-runtime/quickstart.md) |
+| 在自己的代码里调用模型 | 运行 `vllm-sr serve ARTIFACT --engine` 并发送 HTTP 请求。 | [快速开始](model-runtime/quickstart.md) |
 
 ## 它能提供什么 {#what-it-can-serve}
 
@@ -63,7 +63,7 @@ translation:
 
 CPU 和 AMD GPU（MI300X、MI325X）已经验证。NVIDIA GPU 可用但尚未验证；
 Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
-AMD 和 NVIDIA 镜像（`vllm-sr serve --platform amd` 或 `--platform nvidia`）还能在 GPU 上运行它们。
+AMD 和 NVIDIA 镜像（`vllm-sr serve --platform rocm` 或 `--platform cuda`）还能在 GPU 上运行它们。
 
 ## 从旧版本升级？ {#coming-from-an-older-release}
 

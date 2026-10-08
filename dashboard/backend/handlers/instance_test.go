@@ -26,7 +26,7 @@ func instanceTestSocket(t *testing.T, handler http.Handler) {
 	t.Setenv(instanceSocketEnv, socket)
 }
 
-func TestInstanceUnixStatusDeployAndModels(t *testing.T) {
+func TestInstanceUnixStatusAndModels(t *testing.T) {
 	var seen []string
 	instanceTestSocket(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.Method+" "+r.URL.Path)
@@ -38,20 +38,13 @@ func TestInstanceUnixStatusDeployAndModels(t *testing.T) {
 			_, _ = io.WriteString(w, `{"ownership":"managed","observed_mode":"engine","active_deployment":"primary"}`)
 		case "/models":
 			_, _ = io.WriteString(w, `{"object":"list","data":[{"id":"primary","ready":true,"surfaces":["decisions"]}]}`)
-		case "/deploy":
-			body, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(body), `"request_id":"retry"`) {
-				t.Error("operation changed")
-			}
-			w.WriteHeader(202)
-			_, _ = io.WriteString(w, `{"operation":{"id":"retry","phase":"starting"}}`)
 		}
 	}))
-	handler := InstanceHandler(false)
+	handler := InstanceHandler()
 	for _, route := range []struct {
 		method, path, body string
 		status             int
-	}{{"GET", "/api/instance", "", 200}, {"GET", "/api/instance/models", "", 200}, {"POST", "/api/instance/deploy", `{"mode":"engine","deployment":"primary","request_id":"retry"}`, 202}} {
+	}{{"GET", "/api/instance", "", 200}, {"GET", "/api/instance/models", "", 200}, {"POST", "/api/instance/deploy", `{"mode":"engine","deployment":"primary","request_id":"retry"}`, 405}, {"GET", "/api/instance/deploy", "", 404}} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(route.method, route.path, strings.NewReader(route.body))
 		request.Header.Set("Authorization", "Bearer browser-secret")
@@ -60,16 +53,16 @@ func TestInstanceUnixStatusDeployAndModels(t *testing.T) {
 			t.Fatalf("%s => %d", route.path, response.Code)
 		}
 	}
-	if len(seen) != 3 {
+	if len(seen) != 2 {
 		t.Fatal(seen)
 	}
 	if !instanceEngineActive(context.Background()) {
 		t.Fatal("engine identity lost")
 	}
 	response := httptest.NewRecorder()
-	InstanceHandler(true)(response, httptest.NewRequest("POST", "/api/instance/deploy", strings.NewReader(`{}`)))
-	if response.Code != 403 {
-		t.Fatal("readonly deployment allowed")
+	InstanceHandler()(response, httptest.NewRequest("PATCH", "/api/instance", strings.NewReader(`{}`)))
+	if response.Code != 405 || response.Header().Get("Allow") != "GET" {
+		t.Fatal("instance mutation allowed")
 	}
 }
 
@@ -77,19 +70,19 @@ func TestInstanceMissingControllerNeverClaimsManagedOrEngine(t *testing.T) {
 	t.Setenv(instanceSocketEnv, "")
 	t.Setenv("KUBERNETES_SERVICE_HOST", "cluster")
 	response := httptest.NewRecorder()
-	InstanceHandler(false)(response, httptest.NewRequest("GET", "/api/instance", nil))
+	InstanceHandler()(response, httptest.NewRequest("GET", "/api/instance", nil))
 	var state map[string]any
 	_ = json.Unmarshal(response.Body.Bytes(), &state)
-	if state["ownership"] != "kubernetes" || state["observed_mode"] != "unknown" || state["can_switch"] != false {
+	if state["ownership"] != "kubernetes" || state["observed_mode"] != "unknown" {
 		t.Fatal(state)
 	}
 	response = httptest.NewRecorder()
-	InstanceHandler(false)(response, httptest.NewRequest("POST", "/api/instance/deploy", strings.NewReader(`{}`)))
-	if response.Code != 503 {
+	InstanceHandler()(response, httptest.NewRequest("POST", "/api/instance/deploy", strings.NewReader(`{}`)))
+	if response.Code != 405 {
 		t.Fatal("unmanaged operation accepted")
 	}
 	response = httptest.NewRecorder()
-	InstanceHandler(false)(response, httptest.NewRequest("GET", "/api/instance/models", nil))
+	InstanceHandler()(response, httptest.NewRequest("GET", "/api/instance/models", nil))
 	if response.Code != 503 {
 		t.Fatal("missing inventory reported success")
 	}

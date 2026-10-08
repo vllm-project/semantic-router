@@ -21,13 +21,20 @@ export default function DecisionModelCatalog({ model, writable, busy, onDeploy, 
   const [capability, setCapability] = useState('all')
   const [provider, setProvider] = useState('all')
   const [page, setPage] = useState(1)
-  const query = search.trim().toLowerCase()
+  const normalizeSearch = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[-\s]+/g, ' ')
+      .trim()
+  const query = normalizeSearch(search)
   const options = DECISION_MODEL_OPTIONS.filter(
     (option) =>
       (family === 'all' || family === option.family) &&
       (provider === 'all' || provider === option.provider) &&
       (capability === 'all' || option.questionTypes.includes(capability)) &&
-      `${option.label} ${option.provider} ${option.family}`.toLowerCase().includes(query),
+      normalizeSearch(
+        `${option.label} ${option.name} ${option.artifact} ${option.provider} ${option.family}`,
+      ).includes(query),
   )
   const totalPages = Math.max(1, Math.ceil(options.length / pageSize))
   const currentPage = Math.min(page, totalPages)

@@ -248,9 +248,12 @@ Docker defaults or sample routes into it. Credential references are stored in
 a release-scoped Secret, and literal credentials or credential-bearing URLs
 are rejected.
 
-`--platform amd` and `--platform nvidia` are local-container shortcuts. On
-Kubernetes, select GPU images, resources, and device plugins through Helm
-values, a deployment profile, or the operator.
+`--platform auto` detects the execution target, including allocatable GPUs in
+the selected Kubernetes context. Choose `cpu`, `rocm` or `cuda` explicitly to
+select that backend. Kubernetes requires its device plugin and schedules GPU
+resources from canonical placement ordinals; physical `--device-ids` belongs
+to the Docker target. Deployment `--profile` and model `--runtime-profile`
+control different settings.
 
 See [Kubernetes installation](https://vllm-sr.ai/docs/installation/k8s/) for
 gateway, profile, and production guidance.

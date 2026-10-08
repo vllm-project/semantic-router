@@ -130,14 +130,14 @@ def test_interrupted_and_failed_rollback_recover_before_new_work(tmp_path):
     backend.fail = backend.rollback_fail = True
     controller = InstanceController(tmp_path, backend)
     state = request(controller)
-    assert state["can_switch"] is False
+    assert "can_switch" not in state
     with pytest.raises(InstanceConflictError):
         request(controller, request_id="two")
     backend.rollback_fail = False
     restored = InstanceController(tmp_path, backend)
     restored.recover()
     assert restored.status()["observed_mode"] == "router"
-    assert restored.status()["can_switch"] is True
+    assert "can_switch" not in restored.status()
 
 
 def test_conflicting_work_is_rejected_and_retry_not_restarted(tmp_path):
@@ -356,7 +356,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
             return SimpleNamespace(
                 stdout=json.dumps(
                     [
-                        "VLLM_SR_PLATFORM=amd",
+                        "VLLM_SR_PLATFORM=rocm",
                         "ROCR_VISIBLE_DEVICES=7",
                         "API_KEY=private",
                     ]
@@ -380,7 +380,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
     ):
         attach_controller(str(active), str(active), {}, "standalone", 600)
     manifest = json.loads((directory / "manifest.json").read_text())
-    assert manifest["env"] == {"VLLM_SR_PLATFORM": "amd", "ROCR_VISIBLE_DEVICES": "7"}
+    assert manifest["env"] == {"VLLM_SR_PLATFORM": "rocm", "ROCR_VISIBLE_DEVICES": "7"}
     assert manifest["router_image"] == manifest["dashboard_image"] == "sha256:pinned"
 
 
