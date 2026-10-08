@@ -848,6 +848,7 @@ profiles:
       - e2e/profiles/pii-remote-backend/**
       - deploy/kubernetes/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+      - e2e/testcases/pii_repeated_value_masking.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e
