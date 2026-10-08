@@ -3,8 +3,9 @@ package kvtransfer
 import (
 	"context"
 	"errors"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 type sourceLookupStub struct {
