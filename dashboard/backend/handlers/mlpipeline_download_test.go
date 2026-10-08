@@ -143,7 +143,7 @@ type mlDownloadFile struct {
 func newMLDownloadFixture(t testing.TB) (http.HandlerFunc, []mlDownloadFile) {
 	t.Helper()
 	root := t.TempDir()
-	store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"), workflowstore.Options{})
+	store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })
 	files := []mlDownloadFile{
