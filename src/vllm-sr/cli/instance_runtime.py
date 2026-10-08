@@ -213,7 +213,7 @@ class ContainerInstanceBackend:
             method="PUT",
             etag=etag,
         )
-        if status != HTTPStatus.OK:
+        if status not in {HTTPStatus.OK, HTTPStatus.ACCEPTED}:
             raise RuntimeError("Frontend rejected the configuration publication")
         result = json.loads(body)
         if result.get("activation_status") == "failed":

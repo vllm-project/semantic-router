@@ -224,7 +224,7 @@ func Parse(dslSource string) ParseASTResult {
 	}
 
 	// Combine parse + validation errors
-	allErrs := append(parseErrs, valErrs...)
+	allErrs := append(append([]error(nil), parseErrs...), valErrs...)
 	errStr := ""
 	if len(allErrs) > 0 {
 		errStr = joinErrors(allErrs)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { useDecisionModelManagement } from './useDecisionModelManagement'
 import { decisionRuntimeDeclarations } from './decisionRuntimeDeployment'
+import { configuredDecisionDeployment } from './decisionModelSupport'
 import {
   deploymentPlacements,
   withDecisionReplicas,
@@ -25,7 +26,10 @@ export default function DecisionReplicaPanel({
   const deployments = Object.entries(decisionRuntimeDeclarations(model.config)).filter(
     ([, value]) => value.provider === 'model_runtime',
   )
-  const selectedEntry = deployments.find(([name]) => name === selected) ?? deployments[0]
+  const selectedEntry =
+    deployments.find(([name]) => name === selected) ??
+    deployments.find(([name]) => name === configuredDecisionDeployment(model.config)) ??
+    deployments[0]
   if (!selectedEntry) return null
   const [name, config] = selectedEntry
   const observed = model.inventory?.deployments.find((item) => item.name === name)

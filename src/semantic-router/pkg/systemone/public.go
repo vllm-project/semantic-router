@@ -24,7 +24,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.Method != http.MethodPost && !(r.Method == http.MethodGet && r.URL.Path == "/v1/systemone/models") {
+		if r.Method != http.MethodPost && (r.Method != http.MethodGet || r.URL.Path != "/v1/systemone/models") {
 			publicSystemOneError(w, 405, "method_not_allowed")
 			return
 		}

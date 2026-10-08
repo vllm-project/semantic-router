@@ -317,20 +317,9 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 			g.mu.Unlock()
 			return card, nil
 		}
-		if served.state == "failed" && !g.recyclesLocked() {
-			reason := served.reason
+		if err := g.cardFailureLocked(served); err != nil {
 			g.mu.Unlock()
-			return ModelCard{}, fmt.Errorf("%w: model %s failed to load: %s", ErrUnavailable, model, reason)
-		}
-		if served.state == "incompatible" {
-			reason := served.reason
-			g.mu.Unlock()
-			return ModelCard{}, fmt.Errorf("%w: model %s: %s", ErrUnavailable, model, reason)
-		}
-		if g.failure != nil {
-			err := g.failure
-			g.mu.Unlock()
-			return ModelCard{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+			return ModelCard{}, err
 		}
 		state, changed := served.state, g.changed
 		g.mu.Unlock()
@@ -340,6 +329,22 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 		case <-changed:
 		}
 	}
+}
+
+// cardFailureLocked reports preparation failures that waiting cannot repair.
+// The supervisor may retry for an already published generation, but a new
+// generation must release its worker references when all candidates fail.
+func (g *group) cardFailureLocked(served *servedModel) error {
+	if served.state == "failed" && !g.recyclesLocked() {
+		return fmt.Errorf("%w: model %s failed to load: %s", ErrUnavailable, served.name, served.reason)
+	}
+	if served.state == "incompatible" {
+		return fmt.Errorf("%w: model %s: %s", ErrUnavailable, served.name, served.reason)
+	}
+	if g.failure != nil {
+		return fmt.Errorf("%w: %w", ErrUnavailable, g.failure)
+	}
+	return nil
 }
 
 func (g *group) status() []DeploymentStatus {

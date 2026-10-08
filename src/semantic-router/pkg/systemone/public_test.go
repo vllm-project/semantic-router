@@ -3,12 +3,13 @@ package systemone
 import (
 	"context"
 	"encoding/json"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {

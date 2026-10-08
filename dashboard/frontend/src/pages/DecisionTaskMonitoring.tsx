@@ -47,7 +47,9 @@ export default function DecisionTaskMonitoring({ refreshedAt }: { refreshedAt: D
   const [loading, setLoading] = useState(false)
   const deployments = catalog.data?.deployments ?? []
   const deployment =
-    deployments.find((item) => item.deployment === deploymentChoice) ?? deployments[0]
+    deployments.find((item) => item.deployment === deploymentChoice) ??
+    deployments.find((item) => item.deployment === catalog.data?.default_deployment) ??
+    deployments[0]
   const tasks = [
     ...(deployment?.native_question_types.length
       ? [{ id: 'decision', title: 'Recipe questions' }]

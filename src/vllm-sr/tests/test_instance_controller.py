@@ -251,6 +251,41 @@ def test_mode_only_publication_preserves_models_routing_and_container_lifetime(
     assert all(path.startswith("/api/v1/") for path, _, _ in state["calls"])
 
 
+def test_pending_publication_waits_for_active_generation_instead_of_rolling_back(
+    tmp_path, monkeypatch
+):
+    backend, state = frontend_backend(tmp_path)
+    original_api = backend.api
+    activation_reads = 0
+
+    def api(path, payload=None, **kwargs):
+        nonlocal activation_reads
+        if path == "/api/v1/config" and payload is not None:
+            original_api(path, payload, **kwargs)
+            state["mode"] = "router"
+            return 202, b'{"activation_status":"pending"}'
+        if path == "/api/v1/config/hash":
+            activation_reads += 1
+            if activation_reads == 1:
+                return 200, b'{"activation_status":"pending"}'
+            state["mode"] = "engine"
+        return original_api(path, payload, **kwargs)
+
+    backend.api = api
+    monkeypatch.setattr("cli.instance_runtime.time.sleep", lambda _seconds: None)
+    result = request(InstanceController(tmp_path, backend), deployment=None)
+    assert result["operation"]["phase"] == "ready"
+    assert result["observed_mode"] == "engine"
+    assert activation_reads >= 2
+    publications = [
+        payload
+        for path, payload, _ in state["calls"]
+        if path == "/api/v1/config" and payload is not None
+    ]
+    assert len(publications) == 1
+    assert result["operation"].get("rolled_back") is not True
+
+
 def test_failed_generation_restores_previous_config_without_container_cutover(tmp_path):
     backend, state = frontend_backend(tmp_path)
     before = copy.deepcopy(state["document"])

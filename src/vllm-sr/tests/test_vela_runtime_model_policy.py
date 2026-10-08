@@ -40,8 +40,11 @@ def test_reference_vela_policy_survives_runtime_materialization(
     semantic = catalog["embeddings"]["semantic"]
     assert semantic["mmbert_model_path"] == "models/Vela-1.0-Encoder-307M-Embedding"
     assert semantic["embedding_config"]["full_context"] is False
-    # The decision model binds every module; no per-module line pins one.
-    assert catalog["system"]["decision_model"] == "Vela-2.0-0.3B"
+    # The default judgment binding selects a declared logical deployment;
+    # platform materialization must preserve its resource and input policy.
+    assert catalog["system"]["decision_model"] == {"deployment": "primary"}
+    assert catalog["deployments"] == authored["deployments"]
+    assert catalog["deployments"]["primary"]["artifact"] == "vllm-sr/Vela-2.0-0.3B"
     modules = catalog["modules"]
     for module in (
         modules["safety"]["safety"],

@@ -2,6 +2,7 @@ package modelservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -172,10 +173,22 @@ func (p *replicaPool) card(ctx context.Context) (ModelCard, error) {
 			return card, nil
 		}
 		allObserved := true
+		var failures []error
 		for _, w := range p.workers {
-			if !w.member.served.ready.Load() {
+			g, served := w.member.group, w.member.served
+			g.mu.Lock()
+			if !served.ready.Load() {
 				allObserved = false
 			}
+			if err := g.cardFailureLocked(served); err != nil {
+				failures = append(failures, err)
+			} else if served.ready.Load() && reasons[w.id] != "" {
+				failures = append(failures, fmt.Errorf("%w: %s", ErrUnavailable, reasons[w.id]))
+			}
+			g.mu.Unlock()
+		}
+		if len(failures) == len(p.workers) {
+			return ModelCard{}, fmt.Errorf("no replica can become ready: %w", errors.Join(failures...))
 		}
 		if allObserved {
 			return ModelCard{}, fmt.Errorf("%w: no compatible replica (%v)", ErrUnavailable, reasons)
