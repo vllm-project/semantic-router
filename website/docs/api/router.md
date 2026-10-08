@@ -1,6 +1,8 @@
 # Router API
 
-The router data plane accepts model requests through an Envoy listener. In the
+The router data plane accepts model requests on the configured listeners. The
+Router serves them itself in standalone mode, the default; with
+`--gateway extproc`, Envoy serves them and calls the Router over ext_proc. In the
 standard local stack, the listener is `http://localhost:8899`; a recipe can
 choose a different address or port under `listeners`.
 
@@ -18,13 +20,18 @@ queries. See [Router management API](./apiserver).
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
+| `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
+| `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
+| `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | The model is in the request body |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
 `/v1/vector_stores`, and Router Replay paths are not available on a public
 inference listener. Router-owned file and vector-store operations use
 `/api/v1/storage/files` and `/api/v1/storage/vector-stores` on the management
-listener.
+listener. Other `/openai/*` operations, such as embeddings and stored-response
+reads, return `404`.
 
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
@@ -142,9 +149,63 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
+### Azure OpenAI clients
+
+Clients built for Azure OpenAI can call the Router as if it were an Azure
+resource. The deployment Chat path takes the model name from the URL; the
+Responses and v1 Chat paths take it from the request body. In either form,
+`auto` selects a route and a concrete model name targets that model directly.
+The Router checks the client's `api-key` header against the listener's
+`api_keys` when they are set, and removes the header before provider dispatch.
+
+```bash
+curl -sS 'http://localhost:8899/openai/deployments/auto/chat/completions?api-version=2024-10-21' \
+  -H 'Content-Type: application/json' \
+  -H 'api-key: YOUR-LISTENER-KEY' \
+  -d '{"messages":[{"role":"user","content":"Explain semantic routing in one paragraph."}]}'
+```
+
+For GitHub Copilot CLI, set `COPILOT_PROVIDER_TYPE=azure`, point
+`COPILOT_PROVIDER_BASE_URL` at the listener, and set
+`COPILOT_PROVIDER_WIRE_MODEL` to the Router model name. With
+`COPILOT_PROVIDER_WIRE_API=responses`, the CLI uses `/openai/v1/responses`, or
+`/openai/responses` when `COPILOT_PROVIDER_AZURE_API_VERSION` is set. The
+supported Chat paths are `/openai/v1/chat/completions` and the deployment
+route shown above. The Router accepts Copilot's `reasoning.summary` on Responses
+turns. It forwards the setting to a Responses backend. With a Chat Completions
+or Messages backend, the turn still runs, but the summary request is dropped
+and reported in `x-vsr-protocol-warnings`.
+
 Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
+
+## Routing errors
+
+When the Router cannot route a request, it answers the request itself and calls
+no backend. The error uses the client's protocol. In OpenAI Chat Completions and
+Responses errors, `error.code` is a stable reason code and `error.message` a
+short message. Apart from the budget errors, the message names no model,
+decision, or request content:
+
+```json
+{"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
+```
+
+| Code | Status | `error.type` | Meaning |
+| --- | --- | --- | --- |
+| `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
+| `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. An auto alias or entrypoint falls back to `providers.defaults.model`; a Looper alias such as `vllm-sr/flow` evaluates only its algorithm's decisions and has no fallback. |
+| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
+| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
+| `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
+
+The Router logs each of these failures at `WARN`, under the request's
+`x-request-id`, with the code and its own reason: the model the request named,
+the recipe and decision it reached, and the error. Anthropic Messages clients
+get the same status and message in Anthropic's error envelope, which has no
+code field.
 
 ## Request budget errors
 
@@ -158,7 +219,7 @@ limits. If all candidates fail only the budget check, it returns HTTP 400:
 | `max_output_tokens_exceeded` | The requested output exceeds the configured model limit. |
 
 Missing capabilities, unknown limits, unavailable selection evidence, and mixed
-failures retain their existing selection-error behavior. Budget checks do not
+failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
 truncate requests by themselves; opt into
 [context compression](../tutorials/plugin/context-compression.md) when appropriate.
 

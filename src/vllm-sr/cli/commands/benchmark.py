@@ -10,8 +10,14 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import click
+from click.core import ParameterSource
 
 from cli.commands.benchmark_experiments import experiment
+from cli.commands.benchmark_preparations import (
+    preparation_path,
+    prepare_remote_dataset,
+    prepare_remote_datasets,
+)
 from cli.runtime_stack import resolve_runtime_stack
 from cli.sr_bench import setup, sources
 from cli.sr_bench.client import Client
@@ -89,6 +95,7 @@ def benchmark(ctx, url, store, no_autostart):
             )
         client.headers["Authorization"] = "Bearer " + token_file.read_text().strip()
     ctx.obj = client
+    ctx.meta["benchmark_explicit_url"] = explicit_url
 
 
 @benchmark.command("catalog")
@@ -135,13 +142,39 @@ def dataset():
 
 
 @dataset.command("prepare")
-@click.option("--benchmark", "benchmark_id", required=True)
+@click.option(
+    "--benchmark",
+    "benchmark_ids",
+    required=True,
+    multiple=True,
+    help="Benchmark ID; repeat to prepare a shared collection.",
+)
 @click.option(
     "--profile", type=click.Choice(["smoke", "quick", "standard"]), default="quick"
 )
 @click.option("--source-path", type=click.Path(path_type=Path))
+@click.option(
+    "--local",
+    is_flag=True,
+    help="Prepare on this host; required for source files and history options.",
+)
+@click.option(
+    "--no-wait",
+    is_flag=True,
+    help="Return the shared service preparation job immediately.",
+)
 @click.option("--revision")
 @click.option("--seed", default=20260918, type=int)
+@click.option(
+    "--source-partition",
+    help="Frozen upstream partition for native task identity; never an evaluation split.",
+)
+@click.option("--exclusion-snapshot", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--evaluation-role",
+    type=click.Choice(["holdout", "retest"]),
+    help="Explicit family role; retest is never selected automatically.",
+)
 @click.option(
     "--limit",
     type=int,
@@ -149,8 +182,64 @@ def dataset():
 )
 @click.pass_obj
 @guarded
-def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, limit):
-    """Download or read a pinned source and freeze a reusable dataset."""
+def dataset_prepare(
+    client,
+    benchmark_ids,
+    profile,
+    source_path,
+    revision,
+    seed,
+    limit,
+    source_partition,
+    exclusion_snapshot,
+    evaluation_role,
+    local,
+    no_wait,
+):
+    """Download and freeze a dataset through the shared service by default."""
+    local_options = (
+        source_path,
+        revision,
+        source_partition,
+        exclusion_snapshot,
+        evaluation_role,
+    )
+    if len(benchmark_ids) > 1:
+        if (
+            local
+            or limit is not None
+            or any(value is not None for value in local_options)
+        ):
+            raise ValueError(
+                "Multiple benchmarks require shared collection preparation; "
+                "--local, --limit, source, and history options are not supported"
+            )
+        if (
+            click.get_current_context().get_parameter_source("seed")
+            == ParameterSource.DEFAULT
+        ):
+            seed = None
+        output(prepare_remote_datasets(client, benchmark_ids, profile, seed, no_wait))
+        return
+    benchmark_id = benchmark_ids[0]
+    if not local:
+        if any(value is not None for value in local_options):
+            raise ValueError(
+                "Source files, revisions, partitions, and history options require --local; "
+                "local files are not uploaded to the service"
+            )
+        output(
+            prepare_remote_dataset(client, benchmark_id, profile, seed, limit, no_wait)
+        )
+        return
+    if click.get_current_context().meta.get("benchmark_explicit_url"):
+        raise ValueError(
+            "--local cannot be combined with --url or SR_BENCH_URL; unset the service URL to prepare locally"
+        )
+    if no_wait:
+        raise ValueError(
+            "--no-wait requires shared service preparation; remove --local"
+        )
     kwargs = {
         "benchmark": benchmark_id,
         "profile": profile,
@@ -161,7 +250,59 @@ def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, 
     }
     if limit is not None:
         kwargs["limit"] = limit
+    for key, value in {
+        "source_partition": source_partition,
+        "exclusion_snapshot": exclusion_snapshot,
+        "evaluation_role": evaluation_role,
+    }.items():
+        if value is not None:
+            kwargs[key] = value
     output(sources.prepare_dataset(**kwargs))
+
+
+@dataset.command("options")
+@click.pass_obj
+@guarded
+def dataset_options(client):
+    """List downloadable sources, profiles, access notes, and dependencies."""
+    output(client.request("GET", "/dataset-preparations/options"))
+
+
+@dataset.command("preparations")
+@click.argument("preparation_id", required=False)
+@click.pass_obj
+@guarded
+def dataset_preparations(client, preparation_id):
+    """List shared download jobs or inspect one preparation by ID."""
+    path = (
+        preparation_path(preparation_id) if preparation_id else "/dataset-preparations"
+    )
+    output(client.request("GET", path))
+
+
+@dataset.command("exclusions")
+@click.option(
+    "--dataset",
+    "dataset_ids",
+    multiple=True,
+    help="Named prepared dataset whose entire membership is reserved.",
+)
+@click.option(
+    "--run",
+    "run_ids",
+    multiple=True,
+    help="Named frozen run whose entire planned membership is reserved.",
+)
+@click.option("--output", "destination", required=True, type=click.Path(path_type=Path))
+@click.pass_obj
+@guarded
+def dataset_exclusions(client, dataset_ids, run_ids, destination):
+    """Freeze finite named history without inspecting outcomes or running models."""
+    from cli.sr_bench.history_exclusions import compile_snapshot  # noqa: PLC0415
+    from cli.sr_bench.history_snapshot import save_snapshot  # noqa: PLC0415
+
+    snapshot = compile_snapshot(client.store, dataset_ids=dataset_ids, run_ids=run_ids)
+    output(save_snapshot(snapshot, destination))
 
 
 @dataset.command("combine")

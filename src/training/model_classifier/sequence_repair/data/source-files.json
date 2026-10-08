@@ -166,7 +166,7 @@
     "role": "historical exposure screening"
   },
   {
-    "repo": "LLM-Semantic-Router/category-classifier-supplement",
+    "repo": "vllm-sr/category-classifier-supplement",
     "revision": "c51aed0d3a83a548270e835187cee30615188e60",
     "file": "data/train-00000-of-00001.parquet",
     "sha256": "bf5c5e52f9c58f25d0e2a9bc7d23e401db20fde8fac6dece364a6820ed44b7d8",

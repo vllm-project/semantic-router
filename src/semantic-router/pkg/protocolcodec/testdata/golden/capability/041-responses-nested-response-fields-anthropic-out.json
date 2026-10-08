@@ -32,6 +32,10 @@
           {
             "field": "output.status",
             "action": "dropped"
+          },
+          {
+            "field": "usage",
+            "action": "dropped"
           }
         ]
       }

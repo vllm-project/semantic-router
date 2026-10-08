@@ -471,6 +471,70 @@ def test_dataset_http_is_authenticated_read_only_and_compose_requires_write(
         service.server_close()
 
 
+@pytest.mark.parametrize(
+    "unsupported",
+    [
+        {"exclude_case_ids": ["mmlu-pro/one"]},
+        {"exclude_run_ids": ["run-development"]},
+        {"requested_counts": {"mmlu-pro": 1}},
+    ],
+)
+def test_compose_http_rejects_unknown_fields_without_publishing(
+    tmp_path, monkeypatch, unsupported
+):
+    store = Store(tmp_path / "store")
+    selected = [_case("mmlu-pro/one"), _case("mmlu-pro/two")]
+    manifest = _dataset(
+        store.root, [*selected, _case("gpqa-diamond/one", "gpqa-diamond")]
+    )
+    service = Server(("127.0.0.1", 0), store, "dataset-token")
+    monkeypatch.setattr(
+        service.engine,
+        "start",
+        lambda *a, **k: pytest.fail("Composition must never start a run"),
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{service.server_port}{PREFIX}/datasets/compose"
+    headers = {
+        "Authorization": "Bearer dataset-token",
+        "X-SR-Bench-Actor-ID": "writer",
+        "X-SR-Bench-Actor-Role": "write",
+    }
+    body = {"dataset_ids": [manifest["id"]], "benchmarks": ["mmlu-pro"]}
+    before = {
+        path: path.read_bytes()
+        for path in (store.root / "datasets").rglob("*")
+        if path.is_file()
+    }
+    try:
+        response = requests.post(
+            url, headers=headers, json={**body, **unsupported}, timeout=2
+        )
+        assert response.status_code == 400
+        assert response.json()["error"] == "Unsupported dataset compose fields"
+        assert {
+            path: path.read_bytes()
+            for path in (store.root / "datasets").rglob("*")
+            if path.is_file()
+        } == before
+
+        response = requests.post(url, headers=headers, json=body, timeout=2)
+        assert response.status_code == 200
+        composed = response.json()["dataset"]
+        assert composed["id"] != manifest["id"]
+        assert composed["case_count"] == len(selected)
+        assert composed["benchmarks"] == ["mmlu-pro"]
+        assert [
+            json.loads(line) for line in Path(composed["path"]).read_text().splitlines()
+        ] == selected
+        assert store.list() == []
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=2)
+
+
 def test_default_selection_proves_full_content_and_excludes_custom_subsets(tmp_path):
     first = _dataset(tmp_path, [_case("mmlu")])
     bundle = _dataset(tmp_path, [_case("gpqa", "gpqa-diamond"), _case("mmlu")])

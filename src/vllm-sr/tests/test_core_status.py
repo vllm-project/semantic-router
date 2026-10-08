@@ -165,8 +165,6 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
         "_managed_container_statuses",
         lambda _stack_layout: dict.fromkeys(managed_names, "not found"),
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_remove_network",
@@ -184,7 +182,7 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
     ]
 
 
-def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
+def test_stop_keeps_network_with_external_endpoints(monkeypatch, capsys):
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
@@ -201,20 +199,17 @@ def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
         "_managed_container_statuses",
         lambda _stack_layout: dict.fromkeys(managed_names, "not found"),
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_remove_network",
         lambda _name: (1, "", "network has active endpoints"),
     )
 
-    with pytest.raises(RuntimeError, match=stack_layout.network_name):
-        core.stop_vllm_sr()
+    core.stop_vllm_sr()
 
     captured = capsys.readouterr()
-    assert "Nothing to stop" not in captured.out
-    assert "network has active endpoints" in captured.err
+    assert captured.out == "Nothing to stop.\n"
+    assert f"Keeping network {stack_layout.network_name}" in captured.err
 
 
 def test_stop_reports_success_when_only_dashboard_exists(monkeypatch, capsys):
@@ -234,8 +229,6 @@ def test_stop_reports_success_when_only_dashboard_exists(monkeypatch, capsys):
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(core, "container_stop_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
@@ -264,8 +257,6 @@ def test_stop_does_not_report_success_when_container_removal_fails(monkeypatch, 
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(core, "container_stop_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_container", lambda _name: False)
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
@@ -281,7 +272,7 @@ def test_stop_does_not_report_success_when_container_removal_fails(monkeypatch, 
     assert "✓ vLLM Semantic Router stopped" not in captured.out
 
 
-def test_stop_does_not_report_success_when_network_removal_fails(monkeypatch, capsys):
+def test_stop_reports_success_when_external_backend_keeps_network(monkeypatch, capsys):
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
@@ -298,8 +289,6 @@ def test_stop_does_not_report_success_when_network_removal_fails(monkeypatch, ca
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(core, "container_stop_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_container", lambda _name: True)
     monkeypatch.setattr(
@@ -308,12 +297,42 @@ def test_stop_does_not_report_success_when_network_removal_fails(monkeypatch, ca
         lambda _name: (1, "", "network has active endpoints"),
     )
 
+    core.stop_vllm_sr()
+
+    captured = capsys.readouterr()
+    assert captured.out == "✓ vLLM Semantic Router stopped\n"
+    assert f"Keeping network {stack_layout.network_name}" in captured.err
+
+
+def test_stop_propagates_other_network_removal_failures(monkeypatch, capsys):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    managed_names = (
+        *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
+        stack_layout.grafana_container_name,
+        stack_layout.prometheus_container_name,
+        stack_layout.jaeger_container_name,
+        *stack_layout.storage_container_names,
+    )
+
+    monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
+    monkeypatch.setattr(
+        core,
+        "_managed_container_statuses",
+        lambda _stack_layout: dict.fromkeys(managed_names, "not found"),
+    )
+    monkeypatch.setattr(
+        core,
+        "container_remove_network",
+        lambda _name: (1, "", "permission denied"),
+    )
+
     with pytest.raises(RuntimeError, match=stack_layout.network_name):
         core.stop_vllm_sr()
 
     captured = capsys.readouterr()
-    assert "✓ vLLM Semantic Router stopped" not in captured.out
-    assert "network has active endpoints" in captured.err
+    assert "Nothing to stop" not in captured.out
+    assert "permission denied" in captured.err
 
 
 def test_show_logs_reports_empty_result_on_stdout(monkeypatch, capsys):
@@ -426,8 +445,6 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_stop_container",
@@ -439,11 +456,6 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
         lambda name: removed.append(name) or True,
     )
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
-    monkeypatch.setattr(
-        core,
-        "container_network_disconnect_if_attached",
-        lambda _network, _name: (0, "", ""),
-    )
 
 
 def _all_managed_names(stack_layout):

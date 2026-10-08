@@ -1,14 +1,14 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType, SafetySignal } from '../types/config'
+import type {
+  DecisionConditionType,
+  DecisionModelSignal,
+  Listener,
+  SafetySignal,
+} from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
-export interface ListenerConfig {
-  name: string
-  address: string
-  port: number
-  timeout?: string
-}
+export type ListenerConfig = Listener
 
 export interface VLLMEndpoint {
   name: string
@@ -25,8 +25,6 @@ export interface VLLMEndpoint {
 
 export interface ModelConfig {
   model_id: string
-  use_modernbert?: boolean
-  use_mmbert_32k?: boolean
   threshold: number
   use_cpu: boolean
   use_contrastive?: boolean
@@ -129,6 +127,17 @@ export interface ProviderReliability {
   health_check_path?: string
   health_check_interval?: string
   health_check_timeout?: string
+  connect_timeout?: string
+  total_timeout?: string
+  idle_timeout?: string
+  per_try_timeout?: string
+  first_byte_timeout?: string
+  retriable_status_codes?: number[]
+  retry_back_off_base?: string
+  retry_back_off_max?: string
+  retry_after_max?: string
+  retry_budget_percent?: number
+  retry_budget_min_concurrency?: number
 }
 
 export interface LoRAAdapter {
@@ -267,9 +276,8 @@ export interface DecisionCondition {
   conditions?: DecisionCondition[]
 }
 
-export interface DecisionRuleSet {
-  operator?: 'AND' | 'OR' | 'NOT'
-  conditions?: DecisionCondition[]
+// The root is a combination, a single leaf condition, or empty (unconditional).
+export interface DecisionRuleSet extends DecisionCondition {
   on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
@@ -298,6 +306,8 @@ export interface DecisionConfig {
   algorithm?: Record<string, unknown>
   action?: { type: string; destination: string }
   adaptations?: Record<string, unknown>
+  reliability?: Record<string, unknown>
+  fallback?: Record<string, unknown>
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
   emits?: Array<Record<string, unknown>>
@@ -457,7 +467,6 @@ export interface FactCheckModelModuleConfig {
   model_ref?: string
   threshold?: number
   use_cpu?: boolean
-  use_mmbert_32k?: boolean
 }
 
 export interface HallucinationDetectorModuleConfig {
@@ -468,22 +477,12 @@ export interface HallucinationDetectorModuleConfig {
   min_span_length?: number
   min_span_confidence?: number
   context_window_size?: number
-  enable_nli_filtering?: boolean
-  nli_entailment_threshold?: number
-}
-
-export interface NLIExplainerModuleConfig {
-  model_id?: string
-  model_ref?: string
-  threshold?: number
-  use_cpu?: boolean
 }
 
 export interface HallucinationMitigationConfig {
   enabled?: boolean
   fact_check_model?: FactCheckModelModuleConfig
   hallucination_model?: HallucinationDetectorModuleConfig
-  nli_model?: NLIExplainerModuleConfig
 }
 
 export interface FeedbackDetectorConfig {
@@ -491,12 +490,10 @@ export interface FeedbackDetectorConfig {
   model_id?: string
   threshold?: number
   use_cpu?: boolean
-  use_mmbert_32k?: boolean
-  use_modernbert?: boolean
 }
 
 export interface EmbeddingOptimizationConfig {
-  backend?: 'candle' | 'openvino' | 'openai_compatible'
+  backend?: 'model_runtime' | 'openai_compatible'
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -518,10 +515,8 @@ export interface EmbeddingEndpointConfig {
 
 export interface EmbeddingModelsConfig {
   qwen3_model_path?: string
-  gemma_model_path?: string
   mmbert_model_path?: string
   multimodal_model_path?: string
-  bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
   endpoint?: EmbeddingEndpointConfig
@@ -706,12 +701,14 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
+  decision_model?: string
+  safety?: string
+  hazard?: string
   prompt_guard?: string
   domain_classifier?: string
   pii_classifier?: string
   fact_check_classifier?: string
   hallucination_detector?: string
-  hallucination_explainer?: string
   feedback_detector?: string
 }
 
@@ -767,7 +764,6 @@ export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
-  explainer?: NLIExplainerModuleConfig
 }
 
 export interface CanonicalEmbeddingCatalogConfig {
@@ -907,6 +903,7 @@ export interface ConfigSignals {
   conversation?: ConversationSignal[]
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
+  decision?: DecisionModelSignal[]
 }
 
 export interface ConfigProjections {
@@ -1072,7 +1069,10 @@ export interface KeywordSignal {
 export interface EmbeddingSignal {
   name: string
   threshold: number
-  candidates: string[]
+  candidates?: string[]
+  image_candidates?: string[]
+  negative_candidates?: string[]
+  negative_image_candidates?: string[]
   aggregation_method?: string
   query_modality?: 'text' | 'image' | 'audio'
 }
@@ -1202,7 +1202,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean
   description?: string
 }
 
@@ -1394,6 +1393,8 @@ export interface DecisionFormState {
   action: Record<string, unknown>
   algorithm?: Record<string, unknown>
   adaptations: Record<string, unknown>
+  reliability: Record<string, unknown>
+  fallback: Record<string, unknown>
   declarative: Record<string, unknown>
 }
 

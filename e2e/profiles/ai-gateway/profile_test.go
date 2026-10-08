@@ -1,9 +1,11 @@
 package aigateway
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -18,7 +20,8 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 		t.Fatalf("plugin feature recipe must use only its explicit keyword signals: %#v", signals)
 	}
 	names := []string{
-		"plugin_request_mutations", "tool_selection_add_weather", "tool_selection_add_calc",
+		"plugin_request_mutations", "tools_passthrough", "tools_filtered", "tools_none",
+		"tool_selection_add_weather", "tool_selection_add_calc",
 		"tool_selection_filter", "tool_selection_filter_threshold", "tool_selection_add_topk_one",
 		"tool_selection_with_system_prompt",
 	}
@@ -35,6 +38,27 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 		featureSignal := profileNamed(t, signals["keywords"], name)
 		if !reflect.DeepEqual(originalSignal, featureSignal) {
 			t.Fatalf("feature recipe changed keyword matching for %s", name)
+		}
+	}
+}
+
+func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolSelection(t *testing.T) {
+	config := profileConfig(t)
+	baseline := profileMap(t, config, "routing")
+	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-pii-precedence"), "routing")
+	signals := profileMap(t, routing, "signals")
+	if len(signals) != 2 || len(routing["decisions"].([]any)) != 2 {
+		t.Fatalf("PII precedence recipe must hold only the PII block and one tool selection: %#v", routing)
+	}
+	for _, name := range []string{"block_pii", "tool_selection_add_weather_decision"} {
+		if !reflect.DeepEqual(profileNamed(t, baseline["decisions"], name), profileNamed(t, routing["decisions"], name)) {
+			t.Fatalf("PII precedence recipe changed the baseline decision %s", name)
+		}
+	}
+	for signalType, name := range map[string]string{"keywords": "tool_selection_add_weather", "pii": "pii_deny_all"} {
+		original := profileNamed(t, profileMap(t, baseline, "signals")[signalType], name)
+		if !reflect.DeepEqual(original, profileNamed(t, signals[signalType], name)) {
+			t.Fatalf("PII precedence recipe changed the baseline signal %s", name)
 		}
 	}
 }
@@ -70,9 +94,31 @@ func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 	}
 }
 
+func TestExactCacheRecipeKeepsMultilingualNegationOnAnExactOnlyPolicy(t *testing.T) {
+	config := profileConfig(t)
+	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-cache-exact"), "routing")
+	if routing["signals"] != nil || len(routing["decisions"].([]any)) != 1 {
+		t.Fatal("exact-cache fixture must have one unconditional decision")
+	}
+	decision := profileNamed(t, routing["decisions"], "e2e_cache_exact_decision")
+	if !reflect.DeepEqual(decision["rules"], map[string]any{"operator": "AND"}) {
+		t.Fatal("exact-cache fixture must select without classifier signals")
+	}
+	plugins := decision["plugins"].([]any)
+	if len(plugins) != 1 {
+		t.Fatalf("exact-cache fixture plugins = %d, want one", len(plugins))
+	}
+	plugin := plugins[0].(map[string]any)
+	configuration := profileMap(t, plugin, "configuration")
+	if plugin["type"] != "response_cache" || configuration["enabled"] != true ||
+		configuration["mode"] != "exact" || configuration["scope"] != "global" {
+		t.Fatalf("multilingual negation fixture must exercise enabled exact cache: %#v", plugin)
+	}
+}
+
 func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 	config := profileConfig(t)
-	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-cache", "e2e-domain", "e2e-fallback"} {
+	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-pii-precedence", "e2e-cache", "e2e-cache-exact", "e2e-domain", "e2e-fallback"} {
 		found := false
 		for _, raw := range config["entrypoints"].([]any) {
 			entrypoint := raw.(map[string]any)
@@ -90,8 +136,9 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 		priority                     int
 		threshold                    float64
 	}{
-		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.5},
-		{"block_pii", "pii", "pii_deny_all", 999, 0.7},
+		// Vela 2.0 0.3B's thresholds for Vela 1.0's 0.5 and 0.7.
+		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.75},
+		{"block_pii", "pii", "pii_deny_all", 999, 0.01},
 	} {
 		decision := profileNamed(t, routing["decisions"], test.name)
 		signal := profileNamed(t, profileMap(t, routing, "signals")[test.signalType], test.signalName)
@@ -162,13 +209,43 @@ func TestGuardProfileMatchesCanonicalPublishedOperatingPoint(t *testing.T) {
 	if err := yaml.Unmarshal(raw, &canonical); err != nil {
 		t.Fatal(err)
 	}
-	modules := profileMap(t, profileMap(t, profileMap(t, canonical, "global"), "model_catalog"), "modules")
-	guard := profileMap(t, modules, "prompt_guard")
+	catalog := profileMap(t, profileMap(t, canonical, "global"), "model_catalog")
+	guard := profileMap(t, profileMap(t, catalog, "modules"), "prompt_guard")
+	want, ok := guard["threshold"]
+	if !ok {
+		want = decisionModelGuardThreshold(t, profileMap(t, catalog, "system")["decision_model"])
+	}
 	profile := profileMap(t, profileMap(t, profileConfig(t), "routing"), "signals")
 	signal := profileNamed(t, profile["jailbreak"], "jailbreak_standard")
-	if signal["threshold"] != guard["threshold"] {
-		t.Fatalf("Guard operating point differs from canonical published configuration: profile=%v canonical=%v", signal["threshold"], guard["threshold"])
+	if signal["threshold"] != want {
+		t.Fatalf("Guard operating point differs from canonical published configuration: profile=%v canonical=%v", signal["threshold"], want)
 	}
+}
+
+// decisionModelGuardThreshold is the prompt guard threshold published for a
+// Vela 2.0 decision model, which a guard that sets no threshold runs at.
+func decisionModelGuardThreshold(t *testing.T, model any) any {
+	t.Helper()
+	name, _ := model.(string)
+	size, ok := strings.CutPrefix(name, "Vela-2.0-")
+	if !ok {
+		t.Fatalf("canonical decision_model %v is not a Vela 2.0 size", model)
+	}
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "src", "model-runtime", "docs", "records", "vela2-decision-model-sizes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record struct {
+		ModuleThresholds map[string]map[string]float64 `json:"module_thresholds"`
+	}
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatal(err)
+	}
+	threshold, ok := record.ModuleThresholds[size]["jailbreak"]
+	if !ok {
+		t.Fatalf("no published prompt guard threshold for %s", name)
+	}
+	return threshold
 }
 
 func profileConfig(t *testing.T) map[string]any {

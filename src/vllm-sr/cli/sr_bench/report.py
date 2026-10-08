@@ -5,19 +5,23 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
+from collections.abc import Collection
 from datetime import datetime
 from fractions import Fraction
+from itertools import pairwise
 from statistics import mean
+from typing import Any
 
 from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
-from .contracts import BENCHMARK_WEIGHTS, planned_cells
+from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
 from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 COMPARABLE_STATUSES = frozenset({"completed", "failed"})
+MIN_CONTINUITY_REQUESTS = 2
 
 
 def percentile(values, q):
@@ -49,9 +53,18 @@ def paired_conservative_interval(delta, groups, weights, alpha=0.05):
 
 
 def sum_cost(calls):
-    if not calls or any(c.get("cost_usd") is None for c in calls):
+    if not calls or any(not _known_cost(c.get("cost_usd")) for c in calls):
         return None
     return sum(c["cost_usd"] for c in calls)
+
+
+def _known_cost(value):
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
 
 
 def output_diagnostics(results, subject_calls, total):
@@ -88,7 +101,81 @@ def output_diagnostics(results, subject_calls, total):
     }
 
 
-def metric(target_id, results, calls, total):
+def _observed_model(call: dict) -> str | None:
+    if call.get("selected_model"):
+        return call["selected_model"]
+    return call.get("model") if call.get("status") == "completed" else None
+
+
+def _changes(values: list[str]) -> int:
+    return sum(before != after for before, after in pairwise(values))
+
+
+def _task_accuracy(case_ids: list[str], correct: set[str]) -> float | None:
+    if not case_ids:
+        return None
+    return sum(case_id in correct for case_id in case_ids) / len(case_ids)
+
+
+def continuity(
+    results: list[dict[str, Any]],
+    subject_calls: list[dict[str, Any]],
+    session_mode: str = STATELESS,
+) -> dict[str, Any]:
+    """Report model and decision changes within each task as facts, not penalties."""
+    tasks: dict[str, list[dict]] = {}
+    for call in subject_calls:
+        if call.get("case_id"):
+            tasks.setdefault(call["case_id"], []).append(call)
+    correct = {
+        r.get("case_id")
+        for r in results
+        if r["status"] == "completed" and r.get("correct") is True
+    }
+    switches: dict[str, int] = {}
+    decision_changed = unknown = multi_inference = 0
+    for case_id, requests in tasks.items():
+        if len(requests) < MIN_CONTINUITY_REQUESTS:
+            continue
+        # One request with several inference calls hides its own model sequence.
+        if any((c.get("inference_call_count") or 0) > 1 for c in requests):
+            multi_inference += 1
+            continue
+        models = [m for m in map(_observed_model, requests) if m]
+        unknown += len(requests) - len(models)
+        switches[case_id] = _changes(models)
+        decision_changed += (
+            _changes([c["decision"] for c in requests if c.get("decision")]) > 0
+        )
+    switched = [case_id for case_id, count in switches.items() if count]
+    unswitched = [case_id for case_id, count in switches.items() if not count]
+    return {
+        "session_mode": session_mode,
+        "multi_request_tasks": len(switches),
+        "switched_tasks": len(switched),
+        "switched_accuracy": _task_accuracy(switched, correct),
+        "unswitched_tasks": len(unswitched),
+        "unswitched_accuracy": _task_accuracy(unswitched, correct),
+        "model_switches": sum(switches.values()),
+        "mean_switches_per_task": (
+            sum(switches.values()) / len(switches) if switches else None
+        ),
+        "max_switches_per_task": max(switches.values(), default=None),
+        "decision_changed_tasks": decision_changed,
+        "unknown_model_requests": unknown,
+        "multi_inference_tasks": multi_inference,
+    }
+
+
+def metric(
+    target_id: str,
+    results: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+    total: int,
+    *,
+    planned_case_ids: Collection[str] | None = None,
+    session_mode: str = STATELESS,
+) -> dict[str, Any]:
     completed = [r for r in results if r["status"] == "completed"]
     scored = [r for r in completed if isinstance(r.get("correct"), bool)]
     correct = sum(r["correct"] for r in scored)
@@ -98,6 +185,10 @@ def metric(target_id, results, calls, total):
     subject_coverage_complete = len(receipted_cases) == total and all(
         r.get("case_id") in receipted_cases for r in results
     )
+    if planned_case_ids is not None:
+        subject_coverage_complete = (
+            subject_coverage_complete and receipted_cases == set(planned_case_ids)
+        )
     usage_complete = (
         bool(subject)
         and subject_coverage_complete
@@ -106,7 +197,7 @@ def metric(target_id, results, calls, total):
     cost_complete = (
         bool(subject)
         and subject_coverage_complete
-        and all(c.get("cost_usd") is not None for c in subject)
+        and all(_known_cost(c.get("cost_usd")) for c in subject)
     )
     tokens = (
         {k: sum((c.get("usage") or {}).get(k, 0) for c in subject) for k in BUCKETS}
@@ -118,7 +209,7 @@ def metric(target_id, results, calls, total):
         for r in completed
         if r.get("latency_s") is not None
     ]
-    known = sum(c.get("cost_usd") or 0 for c in subject)
+    known = sum(c["cost_usd"] for c in subject if _known_cost(c.get("cost_usd")))
     return {
         "id": target_id,
         "total": total,
@@ -155,18 +246,14 @@ def metric(target_id, results, calls, total):
         ),
         "request_count": len(subject),
         "selected_models": dict(
-            Counter(
-                c.get("selected_model") or c.get("model")
-                for c in subject
-                if c.get("selected_model")
-                or (c.get("status") == "completed" and c.get("model"))
-            )
+            Counter(model for model in map(_observed_model, subject) if model)
         ),
         "pending_selection_count": sum(
             c.get("status") in {"sent", "running"} and not c.get("selected_model")
             for c in subject
         ),
         "decisions": dict(Counter(c["decision"] for c in subject if c.get("decision"))),
+        "continuity": continuity(results, subject, session_mode),
         "queue_wait_p50_s": percentile(
             [r["queue_wait_s"] for r in results if r.get("queue_wait_s") is not None],
             0.5,
@@ -206,7 +293,21 @@ def make_report(store, run_id):
         }
         rows = [r for r in results if r["target_id"] == target["id"]]
         tcalls = [c for c in calls if c["target_id"] == target["id"]]
-        metrics.append(metric(target["id"], rows, tcalls, len(selected_ids)))
+        session_mode: str = (
+            target.get("session_mode", STATELESS)
+            if manifest["mode"] == "live"
+            else STATELESS
+        )
+        metrics.append(
+            metric(
+                target["id"],
+                rows,
+                tcalls,
+                len(selected_ids),
+                planned_case_ids=selected_ids,
+                session_mode=session_mode,
+            )
+        )
         for benchmark in sorted({c["benchmark"] for c in manifest["cases"]}):
             ids = {
                 c["id"]
@@ -224,6 +325,8 @@ def make_report(store, run_id):
                         [r for r in rows if r["case_id"] in ids],
                         [c for c in tcalls if c["case_id"] in ids],
                         len(ids),
+                        planned_case_ids=ids,
+                        session_mode=session_mode,
                     ),
                 }
             )
@@ -342,9 +445,9 @@ def make_report(store, run_id):
         limitations.append(
             "Preview evaluates routing only; it does not measure answer quality."
         )
-    if any(not m["cost_complete"] for m in metrics):
+    if any(m["total_spend_usd"] is None for m in metrics):
         limitations.append(
-            "Some call costs are unknown; cost savings cannot be claimed for those targets."
+            "Some subject or auxiliary call costs are unknown; total cost savings cannot be claimed for those targets."
         )
     if run["status"] != "completed":
         limitations.append(
@@ -376,6 +479,22 @@ def make_report(store, run_id):
     if any(c["benchmark"] == "gpqa-diamond" for c in manifest["cases"]):
         limitations.append(
             "GPQA labels were previously seen in this project; this is a retest, not an unseen holdout claim."
+        )
+    preparation = (manifest.get("dataset") or {}).get("preparation", {})
+    if any(entry["history_snapshot"] is not None for entry in preparation.values()):
+        limitations.append(
+            "History exclusions cover only the named frozen dataset/run memberships. They do not certify complete prior generation, browsing, human exposure or upstream contamination history."
+        )
+    retests = sorted(
+        family
+        for family, entry in preparation.items()
+        if entry["evaluation_role"] == "retest"
+    )
+    if retests:
+        limitations.append(
+            "Explicit retest families included in this report: "
+            + ", ".join(retests)
+            + ". Aggregate scores including them are not an unseen holdout aggregate."
         )
     if manifest["cost_policy"] == "require_priced":
         limitations.append(
@@ -495,7 +614,7 @@ def _exact_quality(report, target, weights):
 
 
 def _strongest_single(singles, report, weights):
-    """Compare frozen weighted counts exactly; never favor a costly quality tie."""
+    """Break exact quality ties by complete subject plus auxiliary spend."""
     metrics = {row["id"]: row for row in report["summary"]["targets"]}
     quality = {
         target["id"]: _exact_quality(report, target["id"], weights)
@@ -506,17 +625,23 @@ def _strongest_single(singles, report, weights):
 
     def priced(target):
         item = metrics[target]
-        return item["cost_complete"] and item["cost_usd"] is not None
+        return item["total_spend_usd"] is not None
 
     best = min(
         tied,
         key=lambda target: (
             not priced(target),
-            metrics[target]["cost_usd"] if priced(target) else math.inf,
+            metrics[target]["total_spend_usd"] if priced(target) else math.inf,
             target,
         ),
     )
     return best, tied, all(priced(target) for target in tied)
+
+
+def _cost_saving_percent(baseline, candidate, eligible):
+    if eligible and baseline is not None and baseline > 0 and candidate is not None:
+        return (1 - candidate / baseline) * 100
+    return None
 
 
 class ComparisonValidator:
@@ -613,6 +738,13 @@ def compare(store, baseline_id, candidate_id):
     )
     base = by_target[best]
     base_metric = metric_by_id[best]
+    priced_policy = bm["cost_policy"] == cm["cost_policy"] == "require_priced"
+    cost_eligible = tied_costs_complete and priced_policy
+    baseline_cost_reason = (
+        None
+        if tied_costs_complete
+        else "At least one strongest single-model reference has incomplete total spend (subject plus auxiliary); the cheapest strongest baseline cannot be established."
+    )
     comparisons = []
     for target in cm["targets"]:
         rows = candidate_rows[target["id"]]
@@ -649,17 +781,21 @@ def compare(store, baseline_id, candidate_id):
         )
         bc = base_metric["cost_usd"]
         cc = cand_metric["cost_usd"]
+        total_base = base_metric["total_spend_usd"]
+        total_candidate = cand_metric["total_spend_usd"]
         neutral_base = base_metric["cache_neutral_cost_usd"]
         neutral_candidate = cand_metric["cache_neutral_cost_usd"]
-        savings = (
-            (1 - cc / bc) * 100
-            if bc is not None
-            and bc > 0
-            and cc is not None
-            and tied_costs_complete
-            and bm["cost_policy"] == cm["cost_policy"] == "require_priced"
-            else None
-        )
+        total_cost_reason = baseline_cost_reason
+        if total_cost_reason is None and not priced_policy:
+            total_cost_reason = (
+                "Total cost savings require priced accounting for both runs."
+            )
+        if total_cost_reason is None and total_candidate is None:
+            total_cost_reason = "Candidate total spend is incomplete: every planned subject case and every actual auxiliary call require known costs."
+        if total_cost_reason is None and total_base == 0:
+            total_cost_reason = (
+                "A zero-cost baseline has no defined percentage savings."
+            )
         comparisons.append(
             {
                 "baseline_target_id": best,
@@ -674,21 +810,25 @@ def compare(store, baseline_id, candidate_id):
                 "quality_delta_ci95_method": "weighted-paired-hoeffding",
                 "quality_delta_ci95_qualification": "Case-independent bounded-difference interval with frozen benchmark weights; excludes strongest-baseline-selection, source contamination and tuning-selection uncertainty.",
                 "quality_delta_bootstrap_ci95": [samples[49], samples[1949]],
-                "cost_saving_percent": savings,
-                "baseline_cost_usd": bc,
-                "candidate_cost_usd": cc,
+                "subject_cost_saving_percent": _cost_saving_percent(
+                    bc, cc, cost_eligible
+                ),
+                "baseline_subject_cost_usd": bc,
+                "candidate_subject_cost_usd": cc,
+                "total_cost_saving_percent": _cost_saving_percent(
+                    total_base, total_candidate, cost_eligible
+                ),
+                "baseline_total_cost_usd": total_base,
+                "candidate_total_cost_usd": total_candidate,
+                "baseline_evaluation_cost_usd": base_metric["evaluation_cost_usd"],
+                "candidate_evaluation_cost_usd": cand_metric["evaluation_cost_usd"],
+                "total_cost_comparison_reason": total_cost_reason,
                 "cache_neutral_baseline_cost_usd": neutral_base,
                 "cache_neutral_candidate_cost_usd": neutral_candidate,
-                "cache_neutral_cost_saving_percent": (
-                    (1 - neutral_candidate / neutral_base) * 100
-                    if neutral_base is not None
-                    and neutral_base > 0
-                    and neutral_candidate is not None
-                    and tied_costs_complete
-                    and bm["cost_policy"] == cm["cost_policy"] == "require_priced"
-                    else None
+                "cache_neutral_cost_saving_percent": _cost_saving_percent(
+                    neutral_base, neutral_candidate, cost_eligible
                 ),
-                "cache_neutral_cost_basis": "Counterfactual fresh-input token-equivalent cost against the same selected baseline; excludes cache-read/write discounts and premiums, not measured billing.",
+                "cache_neutral_cost_basis": "Subject-only counterfactual fresh-input token-equivalent cost against the same selected baseline; excludes auxiliary costs and cache-read/write discounts and premiums, not measured billing.",
                 "wins": sum(d > 0 for d in diffs),
                 "losses": sum(d < 0 for d in diffs),
                 "ties": sum(d == 0 for d in diffs),
@@ -713,12 +853,8 @@ def compare(store, baseline_id, candidate_id):
         "baseline_selection_qualification": "This ranks delivered outcomes under the frozen limits, not model capability without execution failures. All single-model targets remain in the ranking, including failed outcomes and unknown costs.",
         "baseline_selected_target_id": best,
         "baseline_tied_best_target_ids": tied,
-        "baseline_tie_policy": "Exact frozen weighted quality; ties prefer the lowest complete known subject cost, then stable target ID. Unknown-cost ties rank after known costs and suppress savings claims.",
+        "baseline_tie_policy": "Exact frozen weighted quality; ties prefer the lowest complete known total spend (subject plus auxiliary), then stable target ID. Unknown-total ties rank after known totals and suppress all savings claims.",
         "baseline_cost_comparison_eligible": tied_costs_complete,
-        "baseline_cost_comparison_reason": (
-            None
-            if tied_costs_complete
-            else "At least one quality-tied best single has incomplete cost; the cheapest strongest baseline cannot be established."
-        ),
+        "baseline_cost_comparison_reason": baseline_cost_reason,
         "comparisons": comparisons,
     }

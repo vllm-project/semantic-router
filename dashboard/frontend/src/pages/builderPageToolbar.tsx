@@ -5,7 +5,7 @@ import type { EditorMode } from '@/types/dsl'
 import styles from './BuilderPage.module.css'
 
 interface BuilderToolbarProps {
-  dirty: boolean
+  unsaved: boolean
   mode: EditorMode
   wasmReady: boolean
   wasmError: string | null
@@ -29,7 +29,7 @@ interface BuilderToolbarProps {
 }
 
 const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
-  dirty,
+  unsaved,
   mode,
   wasmReady,
   wasmError,
@@ -68,7 +68,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
           <rect x="9" y="9" width="5" height="5" rx="1" />
         </svg>
         Config Builder
-        {dirty && (
+        {unsaved && (
           <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>
         )}
       </div>

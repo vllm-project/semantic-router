@@ -7,6 +7,7 @@ import json
 import os
 import threading
 import time
+from contextlib import contextmanager
 from http import HTTPStatus
 
 import requests
@@ -15,7 +16,7 @@ from cli.routing_preview import build_preview_request, case_request_fields
 
 from .activity import CallActivity
 from .adapters import get_adapter
-from .contracts import digest, plan, planned_cells
+from .contracts import SESSION_AWARE, digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
 from .native_output import capacity as native_capacity
 from .native_output import validate_recipes as validate_native_recipes
@@ -27,6 +28,10 @@ from .transport import CallFailure, chat, effective_request
 
 class ReviewedPlanChangedError(ValueError):
     """A new submission differs from its reviewed hash before any dispatch."""
+
+
+class EngineClosedError(RuntimeError):
+    """Shutdown rejected a new attempt before persistence or dispatch."""
 
 
 class Context:
@@ -52,6 +57,11 @@ class Context:
             self.store.root / "runs" / run_id / digest([case["id"], target["id"]])[:24]
         )
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.session_id: str | None = (
+            f"{run_id}-{digest([case['id'], target['id']])[:24]}"
+            if target.get("session_mode") == SESSION_AWARE
+            else None
+        )
 
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
@@ -73,6 +83,7 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
+        session_id: str | None = self.session_id if role == "subject" else None
         if role == "subject" and not any(
             call["role"] == "subject" for call in self.calls
         ):
@@ -155,6 +166,7 @@ class Context:
                     "effective_body": request_body,
                     "extra_body": extra_body,
                 },
+                **({"session_id": session_id} if session_id else {}),
             },
         )
         call_record = {"id": call_id, "role": role}
@@ -169,6 +181,7 @@ class Context:
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
+                session_id=session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -225,6 +238,8 @@ class Engine:
     def __init__(self, store):
         self.store = store
         self.lock = threading.RLock()
+        self._admission = threading.Lock()
+        self._closed = False
         self.cancels = {}
         self.threads = {}
         self.spent = {}
@@ -232,6 +247,40 @@ class Engine:
         self.user_cancelled = set()
         self.first_failures = {}
         self.store.recover()
+
+    def close(self):
+        """Close admission and cancel every admitted worker without joining it."""
+        with self._admission:
+            self._closed = True
+            with self.lock:
+                for cancel in self.cancels.values():
+                    cancel.set()
+
+    @contextmanager
+    def admit_replay(self, owner, request_key):
+        """Hold shutdown admission and the store lock while materializing a replay.
+
+        An existing idempotency key can be reconciled after shutdown. New keys
+        and requests without a key cannot create a run once admission closes.
+        """
+        with self._admission, self.store.lock:
+            if not (request_key and self.store.request(owner, request_key)):
+                self._reject_when_closing()
+            yield
+
+    def _reject_when_closing(self):
+        """A new run is not admitted once shutdown closed admission."""
+        if self._closed:
+            raise EngineClosedError("Evaluation service is shutting down")
+
+    def _admit(self, frozen, owner, request_key):
+        """Under the admission lock, reconcile an existing run or allow creation."""
+        if request_key and (existing := self.store.request(owner, request_key)):
+            if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
+                raise ValueError("idempotency key is already bound to a different plan")
+            return existing
+        self._reject_when_closing()
+        return None
 
     def start(
         self,
@@ -241,26 +290,30 @@ class Engine:
         recovery=False,
         *,
         actor_role="local",
+        manifest_policy=None,
     ):
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest must be an object")
         if manifest.get("recovery") and not recovery:
             raise ValueError("Recovery lineage requires the explicit recovery endpoint")
-        frozen = plan(manifest)
-        with self.store.lock:
-            if request_key and (existing := self.store.request(owner, request_key)):
-                if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
-                    raise ValueError(
-                        "idempotency key is already bound to a different plan"
-                    )
+        frozen = plan(manifest, policy=manifest_policy)
+        with self._admission:
+            if existing := self._admit(frozen, owner, request_key):
                 return existing
-            if (
-                "plan_sha256" in manifest
-                and manifest["plan_sha256"] != frozen["plan_sha256"]
-            ):
-                raise ReviewedPlanChangedError(
-                    "Reviewed plan changed; review a new frozen plan before starting"
-                )
-            provenance = capture_runner(frozen)
-            validate_native_recipes(frozen, provenance)
+        if (
+            "plan_sha256" in manifest
+            and manifest["plan_sha256"] != frozen["plan_sha256"]
+        ):
+            raise ReviewedPlanChangedError(
+                "Reviewed plan changed; review a new frozen plan before starting"
+            )
+        provenance = capture_runner(frozen)
+        validate_native_recipes(frozen, provenance)
+        # Shutdown cannot miss a persisted run awaiting worker registration.
+        # Store.create releases its lock before we take the accounting lock.
+        with self._admission:
+            if existing := self._admit(frozen, owner, request_key):
+                return existing
             run, created = self.store.create(
                 frozen,
                 owner,
@@ -268,14 +321,14 @@ class Engine:
                 provenance=provenance,
                 actor_role=actor_role,
             )
-        if created:
-            cancel = threading.Event()
-            with self.lock:
-                self.cancels[run["id"]] = cancel
+            if created:
+                cancel = threading.Event()
                 worker = threading.Thread(
                     target=self._run, args=(run["id"], frozen, cancel), daemon=True
                 )
-                self.threads[run["id"]] = worker
+                with self.lock:
+                    self.cancels[run["id"]] = cancel
+                    self.threads[run["id"]] = worker
                 worker.start()
         return self.store.get(run["id"])
 

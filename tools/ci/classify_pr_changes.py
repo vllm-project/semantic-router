@@ -21,20 +21,13 @@ from verification_catalog import full_cpu_ids, profile_image_dependencies
 
 PRODUCTION_RELEASE_IMAGES = (
     "dashboard",
-    "extproc",
-    "extproc-rocm",
     "operator",
     "operator-bundle",
     "vllm-sr",
     "vllm-sr-cuda",
     "vllm-sr-rocm",
 )
-NIGHTLY_IMAGES = (
-    "anthropic-shim",
-    *PRODUCTION_RELEASE_IMAGES,
-    "llm-katan",
-    "vllm-sr-sim",
-)
+NIGHTLY_IMAGES = PRODUCTION_RELEASE_IMAGES
 
 
 @dataclass(frozen=True)
@@ -113,7 +106,14 @@ def select_profiles(
     if suppress_expensive and not full:
         return ()
     required = set(full_e2e_profiles()) if full else set()
-    changed_images = set(select_images(changed, field="pr_paths")) - {"extproc"}
+    changed_images = {
+        name
+        for name, data in image_records().items()
+        if name != "vllm-sr"
+        and any_matches(
+            changed, data.get("verification_paths", data.get("pr_paths", []))
+        )
+    }
     # Reuse the framework's actual image capabilities. Fixture source changes
     # select their PR consumers without promoting manual profiles into CI.
     dependencies = profile_image_dependencies()
@@ -252,7 +252,7 @@ def classify(
 def git_changed_files(base: str, head: str) -> list[str]:
     if base and set(base) != {"0"}:
         result = subprocess.run(
-            ["git", "diff", "--name-only", "-z", base, head],
+            args=["git", "diff", "--name-only", "--no-renames", "-z", base, head],
             check=True,
             capture_output=True,
         )

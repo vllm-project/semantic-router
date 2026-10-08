@@ -1,0 +1,1384 @@
+openapi: 3.0.3
+info:
+  title: vLLM Semantic Router Model Runtime
+  version: 2.1.0
+  description: |
+    Contract of the vllm-sr model runtime. A runtime process serves one or
+    more models; every request may name its `model` (required when a process
+    serves several). `POST /v1/decisions` is a strict superset of System One:
+    every System One request is accepted and every System One response field
+    keeps its meaning; `POST /v1/systemone` is an alias. `POST /v1/classify`,
+    `POST /v1/embeddings` (OpenAI-compatible) and `POST /v1/rerank` serve
+    fixed heads, embeddings and pair scores. `POST /v1/bundle` carries the
+    work of several surfaces and models in one call. The router's Go client
+    is generated from this file.
+  license:
+    name: Apache-2.0
+paths:
+  /v1/decisions:
+    post:
+      operationId: createDecisions
+      summary: Answer typed Choice, Noul, Score, Set and Span questions about one state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+      responses:
+        '200':
+          description: |
+            One answer per question, in request order; a failed question carries its own error. A request in which
+            no question is valid is answered 400 invalid_request, with each question's reason in the message.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/systemone:
+    post:
+      operationId: createSystemOne
+      summary: Alias of /v1/decisions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+      responses:
+        '200':
+          description: Same as /v1/decisions.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/classify:
+    post:
+      operationId: createClassification
+      summary: Run a fixed head (label distribution, label scores or token spans) over texts, pairs or grounded answers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassifyRequest'
+      responses:
+        '200':
+          description: One result per input, in input order; a failed input carries its own error.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassifyResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/embeddings:
+    post:
+      operationId: createEmbeddings
+      summary: OpenAI-compatible embeddings of text, images or audio, with dimensions and layer exits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingsRequest'
+      responses:
+        '200':
+          description: One embedding per input, in input order.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingsResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/rerank:
+    post:
+      operationId: createRerank
+      summary: Score documents against a query with a pair scorer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RerankRequest'
+      responses:
+        '200':
+          description: Documents by descending relevance.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RerankResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/bundle:
+    post:
+      operationId: createBundle
+      summary: Serve several surface requests, for one or more models, in one call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BundleRequest'
+      responses:
+        '200':
+          description: One result per task, in task order, each with the status it would have had alone.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BundleResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+  /v1/models:
+    get:
+      operationId: listModels
+      summary: Describe the served models, their surfaces, heads, limits, placement and verification
+      responses:
+        '200':
+          description: The served models.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Readiness; 200 only when every model is loaded, verified and passed its golden check
+      responses:
+        '200':
+          description: Ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Not ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /health/live:
+    get:
+      operationId: getLiveness
+      summary: Liveness; 200 while the process serves HTTP
+      responses:
+        '200':
+          description: Alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Prometheus metrics
+      responses:
+        '200':
+          description: Prometheus text exposition.
+          content:
+            text/plain:
+              schema:
+                type: string
+components:
+  headers:
+    ServerTiming:
+      description: |
+        The runtime's own time for the request in milliseconds, as a W3C Server Timing list:
+        `parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur=4.871, post;dur=0.034,
+        serialize;dur=0.019, total;dur=5.141`. `parse` reads and decodes the body. `tokenize` validates,
+        renders and tokenizes the request. `queue` is the time it waited for its model, before and between
+        its forwards. `forward` runs its forwards, readout included. `post` assembles the answers.
+        `serialize` encodes the response. `total` runs from the handler's start until the response is ready
+        to send; what it holds beyond the phases is the server's own overhead. A bundle whose tasks go to
+        several models reports the queue, forward and post of the model answered last. A client's time for
+        the call minus `total` is the transport: its own encoding and decoding, the connection and the HTTP
+        exchange.
+      schema:
+        type: string
+  responses:
+    Error:
+      description: A request-level error.
+      headers:
+        Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    DecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [state, questions]
+      properties:
+        model:
+          type: string
+          description: Served model ID. Optional while a runtime serves one model.
+        state:
+          description: |
+            The context the questions are about; text, an object or an array of JSON values. Models with typed
+            parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
+            answer part and every other field as context.
+        questions:
+          type: object
+          description: Named questions; answers keep this order.
+          minProperties: 1
+          additionalProperties:
+            $ref: '#/components/schemas/Question'
+        options:
+          $ref: '#/components/schemas/RequestOptions'
+    Question:
+      type: object
+      additionalProperties: false
+      description: |
+        One question. `instructions` is required unless `preset` names a question the model defines (see
+        `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
+        its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
+        `head` and `threshold` where the model reads them), and any other field is answered with
+        invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
+        a question takes one or the other.
+      properties:
+        type:
+          type: string
+          description: |
+            choice, noul or score; set and span where the model declares them (`question_types` in /v1/models).
+            Unknown or undeclared types are answered with invalid_question.
+        instructions:
+          description: The question; non-blank text, an object or an array.
+        criteria:
+          description: |
+            System One criteria. Choice: an object of 2..255 non-blank option keys to descriptions (descriptions
+            may be null). Noul: an optional object with only false and true (a null description takes the
+            model's default). Score: an ordered list of 2..10 level descriptions. Set and Span: an object of
+            1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
+        choices:
+          type: array
+          description: Ordered Choice or Noul options, an alternative to a criteria object.
+          items:
+            $ref: '#/components/schemas/ChoiceOption'
+        levels:
+          type: array
+          description: Ordered Score level descriptions, an alternative to a criteria list.
+          items: {}
+        labels:
+          type: array
+          description: Ordered Set or Span labels, an alternative to a criteria object.
+          items:
+            $ref: '#/components/schemas/ChoiceOption'
+        over:
+          description: |
+            The state field a question reads (typed-part models): a field name, or a list of field names it reads
+            together in state order; default the whole state, or for a span the answer if present, else the
+            request. A span reads one field.
+        overflow:
+          type: string
+          enum: [window, truncate]
+          description: |
+            Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+            than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+            `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+            both kinds share their model inputs unless one has to be read in windows.
+        head:
+          type: string
+          enum: [router, broad]
+          description: |
+            Span questions on models with a broad span head: the head that answers (default: the model's routing,
+            reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
+        threshold:
+          type: number
+          format: double
+          description: Set or Span decision threshold; the applied threshold is reported in `thresholds`.
+        preset:
+          type: string
+          description: A question the model defines; the model fills in its type, instructions and criteria.
+    ChoiceOption:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key:
+          type: string
+          minLength: 1
+        description:
+          nullable: true
+          description: Text, an object, an array or null.
+    ProfileName:
+      type: string
+      pattern: '^[a-z][a-z0-9_]*$'
+      description: exact, or a profile the server enabled for this model (its card's `profiles`).
+    RequestOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        deadline_ms:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+          description: Work not started by the deadline is not run; its items return deadline_exceeded.
+        profile:
+          $ref: '#/components/schemas/ProfileName'
+        return_meta:
+          type: boolean
+          description: Include meta in the response (default false).
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: |
+            Scan budget: the most tokens of one state part a question reads whole (default its card's
+            `limits.max_scan_tokens`; a part that fits one model input is always read). A longer part fails the
+            questions that read it whole with `scan_budget_exceeded`. Only a model whose card has `max_scan_tokens`
+            takes it.
+    DecisionResponse:
+      type: object
+      required: [model, answers, usage]
+      properties:
+        model:
+          type: string
+        answers:
+          type: object
+          description: One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+          additionalProperties:
+            $ref: '#/components/schemas/Answer'
+        spans:
+          type: object
+          description: Span answers by question ID.
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/Span'
+        sets:
+          type: object
+          description: Set answers by question ID.
+          additionalProperties:
+            $ref: '#/components/schemas/SetAnswer'
+        thresholds:
+          type: object
+          description: The threshold applied to each Set or Span question.
+          additionalProperties:
+            type: number
+            format: double
+        span_heads:
+          type: object
+          description: The span head (router or broad) that answered each Span question, on models with a broad span head.
+          additionalProperties:
+            type: string
+        usage:
+          $ref: '#/components/schemas/Usage'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    Answer:
+      type: object
+      required: [type]
+      description: |
+        One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
+        level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
+        knows why, message.
+      properties:
+        type:
+          type: string
+          nullable: true
+        choice:
+          type: string
+        noul:
+          type: number
+          format: double
+        score:
+          type: number
+          format: double
+        probabilities:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        confidence:
+          type: number
+          format: double
+        abstain_probability:
+          type: number
+          format: double
+          description: Probability of the model's abstain option, where it has one (not calibrated).
+        legend:
+          type: object
+          additionalProperties:
+            type: string
+        error:
+          $ref: '#/components/schemas/ItemError'
+        message:
+          type: string
+          description: Why the question failed, naming the field, such as "set questions do not take ['colour']".
+    ItemError:
+      type: string
+      enum: [invalid_question, invalid_input, max_length_exceeded, scan_budget_exceeded, invalid_model_output, deadline_exceeded, unavailable]
+      description: |
+        Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+        request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+        `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+        scanned.
+    Span:
+      type: object
+      required: [label, start, end, text, probability]
+      description: A labelled span; offsets are Unicode code points into the text the question read, end exclusive.
+      properties:
+        label:
+          type: string
+        start:
+          type: integer
+        end:
+          type: integer
+        text:
+          type: string
+        probability:
+          type: number
+          format: double
+    SetAnswer:
+      type: object
+      required: [selected, probabilities]
+      properties:
+        selected:
+          type: array
+          items:
+            type: string
+        probabilities:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+    Usage:
+      type: object
+      required: [input_tokens, output_tokens]
+      properties:
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+    ResponseMeta:
+      type: object
+      properties:
+        revision:
+          type: string
+          nullable: true
+          description: The 40-hex Hub revision; null for a local package directory.
+        model_sha256:
+          type: string
+        profile:
+          type: string
+        numerics:
+          type: string
+        engine:
+          type: string
+        accelerator:
+          type: string
+        device:
+          type: string
+        queue_ms:
+          type: number
+          format: double
+        compute_ms:
+          type: number
+          format: double
+        head:
+          type: string
+          description: The head that produced a classify result.
+        representation:
+          $ref: '#/components/schemas/Representation'
+    Representation:
+      type: object
+      description: The identity of an embedding space; vectors with different representations never mix.
+      required: [model_sha256, layer, dimension]
+      properties:
+        model_sha256:
+          type: string
+        layer:
+          type: integer
+        dimension:
+          type: integer
+        normalized:
+          type: boolean
+        modality:
+          type: string
+    ClassifyRequest:
+      type: object
+      additionalProperties: false
+      required: [input]
+      properties:
+        model:
+          type: string
+        input:
+          $ref: '#/components/schemas/ClassifyInput'
+        head:
+          type: string
+          description: The head to run (default the model's primary head).
+        options:
+          $ref: '#/components/schemas/ClassifyOptions'
+    ClassifyInput:
+      description: |
+        A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
+        `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+      oneOf:
+        - $ref: '#/components/schemas/InputText'
+        - $ref: '#/components/schemas/TextList'
+        - $ref: '#/components/schemas/ClassifyItemList'
+    InputText:
+      type: string
+    TextList:
+      type: array
+      minItems: 1
+      items:
+        type: string
+    ClassifyItemList:
+      type: array
+      minItems: 1
+      items:
+        $ref: '#/components/schemas/ClassifyItem'
+    ClassifyItem:
+      type: object
+      additionalProperties: false
+      description: One classify input in object form.
+      properties:
+        text:
+          type: string
+        text_pair:
+          type: string
+        context:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+    ClassifyOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        deadline_ms:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+        profile:
+          $ref: '#/components/schemas/ProfileName'
+        return_meta:
+          type: boolean
+          description: Include meta in the response (default false).
+        overflow:
+          type: string
+          enum: [reject, truncate, window]
+          description: What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: Token budget per input including special tokens (default and ceiling the model's limit).
+        window:
+          $ref: '#/components/schemas/WindowOptions'
+        threshold:
+          type: number
+          format: double
+          description: Token heads; the span probability threshold (default the head's).
+        return_tokens:
+          type: boolean
+          description: Token heads; include per-token label probabilities.
+    WindowOptions:
+      type: object
+      additionalProperties: false
+      required: [tokens]
+      properties:
+        tokens:
+          type: integer
+          minimum: 2
+          description: Window size including special tokens.
+        overlap:
+          type: integer
+          minimum: 0
+          description: Content tokens shared by neighbouring windows.
+    ClassifyResponse:
+      type: object
+      required: [model, head, kind, labels, results, usage]
+      properties:
+        model:
+          type: string
+        head:
+          type: string
+        kind:
+          type: string
+          enum: [sequence, scores, token]
+        labels:
+          type: array
+          description: Label order of probabilities and scores.
+          items:
+            type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassifyResult'
+        usage:
+          $ref: '#/components/schemas/Usage'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    ClassifyResult:
+      type: object
+      required: [index]
+      description: |
+        One input's result. sequence: label, probabilities. scores: scores and, with an operating point,
+        selected. token: spans. A windowed input also lists every window. A failed input has only index and
+        error.
+      properties:
+        index:
+          type: integer
+        label:
+          type: string
+        probabilities:
+          type: array
+          items:
+            type: number
+            format: double
+        scores:
+          type: array
+          items:
+            type: number
+            format: double
+        selected:
+          type: array
+          items:
+            type: string
+        spans:
+          type: array
+          items:
+            $ref: '#/components/schemas/Span'
+        tokens:
+          type: array
+          description: Per-token label probabilities (return_tokens).
+          items:
+            $ref: '#/components/schemas/TokenProbabilities'
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassifyWindow'
+        input:
+          $ref: '#/components/schemas/InputUsage'
+        error:
+          $ref: '#/components/schemas/ItemError'
+    ClassifyWindow:
+      type: object
+      required: [start, end]
+      description: One window of a windowed input; start and end are content-token offsets, end exclusive.
+      properties:
+        start:
+          type: integer
+        end:
+          type: integer
+        probabilities:
+          type: array
+          items:
+            type: number
+            format: double
+        scores:
+          type: array
+          items:
+            type: number
+            format: double
+    TokenProbabilities:
+      type: object
+      required: [start, end, probabilities]
+      properties:
+        start:
+          type: integer
+        end:
+          type: integer
+        probabilities:
+          type: array
+          items:
+            type: number
+            format: double
+    InputUsage:
+      type: object
+      required: [tokens, processed_tokens, truncated]
+      description: |
+        Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+        the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+        `tokens_lower_bound` is true.
+      properties:
+        tokens:
+          type: integer
+          description: Tokens of the complete input, or a lower bound when `tokens_lower_bound` is true.
+        processed_tokens:
+          type: integer
+          description: Tokens the model read (windows counted once per content token).
+        truncated:
+          type: boolean
+        tokens_lower_bound:
+          type: boolean
+          description: The input was read in part, so `tokens` is a lower bound of its tokens.
+        windows:
+          type: integer
+          description: Windows the input was read in.
+    EmbeddingsRequest:
+      type: object
+      additionalProperties: false
+      required: [input]
+      properties:
+        model:
+          type: string
+        input:
+          $ref: '#/components/schemas/EmbeddingsInput'
+        dimensions:
+          type: integer
+          minimum: 1
+          description: Output dimension, one the model declares (Matryoshka truncation).
+        encoding_format:
+          type: string
+          enum: [float, base64]
+        layer:
+          type: integer
+          minimum: 1
+          description: An early exit the model declares (default its last layer).
+        input_type:
+          type: string
+          enum: [query, document]
+          description: The role of the input for instructed embedders.
+        user:
+          type: string
+        options:
+          $ref: '#/components/schemas/EmbeddingsOptions'
+    EmbeddingsInput:
+      description: A string, a list of strings, or a list of content parts.
+      oneOf:
+        - $ref: '#/components/schemas/InputText'
+        - $ref: '#/components/schemas/TextList'
+        - $ref: '#/components/schemas/ContentPartList'
+    ContentPartList:
+      type: array
+      minItems: 1
+      items:
+        $ref: '#/components/schemas/ContentPart'
+    ContentPart:
+      type: object
+      additionalProperties: false
+      required: [type]
+      description: |
+        `{type: text, text}`, `{type: image_url, image_url: {url}}` (a base64 data URL) or
+        `{type: input_audio, input_audio: {data, format}}` (base64 WAV), for models whose `embedding.modalities`
+        include the part's modality.
+      properties:
+        type:
+          type: string
+          enum: [text, image_url, input_audio]
+        text:
+          type: string
+        image_url:
+          $ref: '#/components/schemas/ImagePart'
+        input_audio:
+          $ref: '#/components/schemas/AudioPart'
+    ImagePart:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+    AudioPart:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: string
+        format:
+          type: string
+          description: The audio container (default wav).
+    EmbeddingsOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        deadline_ms:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+        profile:
+          $ref: '#/components/schemas/ProfileName'
+        return_meta:
+          type: boolean
+          description: Include meta in the response (default false).
+        overflow:
+          type: string
+          enum: [reject, truncate]
+        max_tokens:
+          type: integer
+          minimum: 1
+    EmbeddingsResponse:
+      type: object
+      required: [object, data, model, usage]
+      properties:
+        object:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Embedding'
+        model:
+          type: string
+        usage:
+          $ref: '#/components/schemas/EmbeddingsUsage'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    Embedding:
+      type: object
+      required: [object, index]
+      properties:
+        object:
+          type: string
+        index:
+          type: integer
+        embedding:
+          $ref: '#/components/schemas/EmbeddingVector'
+        input:
+          $ref: '#/components/schemas/InputUsage'
+        error:
+          $ref: '#/components/schemas/ItemError'
+    EmbeddingVector:
+      description: A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
+      oneOf:
+        - $ref: '#/components/schemas/FloatVector'
+        - $ref: '#/components/schemas/Base64Vector'
+    Base64Vector:
+      type: string
+      format: byte
+    FloatVector:
+      type: array
+      items:
+        type: number
+        format: float
+    EmbeddingsUsage:
+      type: object
+      required: [prompt_tokens, total_tokens]
+      properties:
+        prompt_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+    RerankRequest:
+      type: object
+      additionalProperties: false
+      required: [query, documents]
+      properties:
+        model:
+          type: string
+        query:
+          type: string
+        documents:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        top_n:
+          type: integer
+          minimum: 1
+        return_documents:
+          type: boolean
+        layer:
+          type: integer
+          minimum: 1
+          description: Pair-scorer exit layer, one the model declares (default the served exit).
+        dimensions:
+          type: integer
+          minimum: 1
+          description: Pair-scorer exit dimension, one the model declares.
+        options:
+          $ref: '#/components/schemas/RerankOptions'
+    RerankOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        deadline_ms:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+        profile:
+          $ref: '#/components/schemas/ProfileName'
+        return_meta:
+          type: boolean
+          description: Include meta in the response (default false).
+        overflow:
+          type: string
+          enum: [reject, truncate]
+          description: What happens to a query-document pair longer than max_tokens (default reject).
+        max_tokens:
+          type: integer
+          minimum: 1
+    RerankResponse:
+      type: object
+      required: [model, results, usage]
+      properties:
+        model:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RerankResult'
+        usage:
+          $ref: '#/components/schemas/Usage'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    RerankResult:
+      type: object
+      required: [index]
+      properties:
+        index:
+          type: integer
+        relevance_score:
+          type: number
+          format: double
+          description: The model's relevance score (sigmoid of the logit for logit heads).
+        logit:
+          type: number
+          format: double
+          description: The raw pair-scorer logit.
+        document:
+          type: string
+        input:
+          $ref: '#/components/schemas/InputUsage'
+        error:
+          $ref: '#/components/schemas/ItemError'
+    BundleRequest:
+      type: object
+      additionalProperties: false
+      required: [tasks]
+      properties:
+        tasks:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BundleTask'
+        options:
+          type: object
+          additionalProperties: false
+          properties:
+            deadline_ms:
+              type: number
+              format: double
+              exclusiveMinimum: true
+              minimum: 0
+              description: Applies to every task unless a task's own deadline is earlier.
+    BundleTask:
+      type: object
+      additionalProperties: false
+      required: [id]
+      description: One task; exactly one surface field is set, holding that surface's request body.
+      properties:
+        id:
+          type: string
+          minLength: 1
+        decisions:
+          $ref: '#/components/schemas/DecisionRequest'
+        classify:
+          $ref: '#/components/schemas/ClassifyRequest'
+        embeddings:
+          $ref: '#/components/schemas/EmbeddingsRequest'
+        rerank:
+          $ref: '#/components/schemas/RerankRequest'
+    BundleResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BundleResult'
+    BundleResult:
+      type: object
+      required: [id, status]
+      description: A task's result; on status 200 its surface field holds the response, otherwise error is set.
+      properties:
+        id:
+          type: string
+        status:
+          type: integer
+        decisions:
+          $ref: '#/components/schemas/DecisionResponse'
+        classify:
+          $ref: '#/components/schemas/ClassifyResponse'
+        embeddings:
+          $ref: '#/components/schemas/EmbeddingsResponse'
+        rerank:
+          $ref: '#/components/schemas/RerankResponse'
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [invalid_request, model_not_found, request_too_large, unsupported_surface, overloaded, internal_error, not_ready]
+        message:
+          type: string
+    ModelList:
+      type: object
+      required: [object, data, api_version, limits]
+      properties:
+        api_version:
+          type: string
+          description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+        object:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelCard'
+        limits:
+          $ref: '#/components/schemas/ProcessLimits'
+    ProcessLimits:
+      type: object
+      required: [max_bundle_tasks, max_request_bytes]
+      description: |
+        What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
+        client splits its work to fit.
+      properties:
+        max_bundle_tasks:
+          type: integer
+          minimum: 1
+          description: Most tasks one POST /v1/bundle carries.
+        max_request_bytes:
+          type: integer
+          minimum: 1
+          description: Largest request body, in bytes.
+    ModelCard:
+      type: object
+      required: [id, object, family, surfaces, ready]
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+        owned_by:
+          type: string
+        family:
+          type: string
+        repo:
+          type: string
+          nullable: true
+        revision:
+          type: string
+          nullable: true
+        model_sha256:
+          type: string
+        manifest_sha256:
+          type: string
+        surfaces:
+          type: array
+          items:
+            type: string
+        question_types:
+          type: array
+          items:
+            type: string
+        presets:
+          type: array
+          description: Questions the model defines (Question.preset).
+          items:
+            type: string
+        heads:
+          type: array
+          items:
+            $ref: '#/components/schemas/HeadCard'
+        embedding:
+          $ref: '#/components/schemas/EmbeddingCard'
+        rerank:
+          $ref: '#/components/schemas/RerankCard'
+        limits:
+          $ref: '#/components/schemas/ModelLimits'
+        licence:
+          type: string
+          nullable: true
+        profile:
+          type: string
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileInfo'
+        engine:
+          type: string
+        accelerator:
+          type: string
+        accelerator_validated:
+          type: boolean
+        device:
+          type: string
+        dtype:
+          type: string
+        parameters:
+          type: integer
+        ready:
+          type: boolean
+        status:
+          type: string
+          enum: [starting, loading, warming, ready, degraded, failed]
+          description: This model's state.
+        reason:
+          type: string
+          nullable: true
+        golden:
+          $ref: '#/components/schemas/GoldenStatus'
+        plugins:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginInfo'
+    HeadCard:
+      type: object
+      required: [name, kind, labels]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [sequence, scores, token]
+        labels:
+          type: array
+          items:
+            type: string
+        inputs:
+          type: array
+          description: Accepted inputs (text, pair, grounded).
+          items:
+            type: string
+        default_threshold:
+          type: number
+          format: double
+          nullable: true
+        thresholds:
+          type: array
+          nullable: true
+          description: The packaged operating point, one threshold per label.
+          items:
+            type: number
+            format: double
+        overflow:
+          type: string
+          enum: [reject, truncate, window]
+        window:
+          $ref: '#/components/schemas/HeadWindow'
+        reduction:
+          type: string
+          nullable: true
+          enum: [max, span_union]
+        operating_point_sha256:
+          type: string
+          nullable: true
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the verified operating_point.json the head applies.
+    HeadWindow:
+      type: object
+      nullable: true
+      required: [tokens, overlap]
+      description: The windows the head reads a long input in by default; null when it declares none.
+      properties:
+        tokens:
+          type: integer
+          description: Window size including special tokens.
+        overlap:
+          type: integer
+          description: Content tokens shared by neighbouring windows.
+    EmbeddingCard:
+      type: object
+      required: [dimensions, layers, modalities, normalized, pooling, input_types]
+      properties:
+        dimensions:
+          type: array
+          items:
+            type: integer
+        layers:
+          type: array
+          items:
+            type: integer
+        modalities:
+          type: array
+          items:
+            type: string
+        normalized:
+          type: boolean
+        pooling:
+          type: string
+        input_types:
+          type: array
+          items:
+            type: string
+    RerankCard:
+      type: object
+      required: [exits, default]
+      properties:
+        exits:
+          type: array
+          items:
+            $ref: '#/components/schemas/RerankExit'
+        default:
+          $ref: '#/components/schemas/RerankExit'
+    RerankExit:
+      type: object
+      required: [layer, dimension]
+      properties:
+        layer:
+          type: integer
+        dimension:
+          type: integer
+    ModelLimits:
+      type: object
+      properties:
+        max_input_tokens:
+          type: integer
+        max_scan_tokens:
+          type: integer
+          description: |
+            Decision models that read a long state part in windows (Vela 2.0): the most tokens of one part a question
+            reads whole, by default four inputs on a CPU and 32 on a GPU. A longer part fails its questions with
+            `scan_budget_exceeded`.
+        truncate_tokens:
+          type: integer
+          description: |
+            The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
+            CPU (one forward) and the scan budget on a GPU.
+        min_options:
+          type: integer
+        max_options:
+          type: integer
+        min_levels:
+          type: integer
+        max_levels:
+          type: integer
+        max_inputs:
+          type: integer
+          description: Most inputs or documents one classify, embeddings or rerank request may carry.
+    ProfileInfo:
+      type: object
+      required: [name, numerics]
+      properties:
+        name:
+          type: string
+        numerics:
+          type: string
+          enum: [exact, approximate]
+        description:
+          type: string
+    GoldenStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, matched, unverified, failed]
+        checked:
+          type: integer
+        matched:
+          type: integer
+        reference:
+          type: string
+          nullable: true
+    PluginInfo:
+      type: object
+      required: [group, name]
+      properties:
+        group:
+          type: string
+        name:
+          type: string
+        distribution:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        capabilities:
+          type: object
+          description: |
+            The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
+            and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
+            `auto_priority`, where `auto` tries them (lowest first; null: only when named).
+          additionalProperties: true
+    Health:
+      type: object
+      description: Readiness of the process and its models (`GET /health`).
+      required: [status, api_version]
+      properties:
+        api_version:
+          type: string
+          description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+        status:
+          type: string
+          enum: [starting, loading, warming, ready, degraded, failed]
+        reason:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        models:
+          type: object
+          description: Per-model states when a process serves several models.
+          additionalProperties:
+            $ref: '#/components/schemas/ModelHealth'
+    ModelHealth:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [starting, loading, warming, ready, degraded, failed]
+        reason:
+          type: string
+          nullable: true
+    Liveness:
+      type: object
+      description: Liveness of the process (`GET /health/live`), whatever its models' readiness.
+      required: [status, api_version]
+      properties:
+        api_version:
+          type: string
+          description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+        status:
+          type: string
+          enum: [alive]

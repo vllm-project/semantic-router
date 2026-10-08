@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bce357c513f391824e8320267d03977794c20f76"
+  source_commit: "f0cbd8621f9d5e9c6e0e25ea86ac4c0e4bd16326"
   source_file: "docs/troubleshooting/vsr-headers.md"
   outdated: false
 ---
@@ -13,7 +13,7 @@ Router 使用这些请求头和响应头来保持会话连续性、路由可观�
 
 Router 把头分到两个面：
 
-- **默认面** — 每个非缓存命中响应都包含 `x-vsr-schema-version` 和 `x-vsr-response-path`。成功路由的响应还可以包含最终配方、决策、置信度、算法、模型、路由延迟、成本和回放 id。发生协议转换时会出现协议标记；仅在存在警告时出现协议警告。
+- **默认面** — 每个未被响应缓存服务的路由推理响应都包含 `x-vsr-schema-version` 和 `x-vsr-response-path`。这两个关键头由路由流水线产生，因此改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）会省略它们。唯一例外是管理端点 `POST /api/v1/routing/preview`：它在结果成功时返回 `x-vsr-config-hash`。成功路由的响应还可以包含最终配方、决策、置信度、算法、模型、路由延迟、成本和回放 id——仅当启用 Router Replay 且记录已持久化时才包含回放 id。发生协议转换时会出现协议标记；仅在存在警告时出现协议警告。
 - **调试面** — 中间分类细节、匹配信号、工具选择指标和 `x-vsr-retention-*` 指令仅在请求设置 `x-vsr-debug: true` 时内联出现。启用回放时，同样的诊断上下文仍可通过 `x-vsr-replay-id` 获得。
 
 决策和匹配信号头还要求同时满足以下全部条件：
@@ -42,7 +42,7 @@ Router 把头分到两个面：
 | `x-vsr-client-protocol` | Router 看到的入站协议形态，例如 `openai` 或 `anthropic`。仅在跨协议处理（客户端协议与上游不同）或设置了 `x-vsr-debug` 时发出。 |
 | `x-vsr-upstream-protocol` | 发送到所选上游后端的协议形态。仅在跨协议处理或设置了 `x-vsr-debug` 时发出。 |
 | `x-vsr-protocol-warnings` | 逗号分隔的协议转换警告，编码为 `severity;reason;field`。仅在存在警告时发出。 |
-| `x-vsr-replay-id` | 不透明的 Router 回放记录标识，用于把响应与回放/Insights 数据关联。 |
+| `x-vsr-replay-id` | 不透明的 Router 回放记录标识，用于把响应与回放/Insights 数据关联。仅在启用 Router Replay 且记录已持久化时发出。 |
 
 ## 响应警告
 
@@ -60,11 +60,14 @@ Router 把头分到两个面：
 | ------ | ------- | ----------- | ------- |
 | `x-vsr-selected-recipe` | default | 由入口或 auto/looper 别名选择的路由隔离范围。具体后端直通时省略。 | `support` |
 | `x-vsr-selected-decision` | default | 决策引擎选择的最终决策。 | `complex-request` |
-| `x-vsr-selected-confidence` | default | 所选决策的模型导出分数。没有分数的结构性或错误策略匹配会缺省。 | `0.9100` |
+| `x-vsr-selected-confidence` | default | 所选决策的模型导出分数。当决策基于策略叶子、聚合多个证据叶子，或通过错误策略解析时，该头缺省。 | `0.9100` |
 | `x-vsr-applied-unknown-policy` | default | 未知结果由 `rules.on_unknown` 解析的决策，格式为 `decision=policy` 对。也会出现在 `fail_request` 的 503 上。 | `guarded=no_match` |
 | `x-vsr-selected-algorithm` | default | 决策匹配后使用的模型选择算法。 | `static` |
 | `x-vsr-selected-model` | default | Router 选择的逻辑模型别名。 | `reasoning-model` |
+| `x-vsr-effective-input-tokens` | default | 最终自动输出分发中，所选后端实际渲染的输入 token 数，包含其 chat 模板。 | `512` |
+| `x-vsr-effective-max-output-tokens` | default | 该自动输出分发中发送的已解析输出 token 上限，包含推理。这是预算，不是已消耗的 token。 | `261632` |
 | `x-vsr-routing-latency-ms` | default | Router 选择模型所花时间，单位毫秒，带亚毫秒精度。 | `0.412` |
+| `x-vsr-fallback-attempts` | default | 由跨模型 fallback 的候选模型返回响应时，fallback 一共尝试的次数（含主模型）；两种网关模式相同。主模型直接返回时不出现。 | `2` |
 | `x-vsr-selected-category` | debug | 运行领域路由时的领域/类别分类器结果。 | `math` |
 | `x-vsr-selected-reasoning` | debug | 为请求选择的推理模式。 | `on` |
 | `x-vsr-selected-modality` | debug | 模态结果和可选方法。 | `AR;classifier` |
@@ -76,6 +79,8 @@ Router 把头分到两个面：
 | `x-vsr-injected-system-prompt` | debug | 系统提示词插件是否向请求注入了文本。 | `true` |
 
 用于 UI 展示时，把 `x-vsr-learning-actions` 翻译成面向用户的短语，例如 `tool/protocol pinned`、`model switched` 或 `learning bypassed`。新对话或会话开始的诊断通常只在调试视图中有用，应显示为中性状态文本，而不是主要路由状态。
+
+这两个有效 token 头只在自动输出已解析时，随成功的上游响应一起发出。流式和缓冲响应的初始头中都可获得它们。显式输出上限、缓存命中、跳过处理以及 Looper 响应会省略它们。它们的值来自请求变更和后端渲染之后的最终分发；它们不是估计值，也不是模型配置的最大上下文长度。
 
 ## 匹配信号头
 
@@ -103,6 +108,7 @@ Router 把头分到两个面：
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
 | `x-vsr-matched-input-modality` | `input_modality` |
+| `x-vsr-matched-decision-model` | `decision`（noul 与 score 规则名；choice 为 `rule:choice`；set 或 span 每个匹配的标签为 `rule:label`） |
 
 ## 投影头
 
@@ -125,6 +131,24 @@ Router 把头分到两个面：
 
 未设置的字段会省略。缓存命中不发出这些头，因为该响应没有评估决策。
 
+## 跨模型 KV 传输头（issue #2976）
+
+当 Router 在模型切换时尝试跨模型 KV 复用时，它会在上游调用上注入请求侧提示。目标 vLLM KVConnector 插件在响应上报告结果。这些头是 Router 与推理池内部的；客户端不应依赖它们。
+
+**请求（Router → 后端）：**
+
+| 头 | 说明 |
+| ------ | ----------- |
+| `x-vsr-kv-source-pod` | 持有源模型 KV 缓存的 Pod 的 gRPC 地址。 |
+| `x-vsr-kv-cache-id` | 源 KV 块的不透明会话或缓存标识。 |
+| `x-vsr-kv-mapper-id` | 为源→目标模型对发布的映射器产物，即 ridge 拟合或其蒸馏精修版本。 |
+
+**响应（后端 → Router）：**
+
+| 头 | 说明 |
+| ------ | ----------- |
+| `x-vsr-kv-transfer-status` | `applied`、`fallback_reprefill` 或 `unsupported`。缺省 ⇒ `unsupported`。 |
+
 ## 成本头
 
 在缓冲（非流式）响应上，Router 用已服务模型的 `pricing` 配置，对模型报告的用量计价。这是配置价格数字，不是提供方账单。流式响应和没有 `pricing` 的模型会省略这两个头。
@@ -136,7 +160,7 @@ Router 把头分到两个面：
 
 ## 缓存与插件头
 
-`x-vsr-cache-hit` 和 `x-vsr-fast-response` 在默认面上标识立即响应。缓存相似度和工具选择指标需要 `x-vsr-debug`。
+`x-vsr-cache-hit` 和 `x-vsr-fast-response` 在默认面上标识立即响应。缓存相似度、工具选择指标和 prompt-cache 回执需要 `x-vsr-debug`。
 
 | 头 | 面 | 说明 |
 | ------ | ------- | ----------- |
@@ -146,6 +170,12 @@ Router 把头分到两个面：
 | `x-vsr-tools-strategy` | debug | 本次请求使用的语义工具选择检索策略。 |
 | `x-vsr-tools-confidence` | debug | 工具选择检索器的最高相似度分数。 |
 | `x-vsr-tools-latency-ms` | debug | 工具选择检索器延迟，单位毫秒。 |
+| `x-vsr-prompt-cache-action` | debug | `prompt_cache` 插件的结果：`inserted`、`preserved`、`skipped` 或 `rejected`。 |
+| `x-vsr-prompt-cache-reason` | debug | 非 `inserted` 结果的机器可读原因：`caller_markers`、`no_eligible_target` 或 `unsupported_target`。动作为 `inserted` 时省略。 |
+| `x-vsr-prompt-cache-inserted` | debug | Router 插入的缓存标记数量，最多 `2` 个（一个指令块、一个工具）。 |
+| `x-vsr-prompt-cache-preserved` | debug | 在请求中任何位置找到的调用方提供的缓存标记数量。 |
+
+这些头不含内容：它们只报告计数和结果，从不包含缓存文本本身，也从不声称缓存命中或提供方侧节省。
 
 ## 响应示例
 
@@ -162,6 +192,8 @@ x-vsr-selected-algorithm: static
 x-vsr-selected-model: reasoning-model
 x-vsr-replay-id: replay_01J...
 ```
+
+这里的 `x-vsr-replay-id` 之所以出现，是因为启用了 Router Replay 且记录已持久化。回放被禁用或持久化失败时，响应会携带其他头并省略该头。
 
 请求带 `x-vsr-debug: true` 时，被降级的中间细节和匹配信号也会内联发出：
 
@@ -182,7 +214,7 @@ x-vsr-replay-id: replay_01J...
 
 ## 兼容性与解读
 
-- 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。
+- 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。路由推理响应总会携带它。改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）从不携带该头，因此那里缺失属于预期，而不是合约违规。
 - `x-vsr-matched-projections` 是投影头。单数形式不属于公开合约。
 - 配方名限定本地信号、投影、决策、缓存、回放、指标以及学习/会话身份。把响应与 Insights 或指标关联时，把 `x-vsr-selected-recipe` 与本地决策/信号名一起使用。
 - `event` 是决策和 DSL 使用的公开信号类型。规范 YAML 把 event 规则存在 `routing.signals.events` 下，与其他复数信号容器一致。

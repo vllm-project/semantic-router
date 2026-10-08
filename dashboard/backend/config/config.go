@@ -71,24 +71,65 @@ type Config struct {
 	MCPEnabled bool
 
 	// ML Pipeline configuration
-	MLPipelineEnabled bool
-	MLPipelineDataDir string
-	MLTrainingDir     string // path to src/training/model_selection/ml_model_selection
-	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
+	MLPipelineEnabled           bool
+	MLPipelineDataDir           string
+	MLPipelineAvailable         bool
+	MLPipelineUnavailableReason string
+	MLTrainingDir               string // path to src/training/model_selection/ml_model_selection
+	MLServiceURL                string // URL of the Python ML service sidecar (empty = subprocess mode)
 
-	// OpenClaw configuration
-	OpenClawEnabled bool
-	OpenClawURL     string // URL of OpenClaw gateway (default: http://localhost:18788)
-	OpenClawDataDir string // workspace generation directory
-	OpenClawToken   string // auth token for OpenClaw gateway
-
-	// Durable workflow state (ML pipeline jobs, OpenClaw entities)
+	// Durable workflow state (ML pipeline jobs, MCP servers)
 	WorkflowDBPath string
 	// Durable hourly availability history for the public status page.
 	StatusDBPath string
 
 	// Durable deployed-config projection read model
 	ConfigProjectionDBPath string
+
+	// IgnoredOpenClawSettings names the removed OpenClaw flags and variables
+	// this process was started with, so startup can warn about them.
+	IgnoredOpenClawSettings []string
+}
+
+// removedOpenClawSettings are the flags of the removed OpenClaw integration,
+// with the variables they defaulted from. The flags still parse, for one
+// release, so a manifest that passes them keeps starting; their values are
+// ignored.
+var removedOpenClawSettings = []struct {
+	flag   string
+	env    string
+	isBool bool
+}{
+	{flag: "openclaw", env: "OPENCLAW_ENABLED", isBool: true},
+	{flag: "openclaw-url", env: "OPENCLAW_URL"},
+	{flag: "openclaw-data", env: "OPENCLAW_DATA_DIR"},
+	{flag: "openclaw-token", env: "OPENCLAW_TOKEN"},
+}
+
+func bindRemovedOpenClawFlags() {
+	const usage = "DEPRECATED and ignored: OpenClaw was removed"
+	for _, setting := range removedOpenClawSettings {
+		if setting.isBool {
+			flag.Bool(setting.flag, false, usage)
+		} else {
+			flag.String(setting.flag, "", usage)
+		}
+	}
+}
+
+func ignoredOpenClawSettings() []string {
+	passed := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { passed[f.Name] = true })
+	var ignored []string
+	for _, setting := range removedOpenClawSettings {
+		if passed[setting.flag] {
+			ignored = append(ignored, "-"+setting.flag)
+		}
+		if os.Getenv(setting.env) != "" {
+			ignored = append(ignored, setting.env)
+		}
+	}
+	return ignored
 }
 
 // env returns the env var or default
@@ -116,22 +157,6 @@ func bindAuthFlags() authFlags {
 		bootstrapEmail:    flag.String("bootstrap-admin-email", env("DASHBOARD_ADMIN_EMAIL", ""), "bootstrap admin email"),
 		bootstrapPassword: flag.String("bootstrap-admin-password", env("DASHBOARD_ADMIN_PASSWORD", ""), "bootstrap admin password"),
 		bootstrapName:     flag.String("bootstrap-admin-name", env("DASHBOARD_ADMIN_NAME", ""), "bootstrap admin name"),
-	}
-}
-
-type openClawFlags struct {
-	enabled *bool
-	url     *string
-	dataDir *string
-	token   *string
-}
-
-func bindOpenClawFlags() openClawFlags {
-	return openClawFlags{
-		enabled: flag.Bool("openclaw", env("OPENCLAW_ENABLED", "true") == "true", "enable OpenClaw agent provisioning"),
-		url:     flag.String("openclaw-url", env("OPENCLAW_URL", "http://localhost:18788"), "OpenClaw gateway URL"),
-		dataDir: flag.String("openclaw-data", env("OPENCLAW_DATA_DIR", "./data/openclaw"), "OpenClaw workspace directory"),
-		token:   flag.String("openclaw-token", env("OPENCLAW_TOKEN", ""), "OpenClaw gateway auth token"),
 	}
 }
 
@@ -171,7 +196,6 @@ type parsedFlags struct {
 	statusDBPath           *string
 	configProjectionDBPath *string
 	auth                   authFlags
-	openClaw               openClawFlags
 }
 
 func applyCoreConfig(cfg *Config, flags parsedFlags) {
@@ -237,13 +261,6 @@ func applyAuthConfig(cfg *Config, flags authFlags) error {
 	}
 	cfg.JWTExpiryHours = ttl
 	return nil
-}
-
-func applyOpenClawConfig(cfg *Config, flags openClawFlags) {
-	cfg.OpenClawEnabled = *flags.enabled
-	cfg.OpenClawURL = *flags.url
-	cfg.OpenClawDataDir = *flags.dataDir
-	cfg.OpenClawToken = *flags.token
 }
 
 func resolveConfigPaths(cfg *Config) error {
@@ -313,7 +330,7 @@ func bindFeatureFlags(flags parsedFlags) parsedFlags {
 	flags.srBenchTokenEnv = flag.String("sr-bench-token-env", env("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN"), "environment variable holding the sr-bench service token")
 	flags.pythonPath = flag.String("python", env("PYTHON_PATH", defaultPythonBinary()), "path to Python interpreter")
 	flags.mcpEnabled = flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
-	flags.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
+	flags.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "false") == "true", "enable ML pipeline (benchmark, train, config)")
 	flags.mlPipelineDataDir = flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
 	flags.mlTrainingDir = flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	flags.mlServiceURL = flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
@@ -321,7 +338,6 @@ func bindFeatureFlags(flags parsedFlags) parsedFlags {
 	flags.statusDBPath = flag.String("status-db", env("DASHBOARD_STATUS_DB_PATH", ""), "SQLite path for durable hourly service history")
 	flags.configProjectionDBPath = flag.String("config-projection-db", env("DASHBOARD_CONFIG_PROJECTION_DB_PATH", "./data/config-projection.sqlite"), "SQLite path for deployed config projection state")
 	flags.auth = bindAuthFlags()
-	flags.openClaw = bindOpenClawFlags()
 	return flags
 }
 
@@ -329,8 +345,10 @@ func bindFeatureFlags(flags parsedFlags) parsedFlags {
 func LoadConfig() (*Config, error) {
 	cfg := &Config{}
 	flags := bindFeatureFlags(bindCoreFlags())
+	bindRemovedOpenClawFlags()
 
 	flag.Parse()
+	cfg.IgnoredOpenClawSettings = ignoredOpenClawSettings()
 
 	applyCoreConfig(cfg, flags)
 	if err := applyFeatureConfig(cfg, flags); err != nil {
@@ -339,7 +357,6 @@ func LoadConfig() (*Config, error) {
 	if err := applyAuthConfig(cfg, flags.auth); err != nil {
 		return nil, err
 	}
-	applyOpenClawConfig(cfg, flags.openClaw)
 	if err := resolveConfigPaths(cfg); err != nil {
 		return nil, err
 	}

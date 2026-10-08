@@ -1,4 +1,4 @@
-import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
+import type { Message } from './ChatComponentTypes'
 import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
@@ -95,7 +95,6 @@ const RESPONSE_HEADER_KEYS = [
 export const buildChatMessages = (
   messages: Message[],
   nextUserMessage: string,
-  enableClawMode: boolean,
   nextUserAttachments: PlaygroundAttachment[] = [],
 ): OutboundChatMessage[] => {
   const chatMessages: OutboundChatMessage[] = []
@@ -166,10 +165,6 @@ export const buildChatMessages = (
         chatMessages.push({ role: 'assistant', content: assistantContent })
       }
     }
-  }
-
-  if (enableClawMode) {
-    chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
   }
 
   chatMessages.push({

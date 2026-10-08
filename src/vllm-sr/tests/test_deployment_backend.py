@@ -35,11 +35,15 @@ class TestResolveTarget:
     def test_docker(self):
         assert resolve_target("docker") == "docker"
 
-    def test_k8s(self):
-        assert resolve_target("k8s") == "k8s"
+    def test_kubernetes(self):
+        assert resolve_target("kubernetes") == "kubernetes"
+
+    def test_k8s_is_the_old_name_for_one_release(self, caplog):
+        assert resolve_target("k8s") == "kubernetes"
+        assert "renamed to --target kubernetes" in caplog.text
 
     def test_case_insensitive(self):
-        assert resolve_target("K8S") == "k8s"
+        assert resolve_target("K8S") == "kubernetes"
         assert resolve_target("Docker") == "docker"
 
     def test_invalid_raises(self):

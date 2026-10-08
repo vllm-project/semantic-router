@@ -20,6 +20,7 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
+import { DECISION_MODEL_HINT, DECISION_MODELS } from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -384,12 +385,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
             asObject(section?.detector)?.model_ref ?? asObject(section?.detector)?.model_id,
           ),
         },
-        {
-          label: 'Explainer model',
-          value: compactPathLikeString(
-            asObject(section?.explainer)?.model_ref ?? asObject(section?.explainer)?.model_id,
-          ),
-        },
       ]
     case 'feedback_detector':
       return [
@@ -648,7 +643,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         routerStructuredField(key, 'milvus'),
-        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'bert' },
+        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'mmbert' },
         {
           name: 'default_retrieval_limit',
           label: 'Default Retrieval Limit',
@@ -662,7 +657,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           placeholder: '70',
         },
         { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
-        { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
+        { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'weighted' },
         { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },
         routerStructuredField(key, 'reflection'),
       ]
@@ -725,13 +720,13 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'embedding_model',
           label: 'Embedding Model',
           type: 'select',
-          options: ['bert', 'qwen3', 'gemma', 'mmbert', 'multimodal'],
+          options: ['mmbert', 'qwen3', 'multimodal'],
         },
         {
           name: 'embedding_dimension',
           label: 'Embedding Dimension',
           type: 'number',
-          placeholder: '384',
+          placeholder: 'model default',
         },
         { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
         {
@@ -772,12 +767,10 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/mmbert32k-jailbreak-detector-merged',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        { name: 'use_mmbert_32k', label: 'Use mmBERT 32K', type: 'boolean' },
-        { name: 'use_modernbert', label: 'Use ModernBERT', type: 'boolean' },
         {
           name: 'jailbreak_mapping_path',
           label: 'Mapping Path',
@@ -797,7 +790,6 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
         routerStructuredField(key, 'fact_check'),
         routerStructuredField(key, 'detector'),
-        routerStructuredField(key, 'explainer'),
       ]
     case 'feedback_detector':
       return [
@@ -807,58 +799,57 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        { name: 'use_mmbert_32k', label: 'Use mmBERT 32K', type: 'boolean' },
-        { name: 'use_modernbert', label: 'Use ModernBERT', type: 'boolean' },
       ]
     case 'external_models':
       return [routerStructuredField(key, 'items')]
     case 'system_models':
       return [
         {
+          name: 'decision_model',
+          label: 'Decision Model',
+          type: 'select',
+          options: [...DECISION_MODELS],
+          description: `Answers the built-in signals and every decision question that names no deployment. ${DECISION_MODEL_HINT}. A binding below keeps its signal on another model.`,
+        },
+        {
           name: 'prompt_guard',
           label: 'Prompt Guard Binding',
           type: 'text',
-          placeholder: 'models/mmbert32k-jailbreak-detector-merged',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'domain_classifier',
           label: 'Domain Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Domain',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'pii_classifier',
           label: 'PII Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-PII',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'fact_check_classifier',
           label: 'Fact Check Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-FactCheck',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'hallucination_detector',
           label: 'Hallucination Detector Binding',
           type: 'text',
-          placeholder: 'models/mom-halugate-detector',
-        },
-        {
-          name: 'hallucination_explainer',
-          label: 'Hallucination Explainer Binding',
-          type: 'text',
-          placeholder: 'models/mom-halugate-explainer',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'feedback_detector',
           label: 'Feedback Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
       ]
     case 'embedding_models':
@@ -1074,13 +1065,14 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   }
   if (key === 'hallucination_mitigation') {
     const hallucination = asObject(data)
-    return {
+    const editData: Record<string, unknown> = {
       ...(hallucination || {}),
       enabled: hallucination?.enabled,
       fact_check: asObject(hallucination?.fact_check) || {},
       detector: asObject(hallucination?.detector) || {},
-      explainer: asObject(hallucination?.explainer) || {},
     }
+    delete editData.explainer
+    return editData
   }
   if (key === 'embedding_models') {
     return embeddingModelsEditData(data)
@@ -1159,13 +1151,14 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }) as Partial<ConfigData>
   }
   if (key === 'hallucination_mitigation') {
-    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
+    const hallucination: Record<string, unknown> = {
       ...data,
       enabled: Boolean(data.enabled),
       fact_check: asObject(data.fact_check) || {},
       detector: asObject(data.detector) || {},
-      explainer: asObject(data.explainer) || {},
-    }) as Partial<ConfigData>
+    }
+    delete hallucination.explainer
+    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, hallucination) as Partial<ConfigData>
   }
   if (key === 'model_selection') {
     const { default_algorithm, models_path, knn, kmeans, svm, ml, ...selectionFields } = data

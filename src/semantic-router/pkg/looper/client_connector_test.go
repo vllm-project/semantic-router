@@ -37,16 +37,20 @@ func TestConnectorClientPreservesEndpointAndCallHeaders(t *testing.T) {
 			t.Errorf("path = %q, want /v1/chat/completions", got)
 		}
 		wantHeaders := map[string]string{
-			"Authorization":            "Bearer secret-a",
-			"X-Static":                 "static-a",
-			headers.VSRLooperDecision:  "decision-a",
-			headers.VSRLooperIteration: "2",
-			headers.VSRFusionDepth:     "1",
-			headers.VSRLooperRequest:   "true",
+			"Authorization": "Bearer secret-a",
+			"X-Static":      "static-a",
 		}
 		for name, want := range wantHeaders {
 			if got := request.Header.Get(name); got != want {
 				t.Errorf("%s = %q, want %q", name, got, want)
+			}
+		}
+		for _, internal := range []string{
+			headers.VSRInternalAuth, headers.VSRLooperRequest, headers.VSRLooperDecision,
+			headers.VSRLooperIteration, headers.VSRFusionDepth, headers.VSRSelectedRecipe,
+		} {
+			if got := request.Header.Get(internal); got != "" {
+				t.Errorf("a plain HTTP client sent the internal header %s = %q", internal, got)
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -80,7 +84,6 @@ func TestConnectorClientPreservesEndpointAndCallHeaders(t *testing.T) {
 		CallOptions{
 			DecisionName: "decision-a",
 			Iteration:    2,
-			FusionDepth:  1,
 		},
 	)
 	if err != nil {

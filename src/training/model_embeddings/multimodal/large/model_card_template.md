@@ -32,7 +32,7 @@ model-index:
 
 # __MODEL_NAME__
 
-`__MODEL_NAME__` is the large production multimodal embedding model from the [llm-semantic-router](https://huggingface.co/llm-semantic-router) project.
+`__MODEL_NAME__` is the large production multimodal embedding model from the [vllm-sr](https://huggingface.co/vllm-sr) project.
 
 It is designed for routing, retrieval, and cross-modal matching across text, image, and audio rather than for generative chat. The model uses a tri-encoder architecture with separate text, image, and audio towers projected into one shared embedding space.
 

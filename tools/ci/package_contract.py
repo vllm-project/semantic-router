@@ -30,6 +30,13 @@ CHECKS = [
     "package.resources",
     "package.installed",
 ]
+BUILD_ONLY_CHECKS = [
+    "package.version",
+    "package.staging",
+    "package.build",
+    "package.metadata",
+    "package.resources",
+]
 
 
 def run(*command: str) -> None:
@@ -101,6 +108,11 @@ def main() -> None:
     )
     parser.add_argument("--tag", default="")
     parser.add_argument("--base-ref", default="HEAD")
+    parser.add_argument(
+        "--build-only",
+        action="store_true",
+        help="Build release distributions without rerunning qualification tests.",
+    )
     parser.add_argument("--verify-dist", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -108,12 +120,14 @@ def main() -> None:
     if args.verify_dist:
         verify_distribution(output, args.mode, args.tag)
         return
+    if args.build_only and args.mode != "release":
+        parser.error("--build-only requires --mode release")
     output.mkdir(parents=True, exist_ok=True)
     report = {
         "runtime": "none",
         "device": "none",
         "platform": host_platform(),
-        "expected_checks": CHECKS,
+        "expected_checks": BUILD_ONLY_CHECKS if args.build_only else CHECKS,
         "checks": [],
         "artifacts": [],
     }
@@ -124,16 +138,17 @@ def main() -> None:
         "mode": args.mode,
         "tag": args.tag,
     }
-    base_sha = subprocess.check_output(
-        [
-            "git",
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            args.base_ref + "^{commit}",
-        ],
-        text=True,
-    ).strip()
+    if not args.build_only:
+        base_sha = subprocess.check_output(
+            [
+                "git",
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                args.base_ref + "^{commit}",
+            ],
+            text=True,
+        ).strip()
 
     def check(name, action):
         item = {"id": name, "status": "failed"}
@@ -145,38 +160,39 @@ def main() -> None:
             (output / "evidence.json").write_text(json.dumps(report, indent=2) + "\n")
 
     python = sys.executable
-    check(
-        "catalog.compiler",
-        lambda: run(
-            python,
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "tools/catalog/tests",
-            "-p",
-            "test_*.py",
-        ),
-    )
-    check(
-        "catalog.completeness",
-        lambda: run(
-            python,
-            "tools/catalog/audit_model_catalog.py",
-            "--require-min-evaluations-per-model",
-            "5",
-        ),
-    )
-    check(
-        "catalog.immutable",
-        lambda: run(
-            python,
-            "tools/release/snapshot_model_catalog.py",
-            "--check-published",
-            "--base-ref",
-            base_sha,
-        ),
-    )
+    if not args.build_only:
+        check(
+            "catalog.compiler",
+            lambda: run(
+                python,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "tools/catalog/tests",
+                "-p",
+                "test_*.py",
+            ),
+        )
+        check(
+            "catalog.completeness",
+            lambda: run(
+                python,
+                "tools/catalog/audit_model_catalog.py",
+                "--require-min-evaluations-per-model",
+                "5",
+            ),
+        )
+        check(
+            "catalog.immutable",
+            lambda: run(
+                python,
+                "tools/release/snapshot_model_catalog.py",
+                "--check-published",
+                "--base-ref",
+                base_sha,
+            ),
+        )
 
     def version():
         project = ROOT / "src/vllm-sr"
@@ -221,7 +237,8 @@ def main() -> None:
         lambda: run(python, "-m", "twine", "check", str(wheels[0]), str(sources[0])),
     )
     check("package.resources", lambda: verify_resources(wheels[0], sources[0]))
-    check("package.installed", lambda: check_wheel(wheels[0]))
+    if not args.build_only:
+        check("package.installed", lambda: check_wheel(wheels[0]))
     manifest["files"] = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in wheels + sources

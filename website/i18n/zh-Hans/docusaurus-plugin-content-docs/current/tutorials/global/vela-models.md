@@ -2,7 +2,7 @@
 
 ## 概览 {#overview}
 
-[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10)
+[Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
 是包含十四个已发布 checkpoint 的智能路由模型家族。当前 Router 模型注册表包含 Vela 307M Encoder 基座与十个任务模型，覆盖路由、提示词保护、内容安全、检索和重排，并将每个版本固定到不可变的 revision。
 
 | 模型 | 作用 |
@@ -37,8 +37,8 @@
 
 | Checkpoint | 总参数量 | 输出维度 | 文本上限 | 文本基座与读出 |
 | --- | ---: | ---: | ---: | --- |
-| [Omni Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) | 163.8M（163,771,288） | 384 | 512 tokens | 冻结的 GIST-small；CLS 读出 |
-| [Omni Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md) | 1.36B（1,361,475,288） | 768 | 32,768 tokens | Qwen3-Embedding-0.6B；末 token Matryoshka 读出 |
+| [Omni Nano](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) | 163.8M（163,771,288） | 384 | 512 tokens | 冻结的 GIST-small；CLS 读出 |
+| [Omni Mini](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md) | 1.36B（1,361,475,288） | 768 | 32,768 tokens | Qwen3-Embedding-0.6B；末 token Matryoshka 读出 |
 
 参数量包含全部模态分支，包括新增的 CLAP 音频分支；整数和运行统计量 buffer 不计入参数。Nano 保留 CLS 读出及恒等投影；Mini 对最后一个非 padding token 的完整 1024 维状态归一化，取前 768 维后再次归一化。
 
@@ -46,7 +46,7 @@ Mini 默认使用适合跨模态比较的共享文本模式。纯文本任务可
 
 两者都接收不超过 30 秒、保留原始采样率的 PCM，可为单声道或 channels-first 数组。传入真实采样率后，两个分支分别从原始波形生成 Whisper 的 16 kHz 输入与 CLAP 的 48 kHz 输入。存在更高采样率 PCM 时，不应先降采样到 16 kHz。CLAP 读取按端点分布、每段最多十秒的窗口，聚合归一化向量，经冻结的 TRAIN 统计量标准化及已训练的残差映射后，加到保留的未归一化 Whisper 仿射输出上，最后做 L2 归一化。文本/图像路径保留，音频路径经过新的训练与评测。
 
-最新模型卡将路由与跨模态检索能力分别与[原始 small](https://huggingface.co/llm-semantic-router/multi-modal-embed-small/tree/fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4)和[原始 large](https://huggingface.co/llm-semantic-router/multi-modal-embed-large/tree/e21cde3ccc414c56f504b322662f42c603a939ee)模型对比。分数范围为 0–100，每格表示原始模型 → 当前模型：
+最新模型卡将路由与跨模态检索能力分别与[原始 small](https://huggingface.co/vllm-sr/multi-modal-embed-small/tree/fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4)和[原始 large](https://huggingface.co/vllm-sr/multi-modal-embed-large/tree/e21cde3ccc414c56f504b322662f42c603a939ee)模型对比。分数范围为 0–100，每格表示原始模型 → 当前模型：
 
 | 指标 | 原始 small → Nano | 原始 large → Mini |
 | --- | ---: | ---: |
@@ -70,19 +70,19 @@ Mini 默认使用适合跨模态比较的共享文本模式。纯文本任务可
 
 排名汇总 9 月 17 日注册表快照与当前 Vela 模型，包括单模态专用模型，已报告的评测协议存在差异。尺寸上限按全模型总参数量计算。**两个 Vela 模型都不在这两个完整面板的观测前沿上**，两种聚合指标下均如此。单任务优势包括 Nano 的 IMDb **91.95 accuracy**、NMSQA **62.90 max AP**，以及 Mini 的 Mridingham **68.14 accuracy**、SIBFLEURS **39.07 accuracy**；这些任务级前沿不能证明整体榜单领先。
 
-Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带指令 English 评测使用固定的官方指令，并重新运行了匹配的原始文本对照：Mean(TaskType) 从 **58.79 提升到 64.68**，38 个任务提升、3 个下降。该指令模式不能替代跨图像/音频比较中的默认共享模式。两个新音频路径均重新评测；虽然音频聚合分数提升，语音与文本检索仍有退步。实际测量身份、全部任务和退步项见固定版本的 [Nano 评测](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md)、[Mini 评测](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)及[指令模式匹配对照](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)。这些面板不代表完整多语言或图像覆盖，也不证明时延或内存表现。
+Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带指令 English 评测使用固定的官方指令，并重新运行了匹配的原始文本对照：Mean(TaskType) 从 **58.79 提升到 64.68**，38 个任务提升、3 个下降。该指令模式不能替代跨图像/音频比较中的默认共享模式。两个新音频路径均重新评测；虽然音频聚合分数提升，语音与文本检索仍有退步。实际测量身份、全部任务和退步项见固定版本的 [Nano 评测](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md)、[Mini 评测](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)及[指令模式匹配对照](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)。这些面板不代表完整多语言或图像覆盖，也不证明时延或内存表现。
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
-内置 Domain、Guard、Safety、PII、FactCheck、Feedback 和语义 Embedding 默认使用 Vela。参考配置还选择了 Vela Modality、Hazard 和 Reranker。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
+未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 Vela 2.0 0.3B 上运行，每个请求只调用一次（见[选择模型](model-runtime/choose-a-model.md#vela-20)）。语义 Embedding、Hazard 和 Reranker 使用 Vela 1.0；在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可恢复它。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
 
-默认阈值为 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
+运行 Vela 1.0 任务模型且未设置阈值的模块使用 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
 
 输入预算由部署选择。模块的 `max_sequence_length: 0` 保留保守的 512-token 策略；Embedding 默认采用 22 层、768 维和 `full_context: false`。显式模型绑定可设置最多 **32,768 tokens**（含特殊 token）及 `overflow: reject`，超限输入会被拒绝，不会静默缩短。
 
 ## 配置 {#configuration}
 
-以下片段将 Domain 绑定到 32K 输入预算的 CPU 部署。将它合入已有的完整配置，保留 providers、signals 和 decisions。
+每个 Vela 模型都运行在[模型运行时](model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
 
 ```yaml
 routing:
@@ -90,43 +90,32 @@ routing:
     domain_classifier:
       deployment: vela-domain
       contract: label_distribution.v1
-      adapter: modernbert
-      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
 
 global:
   model_catalog:
     deployments:
       vela-domain:
-        artifact: models/Vela-1.0-Encoder-307M-Domain
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         device: cpu
-        precision: fp32
         input:
           max_tokens: 32768
           overflow: reject
 ```
 
-其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`；Embedding 使用 `mmbert` adapter 和 `embedding.v1`；Reranker 使用 `vela_reranker` 和 `relevance_scores.v1`。Adapter 名表示推理架构，与发布名称独立。完整契约见[进程内推理](/docs/installation/runtime/in-process)。
+其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`，Embedding 使用 `embedding.v1`，Reranker 使用 `relevance_scores.v1`。运行时从模型包读取每个模型的架构，因此这些 binding 不需要 adapter。完整契约见[与路由器一起运行](model-runtime/deploy.md)。
 
-Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、执行设置、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
+Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 
 PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按任务选择输入策略，并使用应用中的实际输入长度测量时延。
 
 ## 推理引擎与硬件 {#inference-engines-and-hardware}
 
-原生 Vela 产物通过 Candle 运行。CPU 路径已验证，包括 32K 输入。Candle 仍提供 CUDA 后端，NVIDIA 性能需要在目标硬件上测量。
+模型运行时用 PyTorch 运行 Vela 模型。CPU 执行（包括 32K 输入）已验证，经 ROCm 的 AMD Instinct MI300X 和 MI325X GPU 也已验证。CUDA 可用但尚未验证，NVIDIA 性能需要在目标硬件上测量。[Profiles](model-runtime/profiles.md) 在精确与速度之间取舍，[选择模型](model-runtime/choose-a-model.md)列出每个模型的开销。
 
-ONNX 是 ORT provider 使用的可移植推理格式。[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)显式将十个任务模型绑定到 AMD GPU：Embedding 和 Reranker 使用 ROCm 下的 CK FlashAttention，分类器使用 MIGraphX。配方固定每个产物的 revision，并保留发布的运行策略。`--platform amd` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。
+[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform amd` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
 
-完整信号流水线以 **8K** 输入预算完成测量。独立 Embedding 和 Reranker 执行已验证至 **32K**；Hazard 在 32K 逻辑预算内使用已验证的 2,048-token 窗口。这些结果不代表所有分类器都完成了 AMD 32K 验证。首次 GPU 编译时间与预热后的请求时延应分别记录。
-
-Domain 和 FactCheck 的更长请求可选择[32K ROCm 部署](../../installation/amd-rocm.md#optional-32k-domain-and-factcheck-on-rocm)。此选项需要更多显存，也会增加短输入的时延。
-
-Embedding 和 Reranker 仓库包含共享外部权重的 FP32 ONNX 计算图。完整表示使用 `onnx/model.onnx`；缩减表示需要匹配已训练层数或层数与维度的计算图。下载器根据模型的编码器配置识别完整表示，因此显式选择完整层数和维度也可以使用主计算图。
-
-CK 版本使用 `onnx/model_fa.onnx` 表示完整的 22 层、768 维表示。选择这个精确的 `head`，并设置 `device: rocm:0`、`custom_ops_profile: ck_flash_attention` 和 `precision: native`。Reranker 的 `pair_scorer` 必须与图匹配：缩减出口使用 `onnx/model_fa_layer_N_dim_D.onnx`，层数和维度也设为对应值。Embedding 使用匹配的 `onnx/model_fa_layer_N.onnx` 配套图。这些图共享已发布的外部权重，同时保留可移植导出。
-
-更新原生权重时，必须重新生成对应的 ONNX 产物再发布。
+早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](model-runtime/migrate.md)。
 
 各模型卡片列出支持的输入长度、用法及可比评测结果。公开对比以此前的 mmBERT 家族为基线，使用匹配数据；质量分数、最大可接受输入长度和推理性能衡量的是不同属性。
 

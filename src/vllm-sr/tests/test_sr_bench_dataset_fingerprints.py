@@ -1,6 +1,7 @@
 """Default-source fingerprints stream full content and retain only bounded proofs."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -39,20 +40,21 @@ def test_verified_large_bundle_does_not_block_small_equivalent_standalone(
     small = [_row("small", "mmlu-pro")]
     large = [_row(f"large-{i}", "livecodebench") for i in range(12)]
     standalone = _save(tmp_path, small)
-    _save(tmp_path, large)
+    large_source = _save(tmp_path, large)
     bundle = _save(tmp_path, small + large)
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", 1024)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", 1024)
     reader = DatasetReader(tmp_path)
     result = _choices(reader)
-    assert Path(bundle["path"]).stat().st_size > datasets.MAX_DATA_BYTES
+    assert Path(bundle["path"]).stat().st_size > datasets.MAX_ROW_BYTES
     assert result["mmlu-pro"]["eligible"]
     assert result["mmlu-pro"]["source_ids"] == [standalone["id"]]
-    assert not result["livecodebench"]["eligible"]
-    assert result["livecodebench"]["reason_code"] == "source_size_limit"
-    assert "Full content was verified" in result["livecodebench"]["reason"]
+    assert result["livecodebench"]["eligible"]
+    assert result["livecodebench"]["source_ids"] == [large_source["id"]]
     assert reader.compose([standalone["id"]], ["mmlu-pro"])["id"] == standalone["id"]
-    with pytest.raises(ValueError, match="size limit"):
-        reader.compose([bundle["id"]], ["mmlu-pro"])
+    assert reader.compose([bundle["id"]], ["mmlu-pro"])["id"] == standalone["id"]
+    assert reader.page(bundle["id"], benchmark="livecodebench", limit="5")[
+        "total"
+    ] == len(large)
 
 
 def test_streaming_proof_includes_answers_and_ignores_row_order(tmp_path):
@@ -84,6 +86,10 @@ def test_stat_keyed_fingerprint_cache_rechecks_tampering(tmp_path, monkeypatch):
     assert checked == ["first"]
     path = Path(saved["path"])
     path.write_bytes(path.read_bytes().replace(b'"answer":"A"', b'"answer":"B"'))
+    # A same-size rewrite within one filesystem clock tick keeps the mtime;
+    # tampering after the cache was filled is a later write.
+    before = path.stat()
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000))
     with pytest.raises(ValueError, match="digest"):
         _choices(reader)
     assert checked == ["first", "first"]
@@ -119,7 +125,7 @@ def test_sources_rejected_early_still_consume_scan_budget(tmp_path, monkeypatch)
         for identity in ("first", "second")
     ]
     maximum = max(Path(manifest["path"]).stat().st_size for manifest in manifests)
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", 1024)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", 1024)
     monkeypatch.setattr(datasets, "MAX_FINGERPRINT_SCAN_BYTES", maximum)
     result = _choices(DatasetReader(tmp_path))["mmlu-pro"]
     assert not result["eligible"] and not result["source_ids"]

@@ -96,7 +96,11 @@ func responseStageGuardConfig(t *testing.T, server *httptest.Server, onError str
 
 	cfg := &config.RouterConfig{}
 	cfg.PromptGuard.Enabled = true
-	cfg.PromptGuard.Protocol = config.PromptGuardProtocolHTTPClassify
+	cfg.PromptGuard.Backend = &config.RemoteClassifierBackend{
+		Protocol: config.RemoteClassifierProtocolHTTPClassify,
+		Contract: config.RemoteClassifierContractLabelDistribution,
+		Model:    "test-guardrail",
+	}
 	cfg.PromptGuard.JailbreakMappingPath = "response-stage-test-mapping"
 	cfg.PromptGuard.PositiveLabels = []string{"jailbreak"}
 	cfg.PromptGuard.Threshold = 0.9
@@ -202,7 +206,7 @@ func TestResponseJailbreakSignalDrivesTheSelectedDecisionPlugin(t *testing.T) {
 	server := newJailbreakScoreServer(t, 0.95, 0.05)
 	router, ctx := newResponseStageRouter(t, server, "", "block")
 
-	router.evaluateResponseJailbreakSignal(ctx, content)
+	router.scoreResponseStageSignals(ctx, content)
 
 	if len(ctx.VSRMatchedResponseJailbreak) != 1 || ctx.VSRMatchedResponseJailbreak[0] != responseStageRuleName {
 		t.Fatalf("matched response rules = %v, want [%s] (errors=%v)", ctx.VSRMatchedResponseJailbreak, responseStageRuleName, ctx.VSRSignalErrors)
@@ -225,7 +229,7 @@ func TestResponseJailbreakSignalCleanOutputTakesNoAction(t *testing.T) {
 	server := newJailbreakScoreServer(t, 0.01, 0.99)
 	router, ctx := newResponseStageRouter(t, server, "", "block")
 
-	router.evaluateResponseJailbreakSignal(ctx, content)
+	router.scoreResponseStageSignals(ctx, content)
 
 	if len(ctx.VSRMatchedResponseJailbreak) != 0 {
 		t.Fatalf("a clean response matched %v", ctx.VSRMatchedResponseJailbreak)
@@ -252,7 +256,7 @@ func TestResponseJailbreakBackendFailureIsNotHidden(t *testing.T) {
 		server := newJailbreakFailingServer(t)
 		router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
 
-		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.scoreResponseStageSignals(ctx, content)
 
 		if got := ctx.VSRSignalErrors[responseStageSignalKey]; got != "response_jailbreak_evaluation_failed" {
 			t.Fatalf("signal error = %q, want the response scan failure recorded under %s", got, responseStageSignalKey)
@@ -278,7 +282,7 @@ func TestResponseJailbreakBackendFailureIsNotHidden(t *testing.T) {
 		server := newJailbreakFailingServer(t)
 		router, ctx := newResponseStageRouter(t, server, "", "block")
 
-		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.scoreResponseStageSignals(ctx, content)
 
 		if response := router.performResponseJailbreakDetectionText(ctx, content); response != nil {
 			t.Fatalf("the default policy must deliver the response, got %+v", response)
@@ -305,7 +309,7 @@ func TestResponseJailbreakPartialScanFailureIsNotClean(t *testing.T) {
 		server, counts := newJailbreakPartialFailureServer(t, 0.05, 0.95)
 		router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
 
-		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.scoreResponseStageSignals(ctx, content)
 
 		if counts.failed.Load() == 0 || counts.scored.Load() == 0 {
 			t.Fatalf("fixture must fail one chunk and score another, backend saw failed=%d scored=%d", counts.failed.Load(), counts.scored.Load())
@@ -323,7 +327,7 @@ func TestResponseJailbreakPartialScanFailureIsNotClean(t *testing.T) {
 		server, _ := newJailbreakPartialFailureServer(t, 0.95, 0.05)
 		router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
 
-		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.scoreResponseStageSignals(ctx, content)
 
 		if got, failed := ctx.VSRSignalErrors[responseStageSignalKey]; failed {
 			t.Fatalf("a detection must not be reported as unresolved, signal error = %q", got)
@@ -351,7 +355,7 @@ func TestResponseJailbreakPartialScanIsResolvedPerRuleThreshold(t *testing.T) {
 		config.JailbreakRule{Name: responseStageRuleName, Threshold: 0.4, Direction: config.SignalDirectionResponse},
 		config.JailbreakRule{Name: "strict_completion", Threshold: 0.9, Direction: config.SignalDirectionResponse})
 
-	router.evaluateResponseJailbreakSignal(ctx, content)
+	router.scoreResponseStageSignals(ctx, content)
 
 	if counts.failed.Load() == 0 || counts.scored.Load() == 0 {
 		t.Fatalf("fixture must fail one chunk and score another, backend saw failed=%d scored=%d", counts.failed.Load(), counts.scored.Load())
@@ -412,7 +416,7 @@ func TestResponseJailbreakSignalReadsTheSelectedRecipeRules(t *testing.T) {
 	guarded.VSRSelectedDecision = &recipe.Profile.Decisions[0]
 	guarded.VSRSelectedDecisionName = recipe.Profile.Decisions[0].Name
 
-	router.evaluateResponseJailbreakSignal(guarded, content)
+	router.scoreResponseStageSignals(guarded, content)
 	if len(guarded.VSRMatchedResponseJailbreak) != 1 {
 		t.Fatalf("the guarded recipe's rule was not scored: matched=%v errors=%v",
 			guarded.VSRMatchedResponseJailbreak, guarded.VSRSignalErrors)
@@ -426,7 +430,7 @@ func TestResponseJailbreakSignalReadsTheSelectedRecipeRules(t *testing.T) {
 	}
 	plain.VSRSelectedDecision = &cfg.Recipes[0].Profile.Decisions[0]
 
-	router.evaluateResponseJailbreakSignal(plain, content)
+	router.scoreResponseStageSignals(plain, content)
 	if len(plain.VSRMatchedResponseJailbreak) != 0 || len(plain.VSRSignalConfidences) != 0 || len(plain.VSRSignalErrors) != 0 {
 		t.Fatalf("the default recipe declares no response-direction rule, yet its response was scored: matched=%v confidences=%v errors=%v",
 			plain.VSRMatchedResponseJailbreak, plain.VSRSignalConfidences, plain.VSRSignalErrors)
@@ -474,7 +478,7 @@ func TestResponseJailbreakSignalRecordsReplayOutcome(t *testing.T) {
 		router, ctx := newResponseStageRouter(t, server, "", "block")
 		recorder := startResponseStageReplay(t, router, ctx)
 
-		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.scoreResponseStageSignals(ctx, content)
 		assertBlocked(t, router, ctx, content)
 		router.recordRouterReplayResponseJailbreak(ctx)
 
@@ -497,7 +501,7 @@ func TestResponseJailbreakSignalRecordsReplayOutcome(t *testing.T) {
 		router, ctx := newResponseStageRouter(t, server, "", "block")
 		recorder := startResponseStageReplay(t, router, ctx)
 
-		router.evaluateResponseJailbreakSignal(ctx, content)
+		router.scoreResponseStageSignals(ctx, content)
 		router.performResponseJailbreakDetectionText(ctx, content)
 		router.recordRouterReplayResponseJailbreak(ctx)
 

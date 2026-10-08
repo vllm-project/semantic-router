@@ -35,11 +35,11 @@ type VectorStoreConfig struct {
 	MaxFileSizeMB int `json:"max_file_size_mb,omitempty" yaml:"max_file_size_mb,omitempty"`
 
 	// EmbeddingModel specifies the model for document embeddings.
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
+	// Options: "mmbert" (default), "qwen3", "multimodal"
 	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
 
 	// EmbeddingDimension is the dimensionality of the embedding vectors.
-	// Default: 768
+	// Default: 0 (the prepared model's native output dimension).
 	EmbeddingDimension int `json:"embedding_dimension,omitempty" yaml:"embedding_dimension,omitempty"`
 
 	// IngestionWorkers is the number of concurrent ingestion pipeline workers.
@@ -73,7 +73,7 @@ type VectorStoreConfig struct {
 	// LlamaStack holds Llama Stack backend configuration.
 	// When backend_type is "llama_stack", vSR delegates vector storage and
 	// embedding to a locally-running Llama Stack instance via its REST API.
-	// Llama Stack handles embedding internally, so vSR's CandleEmbedder is
+	// Llama Stack handles embedding internally, so vSR's prepared embedder is
 	// not used for insert/search — only Llama Stack's configured model is used.
 	LlamaStack *LlamaStackVectorStoreConfig `json:"llama_stack,omitempty" yaml:"llama_stack,omitempty"`
 
@@ -301,17 +301,7 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 		c.MaxFileSizeMB = 50
 	}
 	if c.EmbeddingModel == "" {
-		c.EmbeddingModel = "bert"
-	}
-	if c.EmbeddingDimension <= 0 {
-		// Default dimension depends on model:
-		// - bert/multimodal = 384
-		// - qwen3/gemma/mmbert = 768
-		if c.EmbeddingModel == "bert" || c.EmbeddingModel == "multimodal" {
-			c.EmbeddingDimension = 384
-		} else {
-			c.EmbeddingDimension = 768
-		}
+		c.EmbeddingModel = DefaultEmbeddingModel
 	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2

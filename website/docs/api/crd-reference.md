@@ -92,7 +92,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `model_id` _string_ |  |  | Optional: \{\} <br /> |
-| `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Classification threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `category_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
@@ -196,6 +195,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
+| `decision_model` _string_ | DecisionModel is the Vela model that answers the Router's questions,<br />global.model_catalog.system.decision_model: Vela-2.0-0.3B (the<br />default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any<br />case. It answers the built-in signals and every decision question that<br />names no deployment; the 4B and 9B need a GPU in the Router pod. |  | Pattern: `^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]\|0\.8[Bb]\|4[Bb]\|9[Bb])\|1\.0))?$` <br />Optional: \{\} <br /> |
 | `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
@@ -212,6 +212,7 @@ _Appears in:_
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
+| `streamed_body` _[StreamedBodyConfig](#streamedbodyconfig)_ | StreamedBody enables streamed request body handling. Mirrors<br />global.router.streamed_body; the gateway must send bodies to ExtProc in<br />STREAMED or FullDuplexStreamed mode for it to take effect. |  | Optional: \{\} <br /> |
 
 #### DecisionConfig
 
@@ -231,6 +232,49 @@ _Appears in:_
 | `preferred_endpoints` _string array_ | PreferredEndpoints specifies which vLLM endpoints to prefer for this decision |  | Optional: \{\} <br /> |
 | `plugins` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg) array_ | Plugins contains policy configurations applied after rule matching |  | Optional: \{\} <br /> |
 | `algorithm` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Algorithm configures base model selection for this decision. It is<br />preserved as a router-owned object so supported algorithms can evolve<br />without requiring the operator CRD to duplicate every nested field. |  | Type: object <br />Optional: \{\} <br /> |
+| `reliability` _[DecisionReliabilityConfig](#decisionreliabilityconfig)_ | Reliability overrides the timeouts and retries of the provider model<br />that serves this decision's requests |  | Optional: \{\} <br /> |
+| `fallback` _[DecisionFallbackConfig](#decisionfallbackconfig)_ | Fallback overrides the cross-model fallback policy for this decision's<br />requests, over the recipe's and the router's |  | Optional: \{\} <br /> |
+
+#### DecisionFallbackConfig
+
+DecisionFallbackConfig is a decision's fallback block, with the router
+configuration's field names and meaning. A field left out keeps the
+recipe's or the router's value.
+
+_Appears in:_
+
+- [DecisionConfig](#decisionconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled turns cross-model fallback on or off for this decision |  | Optional: \{\} <br /> |
+| `max_attempts` _integer_ | MaxAttempts bounds the candidates tried, the first one included |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `total_timeout` _string_ | TotalTimeout bounds the whole fallback chain |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `per_attempt_timeout` _string_ | PerAttemptTimeout bounds each candidate's attempt |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retryable_status_codes` _integer array_ | RetryableStatusCodes are the statuses that move on to the next candidate |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+
+#### DecisionReliabilityConfig
+
+DecisionReliabilityConfig is a decision's reliability block, with the
+router configuration's field names and meaning. Durations are Go durations
+such as "30s"; "0s" turns a timeout off.
+
+_Appears in:_
+
+- [DecisionConfig](#decisionconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `total_timeout` _string_ | TotalTimeout bounds the whole call: every attempt and the response |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `per_try_timeout` _string_ | PerTryTimeout bounds each attempt until its response starts |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `idle_timeout` _string_ | IdleTimeout bounds the wait for more of a streamed response<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `first_byte_timeout` _string_ | FirstByteTimeout bounds the wait for the first response byte<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_count` _integer_ | RetryCount is the number of retries after the first attempt |  | Maximum: 5 <br />Minimum: 0 <br />Optional: \{\} <br /> |
+| `retry_on` _string_ | RetryOn adds retry conditions, with Envoy's names (5xx, reset, ...) |  | Optional: \{\} <br /> |
+| `retriable_status_codes` _integer array_ | RetriableStatusCodes adds statuses retried under retriable-status-codes |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+| `retry_back_off_base` _string_ | RetryBackOffBase is the base of the randomized exponential wait between<br />retries (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_back_off_max` _string_ | RetryBackOffMax caps that wait (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_after_max` _string_ | RetryAfterMax honors a response's Retry-After up to this bound<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 
 #### EmbeddingEndpointConfig
 
@@ -261,7 +305,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `qwen3_model_path` _string_ | Path to Qwen3-Embedding-0.6B model directory<br />Qwen3 provides 32K context and high quality embeddings (1024 dimensions) |  | Optional: \{\} <br /> |
-| `gemma_model_path` _string_ | Path to EmbeddingGemma-300M model directory<br />Gemma provides 8K context and fast embeddings (768 dimensions) |  | Optional: \{\} <br /> |
 | `mmbert_model_path` _string_ | Path to mmBERT 2D Matryoshka embedding model directory<br />Supports layer early exit (3/6/11/22) and dimension reduction (64-768) |  | Optional: \{\} <br /> |
 | `use_cpu` _boolean_ | Use CPU for inference (default: true) | true | Optional: \{\} <br /> |
 | `embedding_config` _[HNSWEmbeddingConfig](#hnswembeddingconfig)_ | Embedding configuration for embedding-based classification |  | Optional: \{\} <br /> |
@@ -337,7 +380,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `existingRef` _[GatewayReference](#gatewayreference)_ | ExistingRef references an existing Gateway to use |  | Optional: \{\} <br /> |
+| `existingRef` _[GatewayReference](#gatewayreference)_ | ExistingRef references an existing Gateway that calls the Router over<br />ext_proc. Setting it selects extproc mode. |  | Optional: \{\} <br /> |
 
 #### HNSWCacheConfig
 
@@ -364,7 +407,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `backend` _string_ | Backend selects the embedding provider backend. |  | Enum: [candle openvino openai_compatible] <br />Optional: \{\} <br /> |
+| `backend` _string_ | Backend selects the embedding provider backend: the built-in model<br />runtime (the default) or an external OpenAI-compatible endpoint. |  | Enum: [model_runtime openai_compatible] <br />Optional: \{\} <br /> |
 | `model_type` _string_ | ModelType specifies which embedding model to use<br />Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider) |  | Enum: [qwen3 gemma mmbert remote] <br />Optional: \{\} <br /> |
 | `preload_embeddings` _boolean_ | PreloadEmbeddings enables precomputing candidate embeddings at startup | true | Optional: \{\} <br /> |
 | `target_dimension` _integer_ | TargetDimension is the embedding dimension to use (default: 768)<br />For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.<br />External providers may use other positive dimensions such as 1024, 1536, or 3072. |  | Minimum: 1 <br />Optional: \{\} <br /> |
@@ -382,7 +425,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `repository` _string_ | Repository is the container image repository | ghcr.io/vllm-project/semantic-router/extproc | Optional: \{\} <br /> |
+| `repository` _string_ | Repository is the container image repository | ghcr.io/vllm-project/semantic-router/vllm-sr | Optional: \{\} <br /> |
 | `tag` _string_ | Tag is the container image tag | latest | Optional: \{\} <br /> |
 | `pullPolicy` _[PullPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#pullpolicy-v1-core)_ | PullPolicy is the image pull policy | IfNotPresent | Enum: [Always Never IfNotPresent] <br />Optional: \{\} <br /> |
 | `imageRegistry` _string_ | ImageRegistry is an optional registry prefix |  | Optional: \{\} <br /> |
@@ -720,14 +763,12 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `max_sequence_length` _integer_ | MaxSequenceLength is the total tokenized input budget, including special<br />tokens. Omission or zero preserves the 512-token legacy limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `use_mmbert_32k` _boolean_ | UseMmBERT32K selects the local model that supports token windows. |  | Optional: \{\} <br /> |
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window scans original content tokens with explicit overlap. Omission or<br />null leaves window selection unchanged; no CRD defaults are injected. |  | Optional: \{\} <br /> |
 | `model_id` _string_ |  |  | Optional: \{\} <br /> |
-| `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
-| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit<br />token windows are only supported by the local mmbert32k model. |  | Optional: \{\} <br /> |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id and use_cpu above. Explicit token windows are only supported by<br />the local model. |  | Optional: \{\} <br /> |
 | `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### PersistenceSpec
@@ -790,12 +831,10 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
 | `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local mmbert32k variant supports it. |  | Optional: \{\} <br /> |
+| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local model supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
-| `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `model_id` _string_ | ModelID binds the guard to one model; empty runs the decision model. |  | Optional: \{\} <br /> |
+| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float<br />precision issues; empty takes the threshold calibrated for the model. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |
@@ -1166,8 +1205,8 @@ _Appears in:_
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations |  | Optional: \{\} <br /> |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity |  | Optional: \{\} <br /> |
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#envvar-v1-core) array_ | Environment variables |  | Optional: \{\} <br /> |
-| `args` _string array_ | Container arguments |  | Optional: \{\} <br /> |
-| `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway integration for reusing existing gateways |  | Optional: \{\} <br /> |
+| `args` _string array_ | Router arguments, after the gateway mode flags the Operator passes<br />(-gateway=standalone -listener-address=0.0.0.0, or -gateway=extproc).<br />The gateway mode follows spec.gateway, so args may not set those flags. |  | MaxItems: 64 <br />items:MaxLength: 4096 <br />Optional: \{\} <br /> |
+| `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway selects what serves client traffic. Omitted, the Router runs<br />standalone: it serves the OpenAI-compatible API on port 8801 itself,<br />with no Envoy, and the Service exposes that port. With existingRef, the<br />Router serves ext_proc gRPC on port 50051 for that Gateway, whose<br />ext_proc policy and routes you manage. |  | Optional: \{\} <br /> |
 | `openshift` _[OpenShiftSpec](#openshiftspec)_ | OpenShift-specific features |  | Optional: \{\} <br /> |
 | `ingress` _[IngressSpec](#ingressspec)_ | Ingress configuration |  | Optional: \{\} <br /> |
 
@@ -1186,7 +1225,7 @@ _Appears in:_
 | `replicas` _integer_ | Replicas is the current number of replicas |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of ready replicas |  | Optional: \{\} <br /> |
 | `phase` _string_ | Phase represents the current phase of the SemanticRouter |  | Optional: \{\} <br /> |
-| `gatewayMode` _string_ | GatewayMode indicates deployment mode: standalone or gateway-integration |  | Optional: \{\} <br /> |
+| `gatewayMode` _string_ | GatewayMode is what serves client traffic: standalone (the Router's own<br />listener on port 8801) or gateway-integration (the Gateway in<br />spec.gateway, with the Router serving ext_proc) |  | Optional: \{\} <br /> |
 | `openshiftFeatures` _[OpenShiftFeaturesStatus](#openshiftfeaturesstatus)_ | OpenShiftFeatures tracks OpenShift-specific feature status |  | Optional: \{\} <br /> |
 
 #### ServiceAccountSpec
@@ -1231,6 +1270,20 @@ _Appears in:_
 | `grpc` _[PortSpec](#portspec)_ | GRPC port configuration |  | Optional: \{\} <br /> |
 | `api` _[PortSpec](#portspec)_ | API port configuration |  | Optional: \{\} <br /> |
 | `metrics` _[MetricsPortSpec](#metricsportspec)_ | Metrics port configuration |  | Optional: \{\} <br /> |
+
+#### StreamedBodyConfig
+
+StreamedBodyConfig defines streamed request body handling.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled accumulates request body chunks before routing at end-of-stream. |  | Optional: \{\} <br /> |
+| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `timeout_sec` _integer_ | TimeoutSec caps how long body accumulation may take. A slower body is<br />rejected and the ExtProc stream ends; the downstream response follows the<br />gateway's ExtProc failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### Tool
 

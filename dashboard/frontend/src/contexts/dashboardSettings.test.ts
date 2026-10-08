@@ -12,6 +12,8 @@ const readySettings = {
   routerEvalEndpoint: 'http://router/api/v1/routing/preview',
   srBenchAvailable: true,
   srBenchUnavailableReason: '',
+  mlPipelineAvailable: true,
+  mlPipelineUnavailableReason: '',
 }
 
 describe('decodeDashboardSettings', () => {
@@ -23,6 +25,8 @@ describe('decodeDashboardSettings', () => {
     ['legacy readonly-only response', { readonlyMode: false }],
     ['missing split capability', { ...readySettings, runtimeConfigWritable: undefined }],
     ['missing Evaluation availability', { ...readySettings, srBenchAvailable: undefined }],
+    ['missing ML pipeline availability', { ...readySettings, mlPipelineAvailable: undefined }],
+    ['wrong ML pipeline reason type', { ...readySettings, mlPipelineUnavailableReason: null }],
     ['wrong Evaluation reason type', { ...readySettings, srBenchUnavailableReason: null }],
     ['array payload', []],
   ])('rejects %s instead of inferring authority', (_label, payload) => {

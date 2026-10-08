@@ -14,12 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-// remoteReservation owns no external process or model. It shares only the
-// deployment's admission gate; each binding owns its local connector separately.
-type remoteReservation struct{}
-
-func (remoteReservation) Close() error { return nil }
-
 func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRuntime, spec config.ResolvedModelBinding, external *config.ExternalModelConfig, closer io.Closer, infer func(context.Context, I) (O, error), validate func(I, O) error) (*binding.Resolved[I, O], error) {
 	if models == nil {
 		models = standaloneModelRuntime()
@@ -52,7 +46,9 @@ func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRun
 	if spec.Admission.MaxConcurrency > 0 {
 		gate = admission.NewSemaphore(spec.Admission.MaxConcurrency, spec.Admission.MaxQueue, time.Duration(spec.Admission.QueueTimeoutMs)*time.Millisecond, admission.Overflow(spec.Admission.OnOverflow))
 	}
-	resource, err := models.runtime.Pool.Acquire(ctx, identity, string(budget), gate, func(context.Context) (io.Closer, error) { return remoteReservation{}, nil })
+	// The reference shares only the deployment's admission gate; the binding
+	// owns its connector.
+	resource, err := models.runtime.Pool.Admit(ctx, identity, string(budget), gate)
 	if err != nil {
 		_ = closer.Close()
 		return nil, err

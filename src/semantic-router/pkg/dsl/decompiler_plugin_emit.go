@@ -13,6 +13,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"system_prompt":       emitSystemPromptPluginConfig,
 	"response_cache":      emitResponseCachePluginConfig,
 	"context_compression": emitStructuredPluginConfig,
+	"prompt_cache":        emitStructuredPluginConfig,
 	"router_replay":       emitRouterReplayPluginConfig,
 	"shadow_dispatch":     emitStructuredPluginConfig,
 	"memory":              emitMemoryPluginConfig,
@@ -127,9 +128,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.Enabled {
 		fmt.Fprintf(sb, "    enabled: true\n")
 	}
-	if cfg.UseNLI {
-		fmt.Fprintf(sb, "    use_nli: true\n")
-	}
 	if cfg.HallucinationAction != "" {
 		fmt.Fprintf(sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
 	}
@@ -200,8 +198,8 @@ func emitToolSelectionPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.Strategy != "" {
 		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
 	}
-	if cfg.FallbackToEmpty != nil && *cfg.FallbackToEmpty {
-		fmt.Fprintf(sb, "    fallback_to_empty: true\n")
+	if cfg.FallbackToEmpty != nil {
+		fmt.Fprintf(sb, "    fallback_to_empty: %v\n", *cfg.FallbackToEmpty)
 	}
 	if cfg.RelevanceThreshold != nil {
 		fmt.Fprintf(sb, "    relevance_threshold: %v\n", *cfg.RelevanceThreshold)

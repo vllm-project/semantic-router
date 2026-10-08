@@ -1,8 +1,9 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,22 +17,46 @@ import (
 	"github.com/vllm-project/semantic-router/perf/pkg/benchmark"
 	"github.com/vllm-project/semantic-router/perf/pkg/modelassets"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
+// benchmarkInput is the shared deployment budget: 512 tokens, truncating.
+var benchmarkInput = config.ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}
+
+// Benchmarks reach every model the way the router does: through one runtime
+// manager and the serving facade, each deployment in a runtime process of its
+// own (VLLM_SRUN_COMMAND, else vllm-srun on PATH).
 var (
-	benchmarkRuntime    = native.New(nil)
+	benchmarkManager    = modelservice.NewManager()
+	benchmarkLease      = acquireBenchmarkLease()
+	benchmarkRuntime    = serving.New(benchmarkLease, nil)
 	benchmarkArtifacts  = map[string]benchmark.ModelArtifact{}
+	benchmarkCards      = map[string]modelservice.ModelCard{}
 	benchmarkSpecs      = map[string]config.ResolvedModelBinding{}
 	benchmarkIdentities = map[string]benchmark.ModelIdentity{}
 	benchmarkModelMu    sync.Mutex
 )
 
+func acquireBenchmarkLease() *modelservice.Lease {
+	lease, err := benchmarkManager.AcquireDeployments(nil)
+	if err != nil {
+		panic(fmt.Sprintf("model runtime manager: %v", err))
+	}
+	return lease
+}
+
 func benchmarkModel(b *testing.B, name, contract string) config.ResolvedModelBinding {
+	return benchmarkDeployment(b, name, contract, "perf-"+name, benchmarkInput)
+}
+
+// benchmarkDeployment starts a deployment of a catalog model once and records
+// the identity of the package the runtime actually loaded.
+func benchmarkDeployment(b *testing.B, name, contract, deployment string, input config.ModelInputBudget) config.ResolvedModelBinding {
 	b.Helper()
 	benchmarkModelMu.Lock()
 	defer benchmarkModelMu.Unlock()
-	if spec, ok := benchmarkSpecs[name]; ok {
+	if spec, ok := benchmarkSpecs[deployment]; ok {
 		return spec
 	}
 	root, err := filepath.Abs("../..")
@@ -42,17 +67,26 @@ func benchmarkModel(b *testing.B, name, contract string) config.ResolvedModelBin
 	if err != nil {
 		b.Fatal(err)
 	}
-	digest, err := modelassets.ContentsSHA256(artifact.Path)
-	if err != nil {
-		b.Fatalf("required %s model at %s: %v; run make download-models-perf", name, artifact.Path, err)
+	definition := artifact.Deployment(cacheEmbeddingDevice(), input)
+	if err = benchmarkLease.Ensure(deployment, definition); err != nil {
+		b.Fatalf("start the %s model runtime: %v", name, err)
 	}
-	benchmarkArtifacts[name] = benchmark.ModelArtifact{RepoID: artifact.RepoID, Revision: artifact.Revision, ContentsSHA256: digest}
+	card, err := benchmarkLease.Card(context.Background(), deployment)
+	if err != nil {
+		b.Fatalf("the %s model runtime is not ready: %v", name, err)
+	}
+	repo, revision := card.Repo, card.Revision
+	if repo == "" {
+		repo, revision = artifact.RepoID, artifact.Revision
+	}
+	benchmarkArtifacts[name] = benchmark.ModelArtifact{RepoID: repo, Revision: revision, ContentsSHA256: card.ModelSHA256}
+	benchmarkCards[name] = card
 	spec := config.ResolvedModelBinding{
 		Recipe: "perf", Name: name,
-		Binding:    config.ModelBinding{Deployment: "perf-" + name, Contract: contract, Adapter: "mmbert"},
-		Deployment: config.ModelDeployment{Artifact: artifact.Path, Revision: artifact.Revision, Provider: "candle", Device: cacheEmbeddingDevice(), Precision: "fp32", Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}},
+		Binding:    config.ModelBinding{Deployment: deployment, Contract: contract},
+		Deployment: definition,
 	}
-	benchmarkSpecs[name] = spec
+	benchmarkSpecs[deployment] = spec
 	return spec
 }
 
@@ -63,13 +97,14 @@ func recordModelIdentity(b *testing.B, names ...string) {
 	for _, name := range names {
 		artifacts[name] = benchmarkArtifacts[name]
 	}
-	protocol := "owned-native-v1;max_tokens=512;overflow=truncate;embedding=full-layer/full-dimension"
+	card := benchmarkCards[names[0]]
+	protocol := fmt.Sprintf("model-runtime-v1;engine=%s;profile=%s;max_tokens=512;overflow=truncate;embedding=full-layer/full-dimension", card.Engine, card.Profile)
 	if _, ok := artifacts["embedding"]; ok {
 		// InMemoryCache applies these options to every mmBERT provider; this
-		// describes the existing measured workload, independent of owner setup.
-		protocol = "owned-native-v1;max_tokens=512;overflow=truncate;embedding=layer-6/dimension-256"
+		// describes the measured workload, independent of owner setup.
+		protocol = fmt.Sprintf("model-runtime-v1;engine=%s;profile=%s;max_tokens=512;overflow=truncate;embedding=layer-6/dimension-256", card.Engine, card.Profile)
 	}
-	benchmarkIdentities[b.Name()] = benchmark.ModelIdentity{Artifacts: artifacts, Provider: "candle", Device: cacheEmbeddingDevice(), Precision: "float32", Protocol: protocol}
+	benchmarkIdentities[b.Name()] = benchmark.ModelIdentity{Artifacts: artifacts, Provider: config.ModelRuntimeProvider, Device: card.Device, Precision: card.Dtype, Protocol: protocol}
 }
 
 func recordCacheProtocol(b *testing.B, scenario cacheScenario) {
@@ -104,9 +139,13 @@ func TestMain(m *testing.M) {
 	if domainTask != nil {
 		owners = append(owners, domainTask)
 	}
+	if inputLengthDomain != nil {
+		owners = append(owners, inputLengthDomain)
+	}
 	if cacheEmbeddingOwner != nil {
 		owners = append(owners, cacheEmbeddingOwner)
 	}
+	owners = append(owners, benchmarkLease, runtimeShutdown{benchmarkManager})
 	code, err := closeBenchmarkOwners(code, owners...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "close benchmark model owners: %v\n", err)
@@ -125,3 +164,8 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(code)
 }
+
+// runtimeShutdown stops the runtime processes after their owners close.
+type runtimeShutdown struct{ manager *modelservice.Manager }
+
+func (r runtimeShutdown) Close() error { return r.manager.Shutdown(context.Background()) }

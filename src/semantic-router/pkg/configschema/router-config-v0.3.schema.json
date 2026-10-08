@@ -87,6 +87,7 @@
           "enum": [
             "automix",
             "confidence",
+            "decision",
             "fusion",
             "hybrid",
             "kmeans",
@@ -138,6 +139,9 @@
         },
         "prompt": {
           "$ref": "#/$defs/PromptSelectionConfig"
+        },
+        "decision": {
+          "$ref": "#/$defs/DecisionSelectionConfig"
         },
         "on_error": {
           "type": "string"
@@ -471,15 +475,6 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
-        "variant": {
-          "type": "string"
-        },
         "backend": {
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
@@ -595,24 +590,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalExplainerModule": {
-      "properties": {
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalFactCheckModule": {
       "properties": {
         "max_sequence_length": {
@@ -625,9 +602,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "model_ref": {
@@ -652,12 +626,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "feedback_mapping_path": {
@@ -696,9 +664,6 @@
         "backend": {
           "type": "string"
         },
-        "endpoint": {
-          "type": "string"
-        },
         "include_explanation": {
           "type": "boolean"
         },
@@ -720,12 +685,6 @@
         "context_window_size": {
           "type": "integer"
         },
-        "enable_nli_filtering": {
-          "type": "boolean"
-        },
-        "nli_entailment_threshold": {
-          "type": "number"
-        },
         "model_ref": {
           "type": "string"
         }
@@ -743,9 +702,6 @@
         },
         "detector": {
           "$ref": "#/$defs/CanonicalHallucinationDetector"
-        },
-        "explainer": {
-          "$ref": "#/$defs/CanonicalExplainerModule"
         }
       },
       "additionalProperties": false,
@@ -778,15 +734,15 @@
           "type": "object",
           "default": {
             "hazard": {
-              "artifact": "models/Vela-1.0-Encoder-307M-Hazard",
+              "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
               "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
-              "provider": "candle",
+              "provider": "model_runtime",
               "device": "cpu",
-              "precision": "fp32",
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              }
+              },
+              "profile": "exact"
             }
           }
         },
@@ -816,6 +772,9 @@
             "$ref": "#/$defs/AdmissionConfig"
           },
           "type": "object"
+        },
+        "signal_timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -871,9 +830,6 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
         "pii_mapping_path": {
           "type": "string"
         },
@@ -881,6 +837,9 @@
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -946,13 +905,10 @@
           },
           "type": "array"
         },
-        "variant": {
-          "type": "string"
-        },
-        "protocol": {
-          "type": "string"
-        },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -1120,6 +1076,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1164,6 +1123,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1207,6 +1169,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1381,6 +1346,12 @@
             "$ref": "#/$defs/InputModalityRule"
           },
           "type": "array"
+        },
+        "decision": {
+          "items": {
+            "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -1396,6 +1367,9 @@
         },
         "vector_store": {
           "$ref": "#/$defs/VectorStoreConfig"
+        },
+        "tool_sessions": {
+          "$ref": "#/$defs/ToolSessionStoreConfig"
         }
       },
       "additionalProperties": false,
@@ -1418,6 +1392,9 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "type": "string"
+        },
         "safety": {
           "type": "string"
         },
@@ -1437,9 +1414,6 @@
           "type": "string"
         },
         "hallucination_detector": {
-          "type": "string"
-        },
-        "hallucination_explainer": {
           "type": "string"
         },
         "feedback_detector": {
@@ -1468,6 +1442,28 @@
             "$ref": "#/$defs/ModelScore"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CircuitBreakerConfig": {
+      "properties": {
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "cooldown_period": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "half_open_probes": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -1910,6 +1906,12 @@
         "adaptations": {
           "$ref": "#/$defs/DecisionAdaptationsConfig"
         },
+        "reliability": {
+          "$ref": "#/$defs/DecisionReliability"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackOverride"
+        },
         "plugins": {
           "items": {
             "$ref": "#/$defs/DecisionPlugin"
@@ -1970,6 +1972,18 @@
         },
         "protection": {
           "$ref": "#/$defs/DecisionLearningProtectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionChoice": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -2275,6 +2289,25 @@
           "if": {
             "properties": {
               "type": {
+                "const": "prompt_cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/PromptCachePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "shadow_dispatch"
               }
             },
@@ -2300,6 +2333,7 @@
             "hallucination",
             "header_mutation",
             "memory",
+            "prompt_cache",
             "rag",
             "request_params",
             "response_cache",
@@ -2322,6 +2356,126 @@
         "type",
         "configuration"
       ]
+    },
+    "DecisionQuestion": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionReliability": {
+      "properties": {
+        "total_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "retry_on": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSelectionConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "candidates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSignalRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/DecisionQuestion"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "DynamicRetrievalConfig": {
       "properties": {
@@ -2406,16 +2560,10 @@
         "qwen3_model_path": {
           "type": "string"
         },
-        "gemma_model_path": {
-          "type": "string"
-        },
         "mmbert_model_path": {
           "type": "string"
         },
         "multimodal_model_path": {
-          "type": "string"
-        },
-        "bert_model_path": {
           "type": "string"
         },
         "use_cpu": {
@@ -2440,6 +2588,24 @@
           "type": "number"
         },
         "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
           "items": {
             "type": "string"
           },
@@ -2582,6 +2748,88 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "FallbackOverride": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackPolicy": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FastResponsePluginConfig": {
       "properties": {
         "message": {
@@ -2689,7 +2937,7 @@
         "min_keep": {
           "type": "integer"
         },
-        "nli_contradiction_penalty": {
+        "contradiction_penalty": {
           "type": "number"
         },
         "on_error": {
@@ -2767,9 +3015,6 @@
         "enabled": {
           "type": "boolean"
         },
-        "use_nli": {
-          "type": "boolean"
-        },
         "hallucination_action": {
           "type": "string"
         },
@@ -2790,9 +3035,6 @@
         },
         "description": {
           "type": "string"
-        },
-        "use_nli": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3227,6 +3469,39 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "tls": {
+          "$ref": "#/$defs/ListenerTLS"
+        },
+        "identity": {
+          "$ref": "#/$defs/ListenerIdentity"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerIdentity": {
+      "properties": {
+        "trust_headers": {
+          "type": "boolean"
+        },
+        "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerTLS": {
+      "properties": {
+        "cert_file": {
+          "type": "string"
+        },
+        "key_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4064,17 +4339,20 @@
         "device": {
           "type": "string"
         },
-        "precision": {
-          "type": "string"
-        },
-        "custom_ops_profile": {
-          "type": "string"
-        },
-        "compilation_cache_dir": {
-          "type": "string"
-        },
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "process": {
+          "type": "string"
+        },
+        "served_name": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4536,27 +4814,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PolarityGuardConfig": {
-      "properties": {
-        "mode": {
-          "type": "string"
-        },
-        "nli": {
-          "$ref": "#/$defs/PolarityGuardNLIConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PolarityGuardNLIConfig": {
-      "properties": {
-        "contradiction_threshold": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "PreferenceModelConfig": {
       "properties": {
         "use_contrastive": {
@@ -4782,6 +5039,7 @@
             "conversation",
             "event",
             "input_modality",
+            "decision",
             "kb_metric",
             "projection"
           ]
@@ -4806,6 +5064,27 @@
         },
         "miss": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptCachePluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ttl": {
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on_unsupported": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4938,6 +5217,42 @@
         },
         "health_check_timeout": {
           "type": "string"
+        },
+        "connect_timeout": {
+          "type": "string"
+        },
+        "total_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
+        },
+        "retry_budget_percent": {
+          "type": "number"
+        },
+        "retry_budget_min_concurrency": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -5611,9 +5926,6 @@
         },
         "embedding_model": {
           "type": "string"
-        },
-        "polarity_guard": {
-          "$ref": "#/$defs/PolarityGuardConfig"
         }
       },
       "additionalProperties": false,
@@ -6157,6 +6469,7 @@
             "complexity",
             "context",
             "conversation",
+            "decision",
             "domain",
             "embedding",
             "event",
@@ -6393,6 +6706,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "StickyToolSelectionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_tools": {
+          "type": "integer"
+        },
+        "max_new_tools_per_turn": {
+          "type": "integer"
+        },
+        "pin_called_tools": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "StructureFeature": {
       "properties": {
         "type": {
@@ -6532,6 +6863,54 @@
         },
         "preserve_count": {
           "type": "integer"
+        },
+        "sticky": {
+          "$ref": "#/$defs/StickyToolSelectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "database": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionStoreConfig": {
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "max_sessions": {
+          "type": "integer"
+        },
+        "max_sessions_per_identity": {
+          "type": "integer"
+        },
+        "max_state_bytes": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "redis": {
+          "$ref": "#/$defs/ToolSessionRedisConfig"
         }
       },
       "additionalProperties": false,
@@ -7338,6 +7717,15 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "collection": "decision",
+        "observation_key": "decision",
+        "decision_referenceable": true,
+        "reference_qualifier": "label",
+        "schema_ref": "#/$defs/DecisionSignalRule"
       }
     ],
     "algorithms": [
@@ -7475,6 +7863,16 @@
         "config_field": "prompt",
         "payload_shape": "nested",
         "schema_ref": "#/$defs/PromptSelectionConfig"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "description": "Ask a decision model which declared candidate should answer.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "decision",
+        "payload_shape": "nested",
+        "schema_ref": "#/$defs/DecisionSelectionConfig"
       }
     ],
     "plugins": [
@@ -7557,6 +7955,12 @@
         "schema_ref": "#/$defs/ContextCompressionPluginConfig"
       },
       {
+        "type": "prompt_cache",
+        "display_name": "Prompt Cache",
+        "description": "Add bounded Anthropic prompt-cache markers after route selection.",
+        "schema_ref": "#/$defs/PromptCachePluginConfig"
+      },
+      {
         "type": "shadow_dispatch",
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
@@ -7601,6 +8005,7 @@
       "conversation",
       "event",
       "input_modality",
+      "decision",
       "kb_metric",
       "projection"
     ],
@@ -7710,6 +8115,15 @@
         "path": [
           "stores",
           "vector_store"
+        ]
+      },
+      {
+        "key": "tool_sessions",
+        "layer": "stores",
+        "display_name": "Tool Sessions",
+        "path": [
+          "stores",
+          "tool_sessions"
         ]
       },
       {
@@ -7871,6 +8285,15 @@
         "path": [
           "model_catalog",
           "admission"
+        ]
+      },
+      {
+        "key": "signal_timeout_ms",
+        "layer": "model_catalog",
+        "display_name": "Signal Timeout Ms",
+        "path": [
+          "model_catalog",
+          "signal_timeout_ms"
         ]
       }
     ]

@@ -17,85 +17,45 @@ class ModelMakeContractsTests(unittest.TestCase):
         self,
     ) -> None:
         for failure, count in (
-            ("", 2),
-            ("go:image-calibration", 1),
-            ("python3:image-calibration", 2),
+            ("", 3),
+            ("python3:model-artifacts", 1),
+            ("python3:image-calibration-manifest", 2),
+            ("python3:image-calibration", 3),
         ):
             with self.subTest(failure=failure):
-                result, calls = self._run_target(
-                    "candle", failure, "verify-image-routing-calibration"
-                )
+                result, calls = self._run_target(failure)
                 self.assertEqual(
                     result.returncode == 0, not failure, result.stdout + result.stderr
                 )
                 self.assertEqual(len(calls), count)
                 self.assertTrue(
-                    all(call["suite"] == "image-calibration" for call in calls)
+                    calls[0]["suite"] == "model-artifacts"
+                    and all(
+                        call["suite"].startswith("image-calibration")
+                        for call in calls[1:]
+                    )
                 )
                 if not failure:
-                    self.assertEqual(calls[0]["manifest"], calls[1]["manifest"])
+                    self.assertEqual(calls[1]["manifest"], calls[2]["manifest"])
 
-    def test_candle_runs_both_suites_with_separate_manifests_and_reports(self) -> None:
-        result, calls = self._run_target("candle")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(
-            [(call["command"], call["suite"]) for call in calls],
-            [
-                ("go", "runtime"),
-                ("python3", "runtime"),
-                ("go", "multimodal"),
-                ("python3", "multimodal"),
-            ],
-        )
-        for provision, evaluation in (calls[:2], calls[2:]):
-            self.assertEqual(provision["manifest"], evaluation["manifest"])
-            self.assertEqual(provision["provider"], "candle")
-            self.assertEqual(evaluation["device"], "cpu")
-            self.assertEqual(
-                evaluation["manifest"], str(Path(evaluation["output"]) / "models.json")
-            )
-        self.assertEqual(
-            calls[3]["output"], str(Path(calls[1]["output"]) / "multimodal")
-        )
-
-    def test_any_selected_suite_failure_fails_the_candle_target(self) -> None:
-        for command, suite, expected_calls in (
-            ("go", "runtime", 1),
-            ("python3", "runtime", 2),
-            ("go", "multimodal", 3),
-            ("python3", "multimodal", 4),
-        ):
-            with self.subTest(command=command, suite=suite):
-                result, calls = self._run_target("candle", f"{command}:{suite}")
-                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn("injected model contract failure", result.stderr)
-                self.assertEqual(len(calls), expected_calls, calls)
-
-    def test_ort_runs_only_its_supported_runtime_suite(self) -> None:
-        result, calls = self._run_target("ort", "python3:multimodal")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(
-            [(call["command"], call["suite"]) for call in calls],
-            [("go", "runtime"), ("python3", "runtime")],
-        )
-        self.assertEqual(calls[0]["provider"], "ort")
-        self.assertEqual(calls[1]["device"], "cpu")
+    def test_calibration_prepares_the_nano_artifact_in_the_models_directory(self):
+        result, calls = self._run_target()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        root = Path(calls[1]["manifest"]).parent.parent
+        self.assertEqual(calls[0]["output"], str(root / "models/vela-omni-artifacts"))
+        self.assertEqual(calls[0]["variants"], "nano")
 
     def _run_target(
-        self, provider: str, failure: str = "", target: str = "test-models"
+        self, failure: str = ""
     ) -> tuple[subprocess.CompletedProcess[str], list[dict]]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "bin").mkdir()
             (root / "src/semantic-router").mkdir(parents=True)
             # Recursive $(MAKE) loads this same fixture, including the actual
-            # production targets. Only the native compiler prerequisite is inert.
-            (root / "Makefile").write_text(
-                f"include {MODELS_MAKE}\n"
-                "LOG_TARGET = :\nNATIVE_ENV = MODEL_CONTRACT_NATIVE=1\n"
-                ".PHONY: rust-ci\nrust-ci:\n\t@:\n"
-            )
-            for name in ("go", "python3"):
+            # production targets.
+            (root / "Makefile").write_text(f"include {MODELS_MAKE}\nLOG_TARGET = :\n")
+            for name in ("go", "python3", "docker"):
                 executable = root / "bin" / name
                 executable.write_text(
                     f"#!{sys.executable}\n"
@@ -103,10 +63,12 @@ class ModelMakeContractsTests(unittest.TestCase):
                     "args = sys.argv[1:]\n"
                     "def option(name, default=''):\n"
                     "    return args[args.index(name) + 1] if name in args else default\n"
-                    "default_suite = 'image-calibration' if args[0].endswith('image_calibration.py') else 'runtime'\n"
+                    "default_suite = 'image-calibration' if args[0].endswith('image_calibration.py') or pathlib.Path(sys.argv[0]).name == 'docker' else 'runtime'\n"
+                    "if args[0].endswith('prepare_model_test_assets.py'): default_suite = 'model-artifacts'\n"
+                    "if '--prepare-manifest' in args: default_suite += '-manifest'\n"
                     "call = {'command': pathlib.Path(sys.argv[0]).name,\n"
                     "        'suite': option('--suite', default_suite)}\n"
-                    "for name in ('manifest', 'output', 'provider', 'device'):\n"
+                    "for name in ('manifest', 'output', 'variants'):\n"
                     "    call[name] = option('--' + name)\n"
                     "with open(os.environ['MODEL_CONTRACT_CALLS'], 'a') as output:\n"
                     "    output.write(json.dumps(call) + '\\n')\n"
@@ -130,10 +92,9 @@ class ModelMakeContractsTests(unittest.TestCase):
                 [
                     "make",
                     "--no-print-directory",
-                    target,
+                    "verify-image-routing-calibration",
                     "SHELL=/bin/sh",
-                    f"MODEL_TEST_PROVIDER={provider}",
-                    "MODEL_TEST_DEVICE=cpu",
+                    "AGENT_PYTHON=python3",
                     f"MODEL_TEST_REPORT_DIR={root / 'reports'}",
                     f"MODEL_TEST_MODELS_DIR={root / 'models'}",
                 ],

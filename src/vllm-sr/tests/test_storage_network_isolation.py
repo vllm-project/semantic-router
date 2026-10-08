@@ -2,9 +2,8 @@
 
 Publishing the storage ports on loopback only closes the north-south half of
 the exposure. These tests cover the east-west half: the stores sit on a second
-bridge network that Envoy, Dashboard, the observability
-containers, and any user-selected OpenClaw workload never join, and Router is
-the single container attached to both.
+bridge network that Envoy, Dashboard and the observability containers never
+join, and Router is the single container attached to both.
 
 The ordering assertions are the point of several of these tests, not a
 stylistic preference. Router dials Postgres as its process comes up, so
@@ -48,11 +47,6 @@ def _stub_runtime_images(monkeypatch, tmp_path):
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(docker_bin),
-    )
     monkeypatch.setattr(
         container_start,
         "get_runtime_images",
@@ -107,6 +101,7 @@ def test_serve_creates_both_stack_networks_before_provisioning_storage(
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(tmp_path))
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",
@@ -135,8 +130,6 @@ def test_serve_creates_both_stack_networks_before_provisioning_storage(
     monkeypatch.setattr(
         runtime_lifecycle, "container_exec", lambda *_a, **_k: (0, "ok", "")
     )
-    monkeypatch.setattr(runtime_lifecycle, "load_openclaw_registry", lambda *_a: [])
-    monkeypatch.setattr(core, "recover_openclaw_containers", lambda *_a, **_k: None)
     monkeypatch.setattr(core, "_wait_and_verify_runtime", lambda *_a, **_k: None)
 
     core.start_vllm_sr(
@@ -410,8 +403,6 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core, "container_stop_container", lambda name: stopped.append(name) or True
     )
@@ -493,7 +484,7 @@ def test_a_failed_creation_does_not_remove_a_container_of_the_same_name(monkeypa
 
     return_code, _stdout, stderr = container_start_runner.run_container_specs(
         [("router", "vllm-sr-router-container", (["docker", "create"],))],
-        storage_secret_values={},
+        router_secret_values={},
     )
 
     assert return_code == 125
@@ -541,7 +532,7 @@ def test_a_failure_after_creation_unwinds_the_container_it_created(monkeypatch):
                 ),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
     )
 
     assert return_code == 1

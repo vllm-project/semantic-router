@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Reconcile actual execution receipts with the complete pre-execution CI plan."""
+
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -12,7 +12,16 @@ from typing import Any
 
 from ci_plan import digest
 from ci_results import collection_errors, execution_errors
-from verification_catalog import full_cpu_ids
+from execution_batches import (
+    dispatch_job,
+    e2e_batches,
+    expected_dispatch_jobs,
+    image_producers,
+    platform_batches,
+)
+from provider_mocker_image import validate_acquisition
+from release_guard_waiver import planned_waiver
+from verification_catalog import full_cpu_ids, load_catalog
 
 
 @dataclass(frozen=True)
@@ -44,12 +53,39 @@ def evaluate_gate(
         required
     ):
         errors.append("plan records do not exactly match expected verification IDs")
+    for name, record in planned.items():
+        if record.get("known_issue_waiver") != planned_waiver(
+            plan.get("profile", ""), name
+        ):
+            errors.append(f"{name}: known-issue waiver differs from release policy")
     if plan.get("full_cpu") and not (plan.get("draft") and plan.get("profile") == "pr"):
         missing = set(full_cpu_ids()) - set(required)
         if missing:
             errors.append(f"full CPU required inventory omitted: {sorted(missing)}")
     if not required and not (plan.get("draft") and plan.get("profile") == "pr"):
         errors.append("non-draft plan has no required verifications")
+    try:
+        if plan.get("expected_dispatch_jobs") != expected_dispatch_jobs(plan):
+            errors.append(
+                "plan dispatch inventory differs from required contracts and artifacts"
+            )
+        if plan.get("image_producers") != image_producers(plan["images"]):
+            errors.append("plan image producer inventory differs")
+        for record in planned.values():
+            if record.get("dispatch_job") != dispatch_job(record):
+                errors.append(f"{record['id']}: dispatch identity differs")
+        for field, build_batches in (
+            ("platform_batches", platform_batches),
+            ("e2e_batches", e2e_batches),
+        ):
+            if plan.get(field) != build_batches(plan["verifications"]):
+                errors.append(
+                    f"plan {field} differs from required verification inventory"
+                )
+    except (ValueError, KeyError, TypeError) as error:
+        errors.append(f"invalid dispatch plan: {error}")
+    if plan.get("full_cpu_version") != load_catalog()["full_cpu"]["version"]:
+        errors.append("plan full CPU inventory version differs")
     actual = {}
     for receipt in receipts:
         name = receipt.get("id")
@@ -68,19 +104,37 @@ def evaluate_gate(
         build_map[name] = build
         if build.get("source_sha") != plan.get("source_sha"):
             errors.append(f"build {name}: source SHA differs")
+        if name == "image:provider-mocker":
+            expected = plan.get("image_sources", {}).get("provider-mocker", {})
+            if build.get("inputs_sha256") != expected.get("inputs_sha256"):
+                errors.append("provider-mocker build inputs differ from plan")
+            if build.get("acquisition") != expected.get("source"):
+                errors.append("provider-mocker acquisition mode differs from plan")
+            if expected.get("source") == "published":
+                try:
+                    validate_acquisition(build, expected)
+                except ValueError as error:
+                    errors.append(str(error))
     expected_builds = {f"image:{name}" for name in plan.get("images", [])}
-    if plan.get("native"):
-        expected_builds.add("native:cpu")
     if set(build_map) != expected_builds:
         errors.append(
-            f"build inventory mismatch: missing={sorted(expected_builds-set(build_map))}, extra={sorted(set(build_map)-expected_builds)}"
+            f"build inventory mismatch: missing={sorted(expected_builds - set(build_map))}, extra={sorted(set(build_map) - expected_builds)}"
         )
     for name in required:
         receipt, record = actual.get(name), planned.get(name)
         if not receipt or not record:
             errors.append(f"required verification {name}: missing")
             continue
-        if receipt.get("result") != "success":
+        waived = receipt.get("result") == "qualified-with-waiver"
+        waiver = record.get("known_issue_waiver") if waived else None
+        if waived and (
+            plan.get("profile") != "release"
+            or waiver != planned_waiver("release", name)
+            or not waiver
+        ):
+            errors.append(f"{name}: qualified-with-waiver is not allowed")
+            waiver = None
+        elif receipt.get("result") != "success" and not waived:
             errors.append(
                 f"required verification {name}: {receipt.get('result', 'missing status')}"
             )
@@ -97,28 +151,22 @@ def evaluate_gate(
         evidence = receipt.get("evidence", {})
         errors.extend(
             f"{name}: {error}"
-            for error in collection_errors(evidence, record["activity"])
+            for error in collection_errors(evidence, record["activity"], waiver=waiver)
         )
         if receipt.get("evidence_sha256") != digest(evidence):
             errors.append(f"{name}: evidence digest differs")
         for key in ("runtime", "device", "platform"):
             if evidence.get(key) != record[key]:
                 errors.append(f"{name}: evidence {key} differs from plan")
-        if receipt.get("execution") != record.get("execution"):
-            errors.append(f"{name}: execution mode differs from plan")
-        producer = receipt.get("execution", {}).get(
-            "host_platform", receipt.get("platform")
-        )
         errors.extend(
-            f"{name}: {error}" for error in execution_errors(record, evidence, producer)
+            f"{name}: {error}"
+            for error in execution_errors(record, receipt.get("platform"))
         )
         consumed = receipt.get("artifacts", [])
         consumed_ids = [item.get("id") for item in consumed]
         if len(set(consumed_ids)) != len(consumed_ids):
             errors.append(f"{name}: duplicate consumed artifact identity")
         dependencies = {f"image:{image}" for image in record["images"]}
-        if record["native"]:
-            dependencies.add("native:cpu")
         if not dependencies <= set(consumed_ids):
             errors.append(f"{name}: missing artifact dependencies")
         for artifact in consumed:
@@ -128,11 +176,7 @@ def evaluate_gate(
                     f"{name}: consumed artifact {artifact.get('id')} differs from build"
                 )
     if jobs is not None:
-        expected_jobs = {"plan"} | {record["executor"] for record in planned.values()}
-        if plan.get("images"):
-            expected_jobs.add("images")
-        if plan.get("native"):
-            expected_jobs.add("native-build")
+        expected_jobs = plan.get("expected_dispatch_jobs", [])
         for name, record in jobs.items():
             if record.get("result") in {"failure", "cancelled"}:
                 errors.append(f"prerequisite {name}: {record['result']}")
@@ -157,21 +201,20 @@ def load_builds(directory: Path) -> list[dict]:
                 "id": f"image:{record['id']}",
                 "source_sha": record["source_sha"],
                 "sha256": record["sha256"],
+                **{
+                    key: record[key]
+                    for key in (
+                        "acquisition",
+                        "inputs_sha256",
+                        "registry_digest",
+                        "image_source_sha",
+                        "ref",
+                        "images",
+                    )
+                    if key in record
+                },
             }
         )
-    native = directory / "ci-build-native-cpu/receipt.json"
-    if native.exists():
-        manifest = native.with_name("manifest.json")
-        rows = json.loads(native.read_text())
-        if (
-            len(rows) != 1
-            or rows[0].get("sha256")
-            != hashlib.sha256(manifest.read_bytes()).hexdigest()
-        ):
-            raise ValueError("native build receipt differs from actual manifest")
-        if json.loads(manifest.read_text()).get("platform") != "linux/amd64":
-            raise ValueError("native build platform is not Linux AMD64")
-        builds.extend(rows)
     return builds
 
 

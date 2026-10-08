@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -12,19 +12,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func preparedInventoryService(t *testing.T, runtime *native.Runtime, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
+func preparedInventoryService(t *testing.T, runtime *serving.Runtime, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
+	t.Helper()
+	return preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: runtime}, configs...)
+}
+
+func preparedInventoryServiceWith(t *testing.T, options classification.RecipeRuntimeOptions, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Runtime: runtime})
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +39,7 @@ func preparedInventoryService(t *testing.T, runtime *native.Runtime, configs ...
 
 // These controlled typed handles exercise inventory lifecycle and API wiring;
 // provider inference correctness is covered by the native integration tests.
-func prepareInventoryTask(t *testing.T, runtime *native.Runtime, recipe, name, contract, device string) *binding.Resolved[string, string] {
+func prepareInventoryTask(t *testing.T, runtime *serving.Runtime, recipe, name, contract, device string) *binding.Resolved[string, string] {
 	t.Helper()
 	task, err := binding.Register(binding.NewRegistry(runtime.ObserveBinding), contract, func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
@@ -54,7 +59,7 @@ func prepareInventoryTask(t *testing.T, runtime *native.Runtime, recipe, name, c
 }
 
 func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	cfg, service := preparedInventoryService(t, runtime)
 	for _, task := range []struct{ name, contract string }{
 		{"domain_classifier", "label_distribution.v1"},
@@ -68,7 +73,7 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 		{"embedding", "embedding.v1"},
 		{"rag.reranker", "relevance_scores.v1"},
 	} {
-		prepareInventoryTask(t, runtime, "vela", task.name, task.contract, "migraphx:0")
+		prepareInventoryTask(t, runtime, "vela", task.name, task.contract, "rocm:0")
 	}
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	response := api.buildModelsInfoResponse()
@@ -79,7 +84,7 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 		if len(model.Metadata["resource_id"]) != 64 {
 			t.Fatalf("missing opaque physical resource identity: %+v", model)
 		}
-		if !model.Loaded || model.State != "ready" || model.Recipe != "vela" || model.Metadata["device"] != "migraphx:0" || model.Metadata["max_sequence_length"] != "512" {
+		if !model.Loaded || model.State != "ready" || model.Recipe != "vela" || model.Metadata["device"] != "rocm:0" || model.Metadata["max_sequence_length"] != "512" {
 			t.Fatalf("lost runtime evidence: %+v", model)
 		}
 	}
@@ -88,18 +93,26 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 	_ = requireModelInfo(t, response.Models, "safety.safe.hazard")
 }
 
+func TestModelsUseGPUReadsTheRuntimeDeviceNames(t *testing.T) {
+	for device, want := range map[string]bool{"cuda:0": true, "rocm:1": true, "xpu": true, "mps": true, "cpu": false, "": false} {
+		models := []ModelInfo{{Loaded: true, Metadata: map[string]string{"device": device}}, {Loaded: false, Metadata: map[string]string{"device": "cuda:0"}}}
+		if got := modelsUseGPU(models); got != want {
+			t.Fatalf("device %q: modelsUseGPU = %v, want %v", device, got, want)
+		}
+	}
+}
+
 func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.CategoryModel = config.CategoryModel{ModelID: "models/custom-domain", CategoryMappingPath: "unused-domain-mapping.json"}
 	cfg.PIIModel = config.PIIModel{ModelID: "models/custom-pii", PIIMappingPath: "unused-pii-mapping.json"}
 	cfg.PromptGuard = config.PromptGuardConfig{Enabled: true, ModelID: "models/custom-guard", JailbreakMappingPath: "unused-guard-mapping.json"}
-	cfg.BertModelPath = "models/custom-embedding"
-	cfg, service := preparedInventoryService(t, native.New(nil), cfg)
+	cfg, service := preparedInventoryService(t, serving.New(nil, nil), cfg)
 	if !service.HasClassifier() {
 		t.Fatal("fixture must contain a constructed classifier")
 	}
-	if previous := appendConfiguredModels(nil, cfg, classifierModelAvailability{core: true}); len(previous) != 4 {
-		t.Fatalf("fixture must reproduce the four configured, unused core models: %+v", previous)
+	if previous := appendConfiguredModels(nil, cfg, classifierModelAvailability{core: true}); len(previous) != 3 {
+		t.Fatalf("fixture must reproduce the three configured, unused core models: %+v", previous)
 	}
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	response := api.buildModelsInfoResponse()
@@ -110,7 +123,7 @@ func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *test
 
 func TestPreparedInventoryUsesPublishedGenerationAndPreservesStartupReadiness(t *testing.T) {
 	pool := binding.NewPool()
-	oldRuntime, nextRuntime := native.New(pool), native.New(pool)
+	oldRuntime, nextRuntime := serving.New(nil, pool), serving.New(nil, pool)
 	oldCfg, oldService := preparedInventoryService(t, oldRuntime)
 	nextCfg, nextService := preparedInventoryService(t, nextRuntime)
 	prepareInventoryTask(t, oldRuntime, "old", "domain_classifier", "label_distribution.v1", "rocm:0")
@@ -127,7 +140,8 @@ func TestPreparedInventoryUsesPublishedGenerationAndPreservesStartupReadiness(t 
 		t.Fatalf("retiring generation leaked into current inventory: %+v", response)
 	}
 	api.configPath = filepath.Join(t.TempDir(), "config.yaml")
-	if err := startupstatus.NewFileWriter(api.configPath).Write(startupstatus.State{Phase: "initializing_models", Ready: false, TotalModels: 2, ReadyModels: 1}); err != nil {
+	writer := registry.StartupStatusWriter(startupstatus.NewFileWriter(api.configPath))
+	if err := writer.Write(startupstatus.State{Phase: "initializing_models", Ready: false, TotalModels: 2, ReadyModels: 1}); err != nil {
 		t.Fatal(err)
 	}
 	response = api.buildModelsInfoResponse()

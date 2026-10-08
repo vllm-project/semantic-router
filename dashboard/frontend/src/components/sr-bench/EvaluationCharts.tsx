@@ -31,12 +31,23 @@ const changeColors = {
   unknown: 'var(--text-secondary, #9c9ca8)',
 }
 
-export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
+export function QualityCostChart({
+  points,
+  costBasis,
+}: {
+  points: QualityCostPoint[]
+  costBasis: 'subject' | 'total'
+}) {
+  const costLabel = costBasis === 'total' ? 'Total cost' : 'Subject model cost'
+
   return (
     <section className={styles.chartCard} aria-label="Quality and cost chart">
-      <h3>Quality and cost</h3>
+      <h3>Quality and {costLabel.toLowerCase()}</h3>
       <p className={styles.muted}>
-        Higher quality, lower cost. Recorded usage at frozen model prices.
+        Higher quality, lower cost.{' '}
+        {costBasis === 'total'
+          ? 'Includes model answers and evaluation calls at frozen prices.'
+          : 'Subject model calls at frozen prices; evaluation calls are excluded.'}
       </p>
       {points.length ? (
         <div className={styles.chartCanvas}>
@@ -46,11 +57,11 @@ export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
               <XAxis
                 type="number"
                 dataKey="cost"
-                name="Model cost"
+                name={costLabel}
                 tickCount={4}
                 minTickGap={22}
                 tickFormatter={(v) => `$${number(v, v < 0.01 ? 4 : 2)}`}
-                label={{ value: 'Model cost (USD)', position: 'bottom', offset: 5 }}
+                label={{ value: `${costLabel} (USD)`, position: 'bottom', offset: 5 }}
               />
               <YAxis
                 type="number"
@@ -68,7 +79,9 @@ export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
                     <div className={styles.chartTooltip}>
                       <strong>{item.name}</strong>
                       <div>{number(item.quality, 2)}% macro accuracy</div>
-                      <div>{money(item.cost)} model cost</div>
+                      <div>
+                        {money(item.cost)} {costLabel.toLowerCase()}
+                      </div>
                     </div>
                   ) : null
                 }}
@@ -144,7 +157,7 @@ export function IterationChart({
                 borderRadius: 8,
               }}
               formatter={(value, name) =>
-                name === 'Cost saving' ? (
+                name === 'Total cost saving' ? (
                   <span
                     style={{
                       color:
@@ -189,7 +202,7 @@ export function IterationChart({
               yAxisId="saving"
               type="linear"
               dataKey="saving"
-              name="Cost saving"
+              name="Total cost saving"
               stroke="var(--text-secondary, #9c9ca8)"
               strokeWidth={2}
               dot={({ cx, cy, value, key }) => (

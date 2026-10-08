@@ -126,6 +126,7 @@ func (c *llmLabelClassifier) classify(
 			MaxTokens:   c.maxTokens,
 			Temperature: 0,
 			JSONMode:    true,
+			JSONSchema:  labelScoresJSONSchema(c.labels, c.disableRationale),
 			reasoning:   c.reasoning,
 		},
 	)
@@ -137,6 +138,40 @@ func (c *llmLabelClassifier) classify(
 	}
 	content := strings.TrimSpace(response.Choices[0].Message.Content)
 	return parseLLMLabelClassification(content, c.labels, c.disableRationale)
+}
+
+// labelScoresJSONSchema pins the classifier reply to its parsed contract with
+// a strict structured-output schema: scores must map every exact label to a
+// number, and nothing else may appear. Prompt instructions alone let small
+// models emit malformed JSON that silently voids the signal, so the request
+// enforces what the parser accepts.
+func labelScoresJSONSchema(labels []string, disableRationale bool) *GenerationJSONSchema {
+	labelProperties := make(map[string]interface{}, len(labels))
+	for _, label := range labels {
+		labelProperties[label] = map[string]interface{}{"type": "number"}
+	}
+	required := []string{"scores"}
+	properties := map[string]interface{}{
+		"scores": map[string]interface{}{
+			"type":                 "object",
+			"properties":           labelProperties,
+			"required":             append([]string(nil), labels...),
+			"additionalProperties": false,
+		},
+	}
+	if !disableRationale {
+		properties["rationale"] = map[string]interface{}{"type": "string"}
+		required = append(required, "rationale")
+	}
+	return &GenerationJSONSchema{
+		Name: "label_classification",
+		Schema: map[string]interface{}{
+			"type":                 "object",
+			"properties":           properties,
+			"required":             required,
+			"additionalProperties": false,
+		},
+	}
 }
 
 func parseLLMLabelClassification(

@@ -7,17 +7,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// Resolve only the implicit local default, on the preparation-owned config
-// copy. An explicit deployment, document budget or window retains its policy.
+// Resolve only the implicit local Vela 1.0 Guard, on the preparation-owned
+// config copy. An explicit deployment, document budget or window retains its
+// policy; Vela 2.0 reads the whole text itself.
 func (m *classifierModelRuntime) resolveDefaultJailbreakWindow() error {
 	guard := m.cfg.PromptGuard
+	vela1Guard := config.Vela1SystemModels().PromptGuard
 	if _, bound := m.plan.Lookup(m.recipe, "prompt_guard"); bound ||
-		!guard.Enabled || guard.Variant != config.PromptGuardVariantMmBERT32K || guard.Backend != nil || guard.Protocol != "" ||
+		!guard.Enabled || guard.Backend != nil ||
 		guard.MaxSequenceLength != 0 || guard.Window != nil ||
-		!isDefaultModelArtifact(guard.ModelID, config.DefaultSystemModels().PromptGuard) {
+		!isDefaultModelArtifact(guard.ModelID, vela1Guard) {
 		return nil
 	}
-	model := config.GetModelByPath(config.DefaultSystemModels().PromptGuard)
+	model := config.GetModelByPath(vela1Guard)
 	if model == nil || model.MaxContextLength <= 0 {
 		return fmt.Errorf("default Guard document budget is absent from the model registry")
 	}

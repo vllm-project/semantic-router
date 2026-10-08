@@ -13,7 +13,7 @@ func setupRealFactCheckClassifier(t *testing.T) *FactCheckClassifier {
 	t.Helper()
 	cfg := config.DefaultGlobalConfig().HallucinationMitigation.FactCheckModel
 	cfg.ModelID = requireRealModel(t, "VLLM_SR_FACTCHECK_MODEL", cfg.ModelID)
-	classifier, err := NewFactCheckClassifier(&cfg)
+	classifier, err := NewFactCheckClassifier(&cfg, managedModelRuntime(t))
 	if err != nil {
 		t.Fatalf("build fact-check classifier: %v", err)
 	}

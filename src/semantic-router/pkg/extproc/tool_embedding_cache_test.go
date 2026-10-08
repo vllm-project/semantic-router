@@ -285,15 +285,15 @@ func TestToolEmbedderKeyDistinguishesModelIdentity(t *testing.T) {
 	remote := newCachedToolEmbedder(provider, config.EmbeddingModelTypeRemote, 4, "http://a\x00model-a")
 	remoteOtherDim := newCachedToolEmbedder(provider, config.EmbeddingModelTypeRemote, 8, "http://a\x00model-a")
 	remoteOtherModel := newCachedToolEmbedder(provider, config.EmbeddingModelTypeRemote, 4, "http://a\x00model-b")
-	local := newCachedToolEmbedder(nil, "bert", 4, "")
-	localOtherModel := newCachedToolEmbedder(nil, "qwen3", 4, "")
+	otherModelType := newCachedToolEmbedder(provider, config.EmbeddingModelTypeQwen3, 4, "http://a\x00model-a")
+	unprepared := newCachedToolEmbedder(nil, config.EmbeddingModelTypeRemote, 4, "http://a\x00model-a")
 
 	keys := map[string]string{
 		"remote":             remote.key("text"),
 		"remote-other-dim":   remoteOtherDim.key("text"),
 		"remote-other-model": remoteOtherModel.key("text"),
-		"local":              local.key("text"),
-		"local-other-model":  localOtherModel.key("text"),
+		"other-model-type":   otherModelType.key("text"),
+		"unprepared":         unprepared.key("text"),
 	}
 	seen := make(map[string]string, len(keys))
 	for name, key := range keys {
@@ -304,6 +304,13 @@ func TestToolEmbedderKeyDistinguishesModelIdentity(t *testing.T) {
 	}
 	if remote.key("a") == remote.key("b") {
 		t.Fatalf("different texts collide on the same memo key")
+	}
+}
+
+func TestToolEmbedderWithoutAProviderFailsEveryFill(t *testing.T) {
+	emb := newCachedToolEmbedder(nil, config.EmbeddingModelTypeRemote, 4, "")
+	if _, _, err := emb.embedQueryAndTools(context.Background(), "query", []string{"tool"}); err == nil {
+		t.Fatal("an embedder without a provider returned embeddings")
 	}
 }
 

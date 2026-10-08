@@ -32,7 +32,11 @@ interface DSLState {
 
   // --- UI ---
   mode: EditorMode
+  /** Whether compiled outputs are stale relative to the current source. */
   dirty: boolean
+  /** DSL source snapshot taken at the last load, import, reset, or successful deploy.
+   * The unsaved signal is derived: dslSource !== savedSource. */
+  savedSource: string
   lastCompileAt: number | null
 
   // --- Deploy ---

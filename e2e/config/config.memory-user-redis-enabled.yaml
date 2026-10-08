@@ -10,6 +10,9 @@ listeners:
     address: 0.0.0.0
     port: 8888
     timeout: 300s
+    # The tests stand in for an authenticating proxy: they send x-authz-user-id.
+    identity:
+      trust_headers: true
 providers:
   defaults:
     model: qwen3
@@ -17,7 +20,7 @@ providers:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
-        - name: llm_katan
+        - name: provider_mocker
           provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000

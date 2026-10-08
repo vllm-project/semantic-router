@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -12,7 +11,7 @@ import (
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
 	modelConfigured := c.Config.CategoryModel.ModelID != "" || c.Config.CategoryModel.Backend != nil
-	return c.Config.CategoryModel.Active() && modelConfigured && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.Active() && modelConfigured && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
@@ -49,16 +48,8 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 	if c.Config.PromptGuard.Backend != nil {
 		return c.Config.PromptGuard.JailbreakMappingPath != "" && c.jailbreakInference != nil
 	}
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		hasExternalConfig := externalCfg != nil &&
-			externalCfg.ModelEndpoint.Address != "" &&
-			externalCfg.ModelName != ""
 
-		return c.Config.PromptGuard.JailbreakMappingPath != "" && hasExternalConfig
-	}
-
-	return c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != ""
+	return c.Config.PromptGuard.ModelID != ""
 }
 
 // initializeJailbreakClassifier initializes the jailbreak classification model.
@@ -74,17 +65,9 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	if c.Config.PromptGuard.Backend != nil {
 		return nil
 	}
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      c.Config.PromptGuard.Protocol,
-			"model_ref": externalCfg.ModelName,
-		})
-		return nil
-	}
 
 	if c.jailbreakInitializer == nil {
-		return fmt.Errorf("jailbreak initializer is required for Candle-based inference")
+		return fmt.Errorf("jailbreak initializer is required for local inference")
 	}
 
 	numClasses := c.JailbreakMapping.GetJailbreakTypeCount()
@@ -93,7 +76,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	}
 
 	logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-		"mode":      "candle",
+		"mode":      "model_runtime",
 		"model_ref": c.Config.PromptGuard.ModelID,
 		"classes":   numClasses,
 		"use_cpu":   c.Config.PromptGuard.UseCPU,
@@ -212,7 +195,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
 	modelConfigured := c.Config.PIIModel.ModelID != "" || c.Config.PIIModel.Backend != nil
-	return c.Config.PIIModel.Active() && modelConfigured && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
+	return c.Config.PIIModel.Active() && modelConfigured && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.
@@ -227,7 +210,7 @@ func (c *Classifier) initializePIIClassifier() error {
 	}
 
 	numPIIClasses := c.PIIMapping.GetPIITypeCount()
-	if numPIIClasses < 2 {
+	if numPIIClasses < 2 && !c.PIIMapping.spanNamed {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 

@@ -548,7 +548,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid remom model_distribution", func() {
@@ -671,7 +671,7 @@ func registerValidateConfigStructureFusionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid decision fusion on_error", func() {
@@ -747,7 +747,7 @@ func registerValidateConfigStructureDynamicWorkflowPlannerSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflows with invalid planner max completion tokens", func() {
@@ -834,7 +834,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflow final model outside modelRefs", func() {
@@ -882,7 +882,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(withDecisionBackends(cfg))
 		Expect(err).NotTo(HaveOccurred())
 	})
 }
@@ -918,7 +918,7 @@ func registerValidateConfigStructureStaticWorkflowsSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects static workflows without roles", func() {
@@ -1052,55 +1052,30 @@ var _ = Describe("validateConfigStructure", func() {
 })
 
 var _ = Describe("validatePromptGuardBackendConfig", func() {
-	It("accepts an unset variant/protocol (defaults to candle)", func() {
+	It("accepts the local model (no backend)", func() {
 		cfg := &PromptGuardConfig{}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("accepts variant candle", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle}
+	It("accepts backend http_chat", func() {
+		cfg := &PromptGuardConfig{
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPChat,
+				Contract: RemoteClassifierContractLabelDecision,
+				Model:    "guard",
+			},
+		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("accepts variant mmbert32k", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
+	It("accepts backend http_classify", func() {
+		cfg := &PromptGuardConfig{
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPClassify,
+				Contract: RemoteClassifierContractLabelDistribution,
+				Model:    "guard",
+			},
+		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts protocol http_chat", func() {
-		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPChat}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts protocol http_classify", func() {
-		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPClassify}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("rejects an unrecognized variant", func() {
-		cfg := &PromptGuardConfig{Variant: "some_typo"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("some_typo"))
-	})
-
-	It("rejects an unrecognized protocol", func() {
-		cfg := &PromptGuardConfig{Protocol: "some_typo"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("some_typo"))
-	})
-
-	It("rejects a stale boolean-flag-era value", func() {
-		cfg := &PromptGuardConfig{Variant: "use_vllm"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("rejects setting both variant and protocol", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle, Protocol: PromptGuardProtocolHTTPChat}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
 	})
 })

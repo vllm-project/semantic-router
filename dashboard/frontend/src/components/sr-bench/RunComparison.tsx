@@ -56,6 +56,49 @@ function ChangeInterval({ values }: { values: [number, number] }) {
   )
 }
 
+function ComparisonCostBreakdown({ row }: { row: Comparison['comparisons'][number] }) {
+  return (
+    <details className={styles.details}>
+      <summary>Cost breakdown</summary>
+      <p className={styles.muted}>
+        Evaluation includes judges, simulators and other auxiliary calls. Unknown costs are not
+        treated as zero.
+      </p>
+      <div className={styles.tableScroll}>
+        <table aria-label="Cost breakdown">
+          <thead>
+            <tr>
+              <th>Cost</th>
+              <th>Best single model</th>
+              <th>This run</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Subject model</th>
+              <td>{money(row.baseline_subject_cost_usd)}</td>
+              <td>{money(row.candidate_subject_cost_usd)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Evaluation</th>
+              <td>{money(row.baseline_evaluation_cost_usd)}</td>
+              <td>{money(row.candidate_evaluation_cost_usd)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Total</th>
+              <td>{money(row.baseline_total_cost_usd)}</td>
+              <td>{money(row.candidate_total_cost_usd)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Subject model saving: <ChangeValue value={row.subject_cost_saving_percent} unit="%" />
+      </p>
+    </details>
+  )
+}
+
 interface IterationEvidence {
   id: string
   stage: string
@@ -195,8 +238,14 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         'quality_delta',
         'ci95_low',
         'ci95_high',
-        'model_cost_usd',
-        'cost_saving_percent',
+        'baseline_subject_cost_usd',
+        'candidate_subject_cost_usd',
+        'baseline_evaluation_cost_usd',
+        'candidate_evaluation_cost_usd',
+        'baseline_total_cost_usd',
+        'candidate_total_cost_usd',
+        'subject_cost_saving_percent',
+        'total_cost_saving_percent',
       ],
       ...results.flatMap(
         (item) =>
@@ -207,8 +256,14 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             row.paired_cases,
             row.quality_delta,
             ...row.quality_delta_ci95,
-            row.candidate_cost_usd,
-            row.cost_saving_percent,
+            row.baseline_subject_cost_usd,
+            row.candidate_subject_cost_usd,
+            row.baseline_evaluation_cost_usd,
+            row.candidate_evaluation_cost_usd,
+            row.baseline_total_cost_usd,
+            row.candidate_total_cost_usd,
+            row.subject_cost_saving_percent,
+            row.total_cost_saving_percent,
           ]) ?? [],
       ),
     ]
@@ -254,12 +309,12 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             ),
           )
           .flatMap((target) =>
-            typeof target.macro_accuracy === 'number' && typeof target.cost_usd === 'number'
+            typeof target.macro_accuracy === 'number' && typeof target.total_spend_usd === 'number'
               ? [
                   {
                     name: targetName(reviewedBaseline?.manifest, target.id),
                     quality: target.macro_accuracy * 100,
-                    cost: target.cost_usd,
+                    cost: target.total_spend_usd,
                     kind: 'single' as const,
                   },
                 ]
@@ -272,12 +327,12 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                 (target) => target.id === row.candidate_target_id,
               )
               return typeof metric?.macro_accuracy === 'number' &&
-                typeof row.candidate_cost_usd === 'number'
+                typeof row.candidate_total_cost_usd === 'number'
                 ? [
                     {
                       name: `${item.stage} · ${targetName(runs.find((run) => run.id === item.id)?.manifest, row.candidate_target_id)}`,
                       quality: metric.macro_accuracy * 100,
-                      cost: row.candidate_cost_usd,
+                      cost: row.candidate_total_cost_usd,
                       kind:
                         runs
                           .find((run) => run.id === item.id)
@@ -301,7 +356,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             stage: item.stage,
             quality:
               typeof metric?.macro_accuracy === 'number' ? metric.macro_accuracy * 100 : null,
-            saving: row.cost_saving_percent,
+            saving: row.total_cost_saving_percent,
           }
         })
       : []
@@ -315,8 +370,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
       <p>Choose a single-model baseline and compare compatible saved results.</p>
       {!!results.length && (
         <p className={styles.muted}>
-          Costs apply frozen per-token prices to recorded usage; they are not invoice or
-          hardware-cost measurements.
+          Total cost includes model answers and evaluation calls, priced from recorded usage at
+          frozen rates. These are estimates, not invoices or hardware costs.
         </p>
       )}
       {experiment && (
@@ -364,7 +419,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
       )}
       {qualified && (
         <div className={styles.chartGrid}>
-          <QualityCostChart points={points} />
+          <QualityCostChart points={points} costBasis="total" />
           {trajectory.length > 1 && (
             <IterationChart
               points={trajectory}
@@ -418,12 +473,20 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                         </strong>
                       </div>
                       <div>
-                        <span>Cost saving</span>
+                        <span>Total cost saving</span>
                         <strong>
-                          <ChangeValue value={row.cost_saving_percent} unit="%" metric="cost" />
+                          <ChangeValue
+                            value={row.total_cost_saving_percent}
+                            unit="%"
+                            metric="cost"
+                          />
                         </strong>
                       </div>
                     </div>
+                    {row.total_cost_comparison_reason && (
+                      <p className={styles.muted}>{row.total_cost_comparison_reason}</p>
+                    )}
+                    <ComparisonCostBreakdown row={row} />
                     <p className={styles.muted}>
                       95% paired interval <ChangeInterval values={row.quality_delta_ci95} /> ·{' '}
                       {number(row.paired_cases)} cases
@@ -476,8 +539,10 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                     <th>Macro accuracy</th>
                     <th>Correct / denominator</th>
                     <th>Saved outcomes</th>
-                    <th>Observed model cost</th>
-                    <th>Cache-neutral estimate</th>
+                    <th>Subject model cost</th>
+                    <th>Evaluation cost</th>
+                    <th>Total cost</th>
+                    <th>Cache-neutral subject estimate</th>
                     <th>Tokens</th>
                     <th>Latency p50 / p95</th>
                   </tr>
@@ -500,6 +565,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                           {number(target.completed)} completed · {number(target.failed)} failed
                         </td>
                         <td>{money(target.cost_usd)}</td>
+                        <td>{money(target.evaluation_cost_usd)}</td>
+                        <td>{money(target.total_spend_usd)}</td>
                         <td title={target.cache_neutral_cost_basis}>
                           {money(target.cache_neutral_cost_usd)}
                         </td>
@@ -535,9 +602,9 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
               <p className={styles.muted}>{baselineComparison.baseline_selection_qualification}</p>
             )}
           <p className={styles.muted}>
-            Cache-neutral estimates use the same selected single-model baseline and reprice every
-            prompt token at the frozen fresh-input rate plus output. This counterfactual excludes
-            cache discounts and premiums; it is neither billed spend nor a measured cache-free run.
+            Cache-neutral estimates cover subject model calls only, using the same selected
+            baseline. They reprice prompt tokens at the frozen fresh-input rate plus output,
+            excluding evaluation calls and cache discounts or premiums. They are not measured spend.
           </p>
           <details className={styles.details}>
             <summary>Detailed iteration metrics and uncertainty</summary>
@@ -550,8 +617,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                     <th>Correct / denominator</th>
                     <th>Quality Δ vs best single</th>
                     <th>95% paired interval</th>
-                    <th>Observed cost / saving</th>
-                    <th>Cache-neutral estimate / saving</th>
+                    <th>Total cost / saving</th>
+                    <th>Cache-neutral subject estimate / saving</th>
                     <th>Tokens</th>
                     <th>Latency p50 / p95</th>
                     <th>Wall time</th>
@@ -638,10 +705,10 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                               )}
                             </td>
                             <td>
-                              {money(row.candidate_cost_usd)}
+                              {money(row.candidate_total_cost_usd)}
                               <small>
                                 <ChangeValue
-                                  value={row.cost_saving_percent}
+                                  value={row.total_cost_saving_percent}
                                   unit="% saving"
                                   metric="cost"
                                 />
@@ -722,11 +789,6 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                             </div>
                           ))}
                       </dl>
-                    </details>
-                    <details className={styles.details}>
-                      <summary>Full comparison, provenance and exclusions</summary>
-                      <pre>{JSON.stringify(item.comparison, null, 2)}</pre>
-                      <pre>{JSON.stringify(item.report?.provenance, null, 2)}</pre>
                     </details>
                   </>
                 )}

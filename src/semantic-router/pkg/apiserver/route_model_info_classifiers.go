@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -15,16 +15,14 @@ func classificationAvailabilityForService(service classificationService) classif
 	}
 
 	availability := classifierModelAvailability{
-		core:                   service.HasClassifier(),
-		factCheck:              service.HasFactCheckClassifier(),
-		hallucination:          service.HasHallucinationDetector(),
-		hallucinationExplainer: service.HasHallucinationExplainer(),
-		feedback:               service.HasFeedbackDetector(),
+		core:          service.HasClassifier(),
+		factCheck:     service.HasFactCheckClassifier(),
+		hallucination: service.HasHallucinationDetector(),
+		feedback:      service.HasFeedbackDetector(),
 	}
 	if inventory, ok := service.(classificationInventoryReadinessService); ok {
 		availability.factCheck = inventory.HasAnyFactCheckClassifier()
 		availability.hallucination = inventory.HasAnyHallucinationDetector()
-		availability.hallucinationExplainer = inventory.HasAnyHallucinationExplainer()
 		availability.feedback = inventory.HasAnyFeedbackDetector()
 	}
 	return availability
@@ -75,7 +73,7 @@ func buildRoutingClassifierModels(
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
-				"model_type":   categoryModelInfoType(categoryModel),
+				"model_type":   localModelType(categoryModel.Backend),
 				"threshold":    fmt.Sprintf("%.2f", categoryModel.Threshold),
 			},
 		})
@@ -90,7 +88,7 @@ func buildRoutingClassifierModels(
 			ModelPath: piiModel.ModelID,
 			Metadata: map[string]string{
 				"mapping_path": piiModel.PIIMappingPath,
-				"model_type":   resolveInlineModelType(piiModel.UseMmBERT32K, false, true),
+				"model_type":   localModelType(piiModel.Backend),
 				"threshold":    fmt.Sprintf("%.2f", piiModel.Threshold),
 			},
 		})
@@ -98,13 +96,6 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
-		backend := promptGuard.Protocol
-		if backend == "" {
-			backend = promptGuard.Variant
-		}
-		if backend == "" {
-			backend = routerconfig.PromptGuardVariantCandle
-		}
 		models = append(models, ModelInfo{
 			Name:      "jailbreak_classifier",
 			Type:      "security_detection",
@@ -113,7 +104,7 @@ func buildRoutingClassifierModels(
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
-				"backend":                backend,
+				"backend":                localModelType(promptGuard.Backend),
 			},
 		})
 	}
@@ -121,16 +112,13 @@ func buildRoutingClassifierModels(
 	return models
 }
 
-func categoryModelInfoType(model routerconfig.CategoryModel) string {
-	if model.Backend != nil {
-		// Match the existing prompt_guard convention: a remote classifier reports
-		// its effective transport rather than pretending to be a local model.
-		return model.Backend.Protocol
+// localModelType names how a classifier module runs: the built-in model
+// runtime, or a remote classifier's transport.
+func localModelType(backend *routerconfig.RemoteClassifierBackend) string {
+	if backend != nil {
+		return backend.Protocol
 	}
-	if variant, err := model.EffectiveVariant(); err == nil && variant != "" {
-		return variant
-	}
-	return resolveInlineModelType(model.UseMmBERT32K, model.UseModernBERT, false)
+	return routerconfig.ModelRuntimeProvider
 }
 
 func buildHallucinationModels(
@@ -146,7 +134,7 @@ func buildHallucinationModels(
 			Loaded:    availability.factCheck,
 			ModelPath: factCheckModel.ModelID,
 			Metadata: map[string]string{
-				"model_type": resolveInlineModelType(factCheckModel.UseMmBERT32K, false, false),
+				"model_type": routerconfig.ModelRuntimeProvider,
 				"threshold":  fmt.Sprintf("%.2f", factCheckModel.Threshold),
 				"use_cpu":    fmt.Sprintf("%t", factCheckModel.UseCPU),
 			},
@@ -165,9 +153,9 @@ func buildHallucinationModels(
 		"lifecycle":  "router_local",
 	}
 	if remote, ok := remoteHallucinationBinding(cfg); ok {
-		// The binding plan is the source of truth for a remote detector: the
-		// legacy scalar desugars into it, and a recipe may bind a token_spans
-		// service (http_classify) that is not an OpenAI-compatible endpoint.
+		// The binding plan is the source of truth for a remote detector: a
+		// recipe may bind a chat service (http_chat) or a token_spans service
+		// (http_classify) that is not an OpenAI-compatible endpoint.
 		metadata = map[string]string{
 			"backend":    routerconfig.HallucinationBackendEndpoint,
 			"model_type": "openai_compatible_endpoint",
@@ -185,7 +173,6 @@ func buildHallucinationModels(
 		metadata["min_span_length"] = fmt.Sprintf("%d", hallucinationModel.MinSpanLength)
 		metadata["min_span_confidence"] = fmt.Sprintf("%.2f", hallucinationModel.MinSpanConfidence)
 		metadata["context_window_size"] = fmt.Sprintf("%d", hallucinationModel.ContextWindowSize)
-		metadata["nli_filtering_enabled"] = fmt.Sprintf("%t", hallucinationModel.EnableNLIFiltering)
 		metadata["use_cpu"] = fmt.Sprintf("%t", hallucinationModel.UseCPU)
 	}
 	models = append(models, ModelInfo{
@@ -195,23 +182,6 @@ func buildHallucinationModels(
 		ModelPath: hallucinationModel.ModelID,
 		Metadata:  metadata,
 	})
-
-	nliModel := cfg.HallucinationMitigation.NLIModel
-	if cfg.NeedsLocalHallucinationNLIForAPI() ||
-		cfg.NeedsLocalHallucinationNLIForRouting() ||
-		cfg.NeedsLocalNLIForSemanticCache() {
-		models = append(models, ModelInfo{
-			Name:      "hallucination_explainer",
-			Type:      "nli_explainer",
-			Loaded:    availability.hallucinationExplainer,
-			ModelPath: nliModel.ModelID,
-			Metadata: map[string]string{
-				"model_type": "modernbert_nli",
-				"threshold":  fmt.Sprintf("%.2f", nliModel.Threshold),
-				"use_cpu":    fmt.Sprintf("%t", nliModel.UseCPU),
-			},
-		})
-	}
 
 	return models
 }
@@ -229,24 +199,9 @@ func buildFeedbackAndSimilarityModels(
 			Loaded:    availability.feedback,
 			ModelPath: feedbackModel.ModelID,
 			Metadata: map[string]string{
-				"model_type": resolveInlineModelType(feedbackModel.UseMmBERT32K, feedbackModel.UseModernBERT, false),
+				"model_type": routerconfig.ModelRuntimeProvider,
 				"threshold":  fmt.Sprintf("%.2f", feedbackModel.Threshold),
 				"use_cpu":    fmt.Sprintf("%t", feedbackModel.UseCPU),
-			},
-		})
-	}
-
-	bertModelPath := cfg.BertModelPath
-	if bertModelPath != "" {
-		models = append(models, ModelInfo{
-			Name:      "bert_similarity_model",
-			Type:      "similarity",
-			Loaded:    availability.core,
-			ModelPath: bertModelPath,
-			Metadata: map[string]string{
-				"model_type": "sentence_transformer",
-				"threshold":  fmt.Sprintf("%.2f", cfg.MinSimilarityThreshold()),
-				"use_cpu":    fmt.Sprintf("%t", cfg.UseCPU),
 			},
 		})
 	}
@@ -270,7 +225,6 @@ func (s *ClassificationAPIServer) getPlaceholderModelsInfo(runtimeState *startup
 		placeholderModelInfo("jailbreak_classifier", "security_detection"),
 		placeholderModelInfo("fact_check_classifier", "fact_check_classification"),
 		placeholderModelInfo("hallucination_detector", "hallucination_detection"),
-		placeholderModelInfo("hallucination_explainer", "nli_explainer"),
 		placeholderModelInfo("feedback_detector", "feedback_detection"),
 	}
 
@@ -292,23 +246,6 @@ func placeholderModelInfo(name, modelType string) ModelInfo {
 	}
 }
 
-func resolveInlineModelType(useMmBERT32K, useModernBERT, tokenLevel bool) string {
-	switch {
-	case useMmBERT32K && tokenLevel:
-		return "mmbert_32k_token"
-	case useMmBERT32K:
-		return "mmbert_32k"
-	case useModernBERT && tokenLevel:
-		return "modernbert_token"
-	case useModernBERT:
-		return "modernbert"
-	case tokenLevel:
-		return "bert_token"
-	default:
-		return "bert"
-	}
-}
-
 // remoteHallucinationBinding reports the hallucination detector's remote
 // binding when the compiled plan has one for the default recipe. A config that
 // does not compile falls back to the legacy scalar so model info still
@@ -320,9 +257,6 @@ func remoteHallucinationBinding(cfg *routerconfig.RouterConfig) (routerconfig.Re
 	}
 	plan, err := routerconfig.CompileModelBindings(cfg)
 	if err != nil {
-		if cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == routerconfig.HallucinationBackendEndpoint {
-			return routerconfig.ResolvedModelBinding{Binding: routerconfig.ModelBinding{Adapter: routerconfig.RemoteClassifierProtocolHTTPChat, Contract: routerconfig.RemoteClassifierContractTokenSpans}}, true
-		}
 		return routerconfig.ResolvedModelBinding{}, false
 	}
 	spec, ok := plan.Lookup(recipe, "hallucination_detector")

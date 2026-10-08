@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import sqlite3
 import stat
 import subprocess
@@ -71,6 +72,42 @@ def test_target_credentials_are_loaded_only_from_registered_references(tmp_path)
     )
     assert configured.secrets["MODEL_TOKEN"] == "model-secret"
     assert "MODEL_TOKEN" not in dashboard_bench_env(configured)
+
+
+def test_hugging_face_credential_only_reaches_managed_preparation_worker(tmp_path):
+    stack = resolve_runtime_stack()
+    bench = prepare_bench_runtime(
+        str(tmp_path), stack, {"HF_TOKEN": "fixture-gated-source-token"}
+    )
+    assert bench.secrets["HF_TOKEN"] == "fixture-gated-source-token"
+    assert "HF_TOKEN" not in dashboard_bench_env(bench)
+    spec = container_start._build_bench_runtime_spec(
+        runtime="docker",
+        image="dashboard:test",
+        nofile_limit=10000,
+        network_name=stack.network_name,
+        stack_layout=stack,
+        bench=bench,
+    )
+    command, health = spec[2]
+    assert "HF_TOKEN" in command
+    assert "fixture-gated-source-token" not in " ".join(command + health)
+    assert (
+        "fixture-gated-source-token"
+        not in (bench.store.parent / "service-token").read_text()
+    )
+    external = prepare_bench_runtime(
+        str(tmp_path / "external"),
+        stack,
+        {
+            "SR_BENCH_URL": "https://bench.example",
+            "SR_BENCH_TOKEN": "fixture-service-token",
+            "HF_TOKEN": "fixture-gated-source-token",
+        },
+    )
+    assert external.secrets == {"SR_BENCH_TOKEN": "fixture-service-token"}
+    assert "HF_TOKEN" not in dashboard_bench_env(external)
+    assert not (tmp_path / "external" / ".sr-bench").exists()
 
 
 def test_bench_container_has_no_runtime_socket_or_gpu_and_token_never_enters_argv(
@@ -168,7 +205,7 @@ def test_reused_worker_is_not_owned_by_failed_dashboard_start_rollback(monkeypat
             ),
             ("dashboard", "dashboard", (["docker", "run"],)),
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "secret"},
     )
     assert status == 125
@@ -231,12 +268,115 @@ def test_reconciliation_failure_rolls_back_only_new_runtime_containers(monkeypat
             ("envoy", "envoy", (["docker", "run", "envoy"],)),
             ("sr-bench", "worker", (["docker", "run", "worker"],)),
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "secret"},
     )
     assert status == 1
     assert "reconciliation" in error
     assert removed == ["router", "envoy"]
+
+
+def test_worker_that_never_started_is_removed_and_its_port_conflict_named(
+    monkeypatch,
+):
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        worker = {"id": "unstarted-id", "status": "created"}
+        removed = []
+
+        def run(command, **kwargs):
+            if command[1] == "run":
+                raise subprocess.CalledProcessError(
+                    125,
+                    command,
+                    stderr=f"Bind for 127.0.0.1:{port} failed: port is already allocated",
+                )
+            if command[1] == "inspect":
+                labels = {BENCH_IDENTITY_LABEL: "same"}
+                return SimpleNamespace(
+                    returncode=0, stdout=json.dumps({**worker, "labels": labels})
+                )
+            removed.append(command[1:])
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", run)
+        specs = [
+            (
+                "sr-bench",
+                "bench",
+                (
+                    [
+                        "docker",
+                        "run",
+                        "--label",
+                        f"{BENCH_IDENTITY_LABEL}=same",
+                        "-p",
+                        f"127.0.0.1:{port}:8090",
+                    ],
+                ),
+            )
+        ]
+        code, _, error = container_start_runner.run_container_specs(
+            specs, router_secret_values={}, bench_secret_values={}
+        )
+        assert code == 1
+        assert f"port {port} is already in use" in error
+        assert "VLLM_SR_BENCH_PORT" in error and "VLLM_SR_PORT_OFFSET" in error
+        assert removed == [["rm", "unstarted-id"]]
+
+        # A worker that ran and stopped keeps its evidence, even on a taken port.
+        worker["status"] = "exited"
+        code, _, error = container_start_runner.run_container_specs(
+            specs, router_secret_values={}, bench_secret_values={}
+        )
+        assert code == 1
+        assert "inspect its saved ledger" in error
+        assert removed == [["rm", "unstarted-id"]]
+
+
+def test_worker_that_never_started_is_removed_and_reports_the_runtime_error(
+    monkeypatch,
+):
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    runtime_error = "OCI runtime create failed: exec: no such file or directory"
+    removed = []
+
+    def run(command, **kwargs):
+        if command[1] == "run":
+            raise subprocess.CalledProcessError(127, command, stderr=runtime_error)
+        if command[1] == "inspect":
+            worker = {"id": "unstarted-id", "status": "created", "labels": {}}
+            return SimpleNamespace(returncode=0, stdout=json.dumps(worker))
+        removed.append(command[1:])
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    code, _, error = container_start_runner.run_container_specs(
+        [
+            (
+                "sr-bench",
+                "bench",
+                (
+                    [
+                        "docker",
+                        "run",
+                        "--label",
+                        f"{BENCH_IDENTITY_LABEL}=same",
+                        "-p",
+                        f"127.0.0.1:{port}:8090",
+                    ],
+                ),
+            )
+        ],
+        router_secret_values={},
+        bench_secret_values={},
+    )
+    assert (code, error) == (127, runtime_error)
+    assert removed == [["rm", "unstarted-id"]]
 
 
 @pytest.mark.parametrize(
@@ -294,7 +434,7 @@ def test_serve_replaces_only_idle_image_upgrade_and_preserves_journal(
 
     monkeypatch.setattr(subprocess, "run", run)
     code, _, error = container_start_runner.run_container_specs(
-        [new], storage_secret_values={}, bench_secret_values=bench.secrets
+        [new], router_secret_values={}, bench_secret_values=bench.secrets
     )
     assert code == 0, error
     assert state == {"exists": True, "paused": False, "image": "dashboard:new"}
@@ -315,6 +455,94 @@ def test_image_upgrade_preserves_active_runs_and_unpauses_worker(
     actions = []
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: actions.append(cmd))
     with pytest.raises(ValueError, match="active runs"):
+        _remove_idle_bench_container("docker", "owned-id", tmp_path)
+    assert actions == [
+        ["docker", "pause", "owned-id"],
+        ["docker", "unpause", "owned-id"],
+    ]
+
+
+@pytest.mark.parametrize("status", ["queued", "running", "completed", "failed"])
+def test_image_upgrade_only_replaces_worker_after_preparation_finishes(
+    tmp_path, monkeypatch, status
+):
+    with sqlite3.connect(tmp_path / "journal.sqlite3") as db:
+        db.execute("CREATE TABLE runs(status TEXT)")
+    journal = tmp_path / "dataset-preparations"
+    journal.mkdir()
+    job = {"id": "prep-" + "ab" * 16, "status": status}
+    path = journal / (job["id"] + ".json")
+    actions = []
+
+    def run(command, **kwargs):
+        actions.append(command)
+        if command[1] == "pause":
+            # Admission just before the freeze must be visible to the idle check.
+            path.write_text(json.dumps(job))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    if status in {"queued", "running"}:
+        with pytest.raises(ValueError, match="active dataset preparations"):
+            _remove_idle_bench_container("docker", "owned-id", tmp_path)
+        assert actions == [
+            ["docker", "pause", "owned-id"],
+            ["docker", "unpause", "owned-id"],
+        ]
+    else:
+        _remove_idle_bench_container("docker", "owned-id", tmp_path)
+        assert actions == [
+            ["docker", "pause", "owned-id"],
+            ["docker", "rm", "--force", "owned-id"],
+        ]
+    assert json.loads(path.read_text()) == job
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "invalid-json",
+        "unknown-status",
+        "mismatched-id",
+        "symlink",
+        "unreadable-directory",
+    ],
+)
+def test_image_upgrade_keeps_worker_when_preparation_journal_cannot_be_verified(
+    tmp_path, monkeypatch, failure
+):
+    with sqlite3.connect(tmp_path / "journal.sqlite3") as db:
+        db.execute("CREATE TABLE runs(status TEXT)")
+    journal = tmp_path / "dataset-preparations"
+    journal.mkdir()
+    identifier = "prep-" + "ab" * 16
+    path = journal / (identifier + ".json")
+    if failure == "invalid-json":
+        path.write_text("incomplete fixture")
+    elif failure == "symlink":
+        destination = tmp_path / "foreign-job.json"
+        destination.write_text(json.dumps({"id": identifier, "status": "completed"}))
+        path.symlink_to(destination)
+    elif failure == "unreadable-directory":
+        original_iterdir = type(journal).iterdir
+
+        def iterdir(directory):
+            if directory == journal:
+                raise PermissionError("fixture denied preparation journal read")
+            return original_iterdir(directory)
+
+        monkeypatch.setattr(type(journal), "iterdir", iterdir)
+    else:
+        path.write_text(
+            json.dumps(
+                {
+                    "id": "wrong-id" if failure == "mismatched-id" else identifier,
+                    "status": "unknown" if failure == "unknown-status" else "completed",
+                }
+            )
+        )
+    actions = []
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: actions.append(cmd))
+    with pytest.raises(ValueError, match="Cannot verify dataset preparations"):
         _remove_idle_bench_container("docker", "owned-id", tmp_path)
     assert actions == [
         ["docker", "pause", "owned-id"],
@@ -468,7 +696,7 @@ def test_replaced_worker_is_owned_by_failed_health_rollback(monkeypatch):
                 (["docker", "run"], ["docker", "exec", "health"]),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "fixture"},
     )
     assert code == 125

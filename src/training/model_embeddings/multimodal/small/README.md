@@ -1,7 +1,7 @@
 # Small multimodal embedding training
 
 This package trains and packages
-[`llm-semantic-router/multi-modal-embed-small`](https://huggingface.co/llm-semantic-router/multi-modal-embed-small).
+[`vllm-sr/multi-modal-embed-small`](https://huggingface.co/vllm-sr/multi-modal-embed-small).
 `artifacts.json` maps the public artifact to its checked configuration and
 local train, evaluation, and release entrypoints.
 

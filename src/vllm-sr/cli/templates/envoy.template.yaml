@@ -1,3 +1,42 @@
+{#- Route timeouts and retry policy from a model's reliability block, at the
+    indentation of a route action's fields. Retries prefer an endpoint the
+    request has not tried, as the standalone Router's do. #}
+{% macro route_reliability(r, listener) %}
+                  timeout: {{ r.total_timeout or (listener.timeout | default('1200s')) }}
+                  {% if r.idle_timeout %}
+                  idle_timeout: {{ r.idle_timeout }}
+                  {% endif %}
+                  {% if r.retry_count | default(0) > 0 or r.per_try_timeout %}
+                  retry_policy:
+                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream') }}
+                    num_retries: {{ r.retry_count | default(0) }}
+                    {% if r.per_try_timeout %}
+                    per_try_timeout: {{ r.per_try_timeout }}
+                    {% endif %}
+                    {% if r.retriable_status_codes %}
+                    retriable_status_codes: {{ r.retriable_status_codes | tojson }}
+                    {% endif %}
+                    {% if r.retry_back_off_base or r.retry_back_off_max %}
+                    retry_back_off:
+                      base_interval: {{ r.retry_back_off_base | default('0.025s', true) }}
+                      {% if r.retry_back_off_max %}
+                      max_interval: {{ r.retry_back_off_max }}
+                      {% endif %}
+                    {% endif %}
+                    {% if r.retry_after_max %}
+                    rate_limited_retry_back_off:
+                      reset_headers:
+                      - name: retry-after
+                        format: SECONDS
+                      max_interval: {{ r.retry_after_max }}
+                    {% endif %}
+                    retry_host_predicate:
+                    - name: envoy.retry_host_predicates.previous_hosts
+                      typed_config:
+                        "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                    host_selection_retry_max_attempts: 3
+                  {% endif %}
+{% endmacro %}
 admin:
   address:
     socket_address:
@@ -55,12 +94,7 @@ static_resources:
                 {% endif %}
                 route:
                   cluster: {{ model.cluster_name }}_cluster
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  {% if model.reliability.retry_count | default(0) > 0 %}
-                  retry_policy:
-                    retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
-                    num_retries: {{ model.reliability.retry_count }}
-                  {% endif %}
+{{ route_reliability(model.reliability, listener) }}
                   # Rewrite Host header to match the endpoint Envoy selected.
                   {% if model.auto_host_rewrite %}
                   auto_host_rewrite: true
@@ -90,12 +124,7 @@ static_resources:
                   {% else %}
                   cluster: vllm_static_cluster
                   {% endif %}
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  {% if models and models[0].reliability.retry_count | default(0) > 0 %}
-                  retry_policy:
-                    retry_on: {{ models[0].reliability.retry_on | default('connect-failure,refused-stream') }}
-                    num_retries: {{ models[0].reliability.retry_count }}
-                  {% endif %}
+{{ route_reliability(models[0].reliability if models else {}, listener) }}
                   {% if models %}
                   # Rewrite Host header to match the endpoint Envoy selected.
                   {% if models[0].auto_host_rewrite %}
@@ -131,10 +160,15 @@ static_resources:
                   local auth = request_handle:headers():get("authorization") or
                                request_handle:headers():get("Authorization") or ""
                   local token = string.match(auth, "^[Bb]earer%s+(.+)$")
+                  if not (token and VALID_KEYS[token]) then
+                    -- Azure OpenAI clients send the key in api-key instead.
+                    token = request_handle:headers():get("api-key")
+                  end
                   if token and VALID_KEYS[token] then
                     -- The listener credential authenticates the Router client;
                     -- it is never an upstream provider credential.
                     request_handle:headers():remove("authorization")
+                    request_handle:headers():remove("api-key")
                     return
                   end
                   request_handle:respond(
@@ -160,6 +194,12 @@ static_resources:
               # Unlike route/idle timeouts, zero expires immediately here.
               # Bound each Router processing step independently of chat duration.
               message_timeout: 1200s
+              # A decision's reliability block reaches Envoy's router as these
+              # per-request headers. ext_proc may set no other x-envoy-* header.
+              # Always rendered: the Router reloads its config without Envoy.
+              mutation_rules:
+                allow_expression:
+                  regex: "^x-envoy-(upstream-rq-timeout-ms|upstream-rq-per-try-timeout-ms|max-retries|retry-on|retriable-status-codes)$"
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -221,7 +261,7 @@ static_resources:
   {% for model in models %}
   # Cluster for model: {{ model.name | tojson }}
   - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 10s
+    connect_timeout: {{ model.reliability.connect_timeout | default('10s', true) }}
     type: {{ model.cluster_type }}
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
@@ -233,13 +273,21 @@ static_resources:
     {% else %}
     lb_policy: ROUND_ROBIN
     {% endif %}
-    {% if model.reliability.retry_count | default(0) > 0 or model.reliability.consecutive_5xx | default(0) > 0 %}
+    {% set raised = model.reliability.retry_count | default(0) > 0 or model.reliability.consecutive_5xx | default(0) > 0 %}
+    {% set budget = model.reliability.retry_budget_percent or model.reliability.retry_budget_min_concurrency %}
+    {% if raised or budget %}
     circuit_breakers:
       thresholds:
       - priority: DEFAULT
         max_connections: 1024
         max_pending_requests: 1024
-        max_requests: 4096
+        max_requests: {{ 4096 if raised else 1024 }}
+        {% if budget %}
+        retry_budget:
+          budget_percent:
+            value: {{ model.reliability.retry_budget_percent | default(20.0, true) }}
+          min_retry_concurrency: {{ model.reliability.retry_budget_min_concurrency | default(3, true) }}
+        {% endif %}
     {% endif %}
     {% if model.reliability.consecutive_5xx | default(0) > 0 and model.endpoints | length > 1 %}
     outlier_detection:

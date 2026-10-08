@@ -35,13 +35,14 @@ import (
 func TestReconcileEmbeddingModalityValidation(t *testing.T) {
 	cases := []reconcileEmbeddingModalityCase{
 		{
-			name:              "AudioRejected",
+			name:              "AudioWithoutMultimodalRejected",
 			queryModality:     "audio",
 			ruleName:          "audio_rule_under_test",
-			baseModelType:     "multimodal",
+			baseModelType:     "mmbert",
 			wantValidationErr: true,
-			errSubstrings:     []string{"audio_rule_under_test", "audio FFI", "planned"},
+			errSubstrings:     []string{"audio_rule_under_test", "model_type=multimodal"},
 		},
+		{name: "AudioWithMultimodalAccepted", queryModality: "audio", ruleName: "audio_rule_under_test", baseModelType: "multimodal"},
 		{
 			name:              "ImageWithoutMultimodalRejected",
 			queryModality:     "image",
@@ -428,7 +429,7 @@ func TestReconcileDiscardsStaticModelBindings(t *testing.T) {
 		{"pii_classifier", "token_spans.v1", "mmbert32k", ""},
 		{
 			"prompt_guard", "label_distribution.v1", "modernbert",
-			"  model_catalog: {modules: {prompt_guard: {variant: mmbert32k, max_sequence_length: 32768, window: {size: 128, overlap: 63}}}}\n",
+			"  model_catalog: {modules: {prompt_guard: {max_sequence_length: 32768, window: {size: 128, overlap: 63}}}}\n",
 		},
 	} {
 		binding := fmt.Sprintf("%s: {deployment: removed-deployment, contract: %s, adapter: %s}\n",

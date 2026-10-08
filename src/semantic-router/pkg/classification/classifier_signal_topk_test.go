@@ -9,7 +9,7 @@ import (
 )
 
 func TestEmbeddingOutputPreservesIndependentPredicatesForProjectionAndPriority(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"query": makeEmbedding(1, 0, 0),
 		"one":   makeEmbedding(0.95, 0, 0),
 		"two":   makeEmbedding(0.85, 0, 0),
@@ -37,7 +37,7 @@ func TestEmbeddingOutputPreservesIndependentPredicatesForProjectionAndPriority(t
 			}
 			options := config.HNSWConfig{TopK: tc.topK, PreloadEmbeddings: true}
 			c := &Classifier{
-				keywordEmbeddingClassifier: newTestEmbeddingClassifier(t, rules, options),
+				keywordEmbeddingClassifier: newTestEmbeddingClassifier(t, rules, options, provider),
 				Config: &config.RouterConfig{
 					InlineModels: config.InlineModels{EmbeddingModels: config.EmbeddingModels{EmbeddingConfig: options}},
 					IntelligentRouting: config.IntelligentRouting{

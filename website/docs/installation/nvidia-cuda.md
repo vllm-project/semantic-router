@@ -18,7 +18,10 @@ It does **not** download a language model or start a vLLM server.
 
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
 - an x86-64 host when using the current Semantic Router CUDA image;
-- an NVIDIA driver compatible with the selected container images;
+- a GPU of compute capability 7.0 or newer (Volta and later) for the Router
+  image, the oldest architecture its PyTorch build (CUDA 12.8) includes;
+- an NVIDIA driver, and GPU passthrough into the Router container for the
+  Router-side models that run on CUDA;
 - Docker and NVIDIA Container Toolkit;
 - enough GPU memory for the vLLM model, KV cache, and any Router-side models;
   and
@@ -127,30 +130,41 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-To run supported Router-side ONNX embeddings and classifiers on CUDA, use
-`--platform nvidia`. The CLI selects and pulls the published
-`ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image by default:
+The Router's own models (classifiers, embeddings, decision models) run in the
+[model runtime](model-runtime/overview.md). To run them on CUDA, use
+`--platform nvidia`: the CUDA image ships the runtime with the CUDA build of
+PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
+CUDA support works but is not yet validated; measure it on your hardware.
+A stable CLI selects the matching published release image
+(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
+use `:latest` unless an image is specified explicitly:
 
 ```bash
 vllm-sr config validate --config config.yaml
 vllm-sr serve --platform nvidia --config config.yaml
 ```
 
-For a source checkout, build the maintained CUDA image first. The
-`ifnotpresent` policy preserves that local build while still allowing the CLI
-to obtain missing companion images:
+For a source checkout, build the maintained CUDA image first and explicitly
+select its `latest` tag. An editable CLI installation with a stable package
+version otherwise selects the release tag. With the image override,
+`ifnotpresent` reuses the local build while allowing the CLI to obtain missing
+companion images:
 
 ```bash
 VLLM_SR_PLATFORM=nvidia make vllm-sr-build
-vllm-sr serve \
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
+  vllm-sr serve \
   --platform nvidia \
   --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
 
-Pin a release tag or digest in production. If the Router shares a GPU with
-vLLM, measure memory and latency under representative concurrency; moving
-small, batch-one signal models to CUDA does not always improve end-to-end
+If you override the build tag or registry, set `VLLM_SR_IMAGE` to the actual
+built image and use `VLLM_SR_DASHBOARD_IMAGE` for a custom companion image.
+
+Pin a digest when deployments require an immutable image identity. If the
+Router shares a GPU with vLLM, measure memory and latency under representative
+concurrency; moving small, batch-one signal models to CUDA does not always improve end-to-end
 latency.
 
 ## Verify the routed path
@@ -159,12 +173,15 @@ Check the local stack and Router logs:
 
 ```bash
 vllm-sr status
-vllm-sr logs router | grep 'Using CUDA execution provider'
+vllm-sr logs router | grep model_binding_ready
 nvidia-smi
 ```
 
-The CUDA log appears only when the active recipe loads a supported local ONNX
-model. Then send a request through an entrypoint exposed by that recipe. Replace
+Every prepared Router-side model reports the device it runs on, so a GPU
+deployment shows `"device":"cuda:0"` for the configured classifiers and
+`nvidia-smi` lists the Router process. A model reporting `"device":"cpu"` runs
+on the CPU regardless of GPU passthrough. Then send a request through an
+entrypoint exposed by that recipe. Replace
 `vllm-sr/auto` if your config uses another public model name:
 
 ```bash
@@ -186,14 +203,16 @@ routed request proves the Router, recipe, and backend binding work together.
 
 Configure Docker with `nvidia-ctk`, restart Docker, and repeat NVIDIA's sample
 container command. Debug the container runtime before debugging either vLLM or
-Semantic Router.
+Semantic Router: without working passthrough, the Router-side models configured
+for CUDA cannot load.
 
 ### The Router uses the CPU
 
 Confirm that `--platform nvidia` selected the `vllm-sr-cuda` image and that
 `VLLM_SR_NVIDIA_PRESERVE_CPU` is not enabled. Check the generated runtime
 configuration and startup logs, not only the source recipe. A recipe without a
-local ONNX signal model has nothing to move to CUDA.
+local signal model has nothing to move to CUDA. `GET /v1/models` on a runtime,
+or the Dashboard's model inventory, shows the device each model runs on.
 
 ### vLLM or the Router runs out of GPU memory
 

@@ -14,9 +14,6 @@ import (
 // and request-reachable recipes. Unregistered paths are supplied locally and
 // validated by actual provider preparation, not by the download registry.
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
-	if provider, _ := config.DefaultModelExecution(true); provider != "candle" && provider != "ort" {
-		return nil, fmt.Errorf("unsupported build default model provider %q", provider)
-	}
 	plan, err := config.CompileModelBindings(cfg)
 	if err != nil {
 		return nil, err
@@ -81,7 +78,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
-	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "gemma": &scoped.GemmaModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath, "bert": &scoped.BertModelPath}
+	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath}
 	explicitEmbedding, hasEmbedding := plan.Lookup(cfg.RoutingScope, "embedding")
 	if global {
 		explicitEmbedding, hasEmbedding = plan.LookupGlobal("embedding")
@@ -92,16 +89,15 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 	}
 	if hasEmbedding {
-		scoped.EmbeddingConfig.Backend = config.EmbeddingBackendCandle
+		scoped.EmbeddingConfig.Backend = config.EmbeddingBackendModelRuntime
 	}
 	// A remote default does not suppress an explicit local primary deployment.
 	active := map[string]bool{
 		"domain_classifier": cfg.NeedsCategoryMappingForRouting(), "pii_classifier": cfg.NeedsPIIMappingForRouting(),
 		"prompt_guard": cfg.NeedsJailbreakMappingForRouting(), "fact_check_classifier": cfg.NeedsFactCheckModelForAPI() || cfg.NeedsFactCheckModelForRouting(),
-		"feedback_detector":       cfg.NeedsFeedbackModelForAPI() || cfg.NeedsFeedbackModelForRouting(),
-		"hallucination_detector":  cfg.NeedsLocalHallucinationModelsForRouting() || cfg.NeedsHallucinationDetectorForDefaultRuntime(),
-		"hallucination_explainer": cfg.NeedsLocalHallucinationNLIForAPI() || cfg.NeedsLocalHallucinationNLIForRouting() || cfg.NeedsLocalNLIForSemanticCache(),
-		"modality_detector":       isModalityClassifierEnabled(cfg), "embedding": needed[primary],
+		"feedback_detector":      cfg.NeedsFeedbackModelForAPI() || cfg.NeedsFeedbackModelForRouting(),
+		"hallucination_detector": cfg.NeedsLocalHallucinationModelsForRouting() || cfg.NeedsHallucinationDetectorForDefaultRuntime(),
+		"modality_detector":      isModalityClassifierEnabled(cfg), "embedding": needed[primary],
 		config.RAGRerankerConsumer: cfg.NeedsRAGReranker(),
 	}
 	for _, rule := range cfg.ClassifierRules {
@@ -114,71 +110,22 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
-	defaultProvider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
-	embeddingProvider, _ := config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
-	if defaultProvider == "candle" {
-		for path, files := range candleEmbeddingModelRequiredFiles(&scoped) {
-			required[path] = append(required[path], files...)
-		}
+	for path, files := range embeddingModelRequiredFiles(&scoped) {
+		required[path] = append(required[path], files...)
 	}
-	excludes := candleEmbeddingModelExcludePatterns(&scoped)
+	excludes := embeddingModelExcludePatterns(&scoped)
 	explicitPaths := map[string]bool{}
-	// Implicit Safety and Hazard modules use the same artifact contract as
-	// their typed owners. Explicit per-rule heads are added below from plan.
-	for _, hazard := range []bool{false, true} {
-		if !scoped.NeedsLocalSafetyHeadForRouting(hazard) {
-			continue
-		}
-		head, contract := scoped.SafetyModels.Safety, config.RemoteClassifierContractLabelDistribution
-		if hazard {
-			head, contract = scoped.SafetyModels.Hazard, config.RemoteClassifierContractLabelScores
-		}
-		provider, device := config.DefaultModelExecution(head.UseCPU)
-		spec := config.ResolvedModelBinding{
-			Recipe:     cfg.RoutingScope,
-			Binding:    config.ModelBinding{Adapter: "modernbert", Contract: contract},
-			Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: head.ModelID},
-		}
-		if err := i.addDefaultDeployment(cfg, spec); err != nil {
-			return err
-		}
-		explicitPaths[config.ResolveModelPath(head.ModelID)] = true
-	}
-	if defaultProvider == "ort" || embeddingProvider == "openvino" {
-		// Resolve implicit embeddings with the same provider artifact contract
-		// as explicit bindings. In particular, ROCm requires ONNX graphs and
-		// their external tensors rather than Candle safetensors.
-		for model, path := range paths {
-			provider := defaultProvider
-			if model == primary {
-				provider = embeddingProvider
-			}
-			if provider == "candle" {
-				continue
-			}
-			if *path == "" {
-				continue
-			}
-			spec := config.ResolvedModelBinding{
-				Recipe: cfg.RoutingScope, Name: "embedding",
-				Binding:    config.ModelBinding{Adapter: model, Contract: "embedding.v1"},
-				Deployment: config.ModelDeployment{Provider: provider, Artifact: *path},
-			}
-			if err := i.addDefaultDeployment(cfg, spec); err != nil {
-				return err
-			}
+	// Built-in module models run through implicit model_runtime deployments,
+	// and the runtime downloads them.
+	servedPaths := scoped.RuntimeServedModelPaths()
+	// The runtime downloads a runtime-provisioned catalog model (Vela Omni)
+	// itself; every other embedding model is provisioned as native weights.
+	for _, path := range paths {
+		if catalog := config.GetModelByPath(*path); *path != "" && catalog != nil && catalog.RuntimeProvisioned {
 			explicitPaths[config.ResolveModelPath(*path)] = true
 		}
 	}
-	if provider, device := config.DefaultCategoryExecution(cfg.CategoryModel.UseCPU); provider == "openvino" && active["domain_classifier"] {
-		if _, explicit := plan.Lookup(cfg.RoutingScope, "domain_classifier"); !explicit {
-			spec := config.ResolvedModelBinding{Recipe: cfg.RoutingScope, Name: "domain_classifier", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "auto"}, Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: cfg.CategoryModel.ModelID}}
-			if err := i.addDefaultDeployment(cfg, spec); err != nil {
-				return err
-			}
-			explicitPaths[config.ResolveModelPath(cfg.CategoryModel.ModelID)] = true
-		}
-	}
+
 	for name := range cfg.ModelBindings {
 		spec, ok := plan.Lookup(cfg.RoutingScope, name)
 		if global {
@@ -187,146 +134,48 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		if !ok || !active[name] {
 			continue
 		}
-		if spec.Deployment.Provider == "http" {
-			if spec.Binding.MappingPath != "" {
-				if err := i.addFile(spec.Binding.MappingPath, "", ""); err != nil {
-					return err
-				}
-			}
-			continue
+		// The runtime or the external service owns the model; only an
+		// explicit label map is the router's. The projected consumer names the
+		// runtime's artifact as its model, so it is not a module download.
+		if spec.Deployment.IsModelRuntime() {
+			explicitPaths[config.ResolveModelPath(spec.Deployment.Artifact)] = true
 		}
-		artifact := config.ResolveModelPath(spec.Deployment.Artifact)
-		explicitPaths[artifact] = true
-		if err := i.addDeployment(cfg, spec); err != nil {
-			return err
+		if spec.Binding.MappingPath != "" {
+			if err := i.addFile(spec.Binding.MappingPath, spec.Deployment.Artifact, spec.Deployment.Revision); err != nil {
+				return err
+			}
 		}
 	}
 	if hasEmbedding && needed[primary] && explicitEmbedding.Deployment.Provider != "http" {
 		explicitPaths[config.ResolveModelPath(explicitEmbedding.Deployment.Artifact)] = true
 	}
 	for _, path := range filterDisabledOptionalModelPaths(&scoped, ExtractModelPaths(&scoped)) {
-		if explicitPaths[config.ResolveModelPath(path)] {
+		if explicitPaths[config.ResolveModelPath(path)] || servedPaths[config.ResolveModelPath(path)] {
 			continue
 		}
 		if err := i.addDefault(ModelSpec{LocalPath: config.ResolveModelPath(path), RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...), ExcludePatterns: excludes[config.ResolveModelPath(path)]}); err != nil {
 			return err
 		}
 	}
-	mappings := map[string]string{"domain_classifier": cfg.CategoryMappingPath, "pii_classifier": cfg.PIIMappingPath, "prompt_guard": cfg.PromptGuard.JailbreakMappingPath, "feedback_detector": cfg.FeedbackDetector.FeedbackMappingPath}
-	for consumer, path := range mappings {
-		if active[consumer] && path != "" {
-			revision, artifact := "", ""
-			if spec, ok := plan.Lookup(cfg.RoutingScope, consumer); ok {
-				revision, artifact = spec.Deployment.Revision, spec.Deployment.Artifact
-			}
-			if err := i.addFile(path, artifact, revision); err != nil {
-				return err
-			}
+	mappings := []struct{ consumer, path, model string }{
+		{"domain_classifier", cfg.CategoryMappingPath, cfg.CategoryModel.ModelID},
+		{"pii_classifier", cfg.PIIMappingPath, cfg.PIIModel.ModelID},
+		{"prompt_guard", cfg.PromptGuard.JailbreakMappingPath, cfg.PromptGuard.ModelID},
+		{"feedback_detector", cfg.FeedbackDetector.FeedbackMappingPath, cfg.FeedbackDetector.ModelID},
+	}
+	for _, mapping := range mappings {
+		if !active[mapping.consumer] || mapping.path == "" {
+			continue
 		}
-	}
-	return nil
-}
-
-func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.ResolvedModelBinding) error {
-	path := config.ResolveModelPath(spec.Deployment.Artifact)
-	files := []string{"config.json", "tokenizer.json"}
-	if spec.Binding.Contract == config.RelevanceScoresContract {
-		files = append(files, "matryoshka_config.json")
-	}
-	groups := [][]string{}
-	var rerankerSelections []config.PairScorerSelection
-	excludes := []string(nil)
-	switch spec.Deployment.Provider {
-	case "openvino":
-		if spec.Binding.Head != "" {
-			graph := spec.Binding.Head
-			if !filepath.IsAbs(graph) {
-				graph = filepath.Join(path, graph)
-			}
-			for _, file := range []string{graph, strings.TrimSuffix(graph, ".xml") + ".bin", filepath.Join(filepath.Dir(graph), "openvino_tokenizer.xml"), filepath.Join(filepath.Dir(graph), "openvino_tokenizer.bin")} {
-				if err := i.addFile(file, path, spec.Deployment.Revision); err != nil {
-					return err
-				}
-			}
+		var err error
+		if spec, ok := plan.Lookup(cfg.RoutingScope, mapping.consumer); ok {
+			err = i.addFile(mapping.path, spec.Deployment.Artifact, spec.Deployment.Revision)
 		} else {
-			for _, file := range []string{"openvino_model.xml", "openvino_model.bin", "openvino_tokenizer.xml", "openvino_tokenizer.bin"} {
-				groups = append(groups, []string{file, "openvino/" + file})
-			}
+			err = i.addDefaultFile(mapping.path, mapping.model)
 		}
-	case "ort":
-		if spec.Binding.OperatingPoint != nil {
-			// A calibrated policy also binds its native source checkpoint.
-			// An existing graph-only cache cannot satisfy that identity check.
-			groups = append(groups, []string{"*.safetensors", "*.safetensors.index.json", "pytorch_model*.bin"})
-		}
-		if spec.Binding.Head != "" {
-			head := spec.Binding.Head
-			if !filepath.IsAbs(head) {
-				head = filepath.Join(path, head)
-			}
-			if err := i.addFile(head, path, spec.Deployment.Revision); err != nil {
-				return err
-			}
-		} else if spec.Binding.Contract == config.RelevanceScoresContract {
-			selection := config.PairScorerSelection{}
-			if spec.Binding.PairScorer != nil {
-				selection = *spec.Binding.PairScorer
-			}
-			rerankerSelections = append(rerankerSelections, selection)
-		} else {
-			groups = append(groups, []string{"*.onnx", "onnx/*.onnx", "onnx/layer-*/*.onnx"})
-		}
-		if spec.Binding.Contract == "embedding.v1" {
-			if spec.Binding.Adapter == "multimodal" {
-				groups = [][]string{{"text_encoder.onnx", "onnx/text_encoder.onnx"}, {"image_encoder.onnx", "onnx/image_encoder.onnx"}, {"audio_encoder.onnx", "onnx/audio_encoder.onnx"}}
-			} else {
-				// The maintained MMBERT primary export is layer 22; a flat
-				// single-graph export remains supported by the provider.
-				groups = append(groups, []string{"model.onnx", "onnx/model.onnx", "onnx/layer-22/model.onnx"})
-				layers := []int{cfg.EmbeddingConfig.TargetLayer}
-				ownsCache := cfg.RoutingScope == config.GlobalModelScope || (cfg.RoutingScope == config.DefaultRecipeName && cfg.GlobalModelBindings["embedding"].Deployment == "")
-				if ownsCache && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
-					layers = append(layers, 6)
-				}
-				for _, layer := range layers {
-					if layer > 0 && layer != 22 {
-						groups = append(groups, []string{
-							fmt.Sprintf("onnx/layer-%d/model.onnx", layer),
-							fmt.Sprintf("onnx/model_layer_%d.onnx", layer),
-							fmt.Sprintf("model_layer_%d.onnx", layer),
-						})
-					}
-				}
-			}
-		}
-	default:
-		// A registered Candle snapshot must contain native weights, even if an
-		// ONNX export already exists. Sharded safetensors remain valid.
-		groups = append(groups, []string{"*.safetensors", "*.safetensors.index.json", "pytorch_model*.bin"})
-		if spec.Binding.Contract == config.RelevanceScoresContract {
-			files = append(files, "classification_heads.safetensors")
-			groups = [][]string{{"model.safetensors", "model.safetensors.index.json"}}
-		}
-		excludes = slices.Clone(onnxWeightExcludePatterns)
-		if spec.Binding.Contract == "embedding.v1" && spec.Binding.Adapter == "gemma" {
-			files = append(files, gemmaDenseWeightFiles...)
-		}
-		if spec.Binding.Head != "" {
-			if err := i.add(ModelSpec{LocalPath: config.ResolveModelPath(spec.Binding.Head), RequiredFiles: []string{"config.json", "tokenizer.json"}, RequiredFileGroups: groups, ExcludePatterns: excludes, CheckONNX: spec.Deployment.Provider == "ort", Strict: true}); err != nil {
-				return err
-			}
-		}
-	}
-	if err := i.add(ModelSpec{LocalPath: path, Revision: spec.Deployment.Revision, RequiredFiles: files, RequiredFileGroups: groups, RerankerSelections: rerankerSelections, ExcludePatterns: excludes, CheckONNX: spec.Deployment.Provider == "ort", Strict: true}); err != nil {
-		return err
-	}
-	if spec.Binding.MappingPath != "" {
-		if err := i.addFile(spec.Binding.MappingPath, path, spec.Deployment.Revision); err != nil {
+		if err != nil {
 			return err
 		}
-	}
-	if spec.Binding.OperatingPoint != nil {
-		return i.addFile(spec.Binding.OperatingPoint.ResolvePath(path), path, spec.Deployment.Revision)
 	}
 	return nil
 }
@@ -346,22 +195,21 @@ func (i *modelInventory) addFile(path, artifact, revision string) error {
 	if err != nil {
 		return err
 	}
-	if filepath.Clean(root) != filepath.Clean(artifact) {
+	if filepath.Clean(root) != filepath.Clean(artifact) && !config.SameModelRepo(i.registry[root], artifact) {
 		revision = ""
 	}
 	return i.add(ModelSpec{LocalPath: root, Revision: revision, RequiredFiles: []string{file}, FilesOnly: true, CheckONNX: filepath.Ext(file) == ".onnx", Strict: true})
 }
 
-// Defaults choose their registered release; explicit bindings and standalone
-// companions preserve the caller's revision intent, including an omitted pin.
-func (i *modelInventory) addDefaultDeployment(cfg *config.RouterConfig, spec config.ResolvedModelBinding) error {
-	path := config.ResolveModelPath(spec.Deployment.Artifact)
-	repo, err := i.registeredRepo(path)
+// addDefaultFile adds a companion file of a module's default model at the
+// model's registered release, the revision the model runtime serves.
+func (i *modelInventory) addDefaultFile(path, model string) error {
+	model = config.ResolveModelPath(model)
+	repo, err := i.registeredRepo(model)
 	if err != nil {
 		return err
 	}
-	spec.Deployment.Revision = modelRevision(path, repo)
-	return i.addDeployment(cfg, spec)
+	return i.addFile(path, model, modelRevision(model, repo))
 }
 
 func (i *modelInventory) addDefault(spec ModelSpec) error {
@@ -410,7 +258,6 @@ func (i *modelInventory) add(next ModelSpec) error {
 		}
 		next.RequiredFiles = append(previous.RequiredFiles, next.RequiredFiles...)
 		next.RequiredFileGroups = append(previous.RequiredFileGroups, next.RequiredFileGroups...)
-		next.RerankerSelections = append(previous.RerankerSelections, next.RerankerSelections...)
 		// Companion files do not introduce another execution format. Only
 		// two model consumers intersect their provider exclusion policies.
 		switch {
@@ -453,7 +300,7 @@ func intersectStrings(a, b []string) []string {
 // Explicit bindings retain their selected revision. Implicit built-in modules
 // use the registry pin only when the local path still names that repository.
 func modelRevision(path, repoID string) string {
-	if model := config.GetModelByPath(path); model != nil && model.RepoID == repoID && model.Revision != "" {
+	if model := config.GetModelByPath(path); model != nil && config.SameModelRepo(model.RepoID, repoID) && model.Revision != "" {
 		return model.Revision
 	}
 	return "main"
@@ -461,7 +308,7 @@ func modelRevision(path, repoID string) string {
 
 func modelDownloadExcludePatterns(path, repoID string, runtimePatterns []string) []string {
 	patterns := slices.Clone(runtimePatterns)
-	if model := config.GetModelByPath(path); model != nil && model.RepoID == repoID {
+	if model := config.GetModelByPath(path); model != nil && config.SameModelRepo(model.RepoID, repoID) {
 		for _, pattern := range model.DownloadExcludePatterns {
 			if !slices.Contains(patterns, pattern) {
 				patterns = append(patterns, pattern)

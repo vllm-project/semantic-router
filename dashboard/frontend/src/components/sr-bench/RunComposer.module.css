@@ -1,0 +1,40 @@
+.fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.preparation {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.preparationHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.preparationHeading svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.preparation p,
+.preparation li > span:last-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.preparation ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.preparation li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}

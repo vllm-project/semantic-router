@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -21,19 +21,19 @@ func ValidateBackendEmbedding(ctx context.Context, backend LegacyCacheBackend) e
 	switch c := backend.(type) {
 	case *InMemoryCache:
 		provider = c.embeddingProvider
-		dimension = inMemoryEmbeddingOptions(c.embeddingModel).Dimension
+		dimension = semanticCacheEmbeddingDimension(inMemoryEmbeddingOptions(c.embeddingModel).Dimension, provider)
 	case *RedisCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+		dimension = c.embeddingDimension()
 	case *ValkeyCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+		dimension = c.embeddingDimension()
 	case *MilvusCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+		dimension = c.embeddingDimension()
 	case *QdrantCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(0, c.embeddingModel)
+		dimension = c.embeddingDimension()
 	case *HybridCache:
 		return ValidateBackendEmbedding(ctx, c.milvusCache)
 	default:
@@ -45,13 +45,6 @@ func ValidateBackendEmbedding(ctx context.Context, backend LegacyCacheBackend) e
 	}
 	if len(vector) == 0 || (dimension > 0 && len(vector) != dimension) {
 		return fmt.Errorf("cache embedding dimension %d differs from required %d", len(vector), dimension)
-	}
-	windows, ok := provider.(embedding.WindowProvider)
-	if !ok {
-		return fmt.Errorf("cache embedding requires tokenizer windows")
-	}
-	if _, err := windows.Windows(ctx, "semantic router cache preparation", 0); err != nil {
-		return fmt.Errorf("prepare cache tokenizer: %w", err)
 	}
 	return nil
 }

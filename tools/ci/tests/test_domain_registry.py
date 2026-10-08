@@ -82,20 +82,6 @@ class DomainRegistryTests(unittest.TestCase):
             ),
         )
 
-    def test_modelcompat_tool_keeps_test_and_ci_coverage(self) -> None:
-        for path in (
-            "tools/modelcompat/main.go",
-            "tools/modelcompat/main_test.go",
-            "src/semantic-router/pkg/modelruntime/compatibility/receipt.go",
-            "tools/make/models.mk",
-        ):
-            with self.subTest(path=path):
-                domains = matching_domains((path,))
-                self.assertIn(
-                    "make check-modelcompat", commands_for_domains(domains, "checks")
-                )
-                self.assertIn("core", commands_for_domains(domains, "verifications"))
-
     def test_every_domain_job_is_declared_once(self) -> None:
         jobs = job_records()
         for name, domain in domain_records().items():
@@ -108,7 +94,6 @@ class DomainRegistryTests(unittest.TestCase):
             "perf/benchmarks/cache_bench_test.go",
             "tools/make/performance.mk",
             "tools/make/models.mk",
-            "src/semantic-router/tools/model-test-assets/main.go",
         ):
             with self.subTest(path=path):
                 result = classify([path])
@@ -134,13 +119,7 @@ class DomainRegistryTests(unittest.TestCase):
                 result = classify([path])
                 self.assertIn("model-artifacts", result.domains)
                 self.assertTrue(
-                    {
-                        "native.candle-cpu",
-                        "native.ort-cpu",
-                        "native.openvino-cpu",
-                        "performance",
-                    }
-                    <= set(result.selected_jobs)
+                    {"local.cli", "performance"} <= set(result.selected_jobs)
                 )
                 self.assertNotIn(
                     "make perf-check", commands_for_domains(result.domains, "checks")
@@ -155,13 +134,7 @@ class DomainRegistryTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertFalse(
-                    {
-                        "native.candle-cpu",
-                        "native.ort-cpu",
-                        "native.openvino-cpu",
-                        "performance",
-                    }
-                    & set(classify([path]).selected_jobs)
+                    {"local.cli", "performance"} & set(classify([path]).selected_jobs)
                 )
 
     def test_generated_contract_sources_and_outputs_select_the_drift_gate(self) -> None:
@@ -190,6 +163,23 @@ class DomainRegistryTests(unittest.TestCase):
                     commands_for_domains(domains, "verifications"),
                 )
 
+    def test_router_configs_the_cli_suite_parses_select_it(self) -> None:
+        for path in (
+            "config/config.yaml",
+            "config/recipes/balance/config.yaml",
+            "config/recipes/vela-amd/config.yaml",
+            "config/recipes/built-in/latest/mom-v1/config.yaml",
+            "e2e/config/config.memory-user.yaml",
+            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn(
+                    "make vllm-sr-test", commands_for_domains(result.domains, "checks")
+                )
+                self.assertIn("cli-unit", result.selected_jobs)
+                self.assertNotIn("vllm-sr-cli", result.domains)
+
     def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
         domains = matching_domains(
             (
@@ -209,7 +199,7 @@ class DomainRegistryTests(unittest.TestCase):
             "tools/calibration/image-routing/main.go": "make go-tools-test",
             "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
             "tools/calibration/tuning/engine.py": "make test-calibration",
-            "tools/test/services/mock-vllm/app.py": "make test-provider-simulator",
+            "tools/test/services/provider-mocker/provider_mocker/app.py": "make test-provider-mocker",
         }
         for path, command in cases.items():
             with self.subTest(path=path):
@@ -217,7 +207,7 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn(command, commands_for_domains(domains, "checks"))
                 verification = {
                     "make test-calibration": "learning-tools",
-                    "make test-provider-simulator": "mock-provider",
+                    "make test-provider-mocker": "mock-provider",
                 }.get(command, "core")
                 self.assertIn(
                     verification, commands_for_domains(domains, "verifications")

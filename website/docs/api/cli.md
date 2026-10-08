@@ -16,7 +16,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 
 | Command | Description |
 | --- | --- |
-| [`vllm-sr`](#vllm-sr) | vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints. |
+| [`vllm-sr`](#vllm-sr) | vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime. |
 | [`vllm-sr benchmark`](#vllm-sr-benchmark) | Prepare, run, inspect, and compare sr-bench 1.0 evaluations. |
 | [`vllm-sr benchmark cancel`](#vllm-sr-benchmark-cancel) | Cancel remaining work while retaining all existing evidence. |
 | [`vllm-sr benchmark candidate-plan`](#vllm-sr-benchmark-candidate-plan) | Reuse a terminal baseline's frozen protocol without repeating its requests. |
@@ -25,7 +25,10 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
 | [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
 | [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
-| [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download or read a pinned source and freeze a reusable dataset. |
+| [`vllm-sr benchmark dataset exclusions`](#vllm-sr-benchmark-dataset-exclusions) | Freeze finite named history without inspecting outcomes or running models. |
+| [`vllm-sr benchmark dataset options`](#vllm-sr-benchmark-dataset-options) | List downloadable sources, profiles, access notes, and dependencies. |
+| [`vllm-sr benchmark dataset preparations`](#vllm-sr-benchmark-dataset-preparations) | List shared download jobs or inspect one preparation by ID. |
+| [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download and freeze a dataset through the shared service by default. |
 | [`vllm-sr benchmark dataset show`](#vllm-sr-benchmark-dataset-show) | Inspect a frozen dataset or list datasets in the shared store. |
 | [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
 | [`vllm-sr benchmark experiment attach`](#vllm-sr-benchmark-experiment-attach) | Link existing evidence without changing or rerunning it. |
@@ -58,15 +61,14 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config apply`](#vllm-sr-config-apply) | Plan, compare-and-swap, persist, and hot-reload a configuration. |
 | [`vllm-sr config envoy`](#vllm-sr-config-envoy) | Print the generated Envoy configuration. |
 | [`vllm-sr config get`](#vllm-sr-config-get) | Read the active canonical configuration from a Router. |
-| [`vllm-sr config import`](#vllm-sr-config-import) | Import a supported external config source into canonical v0.3 YAML. |
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
 | [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
-| [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a backup version. |
+| [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
 | [`vllm-sr config router`](#vllm-sr-config-router) | Print the canonical router configuration. |
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
-| [`vllm-sr config versions`](#vllm-sr-config-versions) | List immutable configuration backup versions. |
+| [`vllm-sr config versions`](#vllm-sr-config-versions) | List the configuration history, newest first. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
 | [`vllm-sr optimize`](#vllm-sr-optimize) | Analyze routing evidence and produce candidate recipe changes. |
@@ -83,7 +85,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr recipe pack`](#vllm-sr-recipe-pack) | Create a deterministic ZIP from an exact five-file RECIPE_DIR. |
 | [`vllm-sr recipe plan`](#vllm-sr-recipe-plan) | Validate a recipe and bind the plan to the current config ETag. |
 | [`vllm-sr recipe validate`](#vllm-sr-recipe-validate) | Validate a recipe against the running Router without changing config. |
-| [`vllm-sr request`](#vllm-sr-request) | Send requests through an Envoy listener. |
+| [`vllm-sr request`](#vllm-sr-request) | Send requests through the stack's listener. |
 | [`vllm-sr request chat`](#vllm-sr-request-chat) | Send a one-shot chat completion through the Envoy-routed HTTP API. |
 | [`vllm-sr route`](#vllm-sr-route) | Preview routing decisions or probe the routed inference path. |
 | [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and model selection without generating an answer. |
@@ -101,7 +103,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 Usage: vllm-sr [OPTIONS] [COMMAND] [ARGS]...
 ```
 
-vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints.
+vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime.
 
 | Parameter | Description |
 | --- | --- |
@@ -223,21 +225,66 @@ Create a reusable multi-benchmark dataset from prepared manifests.
 | `MANIFESTS...` | Required argument. Type: path. Accepts multiple values. |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr benchmark dataset exclusions` {#vllm-sr-benchmark-dataset-exclusions}
+
+```text
+Usage: vllm-sr benchmark dataset exclusions [OPTIONS]
+```
+
+Freeze finite named history without inspecting outcomes or running models.
+
+| Parameter | Description |
+| --- | --- |
+| `--dataset TEXT` | Named prepared dataset whose entire membership is reserved. May be repeated. |
+| `--run TEXT` | Named frozen run whose entire planned membership is reserved. May be repeated. |
+| `--output PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset options` {#vllm-sr-benchmark-dataset-options}
+
+```text
+Usage: vllm-sr benchmark dataset options [OPTIONS]
+```
+
+List downloadable sources, profiles, access notes, and dependencies.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset preparations` {#vllm-sr-benchmark-dataset-preparations}
+
+```text
+Usage: vllm-sr benchmark dataset preparations [OPTIONS] [PREPARATION_ID]
+```
+
+List shared download jobs or inspect one preparation by ID.
+
+| Parameter | Description |
+| --- | --- |
+| `[PREPARATION_ID]` | Optional argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr benchmark dataset prepare` {#vllm-sr-benchmark-dataset-prepare}
 
 ```text
 Usage: vllm-sr benchmark dataset prepare [OPTIONS]
 ```
 
-Download or read a pinned source and freeze a reusable dataset.
+Download and freeze a dataset through the shared service by default.
 
 | Parameter | Description |
 | --- | --- |
-| `--benchmark TEXT` | [required] |
+| `--benchmark TEXT` | Benchmark ID; repeat to prepare a shared collection.  [required] May be repeated. |
 | `--profile CHOICE` | Choices: smoke, quick, standard. Default: quick. |
 | `--source-path PATH` | — |
+| `--local` | Prepare on this host; required for source files and history options. Default: false. |
+| `--no-wait` | Return the shared service preparation job immediately. Default: false. |
 | `--revision TEXT` | — |
 | `--seed INTEGER` | Default: 20260918. |
+| `--source-partition TEXT` | Frozen upstream partition for native task identity; never an evaluation split. |
+| `--exclusion-snapshot PATH` | — |
+| `--evaluation-role CHOICE` | Explicit family role; retest is never selected automatically. Choices: holdout, retest. |
 | `--limit INTEGER` | Custom case cap; cannot be represented as an upstream full benchmark. |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -673,12 +720,12 @@ Print generated configuration or run config subcommands.
 Examples:
 
 ```bash
-vllm-sr config envoy
-vllm-sr config router
 vllm-sr config init --output config.yaml
-vllm-sr config envoy --config my-config.yaml
+vllm-sr config validate --config config.yaml
+vllm-sr config apply --config config.yaml
+vllm-sr config router
 vllm-sr config migrate --config old.yaml
-vllm-sr config import --from openclaw --source openclaw.json
+vllm-sr config envoy    # with --gateway extproc
 ```
 
 | Parameter | Description |
@@ -693,12 +740,15 @@ Usage: vllm-sr config apply [OPTIONS]
 
 Plan, compare-and-swap, persist, and hot-reload a configuration.
 
+A change the running Router can't take without a restart is saved for the
+next `vllm-sr serve` of a local stack, as the Dashboard saves one.
+
 | Parameter | Description |
 | --- | --- |
 | `--config FILE` | [default: config.yaml] |
 | `--mode CHOICE` | [default: replace] Choices: replace, merge. |
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
-| `--timeout FLOAT` | [default: 15] |
+| `--timeout FLOAT` | [default: 120] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -729,22 +779,6 @@ Read the active canonical configuration from a Router.
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr config import` {#vllm-sr-config-import}
-
-```text
-Usage: vllm-sr config import [OPTIONS]
-```
-
-Import a supported external config source into canonical v0.3 YAML.
-
-| Parameter | Description |
-| --- | --- |
-| `--from CHOICE` | Import source type.  [required] Choices: openclaw. |
-| `--source TEXT` | Path to the source config file. Defaults to OpenClaw discovery order. |
-| `--target TEXT` | Path to the target canonical config file.  [default: config.yaml] |
-| `--force` | Overwrite existing backup files for the source or target paths. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr config init` {#vllm-sr-config-init}
@@ -799,13 +833,17 @@ Validate and plan an exact remote mutation without changing the Router.
 Usage: vllm-sr config rollback [OPTIONS] VERSION
 ```
 
-Compare-and-swap the active configuration to a backup version.
+Compare-and-swap the active configuration to a recorded version.
+
+VERSION is a configuration version number from `vllm-sr config versions`,
+or the timestamp of a backup. The restored document activates as a new
+version.
 
 | Parameter | Description |
 | --- | --- |
 | `VERSION` | Required argument. Type: text. |
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
-| `--timeout FLOAT` | [default: 15] |
+| `--timeout FLOAT` | [default: 120] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -849,17 +887,26 @@ Usage: vllm-sr config validate [OPTIONS]
 
 Validate configuration file.
 
+The CLI's own checks run first. The Router's validation then decides, as
+it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
+Router in its local image (never pulled), or the running Router --endpoint
+names.
+
 Examples:
 
 ```bash
 vllm-sr config validate
 vllm-sr config validate --config my-config.yaml
+vllm-sr config validate --endpoint http://localhost:8080
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to config file (default: config.yaml) Default: config.yaml. |
-| `--endpoint TEXT` | Also validate with this running Router's authoritative parser. |
+| `--endpoint TEXT` | Validate with this running Router instead of the local Router image. |
+| `--image TEXT` | Router image whose own validation to run (default: the stack's, if present). |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: standalone). Choices: standalone, extproc. |
+| `--offline` | Run only the CLI's own checks, without the Router's validation. Default: false. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
@@ -870,7 +917,7 @@ vllm-sr config validate --config my-config.yaml
 Usage: vllm-sr config versions [OPTIONS]
 ```
 
-List immutable configuration backup versions.
+List the configuration history, newest first.
 
 | Parameter | Description |
 | --- | --- |
@@ -891,17 +938,17 @@ Examples:
 
 ```bash
 vllm-sr dashboard                   # Docker dashboard
-vllm-sr dashboard --target k8s      # Show K8s address and port forward
+vllm-sr dashboard --target kubernetes  # Show K8s address and port forward
 vllm-sr dashboard --no-open
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--no-open` | Don't open browser, just show URL Default: false. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr logs` {#vllm-sr-logs}
@@ -920,18 +967,18 @@ vllm-sr logs router
 vllm-sr logs dashboard
 vllm-sr logs envoy --follow
 vllm-sr logs router -f
-vllm-sr logs router --target k8s        # Kubernetes logs
-vllm-sr logs router --target k8s -f     # Follow K8s logs
+vllm-sr logs router --target kubernetes     # Kubernetes logs
+vllm-sr logs router --target kubernetes -f  # Follow K8s logs
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `SERVICE` | Required argument. Type: choice. Choices: envoy, router, dashboard. |
 | `-f, --follow` | Follow log output Default: false. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr optimize` {#vllm-sr-optimize}
@@ -957,7 +1004,7 @@ Analyze replay and outcomes to produce recipe-learning artifacts.
 | Parameter | Description |
 | --- | --- |
 | `--replay-file FILE` | Router replay JSON file. Accepts a router_replay.list payload or a record array. |
-| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080 when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
+| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080, with VLLM_SR_PORT_OFFSET added to the port, when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
 | `--cases-file FILE` | Optional eval cases JSON with replay_id/request_id plus expected_decision or expected_model. |
 | `--recipe-file FILE` | Optional current recipe YAML used to materialize complete candidate recipe variants. |
 | `--limit INTEGER` | Replay records to fetch from the endpoint.  [default: 100] |
@@ -1157,7 +1204,7 @@ Validate a recipe against the running Router without changing config.
 Usage: vllm-sr request [OPTIONS] COMMAND [ARGS]...
 ```
 
-Send requests through an Envoy listener.
+Send requests through the stack's listener.
 
 | Parameter | Description |
 | --- | --- |
@@ -1270,7 +1317,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 ## `vllm-sr serve` {#vllm-sr-serve}
 
 ```text
-Usage: vllm-sr serve [OPTIONS]
+Usage: vllm-sr serve [OPTIONS] [MODEL]...
 ```
 
 Start vLLM Semantic Router.
@@ -1279,24 +1326,36 @@ Serve uses --config or config.yaml and preserves the Dashboard-first setup flow.
 Connect physical models and publish Mixture-of-Model entrypoints in the
 Dashboard, then keep the same stack running with this single command.
 
-Virtual models are routing policies. Semantic Router starts Router, Envoy, the
-Dashboard, and supporting services; it does not download or launch the physical
-LLM engines referenced by provider backends. Connect user-owned single or
-multiple model endpoints through one canonical config or the Dashboard.
+Virtual models are routing policies. Semantic Router starts the Router, which
+serves the OpenAI-compatible API itself, the Dashboard and supporting services;
+it does not download or launch the physical LLM engines referenced by provider
+backends. Connect user-owned single or multiple model endpoints through one
+canonical config or the Dashboard.
 
 Ports are configured in the selected config under the listeners section.
 
 Local startup waits up to 1800 seconds for Router readiness, or Dashboard
-readiness during first-run setup. Use --startup-timeout SECONDS for a different
+readiness during first-run setup. During setup the command keeps waiting, and
+once you activate a config in the Dashboard it starts the Router from it. Use --startup-timeout SECONDS for a different
 positive budget when model loading or GPU compilation needs more time.
 The wait begins after containers start. It does not change inference deadlines.
 Timeout exits the CLI with an error and leaves containers available for inspection.
 
+GATEWAY MODES:
+
+```text
+standalone - The Router serves the OpenAI-compatible API itself (default)
+extproc    - An Envoy-based gateway in front of the Router: the Envoy container
+             on docker, as before standalone became the default; your gateway
+             on kubernetes
+```
+
 DEPLOYMENT TARGETS:
 
 ```text
-docker  - Local Docker deployment (default)
-k8s     - Kubernetes deployment via Helm
+docker     - Local Docker deployment (default)
+kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
+             release only)
 ```
 
 MODEL SELECTION ALGORITHMS:
@@ -1323,12 +1382,14 @@ Examples:
 ```text
 # Dashboard-first setup or an existing ./config.yaml
 vllm-sr serve
+# Envoy in front of the Router, as before standalone became the default
+vllm-sr serve --gateway extproc
 # User-owned single or multi-model topology
 vllm-sr serve --config my-models.yaml
 # Explicitly replace Dashboard-edited runtime state from reviewed source YAML
 vllm-sr serve --config my-models.yaml --replace-active-config
 # Deploy a user-owned config to Kubernetes
-vllm-sr serve --target k8s --config my-models.yaml --namespace my-ns
+vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
 # Runtime policy and image overrides
 vllm-sr serve --algorithm latency_aware
 vllm-sr serve --image-pull-policy always
@@ -1341,28 +1402,67 @@ vllm-sr serve --platform amd --startup-timeout 7200
 VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 ```
 
+```text
+ENGINE MODE:
+```
+
+```text
+vllm-sr serve MODEL [MODEL ...] [--revision SHA] [--device DEVICE]
+              [--platform PLATFORM] [--host HOST] [--port N]
+              [--runtime-profile PROFILE]
+vllm-sr serve --models models.yaml [--host HOST] [--port N]
+```
+
+Serves router models with the built-in model runtime instead of starting the
+Router: decision models (POST /v1/decisions), classifiers (/v1/classify),
+embedders (/v1/embeddings) and rerankers (/v1/rerank), with /v1/bundle,
+/v1/models, /health and /metrics. The runtime runs in the foreground in a
+container from the platform's router image (vllm-sr, vllm-sr-rocm with
+--platform amd, vllm-sr-cuda with --platform nvidia), and the host publishes
+its port on --host and --port (default 127.0.0.1:8100). Ctrl-C stops it.
+
+MODEL is a Hub repository, a built-in model name or a local package directory,
+which the container reads through a read-only mount; MODEL@REVISION pins a
+revision, and several MODELs share one process. --models lists models with
+their own name, revision, device and profile. --device takes what the image
+runs: cpu, rocm[:N] on amd, cuda[:N] on nvidia, or a plugin's accelerator in
+an image that has the plugin. --runtime-profile selects the numerics profile:
+exact (default, identical to the released package), shared_context, batching,
+max_speed, or one a plugin installs. Downloads persist in
+~/.cache/vllm-sr/models (VLLM_SR_ENGINE_CACHE_DIR moves it). Router mode starts
+managed runtimes itself for model_runtime deployments in the config.
+
 | Parameter | Description |
 | --- | --- |
+| `[MODEL]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
 | `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:latest) |
 | `--router-image TEXT` | Docker image for the router container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
-| `--envoy-image TEXT` | Docker image for the Envoy container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
+| `--envoy-image TEXT` | Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
-| `--minimal` | Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana) Default: false. |
-| `--log-level CHOICE` | Router log level override (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
-| `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). MIGraphX mmBERT embeddings require an explicit model binding and deployment with an input token budget. Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
+| `--minimal` | Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana) Default: false. |
+| `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
+| `--platform TEXT` | cpu (default), amd or nvidia, on both targets and in engine mode. It selects the matching image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. On docker and in engine mode 'amd' passes the ROCm devices through and 'nvidia' the NVIDIA GPUs (--gpus all); on kubernetes the Router requests one GPU (amd.com/gpu or nvidia.com/gpu). Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. On macOS the docker target is CPU only. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. |
-| `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--decision-model NAME` | The Vela model that answers the Router's questions: the built-in signals and every routing.signals.decision question without a deployment. Vela-2.0-0.3B, Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B, Vela-1.0 (case-insensitive; default Vela-2.0-0.3B). The 4B and 9B need a GPU (--platform amd or nvidia). serve writes it into the active config as a new configuration version; later starts keep it. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--profile TEXT` | Deployment profile: dev, prod (kubernetes target only). Selects values-&lt;profile&gt;.yaml defaults. |
+| `--chart-dir TEXT` | Path to Helm chart directory (kubernetes target only; default: ./deploy/helm/semantic-router, else the published chart for this version) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
+| `--models TEXT` | Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile. |
+| `--revision TEXT` | Engine mode: 40-hex revision of a single MODEL. |
+| `--device TEXT` | Engine mode: auto (default), cpu, rocm[:N] with --platform amd, cuda[:N] with --platform nvidia, or a plugin's accelerator. |
+| `--host TEXT` | Engine mode: host address the runtime's port is published on (default 127.0.0.1). |
+| `--port INTEGER RANGE` | Engine mode: host port the runtime is published on (default 8100).  [1&lt;=x&lt;=65535] |
+| `--runtime-profile PROFILE` | Engine mode: the runtime's numerics profile (default exact; vllm-srun plugins lists the installed ones). |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}
@@ -1380,16 +1480,16 @@ vllm-sr status              # Show all services (Docker)
 vllm-sr status all          # Show all services
 vllm-sr status router       # Show router status
 vllm-sr status dashboard    # Show dashboard status
-vllm-sr status --target k8s # Show Kubernetes status
+vllm-sr status --target kubernetes  # Show Kubernetes status
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `[SERVICE]` | Optional argument. Type: choice. Choices: envoy, router, dashboard, all. Default: all. |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr stop` {#vllm-sr-stop}
@@ -1404,15 +1504,15 @@ Examples:
 
 ```bash
 vllm-sr stop                # Stop Docker stack
-vllm-sr stop --target k8s   # Uninstall Helm release
+vllm-sr stop --target kubernetes  # Uninstall Helm release
 ```
 
 | Parameter | Description |
 | --- | --- |
-| `--target TEXT` | Deployment target: docker, k8s (default: docker) |
-| `--namespace TEXT` | Kubernetes namespace (k8s target only) |
-| `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
+| `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
+| `--context TEXT` | kubectl / Helm context (kubernetes target only) |
+| `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr storage` {#vllm-sr-storage}

@@ -33,7 +33,7 @@ MoM 家族包含为路由流水线中特定任务打造的模型：
 #### 领域/意图分类器
 
 - **Model ID**：`models/mmbert32k-intent-classifier-merged`
-- **HuggingFace**：`llm-semantic-router/mmbert32k-intent-classifier-merged`
+- **HuggingFace**：`vllm-sr/mmbert32k-intent-classifier-merged`
 - **用途**：将用户查询归入 14 个 MMLU 类别（数学、科学、历史等）
 - **架构**：mmBERT-32K 合并分类器（307M）
 - **场景**：按领域路由到专用模型或专家
@@ -41,7 +41,7 @@ MoM 家族包含为路由流水线中特定任务打造的模型：
 #### PII 检测器
 
 - **Model ID**：`models/mmbert32k-pii-detector-merged`
-- **HuggingFace**：`llm-semantic-router/mmbert32k-pii-detector-merged`
+- **HuggingFace**：`vllm-sr/mmbert32k-pii-detector-merged`
 - **用途**：检测 17 种 PII 实体类型，对应 35 个 BIO 标签
 - **架构**：mmBERT-32K 合并 token 分类器（307M）
 - **场景**：隐私保护、合规、脱敏
@@ -49,7 +49,7 @@ MoM 家族包含为路由流水线中特定任务打造的模型：
 #### 越狱检测器
 
 - **Model ID**：`models/mmbert32k-jailbreak-detector-merged`
-- **HuggingFace**：`llm-semantic-router/mmbert32k-jailbreak-detector-merged`
+- **HuggingFace**：`vllm-sr/mmbert32k-jailbreak-detector-merged`
 - **用途**：检测提示注入与越狱企图
 - **架构**：mmBERT-32K 合并分类器（307M）
 - **场景**：内容安全、提示安全
@@ -57,7 +57,7 @@ MoM 家族包含为路由流水线中特定任务打造的模型：
 #### 反馈检测器
 
 - **Model ID**：`models/mmbert32k-feedback-detector-merged`
-- **HuggingFace**：`llm-semantic-router/mmbert32k-feedback-detector-merged`
+- **HuggingFace**：`vllm-sr/mmbert32k-feedback-detector-merged`
 - **用途**：将用户反馈分为 4 类（满意、需澄清、答案错误、希望换种说法）
 - **架构**：mmBERT-32K 合并分类器（307M）
 - **场景**：自适应路由、对话改进
@@ -85,7 +85,7 @@ MoM 家族包含为路由流水线中特定任务打造的模型：
 #### Embedding Ultra（默认）
 
 - **Model ID**：`models/mom-embedding-ultra`
-- **HuggingFace**：`llm-semantic-router/mmbert-embed-32k-2d-matryoshka`
+- **HuggingFace**：`vllm-sr/mmbert-embed-32k-2d-matryoshka`
 - **用途**：长上下文多语言语义相似度，支持 2D Matryoshka
 - **架构**：mmBERT 2D Matryoshka（307M）
 - **嵌入维度**：768（可通过 Matryoshka 降维）
@@ -96,7 +96,7 @@ MoM 家族包含为路由流水线中特定任务打造的模型：
 #### Halugate Sentinel
 
 - **Model ID**：`models/mom-halugate-sentinel`
-- **HuggingFace**：`LLM-Semantic-Router/halugate-sentinel`
+- **HuggingFace**：`vllm-sr/halugate-sentinel`
 - **用途**：幻觉筛查第一阶段
 - **架构**：BERT-base（110M）
 - **场景**：快速幻觉检测、预过滤

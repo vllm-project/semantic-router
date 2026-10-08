@@ -48,6 +48,25 @@ func TestRouterClassifierProxyHandlerBlocksReadonlyMutations(t *testing.T) {
 	}
 }
 
+func TestRouterClassifierProxyHidesRouterTransportErrors(t *testing.T) {
+	routerAPI := httptest.NewServer(http.NotFoundHandler())
+	routerAPIURL := routerAPI.URL
+	routerAPI.Close()
+
+	handler := RouterClassifierProxyHandler(routerAPIURL, false)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/storage/knowledge-bases", nil)
+	rr := httptest.NewRecorder()
+
+	handler(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 Bad Gateway, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := strings.TrimSpace(rr.Body.String()); got != "Router API unavailable" {
+		t.Fatalf("expected a generic error without the Router address, got %q", got)
+	}
+}
+
 type classifierProxyCredentialProvider struct {
 	token string
 }

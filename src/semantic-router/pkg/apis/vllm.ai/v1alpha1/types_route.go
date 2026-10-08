@@ -226,17 +226,31 @@ type EmbeddingSignal struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
-	// Threshold is the similarity threshold for matching (0.0-1.0)
+	// Threshold accepts a cosine score, or positive-minus-negative margin when negatives are configured.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=1
+	// +kubebuilder:validation:Minimum=-2
+	// +kubebuilder:validation:Maximum=2
 	Threshold float32 `json:"threshold" yaml:"threshold"`
 
 	// Candidates is the list of candidate phrases for semantic matching
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=100
-	Candidates []string `json:"candidates" yaml:"candidates"`
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	Candidates []string `json:"candidates,omitempty" yaml:"candidates,omitempty"`
+
+	// ImageCandidates contains local image paths or inline base64 images in the positive bank.
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	ImageCandidates []string `json:"imageCandidates,omitempty" yaml:"imageCandidates,omitempty"`
+
+	// NegativeCandidates contains text anchors subtracted from the positive score.
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	NegativeCandidates []string `json:"negativeCandidates,omitempty" yaml:"negativeCandidates,omitempty"`
+
+	// NegativeImageCandidates contains image anchors subtracted from the positive score.
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	NegativeImageCandidates []string `json:"negativeImageCandidates,omitempty" yaml:"negativeImageCandidates,omitempty"`
 
 	// AggregationMethod defines how to aggregate multiple candidate similarities
 	// +optional
@@ -250,7 +264,7 @@ type EmbeddingSignal struct {
 	PrototypeScoring *PrototypeScoringConfig `json:"prototypeScoring,omitempty" yaml:"prototypeScoring,omitempty"`
 
 	// QueryModality declares which modality of the incoming request payload
-	// the query embedding is computed from. Candidates always remain text;
+	// the query embedding is computed from. Candidates are encoded according to their declared text or image field;
 	// the rule cosine-matches the text-anchor set against a query embedding
 	// produced from the declared modality, all in the shared multimodal
 	// embedding space.
@@ -304,6 +318,106 @@ type Decision struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
 	Plugins []DecisionPlugin `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+
+	// Reliability overrides the timeouts and retries of the provider model
+	// that serves this decision's requests
+	// +optional
+	Reliability *DecisionReliability `json:"reliability,omitempty" yaml:"reliability,omitempty"`
+
+	// Fallback overrides the cross-model fallback policy for this decision's
+	// requests, over the route's and the router's
+	// +optional
+	Fallback *DecisionFallback `json:"fallback,omitempty" yaml:"fallback,omitempty"`
+}
+
+// DecisionReliability is a decision's reliability block, with the router
+// configuration's field names and meaning. Durations are Go durations such
+// as "30s"; "0s" turns a timeout off.
+type DecisionReliability struct {
+	// TotalTimeout bounds the whole call: every attempt and the response
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	TotalTimeout string `json:"total_timeout,omitempty" yaml:"total_timeout,omitempty"`
+
+	// PerTryTimeout bounds each attempt until its response starts
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	PerTryTimeout string `json:"per_try_timeout,omitempty" yaml:"per_try_timeout,omitempty"`
+
+	// IdleTimeout bounds the wait for more of a streamed response
+	// (standalone mode only)
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	IdleTimeout string `json:"idle_timeout,omitempty" yaml:"idle_timeout,omitempty"`
+
+	// FirstByteTimeout bounds the wait for the first response byte
+	// (standalone mode only)
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	FirstByteTimeout string `json:"first_byte_timeout,omitempty" yaml:"first_byte_timeout,omitempty"`
+
+	// RetryCount is the number of retries after the first attempt
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=5
+	RetryCount *int32 `json:"retry_count,omitempty" yaml:"retry_count,omitempty"`
+
+	// RetryOn adds retry conditions, with Envoy's names (5xx, reset, ...)
+	// +optional
+	RetryOn string `json:"retry_on,omitempty" yaml:"retry_on,omitempty"`
+
+	// RetriableStatusCodes adds statuses retried under retriable-status-codes
+	// +optional
+	// +kubebuilder:validation:items:Minimum=100
+	// +kubebuilder:validation:items:Maximum=599
+	RetriableStatusCodes []int32 `json:"retriable_status_codes,omitempty" yaml:"retriable_status_codes,omitempty"`
+
+	// RetryBackOffBase is the base of the randomized exponential wait between
+	// retries (standalone mode only)
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	RetryBackOffBase string `json:"retry_back_off_base,omitempty" yaml:"retry_back_off_base,omitempty"`
+
+	// RetryBackOffMax caps that wait (standalone mode only)
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	RetryBackOffMax string `json:"retry_back_off_max,omitempty" yaml:"retry_back_off_max,omitempty"`
+
+	// RetryAfterMax honors a response's Retry-After up to this bound
+	// (standalone mode only)
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	RetryAfterMax string `json:"retry_after_max,omitempty" yaml:"retry_after_max,omitempty"`
+}
+
+// DecisionFallback is a decision's fallback block, with the router
+// configuration's field names and meaning. A field left out keeps the route's
+// or the router's value.
+type DecisionFallback struct {
+	// Enabled turns cross-model fallback on or off for this decision
+	// +optional
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+
+	// MaxAttempts bounds the candidates tried, the first one included
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	MaxAttempts int32 `json:"max_attempts,omitempty" yaml:"max_attempts,omitempty"`
+
+	// TotalTimeout bounds the whole fallback chain
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	TotalTimeout string `json:"total_timeout,omitempty" yaml:"total_timeout,omitempty"`
+
+	// PerAttemptTimeout bounds each candidate's attempt
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`
+	PerAttemptTimeout string `json:"per_attempt_timeout,omitempty" yaml:"per_attempt_timeout,omitempty"`
+
+	// RetryableStatusCodes are the statuses that move on to the next candidate
+	// +optional
+	// +kubebuilder:validation:items:Minimum=100
+	// +kubebuilder:validation:items:Maximum=599
+	RetryableStatusCodes []int32 `json:"retryable_status_codes,omitempty" yaml:"retryable_status_codes,omitempty"`
 }
 
 // SignalCombination defines how to combine multiple signals
@@ -380,7 +494,7 @@ type DecisionPlugin struct {
 	// Type is the plugin type. response_cache is canonical; semantic-cache,
 	// semantic_cache, and response-cache are deprecated aliases.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;shadow_dispatch;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
+	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;prompt_cache;rag;request_params;response-cache;response_cache;response_jailbreak;router_replay;semantic-cache;semantic_cache;shadow_dispatch;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

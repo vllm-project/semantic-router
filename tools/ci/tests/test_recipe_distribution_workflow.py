@@ -112,9 +112,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertNotIn("managed-recipe-release-assets", release_text)
         self.assertNotIn("release-assets/recipes", release_text)
         self.assertNotIn(".vllm-sr-recipe.zip", release_text)
-        self.assertIn(
-            "needs: [validate, gate, docker, helm, pypi, crate]", release_text
-        )
+        self.assertIn("needs: [validate, docker, helm, pypi]", release_text)
         self.assertIn("They are not published", release_text)
         self.assertIn("as separate GitHub Release assets", release_text)
         self.assertIn(
@@ -128,12 +126,23 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", release_text)
         self.assertIn("--check-published --base-ref", release_text)
         self.assertIn('base-ref "$GITHUB_SHA"', release_text)
-        for job_name in ("docker", "helm", "pypi", "crate", "release-notes"):
+        for job_name in ("docker", "helm", "pypi", "release-notes"):
             self.assertIn(
                 "validate",
                 needs(self.release_workflow.jobs[job_name]),
                 msg=f"{job_name} must fail closed behind release validation",
             )
+        for job_name in ("helm-build", "python-build"):
+            self.assertEqual(needs(self.release_workflow.jobs[job_name]), {"validate"})
+            self.assertTrue(self.release_workflow.jobs[job_name]["with"]["build-only"])
+        for job_name in ("docker", "helm", "pypi"):
+            job = self.release_workflow.jobs[job_name]
+            self.assertTrue(
+                {"images", "helm-build", "python-build"}.issubset(needs(job))
+            )
+            for dependency in ("images", "helm-build", "python-build"):
+                self.assertIn(f"needs.{dependency}.result == 'success'", job["if"])
+        self.assertTrue(self.release_workflow.jobs["helm"]["with"]["prebuilt-chart"])
 
     def test_pypi_wheel_dynamically_checks_the_bound_release_snapshot(self) -> None:
         publish_path = REPO_ROOT / ".github" / "workflows" / "pypi-publish.yml"

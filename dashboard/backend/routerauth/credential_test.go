@@ -24,13 +24,16 @@ func TestRewriteAuthorizationReplacesAndStripsEveryBrowserCredential(t *testing.
 	request.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	request.Header.Set("Proxy-Authorization", "Bearer proxy-user-jwt")
 	request.Header.Set("Cookie", "vsr_session=cookie-user-jwt")
+	request.Header.Set("X-Vsr-Outcome-Source", "operator")
+	request.Header.Set("X-Vsr-Outcome-Principal", "browser-controlled")
 	if err := RewriteAuthorization(request, testCredentialProvider{token: "service-token"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := request.Header.Get("Authorization"); got != "Bearer service-token" {
 		t.Fatalf("Authorization = %q", got)
 	}
-	if request.Header.Get("Proxy-Authorization") != "" || request.Header.Get("Cookie") != "" {
+	if request.Header.Get("Proxy-Authorization") != "" || request.Header.Get("Cookie") != "" ||
+		request.Header.Get("X-Vsr-Outcome-Source") != "" || request.Header.Get("X-Vsr-Outcome-Principal") != "" {
 		t.Fatalf("browser credential headers leaked: %#v", request.Header)
 	}
 	if request.URL.Query().Get("authToken") != "" || request.URL.Query().Get("view") != "full" {

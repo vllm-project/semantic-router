@@ -38,6 +38,34 @@ func TestResolveResponseVendorAzure(t *testing.T) {
 	}
 }
 
+// Snowflake Cortex is resolved by provider id, not by host: its account-scoped
+// host also fronts the Snowflake SQL API, whose bodies are not this provider's
+// failure envelope, so a host match would classify those as a vendor envelope.
+func TestResolveResponseVendorSnowflake(t *testing.T) {
+	tests := []struct {
+		name         string
+		providerType string
+		baseURL      string
+		vendor       llmprotocol.ResponseVendor
+	}{
+		{name: "canonical snowflake profile", providerType: "snowflake-cortex", vendor: llmprotocol.ResponseVendorSnowflake},
+		{name: "snowflake host without the provider id", providerType: "openai", baseURL: "https://my-account.snowflakecomputing.com/api/v2/cortex/v1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := &config.ProviderProfile{Type: tt.providerType, BaseURL: tt.baseURL}
+
+			// See TestResolveResponseVendorAzure: resolving the vendor must not
+			// disturb the profile's reasoning transport.
+			before := resolveProviderReasoningTransport(profile)
+
+			assert.Equal(t, tt.vendor, resolveResponseVendor(profile))
+
+			assert.Equal(t, before, resolveProviderReasoningTransport(profile))
+		})
+	}
+}
+
 // Every other backend keeps the strict contract: no vendor allowance at all.
 func TestResolveResponseVendorGrantsNoAllowanceByDefault(t *testing.T) {
 	tests := []struct {

@@ -6,8 +6,8 @@ func TestGlobalModelServicesDoNotBorrowDefaultRecipeOverride(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.ModelDeployments = map[string]ModelDeployment{
-		"global": {Provider: "ort", Device: "rocm:0", Artifact: "models/encoder"},
-		"local":  {Provider: "ort", Device: "cpu", Artifact: "models/encoder"},
+		"global": {Provider: ModelRuntimeProvider, Device: "rocm:0", Artifact: "models/encoder"},
+		"local":  {Provider: ModelRuntimeProvider, Device: "cpu", Artifact: "models/encoder"},
 	}
 	cfg.GlobalModelBindings = map[string]ModelBinding{"embedding": {Deployment: "global", Adapter: "mmbert", Contract: "embedding.v1"}}
 	cfg.ModelBindings = map[string]ModelBinding{"embedding": {Deployment: "local", Adapter: "mmbert", Contract: "embedding.v1"}}

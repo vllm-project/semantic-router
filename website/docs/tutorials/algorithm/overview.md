@@ -90,7 +90,7 @@ same final validation but are not replaced by another model.
 | `hybrid` | supported | Blend several selector scores | Component selector inputs | [Hybrid](./selection/hybrid) |
 | `automix` | experimental | Optimize an estimated cost-quality value | Candidate pricing and quality metadata | [AutoMix](./selection/automix) |
 | `gmtrouter` | experimental | Personalize an intelligence-seeded model rank | Model evidence and user feedback | [GMT Router](./selection/gmtrouter) |
-| `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model and Looper endpoint | [Prompt](./selection/prompt) |
+| `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model | [Prompt](./selection/prompt) |
 | `knn` | experimental | Follow similar labeled examples | Trained selector artifact and embeddings | [KNN](./selection/knn) |
 | `kmeans` | experimental | Route through learned traffic clusters | Trained selector artifact and embeddings | [KMeans](./selection/kmeans) |
 | `svm` | experimental | Apply a learned decision boundary | Trained selector artifact and embeddings | [SVM](./selection/svm) |
@@ -98,10 +98,15 @@ same final validation but are not replaced by another model.
 
 ### Looper Algorithms
 
-Looper algorithms make additional model calls through
-`global.integrations.looper.endpoint`. They increase latency and token usage,
-and intermediate content is sent to every configured worker involved in the
-run.
+Looper algorithms make additional model calls. The Router makes each call in
+process: the call runs the matched decision's plugins and goes to the called
+model's `providers.models[].backend_refs`, so every model a Looper calls needs
+a backend. The calls increase latency and token usage, and intermediate content
+is sent to every configured worker involved in the run.
+
+`global.integrations.looper.endpoint` is deprecated and ignored, because Looper
+calls no longer loop back through the gateway. Remove it, or run
+`vllm-sr config migrate`.
 
 | Type | Status | Goal | Guide |
 |---|---|---|---|
@@ -120,7 +125,8 @@ traffic before using them for production routing.
   its LoRA and reasoning controls, not just its model name. Scoring, composition,
   and dispatch retain the exact winning reference. A legacy model-only result
   that matches multiple different candidates is rejected rather than resolved
-  to the first reference.
+  to the first reference. For a LoRA candidate, Envoy routes by the selected
+  base model while the provider request names the adapter.
 - Router Learning session memory retains the selected candidate's controls.
   Protection can hold that exact choice across tool-loop continuations even
   when a later base selection prefers another effort of the same model. If that

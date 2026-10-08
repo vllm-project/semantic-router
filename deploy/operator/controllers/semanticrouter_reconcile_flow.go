@@ -121,10 +121,11 @@ func (r *SemanticRouterReconciler) ensureInitialProgressingStatus(
 	}
 
 	meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-		Type:    typeProgressingSemanticRouter,
-		Status:  metav1.ConditionTrue,
-		Reason:  "Reconciling",
-		Message: "Starting reconciliation",
+		ObservedGeneration: semanticrouter.Generation,
+		Type:               typeProgressingSemanticRouter,
+		Status:             metav1.ConditionTrue,
+		Reason:             "Reconciling",
+		Message:            "Starting reconciliation",
 	})
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -133,10 +134,11 @@ func (r *SemanticRouterReconciler) ensureInitialProgressingStatus(
 			return err
 		}
 		meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
-			Type:    typeProgressingSemanticRouter,
-			Status:  metav1.ConditionTrue,
-			Reason:  "Reconciling",
-			Message: "Starting reconciliation",
+			ObservedGeneration: current.Generation,
+			Type:               typeProgressingSemanticRouter,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Reconciling",
+			Message:            "Starting reconciliation",
 		})
 		return r.Status().Update(ctx, current)
 	})
@@ -174,13 +176,13 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	semanticrouter.Status.GatewayMode = gatewayMode
 	logger.Info("Gateway mode determined", "mode", gatewayMode)
 
-	if err := r.reconcileEnvoyConfig(ctx, semanticrouter, gatewayMode); err != nil {
-		logger.Error(err, "Failed to reconcile Envoy ConfigMap")
+	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
+		logger.Error(err, "Failed to reconcile Deployment")
 		return err
 	}
 
-	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
-		logger.Error(err, "Failed to reconcile Deployment")
+	if err := r.deleteRetiredEnvoyConfig(ctx, semanticrouter); err != nil {
+		logger.Error(err, "Failed to delete the retired Envoy ConfigMap")
 		return err
 	}
 

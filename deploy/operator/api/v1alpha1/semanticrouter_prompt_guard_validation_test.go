@@ -6,15 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning"
 	"sigs.k8s.io/yaml"
-
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestPromptGuardContextAdmission(t *testing.T) {
@@ -25,18 +22,13 @@ func TestPromptGuardContextAdmission(t *testing.T) {
 		{"omitted", `{}`, false},
 		{"nullable", `{"window":null}`, false},
 		{"explicit whole input", `{"max_sequence_length":32768}`, false},
-		{"local window", `{"variant":"mmbert32k","max_sequence_length":32768,"window":{"size":128,"overlap":63}}`, false},
+		{"local window", `{"max_sequence_length":32768,"window":{"size":128,"overlap":63}}`, false},
 		{"zero budget retains default", `{"max_sequence_length":0,"window":{"size":512}}`, false},
 		{"omitted budget retains default", `{"window":{"size":512}}`, false},
-		{"legacy candle", `{"variant":"candle"}`, false},
-		{"retired protocol", `{"protocol":"http_classify"}`, true},
+		{"named backend", `{"backend":{}}`, false},
 		{"named backend window", `{"backend":{},"window":{"size":128}}`, true},
 		{"named backend budget", `{"backend":{},"max_sequence_length":32768}`, true},
 		{"negative budget", `{"max_sequence_length":-1}`, true},
-		{"remote budget", `{"protocol":"http_chat","max_sequence_length":32768}`, true},
-		{"candle budget", `{"variant":"candle","max_sequence_length":32768}`, true},
-		{"remote window", `{"protocol":"http_classify","window":{"size":128}}`, true},
-		{"candle window", `{"variant":"candle","window":{"size":128}}`, true},
 		{"missing size", `{"window":{}}`, true},
 		{"zero size", `{"window":{"size":0}}`, true},
 		{"negative size", `{"window":{"size":-1}}`, true},
@@ -79,9 +71,8 @@ func TestPromptGuardWindowCELAndPruning(t *testing.T) {
 		{`{backend: {name: remote, protocol: http_classify}, window: {size: 128}}`, true},
 		{`{window: {size: 128, overlap: 63}, max_sequence_length: 32768}`, false},
 		{`{window: {size: 512}, max_sequence_length: 0}`, false},
-		{`{variant: candle}`, false},
-		{`{protocol: http_classify, window: {size: 128}}`, true},
-		{`{variant: candle, max_sequence_length: 1024}`, true},
+		{`{backend: {name: remote, protocol: http_classify}}`, false},
+		{`{backend: {name: remote, protocol: http_classify}, max_sequence_length: 1024}`, true},
 		{`{window: {size: 513}}`, true},
 		{`{window: {size: 128}, max_sequence_length: 64}`, true},
 		{`{window: {size: 128, overlap: 128}}`, true},
@@ -128,21 +119,20 @@ func TestGeneratedPromptGuardContextSchemasAgree(t *testing.T) {
 			t.Fatal(err)
 		}
 		guard := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"].Properties["prompt_guard"]
-		defaults := routerconfig.DefaultGlobalConfig().PromptGuard
-		for field, want := range map[string]string{
-			"model_id":  defaults.ModelID,
-			"threshold": strconv.FormatFloat(float64(defaults.Threshold), 'f', -1, 32),
-		} {
-			value := guard.Properties[field].Default
-			var got string
-			if value == nil || json.Unmarshal(value.Raw, &got) != nil || got != want {
-				t.Fatalf("%s admission default for %s differs from router: got %q, want %q", relative, field, got, want)
+		// The decision model supplies the guard's model and threshold: an
+		// admission default would pin them for every decision model.
+		for _, field := range []string{"model_id", "threshold"} {
+			if value := guard.Properties[field].Default; value != nil {
+				t.Fatalf("%s sets an admission default for %s (%s); the decision model supplies it", relative, field, value.Raw)
 			}
 		}
 		window := guard.Properties["window"]
 		budget := guard.Properties["max_sequence_length"]
 		if !window.Nullable || window.Type != "object" || budget.Type != "integer" || budget.Minimum == nil || *budget.Minimum != 0 {
 			t.Fatalf("%s lost nullable window or nonnegative budget", relative)
+		}
+		if _, exists := guard.Properties["variant"]; exists {
+			t.Fatalf("%s still declares the retired variant selector", relative)
 		}
 		size := window.Properties["size"]
 		overlap := window.Properties["overlap"]

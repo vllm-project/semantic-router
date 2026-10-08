@@ -47,13 +47,13 @@ type fusionExecutionConfig struct {
 	SynthesisTemplate            string
 	JudgePromptVersion           string
 
-	GroundingEnabled                 bool
-	GroundingReference               string
-	GroundingPolicy                  string
-	GroundingMinScore                float64
-	GroundingMinKeep                 int
-	GroundingNLIContradictionPenalty float64
-	GroundingOnError                 string
+	GroundingEnabled              bool
+	GroundingReference            string
+	GroundingPolicy               string
+	GroundingMinScore             float64
+	GroundingMinKeep              int
+	GroundingContradictionPenalty float64
+	GroundingOnError              string
 }
 
 type FusionAnalysis struct {
@@ -168,8 +168,6 @@ func newFusionQuorumOutcome(
 }
 
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	ctx = contextWithFusionDepth(ctx, 1)
-
 	cfg := l.resolveFusionExecutionConfig(req)
 	if len(cfg.AnalysisModels) == 0 {
 		return nil, fmt.Errorf("fusion analysis_models cannot be empty")
@@ -292,7 +290,6 @@ func (l *FusionLooper) callFusionModelStage(
 		CallOptions{
 			DecisionName: req.DecisionName,
 			Iteration:    iteration,
-			FusionDepth:  1,
 			Mode:         responseMode(streaming),
 			Stage:        stage,
 			Role:         fusionCallRole(stage),

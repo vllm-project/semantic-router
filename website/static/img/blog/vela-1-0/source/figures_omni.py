@@ -2,9 +2,9 @@
 
 Release evidence: Nano 0496b39a51c8199592e58cbff81c250f056bd94b;
 Mini f7fafd36abf49adf88b1b2ec0186c68b008eeb07. Pinned source URLs:
-https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/omni_components/single_modality.py
-https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/omni_components/qwen_text_backbone.py
-https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/omni_components/mini.py
+https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/omni_components/single_modality.py
+https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/omni_components/qwen_text_backbone.py
+https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/omni_components/mini.py
 Transformer internals follow Hugging Face Transformers v4.57.6.
 The shared destination contains three independent vectors, not their sum.
 Run: python3 source/figures_omni.py [--output-dir PATH]

@@ -28,16 +28,20 @@ type ImageProvider interface {
 	EmbedImage(context.Context, []byte, int) ([]float32, error)
 }
 type AudioProvider interface {
-	EmbedAudio(context.Context, []float32, int, int, int) ([]float32, error)
+	EmbedAudio(context.Context, AudioRequest) ([]float32, error)
 }
 
-// Window offsets are UTF-8 bytes in the original text, with End exclusive.
-type Window struct {
-	Start int
-	End   int
+// InputChecker reports whether the model reads text whole: false when it
+// would truncate it. The answer comes with the vector of the provider's view,
+// so embedding the same text next costs no second model call. A provider that
+// cannot tell reports binding.ErrCapability or does not implement it.
+type InputChecker interface {
+	FitsInput(context.Context, string) (bool, error)
 }
-type WindowProvider interface {
-	Windows(context.Context, string, int) ([]Window, error)
+
+// ConfigurableInputChecker answers FitsInput at another output view.
+type ConfigurableInputChecker interface {
+	FitsInputWithOptions(context.Context, string, Options) (bool, error)
 }
 
 // Embed applies options at the provider boundary. Remote providers retain their
@@ -55,7 +59,7 @@ func Embed(ctx context.Context, provider Provider, text string, options Options)
 func Image(ctx context.Context, provider Provider, imageRef string, dimension int) ([]float32, error) {
 	p, ok := provider.(ImageProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support images")
+		return nil, fmt.Errorf("%w: embedding provider does not support images", binding.ErrCapability)
 	}
 	var payload []byte
 	var err error
@@ -68,7 +72,7 @@ func Image(ctx context.Context, provider Provider, imageRef string, dimension in
 		payload, err = base64.StdEncoding.DecodeString(imageRef)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("decode embedding image: %w", err)
+		return nil, fmt.Errorf("%w: decode embedding image: %w", binding.ErrInvalidInput, err)
 	}
 	return p.EmbedImage(ctx, payload, dimension)
 }
@@ -118,28 +122,27 @@ func (p *providerView) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 func (p *providerView) EmbedImage(ctx context.Context, data []byte, dim int) ([]float32, error) {
 	q, ok := p.Provider.(ImageProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support images")
+		return nil, fmt.Errorf("%w: embedding provider does not support images", binding.ErrCapability)
 	}
 	return q.EmbedImage(ctx, data, dim)
 }
 
-func (p *providerView) EmbedAudio(ctx context.Context, data []float32, bins, frames, dim int) ([]float32, error) {
+func (p *providerView) EmbedAudio(ctx context.Context, request AudioRequest) ([]float32, error) {
 	q, ok := p.Provider.(AudioProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support audio")
+		return nil, fmt.Errorf("%w: embedding provider does not support audio", binding.ErrCapability)
 	}
-	return q.EmbedAudio(ctx, data, bins, frames, dim)
+	return q.EmbedAudio(ctx, request)
 }
 
-// Windows reports a missing tokenizer as a capability mismatch, the same way a
-// prepared provider without local token windows does, so a caller can tell an
-// absent tokenizer from a tokenizer that failed.
-func (p *providerView) Windows(ctx context.Context, text string, limit int) ([]Window, error) {
-	q, ok := p.Provider.(WindowProvider)
+// FitsInput asks at the view's options, so the answer shares the call that
+// embeds the text through this view.
+func (p *providerView) FitsInput(ctx context.Context, text string) (bool, error) {
+	q, ok := p.Provider.(ConfigurableInputChecker)
 	if !ok {
-		return nil, fmt.Errorf("%w: embedding provider does not support token windows", binding.ErrCapability)
+		return false, fmt.Errorf("%w: embedding provider does not report input truncation", binding.ErrCapability)
 	}
-	return q.Windows(ctx, text, limit)
+	return q.FitsInputWithOptions(ctx, text, p.options)
 }
 
 // CacheIdentity names immutable model/adapter semantics for request-local caches.
@@ -177,4 +180,14 @@ func (p *providerView) RepresentationIdentity(options Options, inputPolicy strin
 		return ContentIdentity{}, ErrIdentityUnsupported
 	}
 	return owned.RepresentationIdentity(options, inputPolicy)
+}
+
+// EmbeddingInfo preserves capabilities when a consumer selects an output view.
+func (p *providerView) EmbeddingInfo() ModelInfo {
+	info := ModelInfo{Backend: p.Backend(), Dimension: p.Dimension()}
+	if described, ok := p.Provider.(Described); ok {
+		info = described.EmbeddingInfo()
+		info.Dimension = p.Dimension()
+	}
+	return info
 }

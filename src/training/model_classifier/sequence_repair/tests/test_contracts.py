@@ -7,6 +7,12 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
+from src.training.model_classifier.domain_classifier.prepare_data import (
+    training_contract as domain_contract,
+)
+from src.training.model_classifier.prompt_guard_fine_tuning_lora.vela_data import (
+    training_contract as guard_contract,
+)
 from src.training.model_classifier.sequence_repair.data import (
     assert_disjoint,
     classification_metrics,
@@ -39,6 +45,15 @@ class ContractTests(unittest.TestCase):
                 path.write_text(json.dumps({"classifier_pooling": pooling}))
                 with self.assertRaises(ValueError):
                     configuration_overrides(path)
+
+    def test_domain_and_guard_recipes_train_the_released_cls_pooling(self):
+        for contract in [domain_contract({"math": 0}, {0: "math"}), guard_contract()]:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "contract.json"
+                path.write_text(json.dumps(contract))
+                self.assertEqual(
+                    configuration_overrides(path)["classifier_pooling"], "cls"
+                )
 
     def test_small_reviewed_source_remains_visible_with_length_and_label_balance(self):
         rows = [{"source": "weak", "length_bucket": "short", "label": "a"}] * 1000 + [

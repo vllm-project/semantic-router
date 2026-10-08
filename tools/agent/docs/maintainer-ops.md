@@ -128,10 +128,6 @@ artifacts are never promoted automatically.
    Python, crate, and Operator publishers.
 5. Verify every publisher before treating the GitHub release as complete.
 
-Fleet Simulator uses its own package version and tag stream. Keep that release
-independent from the main Router version unless a documented compatibility
-constraint requires coordinated updates.
-
 ## Commands
 
 ```bash
@@ -190,7 +186,9 @@ contract without making roadmap, priority, or close decisions:
   Maintainer reclassification is not reverted from stale form text;
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
-  project work or `owner/maintainers` for repository governance;
+  project work or `owner/maintainers` for repository governance; each exact
+  `/accept` event runs a paginated repository-wide reconciliation so earlier
+  valid decisions recover from queued, failed, or interrupted workflow runs;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;

@@ -30,7 +30,7 @@ family. [Provider model evaluation](./model-performance-eval) and
 
 ## Choose your starting checkpoint {#record-the-base-and-task-lineage}
 
-Use [Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)
+Use [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)
 to train a new task. It is the common base for Vela's classifiers, embeddings,
 and reranker. Download an explicit Hub revision and keep its tokenizer and
 configuration together with the weights.
@@ -73,13 +73,13 @@ to serve.
 ## Use the trained model in the router
 
 Export a complete checkpoint with its tokenizer and labels. Choose a supported
-engine and input limit in [Run models locally](../installation/runtime/in-process.md),
+engine and input limit in [Run models locally](../model-runtime/deploy.md),
 then validate your configuration:
 
 ```bash
 vllm-sr config validate --config config.yaml
 ```
 
-Use [route preview](../installation/runtime/lifecycle-diagnostics.md) to check
+Use [route preview](model-runtime/troubleshooting.md) to check
 the signal, selected decision, and latency on representative requests before
 deploying the model to traffic.

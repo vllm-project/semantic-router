@@ -312,7 +312,7 @@ func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 		}
 		return sim, ""
 	}
-	// Even a full-similarity candidate can miss when NLI verification fails.
+	// Even a full-similarity candidate can miss when the polarity guard rejects it.
 	if sim < 0.0 || sim > 1.0 {
 		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1] range", sim)
 	}

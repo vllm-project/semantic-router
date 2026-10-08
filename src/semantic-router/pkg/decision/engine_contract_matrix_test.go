@@ -73,8 +73,9 @@ func logicalContractCases() []engineContractCase {
 				nil,
 				map[string]float64{"keyword:a": 0.8, "embedding:b": 0.6},
 			),
-			wantDecision:   "and",
-			wantConfidence: 0.7,
+			wantDecision: "and",
+			// The keyword leaf is policy, so only the embedding score ranks.
+			wantConfidence: 0.6,
 			wantRules:      []string{"keyword:a", "embedding:b"},
 		},
 		{

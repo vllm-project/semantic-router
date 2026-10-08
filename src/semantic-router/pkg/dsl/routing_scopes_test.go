@@ -108,7 +108,6 @@ ROUTE factual_route {
   PLUGIN semantic_cache { enabled: true, similarity_threshold: 0.9, ttl_seconds: 900 }
   PLUGIN hallucination {
     enabled: true
-    use_nli: true
     hallucination_action: "header"
     unverified_factual_action: "header"
     include_hallucination_details: true

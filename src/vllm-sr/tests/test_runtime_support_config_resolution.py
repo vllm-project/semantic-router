@@ -372,17 +372,15 @@ def test_effective_config_preserves_explicit_embedding_execution(
     if configured is not None:
         semantic["use_cpu"] = configured
     deployment = {
-        "artifact": "models/mmbert-embedding",
-        "provider": "ort",
-        "device": "migraphx:0",
-        "precision": "native",
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+        "device": "rocm:0",
         "input": {"max_tokens": 128, "overflow": "reject"},
     }
     binding = {
         "deployment": "gpu-embedding",
         "contract": "embedding.v1",
         "adapter": "mmbert",
-        "head": "onnx/layer-6/model.onnx",
     }
     source = {
         "version": "v0.3",

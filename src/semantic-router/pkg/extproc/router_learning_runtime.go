@@ -168,14 +168,15 @@ func (rt *routerLearningRuntime) tryAppendReplayOutcome(
 
 func routerReplayOutcome(outcome *routerruntime.RouterOutcome) routerreplay.Outcome {
 	return routerreplay.Outcome{
-		Timestamp: time.Now().UTC(),
-		Source:    string(outcome.Source),
-		Target:    string(outcome.Target),
-		TargetRef: strings.TrimSpace(outcome.TargetRef),
-		Verdict:   string(outcome.Verdict),
-		Reason:    strings.TrimSpace(outcome.Reason),
-		Score:     outcome.Score,
-		Metadata:  cloneLearningOutcomeMetadata(outcome.Metadata),
+		Timestamp:      time.Now().UTC(),
+		Source:         string(outcome.Source),
+		Target:         string(outcome.Target),
+		TargetRef:      strings.TrimSpace(outcome.TargetRef),
+		Verdict:        string(outcome.Verdict),
+		Reason:         strings.TrimSpace(outcome.Reason),
+		Score:          outcome.Score,
+		Metadata:       cloneLearningOutcomeMetadata(outcome.Metadata),
+		IdempotencyKey: strings.TrimSpace(outcome.IdempotencyKey),
 	}
 }
 

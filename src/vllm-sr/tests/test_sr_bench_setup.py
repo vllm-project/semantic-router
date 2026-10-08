@@ -1,10 +1,95 @@
 """Pinned harness setup must provide runtime data before any paid call."""
 
+import hashlib
+import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from cli.sr_bench import external, setup
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        None,
+        "numpy",
+        "scipy.linalg",
+        "sympy",
+        "h5py",
+        "datasets",
+        "tqdm",
+        "mpl_toolkits.mplot3d",
+    ],
+)
+def test_grading_image_checks_dependencies_before_accepting_build(
+    tmp_path, monkeypatch, missing
+):
+    monkeypatch.setenv("SR_BENCH_HOME", str(tmp_path))
+    base = "python@sha256:" + "a" * 64
+    image = "sha256:" + "b" * 64
+    directory = tmp_path / "sandbox"
+    commands, imports = [], []
+
+    def inspect(args, **_kwargs):
+        assert args == ["docker", "image", "inspect", "python:3.12-slim-bookworm"]
+        return json.dumps([{"RepoDigests": [base]}])
+
+    def import_dependency(name, *_args, **_kwargs):
+        imports.append(name)
+        if name == missing:
+            raise ImportError(f"Unavailable grading dependency: {name}")
+        return SimpleNamespace(Axes3D=object())
+
+    def run(args, **kwargs):
+        assert kwargs["check"] is True
+        commands.append(args)
+        if args[1] == "build":
+            lines = (directory / "Dockerfile").read_text().splitlines()
+            assert lines[0] == f"FROM {base}"
+            assert "matplotlib==3.9.4" in lines[1].split()
+            check = json.loads(lines[2].removeprefix("RUN "))
+            assert check[:2] == ["python", "-c"]
+            # Run only the builder's fixed import check; no packages or cases
+            # are loaded, and Docker is entirely mocked for this contract test.
+            try:
+                exec(check[2], {"__builtins__": {"__import__": import_dependency}})
+            except ImportError as exc:
+                raise subprocess.CalledProcessError(1, args) from exc
+            Path(args[args.index("--iidfile") + 1]).write_text(image + "\n")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(setup.subprocess, "check_output", inspect)
+    monkeypatch.setattr(setup.subprocess, "run", run)
+    if missing:
+        with pytest.raises(ValueError, match="Pinned dependency setup failed"):
+            setup.build_grading_image()
+        assert missing in imports
+        assert not (directory / "manifest.json").exists()
+        assert not (directory / "image-id").exists()
+    else:
+        receipt = setup.build_grading_image()
+        assert imports == [
+            "numpy",
+            "scipy.linalg",
+            "sympy",
+            "h5py",
+            "datasets",
+            "tqdm",
+            "mpl_toolkits.mplot3d",
+        ]
+        assert receipt["sandbox_image"] == image
+        assert receipt["base_image"] == base
+        assert (
+            receipt["dockerfile_sha256"]
+            == hashlib.sha256((directory / "Dockerfile").read_bytes()).hexdigest()
+        )
+        assert json.loads((directory / "manifest.json").read_text()) == receipt
+    assert [command[:2] for command in commands] == [
+        ["docker", "pull"],
+        ["docker", "build"],
+    ]
 
 
 def _git(root, *args):

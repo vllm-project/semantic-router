@@ -51,7 +51,6 @@ func responseMode(streaming bool) ResponseMode {
 type CallOptions struct {
 	DecisionName string
 	Iteration    int
-	FusionDepth  int
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
 
@@ -80,9 +79,6 @@ func (options CallOptions) validate(target ModelTarget) error {
 	if options.Iteration <= 0 {
 		return fmt.Errorf("looper iteration must be positive")
 	}
-	if options.FusionDepth < 0 {
-		return fmt.Errorf("fusion depth must not be negative")
-	}
 	if options.Mode != ResponseJSON && options.Mode != ResponseSSE {
 		return fmt.Errorf("unsupported looper response mode %d", options.Mode)
 	}
@@ -107,7 +103,7 @@ func (c *Client) CallModelWithOptions(
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	if c.connector == nil {
+	if c.connector == nil && c.hops == nil {
 		return nil, fmt.Errorf("looper connector is required")
 	}
 	return c.callModel(ctx, &request, target, options)

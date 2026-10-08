@@ -61,6 +61,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:             copyDecisions(cfg.Decisions),
 		Strategy:              cfg.Strategy,
+		Fallback:              cfg.Fallback.Clone(),
 	}
 }
 
@@ -89,6 +90,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Decision:      append([]DecisionSignalRule(nil), signals.DecisionRules...),
 	}
 }
 
@@ -309,6 +311,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
+			Fallback:       cfg.Fallback.Clone(),
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -324,6 +327,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
+			ToolSessions:  cloneToolSessionStoreConfig(cfg.ToolSessions),
 		},
 		Integrations: CanonicalIntegrationGlobal{
 			Tools:  cfg.Tools,
@@ -345,12 +349,6 @@ func canonicalAutoModelNames(names []string) *[]string {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	categoryModel := cfg.CategoryModel
-	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
-		// Export is intentionally non-validating. Preserve an invalid runtime
-		// value so the normal configuration validator reports the actionable
-		// error instead of silently changing it during serialization.
-		categoryModel = cfg.CategoryModel
-	}
 
 	return CanonicalModelCatalog{
 		Deployments: cloneModelMap(cfg.ModelDeployments),
@@ -358,20 +356,11 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},
-		System: CanonicalSystemModels{
-			Safety:                 cfg.SafetyModels.Safety.ModelID,
-			Hazard:                 cfg.SafetyModels.Hazard.ModelID,
-			PromptGuard:            cfg.PromptGuard.ModelID,
-			DomainClassifier:       cfg.CategoryModel.ModelID,
-			PIIClassifier:          cfg.PIIModel.ModelID,
-			FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
-			HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
-			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
-			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
-		},
-		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
-		Admission: cloneAdmissionMap(cfg.ModelAdmission),
+		System:          canonicalSystemModelsFromRouterConfig(cfg),
+		External:        append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:             append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
+		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
 		Modules: CanonicalModelModules{
 			Safety:            cfg.SafetyModels,
 			PromptCompression: cfg.PromptCompression,
@@ -401,10 +390,6 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 				Detector: CanonicalHallucinationDetector{
 					HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
 					ModelRef:                 "hallucination_detector",
-				},
-				Explainer: CanonicalExplainerModule{
-					NLIModelConfig: cfg.HallucinationMitigation.NLIModel,
-					ModelRef:       "hallucination_explainer",
 				},
 			},
 			FeedbackDetector: CanonicalFeedbackDetectorModule{
@@ -633,9 +618,67 @@ func cloneVectorStoreConfig(cfg *VectorStoreConfig) *VectorStoreConfig {
 	return &cloned
 }
 
+// cloneToolSessionStoreConfig deep-clones a ToolSessionStoreConfig. Unlike
+// cloneVectorStoreConfig's shallow *cfg copy (safe there because
+// VectorStoreConfig has no pointer fields of its own), this struct is
+// pointer-heavy (five *int fields plus a nested *ToolSessionRedisConfig) —
+// a shallow copy would alias those pointers with the original across the
+// canonical export boundary, letting a mutation on one side leak into the
+// other.
+func cloneToolSessionStoreConfig(cfg *ToolSessionStoreConfig) *ToolSessionStoreConfig {
+	if cfg == nil {
+		return nil
+	}
+	cloned := *cfg
+	cloned.TTLSeconds = cloneIntPtr(cfg.TTLSeconds)
+	cloned.MaxSessions = cloneIntPtr(cfg.MaxSessions)
+	cloned.MaxSessionsByIdentity = cloneIntPtr(cfg.MaxSessionsByIdentity)
+	cloned.MaxStateBytes = cloneIntPtr(cfg.MaxStateBytes)
+	cloned.TimeoutMs = cloneIntPtr(cfg.TimeoutMs)
+	if cfg.Redis != nil {
+		redisClone := *cfg.Redis
+		cloned.Redis = &redisClone
+	}
+	return &cloned
+}
+
+func cloneIntPtr(v *int) *int {
+	if v == nil {
+		return nil
+	}
+	cloned := *v
+	return &cloned
+}
+
 func normalizedConfigSource(source ConfigSource) ConfigSource {
 	if source == "" {
 		return ConfigSourceFile
 	}
 	return source
+}
+
+// canonicalSystemModelsFromRouterConfig writes the decision model, unless it
+// is the default, and only the system lines that bind a module to another
+// model than the decision model does, so the document still follows it.
+func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemModels {
+	system := CanonicalSystemModels{
+		Safety:                cfg.SafetyModels.Safety.ModelID,
+		Hazard:                cfg.SafetyModels.Hazard.ModelID,
+		PromptGuard:           cfg.PromptGuard.ModelID,
+		DomainClassifier:      cfg.CategoryModel.ModelID,
+		PIIClassifier:         cfg.PIIModel.ModelID,
+		FactCheckClassifier:   cfg.HallucinationMitigation.FactCheckModel.ModelID,
+		HallucinationDetector: cfg.HallucinationMitigation.HallucinationModel.ModelID,
+		FeedbackDetector:      cfg.FeedbackDetector.ModelID,
+	}
+	spec := cfg.DecisionModelSpec()
+	if spec.Name != DefaultDecisionModel {
+		system.DecisionModel = spec.Name
+	}
+	for _, line := range systemLines {
+		if value := line.value(&system); *value == *line.value(&spec.System) {
+			*value = ""
+		}
+	}
+	return system
 }

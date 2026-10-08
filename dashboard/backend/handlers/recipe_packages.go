@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 )
 
@@ -196,6 +197,9 @@ func (h *RecipeHandler) ImportPackage(w http.ResponseWriter, r *http.Request) {
 		writePackageError(w, recipe.NewPackageError(recipe.ErrorInvalidRequest, http.StatusBadRequest, "Recipe import request is invalid.", err))
 		return
 	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	result, created, err := h.packages.Import(r.Context(), request)
 	if err != nil {
 		writePackageError(w, err)
@@ -229,12 +233,15 @@ func (h *RecipeHandler) ActivatePackage(w http.ResponseWriter, r *http.Request) 
 		writePackageError(w, recipe.NewPackageError(recipe.ErrorInvalidRequest, http.StatusBadRequest, "Recipe activation request is invalid.", err))
 		return
 	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	result, err := h.activator.Activate(r.Context(), request)
 	if err != nil {
 		writePackageError(w, err)
 		return
 	}
-	writeRecipeJSON(w, http.StatusOK, result)
+	writeRecipeJSON(w, activationResultHTTPStatus(result.Status), result)
 }
 
 func (h *RecipeHandler) DeactivatePackage(w http.ResponseWriter, r *http.Request) {
@@ -260,12 +267,24 @@ func (h *RecipeHandler) DeactivatePackage(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	result, err := h.activator.Deactivate(r.Context(), request)
 	if err != nil {
 		writePackageError(w, err)
 		return
 	}
-	writeRecipeJSON(w, http.StatusOK, result)
+	writeRecipeJSON(w, activationResultHTTPStatus(result.Status), result)
+}
+
+// activationResultHTTPStatus answers 202 for a committed change that waits for
+// `vllm-sr serve`, as a saved config change that needs a restart is answered.
+func activationResultHTTPStatus(status string) int {
+	if status == recipe.ActivationResultRestartRequired {
+		return http.StatusAccepted
+	}
+	return http.StatusOK
 }
 
 func canonicalRecipePackagePath(actual, expected string) bool {

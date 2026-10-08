@@ -2,6 +2,7 @@
 
 import copy
 import time
+from pathlib import Path
 
 import pytest
 from cli.sr_bench.candidate_plans import candidate_manifest
@@ -100,7 +101,7 @@ def test_comparison_resolves_equivalent_auxiliary_placement(tmp_path):
     ]
     result = compare(store, _record(store, baseline), _record(store, candidate))
     assert result["comparisons"][0]["paired_cases"] == 1
-    assert result["comparisons"][0]["cost_saving_percent"] == 0
+    assert result["comparisons"][0]["subject_cost_saving_percent"] == 0
 
 
 def _weighted_matrix(store, order, costs, correct, candidate=False):
@@ -160,6 +161,157 @@ def _weighted_matrix(store, order, costs, correct, candidate=False):
     return run["id"]
 
 
+def _auxiliary_call(store, run_id, target, cost, *, role="judge", status="completed"):
+    call = store.start_call(run_id, "0", target, role, {})
+    store.finish_call(call, status, {"cost_usd": cost})
+
+
+@pytest.mark.parametrize("auxiliary_cost,total_saving", [(0.5, 25), (1, 0), (2, -50)])
+def test_total_spend_includes_auxiliary_costs_even_when_subject_savings_are_positive(
+    tmp_path, auxiliary_cost, total_saving
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["single"], {"single": 2}, {"single": {"0"}})
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    _auxiliary_call(store, candidate, "balance", auxiliary_cost / 2)
+    _auxiliary_call(store, candidate, "balance", auxiliary_cost / 2, role="simulator")
+    original = list(store.db.iterdump())
+    row = compare(store, baseline, candidate)["comparisons"][0]
+    assert row["subject_cost_saving_percent"] == 50
+    assert row["total_cost_saving_percent"] == pytest.approx(total_saving)
+    assert row["baseline_subject_cost_usd"] == row["baseline_total_cost_usd"] == 2
+    assert row["candidate_subject_cost_usd"] == 1
+    assert row["baseline_evaluation_cost_usd"] == 0
+    assert row["candidate_evaluation_cost_usd"] == auxiliary_cost
+    assert row["candidate_total_cost_usd"] == 1 + auxiliary_cost
+    assert row["total_cost_comparison_reason"] is None
+    assert "Subject-only" in row["cache_neutral_cost_basis"]
+    assert (
+        not {"cost_saving_percent", "baseline_cost_usd", "candidate_cost_usd"}
+        & row.keys()
+    )
+    assert list(store.db.iterdump()) == original
+
+
+@pytest.mark.parametrize("status", ["completed", "failed"])
+def test_unpriced_auxiliary_call_keeps_subject_cost_but_suppresses_total_savings(
+    tmp_path, status
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["single"], {"single": 2}, {"single": {"0"}})
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    _auxiliary_call(store, candidate, "balance", 0.25)
+    _auxiliary_call(store, candidate, "balance", None, role="simulator", status=status)
+    report = make_report(store, candidate)
+    target = report["summary"]["targets"][0]
+    assert target["cost_complete"] is True
+    assert target["cost_usd"] == 1
+    assert target["evaluation_cost_usd"] is None
+    assert target["total_spend_usd"] is None
+    assert report["summary"]["total_spend_usd"] is None
+    row = compare(store, baseline, candidate)["comparisons"][0]
+    assert row["subject_cost_saving_percent"] == 50
+    assert row["candidate_evaluation_cost_usd"] is None
+    assert row["candidate_total_cost_usd"] is None
+    assert row["total_cost_saving_percent"] is None
+    assert "every actual auxiliary call" in row["total_cost_comparison_reason"]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_quality_ties_rank_complete_total_spend_instead_of_subject_cost(
+    tmp_path, reverse
+):
+    store = Store(tmp_path)
+    targets = ["cheap_subject", "cheap_total"]
+    baseline = _weighted_matrix(
+        store,
+        list(reversed(targets)) if reverse else targets,
+        {"cheap_subject": 1, "cheap_total": 8},
+        {"cheap_subject": {"0"}, "cheap_total": {"3"}},
+    )
+    _auxiliary_call(store, baseline, "cheap_subject", 9)
+    _auxiliary_call(store, baseline, "cheap_total", 1)
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    _auxiliary_call(store, candidate, "balance", 1)
+    result = compare(store, baseline, candidate)
+    assert result["baseline_selected_target_id"] == "cheap_total"
+    assert "total spend (subject plus auxiliary)" in result["baseline_tie_policy"]
+    row = result["comparisons"][0]
+    assert row["quality_delta"] == 0
+    assert row["baseline_subject_cost_usd"] == 8
+    assert row["baseline_evaluation_cost_usd"] == 1
+    assert row["baseline_total_cost_usd"] == 9
+    assert row["subject_cost_saving_percent"] == 87.5
+    assert row["total_cost_saving_percent"] == pytest.approx(100 * (1 - 2 / 9))
+
+
+def test_unknown_total_of_quality_tied_single_suppresses_all_savings(tmp_path):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(
+        store,
+        ["cheap_subject", "known_total"],
+        {"cheap_subject": 1, "known_total": 2},
+        {"cheap_subject": {"0"}, "known_total": {"0"}},
+    )
+    _auxiliary_call(store, baseline, "cheap_subject", None)
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 0.5}, {"balance": {"0"}}, candidate=True
+    )
+    result = compare(store, baseline, candidate)
+    assert result["baseline_selected_target_id"] == "known_total"
+    assert result["baseline_cost_comparison_eligible"] is False
+    assert "incomplete total spend" in result["baseline_cost_comparison_reason"]
+    row = result["comparisons"][0]
+    assert row["subject_cost_saving_percent"] is None
+    assert row["total_cost_saving_percent"] is None
+    assert row["cache_neutral_cost_saving_percent"] is None
+    assert (
+        row["total_cost_comparison_reason"] == result["baseline_cost_comparison_reason"]
+    )
+
+
+def test_failed_calls_with_known_costs_remain_in_total_spend(tmp_path):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["single"], {"single": 2}, {"single": {"0"}})
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    call = next(c for c in store.calls(candidate) if c["case_id"] == "0")
+    store.finish_call(call["id"], "failed", {"cost_usd": 0.2})
+    _auxiliary_call(store, candidate, "balance", 2, status="failed")
+    store.result(candidate, "0", "balance", "failed", {"benchmark": "mmlu-pro"})
+    store.status(candidate, "failed")
+    original = list(store.db.iterdump())
+    row = compare(store, baseline, candidate)["comparisons"][0]
+    assert row["quality_delta"] < 0
+    assert row["candidate_total_cost_usd"] == 3
+    assert row["total_cost_saving_percent"] == -50
+    assert list(store.db.iterdump()) == original
+
+
+@pytest.mark.parametrize("auxiliary_cost,expected", [(0, None), (2, 50)])
+def test_zero_subject_baseline_does_not_hide_known_positive_total_spend(
+    tmp_path, auxiliary_cost, expected
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["single"], {"single": 0}, {"single": {"0"}})
+    _auxiliary_call(store, baseline, "single", auxiliary_cost)
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    row = compare(store, baseline, candidate)["comparisons"][0]
+    assert row["subject_cost_saving_percent"] is None
+    assert row["total_cost_saving_percent"] == expected
+    if auxiliary_cost == 0:
+        assert "zero-cost baseline" in row["total_cost_comparison_reason"]
+
+
 @pytest.mark.parametrize("reverse", [False, True])
 def test_best_single_quality_tie_uses_cheapest_independent_of_manifest_order(
     tmp_path, reverse
@@ -185,7 +337,7 @@ def test_best_single_quality_tie_uses_cheapest_independent_of_manifest_order(
     paired = result["comparisons"][0]
     assert paired["baseline_target_id"] == "cheap"
     assert paired["quality_delta"] == 0
-    assert paired["cost_saving_percent"] == 50
+    assert paired["subject_cost_saving_percent"] == 50
 
 
 @pytest.mark.parametrize(
@@ -217,7 +369,7 @@ def test_comparison_retains_negative_positive_and_zero_changes(
     )
     row = compare(store, baseline, candidate)["comparisons"][0]
     assert row["quality_delta"] == pytest.approx(quality_delta)
-    assert row["cost_saving_percent"] == pytest.approx(saving)
+    assert row["subject_cost_saving_percent"] == pytest.approx(saving)
 
 
 @pytest.mark.parametrize(
@@ -241,8 +393,8 @@ def test_tied_baseline_has_stable_id_and_explicit_unknown_cost_policy(
     assert result["baseline_cost_comparison_eligible"] is eligible
     assert result["baseline_tied_best_target_ids"] == ["a", "z"]
     if not eligible:
-        assert "incomplete cost" in result["baseline_cost_comparison_reason"]
-        assert result["comparisons"][0]["cost_saving_percent"] is None
+        assert "incomplete total spend" in result["baseline_cost_comparison_reason"]
+        assert result["comparisons"][0]["subject_cost_saving_percent"] is None
 
 
 def test_stronger_quality_is_not_replaced_by_cheaper_lower_quality(tmp_path):
@@ -300,6 +452,195 @@ def test_pending_model_alias_is_not_an_observed_backend():
     result = metric("balance", [], calls, 3)
     assert result["selected_models"] == {"actual-backend": 1, "acknowledged-backend": 1}
     assert result["pending_selection_count"] == 1
+
+
+def _request(case_id: str, selected_model: str | None, **fields: object) -> dict:
+    return {
+        "role": "subject",
+        "case_id": case_id,
+        "status": "completed",
+        "selected_model": selected_model,
+        "decision": f"route-{selected_model}" if selected_model else None,
+        "inference_call_count": 1,
+        **fields,
+    }
+
+
+UNACKNOWLEDGED = {"status": "failed", "model": "vllm-sr/mom-v1-blend"}
+
+
+@pytest.mark.parametrize(
+    ("calls", "expected"),
+    [
+        pytest.param(
+            [_request("task", model) for model in ("a", "a", "b", "a")],
+            {
+                "multi_request_tasks": 1,
+                "switched_tasks": 1,
+                "model_switches": 2,
+                "max_switches_per_task": 2,
+                "decision_changed_tasks": 1,
+            },
+            id="a-a-b-a",
+        ),
+        pytest.param(
+            [_request("task", "a")],
+            {
+                "multi_request_tasks": 0,
+                "unswitched_tasks": 0,
+                "mean_switches_per_task": None,
+                "max_switches_per_task": None,
+            },
+            id="single-request-task",
+        ),
+        pytest.param(
+            [
+                _request("task", "a"),
+                _request("task", "judge", role="judge"),
+                _request("task", "user", role="simulator"),
+                _request("task", "a"),
+            ],
+            {
+                "multi_request_tasks": 1,
+                "model_switches": 0,
+                "decision_changed_tasks": 0,
+            },
+            id="judge-and-simulator-ignored",
+        ),
+        pytest.param(
+            [
+                _request("task", "a"),
+                _request("task", None, **UNACKNOWLEDGED),
+                _request("task", "a"),
+            ],
+            {
+                "multi_request_tasks": 1,
+                "model_switches": 0,
+                "unknown_model_requests": 1,
+            },
+            id="unknown-model-is-not-a-switch",
+        ),
+        pytest.param(
+            [
+                _request("task", "a"),
+                _request("task", None, **UNACKNOWLEDGED),
+                _request("task", "b"),
+            ],
+            {"model_switches": 1, "unknown_model_requests": 1},
+            id="switch-across-unknown-model",
+        ),
+        pytest.param(
+            [_request("task", "a"), _request("task", "b", inference_call_count=3)],
+            {"multi_request_tasks": 0, "model_switches": 0, "multi_inference_tasks": 1},
+            id="multi-inference-request",
+        ),
+        pytest.param(
+            [
+                _request("task-1", "a"),
+                _request("task-2", "b"),
+                _request("task-1", "a"),
+                _request("task-2", "b"),
+            ],
+            {"multi_request_tasks": 2, "model_switches": 0},
+            id="interleaved-tasks",
+        ),
+        pytest.param(
+            [_request("task", "a", decision="x"), _request("task", "a", decision="y")],
+            {"switched_tasks": 0, "decision_changed_tasks": 1},
+            id="decision-change-without-switch",
+        ),
+    ],
+)
+def test_continuity_counts_switches_between_known_subject_selections(
+    calls: list[dict], expected: dict
+) -> None:
+    block = metric("mom", [], calls, 1)["continuity"]
+    assert {key: block[key] for key in expected} == expected
+
+
+def _routed_run(routes: dict[str, list[str]]) -> dict:
+    calls = [
+        _request(task, model) for task, models in routes.items() for model in models
+    ]
+    results = [
+        {"case_id": "task-1", "status": "completed", "correct": True},
+        {"case_id": "task-2", "status": "completed", "correct": False},
+    ]
+    return metric("mom", results, calls, 2, planned_case_ids=["task-1", "task-2"])
+
+
+def test_continuity_separates_steady_and_switching_runs_with_equal_accuracy() -> None:
+    steady = _routed_run({"task-1": ["big", "big"], "task-2": ["small", "small"]})
+    switching = _routed_run({"task-1": ["big", "small"], "task-2": ["small", "big"]})
+    mixed = _routed_run({"task-1": ["big", "small"], "task-2": ["small", "small"]})
+    assert steady["accuracy"] == switching["accuracy"] == mixed["accuracy"] == 0.5
+    assert steady["selected_models"] == switching["selected_models"]
+    assert steady["decisions"] == switching["decisions"]
+    unchanged = {
+        "session_mode": "stateless",
+        "unknown_model_requests": 0,
+        "multi_inference_tasks": 0,
+    }
+    assert steady["continuity"] == {
+        "multi_request_tasks": 2,
+        "switched_tasks": 0,
+        "switched_accuracy": None,
+        "unswitched_tasks": 2,
+        "unswitched_accuracy": 0.5,
+        "model_switches": 0,
+        "mean_switches_per_task": 0.0,
+        "max_switches_per_task": 0,
+        "decision_changed_tasks": 0,
+        **unchanged,
+    }
+    assert switching["continuity"] == {
+        "multi_request_tasks": 2,
+        "switched_tasks": 2,
+        "switched_accuracy": 0.5,
+        "unswitched_tasks": 0,
+        "unswitched_accuracy": None,
+        "model_switches": 2,
+        "mean_switches_per_task": 1.0,
+        "max_switches_per_task": 1,
+        "decision_changed_tasks": 2,
+        **unchanged,
+    }
+    assert mixed["continuity"]["switched_accuracy"] == 1.0
+    assert mixed["continuity"]["unswitched_accuracy"] == 0.0
+
+
+def test_report_continuity_follows_stored_call_order(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    document = _manifest()
+    document["benchmark_options"] = {}
+    document["targets"][0].update(
+        id="balance",
+        kind="mom",
+        model="balance",
+        config_hash="frozen",
+        max_inference_calls=1,
+    )
+    run, _ = store.create(plan(document))
+    store.result(
+        run["id"], "one", "balance", "completed", {"correct": True, "score": 1}
+    )
+    for role, model in (
+        ("subject", "a"),
+        ("judge", "flash"),
+        ("subject", "b"),
+        ("subject", "b"),
+    ):
+        call = store.start_call(run["id"], "one", "balance", role, {"model": "balance"})
+        store.finish_call(
+            call,
+            "completed",
+            {"selected_model": model, "decision": model, "inference_call_count": 1},
+        )
+    report = make_report(store, run["id"])
+    target = report["summary"]["targets"][0]["continuity"]
+    assert report["benchmarks"][0]["continuity"] == target
+    assert (target["switched_tasks"], target["model_switches"]) == (1, 1)
+    assert (target["switched_accuracy"], target["decision_changed_tasks"]) == (1.0, 1)
 
 
 @pytest.mark.parametrize("change", ["prices", "limits", "native-profile", "judge"])
@@ -673,7 +1014,7 @@ def test_full_timeout_matrix_remains_comparable_without_retry_or_evidence_edits(
     assert result["baseline_selected_target_id"] == "qwen"
     assert result["comparisons"][0]["paired_cases"] == 14
     assert result["comparisons"][0]["quality_delta"] == 0
-    assert result["comparisons"][0]["cost_saving_percent"] == pytest.approx(50)
+    assert result["comparisons"][0]["subject_cost_saving_percent"] == pytest.approx(50)
     assert run_options(store, "comparison")["baselines"][0]["run_id"] == baseline["id"]
     assert (
         run_options(store, "comparison", baseline["id"])["options"][0]["run_id"]
@@ -710,7 +1051,7 @@ def test_failed_best_or_quality_tie_keeps_unknown_cost_and_suppresses_savings(
     original = list(store.db.iterdump())
     result = compare(store, baseline, candidate)
     assert not result["baseline_cost_comparison_eligible"]
-    assert result["comparisons"][0]["cost_saving_percent"] is None
+    assert result["comparisons"][0]["subject_cost_saving_percent"] is None
     assert result["comparisons"][0]["cache_neutral_cost_saving_percent"] is None
     assert {r["id"] for r in result["baseline_targets"]} == {"known", "unknown"}
     assert list(store.db.iterdump()) == original
@@ -806,9 +1147,28 @@ def test_cell_without_complete_billing_never_sums_remaining_cost_as_total(
     assert metric["cost_usd"] is None
     assert metric["total_spend_usd"] is None
     assert metric["cost_complete"] is False
-    assert result["comparisons"][0]["cost_saving_percent"] is None
+    assert result["comparisons"][0]["subject_cost_saving_percent"] is None
     assert make_report(store, baseline)["summary"]["total_spend_usd"] is None
     assert list(store.db.iterdump()) == original
+
+
+def test_report_requires_receipts_for_actual_planned_cases_not_just_equal_counts(
+    tmp_path,
+):
+    store = Store(tmp_path)
+    run_id = _record(store, _manifest())
+    # An incomplete result set must not let an unrelated receipt stand in for
+    # a missing planned case merely because the number of receipts matches.
+    store.db.execute("DELETE FROM results WHERE run_id=?", (run_id,))
+    store.db.execute("UPDATE calls SET case_id='unplanned' WHERE run_id=?", (run_id,))
+    store.db.commit()
+    report = make_report(store, run_id)
+    target = report["summary"]["targets"][0]
+    assert target["total"] == target["pending"] == 1
+    assert target["cost_complete"] is False
+    assert target["cost_usd"] is None
+    assert target["total_spend_usd"] is None
+    assert report["summary"]["total_spend_usd"] is None
 
 
 def test_mixed_baseline_still_requires_outcomes_for_every_planned_target(

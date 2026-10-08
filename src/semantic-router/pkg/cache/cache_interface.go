@@ -30,13 +30,14 @@ type CacheEntry struct {
 // the matched score; a below-threshold miss may include its rejected candidate's
 // score. Errors carry no score.
 type LookupResult struct {
-	ResponseBody []byte
-	Found        bool
-	Similarity   float32
-	StoredAt     time.Time
-	ExpiresAt    time.Time
-	Age          time.Duration
-	AgeKnown     bool
+	ResponseBody  []byte
+	Found         bool
+	Similarity    float32
+	StoredAt      time.Time
+	ExpiresAt     time.Time
+	Age           time.Duration
+	AgeKnown      bool
+	NegationGuard NegationGuardOutcome // semantic hits only
 }
 
 // lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.
@@ -246,9 +247,6 @@ type CacheConfig struct {
 	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
 
 	// EmbeddingModel specifies which embedding model to use
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
+	// Options: "mmbert" (default), "qwen3", "multimodal"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
-
-	// PolarityGuard configures the optional NLI polarity tier of the in-memory backend (#2751)
-	PolarityGuard PolarityGuardOptions `yaml:"polarity_guard,omitempty"`
 }

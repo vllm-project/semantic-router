@@ -3,7 +3,7 @@ set -e
 
 IMAGE="ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 ROUTER_IMAGE="${IMAGE}"
-ENVOY_IMAGE="envoyproxy/envoy:v1.34-latest"
+ENVOY_IMAGE="envoyproxy/envoy:v1.35.3"
 DASHBOARD_IMAGE="ghcr.io/vllm-project/semantic-router/dashboard:latest"
 RUNTIME_CONTAINERS=(
   vllm-sr-router-container
@@ -43,7 +43,7 @@ echo "  Building from: $(pwd)/../.."
 echo "  Note: Use 'make docker-buildx' for multi-platform builds"
 echo ""
 cd ../..
-docker build -t "${IMAGE}" -f src/vllm-sr/Dockerfile .
+docker build -t "${IMAGE}" -f tools/docker/Dockerfile.extproc --target vllm-sr .
 docker image inspect "${ENVOY_IMAGE}" >/dev/null 2>&1 || docker pull "${ENVOY_IMAGE}"
 docker build -t "${DASHBOARD_IMAGE}" -f dashboard/backend/Dockerfile .
 cd src/vllm-sr

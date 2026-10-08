@@ -1,28 +1,37 @@
 #!/usr/bin/env python3
-"""Execute the published-model contract and reject silent skips or empty selection."""
+"""Run the published-model contract through the model runtime; reject skips and empty selection.
+
+Every listed Go test serves its Vela 1.0 package through a managed model
+runtime (``servingtest.Managed``) and reads the package from an environment
+variable. This runner provisions the runtime's pinned packages as plain
+directories, points those variables at them, and requires every listed test to
+pass: a skip, a failure or a missing test fails the contract.
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-FAMILIES = (
-    "Domain",
-    "Guard",
-    "PII",
-    "FactCheck",
-    "Feedback",
-    "Modality",
-    "Safety",
-    "Hazard",
-    "Embedding",
-    "Reranker",
-)
+ROUTER = ROOT / "src/semantic-router"
+# Environment variable -> the runtime's built-in package it names.
+PACKAGES = {
+    "VLLM_SR_DOMAIN_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+    "VLLM_SR_PII_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+    "VLLM_SR_JAILBREAK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+    "VLLM_SR_FACTCHECK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+    "VLLM_SR_FEEDBACK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+    "VLLM_SR_MMBERT_TEST_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+}
+# Router consumers read their label mappings from the package directory; the
+# runtime's pinned file list leaves them out.
+ROUTER_FILES = ["*_mapping.json"]
 CLASSIFIER_TESTS = (
     "TestJailbreakDistributionRealModel",
     "TestJailbreakRiskRealModelContract",
@@ -34,16 +43,64 @@ CLASSIFIER_TESTS = (
     "TestLocalClassifierMaintainedCPU",
     "TestUnifiedClassifierPublishedModels",
 )
-CANDLE_CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
-MULTIMODAL_BINDING_TESTS = (
-    "TestMultiModalEmbeddingInit",
-    "TestMultiModalEncodeText",
-    "TestMultiModalInputValidation",
+CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
+# The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
+OMNI_TESTS = {
+    "classification": (
+        "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
+        "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
+    ),
+    "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
+}
+SELECTIONS = (
+    ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
+    ("./pkg/cache", CACHE_TESTS, "cache.jsonl"),
+    *(
+        ("./pkg/" + package, names, "omni-" + package + ".jsonl")
+        for package, names in OMNI_TESTS.items()
+    ),
 )
-MULTIMODAL_CLASSIFIER_TESTS = (
-    "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-    "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-)
+
+
+def required_inventory() -> set[tuple[str, str]]:
+    """The receipt cannot shorten the checked-in mandatory case inventory."""
+    return {(package, name) for package, names, _ in SELECTIONS for name in names}
+
+
+def provision(models_dir: Path) -> dict[str, dict]:
+    """Copy each pinned package into ``models_dir`` as plain files (the runtime refuses links)."""
+    from vllm_srun.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+        fetch,
+        resolve,
+    )
+
+    cache = models_dir / ".runtime-cache"
+    models = {}
+    for env, repo in PACKAGES.items():
+        target = models_dir / repo.split("/", 1)[1]
+        ref = fetch(resolve(repo, cache_dir=cache), ROUTER_FILES, cache_dir=cache)
+        if not _complete(target, ref):
+            shutil.rmtree(target, ignore_errors=True)
+            shutil.copytree(ref.root, target, symlinks=False)
+            (target / ".complete").write_text(ref.revision + "\n")
+        models[env] = {
+            "env": env,
+            "repo_id": repo,
+            "revision": ref.revision,
+            "path": str(target),
+        }
+    return models
+
+
+def _complete(target: Path, ref) -> bool:
+    marker = target / ".complete"
+    if not marker.is_file() or marker.read_text().strip() != ref.revision:
+        return False
+    return all(
+        (target / path.relative_to(ref.root)).is_file()
+        for path in ref.root.rglob("*")
+        if path.is_file()
+    )
 
 
 def validate_results(events: list[dict], expected: set[str]) -> dict:
@@ -68,15 +125,7 @@ def validate_results(events: list[dict], expected: set[str]) -> dict:
     }
 
 
-def run_suite(
-    package: str,
-    names: tuple[str, ...],
-    expected: set[str],
-    env: dict,
-    output: Path,
-    *,
-    cwd: Path,
-) -> dict:
+def run_suite(package: str, names: tuple[str, ...], env: dict, output: Path) -> dict:
     args = [
         "go",
         "test",
@@ -84,8 +133,6 @@ def run_suite(
         "-count=1",
         "-timeout=45m",
         "-p=1",
-        "-ldflags=-X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider="
-        + env["VLLM_SR_MODEL_TEST_PROVIDER"],
         "-run",
         "^(" + "|".join(names) + ")$",
         package,
@@ -94,7 +141,7 @@ def run_suite(
     with output.open("w") as log:
         process = subprocess.Popen(
             args,
-            cwd=cwd,
+            cwd=ROUTER,
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -113,115 +160,43 @@ def run_suite(
             if event.get("Output"):
                 print(event["Output"], end="", flush=True)
         code = process.wait()
-    result = validate_results(events, expected)
-    result.update(package=package, exit_code=code, expected=sorted(expected))
+    result = validate_results(events, set(names))
+    result.update(package=package, exit_code=code, expected=sorted(names))
     result["success"] = result["success"] and code == 0
     return result
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--models-dir", type=Path, required=True)
+    parser.add_argument(
+        "--omni", type=Path, required=True, help="the pinned Vela Omni Nano snapshot"
+    )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--suite", choices=("runtime", "multimodal"), default="runtime")
-    # Adding a matrix entry cannot qualify a GPU through the CPU-only contract.
-    parser.add_argument("--device", choices=("cpu",), default="cpu")
     args = parser.parse_args()
-    manifest = json.loads(args.manifest.read_text())
-    provider = manifest["provider"]
-    providers = {"candle", "ort"} if args.suite == "runtime" else {"candle"}
-    if provider not in providers:
-        raise ValueError(f"unsupported runtime {provider!r} for {args.suite} suite")
-    families = FAMILIES if args.suite == "runtime" else ("Multimodal",)
-    models = manifest["models"]
-    if len(models) != len(families) or {m["name"] for m in models} != set(families):
-        raise ValueError(f"{args.suite} manifest must cover exactly {families}")
-    if args.suite == "multimodal" and (
-        models[0].get("env") != "MULTIMODAL_MODEL_PATH" or not models[0].get("path")
-    ):
-        raise ValueError(
-            "multimodal manifest requires an explicit MULTIMODAL_MODEL_PATH"
-        )
+    args.output.mkdir(parents=True, exist_ok=True)
+    models = provision(args.models_dir.resolve())
     env = {
         **os.environ,
         "VLLM_SR_REQUIRE_MODEL_TESTS": "1",
-        "VLLM_SR_MODEL_TEST_PROVIDER": provider,
-        "CGO_ENABLED": "1",
+        "REQUIRE_OMNI_TESTS": "1",
+        "VELA_OMNI_ARTIFACT": str(args.omni.resolve()),
+        **{env: model["path"] for env, model in models.items()},
     }
-    for model in manifest["models"]:
-        env[model["env"]] = model["path"]
-        if model["name"] == "Domain":
-            env["CANDLE_GENERIC_CLASSIFIER_MODEL"] = model["path"]
-        if model["name"] == "Embedding" and provider == "candle":
-            env["VLLM_SR_MMBERT_TEST_MODEL"] = model["path"]
-    args.output.mkdir(parents=True, exist_ok=True)
-    suites = []
-    selections = (
-        (
-            ROOT / "src/semantic-router",
-            "./pkg/modelruntime/native",
-            ("TestPublishedVelaModels",),
-            {"TestPublishedVelaModels/" + name for name in FAMILIES},
-            "native.jsonl",
-        ),
-        (
-            ROOT / "src/semantic-router",
-            "./pkg/classification",
-            CLASSIFIER_TESTS,
-            set(CLASSIFIER_TESTS),
-            "classification.jsonl",
-        ),
-    )
-    if args.suite == "multimodal":
-        selections = (
-            (
-                ROOT / "candle-binding",
-                ".",
-                MULTIMODAL_BINDING_TESTS,
-                set(MULTIMODAL_BINDING_TESTS),
-                "binding.jsonl",
-            ),
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/classification",
-                MULTIMODAL_CLASSIFIER_TESTS,
-                set(MULTIMODAL_CLASSIFIER_TESTS),
-                "classification.jsonl",
-            ),
-        )
-    elif provider == "candle":
-        selections += (
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/cache",
-                CANDLE_CACHE_TESTS,
-                set(CANDLE_CACHE_TESTS),
-                "cache.jsonl",
-            ),
-        )
-    elif provider == "ort":
-        selections += (
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/modelruntime",
-                ("TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",),
-                {"TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride"},
-                "default-execution.jsonl",
-            ),
-        )
-    for cwd, package, names, expected, filename in selections:
-        suites.append(
-            run_suite(package, names, expected, env, args.output / filename, cwd=cwd)
-        )
+    suites = [
+        run_suite(package, names, env, args.output / filename)
+        for package, names, filename in SELECTIONS
+    ]
     report = {
         "source_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
-        "environment": "native",
-        "suite": args.suite,
-        "provider": provider,
-        "device": args.device,
-        "models": manifest["models"],
+        "runtime": "model-runtime",
+        "device": "cpu",
+        "models": [
+            *models.values(),
+            {"env": "VELA_OMNI_ARTIFACT", "path": str(args.omni.resolve())},
+        ],
         "suites": suites,
         "success": all(s["success"] for s in suites),
     }

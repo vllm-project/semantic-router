@@ -6,6 +6,7 @@ import json
 import random
 
 from .contracts import digest
+from .task_identity import native_task_identity
 
 
 def _case(benchmark, identity, prompt, answer=None, metadata=None):
@@ -29,12 +30,16 @@ def _mcq(prompt, options):
     )
 
 
-def normalize_records(benchmark, rows, seed):
+def normalize_records(benchmark, rows, seed, *, task_source=None):
     result = []
     for index, row in enumerate(rows):
         # A normalized import is useful for offline preparation, but is never
         # accepted under another benchmark identity.
         if row.get("benchmark") == benchmark and "messages" in row:
+            if task_source is not None:
+                raise ValueError(
+                    "Normalized imports have no verified native task identity"
+                )
             result.append(row)
             continue
         identity = str(
@@ -181,4 +186,8 @@ def normalize_records(benchmark, rows, seed):
             )
         else:
             raise ValueError("Unsupported source benchmark")
+        if task_source is not None:
+            result[-1]["metadata"]["task_identity"] = native_task_identity(
+                benchmark, row, task_source
+            )
     return result

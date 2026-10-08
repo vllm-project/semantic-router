@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .contracts import canonical, planned_cells
 from .experiments import bind_created_run, run_roles
+from .preparation import summary as preparation_summary
 
 MAX_PAGE_SIZE = 500
 
@@ -66,6 +67,8 @@ def run_summary(run):
             )
             if key in dataset
         }
+        if dataset.get("preparation"):
+            manifest["dataset"]["preparation_summary"] = preparation_summary(dataset)
     if recovery := source.get("recovery"):
         manifest["recovery"] = {
             key: recovery[key]

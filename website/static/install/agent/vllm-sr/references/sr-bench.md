@@ -8,7 +8,11 @@ for adapters, dataset preparation, manifests and accounting details.
 ## Choose the scope
 
 **Profile controls the questions:** Smoke checks the pipeline cheaply; Quick/dev
-supports tuning; Standard is a disjoint holdout for a frozen candidate. Select
+supports tuning; reserve Standard for a frozen candidate. Reconcile prior case IDs
+with source provenance before calling it an unseen holdout; a profile name or
+new seed does not remove prior exposure. For repeat holdouts, discover
+`benchmark dataset exclusions --help` and the product guide; disclose unresolved
+history and freeze retest roles explicitly. Select
 benchmarks relevant to the capability change and inspect the planned case count
 and limits. A slice is not a full benchmark score. Whole agent tasks may consume
 many generation, simulator and judge calls.
@@ -103,9 +107,10 @@ latency and elapsed time. Unknown usage is not zero. `capability_only` permits
 unpriced evaluation but cannot support savings claims. With cache effects, report
 observed cost and the separate cache-neutral estimate; neither is a GPU invoice.
 
-Savings are `100 × (1 − candidate subject cost / baseline subject cost)`, with
-complete compatible accounting. The baseline is the best observed single over
-the same aggregate, not a per-question oracle; quality ties use the lowest known
-cost. Show signed quality/cost changes, uncertainty and benchmark coverage.
+Total savings include subject and judge/simulator calls; subject savings are
+reported separately. Compare `100 × (1 − candidate cost / baseline cost)` using
+the same declared scope and complete accounting. The baseline is the best
+observed single over the same aggregate, not a per-question oracle; quality ties
+use the lowest known total cost. Show signed changes, uncertainty and coverage.
 A small dev win or zero observed difference does not establish equivalence.
 Keep essential limitations with the result and detailed evidence accessible.

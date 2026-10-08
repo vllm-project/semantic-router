@@ -70,6 +70,20 @@ Open **Insights** in the Dashboard, or use the
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
+Every record carries `route_diagnostics.decision_ranking`: the strategy
+selection ran under, the tier the winning decision came from, whether that pool
+ranked by confidence and which decision stopped it, and the key that separated
+the winner from the decision behind it. A replayed request therefore explains
+its route the same way the eval API does.
+
+Detail responses can also include `route_diagnostics.prepared_dispatch`, a
+versioned receipt for the exact primary provider-bound body returned to Envoy
+after protocol encoding and provider adaptation. It records the wire format,
+SHA-256 digest, and encoded byte length without retaining another copy of the
+body. Internal Looper calls and response-time fallback attempts are not part of
+this single-dispatch receipt. Because the digest is content-derived, responses
+without `replay.detail` omit the field.
+
 Confidence Looper requests also include `route_diagnostics.looper`: bounded
 attempts, token and cost accounting, timings, disposition reasons, and the final
 attempt. This diagnostic object excludes prompts, tool arguments, credentials,

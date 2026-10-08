@@ -11,7 +11,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
@@ -27,6 +28,7 @@ type VectorStoreRuntime struct {
 	Embedder       vectorstore.Embedder
 	registryCloser io.Closer
 	embeddings     *embedding.Set
+	lease          *modelservice.Lease
 	// drainTimeout bounds how long Shutdown waits for in-flight ingestion jobs
 	// to drain before cancelling them. Sourced from
 	// vector_store.ingestion_drain_timeout_seconds.
@@ -38,7 +40,10 @@ type VectorStoreRuntime struct {
 // unbounded.
 const defaultDrainTimeout = 25 * time.Second
 
-func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*VectorStoreRuntime, error) {
+// NewVectorStoreRuntime builds the vector store. Its embeddings come from the
+// model runtime processes of runtimes (nil: only an OpenAI-compatible endpoint
+// can serve them); the vector store holds its own lease on them until Shutdown.
+func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Manager, pool *binding.Pool) (*VectorStoreRuntime, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("vector store runtime requires config")
 	}
@@ -47,11 +52,6 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 	}
 	cfg.VectorStore.ApplyDefaults()
 	success := false
-
-	var pool *binding.Pool
-	if len(pools) > 0 {
-		pool = pools[0]
-	}
 	// Ingestion outlives individual request generations and owns independent
 	// embedding references until all its workers have stopped.
 	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
@@ -64,11 +64,25 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 	// this service's preparation scope.
 	embeddingConfig.ExternalModels = cfg.ExternalModels
 	embeddingConfig.ModelAdmission = cfg.ModelAdmission
-	prepared, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), embeddingConfig, native.New(pool))
+	runtime := serving.New(nil, pool)
+	var lease *modelservice.Lease
+	if runtimes != nil {
+		var err error
+		if lease, err = runtimes.Acquire(embeddingConfig); err != nil {
+			return nil, fmt.Errorf("acquire vector store embedding runtime: %w", err)
+		}
+		runtime = serving.New(lease, pool)
+		defer func() {
+			if !success {
+				_ = lease.Close()
+			}
+		}()
+	}
+	prepared, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), embeddingConfig, runtime)
 	if err != nil {
 		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
 	}
-	embedder, err := prepared.Get(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension, 0)
+	embedder, err := prepareVectorStoreEmbedding(prepared, cfg.VectorStore)
 	if err != nil {
 		_ = prepared.Close()
 		return nil, err
@@ -78,12 +92,9 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 			_ = prepared.Close()
 		}
 	}()
-	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
-		ModelType: cfg.VectorStore.EmbeddingModel, Dimension: cfg.VectorStore.EmbeddingDimension,
-		InputPolicy: "vectorstore-chunk-content-and-query-v1",
-	})
-	if err != nil && (cfg.VectorStore.EmbeddingModel == "mmbert" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
-		return nil, fmt.Errorf("bind vector store embedding representation: %w", err)
+	identity, err := resolveVectorStoreEmbeddingIdentity(embedder, cfg.VectorStore)
+	if err != nil {
+		return nil, err
 	}
 
 	storeReg, fileReg, regCloser, err := buildMetadataRegistries(cfg)
@@ -137,8 +148,36 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 		Embedder:       embedder,
 		registryCloser: regCloser,
 		embeddings:     prepared,
+		lease:          lease,
 		drainTimeout:   time.Duration(cfg.VectorStore.IngestionDrainTimeoutSeconds) * time.Second,
 	}, nil
+}
+
+// Resolve output width before opening a backend or creating collection metadata.
+// Request a full provider first so an unchecked option view cannot masquerade
+// as support for a dimension that the model does not actually produce.
+func prepareVectorStoreEmbedding(prepared *embedding.Set, cfg *config.VectorStoreConfig) (embedding.Provider, error) {
+	provider, err := prepared.Get(cfg.EmbeddingModel, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	dimension, err := embedding.ResolveDimension(provider, cfg.EmbeddingDimension)
+	if err != nil {
+		return nil, fmt.Errorf("vector store output dimension: %w", err)
+	}
+	cfg.EmbeddingDimension = dimension
+	return embedding.WithOptions(provider, embedding.Options{Dimension: dimension}), nil
+}
+
+func resolveVectorStoreEmbeddingIdentity(embedder embedding.Provider, cfg *config.VectorStoreConfig) (embedding.ContentIdentity, error) {
+	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
+		ModelType: cfg.EmbeddingModel, Dimension: cfg.EmbeddingDimension,
+		InputPolicy: "vectorstore-chunk-content-and-query-v1",
+	})
+	if err != nil && !errors.Is(err, embedding.ErrIdentityUnsupported) {
+		return embedding.ContentIdentity{}, fmt.Errorf("bind vector store embedding representation: %w", err)
+	}
+	return identity, nil
 }
 
 func buildMetadataRegistries(cfg *config.RouterConfig) (vectorstore.StoreRegistry, vectorstore.FileRegistry, io.Closer, error) {
@@ -218,6 +257,7 @@ func (r *VectorStoreRuntime) ShutdownContext(ctx context.Context) error {
 	if r.embeddings != nil {
 		closeErr = errors.Join(closeErr, r.embeddings.Close())
 	}
+	closeErr = errors.Join(closeErr, r.lease.Close())
 	if r.registryCloser != nil {
 		if err := r.registryCloser.Close(); err != nil {
 			logging.Warnf("Failed to close metadata registry: %v", err)

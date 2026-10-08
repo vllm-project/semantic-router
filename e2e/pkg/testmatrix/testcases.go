@@ -21,8 +21,9 @@ var BaselineRouterContract = []string{
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
-	// NLI polarity tier of the semantic cache (issue #2751)
+	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
+	"exact-cache-multilingual-negation",
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
@@ -30,11 +31,14 @@ var BaselineRouterContract = []string{
 	"pii-long-text",
 	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
 	"security-long-text",
+	// A scanned score names the window it came from (issue #3939)
+	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
+	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
 	"rule-condition-logic",
 	"decision-fallback-behavior",
@@ -47,10 +51,16 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// A request the Router cannot route carries a stable reason code (issue #4653)
+	"routing-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
 	"plugin-short-circuit-no-dispatch",
+	// Streaming dispatch always requests the usage chunk, even for
+	// byte-replay-eligible requests, and the client only sees usage it asked
+	// for (issue #3182)
+	"streaming-usage-settlement",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
@@ -61,6 +71,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
+	"context-safety-overlap",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
@@ -68,6 +80,8 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
+	"dashboard-route-bound-authorization",
 	// Config endpoints
 	"dashboard-config-read",
 	"dashboard-deploy-preview",
@@ -75,23 +89,27 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// A semantically invalid deploy must leave the active config serving (issue #3233)
 	"dashboard-deploy-safe-failure",
+	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
+	"dashboard-deploy-rollback",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
 	"dashboard-restart-recovery",
 }
 
-// AnthropicShimContract is the test suite that exercises the Anthropic-
-// shaped backend (llama.cpp + anthropic-shim). These tests require the
-// anthropic-shim profile and will not run correctly against the baseline
+// ProviderProtocolsContract is the test suite that exercises the Anthropic-
+// shaped provider-mocker backend. These tests require the
+// provider-protocols profile and will not run correctly against the baseline
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
-var AnthropicShimContract = []string{
+var ProviderProtocolsContract = []string{
+	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
@@ -101,11 +119,17 @@ var AnthropicShimContract = []string{
 	"anthropic-response-api-streaming",
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
+	"protocol-codec-anthropic-response-diagnostics",
+	"protocol-codec-responses-verbosity-anthropic",
+	"protocol-codec-prompt-cache-key-anthropic",
+	"protocol-codec-anthropic-per-message-effort-backend",
+	"protocol-codec-zero-penalty-anthropic",
 	"protocol-codec-anthropic-backend-tool-lifecycle",
 	"protocol-codec-anthropic-backend-structured-output",
 	"protocol-codec-anthropic-backend-error-matrix",
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
+	"protocol-codec-anthropic-backend-agent-client-replay",
 }
 
 // Combine preserves order while removing duplicate testcase names.

@@ -5,7 +5,13 @@ import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
 import BenchSelect from './BenchSelect'
 import { benchApi } from './api'
-import { benchmarkTitle, friendlyDatasetName, profileTitle } from './datasetPresentation'
+import {
+  benchmarkTitle,
+  datasetEvaluationTitle,
+  friendlyDatasetName,
+  profileTitle,
+} from './datasetPresentation'
+import DatasetExposure from './DatasetExposure'
 import { number } from './model'
 import type { Dataset, DatasetCase, DatasetCasePage, DatasetDetail } from './types'
 import shared from './SrBench.module.css'
@@ -45,6 +51,9 @@ export default function DatasetDetails({
   const name = friendlyDatasetName(
     dataset ?? { name: detail?.name, benchmarks: detail?.benchmarks.map((item) => item.id) },
   )
+  const preparation = detail ? detail.provenance.preparation : dataset?.preparation
+  const benchmarks = detail ? detail.benchmarks.map((item) => item.id) : dataset?.benchmarks
+  const evaluationTitle = datasetEvaluationTitle(preparation, benchmarks)
   return (
     <section className={styles.detail} aria-label="Dataset details">
       <button className={styles.back} onClick={onBack}>
@@ -60,7 +69,7 @@ export default function DatasetDetails({
           <p>
             {number(detail?.case_count ?? dataset?.case_count)} questions
             {detail && ` across ${number(detail.benchmarks.length)} benchmarks`}
-            {detail?.split === 'holdout' ? ' · Holdout set' : ''}
+            {evaluationTitle && ` · ${evaluationTitle}`}
           </p>
         </div>
         <button
@@ -72,6 +81,7 @@ export default function DatasetDetails({
           Evaluate dataset
         </button>
       </div>
+      <DatasetExposure preparation={preparation} benchmarks={benchmarks} />
       {error ? (
         <div className={shared.error} role="alert">
           <p>{error}</p>

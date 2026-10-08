@@ -50,7 +50,7 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
-      threshold: "0.7"
+      threshold: "0.75"
 
     # Tools auto-selection
     tools:

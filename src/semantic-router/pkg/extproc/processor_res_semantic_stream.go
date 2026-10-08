@@ -23,6 +23,7 @@ type semanticResponseStreamState struct {
 	responseID string
 	model      string
 	stop       llmprotocol.StopReason
+	stopSeq    string
 	usage      llmprotocol.Usage
 	items      map[int]*semanticStreamItem
 	order      []int
@@ -189,21 +190,19 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
-	var mutation protocolcodec.StreamEventMutation
+	mutation := clientStreamMutation(ctx, source)
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		streamContext.ResponseID = responseID
-		mutation = func(event *llmprotocol.Event) error {
-			event.ResponseID = responseID
-			return nil
-		}
 	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
-	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 && !streamUsageRequestedByClient(ctx) {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
+		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
+			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
+		)
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -266,6 +265,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				item.toolCall = &llmprotocol.ToolCall{}
 			}
 			if event.ToolCall != nil {
+				if event.ToolCall.Kind != "" {
+					item.toolCall.Kind = event.ToolCall.Kind
+				}
 				if event.ToolCall.ID != "" {
 					item.toolCall.ID = event.ToolCall.ID
 				}
@@ -283,6 +285,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
+			state.stopSeq = event.MatchedStopSequence
 		case llmprotocol.EventResponseFailed:
 			state.terminal = true
 			state.failed = event.Error
@@ -345,7 +348,8 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 	}
 	return &llmprotocol.Response{
 		Generation: 1, ID: state.responseID, CreatedAt: time.Now().UTC(),
-		Model: state.model, Output: output, StopReason: state.stop, Usage: state.usage,
+		Model: state.model, Output: output, StopReason: state.stop,
+		MatchedStopSequence: state.stopSeq, Usage: state.usage,
 	}, nil
 }
 
@@ -370,10 +374,12 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 		}
 	}
-	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	inflight.End(ctx.InflightModel, ctx.InflightToken)
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
+	// Decoded stream events carry the client-facing model, not the provider's.
+	observeUpstreamResponse(ctx, "", usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
@@ -385,6 +391,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return
 	}
+	recordPrimaryOutputDigest(ctx, semanticResponse)
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {

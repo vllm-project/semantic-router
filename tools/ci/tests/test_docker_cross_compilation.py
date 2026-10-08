@@ -1,81 +1,75 @@
 from __future__ import annotations
 
-import json
 import os
 import re
-import shlex
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CPU_DOCKERFILES = (
-    "tools/docker/Dockerfile.extproc",
-    "src/vllm-sr/Dockerfile",
-)
-
 
 sys.path.insert(0, str(REPO_ROOT / "tools/ci"))
-from image_artifacts import DEFINITIONS  # noqa: E402
+from image_artifacts import DEFINITIONS, ROUTER_BUILDS, ROUTER_DOCKERFILE  # noqa: E402
+
+
+def router_build_command() -> str:
+    """The router stage's final RUN command, with line continuations joined."""
+    text = (REPO_ROOT / ROUTER_DOCKERFILE).read_text().replace("\\\n", " ")
+    stage = text.split(" AS router-build", 1)[1].split("\nFROM ", 1)[0]
+    runs = re.findall(r"(?m)^RUN (.+)$", stage)
+    return next(run for run in reversed(runs) if "go build" in run)
 
 
 class DockerCrossCompilationTests(unittest.TestCase):
-    def test_arm64_openssl_override_does_not_reach_host_build_dependencies(
-        self,
-    ) -> None:
-        for dockerfile in CPU_DOCKERFILES:
-            text = (REPO_ROOT / dockerfile).read_text().replace("\\\n", " ")
-            builds = list(
-                re.finditer(r"((?:[A-Z0-9_]+=[^\s;]+\s+)*)cargo build([^;&]+)", text)
+    def test_router_cross_compiles_arm64_with_only_the_target_c_linker(self) -> None:
+        command = router_build_command()
+        with tempfile.TemporaryDirectory() as tmp:
+            stubs = Path(tmp)
+            (stubs / "dpkg").write_text("#!/bin/sh\necho amd64\n")
+            (stubs / "go").write_text(
+                '#!/bin/sh\necho "CC=${CC:-} GOARCH=$GOARCH CGO_ENABLED=$CGO_ENABLED"\n'
             )
-            arm64_builds = [
-                build
-                for build in builds
-                if "--target aarch64-unknown-linux-gnu" in build.group(2)
-                and "OPENSSL" in build.group(1)
-            ]
-            with self.subTest(dockerfile=dockerfile):
-                self.assertTrue(arm64_builds)
-                self.assertNotRegex(
-                    text, r"(?m)^ENV OPENSSL_(DIR|LIB_DIR|INCLUDE_DIR)="
-                )
-            for build in arm64_builds:
-                with self.subTest(dockerfile=dockerfile, command=build.group(0)):
-                    probe = "import json, os; print(json.dumps({k: v for k, v in os.environ.items() if 'OPENSSL' in k}))"
+            for stub in stubs.iterdir():
+                stub.chmod(0o755)
+            for arch, linker in (("arm64", "aarch64-linux-gnu-gcc"), ("amd64", "")):
+                with self.subTest(arch=arch):
                     environment = {
-                        key: value
-                        for key, value in os.environ.items()
-                        if "OPENSSL" not in key
-                    }
+                        key: value for key, value in os.environ.items() if key != "CC"
+                    } | {"PATH": f"{stubs}:{os.environ['PATH']}", "TARGETARCH": arch}
                     result = subprocess.run(
-                        [
-                            "bash",
-                            "-e",
-                            "-c",
-                            f"{build.group(1)}{shlex.quote(sys.executable)} -c {shlex.quote(probe)}",
-                        ],
+                        ["bash", "-e", "-c", command],
                         env=environment,
                         check=True,
                         capture_output=True,
                         text=True,
                     )
-                    overrides = json.loads(result.stdout)
-                    self.assertNotIn("OPENSSL_LIB_DIR", overrides)
                     self.assertEqual(
-                        overrides["AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR"],
-                        "/usr/lib/aarch64-linux-gnu",
+                        result.stdout.strip(),
+                        f"CC={linker} GOARCH={arch} CGO_ENABLED=1",
                     )
 
-    def test_cpu_router_validation_covers_published_architectures(self) -> None:
-        for image in ("extproc", "vllm-sr"):
+    def test_router_images_share_one_dockerfile_and_publish_their_platforms(
+        self,
+    ) -> None:
+        for image, (target, accelerator) in ROUTER_BUILDS.items():
             with self.subTest(image=image):
-                published = DEFINITIONS[image][2]
-                self.assertEqual(published, ["linux/amd64", "linux/arm64"])
+                _, dockerfile, platforms = DEFINITIONS[image]
+                self.assertEqual(dockerfile, ROUTER_DOCKERFILE)
+                self.assertEqual(target, "vllm-sr")
+                expected = (
+                    ["linux/amd64", "linux/arm64"]
+                    if accelerator == "cpu"
+                    else ["linux/amd64"]
+                )
+                self.assertEqual(platforms, expected)
         builder = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text()
         publisher = (REPO_ROOT / ".github/workflows/docker-publish.yml").read_text()
         self.assertIn("image_artifacts.py", builder)
         self.assertIn("--multiarch", builder)
+        self.assertIn("steps.definition.outputs.target", builder)
+        self.assertIn("steps.definition.outputs.accelerator", builder)
         self.assertIn("image_artifacts.py promote", publisher)
         self.assertNotIn("docker/build-push-action", publisher)
 

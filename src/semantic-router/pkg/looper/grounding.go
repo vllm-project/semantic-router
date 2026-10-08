@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/openai/openai-go"
 
@@ -17,31 +15,28 @@ import (
 
 // Grounding-aware fusion scores each panel response for faithfulness before the
 // judge synthesizes, then ranks/filters the panel so the judge works from the
-// most-grounded responses. It makes NO extra LLM calls — it uses local encoder
-// models (a hallucination/groundedness detector and an NLI entailment model).
+// most-grounded responses. It makes NO extra LLM calls — it uses the router's
+// hallucination (groundedness) detector.
 //
 // Reference selection (config.FusionGroundingReference*):
-//   - context: score answers against provided RAG/tool context via the detector.
-//   - panel:   score answers against each other via cross-model NLI (the panel
-//     acts as its own mutual reference).
+//   - context: score answers against provided RAG/tool context.
+//   - panel:   score answers against each other: every peer answer is the
+//     context the detector reads a response against (the panel acts as its
+//     own mutual reference).
 //   - hybrid:  use context when the request carries it, otherwise the panel.
 //
 // Honest framing: grounding measures faithfulness/consistency, not truth. With no
 // authoritative source we can only down-weight the least-supported responses, not
 // certify correctness.
 
-// NLIClassifyFunc returns the entailment and contradiction probabilities for the
-// hypothesis given the premise.
-type NLIClassifyFunc func(ctx context.Context, premise, hypothesis string) (entailment, contradiction float32, err error)
-
 // HallucinationDetectFunc returns the unsupported spans of answer relative to
-// context, plus the detector's confidence.
-type HallucinationDetectFunc func(ctx context.Context, contextText, question, answer string) (unsupportedSpans []string, confidence float32, err error)
+// context, plus the detector's score: its highest hallucinated-token
+// probability, or 0 when it reports none.
+type HallucinationDetectFunc func(ctx context.Context, contextText, question, answer string) (unsupportedSpans []string, score float32, err error)
 
 // GroundingBackends belongs to the request's prepared recipe and generation.
 // Its model handles remain protected by the router's existing generation lease.
 type GroundingBackends struct {
-	NLI    NLIClassifyFunc
 	Detect HallucinationDetectFunc
 }
 
@@ -88,10 +83,10 @@ func (l *FusionLooper) applyGrounding(
 	useContext := resolveGroundingReference(cfg.GroundingReference, contextText)
 
 	if useContext {
-		scores, err = scoreByContext(ctx, contextText, question, panel, cfg, backends.Detect)
+		scores, err = scoreByContext(ctx, contextText, question, panel, backends.Detect)
 		referenceMode = config.FusionGroundingReferenceContext
 	} else {
-		scores, err = scoreByPanel(ctx, panel, cfg, backends.NLI)
+		scores, err = scoreByPanel(ctx, question, panel, cfg, backends.Detect)
 		referenceMode = config.FusionGroundingReferencePanel
 	}
 	if err != nil {
@@ -136,141 +131,26 @@ func resolveGroundingReference(mode, contextText string) (useContext bool) {
 	}
 }
 
-// NLI input budgets. The underlying NLI encoder truncates its (premise [SEP]
-// hypothesis) input to ~512 tokens. Panel answers routinely run to thousands of
-// tokens, so a single document-vs-document call truncates the hypothesis away
-// entirely and the model — seeing only half of one answer — predicts "neutral"
-// for everything. To keep the hypothesis intact we score it sentence-by-sentence
-// against bounded windows of the premise (SummaC/AlignScore-style), taking each
-// hypothesis sentence's best-supporting premise window. Budgets are in runes
-// (~4 chars/token, kept well under the 512-token cap with room for both sides).
-const (
-	nliSingleCallBudget    = 1600 // premise+hypothesis below this -> one fast call
-	nliPremiseWindowChars  = 1200
-	nliHypSentenceMaxChars = 600
-	nliMaxHypSentences     = 16 // caps per-pair NLI calls (= sentences x windows)
-	nliMaxPremiseWindows   = 2
-)
-
-// scoreByPanel scores each response by how well its peers entail (vs contradict)
-// it — the panel as its own mutual reference. It routes through the shared
-// peer-consistency verifier contract (issue #2857); the scoring math is
-// unchanged.
-func scoreByPanel(ctx context.Context, panel []*ModelResponse, cfg fusionExecutionConfig, nli NLIClassifyFunc) ([]groundingScore, error) {
-	if nli == nil {
-		return nil, fmt.Errorf("nli backend not configured")
-	}
-	penalty := cfg.GroundingNLIContradictionPenalty
-	if penalty <= 0 {
-		penalty = 1.0
+// scoreByPanel scores each response by how well its peers support it — the
+// panel as its own mutual reference. It routes through the shared
+// peer-consistency verifier contract (issue #2857).
+func scoreByPanel(ctx context.Context, question string, panel []*ModelResponse, cfg fusionExecutionConfig, detect HallucinationDetectFunc) ([]groundingScore, error) {
+	if detect == nil {
+		return nil, fmt.Errorf("hallucination detector backend not configured")
 	}
 	candidates, idx := groundingVerifierCandidates(panel)
-	res, err := NewPeerConsistencyVerifier(nli, penalty).
-		Verify(ctx, &VerifierRequest{Candidates: candidates})
+	res, err := NewPeerConsistencyVerifier(detect, cfg.GroundingContradictionPenalty).
+		Verify(ctx, &VerifierRequest{Task: question, Candidates: candidates})
 	if err != nil {
 		return nil, err
 	}
 	return groundingScoresFromVerifier(res, panel, idx), nil
 }
 
-// nliPairSignalWith is nliPairSignal against an explicit NLI backend so
-// verifier adapters can score without touching the process-wide global. Short
-// inputs use a single NLI call (preserving the cheap path); long inputs are
-// chunked so the hypothesis is never truncated away: each hypothesis sentence
-// is scored against every bounded premise window and credited with its
-// best-supporting window, then averaged over sentences.
-func nliPairSignalWith(ctx context.Context, nli NLIClassifyFunc, premise, hypothesis string) (entail, contradict float64, err error) {
-	if nli == nil {
-		return 0, 0, fmt.Errorf("nli backend not configured")
-	}
-	if runeLen(premise)+runeLen(hypothesis) <= nliSingleCallBudget {
-		e, c, err := nli(ctx, premise, hypothesis)
-		return float64(e), float64(c), err
-	}
-
-	sentences := splitSentencesCapped(hypothesis, nliHypSentenceMaxChars, nliMaxHypSentences)
-	windows := chunkTextCapped(premise, nliPremiseWindowChars, nliMaxPremiseWindows)
-	if len(sentences) == 0 || len(windows) == 0 {
-		// Nothing usable to chunk; fall back to a single (truncated) call.
-		e, c, err := nli(ctx, premise, hypothesis)
-		return float64(e), float64(c), err
-	}
-
-	var sumE, sumC float64
-	var n int
-	for _, s := range sentences {
-		bestSignal := math.Inf(-1)
-		var bestE, bestC float64
-		for _, w := range windows {
-			e, c, err := nli(ctx, w, s)
-			if err != nil {
-				return 0, 0, err
-			}
-			if signal := float64(e) - float64(c); signal > bestSignal {
-				bestSignal, bestE, bestC = signal, float64(e), float64(c)
-			}
-		}
-		sumE += bestE
-		sumC += bestC
-		n++
-	}
-	if n == 0 {
-		return 0, 0, nil
-	}
-	return sumE / float64(n), sumC / float64(n), nil
-}
-
-// splitSentencesCapped splits text on sentence terminators / newlines, drops
-// trivial fragments, hard-caps each sentence to maxChars (rune-safe) and limits
-// the count to maxCount.
-func splitSentencesCapped(text string, maxChars, maxCount int) []string {
-	fields := strings.FieldsFunc(text, func(r rune) bool {
-		return r == '.' || r == '!' || r == '?' || r == '\n'
-	})
-	out := make([]string, 0, len(fields))
-	for _, f := range fields {
-		f = strings.TrimSpace(f)
-		if runeLen(f) < 12 { // skip trivial fragments (headings, list bullets)
-			continue
-		}
-		out = append(out, truncateRunes(f, maxChars))
-		if len(out) >= maxCount {
-			break
-		}
-	}
-	return out
-}
-
-// chunkTextCapped splits text into at most maxWindows contiguous windows of
-// roughly maxChars runes each.
-func chunkTextCapped(text string, maxChars, maxWindows int) []string {
-	r := []rune(text)
-	out := make([]string, 0, maxWindows)
-	for start := 0; start < len(r) && len(out) < maxWindows; start += maxChars {
-		end := start + maxChars
-		if end > len(r) {
-			end = len(r)
-		}
-		if w := strings.TrimSpace(string(r[start:end])); w != "" {
-			out = append(out, w)
-		}
-	}
-	return out
-}
-
-func runeLen(s string) int { return utf8.RuneCountInString(s) }
-
-func truncateRunes(s string, max int) string {
-	if utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	return string([]rune(s)[:max])
-}
-
 // scoreByContext scores each response by its faithfulness to the provided context
 // (fewer unsupported spans => higher score). It routes through the shared
 // faithfulness verifier contract (issue #2857); scoring is unchanged.
-func scoreByContext(ctx context.Context, contextText, question string, panel []*ModelResponse, cfg fusionExecutionConfig, detect HallucinationDetectFunc) ([]groundingScore, error) {
+func scoreByContext(ctx context.Context, contextText, question string, panel []*ModelResponse, detect HallucinationDetectFunc) ([]groundingScore, error) {
 	if detect == nil {
 		return nil, fmt.Errorf("hallucination detector backend not configured")
 	}

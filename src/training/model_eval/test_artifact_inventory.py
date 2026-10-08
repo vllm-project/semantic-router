@@ -71,9 +71,7 @@ def test_served_artifacts_are_grouped_by_task(tmp_path):
     assert set(inventory) == {"jailbreak", "domain"}
     jailbreak = inventory["jailbreak"]
     assert jailbreak.artifact_name == "mmbert32k-jailbreak-detector-merged"
-    assert jailbreak.hf_repo == (
-        "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
-    )
+    assert jailbreak.hf_repo == "vllm-sr/mmbert32k-jailbreak-detector-merged"
     assert jailbreak.thresholds == (0.7,)
 
 
@@ -107,8 +105,8 @@ def test_two_sites_loading_different_artifacts_for_one_task_is_an_error(tmp_path
 def test_registry_drift_names_both_sides(tmp_path):
     inventory = served_artifacts(load_config(write_config(tmp_path, MINIMAL_CONFIG)))
     registry = {
-        "jailbreak": {"id": "llm-semantic-router/mmbert-jailbreak-detector-merged"},
-        "intent": {"id": "llm-semantic-router/mmbert32k-intent-classifier-merged"},
+        "jailbreak": {"id": "vllm-sr/mmbert-jailbreak-detector-merged"},
+        "intent": {"id": "vllm-sr/mmbert32k-intent-classifier-merged"},
     }
     findings = registry_drift(inventory, registry)
     assert len(findings) == 1
@@ -119,9 +117,9 @@ def test_registry_drift_names_both_sides(tmp_path):
 def test_registry_entry_nothing_serves_is_reported(tmp_path):
     inventory = served_artifacts(load_config(write_config(tmp_path, MINIMAL_CONFIG)))
     registry = {
-        "jailbreak": {"id": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"},
-        "intent": {"id": "llm-semantic-router/mmbert32k-intent-classifier-merged"},
-        "pii": {"id": "llm-semantic-router/mmbert-pii-detector-merged"},
+        "jailbreak": {"id": "vllm-sr/mmbert32k-jailbreak-detector-merged"},
+        "intent": {"id": "vllm-sr/mmbert32k-intent-classifier-merged"},
+        "pii": {"id": "vllm-sr/mmbert-pii-detector-merged"},
     }
     findings = registry_drift(inventory, registry)
     assert findings == [

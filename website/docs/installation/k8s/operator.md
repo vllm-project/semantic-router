@@ -23,7 +23,7 @@ generates the provider bindings used by the Router.
 - optional persistent model storage
 - probes, resources, scheduling, autoscaling, and ingress settings
 - OpenShift security defaults and optional Route creation
-- standalone Envoy sidecar or integration with an existing Gateway
+- standalone mode, where the Router serves its own listener, or integration with an existing Gateway
 
 For the top-level field families and links to the installed schema, see the
 [SemanticRouter CRD reference](../../api/semantic-router-crd).
@@ -183,23 +183,30 @@ entries under the generated routing model card.
 
 ### Standalone
 
-With no `spec.gateway`, the Operator deploys an Envoy sidecar next to the
-Router. Client traffic enters the Service, Envoy invokes ExtProc, and Envoy
-forwards the transformed request to the selected backend.
+With no `spec.gateway`, the Router runs standalone (`-gateway=standalone`): it
+serves the OpenAI-compatible API itself on its listener `http-8801`, port
+**8801**, routes each request and forwards it to the selected backend. No Envoy
+runs in the Pod. The Pod's probes check `/ready` and `/health` on that
+listener, and the Service exposes it as port 8801 (`http-8801`).
 
 This mode is appropriate when the Router should be self-contained and the
 cluster does not already provide a compatible gateway.
+
+Operator releases before standalone mode ran an Envoy sidecar here and served
+the same Service port 8801. After an Operator upgrade the Router serves that
+port itself, and the Operator deletes the sidecar's `<name>-envoy-config`
+ConfigMap once the rollout completes.
 
 ### Existing Gateway
 
 There are two distinct ways to attach an existing Gateway.
 
-#### Forward HTTP to the Operator's Envoy sidecar
+#### Forward HTTP to the standalone Router
 
 For a Gateway API controller that forwards HTTP, keep the Router in standalone
-mode: **omit `spec.gateway.existingRef`**. The Operator creates its Envoy
-sidecar and exposes the inference listener as Service port **8801**
-(`envoy-http`). Create an `HTTPRoute` targeting that port:
+mode: **omit `spec.gateway.existingRef`**. The Router's inference listener is
+Service port **8801** (`http-8801`). Create an `HTTPRoute` targeting that
+port:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -231,9 +238,9 @@ namespace; moving the backend Service to another namespace also requires a
 your deployment. The Operator does not create an `HTTPRoute`; you own this
 route's lifecycle.
 
-The traffic path is Gateway → Router Service `envoy-http` → Envoy sidecar →
-ExtProc → selected model backend. The `api` port (8080 by default) serves Router
-management requests and must not be used as the inference route's backend.
+The traffic path is Gateway → Router Service `http-8801` → Router → selected
+model backend. The `api` port (8080 by default) serves Router management
+requests and must not be used as the inference route's backend.
 
 A complete Router and route example is available in
 [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml).
@@ -268,14 +275,19 @@ spec:
       namespace: gateway-system
 ```
 
-This mode verifies the Gateway exists and omits the Envoy sidecar. You must
-configure the Gateway's ExtProc policy to call the Router Service's **gRPC port
-50051** (or your configured `service.grpc.port`), plus routes to the actual
-model backends that honor the Router's selection. Referencing a Gateway alone
-does not install those policies or routes. Follow the matching
+This mode verifies the Gateway exists and runs the Router in extproc mode
+(`-gateway=extproc`). You must configure the Gateway's ExtProc policy to call
+the Router Service's **gRPC port 50051** (or your configured
+`service.grpc.port`), plus routes to the actual model backends that honor the
+Router's selection. Referencing a Gateway alone does not install those policies
+or routes. Follow the matching
 [Kubernetes Gateway integration guide](gateways) for its processing modes and
 backend selection contract. Do not point an inference `HTTPRoute` at the Router
 management API; it does not implement `/v1/chat/completions`.
+
+When that ExtProc policy sends request bodies in `STREAMED` or
+`FullDuplexStreamed` mode, also set `spec.config.streamed_body.enabled: true`,
+as described in [Streamed ExtProc](streamed-extproc).
 
 ### OpenShift Route
 

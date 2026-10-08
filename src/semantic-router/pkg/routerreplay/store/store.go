@@ -36,6 +36,7 @@ type Signal struct {
 	Metadata      []string `json:"metadata,omitempty"`
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Decision      []string `json:"decision,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -54,14 +55,15 @@ type UsageCost struct {
 
 // Outcome captures typed post-route feedback linked to a replay record.
 type Outcome struct {
-	Timestamp time.Time         `json:"timestamp,omitempty"`
-	Source    string            `json:"source"`
-	Target    string            `json:"target"`
-	TargetRef string            `json:"target_ref,omitempty"`
-	Verdict   string            `json:"verdict"`
-	Reason    string            `json:"reason,omitempty"`
-	Score     float64           `json:"score,omitempty"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
+	Timestamp      time.Time         `json:"timestamp,omitempty"`
+	Source         string            `json:"source"`
+	Target         string            `json:"target"`
+	TargetRef      string            `json:"target_ref,omitempty"`
+	Verdict        string            `json:"verdict"`
+	Reason         string            `json:"reason,omitempty"`
+	Score          float64           `json:"score,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	IdempotencyKey string            `json:"idempotency_key,omitempty"`
 }
 
 const (
@@ -163,6 +165,17 @@ type LooperDiagnostics struct {
 	DroppedUsage        LooperUsage     `json:"dropped_usage,omitempty"`
 }
 
+// PreparedDispatchReceipt fingerprints the primary provider-bound payload
+// returned to Envoy without retaining payload bytes. Internal Looper calls and
+// response-time fallback attempts are outside this single-dispatch contract.
+// Restricted Replay API views omit it. Version permits future additive fields.
+type PreparedDispatchReceipt struct {
+	Version    int    `json:"version"`
+	WireFormat string `json:"wire_format"`
+	SHA256     string `json:"sha256"`
+	ByteLength int    `json:"byte_length"`
+}
+
 // RequestDemandSnapshot is one content-free observation of the request demand
 // at a stable lifecycle boundary. Representation says whether the observation
 // describes semantic or wire form; the closed stage/source vocabularies keep
@@ -192,6 +205,7 @@ type RouteDiagnostics struct {
 	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
+	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
 	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
 	PromptHelperPromptTokens       int64                                `json:"prompt_helper_prompt_tokens,omitempty"`
 	PromptHelperCompletionTokens   int64                                `json:"prompt_helper_completion_tokens,omitempty"`
@@ -233,19 +247,31 @@ type RouteDiagnostics struct {
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
 }
 
-// HallucinationSpan is a single unsupported span with its NLI explanation,
-// mirroring extproc.EnhancedHallucinationSpan for replay persistence.
+// DecisionRanking records how selection ordered the matched decisions,
+// mirroring decision.RankingTrace for replay persistence.
+type DecisionRanking struct {
+	Strategy   string `json:"strategy"`
+	Tiered     bool   `json:"tiered"`
+	Tier       int    `json:"tier"`
+	Comparable bool   `json:"comparable"`
+	Fallback   string `json:"fallback_reason,omitempty"`
+	ScoreKind  string `json:"score_kind,omitempty"`
+	DecidedBy  string `json:"decided_by"`
+	Winner     string `json:"winner"`
+	Candidates int    `json:"candidates"`
+}
+
+// HallucinationSpan is a single unsupported span with its details, mirroring
+// extproc.EnhancedHallucinationSpan for replay persistence.
 type HallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"`
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`
 	Explanation             string  `json:"explanation"`
 }
@@ -547,6 +573,7 @@ func cloneSignal(signal Signal) Signal {
 		Metadata:      cloneStringSlice(signal.Metadata),
 		Classifier:    cloneStringSlice(signal.Classifier),
 		InputModality: cloneStringSlice(signal.InputModality),
+		Decision:      cloneStringSlice(signal.Decision),
 	}
 }
 
@@ -624,10 +651,18 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
+	if value.PreparedDispatch != nil {
+		receipt := *value.PreparedDispatch
+		cloned.PreparedDispatch = &receipt
+	}
 	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	if value.DecisionRanking != nil {
+		ranking := *value.DecisionRanking
+		cloned.DecisionRanking = &ranking
+	}
 	return &cloned
 }
 

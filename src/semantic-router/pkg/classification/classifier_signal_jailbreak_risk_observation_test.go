@@ -102,7 +102,9 @@ func TestGuardRiskObservationInvalidAndPartial(t *testing.T) {
 	partial := observationDistribution(.2)
 	partial.result.Input = &tasks.InputUsage{OriginalTokens: 10, ProcessedTokens: 5, Truncated: true}
 	invalid := []cachedJailbreakResult{{err: errors.New("synthetic failure")}, partial, {}, {result: SequenceClassificationResult{Probabilities: []float32{1, float32(math.NaN())}}}}
-	for _, entry := range invalid {
+	for index, entry := range invalid {
+		// A partial read is unscanned and matches whatever on_error says.
+		unscanned := index == 1
 		for _, policy := range []string{"allow", "block"} {
 			c := observationClassifier([]config.JailbreakRule{{Name: "limit", Threshold: .7}}, observationBackend{"sample": entry}, policy)
 			out := observationResults()
@@ -110,7 +112,7 @@ func TestGuardRiskObservationInvalidAndPartial(t *testing.T) {
 			if out.JailbreakScoreAvailable || len(out.SignalValues) != 0 || len(out.SignalConfidences) != 0 || out.SignalErrors["jailbreak:limit"] == "" {
 				t.Fatalf("invented invalid risk: %+v", out)
 			}
-			if out.JailbreakDetected != (policy == "block") || out.SignalErrorMatches["jailbreak:limit"] != (policy == "block") {
+			if want := policy == "block" || unscanned; out.JailbreakDetected != want || out.SignalErrorMatches["jailbreak:limit"] != want {
 				t.Fatal("on_error behavior changed")
 			}
 		}
@@ -197,6 +199,42 @@ func TestGuardRiskObservationMatchesSecurityAPI(t *testing.T) {
 		c.evaluateJailbreakSignalPieces(context.Background(), out, &sync.Mutex{}, []string{"sample"}, nil)
 		if verdict.RiskScore == nil || *verdict.RiskScore != out.JailbreakConfidence || verdict.Detected != out.JailbreakDetected {
 			t.Fatal("request observation differs from security API")
+		}
+	}
+}
+
+func TestGuardRiskObservationCarriesTheScanWindow(t *testing.T) {
+	rules := []config.JailbreakRule{{Name: "limit", Threshold: .7}}
+	scanned := observationDistribution(.8)
+	scanned.result.Window = &tasks.ScanWindow{Start: 255, End: 765, Count: 2}
+	c := observationClassifier(rules, observationBackend{"sample": scanned}, "allow")
+	out := observationResults()
+
+	c.evaluateJailbreakSignalPieces(context.Background(), out, &sync.Mutex{}, []string{"sample"}, nil)
+
+	for key, want := range map[string]float64{
+		"jailbreak:limit":              .8,
+		"jailbreak:limit:window_start": 255,
+		"jailbreak:limit:window_end":   765,
+		"jailbreak:limit:windows":      2,
+	} {
+		got, ok := out.SignalValues[key]
+		if !ok || math.Abs(got-want) > 1e-6 {
+			t.Fatalf("%s available=%v value=%v want=%v", key, ok, got, want)
+		}
+	}
+}
+
+func TestGuardRiskObservationOmitsAWindowItDoesNotHave(t *testing.T) {
+	rules := []config.JailbreakRule{{Name: "limit", Threshold: .7}}
+	c := observationClassifier(rules, observationBackend{"sample": observationDistribution(.8)}, "allow")
+	out := observationResults()
+
+	c.evaluateJailbreakSignalPieces(context.Background(), out, &sync.Mutex{}, []string{"sample"}, nil)
+
+	for _, key := range []string{"jailbreak:limit:window_start", "jailbreak:limit:window_end", "jailbreak:limit:windows"} {
+		if _, ok := out.SignalValues[key]; ok {
+			t.Fatalf("a scan that reported no window published %s: %v", key, out.SignalValues)
 		}
 	}
 }

@@ -27,9 +27,9 @@ def profile_image_dependencies() -> dict[str, list[str]]:
     """
     source = (ROOT / "e2e/profiles/all/imports.go").read_text()
     fixtures = {
-        "mockVLLMLocalImages": ["mock-vllm"],
+        "providerMockerLocalImages": ["provider-mocker"],
         "dashboardLocalImages": ["dashboard"],
-        "anthropicshim.LocalImages()": ["anthropic-shim"],
+        "modelRuntimeLocalImages": ["provider-mocker", "model-runtime"],
     }
     result = {}
     for match in re.finditer(
@@ -38,7 +38,7 @@ def profile_image_dependencies() -> dict[str, list[str]]:
         re.S,
     ):
         name, capabilities = match.groups()
-        images = ["extproc"]
+        images = ["vllm-sr"]
         local = re.search(r"LocalImages:\s*([^,}]+)", capabilities)
         if local:
             expression = local.group(1).strip()
@@ -69,14 +69,16 @@ def verification_records(registry: dict) -> dict[str, dict]:
             **defaults,
             "activity": "test",
             "display_name": profile.get("display_name", ""),
+            "category": "e2e",
             "boundary": ["e2e"],
             "executor": "e2e",
             "workflow": ".github/workflows/integration-test-k8s.yml",
             "profile": name,
             "images": images,
             "services": ["kind", "gateway", "controlled-backend"],
-            "runtime": "candle",
-            "device": "cpu",
+            "runtime": profile.get("runtime", "model-runtime"),
+            "device": profile.get("device", "cpu"),
+            "resource_class": profile.get("resource_class", "standard"),
             "inventory": f"e2e-profile:{name}",
             "contract": profile["coverage_role"],
         }
@@ -106,11 +108,24 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"verification {name} has a duplicate display_name: {label}")
         else:
             display_names.add(label)
+        if record.get("category") not in {
+            "quality",
+            "components",
+            "integration",
+            "conformance",
+            "runtime",
+            "e2e",
+            "performance",
+            "packages",
+        }:
+            errors.append(f"verification {name} has no stable presentation category")
+        if record.get("resource_class", "standard") not in {"standard", "model"}:
+            errors.append(f"verification {name} has an invalid resource class")
         if record["executor"] == "tools":
             worker = catalog["component_workers"].get(record.get("worker"))
             if not worker or not worker.get("display_name"):
                 errors.append(f"verification {name} lacks a declared component worker")
-            if record["native"] or record["images"] or record["runtime"] != "none":
+            if record["images"] or record["runtime"] != "none":
                 errors.append(
                     f"verification {name} is incompatible with a lightweight worker"
                 )
@@ -126,16 +141,6 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"test verification {name} has no boundary")
         if record.get("device") not in {"cpu", "none"}:
             errors.append(f"verification {name} has no declared hardware runner")
-        if (execution := record.get("execution")) and (
-            execution != {"mode": "qemu-user", "host_platform": "linux/amd64"}
-            or record["platform"] != "linux/riscv64"
-            or record["runtime"] != "candle"
-            or record["device"] != "cpu"
-            or record["native"]
-        ):
-            errors.append(
-                f"verification {name} has an invalid emulated target contract"
-            )
     # Only recurring public CI promises are required. Manual/experimental support
     # must not accidentally be upgraded by the CPU planner.
     public = ROOT / "website/docs/installation/support-matrix.md"

@@ -26,8 +26,9 @@ type RolloutRestartTarget struct {
 
 // ProfileCapabilities declares runner-level behavior a profile requires.
 type ProfileCapabilities struct {
-	RequiresGPU bool
-	LocalImages []LocalImageBuild
+	RequiresGPU     bool
+	LocalImages     []LocalImageBuild
+	RouterBuildArgs map[string]string // model artifacts or other image features required by the profile
 }
 
 // ProfileRegistration is the self-registration contract for runnable profiles.

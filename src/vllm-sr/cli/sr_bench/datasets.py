@@ -5,16 +5,32 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tempfile
 import threading
 from collections import Counter, OrderedDict
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .contracts import canonical, catalog, digest
+from .dataset_io import (
+    MAX_ROW_BYTES,
+    MAX_SCAN_BYTES,
+    DatasetSizeLimitError,
+    file_digest,
+    verified_lines,
+)
+from .dataset_io import (
+    identity as _identity,
+)
+from .dataset_io import (
+    read_small as _read,
+)
+from .preparation import validate_cases as validate_prepared_cases
+from .preparation import validate_manifest as validate_prepared_manifest
 from .setup import harness_paths
 from .sources import _write_dataset
 
-MAX_DATA_BYTES = 128 * 1024 * 1024
+MAX_TASK_INPUT_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_CASE_BYTES = 2 * 1024 * 1024
 MAX_PAGE_BYTES = 8 * 1024 * 1024
@@ -23,45 +39,14 @@ MAX_PAGE_SIZE = 100
 MAX_QUERY_CHARS = 200
 MAX_CASE_ID_CHARS = 512
 MAX_BENCHMARK_ID_CHARS = 64
-MAX_CACHE_BYTES = 32 * 1024 * 1024
-MAX_CACHE_ENTRIES = 16
 MAX_TASK_FILES = 4096
 MAX_DATASETS = 4096
 MAX_COMPOSE_DATASETS = 32
-MAX_FINGERPRINT_SCAN_BYTES = 2 * 1024 * 1024 * 1024
+MAX_FINGERPRINT_SCAN_BYTES = MAX_SCAN_BYTES
 MAX_FINGERPRINT_INDEX_BYTES = 32 * 1024 * 1024
 MAX_FINGERPRINT_CACHE_BYTES = 4 * 1024 * 1024
 MAX_FINGERPRINT_CACHE_ENTRIES = 64
 DATASET_ID = re.compile(r"[0-9a-f]{64}\Z")
-
-
-class DatasetSizeLimitError(ValueError):
-    """A known input size cannot fit within this bounded dataset read."""
-
-    def __init__(self, path, size, maximum, reason_code="source_size_limit"):
-        super().__init__("Dataset input exceeds the supported size limit")
-        self.path = path
-        self.size = size
-        self.maximum = maximum
-        self.reason_code = reason_code
-
-
-def _identity(path):
-    if path.is_symlink() or not path.is_file():
-        raise ValueError("Dataset input must be a regular file")
-    stat = path.stat()
-    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
-
-
-def _read(path, maximum):
-    before = _identity(path)
-    if before[2] > maximum:
-        raise DatasetSizeLimitError(path, before[2], maximum)
-    with path.open("rb") as handle:
-        content = handle.read(maximum + 1)
-    if len(content) > maximum or _identity(path) != before:
-        raise ValueError("Dataset input changed while being read")
-    return content
 
 
 def _text(value):
@@ -153,7 +138,7 @@ def _tau_input(metadata, inputs):
 
 class _TaskInputs:
     def __init__(self):
-        self.remaining = MAX_DATA_BYTES
+        self.remaining = MAX_TASK_INPUT_BYTES
         self.tau_tasks = {}
 
     def read(self, path):
@@ -270,8 +255,6 @@ class DatasetReader:
 
     def __init__(self, root):
         self.root = Path(root).resolve()
-        self.cache = OrderedDict()
-        self.cache_bytes = 0
         self.fingerprint_cache = OrderedDict()
         self.fingerprint_cache_bytes = 0
         self.lock = threading.Lock()
@@ -321,52 +304,62 @@ class DatasetReader:
             raise ValueError(
                 "Prepared dataset identity or content digest does not match"
             )
+        validate_prepared_manifest(manifest)
         return manifest
 
-    def _read_frozen(self, identity, remaining=MAX_DATA_BYTES):
-        """Validate stored rows before display, selection or composition uses them."""
-        manifest = self._read_manifest(identity)
-        _, data_path = self._paths(identity)
-        data = _read(data_path, remaining)
-        if hashlib.sha256(data).hexdigest() != manifest.get("sha256"):
-            raise ValueError(
-                "Prepared dataset identity or content digest does not match"
-            )
-        rows, ids = [], set()
-        for line in data.split(b"\n"):
-            if not line.strip():
-                continue
-            if len(rows) >= MAX_CASES or len(line) > MAX_DATA_BYTES:
+    def _scan(self, identity, manifest, remaining):
+        """Validate one row at a time; exhaust before returning or publishing output."""
+        manifest_path, data_path = self._paths(identity)
+        key = (_identity(manifest_path), _identity(data_path))
+        ids, prepared = set(), []
+        for line in verified_lines(
+            data_path,
+            manifest.get("sha256"),
+            maximum=remaining,
+            row_bytes=MAX_ROW_BYTES,
+        ):
+            if len(ids) >= MAX_CASES:
                 raise ValueError("Dataset exceeds the supported case limit")
             case = json.loads(line)
             _validate_frozen_case(case, manifest, ids)
-            rows.append(case)
-        if len(rows) != manifest["case_count"]:
+            if manifest.get("preparation"):
+                prepared.append(
+                    {
+                        "id": case["id"],
+                        "benchmark": case["benchmark"],
+                        "metadata": {
+                            "task_identity": case.get("metadata", {}).get(
+                                "task_identity"
+                            )
+                        },
+                    }
+                )
+            yield case
+        if len(ids) != manifest["case_count"]:
             raise ValueError("Prepared dataset case count does not match")
-        return manifest, rows, len(data)
+        if manifest.get("preparation"):
+            validate_prepared_cases(manifest, prepared)
+        if (
+            _identity(manifest_path),
+            _identity(data_path),
+        ) != key or self._read_manifest(identity) != manifest:
+            raise ValueError("Prepared dataset changed while being read")
 
     def _cached_content_matches(self, identity, manifest, maximum):
-        # File timestamps can have coarser precision than consecutive writes.
-        # A matching stat tuple alone is not proof of unchanged frozen inputs.
+        # Timestamp equality is not proof, even on a content-addressed path.
         if self._read_manifest(identity) != manifest:
             return False
-        _, path = self._paths(identity)
-        before = _identity(path)
-        if before[2] > maximum:
-            raise DatasetSizeLimitError(path, before[2], maximum)
-        checksum, size = hashlib.sha256(), 0
-        with path.open("rb") as source:
-            while chunk := source.read(min(1024 * 1024, maximum - size + 1)):
-                size += len(chunk)
-                if size > maximum:
-                    raise DatasetSizeLimitError(path, size, maximum)
-                checksum.update(chunk)
-        if _identity(path) != before:
-            raise ValueError("Dataset input changed while being read")
-        if checksum.hexdigest() != manifest.get("sha256"):
+        manifest_path, path = self._paths(identity)
+        before = _identity(manifest_path)
+        if file_digest(path, maximum) != manifest.get("sha256"):
             raise ValueError(
                 "Prepared dataset identity or content digest does not match"
             )
+        if (
+            _identity(manifest_path) != before
+            or self._read_manifest(identity) != manifest
+        ):
+            raise ValueError("Prepared dataset changed while being read")
         return True
 
     def _fingerprint(self, identity, remaining):
@@ -388,36 +381,16 @@ class DatasetReader:
                 self.fingerprint_cache.move_to_end(identity)
                 return cached[1], cached[2], size
             manifest = self._read_manifest(identity)
-            groups, ids, index_bytes, content = {}, set(), 0, hashlib.sha256()
-            with data_path.open("rb") as source:
-                while line := source.readline(MAX_DATA_BYTES + 1):
-                    if len(line) > MAX_DATA_BYTES:
-                        raise DatasetSizeLimitError(
-                            data_path, len(line), MAX_DATA_BYTES
-                        )
-                    content.update(line)
-                    if not line.strip():
-                        continue
-                    if len(ids) >= MAX_CASES:
-                        raise ValueError("Dataset exceeds the supported case limit")
-                    case = json.loads(line)
-                    _validate_frozen_case(case, manifest, ids)
-                    index_bytes += len(case["id"].encode()) + 256
-                    if index_bytes > MAX_FINGERPRINT_INDEX_BYTES:
-                        raise DatasetSizeLimitError(
-                            data_path, index_bytes, MAX_FINGERPRINT_INDEX_BYTES
-                        )
-                    groups.setdefault(case["benchmark"], []).append(
-                        (case["id"], digest(case))
+            groups, index_bytes = {}, 0
+            for case in self._scan(identity, manifest, remaining):
+                index_bytes += len(case["id"].encode()) + 256
+                if index_bytes > MAX_FINGERPRINT_INDEX_BYTES:
+                    raise DatasetSizeLimitError(
+                        data_path, index_bytes, MAX_FINGERPRINT_INDEX_BYTES
                     )
-            if (_identity(manifest_path), _identity(data_path)) != key:
-                raise ValueError("Prepared dataset changed while fingerprinting")
-            if content.hexdigest() != manifest.get("sha256"):
-                raise ValueError(
-                    "Prepared dataset identity or content digest does not match"
+                groups.setdefault(case["benchmark"], []).append(
+                    (case["id"], digest(case))
                 )
-            if len(ids) != manifest["case_count"]:
-                raise ValueError("Prepared dataset case count does not match")
             proofs = {}
             for benchmark, rows in groups.items():
                 provenance = manifest.get("sources", {}).get(benchmark)
@@ -431,6 +404,11 @@ class DatasetReader:
                             "source": provenance,
                             "seed": manifest.get("seed"),
                             "split": manifest["split"],
+                            **(
+                                {"preparation": manifest["preparation"].get(benchmark)}
+                                if manifest.get("preparation")
+                                else {}
+                            ),
                         }
                     ),
                 }
@@ -450,50 +428,17 @@ class DatasetReader:
                 self.fingerprint_cache_bytes += entry_bytes
             return manifest, proofs, size
 
-    def _load(self, identity, task_inputs=None):
-        manifest_path, data_path = self._paths(identity)
-        key = (_identity(manifest_path), _identity(data_path))
-        with self.lock:
-            cached = self.cache.get(identity)
-            if (
-                cached
-                and cached[0] == key
-                and self._cached_content_matches(identity, cached[1], MAX_DATA_BYTES)
-            ):
-                self.cache.move_to_end(identity)
-                return cached[1], cached[2]
-            manifest, rows, _ = self._read_frozen(identity)
-            cases, inputs, view_bytes = [], task_inputs or _TaskInputs(), 0
-            for case in rows:
-                projected = _public_case(case, inputs)
-                view_bytes += len(json.dumps(projected).encode())
-                if view_bytes > MAX_DATA_BYTES:
-                    raise ValueError("Dataset display exceeds the supported size limit")
-                cases.append(projected)
-            # Source-backed empty tasks are reverified for every request; a
-            # changed checkout must not be hidden behind a dataset-file cache.
-            cacheable = not any(
-                c["benchmark"] in {"tau3", "terminal-bench-2.1"} for c in cases
-            )
-            size = len(json.dumps(cases).encode()) + len(json.dumps(manifest).encode())
-            if identity in self.cache:
-                self.cache_bytes -= self.cache.pop(identity)[3]
-            if cacheable and size <= MAX_CACHE_BYTES:
-                while self.cache and (
-                    self.cache_bytes + size > MAX_CACHE_BYTES
-                    or len(self.cache) >= MAX_CACHE_ENTRIES
-                ):
-                    self.cache_bytes -= self.cache.popitem(last=False)[1][3]
-                self.cache[identity] = (key, manifest, cases, size)
-                self.cache_bytes += size
-            return manifest, cases
-
     def detail(self, identity):
-        manifest, cases = self._load(identity)
-        counts = Counter((c["benchmark"], c["category"]) for c in cases)
+        manifest = self._read_manifest(identity)
+        counts = Counter()
+        for case in self._scan(identity, manifest, MAX_FINGERPRINT_SCAN_BYTES):
+            category = case.get("metadata", {}).get("stratum")
+            counts[
+                (case["benchmark"], category if isinstance(category, str) else "all")
+            ] += 1
         titles = {b["id"]: b["title"] for b in catalog()["benchmarks"]}
         benchmarks = []
-        for benchmark in sorted({c["benchmark"] for c in cases}):
+        for benchmark in sorted({benchmark for benchmark, _ in counts}):
             categories = [
                 {"name": category, "count": n}
                 for (b, category), n in sorted(counts.items())
@@ -543,6 +488,11 @@ class DatasetReader:
                     _source_summary(b, s)
                     for b, s in sorted(manifest.get("sources", {}).items())
                 ],
+                **(
+                    {"preparation": manifest["preparation"]}
+                    if manifest.get("preparation")
+                    else {}
+                ),
             },
         }
 
@@ -564,38 +514,43 @@ class DatasetReader:
             for v in (benchmark, category, q)
         ):
             raise ValueError("Dataset filters must contain at most 200 characters")
-        _, rows = self._load(identity)
-        needle = q.casefold()
-        matches = [
-            c
-            for c in rows
-            if (not benchmark or c["benchmark"] == benchmark)
-            and (not category or c["category"] == category)
-            and (
-                not needle
-                or needle
-                in (
-                    c["id"]
-                    + "\n"
-                    + c["question"]
-                    + "\n"
-                    + "\n".join(c.get("choices", []))
-                ).casefold()
-            )
-        ]
-        page, size = [], 0
-        for row in matches[offset : offset + count]:
-            size += len(json.dumps(row).encode())
-            if size > MAX_PAGE_BYTES:
-                break
-            page.append(row)
+        manifest = self._read_manifest(identity)
+        needle, inputs = q.casefold(), _TaskInputs()
+        page, size, matched = [], 0, 0
+        page_full = False
+        for case in self._scan(identity, manifest, MAX_FINGERPRINT_SCAN_BYTES):
+            row = _public_case(case, inputs)
+            if (
+                (benchmark and row["benchmark"] != benchmark)
+                or (category and row["category"] != category)
+                or (
+                    needle
+                    and needle
+                    not in (
+                        row["id"]
+                        + "\n"
+                        + row["question"]
+                        + "\n"
+                        + "\n".join(row.get("choices", []))
+                    ).casefold()
+                )
+            ):
+                continue
+            if matched >= offset and len(page) < count and not page_full:
+                row_size = len(json.dumps(row).encode())
+                if size + row_size > MAX_PAGE_BYTES:
+                    page_full = True
+                else:
+                    page.append(row)
+                    size += row_size
+            matched += 1
         following = offset + len(page)
         return {
             "dataset_id": identity,
             "cases": page,
-            "total": len(matches),
-            "dataset_total": len(rows),
-            "next_cursor": str(following) if following < len(matches) else None,
+            "total": matched,
+            "dataset_total": manifest["case_count"],
+            "next_cursor": str(following) if following < matched else None,
             "limit": count,
         }
 
@@ -671,18 +626,12 @@ class DatasetReader:
         for benchmark in catalog()["benchmarks"]:
             candidates = groups.get(benchmark["id"], [])
             conflict = len({item[0] for item in candidates}) > 1
-            usable = [item for item in candidates if item[5] <= MAX_DATA_BYTES]
             chosen = (
-                min(usable, key=lambda item: (item[1], item[5], item[2]))
-                if usable
+                min(candidates, key=lambda item: (item[1], item[5], item[2]))
+                if candidates
                 else None
             )
             limitation = blocked.get(benchmark["id"])
-            if not limitation and candidates and not usable:
-                limitation = (
-                    "source_size_limit",
-                    "Full content was verified, but every prepared source exceeds the composition size limit. Prepare a smaller dedicated source for this benchmark.",
-                )
             eligible = bool(chosen) and not conflict and limitation is None
             entries.append(
                 {
@@ -753,19 +702,21 @@ class DatasetReader:
             or len(set(benchmarks)) != len(benchmarks)
         ):
             raise ValueError("Compose requires distinct benchmark IDs")
+        # Only row indexes stay in memory. Private spooling freezes selected bytes
+        # after each verified scan and before any output is published.
+        with tempfile.TemporaryFile() as spool:
+            return self._compose(dataset_ids, benchmarks, spool)
+
+    def _compose(self, dataset_ids, benchmarks, spool):
         groups, sources, identity, custom = {}, {}, None, False
+        preparation = {}
         single_source = None
-        input_bytes = 0
+        input_bytes, spool_bytes, index_bytes = 0, 0, 0
         for dataset_id in dict.fromkeys(dataset_ids):
-            manifest, rows, size = self._read_frozen(
-                dataset_id, MAX_DATA_BYTES - input_bytes
-            )
-            input_bytes += size
-            current = (
-                manifest.get("profile"),
-                manifest.get("seed"),
-                manifest.get("split"),
-            )
+            manifest = self._read_manifest(dataset_id)
+            _, path = self._paths(dataset_id)
+            size = _identity(path)[2]
+            current = (manifest["profile"], manifest.get("seed"), manifest["split"])
             if not isinstance(current[1], int) or isinstance(current[1], bool):
                 raise ValueError("Dataset seed must be a frozen integer")
             if identity is not None and identity != current:
@@ -774,70 +725,87 @@ class DatasetReader:
                 )
             identity = current
             custom = custom or bool(manifest.get("custom_subset"))
-            _, path = self._paths(dataset_id)
-            if len(set(dataset_ids)) == 1 and {row["benchmark"] for row in rows} == set(
-                benchmarks
+            selected, present = {}, set()
+            for case in self._scan(
+                dataset_id, manifest, MAX_FINGERPRINT_SCAN_BYTES - input_bytes
             ):
-                single_source = {**manifest, "path": str(path)}
-            for benchmark in benchmarks:
-                selected = sorted(
-                    (row for row in rows if row["benchmark"] == benchmark),
-                    key=lambda row: row["id"],
-                )
-                if not selected:
+                benchmark = case["benchmark"]
+                present.add(benchmark)
+                if benchmark not in benchmarks:
                     continue
+                content = (canonical(case) + "\n").encode()
+                spool_bytes += len(content)
+                index_bytes += len(case["id"].encode()) + 256
+                if (
+                    spool_bytes > MAX_FINGERPRINT_SCAN_BYTES
+                    or index_bytes > MAX_FINGERPRINT_INDEX_BYTES
+                ):
+                    raise ValueError(
+                        "Composed dataset exceeds the supported size limit"
+                    )
+                offset = spool.tell()
+                spool.write(content)
+                selected.setdefault(benchmark, []).append(
+                    (
+                        case["id"],
+                        hashlib.sha256(content).hexdigest(),
+                        offset,
+                        len(content),
+                    )
+                )
+            input_bytes += size
+            if len(set(dataset_ids)) == 1 and present == set(benchmarks):
+                single_source = {**manifest, "path": str(path)}
+            for benchmark, rows in selected.items():
+                rows.sort()
                 source = manifest.get("sources", {}).get(benchmark)
                 if not source:
                     raise ValueError(
                         "Selected benchmark has no frozen source provenance"
                     )
                 if benchmark in groups and (
-                    groups[benchmark] != selected or sources[benchmark] != source
+                    [(row[0], row[1]) for row in groups[benchmark]]
+                    != [(row[0], row[1]) for row in rows]
+                    or sources[benchmark] != source
+                    or preparation.get(benchmark)
+                    != manifest.get("preparation", {}).get(benchmark)
                 ):
                     raise ValueError(
                         "Selected datasets contain conflicting benchmark selections"
                     )
-                groups[benchmark], sources[benchmark] = selected, source
+                if benchmark not in groups:
+                    groups[benchmark], sources[benchmark] = rows, source
+                    if benchmark in manifest.get("preparation", {}):
+                        preparation[benchmark] = manifest["preparation"][benchmark]
         if set(groups) != set(benchmarks):
             raise ValueError(
                 "Prepared datasets do not contain every selected benchmark"
             )
         if single_source is not None:
             return single_source
-        cases = [case for benchmark in sorted(groups) for case in groups[benchmark]]
-        if len({case["id"] for case in cases}) != len(cases):
+        indexes = [row for benchmark in sorted(groups) for row in groups[benchmark]]
+        if len({row[0] for row in indexes}) != len(indexes):
             raise ValueError("Composed dataset contains duplicate case IDs")
-        sources = {benchmark: sources[benchmark] for benchmark in sorted(sources)}
-        if len(cases) > MAX_CASES or len(json.dumps(cases).encode()) > MAX_DATA_BYTES:
-            raise ValueError("Composed dataset exceeds the supported size limit")
-        content_sha = hashlib.sha256(
-            "".join(canonical(case) + "\n" for case in cases).encode()
-        ).hexdigest()
-        output_id = digest(
-            {
-                "cases_sha256": content_sha,
-                "sources": sources,
-                "profile": identity[0],
-                "seed": identity[1],
-                "custom_subset": custom,
-                "selection": "stratified-hash-v1",
-            }
+        if len(indexes) > MAX_CASES:
+            raise ValueError("Composed dataset exceeds the supported case limit")
+
+        def cases():
+            for _, checksum, offset, size in indexes:
+                spool.seek(offset)
+                content = spool.read(size)
+                if (
+                    len(content) != size
+                    or hashlib.sha256(content).hexdigest() != checksum
+                ):
+                    raise ValueError("Composed dataset staging content changed")
+                yield json.loads(content)
+
+        return _write_dataset(
+            self.root,
+            cases(),
+            identity[0],
+            identity[1],
+            {benchmark: sources[benchmark] for benchmark in sorted(sources)},
+            custom,
+            preparation=preparation or None,
         )
-        if (self.root / "datasets" / output_id).exists():
-            existing, _, _ = self._read_frozen(output_id)
-            if any(
-                existing.get(key) != value
-                for key, value in {
-                    "sha256": content_sha,
-                    "sources": sources,
-                    "profile": identity[0],
-                    "seed": identity[1],
-                    "custom_subset": custom,
-                }.items()
-            ):
-                raise ValueError("Existing composed dataset provenance changed")
-            return {**existing, "path": str(self._paths(output_id)[1])}
-        with self.lock:
-            return _write_dataset(
-                self.root, cases, identity[0], identity[1], sources, custom
-            )

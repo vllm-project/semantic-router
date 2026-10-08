@@ -131,7 +131,6 @@ describe('model hub provider detail', () => {
   })
 
   it.each([
-    ['bedrock', '/chat/completions'],
     ['minimax', '/v1/chat/completions'],
   ])(
     'renders only supported operations and the effective path for %s',
@@ -155,7 +154,6 @@ describe('model hub provider detail', () => {
       expect(markup).toContain(expectedPath)
       expect(markup).not.toContain('GET')
       expect(markup).not.toContain('List Models')
-      if (providerID === 'bedrock') expect(markup).not.toContain('/v1/chat/completions')
     },
   )
 
