@@ -64,6 +64,8 @@ interface BuilderDeployConfirmModalProps {
   open: boolean
   loading: boolean
   error: string | null
+  /** The Router's reason for refusing the merged config, or null when it would load. */
+  validationError: string | null
   currentYaml: string
   mergedYaml: string
   onClose: () => void
@@ -74,6 +76,7 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
   open,
   loading,
   error,
+  validationError,
   currentYaml,
   mergedYaml,
   onClose,
@@ -229,6 +232,11 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
             </span>
           </div>
         )}
+        {validationError && (
+          <div className={styles.deployValidationError} role="alert">
+            <strong>The Router refuses this config.</strong> {validationError}
+          </div>
+        )}
         <div className={styles.deployDiffBody}>
           {loading && (
             <div className={styles.deployDiffLoading}>
@@ -299,7 +307,7 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
             type="button"
             className={styles.toolbarBtnDeploy}
             onClick={onConfirm}
-            disabled={loading || !!error}
+            disabled={loading || !!error || !!validationError}
           >
             <svg
               width="12"

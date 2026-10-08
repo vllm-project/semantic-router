@@ -1484,3 +1484,76 @@ func TestUpdateConfigHandler_ReplacesLegacyConfigWithCanonicalPayload(t *testing
 		t.Error("canonical providers/routing blocks should be written")
 	}
 }
+
+// The preview used to merge without validating, so a document the Router
+// refuses was only reported by the toast after Deploy. The preview now carries
+// the Router's verdict beside the diff: set for a refused document, absent for
+// one that loads, and never a non-200, because the full-YAML view shares the
+// endpoint and must keep rendering an invalid draft.
+func TestDeployPreviewHandler_ReportsRouterValidationBesideTheDiff(t *testing.T) {
+	configPath := createValidTestConfig(t, t.TempDir())
+
+	cases := map[string]struct {
+		fragment    string
+		wantRefused string
+	}{
+		"rule the Router refuses": {
+			// threshold alongside a boundary pair, the issue's own example;
+			// the YAML is well formed, so only the Router's validator sees it.
+			fragment: `routing:
+  signals:
+    complexity:
+      - name: needs_reasoning
+        threshold: 0.1
+        hard_above: 0.85
+        easy_below: 0.6
+`,
+			wantRefused: "keep one",
+		},
+		"fragment that loads": {
+			fragment: `routing:
+  signals:
+    domains:
+      - name: business
+        description: Business queries
+`,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			body, err := json.Marshal(DeployRequest{YAML: tc.fragment})
+			if err != nil {
+				t.Fatalf("marshal preview request: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			DeployPreviewHandler(configPath)(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("preview must answer 200 whatever the Router's verdict, got %d: %s", w.Code, w.Body.String())
+			}
+			var response DeployPreviewResponse
+			if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+				t.Fatalf("decode preview response: %v", err)
+			}
+			if response.Preview == "" {
+				t.Fatal("the diff must still be returned so the user sees what would be deployed")
+			}
+			if tc.wantRefused == "" {
+				if response.ValidationError != "" {
+					t.Fatalf("a loadable document must carry no validation error, got %q", response.ValidationError)
+				}
+				return
+			}
+			if !strings.Contains(response.ValidationError, tc.wantRefused) {
+				t.Fatalf("validation_error = %q, want the Router's %q verdict", response.ValidationError, tc.wantRefused)
+			}
+			if !strings.HasPrefix(response.ValidationError, "Merged config validation failed: ") {
+				t.Fatalf("preview and deploy must word the verdict the same way, got %q", response.ValidationError)
+			}
+		})
+	}
+}

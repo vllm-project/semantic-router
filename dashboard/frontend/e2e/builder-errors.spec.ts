@@ -120,3 +120,29 @@ test('shows Format parser errors with output closed and clears them after correc
   await expect(page.getByTitle('Hide Output Panel')).toHaveCount(0)
   await expect(page.locator('.monaco-editor').first()).toContainText('repaired')
 })
+
+// The preview carries the Router's verdict on the merged config. A refused
+// document must be visible in the confirm dialog, beside the diff, with the
+// deploy button blocked, instead of surfacing only in the toast after Deploy.
+test('shows the Router verdict in the deploy dialog and blocks Deploy Now', async ({ page }) => {
+  await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: validConfig }))
+  await page.route('**/api/router/config/deploy/preview', (route) =>
+    route.fulfill({
+      json: {
+        current: validConfig,
+        preview: validConfig,
+        validation_error:
+          'Merged config validation failed: complexity rule "needs_reasoning" sets both threshold and an explicit boundary pair; keep one',
+      },
+    }),
+  )
+  await page.goto('/builder')
+  await expect(page.getByText('model-a', { exact: true }).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Deploy', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: /Deploy to Router/ })
+  await expect(dialog.getByRole('alert')).toContainText('keep one')
+  await expect(dialog.getByRole('button', { name: 'Deploy Now' })).toBeDisabled()
+  await expect(dialog.getByText('Failed to load preview')).toHaveCount(0)
+  await page.screenshot({ path: test.info().outputPath('deploy-dialog-router-verdict.png') })
+})

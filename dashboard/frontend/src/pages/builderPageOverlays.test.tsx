@@ -25,6 +25,7 @@ describe('builder overlay accessibility contracts', () => {
         open: true,
         loading: true,
         error: null,
+        validationError: null,
         currentYaml: '',
         mergedYaml: '',
         onClose: vi.fn(),
@@ -37,6 +38,27 @@ describe('builder overlay accessibility contracts', () => {
     expect(markup).toMatch(/aria-labelledby="[^"]+"/)
     expect(markup).toMatch(/aria-describedby="[^"]+"/)
     expect(markup).toContain('data-dialog-initial-focus="true"')
+  })
+
+  it('shows the Router verdict as an alert and blocks Deploy Now while keeping the diff', () => {
+    const markup = renderToStaticMarkup(
+      createElement(BuilderDeployConfirmModal, {
+        open: true,
+        loading: false,
+        error: null,
+        validationError: 'Merged config validation failed: complexity rule "r" sets both threshold and an explicit boundary pair; keep one',
+        currentYaml: 'routing: {}',
+        mergedYaml: 'routing: {}',
+        onClose: vi.fn(),
+        onConfirm: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('role="alert"')
+    expect(markup).toContain('keep one')
+    // The verdict blocks the deploy button but not the diff.
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Deploy Now/s)
+    expect(markup).not.toContain('Failed to load preview')
   })
 
   it('renders import as a labelled dialog with named config inputs', () => {
