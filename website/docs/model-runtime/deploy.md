@@ -161,9 +161,25 @@ returns overload when all ready replicas are full. Inventory reports desired
 and ready replica counts, per-worker readiness, in-flight requests and
 restarts. A degraded pool can keep serving through its healthy replicas.
 
-CPU workers receive a stable thread budget based on host cores and
-`VLLM_SRUN_CPU_PROCESSES`. Mode changes do not recalculate that budget from the
-number of active consumers.
+### CPU threads
+
+Each managed CPU worker defaults to half the router's available CPU budget,
+rounded down, with at least one thread and at most 16. To choose a different
+thread count per worker, set a positive integer before starting the stack:
+
+```bash
+VLLM_SRUN_CPU_THREADS=8 vllm-sr serve --platform cpu --config config.yaml
+```
+
+The setting is capped by the available CPU budget; it does not set the number
+of workers. Each deployment or replica still owns an independent worker, and
+mode changes do not redistribute threads among active consumers. Start with
+the default, then compare latency and throughput with your actual input lengths
+and concurrency. Fewer threads can reduce contention when several CPU models
+are busy; longer inputs on dedicated cores may benefit from a higher override.
+This is a per-worker limit, so several busy workers can still contend for the
+same cores. Reserve cores for other services when sharing a host. Runtimes you
+attach through `endpoint` manage their own threads.
 
 ## Publish a native API
 
@@ -222,8 +238,8 @@ On a large host, give such a runtime `--threads`, or run it in a cpuset, when
 it serves a model on the optional ONNX Runtime engine (an ONNX package, or an
 Omni bundle): each graph of that model runs its own pool of up to `--threads`
 CPU threads, and without the option up to every CPU the process may run on (an
-Omni bundle has four graphs). The runtimes the router starts always get their
-share of the cores as `--threads`.
+Omni bundle has four graphs). Managed CPU workers receive `--threads` from the
+budget described above.
 
 ### On Kubernetes
 

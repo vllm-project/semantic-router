@@ -540,9 +540,10 @@ def test_active_package_is_validated_before_source_materialization(
     assert "cannot replace an active Recipe package" in caplog.text
 
 
-def test_serve_passes_log_level_to_backend_env(
+def test_serve_passes_host_runtime_controls_to_backend_env(
     monkeypatch, tmp_path: Path, no_running_containers
 ):
+    monkeypatch.setenv("VLLM_SRUN_CPU_THREADS", "8")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -590,6 +591,7 @@ def test_serve_passes_log_level_to_backend_env(
 
     assert result.exit_code == 0
     assert captured["env_vars"]["SR_LOG_LEVEL"] == "debug"
+    assert captured["env_vars"]["VLLM_SRUN_CPU_THREADS"] == "8"
 
 
 def test_serve_keeps_observability_enabled_in_setup_mode(

@@ -257,7 +257,7 @@ func TestLeaseFailsOpenUntilTheAttachedModelIsReady(t *testing.T) {
 	}
 }
 
-func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
+func TestManagerKeepsIndependentProcessesAndSupervisesThem(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -265,7 +265,7 @@ func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
 	t.Setenv(fakeRuntimeEnv, "1")
 	t.Setenv(RuntimeCommandEnv, binary)
 	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
-	t.Setenv(CPUProcessesEnv, "1")
+	t.Setenv(CPUThreadsEnv, "1")
 	manager := NewManager()
 	defer func() { _ = manager.Shutdown(context.Background()) }()
 	deployments := map[string]config.ModelDeployment{

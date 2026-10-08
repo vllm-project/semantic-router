@@ -26,7 +26,7 @@ type processPlan struct {
 	endpoint string
 	models   []modelEntry
 	members  map[string]string
-	// threads is a CPU process's share of the router's cores.
+	// threads is a CPU process's stable budget within the router's cores.
 	threads int
 }
 
@@ -70,7 +70,7 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				}
 				plan.models = []modelEntry{{Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: device, Profile: deployment.Profile}}
 				if device == "cpu" {
-					plan.threads = cpuThreads(cores, maxCPUProcesses(cores))
+					plan.threads = cpuThreads(cores)
 				}
 			}
 			identity, _ := json.Marshal(struct {

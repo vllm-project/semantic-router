@@ -48,6 +48,7 @@ func processes(t *testing.T, lease *Lease) map[string]string {
 }
 
 func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *testing.T) {
+	t.Setenv(CPUThreadsEnv, "")
 	manager, queries := fakeAutoManager(t, "cpu", 8)
 	cfg := runtimeConfig(autoEncoders())
 	if err := manager.Reconcile(cfg); err != nil {
@@ -65,8 +66,8 @@ func TestManagerPlansAutoDeploymentsAsCPUWhereTheRuntimeResolvesAutoToTheCPU(t *
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(data), `"device": "cpu"`) || group.plan.threads != 2 {
-			t.Fatalf("%s runs on the CPU with a thread share of 8 cores (threads %d): %s", name, group.plan.threads, data)
+		if !strings.Contains(string(data), `"device": "cpu"`) || group.plan.threads != 4 {
+			t.Fatalf("%s runs on the CPU with a 4-thread budget (threads %d): %s", name, group.plan.threads, data)
 		}
 	}
 	// A reload plans with the answer it already has.

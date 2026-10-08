@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "9995d68856b15ba944b16614d3e497a952691a10"
+  source_commit: "04f1dd1d06d1e310b86bd65cf404509cb27afeac"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -209,7 +209,11 @@ global:
   传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
 - 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
   `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
-- 在 CPU 上，同一进程中的模型共享 CPU 线程。用 `--threads` 指定你能分给运行时的核数来启动它。
+- 托管 CPU worker 默认使用路由器可用 CPU 预算的一半，向下取整，最少 1 个、最多 16 个线程。
+  在 `vllm-sr serve` 启动前设置正整数 `VLLM_SRUN_CPU_THREADS`，即可指定每个 worker 的线程数，上限为完整 CPU 预算。
+  用实际输入长度和并发量比较效果：多个模型同时忙碌时，减少线程可能降低争用；有专用核心时，长输入可能受益于更多线程。
+  参见 [CPU 线程](model-runtime/deploy.md#cpu-threads)。自行启动并通过 `endpoint` 挂载的运行时使用自己的
+  `--threads` 设置，同一进程中的模型共享这些线程。
 - 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
   的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
 - GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
@@ -228,7 +232,8 @@ global:
 
 **多个路由器可以共享一个运行时吗？** 可以。启动一次，并给每个路由器配置同一个 `endpoint`。
 
-**一个运行时可以提供多个模型吗？** 可以。给 `vllm-sr serve` 传入多个模型，或让路由器把它的 deployment 分组到进程中。
+**一个运行时可以提供多个模型吗？** 可以。给 `vllm-srun serve` 传入多个模型，再通过 `endpoint` 挂载各个 deployment。
+路由器托管的 deployment 和 replica 各自使用独立的 worker。
 
 **更换 embedding 模型后，我缓存和存储的向量会怎样？** 它们与新向量隔离，不会被复用。
 见[更换 embedding 模型时重新向量化](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes)。

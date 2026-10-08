@@ -38,13 +38,20 @@ named the runtime `vllm-sr-runtime`. If you used one, rename what you set:
 | `vllm-sr-runtime` (package and command) | `vllm-srun` |
 | `vllm_sr_runtime` (module) | `vllm_srun` |
 | `vllm_sr_runtime.families`, `.engines`, `.accelerators`, `.profiles` (plugin entry-point groups) | `vllm_srun.families`, `.engines`, `.accelerators`, `.profiles` |
-| `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
+| `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
+| `VLLM_SR_RUNTIME_CPU_PROCESSES` or `VLLM_SRUN_CPU_PROCESSES` | Removed. Set `VLLM_SRUN_CPU_THREADS` to choose threads per managed CPU worker; process counts do not translate directly to thread counts. |
 | `VLLM_SR_RUNTIME_PREPARED_DIR` | removed: Vela Omni downloads like every model (below) |
 | `vllm_sr_runtime_*` metrics | `vllm_srun_*` |
 
 `VLLM_SR_RUNTIME_CONFIG_PATH`, `VLLM_SR_RUNTIME_STATUS_DIR` and
 `VLLM_SR_RUNTIME_CONTAINERS` belong to the CLI and the dashboard, shipped in
 v0.4.0, and keep their names.
+
+Managed CPU workers now default to half the router's available CPU budget,
+rounded down, with a minimum of one thread and a maximum of 16. The thread count
+stays independent of the number of active models; attached runtimes keep their
+own settings. See
+[CPU threads](model-runtime/deploy.md#cpu-threads) before choosing an override.
 
 ## Breaking changes
 

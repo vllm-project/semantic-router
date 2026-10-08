@@ -449,11 +449,16 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 | `VLLM_SRUN_COMMAND` | `vllm-srun` | Command the router runs for a managed process. |
 | `VLLM_SRUN_DIR` | a private temporary directory | Where the router puts the processes' Unix sockets and models files. |
 | `VLLM_SRUN_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
-| `VLLM_SRUN_CPU_PROCESSES` | at most one per two cores | CPU worker concurrency budget used to derive a stable per-worker thread count. It is independent of the active routing consumer set. |
+| `VLLM_SRUN_CPU_THREADS` | Half the CPU budget, rounded down; minimum 1, maximum 16 | Threads per managed CPU worker. A positive integer overrides the default, capped by the router's full CPU budget; invalid or nonpositive values use the default. It does not control worker count or attached runtimes. |
 | `VLLM_SRUN_READY_TIMEOUT` | `10m` | How long the router waits for a deployment to become ready when it starts or reloads, as a duration such as `30m`. A first start may download and verify large models. |
 | `VLLM_SRUN_RESULT_CACHE` | `4096` | Recent classify and decision results for a single-worker deployment; `0` disables it. Multi-worker pools bypass this frontend cache; worker caches remain independent. |
 | `VLLM_SRUN_AUTOTUNE_CACHE` | | The `--autotune-cache` directory of a runtime. |
 | `HF_TOKEN` | | Token for gated or private repositories. |
+
+The CPU budget is the router's `GOMAXPROCS`, normally derived from CPU affinity
+and the container's CPU quota. `vllm-sr serve` forwards `VLLM_SRUN_CPU_THREADS`
+to the router. Worker thread counts stay independent of active routing consumers;
+see [CPU threads](model-runtime/deploy.md#cpu-threads) for tuning guidance.
 
 The router talks to managed runtimes only over Unix sockets in a directory only
 its own user can open (mode 0700). It restarts a process that exits, waiting 1

@@ -254,8 +254,14 @@ not finish its safety scan within it.
 - For a runtime you started, look at `vllm_srun_request_duration_seconds` and
   `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
   `Server-Timing` header of its responses.
-- On CPU, models of one process share the CPU threads. Start the runtime with
-  `--threads` set to the cores you can give it.
+- Managed CPU workers default to half the router's available CPU budget,
+  rounded down, with a minimum of one thread and a maximum of 16. Set
+  `VLLM_SRUN_CPU_THREADS` before `vllm-sr serve` to choose a positive thread count
+  per worker, up to the full CPU budget. Compare real input lengths and concurrency:
+  fewer threads can reduce contention between busy models, while longer inputs
+  on dedicated cores may benefit from more. See [CPU threads](model-runtime/deploy.md#cpu-threads).
+  For a runtime you start and attach yourself, set its `--threads` instead;
+  models in that process share its threads.
 - CPU models slow down sharply when other work holds some of their cores,
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on
@@ -284,7 +290,8 @@ against its pinned hash before loading.
 router the same `endpoint`.
 
 **Can one runtime serve several models?** Yes. Pass several models to
-`vllm-sr serve`, or let the router group its deployments into processes.
+`vllm-srun serve` and attach deployments through `endpoint`. Router-managed
+deployments and replicas each use their own worker.
 
 **What happens to my cached and stored vectors when I change the embedding
 model?** They stay apart from new ones and are not reused. See
