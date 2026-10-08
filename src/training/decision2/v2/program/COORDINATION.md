@@ -207,6 +207,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 15:05 — **`vela2-onecall` → parent: node A RELEASED (cores 112–159, no GPU used). #4749 is accepted, and #4748's `make check` passed (exit 0) along with the local-stack E2E on its tree. CI is queued behind `main`'s backlog, and I keep watching it.**
+  - **Removed from node A:** images `vsr-onecall/*` (5), buildx builder `vela2-onecall` with its cache, the networks and volumes of my `onecall-*` stacks (2 and 30), my exact mirrors under `/data/dev2/src/` (5), and `/data/dev2/runs/vela2-onecall/`. No process of mine remains.
+  - **Not touched:** the dashboard image the CLI test used, which was already on the node; the shared image lock; and anyone else's images, containers or data.
+  - **Evidence kept locally** (scratch, not in the repo): every conformance evaluation report and Router metrics file for `main`, `fe36c817c` and the final commit.
+  - **#4748:** baseline and domain checks all pass, including `test-semantic-router` (the race no longer fails), `vllm-sr-test` (3368 passed) and `model-runtime-test`. On GitHub, DCO passes; "Check linked accepted issue" and CI planning are queued.
+
+- 2026-10-08 15:01 — **`main-green` → parent: node A claim: CPU cores 0–31, no GPU, under `/data/dev2/runs/main-green/`, for about 30 min. It runs `make test-models` and the website build on `main` `42de88e31`. #4743 merged as `ec74e51fc`, squashed onto #4729, and the squash carries exactly my commit's changes. `main`'s CI on `ec74e51fc` runs Published Models, but not with #4745 in the tree, and #4745 changed the `modelservice` bundle that the unified classifier uses.**
+  - **#4743's CI on its head `c7e07a9a7` passed every selected job before `CI / Gate` (success at 14:25):**
+    - Published Models, Local Stack (memory `test_07` ok), and Source Checks with the website build;
+    - Security: the new self-exclusion step passed, and the advisory scan reported 15 findings, 0 HIGH;
+    - Dashboard, Router Contracts, CI Harness, image calibration and Kubernetes Router.
+  - **Node B:** my use ended about 13:41, before the 13:55 reservation, and `nrun.sh` refused my one later attempt. Left there:
+    - data: `/data/dev2/runs/main-green/` (about 20 GB, mostly Vela 1.0 packages) and the mirrors `/data/dev2/src/c7e07a9a7…` and `/data/dev2/src/fe9b447bb…`;
+    - images: `golang:1.25-bookworm`, `node:22-bookworm`, `semantic-router-ci/provider-mocker:e2e-test`, and the memory stack's pulls (`vllm-sr:latest`, `dashboard:latest`, `envoy:v1.35.3`, Milvus and the observability images);
+    - no containers.
+  - **Ask:** I won't touch node B without your OK. Should I remove those leftovers with `ALLOW_RESERVED_NODES=1`, or leave them for you?
+  — `main-green`
+
 - 2026-10-08 14:56 — **`vela2-onecall` → parent: #4745 is verified on its final commit. `make check` found two problems on `main`. The ruff errors are fixed in #4747, which the user merged at 14:47 before its CI. A deadline race #4745 introduced has issue https://github.com/vllm-project/semantic-router/issues/4749, which needs your acceptance, and one-commit PR https://github.com/vllm-project/semantic-router/pull/4748.**
   - **Final commit `4d91df63c` (= merged content), node A, 4 pinned cores, `GOMAXPROCS=4`, three runs each:**
 
