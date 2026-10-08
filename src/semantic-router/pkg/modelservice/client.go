@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -28,6 +30,9 @@ type Client struct {
 	// scanning holds the served models whose card reports a scan budget, the
 	// only ones that take a decisions request's max_tokens and overflow.
 	scanning atomic.Pointer[map[string]bool]
+	// apiMinor is the minor version of the contract the runtime serves, as
+	// /v1/models last reported it (-1 until then).
+	apiMinor atomic.Int64
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -42,6 +47,7 @@ func NewClient(endpoint string) (*Client, error) {
 	}
 	client := &Client{endpoint: endpoint, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
+	client.apiMinor.Store(-1)
 	return client, nil
 }
 
@@ -76,6 +82,7 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
+	c.apiMinor.Store(contractMinor(response.JSON200.ApiVersion))
 	inputs := make(map[string]int, len(response.JSON200.Data))
 	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
@@ -87,6 +94,24 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	c.maxInputs.Store(&inputs)
 	c.scanning.Store(&scanning)
 	return response.JSON200.Data, nil
+}
+
+// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
+// of the major this client speaks, or -1.
+func contractMinor(version string) int64 {
+	major, rest, _ := strings.Cut(version, ".")
+	minor, _, _ := strings.Cut(rest, ".")
+	value, err := strconv.ParseInt(minor, 10, 64)
+	if major != RuntimeAPIMajor || err != nil || value < 0 {
+		return -1
+	}
+	return value
+}
+
+// takesStates reports whether the runtime answers a decisions call about
+// several states (DecisionRequest.states).
+func (c *Client) takesStates() bool {
+	return c.apiMinor.Load() >= statesMinor
 }
 
 // boundedRead is the request a model without a scan budget takes: it reads one
