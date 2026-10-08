@@ -2,6 +2,7 @@ package modelservice
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strconv"
 	"sync"
@@ -82,11 +83,12 @@ type bundleCall struct {
 	result api.BundleResult
 	timing exchangeTiming
 	err    error
-	// decision is set for a decisions call, and sent is closed once the task
-	// that carries it is sent, in the exchange whose context is carrier.
+	// carrier is the context of the exchange that sends the call.
+	carrier context.Context
+	// decision is set for a decisions call, and sent is closed once the call
+	// is sent.
 	decision *decisionCall
 	sent     chan struct{}
-	carrier  context.Context
 }
 
 // decisionCall is a decisions call parked in a bundle: the request it asks,
@@ -335,14 +337,14 @@ func (b *Bundle) park(client *Client, call *bundleCall) error {
 func (c *bundleCall) wait() error {
 	select {
 	case <-c.done:
-		return nil
+		return c.answered()
 	case <-c.sent:
 		return c.waitCarrier()
 	case <-c.ctx.Done():
 	}
 	select {
 	case <-c.done:
-		return nil
+		return c.answered()
 	case <-c.sent:
 		return c.waitCarrier()
 	default:
@@ -353,15 +355,42 @@ func (c *bundleCall) wait() error {
 func (c *bundleCall) waitCarrier() error {
 	select {
 	case <-c.done:
-		return nil
+		return c.answered()
 	case <-c.carrier.Done():
 	}
 	select {
 	case <-c.done:
-		return nil
+		return c.answered()
 	default:
+		if c.cutShort() {
+			return c.ownDeadline()
+		}
 		return c.carrier.Err()
 	}
+}
+
+// answered returns nil once the call is answered, with its own error if it
+// has one; a call its exchange's deadline cut short fails at its caller's.
+func (c *bundleCall) answered() error {
+	if c.err != nil && c.cutShort() {
+		return c.ownDeadline()
+	}
+	return nil
+}
+
+// cutShort reports whether the deadline of the exchange that sent the call
+// has passed for a caller with a deadline of its own.
+func (c *bundleCall) cutShort() bool {
+	_, bounded := c.ctx.Deadline()
+	return bounded && c.carrier != nil && errors.Is(c.carrier.Err(), context.DeadlineExceeded)
+}
+
+// ownDeadline fails the call with its caller's deadline, which is never later
+// than its exchange's: it returns once the caller's own context says so, so
+// the caller reads the error as its own deadline.
+func (c *bundleCall) ownDeadline() error {
+	<-c.ctx.Done()
+	return c.ctx.Err()
 }
 
 // sendReadyLocked sends the calls whose senders are ready: the other calls
@@ -444,8 +473,8 @@ func (b *Bundle) sendLocked(others bool, deployments []string) {
 			ctx, cancel := b.carrier(part)
 			for _, task := range part {
 				for _, call := range task.calls {
+					call.carrier = ctx
 					if call.sent != nil {
-						call.carrier = ctx
 						close(call.sent)
 					}
 				}
