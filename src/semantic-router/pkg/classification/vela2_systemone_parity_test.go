@@ -232,6 +232,10 @@ func spanLabels(spans []modelservice.Span) []string {
 // against /v1/systemone asked the same questions about the same text.
 func TestVela2RouterMatchesSystemOne(t *testing.T) {
 	endpoint := os.Getenv(Vela2SystemOneEndpointEnv)
+	if os.Getenv("VLLM_SR_REQUIRE_MODEL_TESTS") == "1" {
+		// The published-model runner serves the pinned 0.3B there.
+		endpoint, _ = requireVela2Runtime(t, Vela2SystemOneEndpointEnv, config.Vela2SignalModel)
+	}
 	if endpoint == "" {
 		t.Skipf("set %s to a runtime serving one Vela 2.0 model", Vela2SystemOneEndpointEnv)
 	}
