@@ -1,13 +1,13 @@
 # Router images: the Go router with the built-in model runtime.
 #
-# One stage graph builds every published router image. The router binary and
-# the image-routing assets are shared by all of them; only the runtime's
-# PyTorch build differs per accelerator, and only the last layers differ
-# between the Kubernetes image and the CLI stack image.
+# One stage graph builds every published router image: vllm-sr, vllm-sr-rocm
+# and vllm-sr-cuda. The router binary and the image-routing assets are shared
+# by all of them; only the runtime's PyTorch build differs per accelerator.
+# The same image serves `vllm-sr serve`, the Helm chart and the Operator.
 #
-#   docker build -f tools/docker/Dockerfile.extproc -t extproc .
-#   docker build -f tools/docker/Dockerfile.extproc --target vllm-sr -t vllm-sr .
-#   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm -t extproc-rocm .
+#   docker build -f tools/docker/Dockerfile.extproc -t vllm-sr .
+#   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm -t vllm-sr-rocm .
+#   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=cuda -t vllm-sr-cuda .
 #
 # ACCELERATOR is cpu (linux/amd64 and linux/arm64), rocm or cuda (linux/amd64).
 # The CUDA image takes PyTorch from the official wheel, which carries its CUDA
@@ -205,9 +205,9 @@ EOF
 RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
     pip install --no-deps /tmp/model-runtime
 
-# Everything the two router images share. Immutable assets sit outside the
-# mounted model cache, each in an independent layer.
-FROM runtime AS router
+# The router image. Immutable assets sit outside the mounted model cache, each
+# in an independent layer.
+FROM runtime AS vllm-sr
 WORKDIR /app
 # The charts run the router as uid 65532; other uids (OpenShift) have no passwd
 # entry, so Python's getpass and PyTorch's compile caches take USER.
@@ -222,27 +222,20 @@ ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime \
     TRITON_CACHE_DIR=/app/models/triton \
     MIOPEN_USER_DB_PATH=/app/models/miopen \
     MIOPEN_CUSTOM_CACHE_DIR=/app/models/miopen
-COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
-COPY config/knowledge_bases/ /app/config/knowledge_bases/
-COPY --link --from=router-build /out/router /usr/local/bin/router
-EXPOSE 50051 8080 9190
-
-# The vLLM Semantic Router stack image started by `vllm-sr serve`. The CLI's
-# readiness and status probes run curl inside this container.
-FROM router AS vllm-sr
+# The CLI's readiness and status probes run curl inside the container.
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/* && \
     python -c "import torch"
+COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/config.yaml /app/config/config.yaml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
+COPY --link --from=router-build /out/router /usr/local/bin/router
+EXPOSE 50051 8080 9190
 VOLUME ["/app/models"]
+# With no arguments or with router flags, the entrypoint runs the Router on
+# /app/config/config.yaml (Kubernetes); with a config path, the CLI stack.
 ENTRYPOINT ["/app/start-router.sh"]
-CMD ["/app/config.yaml"]
-
-# The ExtProc router image for Kubernetes (Helm chart and operator), with the
-# reference configuration as its default.
-FROM router AS extproc
-COPY config/config.yaml /app/config/config.yaml
-ENTRYPOINT ["/usr/local/bin/router", "--config=/app/config/config.yaml"]

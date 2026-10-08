@@ -326,8 +326,8 @@ def test_k8s_serve_rejects_replace_active_config(tmp_path: Path, caplog):
         ],
     )
 
-    assert result.exit_code != 0
-    assert "supported only for local Docker deployments" in caplog.text
+    assert result.exit_code == 2
+    assert "--replace-active-config applies to the docker target" in result.output
 
 
 def test_serve_help_describes_docker_only_runtime():

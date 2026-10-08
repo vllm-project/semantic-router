@@ -193,11 +193,8 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
     sections: [
       {
         title: 'Integrations',
-        description: 'Extend the control plane with tools and agent runtimes.',
-        items: [
-          { kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' },
-          { kind: 'route', label: 'OpenClaw', icon: 'claw', to: '/openclaw' },
-        ],
+        description: 'Extend the control plane with tools.',
+        items: [{ kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' }],
       },
     ],
   },

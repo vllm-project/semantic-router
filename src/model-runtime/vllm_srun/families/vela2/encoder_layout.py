@@ -15,7 +15,7 @@ windows that cover the word.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -23,6 +23,9 @@ from .layout import Budget, Row, Tokens, fit, window_words
 from .raw import RawRow, RawSpan
 from .request import Question
 from .words import Words
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 MARKERS = (
     "[Q]",
@@ -63,9 +66,11 @@ class EncoderSequence:
     questions: list[SequenceQuestion]
     labels: list[int] = field(default_factory=list)
     label_names: list[str] = field(default_factory=list)
-    words: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))
-    word_offsets: np.ndarray = field(default_factory=lambda: np.zeros((0, 2), np.int32))
-    word_index: np.ndarray | None = None
+    words: NDArray[np.int64] = field(default_factory=lambda: np.zeros(0, np.int64))
+    word_offsets: NDArray[np.int32] = field(
+        default_factory=lambda: np.zeros((0, 2), np.int32)
+    )
+    word_index: NDArray[np.intp] | None = None
     budget: Budget | None = None
 
 
@@ -100,8 +105,10 @@ class EncoderLayout:
         self.max_len = int(config["max_length"])
         self.overlap = int(config["window_overlap"])
 
-    def sequences(self, row: Row, tokens: Tokens) -> list[EncoderSequence]:
-        """The row as one sequence, or as windows over a labelled part that had to be cut."""
+    def sequences(
+        self, row: Row, tokens: Tokens, in_windows: bool = True
+    ) -> list[EncoderSequence]:
+        """The row as one sequence, or (with ``windows``) as windows over a labelled part that had to be cut."""
         compiled = [self._compile(q, tokens) for q in row.questions if q.type != "span"]
         span = row.span
         labels = (
@@ -113,7 +120,8 @@ class EncoderLayout:
             else []
         )
         first = self._assemble(row, compiled, labels)
-        if not first.budget.protected_cut:
+        assert first.budget is not None
+        if not first.budget.protected_cut or not in_windows:
             return [first]
         role = self._window_role(row)
         if role is None:
@@ -150,7 +158,9 @@ class EncoderLayout:
             input_tokens=sum(len(sequence.ids) for sequence in sequences),
         )
         for index, entry in enumerate(first.questions):
-            stacked = np.stack([output[0][index] for output in outputs])
+            stacked: NDArray[np.float32] = np.stack(
+                [output[0][index] for output in outputs]
+            )
             raw.logits[entry.question.id] = (
                 stacked.max(0) if entry.question.type == "set" else stacked.mean(0)
             )
@@ -164,11 +174,13 @@ class EncoderLayout:
                 outputs[0][1].astype(np.float64),
             )
             return raw
-        words = row.part(span.over).words
+        words = row.part(cast(str, span.over)).words
+        assert words is not None
         total = len(words)
         accumulated = np.zeros((total, len(span.names)), np.float64)
         counts = np.zeros(total, np.float64)
         for sequence, (_, logits) in zip(sequences, outputs, strict=True):
+            assert sequence.word_index is not None
             covered = sequence.word_index[: len(logits)]
             accumulated[covered] += logits
             counts[covered] += 1
@@ -196,7 +208,7 @@ class EncoderLayout:
     @staticmethod
     def _window_role(row: Row) -> str | None:
         if row.span is not None:
-            return row.span.over
+            return cast(str, row.span.over)
         overs = [question.over for question in row.questions]
         if isinstance(overs[0], str) and all(over == overs[0] for over in overs):
             return overs[0]
@@ -245,29 +257,28 @@ class EncoderLayout:
             ids.extend(int(token) for token in part.ids[: budget.lengths[part.role]])
             ranges[part.role] = (start, len(ids))
         ids.append(self.eos)
-        for entry in questions:
-            roles = entry.question.roles
-            entry.pool = (ranges[roles[0]][0], ranges[roles[-1]][1])
+        for placed in questions:
+            roles = placed.question.roles
+            placed.pool = (ranges[roles[0]][0], ranges[roles[-1]][1])
         sequence = EncoderSequence(ids, questions, budget=budget)
         span = row.span
         if span is not None:
-            part = row.part(span.over)
+            role = cast(str, span.over)
+            part = row.part(role)
             words = (
                 part.words
                 if part.words is not None
                 else Words(np.zeros((0, 2), np.int32), np.zeros(0, np.int32))
             )
-            keep = words.first < budget.lengths[span.over]
+            keep = words.first < budget.lengths[role]
             sequence.labels = label_positions
             sequence.label_names = span.names
-            sequence.words = (ranges[span.over][0] + 1 + words.first[keep]).astype(
-                np.int64
-            )
+            sequence.words = (ranges[role][0] + 1 + words.first[keep]).astype(np.int64)
             sequence.word_offsets = words.offsets[keep]
         return sequence
 
 
-def batch_indices(sequences: list[EncoderSequence]) -> dict[str, np.ndarray]:
+def batch_indices(sequences: list[EncoderSequence]) -> dict[str, NDArray[np.int64]]:
     """The readout index tensors of a padded batch (the published graph's inputs).
 
     ``q_index`` [row, [Q], pool start, pool end) per question; ``opt_index``
@@ -275,7 +286,10 @@ def batch_indices(sequences: list[EncoderSequence]) -> dict[str, np.ndarray]:
     start]; ``ent_index`` [row, [E]]. An empty index gets one dummy entry so
     no graph input is empty; readouts drop it.
     """
-    queries, options, units, labels = [], [], [], []
+    queries: list[tuple[int, int, int, int]] = []
+    options: list[tuple[int, int, int]] = []
+    units: list[tuple[int, int]] = []
+    labels: list[tuple[int, int]] = []
     for row, sequence in enumerate(sequences):
         for entry in sequence.questions:
             owner = len(queries)
@@ -292,8 +306,10 @@ def batch_indices(sequences: list[EncoderSequence]) -> dict[str, np.ndarray]:
 
 
 def split_outputs(
-    sequences: list[EncoderSequence], option_logits: np.ndarray, span_logits: np.ndarray
-) -> list[tuple[list[np.ndarray], np.ndarray | None]]:
+    sequences: list[EncoderSequence],
+    option_logits: NDArray[np.float32],
+    span_logits: NDArray[np.float32],
+) -> list[tuple[list[NDArray[np.float32]], NDArray[np.float32] | None]]:
     """Per sequence: its questions' option logits and its own word x label block."""
     out = []
     option, unit, label = 0, 0, 0

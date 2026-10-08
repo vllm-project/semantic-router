@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent-harness',
         'installation/agent',
         'installation/shell-completion',
         {
@@ -41,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/gateway-modes',
             'installation/support-matrix',
           ],
         },
@@ -289,6 +291,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/configuration-management',
             'installation/recipe-lifecycle',
             {
               type: 'category',
@@ -448,6 +451,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/open-intelligence-index-and-model-arena',
             'proposals/unified-model-catalog-and-evaluation-index',
+            'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -541,19 +545,6 @@ const sidebars: SidebarsConfig = {
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
       ],
     },
     {

@@ -9,7 +9,7 @@ from cli.commands.chat import chat
 
 @click.group()
 def request() -> None:
-    """Send requests through an Envoy listener."""
+    """Send requests through the stack's listener."""
 
 
 request.add_command(chat)

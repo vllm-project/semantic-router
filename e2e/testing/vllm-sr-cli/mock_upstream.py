@@ -103,12 +103,13 @@ class MockUpstreamMixin:
         request_headers: dict[str, str] | None = None,
         model: str = "test-model",
         content: str = "ping",
+        listener_port: int = 8888,
     ):
         """Send a chat request, retrying until the local stack is ready.
 
         Returns the response headers of the first successful request.
         """
-        listener_port = 8888 + self.runtime_stack.port_offset
+        listener_port += self.runtime_stack.port_offset
         request = urllib_request.Request(
             f"http://localhost:{listener_port}{request_path}",
             data=json.dumps(
