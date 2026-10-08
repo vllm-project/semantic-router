@@ -13,6 +13,7 @@ from cli.container_runtime import get_container_runtime
 from cli.container_gpu_isolation import AMD_ROUTER_VISIBLE_DEVICES_ENV
 
 PLATFORMS = ("auto", "cpu", "cuda", "rocm")
+RENDER_NODE_GLOB = "renderD*/device/vendor"  # codespell:ignore renderd
 GPU_RESOURCES = {"cuda": "nvidia.com/gpu", "rocm": "amd.com/gpu"}
 
 
@@ -102,7 +103,7 @@ def _host_devices():
     if Path("/dev/kfd").exists():
         cards = [
             path
-            for path in Path("/sys/class/drm").glob("renderD*/device/vendor")
+            for path in Path("/sys/class/drm").glob(RENDER_NODE_GLOB)
             if path.read_text().strip().lower() == "0x1002"
         ]
         devices["rocm"] = tuple(range(len(cards)))

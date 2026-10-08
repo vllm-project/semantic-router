@@ -7,9 +7,7 @@ reject a stale projection without requiring torch, a GPU, or the model cache.
 
 import argparse
 import ast
-import importlib
 import json
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,22 +19,55 @@ BACKEND_OUTPUT = (
 RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
 
 
+def release_literal(node, bindings):
+    if isinstance(node, ast.Name):
+        return release_literal(bindings[node.id], bindings)
+    if isinstance(node, ast.JoinedStr):
+        return "".join(
+            (
+                str(release_literal(part.value, bindings))
+                if isinstance(part, ast.FormattedValue)
+                else ast.literal_eval(part)
+            )
+            for part in node.values
+        )
+    return ast.literal_eval(node)
+
+
 def release_projection():
-    """Read the runtime's stdlib-only release tables, without loading plugins."""
-    sys.path.insert(0, str(RUNTIME.parent))
-    try:
-        releases = {}
-        for path in sorted((RUNTIME / "registry/tables").glob("*.py")):
-            if path.stem in {"__init__", "common"}:
-                continue
-            table = importlib.import_module(f"vllm_srun.registry.tables.{path.stem}")
-            for model in table.MODELS:
-                if model.repo_id in releases:
-                    raise ValueError(f"duplicate release: {model.repo_id}")
-                releases[model.repo_id] = model.revision
-        return dict(sorted(releases.items()))
-    finally:
-        sys.path.pop(0)
+    """Project literal identities and factory arguments without importing runtime code."""
+    organization = assignment(RUNTIME / "registry/tables/common.py", "ORG")
+    releases = {}
+    for path in sorted((RUNTIME / "registry/tables").glob("*.py")):
+        if path.stem in {"__init__", "common"}:
+            continue
+        tree = ast.parse(path.read_text())
+        factories = {
+            node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+        }
+        models = assignment(path, "MODELS")
+        while isinstance(models, ast.Name):
+            models = assignment(path, models.id)
+        for model in models.elts:
+            bindings = {"ORG": organization}
+            constructor = model
+            if model.func.id != "BuiltinModel":
+                factory = factories[model.func.id]
+                bindings.update(
+                    (arg.arg, value)
+                    for arg, value in zip(factory.args.args, model.args)
+                )
+                bindings.update((item.arg, item.value) for item in model.keywords)
+                constructor = next(
+                    node.value for node in factory.body if isinstance(node, ast.Return)
+                )
+            fields = {item.arg: item.value for item in constructor.keywords}
+            repo = release_literal(fields["repo_id"], bindings)
+            revision = release_literal(fields["revision"], bindings)
+            if repo in releases:
+                raise ValueError(f"duplicate release: {repo}")
+            releases[repo] = revision
+    return dict(sorted(releases.items()))
 
 
 def assignment(path, name):
