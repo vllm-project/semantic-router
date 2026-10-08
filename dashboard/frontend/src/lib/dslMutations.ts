@@ -569,11 +569,11 @@ function serializeRouteBody(input: RouteInput): string {
   for (const p of input.plugins) {
     if (p.fields && Object.keys(p.fields).length > 0) {
       const pluginFields = serializeFields(p.fields, '    ')
-      lines.push(`  PLUGIN ${p.name} {`)
+      lines.push(`  PLUGIN ${formatDslName(p.name)} {`)
       lines.push(pluginFields)
       lines.push(`  }`)
     } else {
-      lines.push(`  PLUGIN ${p.name}`)
+      lines.push(`  PLUGIN ${formatDslName(p.name)}`)
     }
   }
 

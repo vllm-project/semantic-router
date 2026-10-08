@@ -69,11 +69,11 @@ function generateRouteDslPreview(
     plugins.forEach((p) => {
       if (p.fields && Object.keys(p.fields).length > 0) {
         const pluginFields = serializeFields(filterPreviewFields(p.fields), '    ')
-        lines.push(`  PLUGIN ${p.name} {`)
+        lines.push(`  PLUGIN ${formatDslName(p.name)} {`)
         if (pluginFields.trim()) lines.push(pluginFields)
         lines.push(`  }`)
       } else {
-        lines.push(`  PLUGIN ${p.name}`)
+        lines.push(`  PLUGIN ${formatDslName(p.name)}`)
       }
     })
   }

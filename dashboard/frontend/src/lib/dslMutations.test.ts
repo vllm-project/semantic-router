@@ -100,6 +100,22 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
     ).toBe('PLUGIN "team cache" semantic_cache {\n  enabled: true\n}\n')
   })
 
+  it('quotes route plugin references whose names need quotes', () => {
+    const updated = updateRoute('ROUTE support {\n  PRIORITY 1\n}\n', 'support', {
+      priority: 1,
+      models: [],
+      plugins: [
+        { name: 'team cache' },
+        { name: 'team guard', fields: { enabled: true } },
+        { name: 'semantic_cache' },
+      ],
+    })
+
+    expect(updated).toContain('  PLUGIN "team cache"\n')
+    expect(updated).toContain('  PLUGIN "team guard" {\n    enabled: true\n  }\n')
+    expect(updated).toContain('  PLUGIN semantic_cache\n')
+  })
+
   it('writes names that are DSL identifiers without quotes', () => {
     expect(
       updateSignal('SIGNAL keyword urgent-requests {\n}\n', 'keyword', 'urgent-requests', {
