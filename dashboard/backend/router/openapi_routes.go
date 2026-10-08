@@ -23,9 +23,8 @@ var dashboardOpenAPIInfo = apicontract.Info{
 // contracts. Each entry is reviewed: adding a prefix hides routes from the
 // published document and from client generation.
 var openAPIExemptPrefixes = map[string]string{
-	"/embedded/":  "embedded third-party UIs (Grafana, Jaeger, Prometheus, OpenClaw, WizMap) proxied as HTML and upstream APIs",
-	"/_internal/": "internal sidecar transport, not a client API",
-	"/metrics/":   "Prometheus exposition proxy, not a JSON API",
+	"/embedded/": "embedded third-party UIs (Grafana, Jaeger, Prometheus, WizMap) proxied as HTML and upstream APIs",
+	"/metrics/":  "Prometheus exposition proxy, not a JSON API",
 }
 
 func openAPIExemption(pattern string) (string, bool) {
