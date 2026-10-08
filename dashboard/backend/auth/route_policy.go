@@ -31,7 +31,6 @@ const (
 	ResourceOwnerReplay        ResourceOwner = "replay"
 	ResourceOwnerFeedback      ResourceOwner = "feedback"
 	ResourceOwnerTools         ResourceOwner = "tools"
-	ResourceOwnerOpenClaw      ResourceOwner = "openclaw"
 	ResourceOwnerML            ResourceOwner = "ml"
 	ResourceOwnerWorkflow      ResourceOwner = "workflow"
 )
@@ -430,7 +429,6 @@ var knownResourceOwners = map[ResourceOwner]struct{}{
 	ResourceOwnerReplay:        {},
 	ResourceOwnerFeedback:      {},
 	ResourceOwnerTools:         {},
-	ResourceOwnerOpenClaw:      {},
 	ResourceOwnerML:            {},
 	ResourceOwnerWorkflow:      {},
 }

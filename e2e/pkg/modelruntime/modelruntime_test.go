@@ -105,7 +105,10 @@ func TestClientDecodesSurfacesAndRequiresEveryAnswer(t *testing.T) {
 			_, _ = writer.Write([]byte(`{"model":"vela-domain","head":"default","kind":"sequence","labels":["code","math"],
 				"results":[{"index":0,"label":"math","probabilities":[0.25,0.75]}],"usage":{"input_tokens":4,"output_tokens":0}}`))
 		case "/v1/decisions":
-			_, _ = writer.Write([]byte(`{"answers":{"kind":{"choice":"code","probabilities":{"code":0.9}}}}`))
+			_, _ = writer.Write([]byte(`{"answers":{"kind":{"choice":"code","probabilities":{"code":0.9}},
+				"topics.billing":{"noul":0.8},"names":{"noul":0.7},"bare":{"noul":0.6}},
+				"sets":{"topics":{"selected":["billing"],"probabilities":{"billing":0.8}}},
+				"spans":{"names":[{"label":"city","start":10,"end":16,"text":"Lisbon","probability":0.7}]}}`))
 		default:
 			writer.WriteHeader(http.StatusNotFound)
 			_, _ = writer.Write([]byte(`{"error":{"code":"model_not_found","message":"no"}}`))
@@ -135,6 +138,20 @@ func TestClientDecodesSurfacesAndRequiresEveryAnswer(t *testing.T) {
 	questions := map[string]Question{"kind": {Type: "choice"}, "hard": {Type: "noul"}}
 	if _, err := client.Decide(ctx, DecisionsRequest{State: "x", Questions: questions}); err == nil {
 		t.Fatal("a missing answer was accepted")
+	}
+	questions = map[string]Question{"kind": {Type: "choice"}, "topics": {Type: "set"}, "names": {Type: "span"}}
+	decided, err := client.Decide(ctx, DecisionsRequest{State: "x", Questions: questions})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set, spans := decided.Sets["topics"], decided.Spans["names"]; len(set.Selected) != 1 || set.Selected[0] != "billing" ||
+		len(spans) != 1 || spans[0].Text != "Lisbon" {
+		t.Fatalf("set and span answers = %+v", decided)
+	}
+	for _, question := range []map[string]Question{{"other": {Type: "set"}}, {"bare": {Type: "span"}}} {
+		if _, err := client.Decide(ctx, DecisionsRequest{State: "x", Questions: question}); err == nil {
+			t.Fatalf("%v was accepted without its set or spans", question)
+		}
 	}
 	var statusErr *StatusError
 	if _, err := client.Rerank(ctx, RerankRequest{Query: "q", Documents: []string{"d"}}); !errors.As(err, &statusErr) || statusErr.Status != http.StatusNotFound {

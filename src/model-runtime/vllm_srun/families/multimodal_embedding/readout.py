@@ -39,11 +39,15 @@ class ClapProjection(nn.Module):
         self.linear2 = nn.Linear(width, width)
 
     def forward(self, pooled: torch.Tensor) -> torch.Tensor:
-        return self.linear2(F.relu(self.linear1(pooled)))
+        projected: torch.Tensor = self.linear2(F.relu(self.linear1(pooled)))
+        return projected
 
 
 class Residual(nn.Module):
     """The frozen CLAP residual: ``weight @ ((clap - mean) / scale)`` added to the speech projection."""
+
+    mean: torch.Tensor
+    scale: torch.Tensor
 
     def __init__(self, dimension: int, width: int):
         super().__init__()
@@ -129,9 +133,10 @@ class OmniReadout(nn.Module):
     def image(self, pooled: torch.Tensor) -> torch.Tensor | None:
         """One image's embedding from the vision tower's pooled vector ``[1, hidden]``."""
         if self.normalize_pooled_image:
-            pooled = unit(pooled.float())
-            if pooled is None:
+            normalized = unit(pooled.float())
+            if normalized is None:
                 return None
+            pooled = normalized
         projected = unit(self.image_projection(pooled))
         return None if projected is None else unit(projected.float())
 

@@ -5,7 +5,13 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 from cli.config_contract import iter_condition_leaves, iter_routing_profiles
+from cli.decision_model import (
+    DECISION_MODEL_FIELD,
+    VELA1_DECISION_MODEL,
+    configured_decision_model,
+)
 from cli.models import UserConfig
+from cli.models_decision import OPTION_QUESTION_TYPES
 from cli.validation_error import ValidationError
 
 MODEL_RUNTIME_PROVIDER = "model_runtime"
@@ -102,14 +108,37 @@ def _reference_error(deployments: dict, name: str) -> str | None:
     return None
 
 
+def _decision_model(config: UserConfig) -> tuple[str | None, list[ValidationError]]:
+    """The configured decision model, canonical, or the error that names it."""
+
+    try:
+        return configured_decision_model({"global": config.global_ or {}}), []
+    except ValueError as error:
+        return None, [ValidationError(str(error), field=DECISION_MODEL_FIELD)]
+
+
+def _decision_model_question_error(decision_model: str | None) -> str | None:
+    if decision_model != VELA1_DECISION_MODEL:
+        return None
+    return (
+        f"deployment is required: the decision model is {decision_model}, whose "
+        "specialists answer only the built-in signals. Name a model_runtime "
+        "deployment for the question, or choose a Vela 2.0 decision model in "
+        f"{DECISION_MODEL_FIELD}"
+    )
+
+
 def validate_decision_model_references(
     config: UserConfig, deployments: dict
 ) -> list[ValidationError]:
-    errors = []
+    decision_model, errors = _decision_model(config)
     for name, profile in iter_routing_profiles(config):
         prefix = "routing" if name == "default" else f"recipes.{name}.routing"
         for rule in profile.signals.decision or []:
-            message = _reference_error(deployments, rule.deployment)
+            if rule.deployment:
+                message = _reference_error(deployments, rule.deployment)
+            else:
+                message = _decision_model_question_error(decision_model)
             if message:
                 errors.append(
                     ValidationError(
@@ -117,6 +146,7 @@ def validate_decision_model_references(
                     )
                 )
         rules = {rule.name: rule for rule in profile.signals.decision or []}
+        errors.extend(_set_label_answer_errors(prefix, list(rules.values())))
         for decision in profile.decisions:
             errors.extend(_selector_errors(prefix, decision, deployments))
             errors.extend(_condition_errors(prefix, decision, rules))
@@ -132,24 +162,47 @@ def _condition_errors(prefix, decision, rules) -> list[ValidationError]:
         rule = rules.get(condition.name or "")
         if rule is None:
             continue
-        if rule.question.type != "choice" and condition.label is not None:
+        kind = rule.question.type
+        if kind not in OPTION_QUESTION_TYPES and condition.label is not None:
             errors.append(
                 ValidationError(
                     f"Decision '{decision.name}' condition '{rule.name}' is a "
-                    f"{rule.question.type} question and takes no label",
+                    f"{kind} question and takes no label",
                     field=field,
                 )
             )
         elif (
-            rule.question.type == "choice" and condition.label not in rule.option_keys()
+            kind in OPTION_QUESTION_TYPES and condition.label not in rule.option_keys()
         ):
+            option = "choice key" if kind == "choice" else "label"
             errors.append(
                 ValidationError(
-                    f"Decision '{decision.name}' choice condition '{rule.name}' "
-                    "requires a declared choice key as its label",
+                    f"Decision '{decision.name}' {kind} condition '{rule.name}' "
+                    f"requires a declared {option} as its label",
                     field=field,
                 )
             )
+    return errors
+
+
+def _set_label_answer_errors(prefix, rules) -> list[ValidationError]:
+    """A rule named like a set label's answer key ("<rule>.<label>") on the same deployment."""
+    names = {(rule.deployment or "", rule.name) for rule in rules}
+    errors = []
+    for rule in rules:
+        if rule.question.type != "set":
+            continue
+        for label in rule.question.labels:
+            other = f"{rule.name}.{label.key}"
+            if (rule.deployment or "", other) in names:
+                errors.append(
+                    ValidationError(
+                        f"the name collides with the answer key of set question "
+                        f"'{rule.name}''s label '{label.key}' on deployment "
+                        f"'{rule.deployment or 'of the decision model'}'; rename one of them",
+                        field=f"{prefix}.signals.decision.{other}",
+                    )
+                )
     return errors
 
 

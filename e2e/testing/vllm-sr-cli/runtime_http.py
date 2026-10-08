@@ -4,6 +4,8 @@
 mode, or `vllm-srun serve ...`) on a free local port and stops it with
 SIGINT, as a reader would with Ctrl-C. `page_requests` reads the requests a
 docs page tells readers to send, so the tests send exactly those.
+`write_fixture` writes a tiny random-weight package with the runtime of the
+router image, so the host needs no runtime of its own.
 """
 
 import json
@@ -20,7 +22,9 @@ from urllib import request as urllib_request
 READY_TIMEOUT_SECONDS = 180
 STOP_TIMEOUT_SECONDS = 30
 HTTP_TIMEOUT_SECONDS = 60
+FIXTURE_TIMEOUT_SECONDS = 600
 HTTP_OK = 200
+DEFAULT_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 # A runtime request on a page: the path a curl command calls and its JSON body.
 CURL_REQUEST = re.compile(
     r"curl[^\n]*?(/v1/(?:decisions|classify|embeddings|rerank|bundle))"
@@ -33,6 +37,53 @@ def page_requests(page: Path) -> dict[str, dict]:
     """The runtime requests a docs page tells readers to send, by path."""
     text = page.read_text(encoding="utf-8")
     return {path: json.loads(body) for path, body in CURL_REQUEST.findall(text)}
+
+
+def container_runtime() -> str:
+    return os.environ.get("CONTAINER_RUNTIME", "").strip() or "docker"
+
+
+def router_image() -> str:
+    return os.environ.get("VLLM_SR_IMAGE", "").strip() or DEFAULT_IMAGE
+
+
+def write_fixture(output: Path, family: str, variant: str, seed: int = 0) -> Path:
+    """`vllm-srun fixture` in the router image, writing *output* as this user."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    runtime = container_runtime()
+    identity = (
+        ["--userns=keep-id"]
+        if runtime == "podman" and os.geteuid() != 0
+        else ["--user", f"{os.getuid()}:{os.getgid()}"]
+    )
+    result = subprocess.run(
+        [
+            runtime,
+            "run",
+            "--rm",
+            *identity,
+            "-v",
+            f"{output.parent.resolve()}:/out:z",
+            "--entrypoint",
+            "vllm-srun",
+            router_image(),
+            "fixture",
+            f"/out/{output.name}",
+            "--family",
+            family,
+            "--variant",
+            variant,
+            "--seed",
+            str(seed),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=FIXTURE_TIMEOUT_SECONDS,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(f"vllm-srun fixture failed: {result.stderr}")
+    return output
 
 
 def free_port() -> int:

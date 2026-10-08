@@ -131,7 +131,7 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
-	authenticateLooperRequestContext(ctx)
+	markLooperHop(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]

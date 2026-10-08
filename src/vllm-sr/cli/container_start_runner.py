@@ -25,7 +25,8 @@ log = get_logger(__name__)
 def run_container_specs(
     container_specs,
     *,
-    storage_secret_values: dict[str, str],
+    router_secret_values: dict[str, str],
+    dashboard_secret_values: dict[str, str] | None = None,
     bench_secret_values: dict[str, str] | None = None,
     bench_token_env: str = "SR_BENCH_TOKEN",
 ):
@@ -47,7 +48,8 @@ def run_container_specs(
         return_code, stdout, stderr = _run_service_commands(
             commands,
             service_name,
-            storage_secret_values,
+            router_secret_values,
+            dashboard_secret_values=dashboard_secret_values or {},
             bench_secret_values=bench_secret_values or {},
             bench_token_env=bench_token_env,
             container_name=container_name,
@@ -67,9 +69,10 @@ def run_container_specs(
 def _run_service_commands(
     commands,
     service_name: str,
-    storage_secret_values: dict[str, str],
+    router_secret_values: dict[str, str],
     *,
     on_created,
+    dashboard_secret_values: dict[str, str] | None = None,
     bench_secret_values: dict[str, str] | None = None,
     bench_token_env: str = "SR_BENCH_TOKEN",
     container_name: str = "",
@@ -82,7 +85,7 @@ def _run_service_commands(
 
     # Only the creating command resolves the inheriting `-e NAME` flags, so it
     # is the only child that is handed the credential values.
-    creation_env = _service_child_env(service_name, storage_secret_values)
+    creation_env = _service_child_env(service_name, router_secret_values)
     if service_name == "sr-bench":
         values = bench_secret_values or {}
         creation_env = {
@@ -90,11 +93,12 @@ def _run_service_commands(
             **values,
             "SR_BENCH_TOKEN": values.get(bench_token_env, ""),
         }
-    elif service_name == "dashboard" and bench_secret_values:
-        creation_env = {
-            **os.environ,
-            bench_token_env: bench_secret_values[bench_token_env],
-        }
+    elif service_name == "dashboard":
+        values = dict(dashboard_secret_values or {})
+        if bench_secret_values:
+            values[bench_token_env] = bench_secret_values[bench_token_env]
+        if values:
+            creation_env = {**os.environ, **values}
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
 
@@ -158,21 +162,20 @@ def _run_service_commands(
 
 
 def _service_child_env(
-    service_name: str, storage_secret_values: dict[str, str]
+    service_name: str, router_secret_values: dict[str, str]
 ) -> dict[str, str] | None:
-    """Hand the storage credentials to the Router's creating command alone.
+    """Hand the Router's credentials to the Router's creating command alone.
 
     The values travel in this one child's environment, paired with the
     inheriting ``-e NAME`` flag, so they never appear in a command line. They
     are never assigned into ``os.environ``: that would expose them to every
-    other process the CLI spawns, including ``docker exec`` and OpenClaw
-    workloads. ``None`` means "inherit", which is what every other service
-    gets.
+    other process the CLI spawns, including ``docker exec``. ``None`` means
+    "inherit", which is what every service without secrets gets.
     """
 
-    if service_name != "router" or not storage_secret_values:
+    if service_name != "router" or not router_secret_values:
         return None
-    return {**os.environ, **storage_secret_values}
+    return {**os.environ, **router_secret_values}
 
 
 def _cleanup_started_containers(container_names: list[str]) -> None:

@@ -48,7 +48,8 @@ class WhisperAttention(nn.Module):
             query, key, value, None, scale=1.0, is_causal=False, enable_gqa=False
         )
         output = output.transpose(1, 2).contiguous().reshape(batch, length, hidden)
-        return self.out_proj(output)
+        out: torch.Tensor = self.out_proj(output)
+        return out
 
 
 class WhisperEncoderLayer(nn.Module):
@@ -69,9 +70,10 @@ class WhisperEncoderLayer(nn.Module):
         hidden_states = hidden_states + self.self_attn(
             self.self_attn_layer_norm(hidden_states), kernels
         )
-        return hidden_states + self.fc2(
+        out: torch.Tensor = hidden_states + self.fc2(
             self.act(self.fc1(self.final_layer_norm(hidden_states)))
         )
+        return out
 
 
 class WhisperEncoderBackbone(nn.Module):
@@ -85,7 +87,7 @@ class WhisperEncoderBackbone(nn.Module):
             raise ValueError("scaled Whisper embeddings are not supported")
         hidden, mels = config["d_model"], config["num_mel_bins"]
         self.config = config
-        self.positions = config["max_source_positions"]
+        self.positions: int = config["max_source_positions"]
         self.conv1 = nn.Conv1d(mels, hidden, kernel_size=3, padding=1)
         self.conv2 = nn.Conv1d(hidden, hidden, kernel_size=3, stride=2, padding=1)
         self.embed_positions = nn.Embedding(self.positions, hidden)

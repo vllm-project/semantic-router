@@ -123,6 +123,35 @@ config:
             instructions: Is this request about software?
           predicate:
             gte: 0
+        # testcases/decision_runtime_set_span.go asks the attached Vela 2.0
+        # fixture these questions. A zero threshold makes every label count,
+        # so the random weights still select labels and mark spans.
+        - name: topics
+          description: Which support topics the request mentions.
+          deployment: attached-vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: Payments, invoices or refunds
+              - key: shipping
+                description: Deliveries, parcels or returns
+            threshold: 0
+          timeout_ms: 10000
+        - name: names
+          description: Where the request names a city or a person.
+          deployment: attached-vela2
+          question:
+            type: span
+            instructions: Which spans name a city or a person?
+            labels:
+              - key: city
+                description: A city name
+              - key: person
+                description: A person's name
+            threshold: 0
+          timeout_ms: 10000
     model_bindings:
       classifier.user_reaction:
         deployment: attached-feedback
@@ -225,6 +254,10 @@ config:
             - {type: decision, name: request_kind, label: code}
             - {type: decision, name: request_kind, label: math}
             - {type: decision, name: request_kind, label: chat}
+            - {type: decision, name: topics, label: billing}
+            - {type: decision, name: topics, label: shipping}
+            - {type: decision, name: names, label: city}
+            - {type: decision, name: names, label: person}
             # A BOTH condition needs an AR and a diffusion model; the BOTH rule
             # still reports a BOTH answer.
             - {type: modality, name: AR}
@@ -317,6 +350,10 @@ config:
           input:
             max_tokens: 512
             overflow: truncate
+        attached-vela2:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          served_name: vela2-a
         decision-offline:
           provider: model_runtime
           endpoint: http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100

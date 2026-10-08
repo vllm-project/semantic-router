@@ -108,6 +108,26 @@ def test_server_process(qwen35_package, tmp_path, transport):
         assert set(answers) == set(QUESTIONS) and all(
             "error" not in a for a in answers.values()
         )
+        connection = connect()
+        connection.request(
+            "POST",
+            "/v1/bundle",
+            body=json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "t",
+                            "decisions": {"state": STATE, "questions": QUESTIONS},
+                        }
+                    ]
+                }
+            ),
+            headers={"content-type": "application/json"},
+        )
+        response = connection.getresponse()
+        assert response.status == 200 and response.read()
+        timing = response.getheader("server-timing", "")
+        assert timing.startswith("parse;dur=") and ", total;dur=" in timing
         status, body = request(connect(), "GET", "/v1/models")
         assert status == 200 and json.loads(body)["data"][0]["ready"]
     finally:

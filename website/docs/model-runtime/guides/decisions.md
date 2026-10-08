@@ -21,11 +21,12 @@ places:
 | `choice` | Which of these options fits? | The chosen option and the probability of each option |
 | `noul` | Is this true? | The probability of yes |
 | `score` | How much, on an ordered scale? | The expected level and the probability of each level |
-| `set` | Which of these labels apply? (Vela 2.0) | Every label above its threshold |
-| `span` | Where in the text is ...? (Vela 2.0) | Labelled spans of the text |
+| `set` | Which of these labels apply? (Vela 2.0) | Every label's probability, and the labels above its threshold |
+| `span` | Where in the text is ...? (Vela 2.0) | Labelled spans of the text, each with its probability |
 
 All questions of one request that go to the same model travel in one call and
-are answered together.
+are answered together, including the PII question when the
+[`pii` signal](tutorials/signal/learned/pii.md#vela-20) runs on that model.
 
 ## Ask a question
 
@@ -109,13 +110,83 @@ routing:
 The model's probability for each candidate becomes its selection score. If the
 model is not ready or answers late, the first model in `modelRefs` answers.
 
+## Route on labels and spans
+
+Vela 2.0 also answers `set` and `span` questions. Both take `labels`, and a
+condition names the label it routes on:
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+routing:
+  signals:
+    decision:
+      - name: support_topics
+        deployment: vela2
+        question:
+          type: set
+          instructions: Which topics does the request mention?
+          labels:
+            - key: billing
+              description: payments, invoices or refunds
+            - key: shipping
+              description: deliveries, tracking or returns
+      - name: places
+        deployment: vela2
+        question:
+          type: span
+          instructions: Which spans name a city?
+          labels:
+            - key: city
+              description: a city name
+  decisions:
+    - name: billing-in-a-city
+      priority: 150
+      rules:
+        operator: AND
+        conditions:
+          - type: decision
+            name: support_topics
+            label: billing
+          - type: decision
+            name: places
+            label: city
+      modelRefs:
+        - model: support-model
+```
+
+A `set` label matches when the model selects it, and a `span` label when the
+model finds a span of it; a `predicate` on the rule matches on the label's
+probability instead. Every label's probability is a signal value
+(`decision:support_topics:billing`). On models with a broad span head (0.8B,
+4B, 9B), `head: router | broad` picks the head that answers a span question;
+`threshold` replaces the model's own threshold. See the
+[signal reference](tutorials/signal/learned/decision.md#set-and-span-questions).
+
+When the router loads the configuration, it checks every `set` and `span`
+question against the model that answers it, and fails with the signal's name
+if that model answers only `choice`, `noul` and `score` questions (Decision
+1.0 and 2.0).
+
+Vela 2.0 also answers PII and unsupported claims with its router span head:
+bind the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
+[`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) signals
+to the same deployment, and the PII question travels with the request's other
+questions to it.
+
 ## Which decision model
 
 Decision 2.0 is the default family; Kai-0.6B runs on a CPU and the larger
 sizes are more accurate on a GPU. Decision 1.0 models answer the same
-questions. Vela 2.0 also answers `set` and `span` questions and has ready-made
-questions for PII, hallucination and toxicity; it is a private preview and
-needs a Hugging Face token with access. See
+questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
+questions for PII and unsupported claims, and its 0.3B answers the router's
+[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, in one
+call. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 
 ## Check it

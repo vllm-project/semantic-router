@@ -90,6 +90,20 @@ Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
 
+Startup completes once every model deployment the Router manages for its
+configuration is ready, decision models included. While the Router waits for
+them, `/ready` and `/startup-status` report `phase: loading_model_deployments`,
+`pending_models` names the deployments that are not ready, and `ready_models`
+and `total_models` count them. `/startup-status` also lists them in
+`model_deployments`, each with its `name`, `artifact`, `process`, `state`,
+`ready` and, after a failure, `reason`, and keeps the list once startup is
+complete. A model that fails to load ends startup with `phase: error`. A
+configuration reload does not turn `/ready` back to `503`: the previous
+configuration serves until the new one's models are ready. The standalone
+listeners and the ext_proc gRPC port open only once those models are ready, so
+the listener's `/ready` and the gRPC health service never report ready before
+the management `/ready` does.
+
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record
 cannot change these responses. Until the local replica reports startup progress,
@@ -270,8 +284,8 @@ curl -i http://localhost:8080/api/v1/config \
 | `POST` | `/api/v1/config/plan` | Plan the exact candidate and return the current/candidate ETags without writing |
 | `PATCH` | `/api/v1/config` | Merge, validate, persist, and hot-reload an update |
 | `PUT` | `/api/v1/config` | Replace, validate, persist, and hot-reload the document |
-| `GET` | `/api/v1/config/versions` | List configuration backups |
-| `POST` | `/api/v1/config/rollback` | Restore a backup |
+| `GET` | `/api/v1/config/versions` | List the configuration history |
+| `POST` | `/api/v1/config/rollback` | Activate a recorded version again, as a new version |
 | `GET` | `/api/v1/config/hash` | Compare persisted, generated, and active hashes |
 
 Recipe operations use the same canonical document:
@@ -289,9 +303,9 @@ the exact current `ETag` in `If-Match`. The Router does not accept unguarded
 writes. A mutation response and `GET /api/v1/config/hash` use the same explicit
 runtime identity fields: `source_config_hash`, `generated_runtime_hash`,
 `active_runtime_hash`, and `activation_status`. Config mutations validate,
-create a backup, and trigger reload; an active config still does not prove that
-upstream model backends are healthy. Check `/ready` and send a representative
-request after a change.
+keep the replaced document in the configuration history, and trigger reload;
+an active config still does not prove that upstream model backends are
+healthy. Check `/ready` and send a representative request after a change.
 
 `activation_status` is `active`, `pending`, `failed`, or `unknown`. When a
 candidate has been attempted, `activation` includes its document hash, attempt,
@@ -302,6 +316,48 @@ wait: the document was persisted, so read its current `ETag` and inspect or
 roll back that candidate instead of blindly retrying the write. The status is
 process-local and describes the latest attempted candidate. A newer file
 supersedes an older attempt.
+
+Each activation takes the next configuration version. A mutation that
+activates returns it as `config_version`. A rejected one carries
+`activation.reasons`: each has a `stage` (`parse`, `compile`, `validate`,
+`warm` or `activate`), a `code`, an optional `path` into the document, and a
+redacted `message`. `GET /api/v1/config` names the version that serves in the
+`x-vsr-config-version` header and its document hash in `x-vsr-config-hash`;
+both can trail the persisted document while it activates or after it is
+rejected. `GET /api/v1/config/hash` adds `active_version` and
+`last_rejection`.
+
+An activation rebuilds only what its changes reach. When the signals and the
+models they use are unchanged, the new version keeps the loaded classifiers
+and embedding models. Under `--gateway standalone`, it also keeps the upstream
+connection pools when the providers' backends and the listeners are unchanged.
+A request in standalone mode is served by the version it started on, from routing through
+its fallback chain to the last byte. Such a Router binds its listeners at
+startup, so a change to the set of listeners or to a listener's `address`,
+`port` or `timeout` is rejected with code `restart_required` at that
+listener's path; restart the Router to apply it. Listener `api_keys` change
+without a restart.
+
+The Router records every activation, from any source, in one history of the
+last 10 versions (`-config-history-limit` changes it). Every configuration file
+has its own history, so a restart keeps it and Routers whose files share a
+directory never mix theirs: a workspace's `config.yaml` keeps it in
+`.vllm-sr/config-backups` beside the file, and any other file in a directory
+named after it inside that one. `VLLM_SR_CONFIG_BACKUP_DIR` moves it. The
+Helm chart keeps it on the models volume for one persistent replica, and each
+Pod keeps its own when replicas would share it; the other Kubernetes manifests
+keep it per Pod, since the ConfigMap is the document replicas share. Writers
+of one history take turns under a lock, so
+no version names two activations. A Router that restarts on the newest
+recorded document keeps its version. `GET /api/v1/config/versions`
+lists the history newest first. Each entry keeps `version` (its timestamp),
+`timestamp`, `source` and `filename`, and adds `config_version`, `hash`,
+`active` on the version that serves, and `rollback_of` on a rollback. `POST
+/api/v1/config/rollback` takes `{"version": "<number or timestamp>"}` or
+`{"config_version": <number>}`, persists the recorded document, and activates
+it as a new version whose `rollback_of` names the restored one. Versions that
+came from Kubernetes resources record no document; restore those at their
+source.
 
 Tracing settings are initialized at process startup. Config plans, updates,
 and rollbacks that change `global.services.observability.tracing` return
@@ -411,6 +467,12 @@ permissions.
 
 `GET /api/v1/observability/audit` requires `audit.read` and covers audited
 management operations across config, recipes, data, cache, and compression.
+It also records how every configuration update ended, whatever its source:
+`config.activate`, `config.reject` and `config.supersede` entries carry a
+`config` object with the attempt, result, source, version and document hash,
+and for a rejection its stage and reason codes. Their `request_id` and `role`
+name the management request that caused the update, when one did; they have
+no method, path or status.
 Use an exact `action` filter, `limit` (1–1000, default 100), and `after_sequence`
 for pagination. Continue with the returned `next_sequence` and keep the same
 filter. `has_more` indicates more matching entries; `truncated` means the
@@ -554,7 +616,7 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
 | `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
-| `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence |
+| `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit, configuration lifecycle outcomes included; filter by action and resume after a sequence |
 | `GET` | `/api/v1/observability/plugins/context_compression/stats` | Get redacted context-compression statistics |
 
 ### storage

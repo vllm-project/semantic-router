@@ -979,24 +979,24 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
   }
 
   SIGNAL jailbreak prompt_attack {
-    threshold: 0.5
+    threshold: 0.75
     include_history: true
   }
 
   SIGNAL safety unsafe {
     model: ""
-    threshold: 0.5
+    threshold: 0.46
   }
 
   SIGNAL pii personal_data {
-    threshold: 0.7
+    threshold: 0.01
     pii_types_allowed: ["NRP"]
     include_history: true
     description: "Personal identifiers trigger sensitive handling independently of context."
   }
 
   SIGNAL pii personal_attribute {
-    threshold: 0.7
+    threshold: 0.01
     pii_types_allowed: ["AGE", "CREDIT_CARD", "DATE_TIME", "DOMAIN_NAME", "EMAIL_ADDRESS", "GPE", "IBAN_CODE", "IP_ADDRESS", "ORGANIZATION", "PERSON", "PHONE_NUMBER", "STREET_ADDRESS", "TITLE", "US_DRIVER_LICENSE", "US_SSN", "ZIP_CODE"]
     include_history: true
     description: "Nationality, religious and political attributes require personal context."
