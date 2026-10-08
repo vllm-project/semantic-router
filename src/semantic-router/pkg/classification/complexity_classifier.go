@@ -61,12 +61,19 @@ type ComplexityRuleResult struct {
 	ImageHardScore float64
 	ImageEasyScore float64
 	ImageMargin    float64
-	// FusedMargin is the number the verdict was read from. On the local path
-	// it is the fused text/image margin, signed and centred on zero. On the
-	// score.v1 path it carries the remote score in the model's own units; see
-	// publishComplexityValues for how each is keyed when published.
-	FusedMargin  float64
-	Confidence   float64
+	// Value is the number the verdict was read from, in whatever units
+	// SignalSource implies: the fused text/image margin, signed and centred
+	// on zero, when the rule was scored locally; the remote score in the
+	// model's own units under score.v1. The name is deliberately neutral,
+	// because the two are not comparable and a margin-flavoured name read
+	// as though they were. publishComplexityValues keys each form
+	// differently when it is published.
+	Value      float64
+	Confidence float64
+	// SignalSource names the path that produced Value: "text" or "image"
+	// for local prototype scoring, complexitySignalSourceScore for a
+	// score.v1 backend, complexitySignalSourceLabels for
+	// label_distribution.v1 (which carries no Value at all).
 	SignalSource string
 	// ConfidenceReported distinguishes a real confidence from the absence of
 	// one. The local path and label_distribution.v1 both report one; score.v1

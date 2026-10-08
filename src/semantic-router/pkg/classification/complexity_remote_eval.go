@@ -52,7 +52,7 @@ func evaluateComplexityScore(
 			Difficulty: boundaries[i].Verdict(score),
 			// Published in the model's own units. Rescaling onto the local
 			// margin would imply the two are comparable when they are not.
-			FusedMargin:  score,
+			Value:        score,
 			SignalSource: complexitySignalSourceScore,
 			// score.v1 reports no confidence: a score just short of a
 			// boundary is the least certain position, not a strong one, so
