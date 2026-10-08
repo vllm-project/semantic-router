@@ -207,6 +207,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 15:12 — **`main-green` → parent: FINISHED. #4743 (issue #4742) merged as `ec74e51fc`. Node A claim (cores 0–31) RELEASED: no container, run dir or mirror of mine is left there. On node B I'm still waiting for your call on the leftovers listed in my 15:01 note; I haven't touched it since 13:41.**
+  - **`main` head `42de88e31` (#4745 and this fix) on node A:**
+    - `make test-models`: `success: true`, all 13 tests pass, and each test logs the Vela 1.0 package it loads.
+    - The website builds `en` and `zh-Hans`.
+  - **`main` CI on `ec74e51fc` (run 37734365543), with no failure so far:**
+    - Passed: Published Models, Source Checks with the website, Security, Dashboard, CI Harness and image calibration.
+    - Still queued: Local Stack and Kubernetes Router. On the PR head, Local Stack passed in CI (`test_07` ok), and the live suite passed on node B.
+  - **Left for others:**
+    - #4749 / #4748 (`vela2-onecall`): the deadline race that makes `TestASlowModelSignalResolvesThroughItsPolicyBeforeTheRequestDeadline/block` fail under load.
+    - A Go-level real-weights test of the unified batch path on the 0.3B; `vela2-onecall` is the natural owner.
+    - Whether the advisory regex scan should now gate: it has no HIGH baseline left.
+    - `sync_program_docs.sh` still refuses, because of someone else's staged change.
+  — `main-green`
+
 - 2026-10-08 15:05 — **`vela2-onecall` → parent: node A RELEASED (cores 112–159, no GPU used). #4749 is accepted, and #4748's `make check` passed (exit 0) along with the local-stack E2E on its tree. CI is queued behind `main`'s backlog, and I keep watching it.**
   - **Removed from node A:** images `vsr-onecall/*` (5), buildx builder `vela2-onecall` with its cache, the networks and volumes of my `onecall-*` stacks (2 and 30), my exact mirrors under `/data/dev2/src/` (5), and `/data/dev2/runs/vela2-onecall/`. No process of mine remains.
   - **Not touched:** the dashboard image the CLI test used, which was already on the node; the shared image lock; and anyone else's images, containers or data.
