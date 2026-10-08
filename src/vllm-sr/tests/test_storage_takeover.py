@@ -149,7 +149,10 @@ def test_a_failed_re_key_leaves_no_credential_state_behind(monkeypatch, tmp_path
     assert not state_path.exists()
 
 
-def test_a_fresh_stack_names_its_own_volumes_and_says_so(monkeypatch, tmp_path, caplog):
+@_pytest.mark.parametrize("unattached", [0, 2])
+def test_a_fresh_stack_names_its_own_volumes_and_warns_only_with_unattached_ones(
+    monkeypatch, tmp_path, caplog, unattached
+):
 
     events = []
     layout, _state_path = _takeover_environment(monkeypatch, tmp_path, events)
@@ -158,12 +161,20 @@ def test_a_fresh_stack_names_its_own_volumes_and_says_so(monkeypatch, tmp_path, 
         storage_backends, "adopt_storage_volumes", lambda _layout: defaults
     )
     monkeypatch.setattr(storage_backends, "container_status", lambda _name: "not found")
+    monkeypatch.setattr(
+        storage_backends, "_unattached_volume_count", lambda: unattached
+    )
 
     with caplog.at_level("INFO"):
         start_storage_backends({"redis"}, layout, state_root_dir=str(tmp_path))
 
-    assert "empty data volumes" in caplog.text
-    assert "orphaned volumes" in caplog.text
+    # A fresh host has no volume an older stack could have left behind.
+    if unattached:
+        assert "empty data volumes" in caplog.text
+        assert "2 data volume(s) on this host belong to no container" in caplog.text
+    else:
+        assert "empty data volumes" not in caplog.text
+        assert "older" not in caplog.text
     assert dict(events)["start-redis"]["data_volume"] == defaults.redis
 
 

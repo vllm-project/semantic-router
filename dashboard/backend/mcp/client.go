@@ -519,25 +519,33 @@ func mcpCallFailureLogMessage(err error) string {
 	)
 }
 
-// CallToolStreaming calls a tool with streaming
-// Note: SDK may not fully support streaming yet, providing compatible implementation here
+// CallToolStreaming calls a tool and emits one terminal chunk.
+// The SDK call is synchronous; the chunk type is complete or error.
+// Transport failures are also returned so callers do not treat the callback's nil error as success.
 func (c *Client) CallToolStreaming(ctx context.Context, name string, arguments json.RawMessage, onChunk func(StreamChunk) error) error {
-	// Current SDK version may not support true streaming
-	// Using synchronous call simulation
 	result, err := c.CallTool(ctx, name, arguments)
 	if err != nil {
-		return onChunk(StreamChunk{Type: "error", Data: "Tool execution failed"})
+		if chunkErr := onChunk(StreamChunk{Type: "error", Data: "Tool execution failed"}); chunkErr != nil {
+			return chunkErr
+		}
+		return err
 	}
 
-	// Send completion event
-	var data interface{}
-	if len(result.Content) > 0 && result.Content[0].Type == "text" {
-		data = result.Content[0].Text
-	} else {
-		data = result.Content
+	payload := contentPayload(result)
+	if result.IsError {
+		return onChunk(StreamChunk{Type: "error", Data: payload})
 	}
+	return onChunk(StreamChunk{Type: "complete", Data: payload, Progress: 100})
+}
 
-	return onChunk(StreamChunk{Type: "complete", Data: data, Progress: 100})
+func contentPayload(result *CallToolResult) interface{} {
+	if result == nil || len(result.Content) == 0 {
+		return nil
+	}
+	if len(result.Content) == 1 && result.Content[0].Type == "text" {
+		return result.Content[0].Text
+	}
+	return result.Content
 }
 
 // GetStatus returns the status

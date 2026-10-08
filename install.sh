@@ -502,6 +502,42 @@ detect_python_candidate() {
   find_python
 }
 
+# venv needs ensurepip, which Debian and Ubuntu ship separately in pythonX.Y-venv.
+python_creates_venvs() {
+  "$1" -m ensurepip --version >/dev/null 2>&1
+}
+
+python_venv_package() {
+  local version
+  version="$("$1" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" || version=""
+  if [ -n "$version" ]; then
+    printf 'python%s-venv\n' "$version"
+  else
+    printf 'python3-venv\n'
+  fi
+}
+
+ensure_python_venv() {
+  local python_cmd package
+  python_cmd="$1"
+  if python_creates_venvs "$python_cmd"; then
+    return
+  fi
+  package="$(python_venv_package "$python_cmd")"
+  if [ "$OS_NAME" != "linux" ] || [ "$(detect_linux_pkg_manager || true)" != "apt-get" ]; then
+    die "$python_cmd cannot create a virtual environment: ensurepip is missing. Install Python's venv support, or pass --python with an interpreter that has it, and re-run the installer."
+  fi
+  if [ "$(id -u)" -ne 0 ] && ! has_cmd sudo; then
+    die "$python_cmd cannot create a virtual environment: ensurepip is missing. As root, run: apt-get install -y $package, then re-run the installer."
+  fi
+  step "Installing $package: $python_cmd has no ensurepip, which venv needs"
+  run_as_root apt-get update
+  run_as_root apt-get install -y "$package"
+  python_creates_venvs "$python_cmd" || die \
+    "$python_cmd still cannot create a virtual environment after installing $package. Install its venv support and re-run the installer."
+  done_step "$package is installed"
+}
+
 detect_linux_pkg_manager() {
   for candidate in apt-get dnf yum; do
     if has_cmd "$candidate"; then
@@ -568,6 +604,11 @@ describe_python_dependency_plan() {
   local python_cmd pkg_manager
   python_cmd="$1"
   if [ -n "$python_cmd" ]; then
+    if ! python_creates_venvs "$python_cmd" && [ "$OS_NAME" = "linux" ] \
+      && [ "$(detect_linux_pkg_manager || true)" = "apt-get" ]; then
+      printf '%s via apt-get (%s has no ensurepip)\n' "$(python_venv_package "$python_cmd")" "$python_cmd"
+      return
+    fi
     printf 'none (using %s)\n' "$python_cmd"
     return
   fi
@@ -762,6 +803,7 @@ install_cli() {
   }
 
   done_step "Using Python interpreter: $python_cmd"
+  ensure_python_venv "$python_cmd"
   mkdir -p "$INSTALL_ROOT"
   step "Creating isolated environment at $INSTALL_ROOT/venv"
   "$python_cmd" -m venv "$INSTALL_ROOT/venv"

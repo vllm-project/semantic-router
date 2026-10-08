@@ -1,6 +1,8 @@
 # Router API
 
-The router data plane accepts model requests through an Envoy listener. In the
+The router data plane accepts model requests on the configured listeners. The
+Router serves them itself in standalone mode, the default; with
+`--gateway extproc`, Envoy serves them and calls the Router over ext_proc. In the
 standard local stack, the listener is `http://localhost:8899`; a recipe can
 choose a different address or port under `listeners`.
 

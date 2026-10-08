@@ -34,7 +34,7 @@ from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
 from .decoder_layout import DecoderTree
 from .encoder_layout import MARKERS, EncoderSequence
-from .layout import Row, Tokens, rows_of
+from .layout import Row, Tokens, fail_unscanned, read_parts, rows_for
 from .members import DecoderMember, EncoderMember
 from .package import DECODER, ENCODER, Vela2Package, member_of, verify
 from .request import QUESTION_TYPES, Plan, Question, QuestionReader
@@ -45,6 +45,13 @@ TOKEN_CACHE = 8192
 # coalescing profiles pack short sequences of several requests and run long
 # ones alone.
 CPU_PACKED_TOKENS = 2048
+# A question reads a part whole up to this many inputs' worth of tokens by
+# default (``max_scan_tokens``): a few forwards on a CPU, many on a GPU; a
+# longer part fails it with ``scan_budget_exceeded``. A request may set another
+# budget. A question that truncates reads at most ``truncate_tokens`` of a part:
+# one forward on a CPU.
+SCAN_INPUTS = {"cpu": 4, "gpu": 32}
+TRUNCATE_INPUTS = {"cpu": 1, "gpu": 32}
 LICENCES = {
     ENCODER: {
         "spdx": "apache-2.0",
@@ -228,6 +235,14 @@ class Vela2Family(ModelFamily):
             details.calibration, noul_calibration=noul, report_heads=broad
         )
         gpu = engine_model.device.type != "cpu"
+        scan = self.options.model_options.get(
+            "max_scan_tokens",
+            SCAN_INPUTS["gpu" if gpu else "cpu"] * details.max_input_tokens,
+        )
+        if isinstance(scan, bool) or not isinstance(scan, int) or scan < 1:
+            raise PackageError("options.max_scan_tokens must be a positive integer")
+        scan = max(scan, details.max_input_tokens)
+        truncate = TRUNCATE_INPUTS["gpu" if gpu else "cpu"] * details.max_input_tokens
         info = ModelInfo(
             id=package.model_name,
             family=self.name,
@@ -239,6 +254,8 @@ class Vela2Family(ModelFamily):
             question_types=QUESTION_TYPES,
             limits={
                 "max_input_tokens": package.max_input_tokens,
+                "max_scan_tokens": scan,
+                "truncate_tokens": truncate,
                 "min_options": MIN_OPTIONS,
                 "max_options": MAX_OPTIONS,
                 "min_levels": MIN_LEVELS,
@@ -253,7 +270,15 @@ class Vela2Family(ModelFamily):
             presets=reader.presets,
         )
         return Vela2Model(
-            info, engine_model, details, member, reader, answerer, _tokenizer(details)
+            info,
+            engine_model,
+            details,
+            member,
+            reader,
+            answerer,
+            _tokenizer(details),
+            scan,
+            truncate,
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
@@ -262,6 +287,25 @@ class Vela2Family(ModelFamily):
             "decisions",
             {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
         )
+
+
+def windowed(mapping: list[Any]) -> bool:
+    """Whether a planned row reads a part in windows: an encoder row of several
+    sequences, or a decoder row with span windows."""
+    return any(
+        (isinstance(entry, list) and len(entry) > 1)
+        or bool(getattr(entry, "windows", None))
+        for entry in mapping
+    )
+
+
+def shifted(mapping: list[Any], offset: int) -> list[Any]:
+    """A mapping planned on its own, after ``offset`` items of another (encoder
+    rows index their sequences; decoder rows hold their trees)."""
+    return [
+        [index + offset for index in entry] if isinstance(entry, list) else entry
+        for entry in mapping
+    ]
 
 
 @dataclass
@@ -285,8 +329,12 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         reader: QuestionReader,
         answerer: Answerer,
         tokenizer: Any,
+        scan_tokens: int | None = None,
+        truncate_tokens: int | None = None,
     ):
         self.info = info
+        self.scan_tokens = scan_tokens or package.max_input_tokens
+        self.truncate_tokens = truncate_tokens or package.max_input_tokens
         self.engine_model = engine_model
         self.package = package
         self.member = member
@@ -298,6 +346,7 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         self.tokens = Tokens(
             encode=lambda text: tokenizer.encode(text, add_special_tokens=False),
             ids=lambda text: list(cached(text)),
+            tokenizer=tokenizer,
         )
 
     def forward_token_budget(self) -> int | None:
@@ -317,10 +366,47 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         """One call per request: the members batch its sequences as the packages do."""
         return [list(range(len(items)))] if items else []
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> Vela2Plan:
+    def plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None = None
+    ) -> Vela2Plan:
+        """The request's rows and model inputs.
+
+        A question reads a long part whole, in windows up to the scan budget
+        (``scan``, the request's ``max_tokens``, or ``scan_tokens``; never below
+        one input), or with ``overflow: truncate`` only its first
+        ``truncate_tokens``, one forward on a CPU. Questions of both kinds share
+        their rows, as one request of either kind would read them, unless a row
+        has to be read in windows: then each kind gets rows of its own.
+        """
         request = self.reader.read(state, questions)
-        rows = rows_of(request, self.tokens)
-        items, mapping = self.member.plan(rows, self.tokens)
+        max_len = self.package.max_input_tokens
+        budget = max(scan or self.scan_tokens or max_len, max_len)
+        cut = self.truncate_tokens
+        truncating = [q for q in request.questions if q.truncate]
+        need = max(budget, cut) if truncating else budget
+        parts = read_parts(request, self.tokens, need + 1)
+        whole = fail_unscanned(
+            request, [q for q in request.questions if not q.truncate], parts, budget
+        )
+        rows: list[Row] | None = None
+        items: list[Any] = []
+        mapping: list[Any] = []
+        if not truncating or (whole and all(len(p.ids) <= budget for p in parts)):
+            together = [q for q in request.questions if q.id not in request.errors]
+            rows = rows_for(together, parts)
+            items, mapping = self.member.plan(rows, self.tokens)
+            if truncating and windowed(mapping):
+                rows = None
+        if rows is None:
+            whole_rows = rows_for(whole, parts)
+            items, mapping = self.member.plan(whole_rows, self.tokens)
+            cut_rows = rows_for(truncating, [part.cut(cut) for part in parts])
+            cut_items, cut_mapping = self.member.plan(
+                cut_rows, self.tokens, cut > max_len
+            )
+            rows = whole_rows + cut_rows
+            mapping = [*mapping, *shifted(cut_mapping, len(items))]
+            items = [*items, *cut_items]
         return Vela2Plan(
             question_ids=request.question_ids,
             items=items,

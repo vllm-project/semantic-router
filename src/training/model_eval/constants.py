@@ -147,6 +147,9 @@ VELA_RELEASE_REVISIONS = {
     "vllm-sr/Vela-1.0-Omni-Nano": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
     "vllm-sr/Vela-1.0-Omni-Mini": "801bae3ad28df6891408f0e0441c676b30e132e3",
     "vllm-sr/Vela-2.0-0.3B": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+    "vllm-sr/Vela-2.0-0.8B": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+    "vllm-sr/Vela-2.0-4B": "c1e64d4f872cb38bc58502e6888340100bab9d55",
+    "vllm-sr/Vela-2.0-9B": "bc8761637d8788619dfbaf6d8890128efe85fd40",
 }
 
 MODEL_REGISTRY = deepcopy(LEGACY_MODEL_REGISTRY)

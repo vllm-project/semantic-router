@@ -194,7 +194,8 @@ global:
 Helm chart 通过顶层值（`router.skipProcessing.enabled`）暴露同一开关，因此可在安装时启用，而无需编辑嵌入的规范配置：
 
 ```bash
-helm install vsr ./deploy/helm/semantic-router \
+helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
   --set router.skipProcessing.enabled=true
 ```
 

@@ -249,7 +249,7 @@ def _start_vllm_sr_locked(
     pending = read_pending_activation(runtime_config_file)
     if pending is not None and pending.reason == REASON_RESTART:
         log.info(
-            "Applying the change saved in the Dashboard that needed a restart"
+            f"Applying the change saved {pending.saved_by()} that needed a restart"
             + (f": {pending.detail}" if pending.detail else "")
         )
     # This start serves whatever the Dashboard saved, so a pending activation
@@ -771,7 +771,7 @@ def show_status(service: str = "all"):
     if status == "exited":
         heading("Runtime status")
         fields((("State", "Container exited (error)"),))
-        echo("View logs with: vllm-sr logs <envoy|router>")
+        echo("View logs with: vllm-sr logs router")
         return
     if status != "running":
         heading("Runtime status")
@@ -822,7 +822,7 @@ def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
     pending = read_pending_activation(runtime_config)
     if pending is not None and pending.reason == REASON_RESTART:
         return (
-            "Restart required: a change saved in the Dashboard needs "
+            f"Restart required: a change saved {pending.saved_by()} needs "
             "`vllm-sr serve` to apply it"
             + (f" ({pending.detail})." if pending.detail else ".")
         )

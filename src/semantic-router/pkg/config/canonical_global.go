@@ -83,6 +83,9 @@ type CanonicalModelCatalog struct {
 	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
 	Modules     CanonicalModelModules      `yaml:"modules"`
 	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
+	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
+	// below the request's; 0 derives it from the request's deadline.
+	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -105,6 +108,9 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	// DecisionModel is the Vela model that answers the built-in signals and
+	// the decision questions that name no deployment (decision_model.go).
+	DecisionModel         string `yaml:"decision_model,omitempty"`
 	Safety                string `yaml:"safety,omitempty"`
 	Hazard                string `yaml:"hazard,omitempty"`
 	PromptGuard           string `yaml:"prompt_guard,omitempty"`
@@ -183,6 +189,9 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
+		if err := applyDecisionModel(&defaults, nil); err != nil {
+			return CanonicalGlobal{}, err
+		}
 		if err := resolveModuleModelRefs(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
@@ -195,6 +204,9 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	}
 	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := rejectLegacyPromptGuardProtocol(rawOverride); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	if err := applyDecisionModel(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
 	if err := resolveModuleModelRefs(&resolved); err != nil {
@@ -315,6 +327,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.DecisionModel = modelCatalog.System.DecisionModel
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
@@ -329,6 +342,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
 	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
+	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {

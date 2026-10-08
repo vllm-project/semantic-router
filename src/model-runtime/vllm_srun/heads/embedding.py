@@ -27,6 +27,7 @@ from ..errors import (
     MAX_LENGTH_EXCEEDED,
 )
 from ..plugins.base import DEADLINE, EmbeddingInfo, SurfacePlan, SurfaceRequest
+from ..text import bounds
 from .task import positive_option
 
 if TYPE_CHECKING:
@@ -207,21 +208,30 @@ def encode_text(
     """Token IDs with the tokenizer's special tokens, within ``budget``; an item error code otherwise.
 
     ``truncate`` keeps the beginning of the content inside the special-token
-    envelope; nothing is cut silently: the usage reports both counts.
+    envelope; nothing is cut silently: the usage reports both counts. Only the
+    tokens that decide the budget are read (``bounds.read``); for a longer
+    text, ``tokens`` counts those and ``tokens_lower_bound`` says so, and a
+    text certainly over the budget fails unread unless it is truncated.
     """
-    content = backend.encode(text, add_special_tokens=False)
     specials = backend.num_special_tokens_to_add(False)
-    tokens = len(content.ids) + specials
+    if overflow != "truncate" and bounds.surely_over(backend, text, budget - specials):
+        return MAX_LENGTH_EXCEEDED
+    read = bounds.read(backend, text, budget - specials + 1)
+    content = read.encoding
+    tokens = read.tokens + specials
     if tokens > budget:
         if overflow != "truncate" or budget <= specials:
             return MAX_LENGTH_EXCEEDED
         content.truncate(budget - specials)
     ids = list(backend.post_process(content).ids)
-    return ids, {
+    usage: dict[str, Any] = {
         "tokens": tokens,
         "processed_tokens": len(ids),
         "truncated": len(ids) < tokens,
     }
+    if not read.complete:
+        usage["tokens_lower_bound"] = True
+    return ids, usage
 
 
 def content_key(*parts: Any) -> str:

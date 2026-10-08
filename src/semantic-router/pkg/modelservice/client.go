@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -25,6 +27,12 @@ type Client struct {
 	bundleTasks atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
 	maxInputs atomic.Pointer[map[string]int]
+	// scanning holds the served models whose card reports a scan budget, the
+	// only ones that take a decisions request's max_tokens and overflow.
+	scanning atomic.Pointer[map[string]bool]
+	// apiMinor is the minor version of the contract the runtime serves, as
+	// /v1/models last reported it (-1 until then).
+	apiMinor atomic.Int64
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -39,6 +47,7 @@ func NewClient(endpoint string) (*Client, error) {
 	}
 	client := &Client{endpoint: endpoint, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
+	client.apiMinor.Store(-1)
 	return client, nil
 }
 
@@ -73,14 +82,64 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
+	c.apiMinor.Store(contractMinor(response.JSON200.ApiVersion))
 	inputs := make(map[string]int, len(response.JSON200.Data))
+	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
 		if card.Limits != nil && card.Limits.MaxInputs != nil {
 			inputs[card.Id] = *card.Limits.MaxInputs
 		}
+		scanning[card.Id] = card.Limits != nil && deref(card.Limits.MaxScanTokens) > 0
 	}
 	c.maxInputs.Store(&inputs)
+	c.scanning.Store(&scanning)
 	return response.JSON200.Data, nil
+}
+
+// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
+// of the major this client speaks, or -1.
+func contractMinor(version string) int64 {
+	major, rest, _ := strings.Cut(version, ".")
+	minor, _, _ := strings.Cut(rest, ".")
+	value, err := strconv.ParseInt(minor, 10, 64)
+	if major != RuntimeAPIMajor || err != nil || value < 0 {
+		return -1
+	}
+	return value
+}
+
+// takesStates reports whether the runtime answers a decisions call about
+// several states (DecisionRequest.states).
+func (c *Client) takesStates() bool {
+	return c.apiMinor.Load() >= statesMinor
+}
+
+// boundedRead is the request a model without a scan budget takes: it reads one
+// bounded input whatever the caller asks, so neither option goes.
+func boundedRead(request Request) Request {
+	request.MaxTokens = 0
+	questions := make([]Question, len(request.Questions))
+	for index, question := range request.Questions {
+		question.Truncate = false
+		questions[index] = question
+	}
+	request.Questions = questions
+	return request
+}
+
+// scans reports whether the served model a request names (the only model when
+// it names none) has a scan budget, as its card last reported.
+func (c *Client) scans(model string) bool {
+	scanning := c.scanning.Load()
+	if scanning == nil {
+		return false
+	}
+	if model == "" && len(*scanning) == 1 {
+		for _, scans := range *scanning {
+			return scans
+		}
+	}
+	return (*scanning)[model]
 }
 
 // inputCap is the input cap of the served model a request names (the only
@@ -114,6 +173,9 @@ func (c *Client) Decide(ctx context.Context, request Request) (Response, error) 
 // and stores the call the runtime actually answers. The timing is that of the
 // exchange that carried the call.
 func (c *Client) decide(ctx context.Context, request Request, cache *resultCache, deployment string) (Response, exchangeTiming, error) {
+	if !c.scans(request.Model) {
+		request = boundedRead(request)
+	}
 	body, err := encodeDecisionRequest(ctx, request)
 	if err != nil {
 		return Response{}, exchangeTiming{}, err
@@ -145,6 +207,9 @@ func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRe
 		State:     state,
 		Questions: make(map[string]api.Question, len(request.Questions)),
 		Options:   &api.RequestOptions{DeadlineMs: deadline},
+	}
+	if request.MaxTokens > 0 {
+		body.Options.MaxTokens = &request.MaxTokens
 	}
 	for _, question := range request.Questions {
 		body.Questions[question.ID] = encodeQuestion(question)
@@ -186,7 +251,12 @@ func (labels labelCriteria) MarshalJSON() ([]byte, error) {
 func encodeQuestion(question Question) api.Question {
 	if question.Preset != "" {
 		preset := question.Preset
-		return api.Question{Preset: &preset, Threshold: question.Threshold}
+		encoded := api.Question{Preset: &preset, Threshold: question.Threshold}
+		if question.Truncate {
+			overflow := api.QuestionOverflowTruncate
+			encoded.Overflow = &overflow
+		}
+		return encoded
 	}
 	questionType := question.Type
 	var instructions interface{} = question.Instructions
@@ -198,6 +268,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.Head != "" {
 		head := api.QuestionHead(question.Head)
 		encoded.Head = &head
+	}
+	if question.Truncate {
+		overflow := api.QuestionOverflowTruncate
+		encoded.Overflow = &overflow
 	}
 	if len(question.Choices) > 0 {
 		choices := make([]api.ChoiceOption, len(question.Choices))

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -261,11 +262,12 @@ func validateJailbreakDistribution(mapping *JailbreakMapping, positiveLabels []s
 }
 
 // A provider may return valid probabilities for only a prefix. All Guard
-// consumers must treat that as an unresolved scan, not a clean full input.
-// Older backends without input metadata retain their existing contract.
+// consumers must treat that as an unscanned input, not a clean full one: the
+// error is an input limit, which a jailbreak rule matches whatever on_error
+// says. Older backends without input metadata retain their existing contract.
 func validateJailbreakInputCoverage(input *tasks.InputUsage) error {
 	if input != nil && (input.Truncated || input.ProcessedTokens < input.OriginalTokens) {
-		return fmt.Errorf("jailbreak input is incomplete: processed %d of %d tokens (truncated=%t)", input.ProcessedTokens, input.OriginalTokens, input.Truncated)
+		return fmt.Errorf("%w: jailbreak input is incomplete: processed %d of %d tokens (truncated=%t)", binding.ErrInputLimit, input.ProcessedTokens, input.OriginalTokens, input.Truncated)
 	}
 	return nil
 }

@@ -128,6 +128,9 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "classifier",
         "use_cpu",
     ),
+    # Safety runs the decision model too: on a GPU it shares the other
+    # signals' deployment instead of loading a CPU copy.
+    ("global", "model_catalog", "modules", "safety", "safety", "use_cpu"),
 )
 
 
