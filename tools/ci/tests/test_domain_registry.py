@@ -47,7 +47,7 @@ class DomainRegistryTests(unittest.TestCase):
     def test_domain_matching_can_report_overlapping_owners(self) -> None:
         self.assertEqual(
             matching_domains(("config/recipes/privacy/probes.yaml",)),
-            ("router-core", "maintained-recipes"),
+            ("router-core", "dashboard", "maintained-recipes"),
         )
 
     def test_memory_implementation_and_split_suite_select_live_integration(
