@@ -214,16 +214,16 @@ config:
           description: Catch-all for unclassified queries
       jailbreak:
         - name: jailbreak_dev
-          threshold: 0.5
+          threshold: 0.75
           include_history: false
           description: Relaxed jailbreak detection for dev environment
         - name: jailbreak_prod
-          threshold: 0.9
+          threshold: 0.77
           include_history: false
           description: Strict jailbreak detection for prod environment
       pii:
         - name: pii_dev
-          threshold: 0.6
+          threshold: 0.01
           pii_types_allowed:
             - GPE
             - ORGANIZATION
@@ -231,7 +231,7 @@ config:
           include_history: false
           description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
         - name: pii_prod
-          threshold: 0.9
+          threshold: 0.01
           pii_types_allowed: []
           include_history: false
           description: Strict PII policy for prod (block all)

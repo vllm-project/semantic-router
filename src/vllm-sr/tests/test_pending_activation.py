@@ -38,7 +38,10 @@ def test_the_heartbeat_covers_the_block(tmp_path):
     heartbeat = pending_activation.heartbeat_file(config)
 
     with pending_activation.serve_heartbeat(config, interval=0.01):
-        assert json.loads(heartbeat.read_text()) == {"pid": os.getpid()}
+        assert json.loads(heartbeat.read_text()) == {
+            "pid": os.getpid(),
+            "state": "starting",
+        }
         first = heartbeat.stat().st_mtime_ns
         deadline = time.monotonic() + 5
         while heartbeat.stat().st_mtime_ns == first and time.monotonic() < deadline:
@@ -46,6 +49,20 @@ def test_the_heartbeat_covers_the_block(tmp_path):
         assert heartbeat.stat().st_mtime_ns > first
 
     assert not heartbeat.exists()
+
+
+def test_the_heartbeat_says_what_the_cli_does(tmp_path):
+    config = tmp_path / "runtime-config.yaml"
+    heartbeat = pending_activation.heartbeat_file(config)
+
+    with pending_activation.serve_heartbeat(config, interval=0.01) as state:
+        state(pending_activation.SERVE_WAITING)
+        assert json.loads(heartbeat.read_text())["state"] == "waiting"
+        time.sleep(0.05)
+        # The beat keeps the state it was given.
+        assert json.loads(heartbeat.read_text())["state"] == "waiting"
+        state(pending_activation.SERVE_STARTING)
+        assert json.loads(heartbeat.read_text())["state"] == "starting"
 
 
 def test_the_wait_ends_when_the_dashboard_records_the_activation(tmp_path):
@@ -172,10 +189,22 @@ def test_serve_starts_the_router_once_setup_is_activated(
     stack = resolve_runtime_stack()
     waited_unlocked = []
 
+    started = []
+
+    def start(*args, **kwargs):
+        # The Dashboard sees a CLI that starts the stack.
+        heartbeat = pending_activation.heartbeat_file(runtime_config)
+        started.append(json.loads(heartbeat.read_text())["state"])
+        calls.append(("start", args, kwargs))
+        return (0, "", "")
+
+    monkeypatch.setattr(core, "container_start_vllm_sr", start)
+
     def wait(config, *, dashboard_running):
         assert dashboard_running()
-        # The Dashboard sees a waiting CLI.
-        assert pending_activation.heartbeat_file(config).is_file()
+        # The Dashboard sees a CLI that waits to apply the activation.
+        heartbeat = pending_activation.heartbeat_file(config)
+        assert json.loads(heartbeat.read_text())["state"] == "waiting"
         # The Dashboard's activation needs the runtime config lock.
         acquire_runtime_config_lock(
             runtime_config_path=config,
@@ -209,6 +238,8 @@ def test_serve_starts_the_router_once_setup_is_activated(
     assert "DASHBOARD_SETUP_MODE" not in activated["env_vars"]
     assert calls[-1][1][0] == [{"name": "http-9000", "port": 9000}]
     assert pending_activation.read_pending_activation(runtime_config) is None
+    assert started == ["starting", "starting"]
+    assert not pending_activation.heartbeat_file(runtime_config).exists()
 
 
 def test_serve_that_stops_waiting_leaves_the_router_stopped(setup_stack, monkeypatch):

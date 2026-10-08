@@ -247,16 +247,27 @@ ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
 the matching flag so the UI does not offer operations the runtime cannot
 persist.
 
-The Dashboard needs no container-runtime socket, and `vllm-sr serve` mounts
-none. A saved change the Router hot-reloads applies at once; one the running
-containers can't take (the Router answers `restart_required`, or an extproc
-stack's generated Envoy config changes) is recorded beside the runtime config as
-a pending activation, and the Dashboard answers "Restart required: run
-`vllm-sr serve` to apply." The CLI applies it (`src/vllm-sr/cli/pending_activation.py`).
-A Recipe activation or deactivation that needs the containers recreated (new
-listeners, storage or management API) is committed the same way and answered
-`202` with `status: restart_required`; the Dashboard reads the stack's storage
-from what `vllm-sr serve` passed it and never inspects containers.
+The Dashboard holds no container runtime: its image has no container CLI, and
+`vllm-sr serve` mounts no runtime socket. A saved change the Router hot-reloads
+applies at once; one the running containers can't take (the Router answers
+`restart_required`, or an extproc stack's generated Envoy config changes) is
+recorded beside the runtime config as a pending activation, and the Dashboard
+answers "Restart required: run `vllm-sr serve` to apply." The CLI applies it
+(`src/vllm-sr/cli/pending_activation.py`). A Recipe activation or deactivation
+that needs the containers recreated (new listeners, storage or management API)
+is committed the same way and answered `202` with `status: restart_required`;
+the Dashboard reads the stack's storage from what `vllm-sr serve` passed it and
+never inspects containers.
+
+The status page reads the Router's and Envoy's HTTP probes. For a service that
+does not answer, it reads the stack's files instead: the runtime config's setup
+block (standby), the heartbeat of a `vllm-sr serve` that is starting the stack
+(starting), and the pending activation. Logs come from the bounded log spool.
+
+`vllm-sr serve` owns the Router management credential the Dashboard uses
+(`VLLM_SR_DASHBOARD_RECIPE_TOKEN`) and passes it in the environment; the
+Dashboard never writes it down. The entrypoint shares the Recipe store with the
+group in `VLLM_SR_RECIPE_STORE_GID`, the CLI user's, so a non-root CLI reads it.
 See the [security hardening guide](../website/docs/installation/security-hardening.md)
 for the deployment boundary.
 

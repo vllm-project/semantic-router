@@ -32,9 +32,7 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     docker = tmp_path / "docker"
     docker.touch()
 
-    def capture_specs(
-        specs, *, storage_secret_values, bench_secret_values, bench_token_env
-    ):
+    def capture_specs(specs, **_secrets):
         captured.extend(specs)
         return 0, "", ""
 

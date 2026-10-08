@@ -22,7 +22,13 @@ const (
 	pendingActivationSuffix = ".pending-activation.json"
 	// The CLI beats every two seconds; a few missed beats mean it stopped.
 	serveHeartbeatFreshness = 10 * time.Second
+	maxServeHeartbeatBytes  = 4 << 10
 )
+
+// The heartbeat's state while the attached CLI waits to apply an activation;
+// otherwise it starts the stack. A heartbeat without a state comes from a CLI
+// that beat only while it waited for setup.
+const serveWaiting = "waiting"
 
 type activationReason string
 
@@ -42,10 +48,41 @@ func pendingActivationPath(configPath string, suffix string) string {
 	return strings.TrimSuffix(configPath, filepath.Ext(configPath)) + suffix
 }
 
+// serveState returns what an attached `vllm-sr serve` does, or "" when none
+// beats.
+func serveState(configPath string) string {
+	path := pendingActivationPath(configPath, serveHeartbeatSuffix)
+	info, err := os.Stat(path)
+	if err != nil || time.Since(info.ModTime()) >= serveHeartbeatFreshness || info.Size() > maxServeHeartbeatBytes {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var heartbeat struct {
+		State string `json:"state"`
+	}
+	if json.Unmarshal(data, &heartbeat) != nil || heartbeat.State == "" {
+		return serveWaiting
+	}
+	return heartbeat.State
+}
+
 // serveAttached reports whether a `vllm-sr serve` waits to apply this config.
 func serveAttached(configPath string) bool {
-	info, err := os.Stat(pendingActivationPath(configPath, serveHeartbeatSuffix))
-	return err == nil && time.Since(info.ModTime()) < serveHeartbeatFreshness
+	return serveState(configPath) == serveWaiting
+}
+
+// serveRunning reports whether a `vllm-sr serve` is starting the stack or
+// waits to apply an activation.
+func serveRunning(configPath string) bool {
+	return serveState(configPath) != ""
+}
+
+func pendingActivationRecorded(configPath string) bool {
+	_, err := os.Lstat(pendingActivationPath(configPath, pendingActivationSuffix))
+	return err == nil
 }
 
 // recordPendingActivation tells the attached CLI, or the next `vllm-sr serve`,

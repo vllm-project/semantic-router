@@ -19,7 +19,12 @@ from cli.models import (
     MemoryPluginConfig,
     RAGPluginConfig,
 )
-from cli.terminal import echo, error as terminal_error
+from cli.terminal import (
+    echo,
+    error as terminal_error,
+    hint as terminal_hint,
+    warning as terminal_warning,
+)
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
@@ -35,6 +40,7 @@ from cli.validator_projection_embedding import (
     validate_projection_score_dependencies,
 )
 from cli.validator_recipe_contracts import (
+    looper_alias_collision_warnings,
     validate_domain_references,
     validate_recipe_contracts,
 )
@@ -585,6 +591,19 @@ def validate_user_config(
         log.info("Configuration validation passed")
 
     return errors
+
+
+def collect_validation_warnings(config: UserConfig) -> List[ValidationError]:
+    """Return findings that leave the configuration valid but likely wrong."""
+    return looper_alias_collision_warnings(config)
+
+
+def print_validation_warnings(warnings: List[ValidationError]):
+    """Print validation warnings, each with its hint."""
+    for validation_warning in warnings:
+        terminal_warning(str(validation_warning))
+        if validation_warning.hint:
+            terminal_hint(validation_warning.hint)
 
 
 def print_validation_errors(errors: List[ValidationError]):

@@ -54,7 +54,7 @@ const (
 type DecisionSignalRule struct {
 	Name        string            `yaml:"name"`
 	Description string            `yaml:"description,omitempty"`
-	Deployment  string            `yaml:"deployment"`
+	Deployment  string            `yaml:"deployment,omitempty"`
 	Question    DecisionQuestion  `yaml:"question"`
 	Predicate   *NumericPredicate `yaml:"predicate,omitempty"`
 	TimeoutMs   int               `yaml:"timeout_ms,omitempty"`

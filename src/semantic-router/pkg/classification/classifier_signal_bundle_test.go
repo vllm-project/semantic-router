@@ -53,15 +53,15 @@ func TestSignalStageSendsOneBundleWithoutWaitingForHeuristics(t *testing.T) {
 		mu.Unlock()
 	}
 	dispatchers := []signalDispatch{
-		{config.SignalTypeDomain, "Domain", func() { record("domain", call["domain"](stage)) }},
-		{config.SignalTypeJailbreak, "Jailbreak", func() { record("guard", call["guard"](stage)) }},
-		{config.SignalTypeUserFeedback, "User feedback", func() { record("feedback", call["feedback"](stage)) }},
-		{config.SignalTypeKeyword, "Keyword", func() { time.Sleep(200 * time.Millisecond) }},
+		{config.SignalTypeDomain, "Domain", func(ctx context.Context) { record("domain", call["domain"](ctx)) }},
+		{config.SignalTypeJailbreak, "Jailbreak", func(ctx context.Context) { record("guard", call["guard"](ctx)) }},
+		{config.SignalTypeUserFeedback, "User feedback", func(ctx context.Context) { record("feedback", call["feedback"](ctx)) }},
+		{config.SignalTypeKeyword, "Keyword", func(context.Context) { time.Sleep(200 * time.Millisecond) }},
 	}
 	used := map[string]bool{"domain:a": true, "jailbreak:a": true, "user_feedback:a": true, "keyword:a": true}
 	ready := map[string]bool{config.SignalTypeDomain: true, config.SignalTypeJailbreak: true, config.SignalTypeUserFeedback: true, config.SignalTypeKeyword: true}
 	var wg sync.WaitGroup
-	runSignalDispatchers(dispatchers, used, ready, bundle, &wg)
+	runSignalDispatchers(stage, dispatchers, used, ready, bundle, func(string) []string { return nil }, &wg)
 	wg.Wait()
 	after, tasks := fake.Bundles()
 	if after-before != 1 || tasks != 3 || bundle.Flushes() != 1 {

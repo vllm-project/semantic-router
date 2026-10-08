@@ -18,7 +18,7 @@ select = [
 ignore = [
   "E501",
   "PLR09",   # numeric function/method counts are review signals, not correctness gates
-  "PLR1702", # nested-block count is covered by the advisory structure report
+  "PLR1702", # nested-block count is a review signal, not a correctness gate
 ]
 
 [lint.per-file-ignores]

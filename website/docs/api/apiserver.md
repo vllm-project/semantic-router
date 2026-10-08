@@ -90,6 +90,20 @@ Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
 
+Startup completes once every model deployment the Router manages for its
+configuration is ready, decision models included. While the Router waits for
+them, `/ready` and `/startup-status` report `phase: loading_model_deployments`,
+`pending_models` names the deployments that are not ready, and `ready_models`
+and `total_models` count them. `/startup-status` also lists them in
+`model_deployments`, each with its `name`, `artifact`, `process`, `state`,
+`ready` and, after a failure, `reason`, and keeps the list once startup is
+complete. A model that fails to load ends startup with `phase: error`. A
+configuration reload does not turn `/ready` back to `503`: the previous
+configuration serves until the new one's models are ready. The standalone
+listeners and the ext_proc gRPC port open only once those models are ready, so
+the listener's `/ready` and the gRPC health service never report ready before
+the management `/ready` does.
+
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record
 cannot change these responses. Until the local replica reports startup progress,

@@ -388,12 +388,44 @@ def _log_takeover_intent(
         return
     defaults = default_storage_volume_names(stack_layout)
     if volumes is None or volumes == defaults:
+        # Only a host with volumes no container uses can hold the data of
+        # storage containers an older CLI removed; a fresh host has none.
+        unattached = _unattached_volume_count()
+        if not unattached:
+            return
         log.info(
             "No managed storage containers exist yet, so this stack starts on "
-            "empty data volumes. If an older CLI removed them with "
-            "`vllm-sr stop`, their data may survive as orphaned volumes. "
-            f"{RECOVERY_HINT}"
+            f"empty data volumes. {unattached} data volume(s) on this host "
+            "belong to no container: if an older vllm-sr removed this stack's "
+            "storage containers with `vllm-sr stop`, their data may be among "
+            "them. The storage credential recovery section of the "
+            "security-hardening documentation shows how to recover it."
         )
+
+
+def _unattached_volume_count() -> int:
+    """How many volumes no container uses, or 0 when the runtime can't say."""
+
+    try:
+        result = subprocess.run(
+            [
+                get_container_runtime(),
+                "volume",
+                "ls",
+                "--quiet",
+                "--filter",
+                "dangling=true",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=RUNTIME_COMMAND_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    if result.returncode != 0:
+        return 0
+    return len([line for line in result.stdout.splitlines() if line.strip()])
 
 
 def _start_backend(name: str, starter: Callable[[], tuple[int, str, str]]) -> None:
