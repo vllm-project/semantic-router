@@ -10,8 +10,8 @@ from collections.abc import Callable
 from cli.container_runtime import get_container_runtime
 from cli.container_services import (
     container_mount_destinations,
-    container_remove_container,
     container_network_disconnect_if_attached,
+    container_remove_container,
     container_start_milvus,
     container_start_postgres,
     container_start_redis,
