@@ -330,8 +330,9 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ToolSessions:  cloneToolSessionStoreConfig(cfg.ToolSessions),
 		},
 		Integrations: CanonicalIntegrationGlobal{
-			Tools:  cfg.Tools,
-			Looper: cfg.Looper,
+			KVTransfer: cfg.KVTransfer,
+			Tools:      cfg.Tools,
+			Looper:     cfg.Looper,
 		},
 		ModelCatalog: canonicalModelCatalogFromRouterConfig(cfg),
 	}
