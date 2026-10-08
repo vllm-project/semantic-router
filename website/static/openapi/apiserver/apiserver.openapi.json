@@ -7708,6 +7708,34 @@
                           "confidence": {
                             "type": "number"
                           },
+                          "pii": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "has_pii": {
+                                "type": "boolean"
+                              },
+                              "pii_types": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "scores_available": {
+                                "nullable": true,
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "has_pii",
+                              "confidence"
+                            ]
+                          },
                           "probabilities": {
                             "nullable": true,
                             "type": "object",
@@ -7717,6 +7745,95 @@
                           },
                           "processing_time_ms": {
                             "type": "integer"
+                          },
+                          "security": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "decision": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "categories": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "score": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Value": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "Value"
+                                    ]
+                                  },
+                                  "score_semantics": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Calibrated": {
+                                        "type": "boolean"
+                                      },
+                                      "Direction": {
+                                        "type": "string"
+                                      },
+                                      "Maximum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Minimum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Unit": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "Unit",
+                                      "Direction",
+                                      "Minimum",
+                                      "Maximum",
+                                      "Calibrated"
+                                    ]
+                                  },
+                                  "source_label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "label"
+                                ]
+                              },
+                              "is_jailbreak": {
+                                "type": "boolean"
+                              },
+                              "scores_available": {
+                                "nullable": true,
+                                "type": "boolean"
+                              },
+                              "threat_type": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "is_jailbreak",
+                              "threat_type",
+                              "confidence"
+                            ]
                           }
                         },
                         "required": [
