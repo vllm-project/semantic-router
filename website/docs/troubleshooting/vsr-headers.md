@@ -92,6 +92,7 @@ Router Learning observability, require `x-vsr-debug`.
 | `x-vsr-learning-scopes` | debug | Method-keyed identity scopes used by learning. | `protection=conversation` |
 | `x-vsr-learning-reasons` | debug | Method-keyed machine-readable reasons for actions. | `adaptation=sampled_win,protection=switch_allowed` |
 | `x-vsr-injected-system-prompt` | debug | Whether a system-prompt plugin injected text into the request. | `true` |
+| `x-vsr-decision-ranking` | debug | The matched decision the selected one beat and the comparison that settled it. Prose; parse `decision_ranking` in Router Replay instead. Omitted when only one decision matched. | `escalate-extreme over escalate-hard: equal priority 0, no comparable confidence, decision name ordering` |
 
 For UI display guidance, translate `x-vsr-learning-actions` into user-facing
 phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`.
