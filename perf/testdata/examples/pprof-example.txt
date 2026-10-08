@@ -15,8 +15,8 @@ Showing top 20 nodes out of 245
     8.45s 19.96% 19.96%     12.34s 29.15%  runtime.mallocgc
     5.67s 13.39% 33.35%     18.23s 43.05%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification.(*UnifiedClassifier).ClassifyBatch
     4.23s  9.99% 43.34%      9.12s 21.54%  runtime.scanobject
-    3.45s  8.15% 51.49%      7.89s 18.63%  C.classify_unified_batch (CGO)
-    2.89s  6.83% 58.32%      6.78s 16.01%  github.com/vllm-project/semantic-router/candle-binding.ClassifyBatch
+    3.45s  8.15% 51.49%      7.89s 18.63%  net/http.(*persistConn).roundTrip
+    2.89s  6.83% 58.32%      6.78s 16.01%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice.(*Client).Bundle
     2.34s  5.53% 63.85%      5.67s 13.39%  runtime.mapassign_faststr
     2.12s  5.01% 68.86%      4.56s 10.77%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision.(*Engine).EvaluateDecisions
     1.89s  4.46% 73.32%      3.45s  8.15%  encoding/json.Unmarshal
@@ -29,7 +29,7 @@ Showing top 20 nodes out of 245
     0.76s  1.80% 92.41%      1.23s  2.91%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision.evaluateRuleCombination
     0.65s  1.54% 93.95%      1.12s  2.65%  runtime.memmove
     0.54s  1.28% 95.23%      0.98s  2.31%  runtime.convT2Estring
-    0.43s  1.02% 96.25%      0.87s  2.06%  github.com/vllm-project/semantic-router/candle-binding.generateEmbedding
+    0.43s  1.02% 96.25%      0.87s  2.06%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving.(*Runtime).Embedding
     0.32s  0.76% 97.01%      0.76s  1.80%  runtime.heapBitsSetType
     0.21s  0.50% 97.51%      0.65s  1.54%  sync.(*Mutex).Lock
 ```
@@ -116,7 +116,7 @@ Showing nodes accounting for 1.23GB, 89.13% of 1.38GB total
   345.67MB 25.05% 25.05%   567.89MB 41.15%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification.(*UnifiedClassifier).ClassifyBatch
   234.56MB 17.01% 42.06%   345.67MB 25.05%  runtime.makeslice
   156.78MB 11.36% 53.42%   234.56MB 17.01%  encoding/json.Unmarshal
-  123.45MB  8.95% 62.37%   156.78MB 11.36%  github.com/vllm-project/semantic-router/candle-binding.ClassifyBatch
+  123.45MB  8.95% 62.37%   156.78MB 11.36%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice.(*Client).Bundle
    98.76MB  7.16% 69.53%   123.45MB  8.95%  strings.Builder.Grow
    87.65MB  6.35% 75.88%    98.76MB  7.16%  runtime.convTslice
    76.54MB  5.55% 81.43%    87.65MB  6.35%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache.generateEmbedding

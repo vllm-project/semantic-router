@@ -37,8 +37,8 @@ func windowedGuardFixture(t *testing.T) (*windowedJailbreakBackend, *fakeJailbre
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	cfg.PromptGuard = config.PromptGuardConfig{
-		Enabled: true, ModelID: "guard-fixture", JailbreakMappingPath: "fixture-mapping",
-		Variant: config.PromptGuardVariantMmBERT32K, UseCPU: true,
+		Enabled: true, ModelID: "models/Vela-1.0-Encoder-307M-Guard", JailbreakMappingPath: "fixture-mapping",
+		UseCPU:            true,
 		MaxSequenceLength: 32768, Threshold: .5,
 		PositiveLabels: []string{"jailbreak", "injection"},
 		Window:         &config.SequenceHeadWindowConfig{Size: 128, Overlap: 63},

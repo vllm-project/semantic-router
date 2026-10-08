@@ -22,6 +22,9 @@ support:
 - use [Deployment Support](support-matrix) for
   project-maintained stacks, integrations, and hardware profiles.
 
+For client connection settings, virtual model limits, and a tool-loop check,
+start with [Connect an agent harness](agent-harness).
+
 ## Client-facing protocols
 
 | Client API | Inference endpoint | Buffered | Streaming | Availability |
@@ -182,7 +185,7 @@ profile for that topology.
 
 Test the backend directly with its native path and a minimal request first.
 Then send the same semantic request through the Router using the client API that
-your application needs. A successful health check does not validate request
+your agent harness or other API client needs. A successful health check does not validate request
 schema, streaming, tools, or error translation.
 
 ## Validation and failure behavior

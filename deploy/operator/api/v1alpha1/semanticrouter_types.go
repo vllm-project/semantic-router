@@ -119,11 +119,20 @@ type SemanticRouterSpec struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
-	// Container arguments
+	// Router arguments, after the gateway mode flags the Operator passes
+	// (-gateway=standalone -listener-address=0.0.0.0, or -gateway=extproc).
+	// The gateway mode follows spec.gateway, so args may not set those flags.
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=4096
+	// +kubebuilder:validation:XValidation:rule="self.all(a, !a.matches('^--?(gateway|listener-address)(=|$)'))",message="spec.args must not set -gateway or -listener-address: the gateway mode follows spec.gateway"
 	// +optional
 	Args []string `json:"args,omitempty"`
 
-	// Gateway integration for reusing existing gateways
+	// Gateway selects what serves client traffic. Omitted, the Router runs
+	// standalone: it serves the OpenAI-compatible API on port 8801 itself,
+	// with no Envoy, and the Service exposes that port. With existingRef, the
+	// Router serves ext_proc gRPC on port 50051 for that Gateway, whose
+	// ext_proc policy and routes you manage.
 	// +optional
 	Gateway *GatewaySpec `json:"gateway,omitempty"`
 
@@ -139,7 +148,7 @@ type SemanticRouterSpec struct {
 // ImageSpec defines the container image configuration
 type ImageSpec struct {
 	// Repository is the container image repository
-	// +kubebuilder:default="ghcr.io/vllm-project/semantic-router/extproc"
+	// +kubebuilder:default="ghcr.io/vllm-project/semantic-router/vllm-sr"
 	// +optional
 	Repository string `json:"repository,omitempty"`
 
@@ -267,6 +276,15 @@ type ConfigSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
+
+	// DecisionModel is the Vela model that answers the Router's questions,
+	// global.model_catalog.system.decision_model: Vela-2.0-0.3B (the
+	// default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any
+	// case. It answers the built-in signals and every decision question that
+	// names no deployment; the 4B and 9B need a GPU in the Router pod.
+	// +kubebuilder:validation:Pattern=`^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]|0\.8[Bb]|4[Bb]|9[Bb])|1\.0))?$`
+	// +optional
+	DecisionModel string `json:"decision_model,omitempty" yaml:"decision_model,omitempty"`
 
 	// ModelDeployments contains canonical global.model_catalog.deployments.
 	// The router validates provider, device, precision and task compatibility.
@@ -1049,11 +1067,6 @@ type EmbeddingModelsConfig struct {
 	// +optional
 	Qwen3ModelPath string `json:"qwen3_model_path,omitempty"`
 
-	// Path to EmbeddingGemma-300M model directory
-	// Gemma provides 8K context and fast embeddings (768 dimensions)
-	// +optional
-	GemmaModelPath string `json:"gemma_model_path,omitempty"`
-
 	// Path to mmBERT 2D Matryoshka embedding model directory
 	// Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
 	// +optional
@@ -1077,8 +1090,9 @@ type EmbeddingModelsConfig struct {
 
 // HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
 type HNSWEmbeddingConfig struct {
-	// Backend selects the embedding provider backend.
-	// +kubebuilder:validation:Enum=candle;openvino;openai_compatible
+	// Backend selects the embedding provider backend: the built-in model
+	// runtime (the default) or an external OpenAI-compatible endpoint.
+	// +kubebuilder:validation:Enum=model_runtime;openai_compatible
 	// +optional
 	Backend string `json:"backend,omitempty"`
 
@@ -1425,6 +1439,16 @@ type DecisionConfig struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	Algorithm *apiextensionsv1.JSON `json:"algorithm,omitempty" yaml:"algorithm,omitempty"`
+
+	// Reliability overrides the timeouts and retries of the provider model
+	// that serves this decision's requests
+	// +optional
+	Reliability *DecisionReliabilityConfig `json:"reliability,omitempty" yaml:"reliability,omitempty"`
+
+	// Fallback overrides the cross-model fallback policy for this decision's
+	// requests, over the recipe's and the router's
+	// +optional
+	Fallback *DecisionFallbackConfig `json:"fallback,omitempty" yaml:"fallback,omitempty"`
 }
 
 // RuleCombinationConfig defines how to combine multiple rule conditions
@@ -1500,8 +1524,8 @@ type ToolsConfig struct {
 
 // PromptGuardConfig defines prompt guard configuration.
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || !has(self.backend)",message="max_sequence_length applies to the local model; omit it with backend"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || !has(self.backend)",message="window applies to the local model; omit it with backend"
 // +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
 	// Backend selects a named external classifier and its typed result contract.
@@ -1514,23 +1538,18 @@ type PromptGuardConfig struct {
 	// +optional
 	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
 	// Window enables explicit scanning of all input tokens. Omission or null
-	// keeps whole-input inference. Only the local mmbert32k variant supports it.
+	// keeps whole-input inference. Only the local model supports it.
 	// +nullable
 	// +optional
 	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// Variant selects a local Candle-backed model variant. It is mutually
-	// exclusive with Backend. When both are omitted, the operator uses mmbert32k.
-	// +kubebuilder:validation:Enum=candle;mmbert32k
-	// +optional
-	Variant string `json:"variant,omitempty"`
-	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
+	// ModelID binds the guard to one model; empty runs the decision model.
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.5"
+	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
+	// precision issues; empty takes the threshold calibrated for the model.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
@@ -1581,8 +1600,6 @@ type ClassifierConfig struct {
 type CategoryModelConfig struct {
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
 	// Classification threshold (0.0-1.0). Stored as string to avoid float precision issues.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
@@ -1601,9 +1618,8 @@ type CategoryModelConfig struct {
 // admission instead of by the router at load.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
-// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.use_mmbert_32k) || !self.use_mmbert_32k",message="backend cannot be combined with local use_mmbert_32k"
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="max_sequence_length requires local use_mmbert_32k"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="window requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || !has(self.backend)",message="max_sequence_length applies to the local model; omit it with backend"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || !has(self.backend)",message="window applies to the local model; omit it with backend"
 // +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PIIModelConfig struct {
 	// MaxSequenceLength is the total tokenized input budget, including special
@@ -1611,9 +1627,6 @@ type PIIModelConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
-	// UseMmBERT32K selects the local model that supports token windows.
-	// +optional
-	UseMmBERT32K bool `json:"use_mmbert_32k,omitempty"`
 	// Window scans original content tokens with explicit overlap. Omission or
 	// null leaves window selection unchanged; no CRD defaults are injected.
 	// +nullable
@@ -1621,8 +1634,6 @@ type PIIModelConfig struct {
 	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
 	// Detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
@@ -1633,8 +1644,8 @@ type PIIModelConfig struct {
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
 	// Backend names a remote token classifier speaking token_spans.v1. Its
 	// absence keeps local PII inference. The local selectors this replaces are
-	// model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
-	// token windows are only supported by the local mmbert32k model.
+	// model_id and use_cpu above. Explicit token windows are only supported by
+	// the local model.
 	// +optional
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 	// OnError selects what a PII backend failure, or a provider-declared
@@ -2016,7 +2027,8 @@ type ServiceBackend struct {
 
 // GatewaySpec defines Gateway API integration configuration
 type GatewaySpec struct {
-	// ExistingRef references an existing Gateway to use
+	// ExistingRef references an existing Gateway that calls the Router over
+	// ext_proc. Setting it selects extproc mode.
 	// +optional
 	ExistingRef *GatewayReference `json:"existingRef,omitempty"`
 }
@@ -2095,7 +2107,9 @@ type SemanticRouterStatus struct {
 	// +optional
 	Phase string `json:"phase,omitempty"`
 
-	// GatewayMode indicates deployment mode: standalone or gateway-integration
+	// GatewayMode is what serves client traffic: standalone (the Router's own
+	// listener on port 8801) or gateway-integration (the Gateway in
+	// spec.gateway, with the Router serving ext_proc)
 	// +optional
 	GatewayMode string `json:"gatewayMode,omitempty"`
 

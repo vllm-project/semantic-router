@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -50,6 +50,8 @@ type InitOptions struct {
 	RemoteExposure  *bool
 	AuthMode        string
 	RuntimeRegistry *routerruntime.Registry
+	// GatewayMode decides which config changes need a restart.
+	GatewayMode config.GatewayMode
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
@@ -145,10 +147,13 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry), buildConfigUpdater(opts.RuntimeRegistry, liveClassificationSvc)),
 		runtimeRegistry:       opts.RuntimeRegistry,
 		configPath:            opts.ConfigPath,
+		gatewayMode:           opts.GatewayMode,
 		memoryStore:           memoryStore,
 		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 		startupStatusConfig:   &cfg.StartupStatus,
 	}
+
+	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
 
 	// Create HTTP server with routes
 	apiServer.initRoutingPreviewAdmission(cfg)

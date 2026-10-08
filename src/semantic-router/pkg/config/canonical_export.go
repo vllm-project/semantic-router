@@ -330,8 +330,9 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ToolSessions:  cloneToolSessionStoreConfig(cfg.ToolSessions),
 		},
 		Integrations: CanonicalIntegrationGlobal{
-			Tools:  cfg.Tools,
-			Looper: cfg.Looper,
+			KVTransfer: cfg.KVTransfer,
+			Tools:      cfg.Tools,
+			Looper:     cfg.Looper,
 		},
 		ModelCatalog: canonicalModelCatalogFromRouterConfig(cfg),
 	}
@@ -349,12 +350,6 @@ func canonicalAutoModelNames(names []string) *[]string {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	categoryModel := cfg.CategoryModel
-	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
-		// Export is intentionally non-validating. Preserve an invalid runtime
-		// value so the normal configuration validator reports the actionable
-		// error instead of silently changing it during serialization.
-		categoryModel = cfg.CategoryModel
-	}
 
 	return CanonicalModelCatalog{
 		Deployments: cloneModelMap(cfg.ModelDeployments),
@@ -362,20 +357,11 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},
-		System: CanonicalSystemModels{
-			Safety:                 cfg.SafetyModels.Safety.ModelID,
-			Hazard:                 cfg.SafetyModels.Hazard.ModelID,
-			PromptGuard:            cfg.PromptGuard.ModelID,
-			DomainClassifier:       cfg.CategoryModel.ModelID,
-			PIIClassifier:          cfg.PIIModel.ModelID,
-			FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
-			HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
-			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
-			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
-		},
-		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
-		Admission: cloneAdmissionMap(cfg.ModelAdmission),
+		System:          canonicalSystemModelsFromRouterConfig(cfg),
+		External:        append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:             append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
+		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
 		Modules: CanonicalModelModules{
 			Safety:            cfg.SafetyModels,
 			PromptCompression: cfg.PromptCompression,
@@ -405,10 +391,6 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 				Detector: CanonicalHallucinationDetector{
 					HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
 					ModelRef:                 "hallucination_detector",
-				},
-				Explainer: CanonicalExplainerModule{
-					NLIModelConfig: cfg.HallucinationMitigation.NLIModel,
-					ModelRef:       "hallucination_explainer",
 				},
 			},
 			FeedbackDetector: CanonicalFeedbackDetectorModule{
@@ -674,4 +656,30 @@ func normalizedConfigSource(source ConfigSource) ConfigSource {
 		return ConfigSourceFile
 	}
 	return source
+}
+
+// canonicalSystemModelsFromRouterConfig writes the decision model, unless it
+// is the default, and only the system lines that bind a module to another
+// model than the decision model does, so the document still follows it.
+func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemModels {
+	system := CanonicalSystemModels{
+		Safety:                cfg.SafetyModels.Safety.ModelID,
+		Hazard:                cfg.SafetyModels.Hazard.ModelID,
+		PromptGuard:           cfg.PromptGuard.ModelID,
+		DomainClassifier:      cfg.CategoryModel.ModelID,
+		PIIClassifier:         cfg.PIIModel.ModelID,
+		FactCheckClassifier:   cfg.HallucinationMitigation.FactCheckModel.ModelID,
+		HallucinationDetector: cfg.HallucinationMitigation.HallucinationModel.ModelID,
+		FeedbackDetector:      cfg.FeedbackDetector.ModelID,
+	}
+	spec := cfg.DecisionModelSpec()
+	if spec.Name != DefaultDecisionModel {
+		system.DecisionModel = spec.Name
+	}
+	for _, line := range systemLines {
+		if value := line.value(&system); *value == *line.value(&spec.System) {
+			*value = ""
+		}
+	}
+	return system
 }

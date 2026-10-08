@@ -175,7 +175,7 @@ type MLSelectorConfig struct {
 	// SVM configuration
 	SVM *SVMConfig `yaml:"svm,omitempty"`
 
-	// MLP configuration (GPU-accelerated via Candle)
+	// MLP configuration
 	// Reference: FusionFactory (arXiv:2507.10540)
 	MLP *MLPConfig `yaml:"mlp,omitempty"`
 }

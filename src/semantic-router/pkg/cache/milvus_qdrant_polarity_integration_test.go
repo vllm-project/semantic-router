@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -54,7 +54,7 @@ func TestMilvusSemanticPolarityStorageIntegration(t *testing.T) {
 	cfg := milvusExactTestConfig(host, port)
 	cfg.Search.TopK = 5
 	cfg.Search.ConsistencyLevel = "Strong"
-	backend, err := NewMilvusCache(MilvusCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingModel: "bert", Config: cfg})
+	backend, err := NewMilvusCache(MilvusCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingModel: "qwen3", Config: cfg})
 	if err != nil {
 		storagetest.Unavailable(t, "milvus", err)
 	}
@@ -82,7 +82,7 @@ func TestMilvusSemanticPolarityStorageIntegration(t *testing.T) {
 func TestQdrantSemanticPolarityStorageIntegration(t *testing.T) {
 	storagetest.Require(t, "qdrant")
 	host, port := remoteVectorStorageAddress(t, "QDRANT", 6334)
-	backend, err := NewQdrantCache(QdrantCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingModel: "bert", Config: &config.QdrantConfig{Host: host, Port: port, ConnectTimeout: 5, CollectionName: fmt.Sprintf("polarity_cache_%d", time.Now().UnixNano())}})
+	backend, err := NewQdrantCache(QdrantCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingModel: "qwen3", Config: &config.QdrantConfig{Host: host, Port: port, ConnectTimeout: 5, CollectionName: fmt.Sprintf("polarity_cache_%d", time.Now().UnixNano())}})
 	if err != nil {
 		storagetest.Unavailable(t, "qdrant", err)
 	}

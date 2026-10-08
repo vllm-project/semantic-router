@@ -187,6 +187,8 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@"$(AGENT_PYTHON)" deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@echo "Model deployment and recipe binding rendering verified"
+	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
+	@echo "Standalone and extproc gateway modes verified"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards

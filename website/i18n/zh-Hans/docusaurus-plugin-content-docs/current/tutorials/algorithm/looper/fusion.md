@@ -2,7 +2,7 @@
 translation:
   source_commit: "f538b1e52efaa172923a6764c8ad9ab18e0188af"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: false
+  outdated: true
 ---
 
 # 融合
@@ -166,7 +166,6 @@ global:
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       fusion:
         model_names:
@@ -174,6 +173,8 @@ global:
 ```
 
 `global.integrations.looper.fusion` 只注册直接请求模型名。它不拥有路由策略、默认路由、裁判选择、面板选择、并发、模板或错误处理。
+
+每个别名都应使用没有任何模型使用的名字。如果别名同时也是某个模型的名字，它会截获该模型的请求：这些请求只评估 Fusion 决策，没有匹配任何决策的请求会以 [`no_route`](../../../api/router.md#routing-errors) 失败。Router 和 `vllm-sr config validate` 都会对这样的别名发出警告。
 
 裁判模型、分析面板、分析模式、采样设置、并发、token 与时间预算、法定人数、模板、提示词版本、追踪可见性、错误策略和依据策略都属于
 `routing.decisions[].algorithm.fusion`。直接 slug 调用只评估可执行 Fusion 的决策，因此 `vllm-sr/fusion` 不会静默回退到普通单模型路由。公开 HTTP 路径执行所选配方策略，不会通过
@@ -272,7 +273,7 @@ algorithm:
       policy: weight             # weight | annotate | filter
       min_score: 0.0             # filter policy only: drop below this (0-1)
       min_keep: 1                # filter policy only: keep at least this many
-      nli_contradiction_penalty: 1.0
+      contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
 ```
 
@@ -287,7 +288,7 @@ algorithm:
 | `policy` | string | `weight` | `weight`（软加权，全部保留）、`annotate`（备注，全部保留）或 `filter`（硬丢弃） |
 | `min_score` | float | `0.0` | 仅 `filter` 策略：丢弃分数低于该值的响应（0–1） |
 | `min_keep` | int | `1` | 仅 `filter` 策略：至少保留这么多最高分响应 |
-| `nli_contradiction_penalty` | float | `1.0` | `panel` 参考中同伴矛盾的权重 |
+| `contradiction_penalty` | float | `1.0` | `panel` 参考中同伴矛盾（幻觉检测器给出的无依据片段概率）的权重；`vllm-sr config migrate` 会把旧的 `nli_contradiction_penalty` 改名为此字段 |
 | `on_error` | string | `skip` | `skip`（回退到普通 Fusion）或 `fail` |
 
 面板响应和原始请求会发送给裁判模型。把所有面板和裁判提供商视为同一数据边界，并在中间追踪会暴露敏感内容时将其关闭。完整示例见：

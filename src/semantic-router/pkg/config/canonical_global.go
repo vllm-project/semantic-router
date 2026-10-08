@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -67,8 +68,9 @@ type CanonicalStoreGlobal struct {
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
 type CanonicalIntegrationGlobal struct {
-	Tools  ToolsConfig  `yaml:"tools"`
-	Looper LooperConfig `yaml:"looper"`
+	KVTransfer *KVTransferConfig `yaml:"kv_transfer,omitempty"`
+	Tools      ToolsConfig       `yaml:"tools"`
+	Looper     LooperConfig      `yaml:"looper"`
 }
 
 // CanonicalModelCatalog groups router-owned model assets and the module
@@ -82,6 +84,9 @@ type CanonicalModelCatalog struct {
 	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
 	Modules     CanonicalModelModules      `yaml:"modules"`
 	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
+	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
+	// below the request's; 0 derives it from the request's deadline.
+	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -104,15 +109,17 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
-	Safety                 string `yaml:"safety,omitempty"`
-	Hazard                 string `yaml:"hazard,omitempty"`
-	PromptGuard            string `yaml:"prompt_guard,omitempty"`
-	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
-	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
-	FactCheckClassifier    string `yaml:"fact_check_classifier,omitempty"`
-	HallucinationDetector  string `yaml:"hallucination_detector,omitempty"`
-	HallucinationExplainer string `yaml:"hallucination_explainer,omitempty"`
-	FeedbackDetector       string `yaml:"feedback_detector,omitempty"`
+	// DecisionModel is the Vela model that answers the built-in signals and
+	// the decision questions that name no deployment (decision_model.go).
+	DecisionModel         string `yaml:"decision_model,omitempty"`
+	Safety                string `yaml:"safety,omitempty"`
+	Hazard                string `yaml:"hazard,omitempty"`
+	PromptGuard           string `yaml:"prompt_guard,omitempty"`
+	DomainClassifier      string `yaml:"domain_classifier,omitempty"`
+	PIIClassifier         string `yaml:"pii_classifier,omitempty"`
+	FactCheckClassifier   string `yaml:"fact_check_classifier,omitempty"`
+	HallucinationDetector string `yaml:"hallucination_detector,omitempty"`
+	FeedbackDetector      string `yaml:"feedback_detector,omitempty"`
 }
 
 // CanonicalPromptGuardModule keeps prompt-guard settings visible as a module
@@ -141,12 +148,11 @@ type CanonicalPIIModule struct {
 }
 
 // CanonicalHallucinationModule keeps the mitigation block readable by splitting
-// fact-check, detector, and explainer responsibilities.
+// fact-check and detector responsibilities.
 type CanonicalHallucinationModule struct {
 	Enabled   bool                           `yaml:"enabled,omitempty"`
 	FactCheck CanonicalFactCheckModule       `yaml:"fact_check"`
 	Detector  CanonicalHallucinationDetector `yaml:"detector"`
-	Explainer CanonicalExplainerModule       `yaml:"explainer"`
 }
 
 type CanonicalFactCheckModule struct {
@@ -157,11 +163,6 @@ type CanonicalFactCheckModule struct {
 type CanonicalHallucinationDetector struct {
 	HallucinationModelConfig `yaml:",inline"`
 	ModelRef                 string `yaml:"model_ref,omitempty"`
-}
-
-type CanonicalExplainerModule struct {
-	NLIModelConfig `yaml:",inline"`
-	ModelRef       string `yaml:"model_ref,omitempty"`
 }
 
 type CanonicalFeedbackDetectorModule struct {
@@ -183,13 +184,15 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 		Enabled:            m.Enabled,
 		FactCheckModel:     m.FactCheck.FactCheckModelConfig,
 		HallucinationModel: m.Detector.HallucinationModelConfig,
-		NLIModel:           m.Explainer.NLIModelConfig,
 	}
 }
 
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
+		if err := applyDecisionModel(&defaults, nil); err != nil {
+			return CanonicalGlobal{}, err
+		}
 		if err := resolveModuleModelRefs(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
@@ -201,12 +204,16 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, err
 	}
 	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
-	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
+	if err := rejectLegacyPromptGuardProtocol(rawOverride); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	if err := applyDecisionModel(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeModuleOperatingPoints(&resolved, rawOverride)
 	return resolved, nil
 }
 
@@ -252,112 +259,9 @@ func mergeCanonicalGlobalOverride(
 	return resolved, nil
 }
 
-func normalizeSparseCanonicalCategoryOverride(
-	resolved *CanonicalGlobal,
-	rawOverride *StructuredPayload,
-) error {
-	if err := normalizeCanonicalPromptGuardBackend(&resolved.ModelCatalog.Modules.PromptGuard.PromptGuardConfig, rawOverride); err != nil {
-		return err
-	}
-	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
-	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
-		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
-			// The canonical default is a local mmBERT variant. A remote backend
-			// supplied by a sparse override must replace that inherited local
-			// selector, otherwise the merged value is rejected as a mixed local /
-			// remote configuration. Do this only when backend is present in the
-			// raw override: an unrelated sparse module override must preserve the
-			// inherited local default.
-			categoryModel.Variant = ""
-			categoryModel.UseModernBERT = false
-			categoryModel.UseMmBERT32K = false
-		}
-		if !hasRawKey(rawDomain, "variant") &&
-			(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
-			// A sparse legacy override must be able to replace the canonical
-			// default variant, including the explicit false/false form used to
-			// clear it.
-			categoryModel.Variant = ""
-		}
-	}
-	normalizeCanonicalPIIBackend(&resolved.ModelCatalog.Modules.Classifier.PII.PIIModel, rawOverride)
-	return normalizeCanonicalCategoryVariant(categoryModel)
-}
-
-// normalizeCanonicalPIIBackend applies the domain rule to PII: the canonical
-// default selects the local mmBERT PII model, and a sparse override that
-// attaches a remote backend must replace that inherited selector rather than be
-// rejected for mixing local and remote. Only a backend key the operator wrote
-// counts; an unrelated sparse pii override keeps the default. model_ref still
-// resolves, so the mapping file the token_spans adapter needs is provisioned
-// with the local model.
-func normalizeCanonicalPIIBackend(model *PIIModel, rawOverride *StructuredPayload) {
-	rawPII := rawCanonicalClassifierModuleOverride(rawOverride, "pii")
-	if rawPII == nil || !hasRawKey(rawPII, "backend") || rawBoolValue(rawPII, "use_mmbert_32k") {
-		return
-	}
-	model.UseMmBERT32K = false
-}
-
-// normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
-// canonical override has been merged onto defaults. A legacy key in that
-// override is allowed to replace an inherited default variant; an explicitly
-// configured variant alongside a legacy selector remains an error.
-func normalizeCanonicalCategoryVariant(model *CategoryModel) error {
-	if model == nil {
-		return nil
-	}
-	if err := model.ValidateLocalVariant(); err != nil {
-		return err
-	}
-	variant, err := model.EffectiveVariant()
-	if err != nil {
-		return err
-	}
-	if variant != "" {
-		model.Variant = variant
-		model.UseModernBERT = false
-		model.UseMmBERT32K = false
-	}
-	return nil
-}
-
-func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]interface{} {
-	return rawCanonicalClassifierModuleOverride(rawOverride, "domain")
-}
-
-// rawCanonicalClassifierModuleOverride returns the raw (pre-merge) mapping the
-// override supplied for one classifier module, so normalization can tell an
-// inherited default from a key the operator actually wrote.
-func rawCanonicalClassifierModuleOverride(rawOverride *StructuredPayload, module string) map[string]interface{} {
-	if rawOverride == nil || rawOverride.IsEmpty() {
-		return nil
-	}
-	var global map[string]interface{}
-	if err := rawOverride.DecodeInto(&global); err != nil {
-		return nil
-	}
-	modelCatalog := nestedStringMap(global["model_catalog"])
-	modules := nestedStringMap(modelCatalog["modules"])
-	classifier := nestedStringMap(modules["classifier"])
-	return nestedStringMap(classifier[module])
-}
-
 func hasRawKey(raw map[string]interface{}, key string) bool {
 	_, ok := raw[key]
 	return ok
-}
-
-func hasActiveRawCategoryLocalSelector(raw map[string]interface{}) bool {
-	if variant, ok := raw["variant"].(string); ok && strings.TrimSpace(variant) != "" {
-		return true
-	}
-	return rawBoolValue(raw, "use_modernbert") || rawBoolValue(raw, "use_mmbert_32k")
-}
-
-func rawBoolValue(raw map[string]interface{}, key string) bool {
-	value, ok := raw[key].(bool)
-	return ok && value
 }
 
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
@@ -412,11 +316,20 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 }
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
+	cfg.KVTransfer = integrations.KVTransfer
 	cfg.Tools = integrations.Tools
 	cfg.Looper = integrations.Looper
+	if integrations.Looper.Endpoint != "" {
+		logging.ComponentWarnEvent("config", "looper_endpoint_deprecated", map[string]interface{}{
+			"field":  "global.integrations.looper.endpoint",
+			"reason": "the Router makes Looper calls in process; the field is ignored and goes in the next release",
+			"fix":    "remove it, or run vllm-sr config migrate",
+		})
+	}
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.DecisionModel = modelCatalog.System.DecisionModel
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
@@ -431,6 +344,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
 	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
+	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
@@ -493,13 +407,6 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	); err != nil {
 		return fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
 	}
-	if global.ModelCatalog.Modules.HallucinationMitigation.Explainer.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.HallucinationMitigation.Explainer.ModelRef,
-		global.ModelCatalog.Modules.HallucinationMitigation.Explainer.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.explainer: %w", err)
-	}
 	if global.ModelCatalog.Modules.FeedbackDetector.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.FeedbackDetector.ModelRef,
 		global.ModelCatalog.Modules.FeedbackDetector.ModelID,
@@ -534,8 +441,6 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		modelID = catalog.FactCheckClassifier
 	case "hallucination_detector":
 		modelID = catalog.HallucinationDetector
-	case "hallucination_explainer":
-		modelID = catalog.HallucinationExplainer
 	case "feedback_detector":
 		modelID = catalog.FeedbackDetector
 	default:
@@ -547,9 +452,9 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 	return modelID, nil
 }
 
-// Explicit backend overrides clear only inherited defaults; a legacy protocol
-// in canonical input must be converted by the migration command.
-func normalizeCanonicalPromptGuardBackend(model *PromptGuardConfig, rawOverride *StructuredPayload) error {
+// rejectLegacyPromptGuardProtocol refuses the legacy protocol key, which the
+// migration command converts to a named backend.
+func rejectLegacyPromptGuardProtocol(rawOverride *StructuredPayload) error {
 	if rawOverride == nil || rawOverride.IsEmpty() {
 		return nil
 	}
@@ -562,9 +467,6 @@ func normalizeCanonicalPromptGuardBackend(model *PromptGuardConfig, rawOverride 
 	raw := nestedStringMap(modules["prompt_guard"])
 	if protocol, ok := raw["protocol"].(string); ok && strings.TrimSpace(protocol) != "" {
 		return fmt.Errorf("global.model_catalog.modules.prompt_guard.protocol is legacy; run vllm-sr config migrate to declare a named backend")
-	}
-	if hasRawKey(raw, "backend") && !hasRawKey(raw, "variant") {
-		model.Variant = ""
 	}
 	return nil
 }

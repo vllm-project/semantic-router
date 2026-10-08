@@ -9,8 +9,8 @@ package safefetch
 import "net/netip"
 
 // nonPublicNetworks are the ranges a public-web fetch must never reach. It
-// covers loopback, private, carrier-grade NAT, link-local (including the cloud
-// metadata address 169.254.169.254), documentation, benchmarking, multicast,
+// covers loopback, private, carrier-grade NAT, link-local (which holds the
+// cloud instance metadata service), documentation, benchmarking, multicast,
 // and the IPv6 equivalents plus the translation ranges that embed an IPv4
 // destination.
 var nonPublicNetworks = mustPrefixes(

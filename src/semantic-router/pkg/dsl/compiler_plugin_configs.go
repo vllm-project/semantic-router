@@ -224,8 +224,8 @@ func (c *Compiler) compileHallucinationPluginConfig(fields map[string]Value) con
 	if v, ok := getBoolField(fields, "enabled"); ok {
 		cfg.Enabled = v
 	}
-	if v, ok := getBoolField(fields, "use_nli"); ok {
-		cfg.UseNLI = v
+	if _, ok := fields["use_nli"]; ok {
+		c.addError(Position{}, "hallucination plugin: use_nli is retired with the NLI explainer; remove it")
 	}
 	if v, ok := getStringField(fields, "hallucination_action"); ok {
 		cfg.HallucinationAction = v

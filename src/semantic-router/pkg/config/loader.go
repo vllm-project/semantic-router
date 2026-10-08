@@ -238,6 +238,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,
 		rejectUnsupportedRouterLearningFields,
+		rejectRemovedModelExecutionFields,
 	}
 	for _, validate := range validators {
 		if err := validate(raw); err != nil {
@@ -671,6 +672,7 @@ func applyParsedConfigDefaults(cfg *RouterConfig) {
 		cfg.VectorStore.ApplyDefaults()
 	}
 	applyBatchConcurrencyMigration(cfg)
+	dropReliabilityHeaderMutations(cfg)
 }
 
 func logParsedDecisions(cfg *RouterConfig) {

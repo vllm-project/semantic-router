@@ -18,7 +18,7 @@ func TestUnreachableDefaultDoesNotPrepareRoutingArtifacts(t *testing.T) {
 		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: defaultProfile}, {Name: "active"}},
 		Entrypoints:   []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
 	}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: "candle", Device: "cpu"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: config.ModelRuntimeProvider, Device: "cpu"}}
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unreachable default tried to load routing model: %v", err)
@@ -44,12 +44,9 @@ func TestUnreachableDefaultDoesNotPrepareRoutingArtifacts(t *testing.T) {
 func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T) {
 	defaultClassifier := &Classifier{}
 	namedClassifier := &Classifier{
-		factCheckClassifier: &FactCheckClassifier{initialized: true},
-		hallucinationDetector: &HallucinationDetector{
-			initialized:    true,
-			nliInitialized: true,
-		},
-		feedbackDetector: &FeedbackDetector{initialized: true},
+		factCheckClassifier:   &FactCheckClassifier{initialized: true},
+		hallucinationDetector: &HallucinationDetector{initialized: true},
+		feedbackDetector:      &FeedbackDetector{initialized: true},
 	}
 	classifiers := &RecipeClassifiers{
 		byRecipe: map[config.RecipeName]*Classifier{
@@ -61,7 +58,6 @@ func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T)
 
 	if classifiers.HasFactCheckClassifier() ||
 		classifiers.HasHallucinationDetector() ||
-		classifiers.HasHallucinationExplainer() ||
 		classifiers.HasFeedbackDetector() {
 		t.Fatal("named-only models must not make default model-less APIs ready")
 	}
@@ -70,9 +66,6 @@ func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T)
 	}
 	if !classifiers.HasAnyHallucinationDetector() {
 		t.Fatal("named-recipe hallucination readiness was not aggregated")
-	}
-	if !classifiers.HasAnyHallucinationExplainer() {
-		t.Fatal("named-recipe hallucination explainer readiness was not aggregated")
 	}
 	if !classifiers.HasAnyFeedbackDetector() {
 		t.Fatal("named-recipe feedback readiness was not aggregated")
@@ -94,7 +87,6 @@ func TestRecipeClassifierReadinessStaysFalseWhenModelsAreUninitialized(t *testin
 
 	if classifiers.HasAnyFactCheckClassifier() ||
 		classifiers.HasAnyHallucinationDetector() ||
-		classifiers.HasAnyHallucinationExplainer() ||
 		classifiers.HasAnyFeedbackDetector() {
 		t.Fatal("uninitialized named-recipe models must not report ready")
 	}

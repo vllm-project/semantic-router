@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -44,10 +44,15 @@ const (
 type RouteAuditAction string
 
 const (
-	AuditActionNone                  RouteAuditAction = ""
-	AuditActionConfigPatch           RouteAuditAction = "config.patch"
-	AuditActionConfigPut             RouteAuditAction = "config.put"
-	AuditActionConfigRollback        RouteAuditAction = "config.rollback"
+	AuditActionNone           RouteAuditAction = ""
+	AuditActionConfigPatch    RouteAuditAction = "config.patch"
+	AuditActionConfigPut      RouteAuditAction = "config.put"
+	AuditActionConfigRollback RouteAuditAction = "config.rollback"
+	// The configuration lifecycle's outcomes: an update that activated (an
+	// ACK), was rejected (a NACK), or was superseded by a newer document.
+	AuditActionConfigActivate        RouteAuditAction = "config.activate"
+	AuditActionConfigReject          RouteAuditAction = "config.reject"
+	AuditActionConfigSupersede       RouteAuditAction = "config.supersede"
 	AuditActionRecipeSave            RouteAuditAction = "recipe.save"
 	AuditActionRecipeDelete          RouteAuditAction = "recipe.delete"
 	AuditActionKnowledgeBaseSave     RouteAuditAction = "knowledge_base.save"

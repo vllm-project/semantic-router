@@ -185,7 +185,6 @@ Direct Fusion slug registration:
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       fusion:
         model_names:
@@ -193,6 +192,8 @@ global:
 ```
 
 `global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
+
+Give every alias a name that no model uses. An alias that is also a model's name captures that model's requests: they evaluate only Fusion decisions, and one that matches none fails with [`no_route`](../../../api/router.md#routing-errors). The Router and `vllm-sr config validate` warn about such an alias.
 
 The judge model, analysis panel, analysis mode, sampling settings, concurrency,
 token and time budgets, quorum, templates, prompt version, trace visibility,
@@ -414,12 +415,12 @@ Public mode-trace transport remains deferred to
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses local encoder models (the hallucination/groundedness detector and an NLI entailment model).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses the hallucination detector (Vela Halu by default), which runs in the [model runtime](../../../model-runtime/guides/hallucination.md).
 
 Reference selection (what each answer is scored against):
 
 - `context` — score answers against provided RAG/tool context via the detector (strongest, but only when the request carries context such as system/tool messages).
-- `panel` — score answers against each other via cross-model NLI; the panel acts as its own mutual reference (no external dependency, works on any query).
+- `panel` — score answers against each other: the detector reads each answer with a peer's answer as its context, so the panel acts as its own mutual reference (no external dependency, works on any query).
 - `hybrid` (default) — use `context` when the request carries it, otherwise `panel`.
 
 Policy (how the scores are used):
@@ -434,7 +435,7 @@ quorum check on the reduced judge input.
 
 > Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 
-Requires the hallucination detector (and, for the `panel`/cross-model path, the NLI model) to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
+Requires the hallucination detector to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
 
 ```yaml
 algorithm:
@@ -448,7 +449,7 @@ algorithm:
       policy: weight             # weight | annotate | filter
       min_score: 0.0             # filter policy only: drop below this (0-1)
       min_keep: 1                # filter policy only: keep at least this many
-      nli_contradiction_penalty: 1.0
+      contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
 ```
 
@@ -463,7 +464,7 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `policy` | string | `weight` | `weight` (soft-weight, keep all), `annotate` (notes, keep all), or `filter` (hard-drop) |
 | `min_score` | float | `0.0` | `filter` policy only: drop responses scoring below this (0–1) |
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
-| `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
+| `contradiction_penalty` | float | `1.0` | Weight of a peer contradiction (the detector's unsupported-span probability) in the `panel` reference; `vllm-sr config migrate` renames the earlier `nli_contradiction_penalty` |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
 
 Panel responses and the original request are sent to the judge model. Treat all

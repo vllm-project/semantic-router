@@ -115,6 +115,8 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **model-runtime**: Router-managed and attached model runtimes on tiny fixture models: process groups, task signals and decision signals against the runtimes' own answers, the decision selector, request bundles, supervisor restarts, and fail-open.
+- **model-runtime-real** (opt-in, downloads about 4 GB): real Decision 2.0 Kai-0.6B and the Vela Domain, PII and Guard defaults on CPU in the Router's managed runtime; clear prompts take the routes the models decide, and the Router routes on Kai's own answer. Run it with `make e2e-test E2E_PROFILE=model-runtime-real` on a machine with Hugging Face Hub access.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.

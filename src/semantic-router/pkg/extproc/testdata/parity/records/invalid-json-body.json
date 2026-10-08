@@ -1,0 +1,118 @@
+{
+  "case": "invalid-json-body",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "74"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-invalid-json-body"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"messages\":[{\"role\":\"user\",\"content\":\"unterminated",
+      "effect": {
+        "immediate": {
+          "status": 400,
+          "header": {
+            "set": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "x-vsr-schema-version",
+                "value": "2"
+              },
+              {
+                "name": "x-vsr-response-path",
+                "value": "error"
+              },
+              {
+                "name": "x-vsr-config-version",
+                "value": "1"
+              }
+            ]
+          },
+          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"invalid_json\",\"message\":\"request JSON is invalid\",\"param\":null}}"
+        }
+      }
+    }
+  ],
+  "response": {
+    "status": 400,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "2"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "error"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "content-length",
+        "value": "113"
+      }
+    ],
+    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"invalid_json\",\"message\":\"request JSON is invalid\",\"param\":null}}"
+  },
+  "evidence": {}
+}
