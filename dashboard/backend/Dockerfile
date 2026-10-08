@@ -89,6 +89,7 @@ COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
 COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
 COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
+COPY src/semantic-router/pkg/modelservice/api/ /app/src/semantic-router/pkg/modelservice/api/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
