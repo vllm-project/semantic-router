@@ -5,6 +5,7 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import { canWriteConfig } from '../utils/accessControl'
 import { getRouterModelStateLabel } from '../utils/routerRuntime'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import DecisionModelRuntimePanel from './DecisionModelRuntimePanel'
 import { buildIntelligenceRoutingScopes } from './dashboardRouterIntelligenceSupport'
 import { decisionActivationLabel, decisionModelRuntimeState } from './decisionModelManagement'
 import { DECISION_MODEL_OPTIONS } from './decisionModelSupport'
@@ -19,7 +20,15 @@ export default function DecisionModelPage() {
   const model = useDecisionModelManagement()
   const engineOnly = model.status?.serving_mode === 'engine'
   const writable = !engineOnly && !isReadonly && !accessLoading && canWriteConfig(user)
-  const scopes = model.config ? buildIntelligenceRoutingScopes(model.config) : []
+  const questions = model.config
+    ? [
+        ...new Set(
+          buildIntelligenceRoutingScopes(model.config).flatMap((scope) =>
+            scope.questions.map((question) => question.name),
+          ),
+        ),
+      ]
+    : []
   const consumers = model.status?.models?.models ?? []
   const bindings = Object.entries(model.global?.model_catalog?.system ?? {}).filter(
     ([name, value]) => name !== 'decision_model' && typeof value === 'string' && value.trim(),
@@ -194,83 +203,18 @@ export default function DecisionModelPage() {
           )}
         </section>
 
-        <section className={styles.panel} aria-labelledby="decision-runtime-title">
-          <h2 id="decision-runtime-title">Model runtime deployments</h2>
-          <p className={styles.muted}>
-            Live reports include the shared decision model, specialist overrides, and other router
-            model dependencies.
-          </p>
-          {!model.inventory?.deployments.length && <p>No model runtime deployments reported.</p>}
-          <div className={styles.deployments}>
-            {model.inventory?.deployments.map((deployment) => (
-              <article className={styles.deployment} key={deployment.name}>
-                <div className={styles.deploymentTitle}>
-                  <h3>{deployment.name}</h3>
-                  <span>
-                    {deployment.ready && deployment.state === 'ready'
-                      ? 'Ready'
-                      : deployment.state || 'Not ready'}
-                  </span>
-                </div>
-                {deployment.reason && <p className={styles.notice}>{deployment.reason}</p>}
-                <dl className={styles.facts}>
-                  <div>
-                    <dt>Repository</dt>
-                    <dd>{shown(deployment.repo)}</dd>
-                  </div>
-                  <div>
-                    <dt>Revision</dt>
-                    <dd>{shown(deployment.revision)}</dd>
-                  </div>
-                  <div>
-                    <dt>Device</dt>
-                    <dd>{shown(deployment.device)}</dd>
-                  </div>
-                  <div>
-                    <dt>Engine backend</dt>
-                    <dd>{shown(deployment.engine)}</dd>
-                  </div>
-                  <div>
-                    <dt>Profile</dt>
-                    <dd>{shown(deployment.profile)}</dd>
-                  </div>
-                  <div>
-                    <dt>Restarts</dt>
-                    <dd>{deployment.restarts ?? 'Not reported'}</dd>
-                  </div>
-                  <div>
-                    <dt>Family</dt>
-                    <dd>{shown(deployment.family)}</dd>
-                  </div>
-                  <div>
-                    <dt>Process</dt>
-                    <dd>{shown(deployment.process)}</dd>
-                  </div>
-                  <div>
-                    <dt>Served model</dt>
-                    <dd>{shown(deployment.served_name)}</dd>
-                  </div>
-                  <div>
-                    <dt>Ownership</dt>
-                    <dd>{deployment.managed ? 'Managed by router' : 'External deployment'}</dd>
-                  </div>
-                </dl>
-                {deployment.surfaces?.length ? (
-                  <p className={styles.muted}>Surfaces: {deployment.surfaces.join(', ')}</p>
-                ) : null}
-                {deployment.heads?.length ? (
-                  <p className={styles.muted}>
-                    Heads:{' '}
-                    {deployment.heads.map((head) => `${head.name} (${head.kind})`).join(', ')}
-                  </p>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </section>
+        <DecisionModelRuntimePanel
+          inventory={model.inventory}
+          refreshedAt={model.updatedAt}
+          engineOnly={engineOnly}
+        />
 
-        <section className={styles.panel} aria-labelledby="decision-consumers-title">
-          <h2 id="decision-consumers-title">Bindings and questions</h2>
+        <details className={`${styles.panel} ${styles.advanced}`}>
+          <summary>Advanced bindings</summary>
+          <p className={styles.muted}>
+            Inspect prepared signal bindings and custom assignments when troubleshooting model
+            usage.
+          </p>
           {consumers.length ? (
             <div className={styles.tableScroll}>
               <table>
@@ -297,38 +241,29 @@ export default function DecisionModelPage() {
           ) : (
             <p>No runtime consumers reported.</p>
           )}
-          {scopes.map((scope) => (
-            <div className={styles.scope} key={scope.id}>
-              <h3>{scope.label}</h3>
-              <p>{scope.entrypoints.join(', ') || 'No public model names configured'}</p>
-              <p>
-                {scope.questions.length
-                  ? scope.questions
-                      .map((question) => `${question.name} (${question.kind})`)
-                      .join(' · ')
-                  : 'No custom questions configured.'}
-              </p>
+          {questions.length > 0 && (
+            <div className={styles.scope}>
+              <h3>Custom questions</h3>
+              <p>{questions.join(' · ')}</p>
             </div>
-          ))}
-          <h3>Explicit signal overrides</h3>
-          {bindings.length ? (
-            <dl className={styles.facts}>
-              {bindings.map(([name, value]) => (
-                <div key={name}>
-                  <dt>{name}</dt>
-                  <dd>{String(value)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className={styles.muted}>
-              No explicit overrides. Built-in signals use the selected model&apos;s defaults.
-            </p>
+          )}
+          {bindings.length > 0 && (
+            <>
+              <h3>Custom model assignments</h3>
+              <dl className={styles.facts}>
+                {bindings.map(([name, value]) => (
+                  <div key={name}>
+                    <dt>{name.replace(/_/g, ' ')}</dt>
+                    <dd>{String(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
           )}
           <Link to="/config/global-config#global-section-system_models">
             Manage advanced model bindings &rsaquo;
           </Link>
-        </section>
+        </details>
       </div>
     </ConfigPageManagerLayout>
   )

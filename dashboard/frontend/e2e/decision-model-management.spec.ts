@@ -5,6 +5,8 @@ async function mockDecisionModelManager(
   page: Page,
   options: {
     readonly?: boolean
+    defaultModel?: boolean
+    metrics?: 'reported' | 'empty' | 'unavailable'
     engine?: boolean
     applyStatus?: 'success' | 'restart_required' | 'persisted' | 'failed'
   } = {},
@@ -25,16 +27,52 @@ async function mockDecisionModelManager(
   })
   const global = {
     model_catalog: {
-      system: { decision_model: 'Vela-2.0-4B', pii_classifier: 'models/custom-pii' },
+      system: options.defaultModel
+        ? ({} as { decision_model?: string; pii_classifier?: string })
+        : { decision_model: 'Vela-2.0-4B', pii_classifier: 'models/custom-pii' },
     },
   }
-  let observed = 'Vela-2.0-4B'
+  let observed = options.defaultModel ? 'Vela-2.0-0.3B' : 'Vela-2.0-4B'
   let pending = false
   const requests: unknown[] = []
   const reply = (data: unknown) => ({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify(data),
+  })
+  const metricsRequests: string[] = []
+  let metricsMode = options.metrics
+  await page.route('**/embedded/prometheus/api/v1/query?*', (route) => {
+    const query = new URL(route.request().url()).searchParams.get('query') ?? ''
+    metricsRequests.push(query)
+    if (metricsMode === 'unavailable')
+      return route.fulfill({ status: 503, body: 'Prometheus unavailable' })
+    const value = query.includes('histogram_quantile')
+      ? '0.125'
+      : query.includes('phase="forward"')
+        ? '0.010'
+        : query.includes('result="hit"')
+          ? '75'
+          : query.includes('outcome!="ok"')
+            ? '0'
+            : query.includes('duration_seconds_sum')
+              ? '0.025'
+              : '2.5'
+    return route.fulfill(
+      reply({
+        status: 'success',
+        data: {
+          resultType: 'vector',
+          result:
+            metricsMode === 'empty'
+              ? []
+              : [
+                  { metric: { deployment: `@${observed}/auto` }, value: [1, value] },
+                  { metric: { deployment: 'backend-llm' }, value: [1, '999'] },
+                ],
+        },
+      }),
+    )
   })
   await page.route('**/api/router/config/global', (route) => route.fulfill(reply(global)))
   await page.route('**/api/router/config/all', (route) =>
@@ -44,7 +82,9 @@ async function mockDecisionModelManager(
         global,
         providers: { models: [] },
         routing: {
-          signals: { decision: [{ name: 'task', question: { type: 'choice' } }] },
+          signals: options.defaultModel
+            ? {}
+            : { decision: [{ name: 'task', question: { type: 'noul' } }] },
           decisions: [],
         },
       }),
@@ -155,14 +195,78 @@ async function mockDecisionModelManager(
   })
   return {
     requests,
+    metricsRequests,
+    failMetrics: () => {
+      metricsMode = 'unavailable'
+    },
     activate: () => {
-      observed = global.model_catalog.system.decision_model
+      observed = global.model_catalog.system.decision_model ?? 'Vela-2.0-0.3B'
       pending = false
     },
   }
 }
 
 test.describe('Decision model management', () => {
+  test('shows measured runtime statistics and clears them when observation fails', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionModelManager(page)
+    await page.goto('/decision-model')
+    const deployment = page.getByRole('article', { name: '@Vela-2.0-4B/auto', exact: true })
+    const metric = (name: string) =>
+      deployment
+        .locator('dl[aria-label="Model statistics"] > div')
+        .filter({ has: page.getByText(name, { exact: true }) })
+    await expect(metric('Runtime calls / sec')).toContainText('2.50')
+    await expect(metric('Unsuccessful calls')).toContainText('0.0%')
+    await expect(metric('Mean call latency')).toContainText('25.0 ms')
+    await expect(metric('P95 call latency')).toContainText('125.0 ms')
+    await expect(metric('Result cache hit rate')).toContainText('75.0%')
+    await expect(metric('Mean model forward')).toContainText('10.0 ms')
+    await expect(deployment).not.toContainText('999')
+    fixture.failMetrics()
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect(metric('Runtime calls / sec')).toContainText('Not reported')
+    await expect(page.getByText(/Some model statistics are unavailable/)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Deploy selected model' })).toBeEnabled()
+  })
+
+  test('keeps the default 0.3B model and shows absent samples as unknown without empty configuration clutter', async ({
+    page,
+  }) => {
+    await mockDecisionModelManager(page, { defaultModel: true, metrics: 'empty' })
+    await page.goto('/decision-model')
+    await expect(page.getByRole('radio', { name: /Vela 2.0 0.3B/ })).toBeChecked()
+    const stats = page
+      .getByRole('article', { name: '@Vela-2.0-0.3B/auto', exact: true })
+      .locator('dl[aria-label="Model statistics"]')
+    await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(6)
+    await page.getByText('Advanced bindings', { exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Custom model assignments' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Custom questions' })).toHaveCount(0)
+    await expect(page.getByText('Default routing', { exact: true })).toHaveCount(0)
+    await expect(page.getByText(/No custom questions configured/)).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Explicit signal overrides' })).toHaveCount(0)
+  })
+
+  test('bounds stalled metrics independently of configuration deployment', async ({ page }) => {
+    await page.clock.install()
+    const fixture = await mockDecisionModelManager(page)
+    let queries = 0
+    await page.route('**/embedded/prometheus/api/v1/query?*', () => {
+      queries += 1
+    })
+    await page.goto('/decision-model')
+    await expect.poll(() => queries).toBeGreaterThanOrEqual(6)
+    await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
+    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
+    await page.getByRole('button', { name: 'Deploy selected model' }).click()
+    await expect.poll(() => fixture.requests.length).toBe(1)
+    await expect(page.getByRole('button', { name: 'Deploy selected model' })).toBeEnabled()
+    await page.clock.fastForward(8_100)
+    await expect(page.getByText(/Some model statistics are unavailable/)).toBeVisible()
+  })
+
   test('bounds stalled status reads before and after a deployment request', async ({ page }) => {
     await page.clock.install()
     const fixture = await mockDecisionModelManager(page)
@@ -210,19 +314,16 @@ test.describe('Decision model management', () => {
     await expect(status).toContainText('Matching runtime ready')
     await expect(status).toContainText('Router')
     const deployments = page.getByRole('region', { name: 'Model runtime deployments' })
-    for (const value of [
-      'revision-123',
-      'rocm:0',
-      'torch',
-      'exact',
-      'model-runtime-1',
-      'safety (classification)',
-    ]) {
+    await deployments.getByText('Deployment details', { exact: true }).click()
+    for (const value of ['revision-123', 'rocm:0', 'torch', 'exact', 'model-runtime-1', 'safety']) {
       await expect(deployments).toContainText(value)
     }
-    await expect(page.getByRole('region', { name: 'Bindings and questions' })).toContainText(
-      'task (choice)',
-    )
+    await expect(page.getByText('Custom model assignments', { exact: true })).not.toBeVisible()
+    await page.getByText('Advanced bindings', { exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Custom questions' })).toBeVisible()
+    await expect(page.locator('details[open]').last()).toContainText('task')
+    await expect(page.getByText('Default routing', { exact: true })).toHaveCount(0)
+    await expect(page.getByText(/\(noul\)/)).toHaveCount(0)
     await expect(
       page.getByRole('link', { name: /Manage advanced model bindings/ }),
     ).toHaveAttribute('href', '/config/global-config#global-section-system_models')
@@ -244,9 +345,8 @@ test.describe('Decision model management', () => {
     await expect(page.getByRole('region', { name: 'Model runtime deployments' })).toContainText(
       '@Vela-2.0-4B/auto',
     )
-    await expect(page.getByRole('region', { name: 'Bindings and questions' })).toContainText(
-      'models/custom-pii',
-    )
+    await page.getByText('Advanced bindings', { exact: true }).click()
+    await expect(page.getByText('models/custom-pii', { exact: true })).toBeVisible()
     fixture.activate()
     await page.clock.fastForward(10_100)
     await expect(status).toContainText('Matching runtime ready')
@@ -284,12 +384,16 @@ test.describe('Decision model management', () => {
   })
 
   test('keeps management observable but disables writes for config readers', async ({ page }) => {
-    await mockDecisionModelManager(page, { readonly: true })
+    const fixture = await mockDecisionModelManager(page, { readonly: true })
     await page.goto('/decision-model')
     await expect(page.getByRole('heading', { name: 'Decision Model', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Deploy selected model' })).toBeDisabled()
     await expect(page.getByRole('radio').first()).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
+    await expect(
+      page.getByText(/Viewing model statistics requires observability read access/),
+    ).toBeVisible()
+    expect(fixture.metricsRequests).toEqual([])
   })
 
   test('does not apply router model settings to a standalone engine', async ({ page }) => {
@@ -300,5 +404,6 @@ test.describe('Decision model management', () => {
     await expect(page.getByRole('button', { name: 'Deploy selected model' })).toBeDisabled()
     await expect(page.getByRole('radio').first()).toBeDisabled()
     expect(fixture.requests).toEqual([])
+    expect(fixture.metricsRequests).toEqual([])
   })
 })
