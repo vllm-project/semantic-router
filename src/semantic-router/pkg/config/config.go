@@ -74,6 +74,7 @@ const (
 
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
+	KVTransfer   *KVTransferConfig `yaml:"-"`
 	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`
 	MoMRegistry  map[string]string `yaml:"mom_registry,omitempty"`
 	// SkipExternalAssetValidation is set only for untrusted read-only

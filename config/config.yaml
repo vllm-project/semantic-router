@@ -2426,6 +2426,8 @@ global:
         key_prefix: "vsr:session-tools:v1:"
 
   integrations:
+    kv_transfer:
+      enabled: false
     tools:
       enabled: true
       top_k: 5

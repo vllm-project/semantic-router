@@ -43,6 +43,7 @@ var (
 
 	// These contracts need the complete routing graph, including all recipes.
 	routingConfigContractValidators = []configContractValidator{
+		validateKVTransferConfig,
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,

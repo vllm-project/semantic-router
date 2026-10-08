@@ -39,9 +39,11 @@ def test_validate_result_uses_clean_stdout() -> None:
     config_path = REPO_ROOT / "config/config.yaml"
 
     # This stream contract must not depend on a Router image cached on the host.
-    result = _run_cli("config", "validate", "--offline", "--config", str(config_path))
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--offline", "--config", str(config_path)]
+    )
 
-    assert result.returncode == 0, result.stderr
+    assert result.exit_code == 0, result.output
     assert "✓ Configuration is valid" in result.stdout
     assert "Configuration summary" in result.stdout
     assert result.stderr == ""
