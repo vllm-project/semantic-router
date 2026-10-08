@@ -340,7 +340,7 @@ routing:
         description: Content risk, independent of prompt attacks.
         labels: [safe, unsafe]
         unsafe_labels: [unsafe]
-        threshold: 0.5
+        threshold: 0.46
 
     fact_check:
       - name: needs_fact_check
@@ -559,7 +559,7 @@ routing:
       # decision's response_jailbreak plugin enforces on it.
       - name: unsafe_completion
         direction: response
-        threshold: 0.85
+        threshold: 0.77
         description: Detect jailbreak content in the model's own output.
 
     # Hallucination rules check the model's answer against the grounding
@@ -572,7 +572,7 @@ routing:
 
     pii:
       - name: restricted_pii
-        threshold: 0.85
+        threshold: 0.01
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS
@@ -2413,6 +2413,8 @@ global:
         key_prefix: "vsr:session-tools:v1:"
 
   integrations:
+    kv_transfer:
+      enabled: false
     tools:
       enabled: true
       top_k: 5
@@ -2538,15 +2540,19 @@ global:
           max_retries: 2
           max_response_bytes: 16777216
           dimensions: 1024
+    # The decision model answers every built-in signal it covers, and every
+    # routing.signals.decision question that names no deployment, in one call
+    # per request: Vela-2.0-0.3B (the default), Vela-2.0-0.8B, Vela-2.0-4B or
+    # Vela-2.0-9B (the 4B and 9B need a GPU), or Vela-1.0 for the Vela 1.0
+    # specialists. Each module takes the thresholds of the model it runs where
+    # it sets none. Hazard keeps its Vela 1.0 model. A line per module binds
+    # one signal to another model, for example:
+    #   prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+    #   safety, domain_classifier, pii_classifier, fact_check_classifier,
+    #   hallucination_detector and feedback_detector likewise.
     system:
-      safety: models/Vela-1.0-Encoder-307M-Safety
+      decision_model: Vela-2.0-0.3B
       hazard: models/Vela-1.0-Encoder-307M-Hazard
-      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
-      pii_classifier: models/Vela-1.0-Encoder-307M-PII
-      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
-      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
     # Keys must match global.model_catalog.system entries (prompt_guard,
     # domain_classifier, pii_classifier, fact_check_classifier,
@@ -2567,6 +2573,12 @@ global:
         max_queue: 64
         queue_timeout_ms: 250
         on_overflow: shed
+    # Deadline of a request's model-runtime signals. 0 (default) derives it
+    # from the request's deadline, less a tenth of the time left (at least a
+    # second), or 45 s for a served request. A signal still running resolves
+    # through its policy: a routing signal through on_error, a safety signal
+    # (prompt guard, PII) as unscanned.
+    signal_timeout_ms: 0
     external:
       - name: external-safety
         model_role: classification
@@ -2732,7 +2744,6 @@ global:
       safety:
         safety:
           model_ref: safety
-          model_id: models/Vela-1.0-Encoder-307M-Safety
           use_cpu: true
           max_sequence_length: 0
       prompt_compression:
@@ -2754,21 +2765,27 @@ global:
       prompt_guard:
         enabled: true
         model_ref: prompt_guard
-        model_id: models/Vela-1.0-Encoder-307M-Guard
-        threshold: 0.5
+        # model_id binds the guard to one model and threshold sets its own;
+        # without them it runs the decision model at that model's threshold.
         use_cpu: true
+        # Vela 2.0 reads the whole text up to its scan budget (four inputs on a
+        # CPU, or the deployment's input {overflow: window, max_tokens}) and
+        # names its own labels, so it sets no window. A sequence classifier such
+        # as Vela 1.0 Guard takes a document budget, token windows
+        # (window: {size: 512, overlap: 255}) and a label mapping
+        # (jailbreak_type_mapping.json in its directory).
         max_sequence_length: 0
-        # Optional token windows. The total input budget above remains 512
-        # when zero; larger budgets require a qualified checkpoint and policy.
-        window:
-          size: 512
-          overlap: 255
-        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
+        jailbreak_mapping_path: ""
         positive_labels: [jailbreak]
         # allow (default) tolerates a classifier-backend failure and treats the
         # affected content as not matching; block treats it as a match instead,
         # since an inference failure means the content could not be verified safe.
         on_error: allow
+        # block (default) matches content the guard did not read in full (over
+        # its input or cap, truncated, or not scanned by the signal deadline) as
+        # unscanned, so padding cannot carry an attack past it; allow leaves
+        # such content to on_error.
+        on_unscanned: block
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is
@@ -2776,10 +2793,10 @@ global:
           enabled: true
           model_ref: domain_classifier
           max_sequence_length: 0
-          model_id: models/Vela-1.0-Encoder-307M-Domain
-          threshold: 0.5
           use_cpu: true
-          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
+          # Vela 2.0 names its 14 domains itself; a classifier head takes its
+          # category_mapping.json.
+          category_mapping_path: ""
           fallback_category: other
         mcp:
           enabled: true
@@ -2798,19 +2815,23 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: pii_classifier
-          # Document budget; each exact token window executes at most 512 tokens.
-          max_sequence_length: 32768
-          window:
-            size: 512
-            overlap: 255
-          model_id: models/Vela-1.0-Encoder-307M-PII
-          threshold: 0.9
+          # Vela 2.0 0.3B finds spans with its router span head and reads the
+          # whole text up to its scan budget, so it sets no window; a token
+          # classifier such as Vela 1.0 PII takes a document budget (32768),
+          # token windows (window: {size: 512, overlap: 255}) and its
+          # pii_mapping.json.
+          max_sequence_length: 0
           use_cpu: true
-          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
-          # allow (default) keeps a classify error or a provider-declared
-          # truncation as a non-match for that content; block treats it as a
-          # match on classification_error, so unverified text cannot pass as clean.
+          pii_mapping_path: ""
+          # allow (default) keeps a classify error as a non-match for that
+          # content; block treats it as a match on classification_error, so
+          # unverified text cannot pass as clean.
           on_error: allow
+          # block (default) matches content the model did not read in full
+          # (over its input or cap, a provider-declared truncation, or not
+          # scanned by the signal deadline) as unscanned, so a long request
+          # routes as private; allow leaves such content to on_error.
+          on_unscanned: block
         preference:
           use_contrastive: true
           embedding_model: models/preference-encoder
@@ -2834,14 +2855,11 @@ global:
         fact_check:
           model_ref: fact_check_classifier
           max_sequence_length: 0
-          model_id: models/Vela-1.0-Encoder-307M-FactCheck
-          threshold: 0.95
           use_cpu: true
         detector:
           backend: model_runtime
           include_explanation: false
           model_ref: hallucination_detector
-          model_id: models/Vela-1.0-Encoder-307M-Halu
           threshold: 0.5
           use_cpu: true
           min_span_length: 1
@@ -2851,15 +2869,14 @@ global:
         enabled: true
         model_ref: feedback_detector
         max_sequence_length: 0
-        model_id: models/Vela-1.0-Encoder-307M-Feedback
-        threshold: 0.7
         use_cpu: true
         feedback_mapping_path: ''
       modality_detector:
         enabled: true
         method: hybrid
         classifier:
-          model_path: models/Vela-1.0-Encoder-307M-Modality
+          # Empty runs the decision model; a model or package path binds one.
+          model_path: ""
           max_sequence_length: 0
           use_cpu: true
         keywords:
@@ -2869,5 +2886,5 @@ global:
         both_keywords:
           - explain and illustrate
           - describe with an image
-        confidence_threshold: 0.7
+        confidence_threshold: 0.51
         lower_threshold_ratio: 0.7

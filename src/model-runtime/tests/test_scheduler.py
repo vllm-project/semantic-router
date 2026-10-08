@@ -12,6 +12,7 @@ from vllm_srun.profiles.shared_context import SharedContextProfile
 from vllm_srun.scheduler import scheduler as scheduler_module
 from vllm_srun.scheduler.planner import cost, micro_batches
 from vllm_srun.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
+from vllm_srun.timing import RunTiming
 
 
 def item(name, length):
@@ -734,3 +735,100 @@ def test_a_group_beyond_the_queue_bound_is_refused_whole():
             [[item("a", 4)], [item("b", 4)]], deadlines=[None, None], profile="exact"
         )
     assert error.value.code == "overloaded"
+
+
+def test_a_group_timing_counts_a_forward_once_however_many_of_its_jobs_it_holds():
+    timing = RunTiming()
+    timing.ran(3, 0.010, 100.0)
+    timing.ran(3, 0.010, 100.0)
+    timing.ran(4, 0.005, 100.5)
+    assert timing.forward == pytest.approx(0.015) and timing.done == 100.5
+
+
+class SlowModel(FakeModel):
+    """Every forward takes ``seconds``."""
+
+    def __init__(self, seconds, fuse=False):
+        super().__init__()
+        self.seconds = seconds
+        self.fuse_bundled_jobs = fuse
+
+    def run(self, items):
+        time.sleep(self.seconds)
+        return super().run(items)
+
+
+@pytest.mark.parametrize("fuse, forwards", [(False, 2), (True, 1)])
+def test_a_group_timing_holds_the_forwards_that_ran_its_jobs(fuse, forwards):
+    model = SlowModel(0.03, fuse=fuse)
+    exact = ExactProfile()
+    exact.bind(model)
+    scheduler = Scheduler(model, {"exact": exact})
+    scheduler.start()
+    timing = RunTiming()
+    try:
+        submitted = time.monotonic()
+        futures = scheduler.submit_group(
+            [[item("a", 4)], [item("b", 6)]],
+            deadlines=[None, None],
+            profile="exact",
+            timing=timing,
+        )
+        for future in futures:
+            future.result(timeout=5)
+        answered = time.monotonic()
+        assert len(model.calls) == forwards
+        assert forwards * 0.03 <= timing.forward <= timing.done - submitted
+        assert submitted < timing.done <= answered
+    finally:
+        scheduler.stop()
+
+
+def test_a_group_timing_leaves_the_forwards_of_other_jobs_to_its_wait():
+    gate = threading.Event()
+    model = GatedModel(gates={"blocker": gate})
+    scheduler = started(model)
+    timing = RunTiming()
+    try:
+        scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
+        assert model.entered.wait(5)
+        submitted = time.monotonic()
+        (future,) = scheduler.submit_group(
+            [[item("mine", 8)]], deadlines=[None], profile="exact", timing=timing
+        )
+        time.sleep(0.05)
+        gate.set()
+        future.result(timeout=5)
+        waited = timing.done - submitted
+        assert waited >= 0.05 and timing.forward < 0.025
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_a_caller_records_its_group_timing_and_a_failed_forward_counts():
+    model = WorkerModel(hold=0.01)
+    scheduler = Scheduler(model, {"exact": ExactProfile()})
+    scheduler.start()
+    try:
+        timing = RunTiming()
+        futures = scheduler.run_now(
+            [[item("a", 4)]], deadlines=[None], profile="exact", timing=timing
+        )
+        assert futures is not None and futures[0].done()
+        assert model.threads == [threading.current_thread().name]
+        assert timing.forward >= 0.01 and timing.done > 0
+    finally:
+        scheduler.stop()
+    failing = Scheduler(FakeModel(fail=True), {"exact": ExactProfile()})
+    failing.start()
+    try:
+        timing = RunTiming()
+        (future,) = failing.submit_group(
+            [[item("a", 4)]], deadlines=[None], profile="exact", timing=timing
+        )
+        with pytest.raises(RuntimeError):
+            future.result(timeout=5)
+        assert timing.done > 0
+    finally:
+        failing.stop()

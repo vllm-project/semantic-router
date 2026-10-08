@@ -277,6 +277,15 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
+	// DecisionModel is the Vela model that answers the Router's questions,
+	// global.model_catalog.system.decision_model: Vela-2.0-0.3B (the
+	// default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any
+	// case. It answers the built-in signals and every decision question that
+	// names no deployment; the 4B and 9B need a GPU in the Router pod.
+	// +kubebuilder:validation:Pattern=`^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]|0\.8[Bb]|4[Bb]|9[Bb])|1\.0))?$`
+	// +optional
+	DecisionModel string `json:"decision_model,omitempty" yaml:"decision_model,omitempty"`
+
 	// ModelDeployments contains canonical global.model_catalog.deployments.
 	// The router validates provider, device, precision and task compatibility.
 	// +optional
@@ -1536,11 +1545,11 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
+	// ModelID binds the guard to one model; empty runs the decision model.
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.5"
+	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
+	// precision issues; empty takes the threshold calibrated for the model.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`

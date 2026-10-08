@@ -21,7 +21,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import Future
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from functools import partial
 from http import HTTPStatus
 from pathlib import Path
@@ -55,11 +55,13 @@ from .plugins.base import (
     UnsupportedSurfaceError,
     VerifiedPackage,
 )
+from .plugins.decisions import join_states, split_states
 from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
+from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
@@ -171,7 +173,7 @@ SURFACE_FIELDS = {
     },
 }
 SURFACE_OPTIONS = {
-    "decisions": set(),
+    "decisions": {"max_tokens"},
     "classify": {"overflow", "max_tokens", "window", "threshold", "return_tokens"},
     "embeddings": {"overflow", "max_tokens"},
     "rerank": {"overflow", "max_tokens"},
@@ -196,7 +198,8 @@ class _Lookup:
     """A job group's result-cache hits and the items still to run, per member.
 
     ``futures`` is set when the planning thread already ran the misses
-    (``Scheduler.run_now``), ``submitted`` when it tried to.
+    (``Scheduler.run_now``), ``submitted`` when it tried to. ``run`` records
+    the group's forwards.
     """
 
     values: dict[tuple[int, int], Any]
@@ -204,6 +207,7 @@ class _Lookup:
     slots: list[list[tuple[int, int, str | None]]]
     submitted: float | None = None
     futures: list[Future[Results[Any]]] | BaseException | None = None
+    run: RunTiming = field(default_factory=RunTiming)
 
 
 class ResultCache:
@@ -533,11 +537,12 @@ class ServedModel:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
+        timing: RunTiming | None = None,
     ) -> list[Future[Results[Any]]]:
         if self.scheduler is None:
             raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
         return self.scheduler.submit_group(
-            item_lists, deadlines=deadlines, profile=profile
+            item_lists, deadlines=deadlines, profile=profile, timing=timing
         )
 
     def run_items_now(
@@ -545,11 +550,14 @@ class ServedModel:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
+        timing: RunTiming | None = None,
     ) -> list[Future[Results[Any]]] | None:
         """Run the group on this thread if the model's scheduler is idle (never on the event loop)."""
         if self.scheduler is None:
             return None
-        return self.scheduler.run_now(item_lists, deadlines=deadlines, profile=profile)
+        return self.scheduler.run_now(
+            item_lists, deadlines=deadlines, profile=profile, timing=timing
+        )
 
     def meta(
         self, profile_name: str, queue_ms: float, compute_ms: float
@@ -885,9 +893,16 @@ class Runtime:
     # -- every surface -------------------------------------------------------
 
     def prepare(
-        self, surface: str, body: Any, received: float | None = None
+        self,
+        surface: str,
+        body: Any,
+        received: float | None = None,
+        part: bool = False,
     ) -> Prepared:
-        """Validate a surface request and plan it for its model (runs off the event loop)."""
+        """Validate a surface request and plan it for its model (runs off the event loop).
+
+        ``part`` marks one state of a decisions request with several (``states``).
+        """
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
         if len(self.served) == 1:
@@ -913,7 +928,7 @@ class Runtime:
             served, surface, body, received
         )
         request = SurfaceRequest(
-            surface, body, deadline, profile, return_meta, received
+            surface, body, deadline, profile, return_meta, received, part
         )
         try:
             plan = served.model.plan_surface(surface, request)
@@ -944,17 +959,25 @@ class Runtime:
         return response
 
     async def call(
-        self, surface: str, body: Any, size: int | None = None
+        self,
+        surface: str,
+        body: Any,
+        size: int | None = None,
+        timing: ServerTiming | None = None,
     ) -> tuple[int, dict[str, Any]]:
         """Serve one surface request; returns (HTTP status, body).
 
         ``size`` is the request's encoded size: small requests are planned on
-        the event loop, larger ones on a worker thread.
+        the event loop, larger ones on a worker thread. ``timing`` receives
+        the request's phases.
         """
-        return (await self._serve([(surface, body)], size))[0]
+        return (await self._serve([(surface, body)], size, timing))[0]
 
     async def bundle(
-        self, body: Any, size: int | None = None
+        self,
+        body: Any,
+        size: int | None = None,
+        timing: ServerTiming | None = None,
     ) -> tuple[int, dict[str, Any]]:
         """Serve every task of a bundle at once; results keep task order."""
         try:
@@ -962,7 +985,7 @@ class Runtime:
         except RuntimeServiceError as exc:
             return exc.status, exc.body()
         outcomes = await self._serve(
-            [(surface, task_body) for _, surface, task_body in tasks], size
+            [(surface, task_body) for _, surface, task_body in tasks], size, timing
         )
         results = []
         for (task_id, surface, _), (status, response) in zip(
@@ -976,25 +999,34 @@ class Runtime:
         return 200, {"results": results}
 
     def _prepare_outcome(
-        self, surface: str, body: Any, received: float
+        self, surface: str, body: Any, received: float, part: bool = False
     ) -> Prepared | tuple[int, dict[str, Any]]:
         try:
-            return self.prepare(surface, body, received)
+            return self.prepare(surface, body, received, part)
         except Exception as exc:
             return _error_outcome(exc)
 
     def _prepare_and_run(
-        self, surface: str, body: Any, received: float
+        self,
+        surface: str,
+        body: Any,
+        part: bool,
+        received: float,
+        timing: ServerTiming,
     ) -> tuple[Prepared | tuple[int, dict[str, Any]], _Lookup | None]:
         """Plan one request off the event loop and run it here if its model is idle."""
-        prepared = self._prepare_outcome(surface, body, received)
+        prepared = self._prepare_outcome(surface, body, received, part)
+        timing.tokenize = time.monotonic() - received
         if not isinstance(prepared, Prepared):
             return prepared, None
         lookup = self._lookup([(0, prepared)])
         lookup.submitted = time.monotonic()
         try:
             lookup.futures = prepared.served.run_items_now(
-                lookup.misses, [prepared.request.deadline], prepared.request.profile
+                lookup.misses,
+                [prepared.request.deadline],
+                prepared.request.profile,
+                lookup.run,
             )
         except Exception as exc:
             lookup.futures = exc
@@ -1003,26 +1035,76 @@ class Runtime:
         return prepared, lookup
 
     async def _serve(
-        self, requests: list[tuple[str, Any]], size: int | None = None
+        self,
+        requests: list[tuple[str, Any]],
+        size: int | None = None,
+        timing: ServerTiming | None = None,
     ) -> list[tuple[int, dict[str, Any]]]:
         """Plan every request, run each model's share as one job group, finish in order.
 
         A group holds a model's tasks of one profile, whatever their deadlines:
         each job keeps its own. A lone request planned off the event loop runs
-        on its planning thread when its model's scheduler is idle.
+        on its planning thread when its model's scheduler is idle. A decisions
+        request with further ``states`` runs as one request per state, in its
+        model's group, and their answers join into its response.
         """
+        if timing is None:
+            timing = ServerTiming()
         received = time.monotonic()
+        parts: list[tuple[str, Any, bool]] = []
+        # Per request: where its parts start, and its states' names or the
+        # error it already has.
+        joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
+        for surface, body in requests:
+            try:
+                split = split_states(body) if surface == "decisions" else None
+            except ValueError as exc:
+                failed = _error_outcome(
+                    RuntimeServiceError("invalid_request", str(exc))
+                )
+                joins.append((len(parts), None, failed))
+                continue
+            if split is None:
+                joins.append((len(parts), None, None))
+                parts.append((surface, body, False))
+                continue
+            bodies, names = split
+            joins.append((len(parts), names, None))
+            parts.extend((surface, state_body, True) for state_body in bodies)
+        outcomes = await self._serve_parts(parts, size, timing, received)
+        joined = []
+        for start, states, error in joins:
+            if error is not None:
+                joined.append(error)
+            elif states is None:
+                joined.append(outcomes[start])
+            else:
+                joined.append(
+                    join_states(outcomes[start : start + 1 + len(states)], states)
+                )
+        return joined
+
+    async def _serve_parts(
+        self,
+        requests: list[tuple[str, Any, bool]],
+        size: int | None,
+        timing: ServerTiming,
+        received: float,
+    ) -> list[tuple[int, dict[str, Any]]]:
+        if not requests:
+            return []
         lookups: list[_Lookup | None] = [None] * len(requests)
         if size is not None and size <= INLINE_PLAN_BYTES:
             planned = [
-                self._prepare_outcome(surface, body, received)
-                for surface, body in requests
+                self._prepare_outcome(surface, body, received, part)
+                for surface, body, part in requests
             ]
+            timing.tokenize = time.monotonic() - received
         elif len(requests) == 1:
             from starlette.concurrency import run_in_threadpool
 
             prepared, lookups[0] = await run_in_threadpool(
-                self._prepare_and_run, *requests[0], received
+                self._prepare_and_run, *requests[0], received, timing
             )
             planned = [prepared]
         else:
@@ -1030,15 +1112,18 @@ class Runtime:
 
             planned = await asyncio.gather(
                 *(
-                    run_in_threadpool(self._prepare_outcome, surface, body, received)
-                    for surface, body in requests
+                    run_in_threadpool(
+                        self._prepare_outcome, surface, body, received, part
+                    )
+                    for surface, body, part in requests
                 )
             )
+            timing.tokenize = time.monotonic() - received
         if lookups[0] is not None:
             first = planned[0]
             assert isinstance(first, Prepared)
             outcomes: list[tuple[int, dict[str, Any]] | None] = [None]
-            await self._run_group([(0, first)], outcomes, lookups[0])
+            await self._run_group([(0, first)], outcomes, timing, lookups[0])
             return [outcome for outcome in outcomes if outcome is not None]
         outcomes = [None] * len(requests)
         groups: dict[tuple[int, str], list[tuple[int, Prepared]]] = {}
@@ -1049,7 +1134,7 @@ class Runtime:
             else:
                 outcomes[index] = prepared
         await asyncio.gather(
-            *(self._run_group(members, outcomes) for members in groups.values())
+            *(self._run_group(members, outcomes, timing) for members in groups.values())
         )
         return [outcome for outcome in outcomes if outcome is not None]
 
@@ -1086,6 +1171,7 @@ class Runtime:
         self,
         members: list[tuple[int, Prepared]],
         outcomes: list[tuple[int, dict[str, Any]] | None],
+        timing: ServerTiming,
         lookup: _Lookup | None = None,
     ) -> None:
         """Run one model's job group; every member is answered from its own jobs."""
@@ -1103,6 +1189,7 @@ class Runtime:
                     lookup.misses,
                     [prepared.request.deadline for _, prepared in members],
                     members[0][1].request.profile,
+                    lookup.run,
                 )
         except Exception as exc:
             for index, _ in members:
@@ -1146,6 +1233,7 @@ class Runtime:
                 )
             except Exception as exc:
                 outcomes[index] = _error_outcome(exc)
+        timing.ran(lookup.run, submitted, finished, time.monotonic())
 
     def _bundle_tasks(self, body: Any) -> list[tuple[str, str, dict[str, Any]]]:
         if not isinstance(body, dict) or set(body) - {"tasks", "options"}:
@@ -1248,6 +1336,9 @@ class Runtime:
 
 def with_overrides(config: ServeConfig, **changes: Any) -> ServeConfig:
     return replace(config, **changes)
+
+
+_Outcome = tuple[int, dict[str, Any]]
 
 
 def _error_outcome(error: BaseException) -> tuple[int, dict[str, Any]]:

@@ -7161,11 +7161,35 @@
                     },
                     "valid": {
                       "type": "boolean"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "valid",
-                    "normalized_yaml"
+                    "normalized_yaml",
+                    "warnings"
                   ]
                 }
               }
@@ -20892,6 +20916,12 @@
                                   "fallback_reason": {
                                     "type": "string"
                                   },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "runner_up": {
+                                    "type": "string"
+                                  },
                                   "score_kind": {
                                     "type": "string"
                                   },
@@ -25043,6 +25073,12 @@
                               "type": "string"
                             },
                             "fallback_reason": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "runner_up": {
                               "type": "string"
                             },
                             "score_kind": {
@@ -32591,6 +32627,12 @@
                         "fallback_reason": {
                           "type": "string"
                         },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "runner_up": {
+                          "type": "string"
+                        },
                         "score_kind": {
                           "type": "string"
                         },
@@ -36026,6 +36068,12 @@
                               "type": "string"
                             },
                             "fallback_reason": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "runner_up": {
                               "type": "string"
                             },
                             "score_kind": {
@@ -56647,6 +56695,38 @@
                     "message": {
                       "type": "string"
                     },
+                    "model_deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "ready"
+                        ]
+                      }
+                    },
                     "pending_models": {
                       "nullable": true,
                       "type": "array",
@@ -56832,6 +56912,38 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "model_deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "ready"
+                        ]
+                      }
                     },
                     "pending_models": {
                       "nullable": true,

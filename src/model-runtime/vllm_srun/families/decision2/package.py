@@ -170,7 +170,9 @@ def checkpoint_files(root: Path) -> dict[str, str]:
                 for path in subtree.rglob("*")
                 if path.is_file() and path.suffix in MODEL_SUFFIXES
             )
-    return {str(path.relative_to(root)): sha256_file(path) for path in sorted(files)}
+    return {
+        path.relative_to(root).as_posix(): sha256_file(path) for path in sorted(files)
+    }
 
 
 def source_files(base_root: Path) -> dict[str, str]:
@@ -188,7 +190,8 @@ def source_files(base_root: Path) -> dict[str, str]:
     if not any(path.suffix in {".safetensors", ".bin"} for path in files):
         raise PackageError("the pinned base contains no weight files")
     return {
-        str(path.relative_to(base_root)): sha256_file(path) for path in sorted(files)
+        path.relative_to(base_root).as_posix(): sha256_file(path)
+        for path in sorted(files)
     }
 
 
