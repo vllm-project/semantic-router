@@ -32,7 +32,12 @@ const response = {
 
 async function mockPlayground(
   page: Page,
-  options: { reader?: boolean; classicOnly?: boolean; unready?: boolean } = {},
+  options: {
+    reader?: boolean
+    classicOnly?: boolean
+    unready?: boolean
+    sameIdentity?: boolean
+  } = {},
 ) {
   await mockAuthenticatedAppShell(
     page,
@@ -57,7 +62,7 @@ async function mockPlayground(
         deployments: [
           {
             id: '@vela/auto',
-            model: 'vela-test',
+            model: options.sameIdentity ? '@vela/auto' : 'vela-test',
             ready: !options.unready,
             question_types: options.classicOnly ? types.slice(0, 3) : types,
             surfaces: ['decisions'],
@@ -76,7 +81,9 @@ async function mockPlayground(
   await expect(
     page.getByRole('heading', { name: 'Decision Model Test', exact: true }),
   ).toBeVisible()
-  await expect(page.getByLabel('Runtime target', { exact: true })).toContainText('vela-test')
+  await expect(page.getByLabel('Runtime target', { exact: true })).toContainText(
+    options.sameIdentity ? '@vela/auto' : 'vela-test',
+  )
   return requests
 }
 
@@ -186,7 +193,10 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
 test('uses discovered question support and runtime readiness to gate inference', async ({
   page,
 }) => {
-  const requests = await mockPlayground(page, { classicOnly: true })
+  const requests = await mockPlayground(page, { classicOnly: true, sameIdentity: true })
+  await expect(
+    page.getByRole('region', { name: 'Runtime target', exact: true }).locator('option:checked'),
+  ).toHaveText('@vela/auto')
   await expect(
     page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }),
   ).toBeDisabled()

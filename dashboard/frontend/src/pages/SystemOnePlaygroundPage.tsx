@@ -348,7 +348,7 @@ export default function SystemOnePlaygroundPage() {
               )}
               {runtime.capabilities?.deployments.map((item) => (
                 <option value={item.id} key={item.id}>
-                  {item.model} · {item.id}
+                  {item.model === item.id ? item.model : `${item.model} · ${item.id}`}
                 </option>
               ))}
             </select>

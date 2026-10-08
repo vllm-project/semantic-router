@@ -5,6 +5,7 @@ import {
   decisionModelMetricQueries,
   decisionModelMetricRange,
   formatDecisionModelMetric,
+  formatDecisionModelRateAxis,
   readDecisionModelMetricMatrix,
 } from './decisionModelMetrics'
 
@@ -15,6 +16,13 @@ const matrix = (result: unknown[]) => ({
 const range = { start: 100, end: 160, step: 15 }
 
 describe('decision model runtime metrics', () => {
+  it('keeps quiet-runtime traffic ticks distinct from zero and from one another', () => {
+    const labels = [0, 0.005, 0.01, 0.015, 0.02].map(formatDecisionModelRateAxis)
+    expect(new Set(labels).size).toBe(5)
+    expect(Number(formatDecisionModelRateAxis(0.005))).toBe(0.005)
+    expect(Number(formatDecisionModelRateAxis(0.02))).toBe(0.02)
+    expect(formatDecisionModelRateAxis(123_000).length).toBeLessThan(7)
+  })
   it('uses exact escaped deployment labels for router runtime counters and histograms', () => {
     const names = ['@Vela-2.0-0.3B/auto', 'custom"\\\n.*|other']
     const queries = decisionModelMetricQueries(names)

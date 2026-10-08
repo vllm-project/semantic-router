@@ -60,6 +60,15 @@ export type DecisionModelChartPoint = { time: number } & Partial<
 >
 export type DecisionModelMetricRange = { start: number; end: number; step: number }
 
+export function formatDecisionModelRateAxis(value: number): string {
+  // A quiet runtime can average far below one call per second. Fixed decimal
+  // precision would turn every tick in that range into a misleading zero.
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumSignificantDigits: 3,
+  }).format(value)
+}
+
 export function decisionModelMetricRange(
   window: DecisionModelTimeWindow,
   now = Date.now(),

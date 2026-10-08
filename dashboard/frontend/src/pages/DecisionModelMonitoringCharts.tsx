@@ -13,6 +13,7 @@ import {
 import {
   DECISION_MODEL_METRICS,
   formatDecisionModelMetric,
+  formatDecisionModelRateAxis,
   type DecisionModelChartPoint,
   type DecisionModelMetricKey,
 } from './decisionModelMetrics'
@@ -219,10 +220,11 @@ export default function DecisionModelMonitoringCharts({
                           ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(
                               value * 1_000,
                             )
-                          : new Intl.NumberFormat(undefined, {
-                              notation: 'compact',
-                              maximumFractionDigits: 1,
-                            }).format(value)
+                          : percentageOnly
+                            ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(
+                                value,
+                              )
+                            : formatDecisionModelRateAxis(value)
                       }
                     />
                     {section.id === 'traffic' && (

@@ -8,6 +8,7 @@ async function mockDecisionModelManager(
     defaultModel?: boolean
     metrics?: 'reported' | 'empty' | 'unavailable' | 'partial'
     engine?: boolean
+    lowTraffic?: boolean
     applyStatus?: 'success' | 'restart_required' | 'persisted' | 'failed'
   } = {},
 ) {
@@ -63,7 +64,9 @@ async function mockDecisionModelManager(
             ? '0'
             : query.includes('duration_seconds_sum')
               ? '0.025'
-              : '2.5'
+              : options.lowTraffic
+                ? '0.02'
+                : '2.5'
     const start = Number(params.get('start'))
     const end = Number(params.get('end'))
     const step = Number(params.get('step'))
@@ -270,10 +273,10 @@ test.describe('Decision model management', () => {
   test('changes real monitoring windows, handles partial failure, and recovers from missing observations', async ({
     page,
   }) => {
-    const fixture = await mockDecisionModelManager(page)
+    const fixture = await mockDecisionModelManager(page, { lowTraffic: true })
     await page.goto('/decision-model')
     const stats = page.locator('dl[aria-label="Model statistics"]')
-    await expect(stats).toContainText('2.50')
+    await expect(stats).toContainText('0.02')
     await expect(
       page.getByRole('region', { name: 'Traffic & reliability' }).locator('svg.recharts-surface'),
     ).toHaveCount(1)
@@ -283,6 +286,14 @@ test.describe('Decision model management', () => {
     await expect(
       page.getByRole('region', { name: 'Result cache efficiency' }).locator('svg.recharts-surface'),
     ).toHaveCount(1)
+    const rateTicks = page
+      .getByRole('region', { name: 'Traffic & reliability' })
+      .locator('.recharts-yAxis')
+      .first()
+      .locator('.recharts-cartesian-axis-tick-value')
+    await expect
+      .poll(async () => new Set(await rateTicks.allTextContents()).size)
+      .toBeGreaterThan(1)
     const windows = page.getByRole('group', { name: 'Monitoring time range' })
     await expect(windows.getByRole('button', { name: '1h' })).toHaveAttribute(
       'aria-pressed',
@@ -297,7 +308,7 @@ test.describe('Decision model management', () => {
     fixture.setMetrics('partial')
     await windows.getByRole('button', { name: '6h' }).click()
     await expect(page.getByText(/Unavailable: Unsuccessful calls/)).toBeVisible()
-    await expect(stats).toContainText('2.50')
+    await expect(stats).toContainText('0.02')
     await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(1)
     checkRange(21600)
     fixture.setMetrics('empty')
@@ -311,7 +322,7 @@ test.describe('Decision model management', () => {
     checkRange(900)
     fixture.setMetrics('reported')
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
-    await expect(stats).toContainText('2.50')
+    await expect(stats).toContainText('0.02')
     await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(0)
     await expect(
       page.getByRole('link', { name: 'Test decision model', exact: true }),
