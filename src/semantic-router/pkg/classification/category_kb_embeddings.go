@@ -3,7 +3,6 @@ package classification
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -44,20 +43,7 @@ func (c *KnowledgeBaseClassifier) embedText(text string) ([]float32, error) {
 }
 
 func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
-	numWorkers := runtime.NumCPU()
-	backend := embeddingBackendOverride()
-	if backend == "candle" {
-		numWorkers = 1
-	} else if numWorkers > 8 {
-		numWorkers = 8
-	}
-	if numWorkers > len(refs) {
-		numWorkers = len(refs)
-	}
-	if numWorkers == 0 {
-		numWorkers = 1
-	}
-
+	numWorkers := embeddingWorkers(len(refs))
 	resultChan := make(chan embeddingResult, len(refs))
 	refChan := make(chan exemplarRef, len(refs))
 	for _, ref := range refs {

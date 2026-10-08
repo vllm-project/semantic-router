@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -66,7 +65,7 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	queryEmbeddings, err := vectorStoreQueryVectors(r.Context(), embedder, params)
+	queryEmbedding, err := embedder.Embed(r.Context(), params.request.Query)
 	if err != nil {
 		// The client message stays generic, so the cause is only on the server.
 		logging.Errorf("Vector store search could not embed the query for store %s: %v", params.storeID, err)
@@ -74,7 +73,7 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbeddings...)
+	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbedding)
 	if err != nil {
 		logging.Errorf("Vector store search failed for store %s: %v", params.storeID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SEARCH_ERROR", "search failed")
@@ -142,51 +141,14 @@ func ensureVectorStoreSearchFilters(filters map[string]interface{}, query string
 	return filters
 }
 
-// vectorStoreQueryVectors embeds the query once per window of itself, so a
-// question that sits past the first window is still read. Hybrid search scores
-// the query text as well, so it keeps one embedding and its lexical half stays
-// weighed once rather than once per window.
-func vectorStoreQueryVectors(
-	ctx context.Context,
-	embedder vectorstore.Embedder,
-	params vectorStoreSearchParams,
-) ([][]float32, error) {
-	if params.request.Hybrid != nil {
-		vector, err := embedder.Embed(ctx, params.request.Query)
-		if err != nil {
-			return nil, err
-		}
-		return [][]float32{vector}, nil
-	}
-	return embedding.QueryVectors(ctx, embedder, params.request.Query, embedding.DefaultQueryWindowLimit)
-}
-
 func performVectorStoreSearch(
 	ctx context.Context,
 	manager *vectorstore.Manager,
 	params vectorStoreSearchParams,
-	queryEmbeddings ...[]float32,
+	queryEmbedding []float32,
 ) ([]vectorstore.SearchResult, error) {
-	if params.request.Hybrid != nil {
-		var vector []float32
-		if len(queryEmbeddings) > 0 {
-			vector = queryEmbeddings[0]
-		}
-		return manager.HybridSearch(
-			ctx,
-			params.storeID,
-			params.request.Query,
-			vector,
-			params.topK,
-			params.threshold,
-			params.request.Filters,
-			params.request.Hybrid,
-		)
-	}
-
-	batches := make([][]vectorstore.SearchResult, 0, len(queryEmbeddings))
-	for _, queryEmbedding := range queryEmbeddings {
-		results, err := manager.Search(
+	if params.request.Hybrid == nil {
+		return manager.Search(
 			ctx,
 			params.storeID,
 			queryEmbedding,
@@ -194,10 +156,16 @@ func performVectorStoreSearch(
 			params.threshold,
 			params.request.Filters,
 		)
-		if err != nil {
-			return nil, err
-		}
-		batches = append(batches, results)
 	}
-	return vectorstore.MergeSearchResults(params.topK, batches...), nil
+
+	return manager.HybridSearch(
+		ctx,
+		params.storeID,
+		params.request.Query,
+		queryEmbedding,
+		params.topK,
+		params.threshold,
+		params.request.Filters,
+		params.request.Hybrid,
+	)
 }

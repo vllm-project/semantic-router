@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -48,6 +47,14 @@ func NewClient(config *ServerConfig) (*Client, error) {
 // Connect establishes connection
 func (c *Client) Connect(ctx context.Context) error {
 	log.Printf("[MCP-Client] Connect() called: transport=%s", c.config.Transport)
+
+	if err := ValidateSecurity(c.config.Security); err != nil {
+		c.mu.Lock()
+		c.status = StatusError
+		c.err = err
+		c.mu.Unlock()
+		return err
+	}
 
 	c.mu.Lock()
 	c.status = StatusConnecting
@@ -178,48 +185,12 @@ func (c *Client) createStreamableHTTPClient(ctx context.Context) (client.MCPClie
 		opts = append(opts, transport.WithHTTPHeaders(c.config.Connection.Headers))
 	}
 
-	// If custom HTTP Client is needed (e.g., adding OAuth Token)
-	if c.config.Security != nil && c.config.Security.OAuth != nil {
-		customClient := &http.Client{
-			Transport: &oauthTransport{
-				base:  http.DefaultTransport,
-				oauth: c.config.Security.OAuth,
-			},
-			Timeout: timeout,
-		}
-		opts = append(opts, transport.WithHTTPBasicClient(customClient))
-	}
-
 	mcpClient, err := client.NewStreamableHttpClient(c.config.Connection.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create streamable http client: %w", err)
 	}
 
 	return mcpClient, nil
-}
-
-// oauthTransport is a custom HTTP Transport for adding OAuth Token
-type oauthTransport struct {
-	base  http.RoundTripper
-	oauth *OAuthConfig
-
-	// TODO: Implement token cache and refresh
-	mu          sync.RWMutex
-	accessToken string
-}
-
-func (t *oauthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// TODO: Implement OAuth 2.1 token acquisition and refresh logic
-	// This is just a placeholder, actual implementation needs client_credentials flow
-	t.mu.RLock()
-	token := t.accessToken
-	t.mu.RUnlock()
-
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	return t.base.RoundTrip(req)
 }
 
 // Disconnect closes the connection

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,15 +14,19 @@ import (
 	"strings"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelselection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 const (
 	// HuggingFace repositories
 	defaultModelsRepo = "abdallah1008/semantic-router-ml-models"
 	defaultDataRepo   = "abdallah1008/ml-selection-benchmark-data"
+	// The selectors were trained on this model's 1024-dimensional embeddings.
+	defaultEmbeddingModel = "Qwen/Qwen3-Embedding-0.6B"
+	embeddingDimensions   = 1024
+	embeddingBatch        = 32
 )
 
 // BenchmarkRecord represents a record from the benchmark data JSONL
@@ -71,8 +76,10 @@ func main() {
 		"HuggingFace dataset repository for benchmark data")
 	noDownload := flag.Bool("no-download", false,
 		"Skip HuggingFace download, use local files only")
-	qwen3ModelPath := flag.String("qwen3-model", "",
-		"Path to Qwen3-Embedding-0.6B model (downloads from HuggingFace if not provided)")
+	runtimeEndpoint := flag.String("runtime", "",
+		"Model runtime that serves the embedding model, e.g. http://127.0.0.1:8100")
+	embeddingModel := flag.String("embedding-model", defaultEmbeddingModel,
+		"Embedding model served by --runtime")
 	noEmbeddings := flag.Bool("no-embeddings", false,
 		"Skip embedding generation (use random vectors for testing)")
 
@@ -81,8 +88,11 @@ func main() {
 
 Validate that ML-based routing provides benefit over baselines.
 
-This tool uses the ACTUAL production Go/Rust selectors to validate
-model selection performance, proving the end-to-end system works.
+This tool runs the router's own selectors (pkg/modelselection) to validate
+model selection performance, proving the end-to-end system works. Query
+embeddings come from a model runtime serving %s:
+
+  vllm-sr serve %s --device cpu --port 8100
 
 It automatically downloads pretrained models and benchmark data from HuggingFace:
   - Models: %s
@@ -90,22 +100,21 @@ It automatically downloads pretrained models and benchmark data from HuggingFace
 
 It compares:
   - Oracle (best possible): Always picks the actual best model
-  - ML Selection (KNN/KMeans/SVM/MLP): Uses trained ML model via Rust FFI
+  - ML Selection (KNN/KMeans/SVM/MLP): Uses the trained selector artifacts
   - Random Selection: Randomly picks a model
   - Single Model: Always picks one specific model
 
 Usage:
-  go run validate.go [flags]
+  make run-ml-selection-validate GO_TOOL_ARGS="[flags]"
 
 Examples:
-  go run validate.go                                    # Downloads everything from HuggingFace
-  go run validate.go --algorithm mlp                    # Validate only MLP (confirm MLP works)
-  go run validate.go --algorithm knn                    # Validate only KNN
-  go run validate.go --data-file local.jsonl            # Use local data file
-  go run validate.go --no-download                      # Skip downloads, use local files only
+  GO_TOOL_ARGS="--runtime http://127.0.0.1:8100"                     # Downloads everything from HuggingFace
+  GO_TOOL_ARGS="--runtime http://127.0.0.1:8100 --algorithm mlp"     # Validate only MLP
+  GO_TOOL_ARGS="--runtime http://127.0.0.1:8100 --data-file local.jsonl"
+  GO_TOOL_ARGS="--no-embeddings --no-download"                       # Random vectors, local files only
 
 Flags:
-`, defaultModelsRepo, defaultDataRepo)
+`, defaultEmbeddingModel, defaultEmbeddingModel, defaultModelsRepo, defaultDataRepo)
 		flag.PrintDefaults()
 	}
 
@@ -114,7 +123,7 @@ Flags:
 	rand.Seed(*seed)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
-	fmt.Println("  ML Model Selection Validation (Production Go/Rust Code)")
+	fmt.Println("  ML Model Selection Validation (Router Selectors)")
 	fmt.Println("=" + strings.Repeat("=", 69))
 
 	// Download from HuggingFace if needed
@@ -155,53 +164,22 @@ Flags:
 	fmt.Printf("Loaded %d test queries with %d models\n", len(queryResults), len(modelNames))
 	fmt.Printf("Models: %s\n\n", strings.Join(modelNames, ", "))
 
-	// Initialize Qwen3 embedding model (unless --no-embeddings)
 	if !*noEmbeddings {
-		fmt.Println("Initializing Qwen3 embedding model...")
-		qwen3Path := *qwen3ModelPath
-		if qwen3Path == "" {
-			// Default to HuggingFace model ID (will be downloaded automatically)
-			qwen3Path = "Qwen/Qwen3-Embedding-0.6B"
-		}
-
-		// Initialize Qwen3 for embeddings (1024-dim, matches training)
-		// Using batched initialization with batch size 32 and 100ms timeout
-		if err := candle_binding.InitEmbeddingModelsBatched(qwen3Path, 32, 100, false); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to initialize Qwen3 embeddings: %v\nPlease download the model or use --no-embeddings for testing\n", err)
+		if *runtimeEndpoint == "" {
+			fmt.Fprintln(os.Stderr, "Error: --runtime is required unless --no-embeddings is set")
 			os.Exit(1)
 		}
-		fmt.Printf("Loaded Qwen3 embedding model: %s\n", qwen3Path)
-	}
-
-	// Generate embeddings for queries that don't have them
-	if !*noEmbeddings {
-		fmt.Println("\nGenerating embeddings for test queries...")
-		for i := range queryResults {
-			if len(queryResults[i].Embedding) == 0 {
-				// Generate embedding using Qwen3 batched API (1024-dim)
-				output, err := candle_binding.GetEmbeddingBatched(queryResults[i].Query, "qwen3", 1024)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: failed to generate embedding for query %d: %v\n", i, err)
-					os.Exit(1)
-				}
-				// Convert float32 to float64
-				queryResults[i].Embedding = make([]float64, len(output.Embedding))
-				for j, v := range output.Embedding {
-					queryResults[i].Embedding[j] = float64(v)
-				}
-			}
-			// Progress indicator
-			if (i+1)%20 == 0 || i+1 == len(queryResults) {
-				fmt.Printf("\r  Generated embeddings: %d/%d", i+1, len(queryResults))
-			}
+		fmt.Printf("\nEmbedding test queries with %s on %s...\n", *embeddingModel, *runtimeEndpoint)
+		if err := embedQueries(queryResults, *runtimeEndpoint, *embeddingModel); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
-		fmt.Println()
 	} else {
 		// Use random embeddings for testing
 		fmt.Println("Using random embeddings (--no-embeddings mode)...")
 		for i := range queryResults {
 			if len(queryResults[i].Embedding) == 0 {
-				queryResults[i].Embedding = make([]float64, 1024)
+				queryResults[i].Embedding = make([]float64, embeddingDimensions)
 				for j := range queryResults[i].Embedding {
 					queryResults[i].Embedding[j] = rand.Float64()*2 - 1
 				}
@@ -242,9 +220,48 @@ Flags:
 	printResults(results, len(queryResults), len(modelNames), selectionsByAlgo)
 }
 
+// embedQueries fills the missing query embeddings from the model runtime, in batches.
+func embedQueries(queries []QueryResult, endpoint, model string) error {
+	client, err := modelservice.NewClient(endpoint)
+	if err != nil {
+		return fmt.Errorf("connect to the model runtime: %w", err)
+	}
+	pending := make([]int, 0, len(queries))
+	for i := range queries {
+		if len(queries[i].Embedding) == 0 {
+			pending = append(pending, i)
+		}
+	}
+	for start := 0; start < len(pending); start += embeddingBatch {
+		batch := pending[start:min(start+embeddingBatch, len(pending))]
+		inputs := make([]modelservice.EmbedInput, len(batch))
+		for j, i := range batch {
+			inputs[j] = modelservice.EmbedInput{Text: queries[i].Query}
+		}
+		response, err := client.Embed(context.Background(), model, modelservice.EmbedRequest{
+			Inputs:     inputs,
+			Dimensions: embeddingDimensions,
+		})
+		if err != nil {
+			return fmt.Errorf("embed queries %d-%d: %w", start, start+len(batch), err)
+		}
+		for j, i := range batch {
+			if j < len(response.Errors) && response.Errors[j] != "" {
+				return fmt.Errorf("embed query %d: %s", i, response.Errors[j])
+			}
+			queries[i].Embedding = make([]float64, len(response.Embeddings[j]))
+			for k, value := range response.Embeddings[j] {
+				queries[i].Embedding[k] = float64(value)
+			}
+		}
+		fmt.Printf("\r  Generated embeddings: %d/%d", start+len(batch), len(pending))
+	}
+	fmt.Println()
+	return nil
+}
+
 // downloadFromHuggingFace downloads pretrained models and benchmark data from HuggingFace.
 // Uses huggingface-cli for robust downloads (handles auth, LFS, caching, parquet, etc.)
-// Reference: https://github.com/huggingface/candle/blob/main/candle-datasets/src/hub.rs
 func downloadFromHuggingFace(modelsDir, modelsRepo, dataRepo, dataFile string) error {
 	// Create models directory if it doesn't exist
 	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
@@ -679,7 +696,7 @@ func printResults(results []StrategyResult, numQueries, numModels int, selection
 			}
 		}
 	} else {
-		fmt.Println("\nMLP validation: MLP selector was not loaded (see warnings above). Run with candle-binding built and LD_LIBRARY_PATH set.")
+		fmt.Println("\nMLP validation: MLP selector was not loaded (see warnings above).")
 	}
 
 	// Calculate ML benefit over random
@@ -702,6 +719,6 @@ func printResults(results []StrategyResult, numQueries, numModels int, selection
 	}
 
 	fmt.Println()
-	fmt.Println("Note: This validation uses the ACTUAL production Go/Rust selectors.")
+	fmt.Println("Note: This validation uses the router's production selectors.")
 	fmt.Printf("Timestamp: %s\n", time.Now().Format(time.RFC3339))
 }

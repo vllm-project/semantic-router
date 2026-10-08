@@ -3,10 +3,6 @@ name: Generated Contracts
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        description: Verified CPU libraries from this workflow run.
-        type: string
-        required: true
       verifications:
         description: Selected generated-contract activity from the CI plan.
         type: string
@@ -29,12 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Load Shared Native Libraries
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
       - name: Check Schema, OpenAPI, and CRD References
-        run: make config-schema-check api-docs-check docs-crd-check
+        run: make config-schema-check api-docs-check docs-crd-check model-runtime-client-check
       - name: Record Generated Contract Evidence
         env:
           VERIFICATIONS: ${{ inputs.verifications }}
@@ -42,6 +34,7 @@ jobs:
           python3 -m pip install PyYAML==6.0.3
           python3 tools/ci/workflow_evidence.py --verifications "$VERIFICATIONS" --id generated-contracts \
             --check config-schema-check --check api-docs-check --check docs-crd-check \
+            --check model-runtime-client-check \
             --output .agent-harness/generated-contracts-result.json
       - uses: actions/upload-artifact@v4
         with:

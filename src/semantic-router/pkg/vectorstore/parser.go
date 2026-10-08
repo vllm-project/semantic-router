@@ -89,7 +89,7 @@ func extractCSV(content []byte) (string, error) {
 		}
 
 		rowNum++
-		b.WriteString(fmt.Sprintf("Row %d:\n", rowNum))
+		fmt.Fprintf(&b, "Row %d:\n", rowNum)
 		for i, val := range record {
 			header := ""
 			if i < len(headers) {
@@ -97,7 +97,7 @@ func extractCSV(content []byte) (string, error) {
 			} else {
 				header = fmt.Sprintf("Column%d", i+1)
 			}
-			b.WriteString(fmt.Sprintf("  %s: %s\n", header, val))
+			fmt.Fprintf(&b, "  %s: %s\n", header, val)
 		}
 	}
 

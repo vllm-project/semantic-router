@@ -28,6 +28,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"multi_factor":  selection.MethodMultiFactor,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
+	"decision":      selection.MethodDecision,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -156,6 +157,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"decision":       signals.MatchedDecisionRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -201,6 +203,7 @@ func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *c
 			{"metadata", signals.Metrics.Metadata.ExecutionTimeMs},
 			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
 			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
+			{"decision", signals.Metrics.Decision.ExecutionTimeMs},
 		}
 		for _, timing := range timings {
 			if timing.ms > 0 {

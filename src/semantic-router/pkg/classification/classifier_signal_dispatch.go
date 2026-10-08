@@ -146,19 +146,60 @@ func boundedReaskMessages(messages []string) []string {
 	return bounded
 }
 
-func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
+// modelBackedSignalTypes call model deployments; their goroutines join the
+// stage's request bundle, so the bundle flushes once all of them have parked
+// or finished. Heuristic signals never delay a flush.
+var modelBackedSignalTypes = map[string]bool{
+	config.SignalTypeDomain:       true,
+	config.SignalTypeFactCheck:    true,
+	config.SignalTypeUserFeedback: true,
+	config.SignalTypeModality:     true,
+	config.SignalTypeSafety:       true,
+	config.SignalTypeJailbreak:    true,
+	config.SignalTypePII:          true,
+	config.SignalTypeClassifier:   true,
+	config.SignalTypeDecision:     true,
+	config.SignalTypeEmbedding:    true,
+	config.SignalTypeComplexity:   true,
+	config.SignalTypeKB:           true,
+	config.SignalTypeReask:        true,
+	config.SignalTypePreference:   true,
+}
+
+// stageBundle is the part of a request bundle the dispatchers use.
+type stageBundle interface {
+	Join() (leave func())
+}
+
+// runSignalDispatchers joins every model-backed participant before it starts
+// any: a participant that parks its call at once must not find the others not
+// yet joined, which would flush the bundle without their calls.
+func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, bundle stageBundle, wg *sync.WaitGroup) {
+	type run struct {
+		dispatch signalDispatch
+		leave    func()
+	}
+	runs := make([]run, 0, len(dispatchers))
 	for _, d := range dispatchers {
 		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
-			wg.Add(1)
-			go func(dispatch signalDispatch) {
-				defer wg.Done()
-				dispatch.evaluate()
-			}(d)
+			leave := func() {}
+			if modelBackedSignalTypes[d.signalType] {
+				leave = bundle.Join()
+			}
+			runs = append(runs, run{dispatch: d, leave: leave})
 			continue
 		}
 
 		if !isSignalTypeUsed(usedSignals, d.signalType) {
 			logging.Debugf("[Signal Computation] %s signal not used in any decision, skipping evaluation", d.name)
 		}
+	}
+	for _, r := range runs {
+		wg.Add(1)
+		go func(r run) {
+			defer wg.Done()
+			defer r.leave()
+			r.dispatch.evaluate()
+		}(r)
 	}
 }

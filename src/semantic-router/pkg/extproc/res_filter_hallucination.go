@@ -44,20 +44,12 @@ func (r *OpenAIRouter) performHallucinationDetectionText(
 		return nil
 	}
 
-	// Check if NLI is enabled for this decision
-	useNLI := r.isNLIEnabledForDecision(ctx.VSRSelectedDecision)
-
-	logging.Debugf("Hallucination detection: decision=%v, useNLI=%v",
-		ctx.VSRSelectedDecision != nil, useNLI)
-
-	start := time.Now()
-
-	if useNLI {
-		return r.performHallucinationDetectionWithNLI(ctx, assistantContent)
+	classifier := r.classifierForRequest(ctx)
+	if hallucinationSpanDetails(classifier) {
+		return r.performHallucinationDetectionWithSpans(ctx, classifier, assistantContent)
 	}
 
-	// Use basic hallucination detection
-	classifier := r.classifierForRequest(ctx)
+	start := time.Now()
 	result, err := classifier.DetectHallucination(
 		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
@@ -100,12 +92,10 @@ func (r *OpenAIRouter) performHallucinationDetectionText(
 	return nil
 }
 
-// performHallucinationDetectionWithNLI performs hallucination detection with NLI explanations
-func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext, assistantContent string) *ext_proc.ProcessingResponse {
+// performHallucinationDetectionWithSpans runs detection with span details.
+func (r *OpenAIRouter) performHallucinationDetectionWithSpans(ctx *RequestContext, classifier *classification.Classifier, assistantContent string) *ext_proc.ProcessingResponse {
 	start := time.Now()
-
-	classifier := r.classifierForRequest(ctx)
-	result, err := classifier.DetectHallucinationWithNLI(
+	result, err := classifier.DetectHallucinationWithExplanations(
 		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
@@ -116,18 +106,18 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	metrics.RecordHallucinationDetectionLatency(latency)
 
 	if err != nil {
-		logging.Errorf("Hallucination detection with NLI failed: %v", err)
-		metrics.RecordPluginError("hallucination", "detection_nli_error")
+		logging.Errorf("Hallucination detection failed: %v", err)
+		metrics.RecordPluginError("hallucination", "detection_error")
 		return nil // Don't block on error
 	}
 
 	if result == nil {
-		logging.Debugf("Hallucination detection with NLI returned nil result")
+		logging.Debugf("Hallucination detection returned nil result")
 		return nil
 	}
 
 	// Record result to context, shaped exactly as the signal path shapes it.
-	evidence := hallucinationEvidenceFromNLI(result)
+	evidence := hallucinationEvidenceWithSpans(result)
 	ctx.HallucinationDetected = evidence.Detected
 	ctx.HallucinationConfidence = evidence.Confidence
 	ctx.HallucinationScoreAvailable = evidence.ScoreAvailable
@@ -138,12 +128,12 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	decisionName := requestDecisionStateKey(ctx)
 
 	if result.HallucinationDetected {
-		metrics.RecordPluginExecution("hallucination", decisionName, "detected_nli", latency)
-		logging.Warnf("Hallucination detected (NLI): score=%s, spans=%d, action=%s",
+		metrics.RecordPluginExecution("hallucination", decisionName, "detected", latency)
+		logging.Warnf("Hallucination detected: score=%s, spans=%d, action=%s",
 			hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence), len(result.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
-		logging.Debugf("No hallucination detected (NLI): score=%s", hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence))
+		logging.Debugf("No hallucination detected: score=%s", hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence))
 	}
 
 	return nil
@@ -181,24 +171,6 @@ func (r *OpenAIRouter) consumeHallucinationSignal(ctx *RequestContext) {
 		return
 	}
 	metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", 0)
-}
-
-// isNLIEnabledForDecision checks if NLI is enabled for the given decision's hallucination plugin
-func (r *OpenAIRouter) isNLIEnabledForDecision(decision *config.Decision) bool {
-	if decision == nil {
-		logging.Debugf("isNLIEnabledForDecision: decision is nil")
-		return false
-	}
-
-	halConfig := decision.GetHallucinationConfig()
-	if halConfig == nil {
-		logging.Debugf("isNLIEnabledForDecision: halConfig is nil for decision %s", decision.Name)
-		return false
-	}
-
-	logging.Debugf("isNLIEnabledForDecision: decision=%s, enabled=%v, useNLI=%v",
-		decision.Name, halConfig.Enabled, halConfig.UseNLI)
-	return halConfig.UseNLI
 }
 
 func (r *OpenAIRouter) applySemanticHallucinationWarning(
@@ -242,12 +214,12 @@ func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includ
 		return "[Hallucination Warning] This response may contain unsupported claims. Please verify the information independently."
 	}
 
-	// Check if we have enhanced NLI information
+	// Span details when the detector explains its spans
 	if ctx.EnhancedHallucinationInfo != nil && len(ctx.EnhancedHallucinationInfo.Spans) > 0 {
 		return r.buildEnhancedHallucinationWarningText(ctx)
 	}
 
-	// Basic details without NLI
+	// Plain spans
 	warning := hallucinationWarningPrefix(ctx.HallucinationScoreAvailable, ctx.HallucinationScoreKind, ctx.HallucinationConfidence)
 
 	if len(ctx.HallucinationSpans) > 0 {
@@ -259,7 +231,7 @@ func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includ
 	return warning
 }
 
-// buildEnhancedHallucinationWarningText builds warning text with NLI details
+// buildEnhancedHallucinationWarningText builds warning text with span details
 func (r *OpenAIRouter) buildEnhancedHallucinationWarningText(ctx *RequestContext) string {
 	info := ctx.EnhancedHallucinationInfo
 
@@ -267,12 +239,7 @@ func (r *OpenAIRouter) buildEnhancedHallucinationWarningText(ctx *RequestContext
 	warning += " Detailed analysis:"
 
 	for i, span := range info.Spans {
-		warning += fmt.Sprintf(" [%d] \"%s\"", i+1, span.Text)
-		if span.NLILabel != "" && !strings.EqualFold(span.NLILabel, "unknown") {
-			warning += fmt.Sprintf(" (NLI: %s, confidence: %.0f%%, severity: %s)", span.NLILabel, span.NLIConfidence*100, severityToString(span.Severity))
-		} else {
-			warning += fmt.Sprintf(" (severity: %s)", severityToString(span.Severity))
-		}
+		warning += fmt.Sprintf(" [%d] \"%s\" (severity: %s)", i+1, span.Text, severityToString(span.Severity))
 		if span.Explanation != "" {
 			warning += fmt.Sprintf(" - %s", span.Explanation)
 		}

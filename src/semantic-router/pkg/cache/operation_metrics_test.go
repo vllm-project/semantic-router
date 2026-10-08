@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -70,7 +70,7 @@ func newMetricsQdrantCache(t *testing.T, fail bool) *QdrantCache {
 	t.Cleanup(func() { _ = client.Close() })
 	return &QdrantCache{
 		enabled: true, collectionName: "fixture", client: client,
-		embeddingProvider: cacheTestEmbeddingProvider(), embeddingModel: "bert",
+		embeddingProvider: cacheTestEmbeddingProvider(), embeddingModel: "qwen3",
 	}
 }
 

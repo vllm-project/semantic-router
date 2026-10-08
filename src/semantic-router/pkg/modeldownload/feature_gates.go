@@ -23,10 +23,8 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{
 				cfg.Qwen3ModelPath,
-				cfg.GemmaModelPath,
 				cfg.MmBertModelPath,
 				cfg.MultiModalModelPath,
-				cfg.BertModelPath,
 			}
 		},
 	},
@@ -67,20 +65,10 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return cfg.NeedsLocalHallucinationModelsForRouting() ||
 				(cfg.NeedsHallucinationDetectorForDefaultRuntime() &&
-					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendCandle)
+					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendLocal)
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.HallucinationMitigation.HallucinationModel.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsLocalHallucinationNLIForAPI() ||
-				cfg.NeedsLocalHallucinationNLIForRouting() ||
-				cfg.NeedsLocalNLIForSemanticCache()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.HallucinationMitigation.NLIModel.ModelID}
 		},
 	},
 	{
@@ -95,10 +83,13 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	{
 		enabled: isModalityClassifierEnabled,
 		paths: func(cfg *config.RouterConfig) []string {
-			if cfg.ModalityDetector.Classifier == nil {
-				return nil
+			if classifier := cfg.ModalityDetector.Classifier; classifier != nil && classifier.ModelPath != "" {
+				return []string{classifier.ModelPath}
 			}
-			return []string{cfg.ModalityDetector.Classifier.ModelPath}
+			if model, _, ok := cfg.ModalityClassifierModel(); ok {
+				return []string{model}
+			}
+			return nil
 		},
 	},
 }
@@ -144,7 +135,7 @@ func isModalityClassifierEnabled(cfg *config.RouterConfig) bool {
 	md := cfg.ModalityDetector
 	// Match runtime ownership: inherited settings alone do not prepare a
 	// modality classifier in a recipe that declares no modality rules.
-	if len(cfg.ModalityRules) == 0 || !md.Enabled || md.Classifier == nil || md.Classifier.ModelPath == "" {
+	if _, _, ok := cfg.ModalityClassifierModel(); len(cfg.ModalityRules) == 0 || !md.Enabled || !ok {
 		return false
 	}
 

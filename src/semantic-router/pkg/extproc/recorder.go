@@ -337,6 +337,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Metadata:      ctx.VSRMatchedMetadata,
 		Classifier:    ctx.VSRMatchedClassifier,
 		InputModality: ctx.VSRMatchedInputModality,
+		Decision:      ctx.VSRMatchedDecisionModel,
 	}
 }
 
@@ -500,9 +501,8 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	}
 }
 
-// hallucinationSpanDetailsForReplay converts NLI span analysis into the
-// replay store's shape. Returns nil when NLI detection did not run for this
-// request, so basic (non-NLI) detection continues to persist plain spans only.
+// hallucinationSpanDetailsForReplay converts span details into the replay
+// store's shape. Returns nil when the detector returned plain spans only.
 func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []routerreplay.HallucinationSpan {
 	if info == nil {
 		return nil
@@ -515,9 +515,6 @@ func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []router
 			End:                     span.End,
 			HallucinationConfidence: span.HallucinationConfidence,
 			ScoreAvailable:          span.ScoreAvailable,
-			NLILabel:                span.NLILabel,
-			NLIConfidence:           span.NLIConfidence,
-			NLIScoreAvailable:       span.NLIScoreAvailable,
 			Severity:                span.Severity,
 			Explanation:             span.Explanation,
 		}
@@ -646,7 +643,7 @@ func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRu
 		outcome.Verdict = "unavailable"
 		outcome.Reason = code
 		outcome.Metadata["score_available"] = "false"
-		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
+		if t := ctx.ResponseJailbreakType; t == classification.JailbreakClassificationErrorType || t == classification.JailbreakUnscannedType {
 			outcome.Metadata["policy_match"] = "true"
 		}
 		return outcome
@@ -723,7 +720,6 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 		Metadata: map[string]string{
 			"signal":    config.SignalTypeHallucination,
 			"direction": config.SignalDirectionResponse,
-			"use_nli":   strconv.FormatBool(rule.UseNLI),
 		},
 	}
 	if ctx.VSRSelectedDecisionName != "" {

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package memory
 
@@ -45,7 +45,7 @@ func TestQdrantListIntegrationCrossesOrderedScrollBatches(t *testing.T) {
 			Host: host, Port: port, Collection: collection, Dimension: 2,
 		},
 		Enabled:         true,
-		EmbeddingConfig: &EmbeddingConfig{Model: EmbeddingModelBERT, Dimension: 2},
+		EmbeddingConfig: &EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 2},
 	})
 	if err != nil {
 		_ = client.Close()
@@ -126,7 +126,7 @@ func TestQdrantListIntegrationDistinctTimestampsCrossBatch(t *testing.T) {
 			Host: host, Port: port, Collection: collection, Dimension: 2,
 		},
 		Enabled:         true,
-		EmbeddingConfig: &EmbeddingConfig{Model: EmbeddingModelBERT, Dimension: 2},
+		EmbeddingConfig: &EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 2},
 	})
 	if err != nil {
 		_ = client.Close()

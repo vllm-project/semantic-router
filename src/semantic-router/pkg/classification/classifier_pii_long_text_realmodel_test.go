@@ -13,14 +13,14 @@ func setupRealPIIClassifier(t *testing.T) *Classifier {
 	t.Helper()
 	defaults := config.DefaultGlobalConfig()
 	modelPath := requireRealModel(t, "VLLM_SR_PII_MODEL", defaults.PIIModel.ModelID)
-	mappingPath := filepath.Join(modelPath, filepath.Base(defaults.PIIMappingPath))
+	mappingPath := filepath.Join(modelPath, "pii_mapping.json")
 	mapping, err := LoadPIIMapping(mappingPath)
 	if err != nil {
 		t.Fatalf("load PII mapping: %v", err)
 	}
 	cfg := &config.RouterConfig{}
 	cfg.PIIModel = defaults.PIIModel
-	models, err := newClassifierModelRuntime(cfg, nil)
+	models, err := newClassifierModelRuntime(cfg, managedRuntimeOptions(t))
 	if err != nil {
 		t.Fatalf("prepare PII runtime: %v", err)
 	}
@@ -49,7 +49,7 @@ func setupRealPIIClassifier(t *testing.T) *Classifier {
 	case *ownedTokenBackend:
 		assertRealModelCPU(t, prepared.handle.Capability())
 	default:
-		t.Fatalf("expected an owned native PII backend, got %T", backend)
+		t.Fatalf("expected an owned PII backend, got %T", backend)
 	}
 	return classifier
 }
@@ -73,7 +73,7 @@ func coversSpan(t *testing.T, text string, detections []PIIDetection, start, end
 	return false
 }
 
-// Real tokenization and the owned token-window task must preserve detections
+// The runtime's tokenization and token windows must preserve detections
 // beyond the first 512-token forward and report offsets in the original input.
 func TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow(t *testing.T) {
 	classifier := setupRealPIIClassifier(t)

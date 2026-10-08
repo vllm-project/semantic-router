@@ -1,4 +1,4 @@
-//go:build !windows && cgo && !riscv64
+//go:build !windows
 
 package memory
 
@@ -83,7 +83,7 @@ func setupValkeyMemoryIntegration(t *testing.T) (*ValkeyStore, *glide.Client) {
 		Enabled:      true,
 		EmbeddingConfig: &EmbeddingConfig{
 			Provider: storageMemoryVectors(),
-			Model:    EmbeddingModelBERT,
+			Model:    EmbeddingModelQwen3,
 		},
 	})
 	if err != nil {

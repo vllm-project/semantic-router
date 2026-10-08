@@ -200,16 +200,6 @@ func (c *RouterConfig) NeedsHallucinationDetectorForDefaultRuntime() bool {
 		c.HallucinationMitigation.HallucinationModel.ModelID != ""
 }
 
-// NeedsLocalHallucinationNLIForAPI reports whether the default public NLI API
-// has a local detector and explainer configured. Endpoint-backed hallucination
-// detection does not implement the local NLI classification API.
-func (c *RouterConfig) NeedsLocalHallucinationNLIForAPI() bool {
-	return c.ownsDefaultAPIConsumer() &&
-		c.NeedsHallucinationDetectorForDefaultRuntime() &&
-		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle &&
-		c.HallucinationMitigation.NLIModel.ModelID != ""
-}
-
 func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
 	return c != nil &&
 		(c.RoutingScope == "" || c.RoutingScope == DefaultRecipeName)
@@ -264,43 +254,7 @@ func (c *RouterConfig) NeedsHallucinationDetectorForRouting() bool {
 func (c *RouterConfig) NeedsLocalHallucinationModelsForRouting() bool {
 	return c != nil &&
 		c.NeedsHallucinationDetectorForRouting() &&
-		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle
-}
-
-// NeedsLocalHallucinationNLIForRouting reports whether a declared
-// hallucination rule, or an enabled local hallucination plugin that still
-// owns detection, requests NLI explanations.
-func (c *RouterConfig) NeedsLocalHallucinationNLIForRouting() bool {
-	if c == nil ||
-		!c.NeedsLocalHallucinationModelsForRouting() ||
-		c.HallucinationMitigation.NLIModel.ModelID == "" {
-		return false
-	}
-	for _, signals := range c.reachableRoutingSignals() {
-		for _, rule := range signals.HallucinationRules {
-			if rule.UseNLI {
-				return true
-			}
-		}
-	}
-	decisions := c.routingConsumerDecisions()
-	for i := range decisions {
-		plugin := decisions[i].GetHallucinationConfig()
-		if plugin != nil && plugin.Enabled && plugin.UseNLI {
-			return true
-		}
-	}
-	return false
-}
-
-// NeedsLocalNLIForSemanticCache reports actual demand for the global cache's
-// NLI polarity tier. Recipe overrides never supply this service-owned model.
-func (c *RouterConfig) NeedsLocalNLIForSemanticCache() bool {
-	return c != nil &&
-		c.NeedsSemanticResponseCache() &&
-		(c.SemanticCache.BackendType == "" || c.SemanticCache.BackendType == "memory") &&
-		c.SemanticCache.PolarityGuard.UsesNLI() &&
-		(c.GlobalModelBindings["hallucination_explainer"].Deployment != "" || c.HallucinationMitigation.NLIModel.ModelID != "")
+		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendLocal
 }
 
 func (c *RouterConfig) routingConsumerDecisions() []Decision {

@@ -79,7 +79,7 @@ func validateSafetyClassifier(cfg *RouterConfig, consumer string, rule Classifie
 			rule.Model = deployment.ExternalModel
 			return validateSequenceClassifierSignal(cfg, rule)
 		}
-		local.ModelID, local.MaxSequenceLength = deployment.Artifact, deployment.Input.MaxTokens
+		local.ModelID, local.MaxSequenceLength = deployment.ServedModel(decl.Deployment), deployment.Input.MaxTokens
 		if rule.Model != "" {
 			local.Window = nil
 		}

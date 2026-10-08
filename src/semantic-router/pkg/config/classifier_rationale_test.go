@@ -7,7 +7,7 @@ import (
 
 func TestClassifierDisableRationaleRequiresLLM(t *testing.T) {
 	for _, ruleType := range []string{ClassifierSignalTypeLocal, ClassifierSignalTypeSequenceClassifier} {
-		for _, provider := range []string{"candle", "http"} {
+		for _, provider := range []string{ModelRuntimeProvider, "http"} {
 			t.Run(ruleType+"/"+provider, func(t *testing.T) {
 				cfg := genericBindingConfig(provider, ruleType)
 				cfg.ClassifierRules[0].DisableRationale = true
