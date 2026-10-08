@@ -105,7 +105,7 @@ class E2EBatchTests(unittest.TestCase):
             self.assertEqual(receipt["evidence"]["expected_cases"], ["required-case"])
             self.assertEqual(
                 {row["id"] for row in receipt["artifacts"]},
-                {"image:extproc", "image:provider-mocker"},
+                {"image:vllm-sr", "image:provider-mocker"},
             )
             self.assertIn(receipt["id"] + "/test-report.json", result["raw"])
         self.assertEqual(len(result["summaries"]), len(PROFILES))
@@ -176,7 +176,7 @@ class E2EBatchTests(unittest.TestCase):
             elif condition == "profile":
                 changed["verifications"][0]["profile"] = "missing-profile"
             elif condition == "images":
-                changed["images"] = ["extproc"]
+                changed["images"] = ["vllm-sr"]
             else:
                 changed["verifications"][0]["executor"] = "platform"
             with self.subTest(condition=condition), self.assertRaises(ValueError):
@@ -306,7 +306,7 @@ class E2EBatchTests(unittest.TestCase):
                     ),
                     "CI_IMAGE_RECEIPTS": str(artifact_file),
                     "CI_NATIVE_RECEIPTS": "",
-                    "E2E_PREBUILT_EXT_PROC_IMAGE": "verified:extproc",
+                    "E2E_PREBUILT_EXT_PROC_IMAGE": "verified:vllm-sr",
                     "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE": (
                         ""
                         if condition == "missing-image"

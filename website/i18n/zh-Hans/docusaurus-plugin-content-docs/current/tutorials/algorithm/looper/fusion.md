@@ -166,7 +166,6 @@ global:
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       fusion:
         model_names:
@@ -174,6 +173,8 @@ global:
 ```
 
 `global.integrations.looper.fusion` 只注册直接请求模型名。它不拥有路由策略、默认路由、裁判选择、面板选择、并发、模板或错误处理。
+
+每个别名都应使用没有任何模型使用的名字。如果别名同时也是某个模型的名字，它会截获该模型的请求：这些请求只评估 Fusion 决策，没有匹配任何决策的请求会以 [`no_route`](../../../api/router.md#routing-errors) 失败。Router 和 `vllm-sr config validate` 都会对这样的别名发出警告。
 
 裁判模型、分析面板、分析模式、采样设置、并发、token 与时间预算、法定人数、模板、提示词版本、追踪可见性、错误策略和依据策略都属于
 `routing.decisions[].algorithm.fusion`。直接 slug 调用只评估可执行 Fusion 的决策，因此 `vllm-sr/fusion` 不会静默回退到普通单模型路由。公开 HTTP 路径执行所选配方策略，不会通过

@@ -21,8 +21,6 @@ class ReleaseVersionContractTests(unittest.TestCase):
             release_contract.parse_release_images(),
             (
                 "dashboard",
-                "extproc",
-                "extproc-rocm",
                 "operator",
                 "operator-bundle",
                 "vllm-sr",
@@ -118,10 +116,68 @@ class ReleaseVersionContractTests(unittest.TestCase):
                 self.assertEqual(len(errors), 1)
                 self.assertIn("stable vMAJOR.MINOR.PATCH", errors[0])
 
-    def test_simulator_docs_use_an_independent_published_version(self) -> None:
-        errors: list[str] = []
-        release_contract.validate_sim_upgrade_docs(errors)
-        self.assertEqual(errors, [])
+    def _validate_with(self, pyproject: str, expected: str | None) -> list[str]:
+        contract = release_contract.collect_contract()
+        dev_cycle = release_contract.ReleaseContract(
+            pyproject_version=pyproject,
+            helm_chart_version=contract.helm_chart_version,
+            helm_app_version="v0.4.0",
+            release_images=contract.release_images,
+        )
+        with (
+            mock.patch.object(
+                release_contract, "collect_contract", return_value=dev_cycle
+            ),
+            mock.patch.object(
+                release_contract,
+                "UPGRADE_ROLLBACK_DOC_PATH",
+                release_contract.UPGRADE_ROLLBACK_DOC_PATH,
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            return release_contract.validate(expected)[1]
+
+    def test_main_carries_the_next_version_and_documents_the_pinned_release(
+        self,
+    ) -> None:
+        # Between releases `main` is on the next minor, so dev builds sort
+        # after the release; the docs keep the release the chart pins.
+        with mock.patch.object(
+            release_contract,
+            "read_text",
+            side_effect=self._docs_pinned_at("0.4.0"),
+        ):
+            self.assertEqual(self._validate_with("0.5.0", None), [])
+            self.assertEqual(self._validate_with("0.4.0", None), [])
+            behind = self._validate_with("0.3.0", None)
+        self.assertEqual(len(behind), 1)
+        self.assertIn("behind the released v0.4.0", behind[0])
+
+    def test_a_release_check_still_requires_the_released_version(self) -> None:
+        with mock.patch.object(
+            release_contract,
+            "read_text",
+            side_effect=self._docs_pinned_at("0.4.0"),
+        ):
+            errors = self._validate_with("0.5.0", "0.4.0")
+        self.assertTrue(
+            any(
+                "vllm-sr version has '0.5.0' but expected '0.4.0'" in e for e in errors
+            ),
+            errors,
+        )
+
+    @staticmethod
+    def _docs_pinned_at(version: str):
+        original = release_contract.read_text
+
+        def read(path: Path) -> str:
+            text = original(path)
+            if path == release_contract.UPGRADE_ROLLBACK_DOC_PATH:
+                return text.replace("0.4.0", version)
+            return text
+
+        return read
 
 
 if __name__ == "__main__":

@@ -46,7 +46,7 @@ The PR, main, nightly, and release entrypoints share one verification plan:
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.
-Compatible component checks use one of three setup classes: **CLI and Fleet**,
+Compatible component checks use one of three setup classes: **CLI**,
 **Model Tools**, and **Router Tools**. Each selected contract runs in its own
 worker with its own test inventory, logs, and result. A failed contract leaves
 other independent checks running, but fails its worker and the Gate.

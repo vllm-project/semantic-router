@@ -280,12 +280,36 @@ func validateCanonicalFallback(canonical *CanonicalConfig) error {
 		base = fallback.DefaultPolicy()
 	}
 
+	if err := validateDecisionFallbacks("routing", canonical.Routing.Decisions, base); err != nil {
+		return err
+	}
 	for _, recipe := range canonical.Recipes {
+		effective := base
 		if recipe.Routing.Fallback != nil {
-			effective := recipe.Routing.Fallback.Inherit(base)
+			effective = recipe.Routing.Fallback.Inherit(base)
 			if err := effective.Validate(); err != nil {
 				return fmt.Errorf("recipes[%s].routing.fallback: %w", recipe.Name, err)
 			}
+		}
+		if err := validateDecisionFallbacks(fmt.Sprintf("recipes[%s].routing", recipe.Name), recipe.Routing.Decisions, effective); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateDecisionFallbacks checks each decision's fallback override, and the
+// policy it makes over its recipe's, as the recipe block is checked.
+func validateDecisionFallbacks(path string, decisions []Decision, recipe fallback.FallbackPolicy) error {
+	for _, decision := range decisions {
+		if decision.Fallback == nil {
+			continue
+		}
+		if err := decision.Fallback.Validate(); err != nil {
+			return fmt.Errorf("%s.decisions[%s].fallback: %w", path, decision.Name, err)
+		}
+		if err := recipe.WithDefaults().Resolve(decision.Fallback).Validate(); err != nil {
+			return fmt.Errorf("%s.decisions[%s].fallback: %w", path, decision.Name, err)
 		}
 	}
 	return nil
@@ -568,8 +592,7 @@ func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
 	if model.Catalog != "" || model.Reasoning != nil || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
-	return model.Pricing != (ModelPricing{}) ||
-		model.Reliability != (ProviderReliability{})
+	return model.Pricing != (ModelPricing{}) || !model.Reliability.IsZero()
 }
 
 func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {
@@ -607,11 +630,17 @@ func autoGenerateCategoriesFromDecisions(decisions []Decision) []Category {
 	}
 	sort.Strings(keys)
 	for _, name := range keys {
+		// A referenced classifier label declares itself; any other name can
+		// only be the fallback for labels no rule lists.
+		label := "other"
+		if IsSupportedRoutingDomainName(name) {
+			label = name
+		}
 		categories = append(categories, Category{
 			CategoryMetadata: CategoryMetadata{
 				Name:           name,
 				Description:    name,
-				MMLUCategories: []string{"other"},
+				MMLUCategories: []string{label},
 			},
 		})
 	}

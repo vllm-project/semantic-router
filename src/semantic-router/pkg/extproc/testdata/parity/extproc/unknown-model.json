@@ -1,0 +1,62 @@
+[
+  {
+    "requestHeaders": {
+      "response": {
+        "headerMutation": {
+          "removeHeaders": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "accept-encoding",
+                "value": "identity"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "immediateResponse": {
+      "bodyText": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"message\":\"the requested model is not available\",\"param\":null}}",
+      "headers": {
+        "setHeaders": [
+          {
+            "header": {
+              "key": "content-type",
+              "rawValueText": "application/json"
+            }
+          },
+          {
+            "header": {
+              "key": "x-vsr-schema-version",
+              "rawValueText": "2"
+            }
+          },
+          {
+            "header": {
+              "key": "x-vsr-response-path",
+              "rawValueText": "error"
+            }
+          },
+          {
+            "header": {
+              "key": "x-vsr-config-version",
+              "rawValueText": "1"
+            }
+          }
+        ]
+      },
+      "status": {
+        "code": "BadRequest"
+      }
+    }
+  }
+]

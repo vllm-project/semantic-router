@@ -12,23 +12,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from release_contract_markers import (
-    sim_release_notes_markers,
-    sim_release_workflow_markers,
-    sim_upgrade_docs_markers,
     upgrade_runbook_fixture_markers,
 )
 from snapshot_model_catalog import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
-SIM_PYPROJECT_PATH = REPO_ROOT / "src/fleet-sim/pyproject.toml"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
 DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 CI_IMAGE_INVENTORY_PATH = REPO_ROOT / "tools/ci/classify_pr_changes.py"
 CI_IMAGE_ARTIFACTS_PATH = REPO_ROOT / "tools/ci/image_artifacts.py"
-SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
 UPGRADE_ROLLBACK_DOC_PATH = REPO_ROOT / "website/docs/installation/upgrade-rollback.md"
 BUILT_IN_CATALOG_ROOT = REPO_ROOT / "config/recipes/built-in"
 GHCR_IMAGE_PREFIX = "ghcr.io/vllm-project/semantic-router"
@@ -46,7 +41,6 @@ IMAGE_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 @dataclass(frozen=True)
 class ReleaseContract:
     pyproject_version: str
-    sim_version: str
     helm_chart_version: str
     helm_app_version: str
     release_images: tuple[str, ...]
@@ -204,7 +198,6 @@ def parse_defined_images() -> set[str]:
 def collect_contract() -> ReleaseContract:
     return ReleaseContract(
         pyproject_version=parse_project_version(PYPROJECT_PATH),
-        sim_version=parse_project_version(SIM_PYPROJECT_PATH),
         helm_chart_version=parse_chart_key(HELM_CHART_PATH, "version"),
         helm_app_version=parse_chart_key(HELM_CHART_PATH, "appVersion"),
         release_images=parse_release_images(),
@@ -359,16 +352,44 @@ def validate_upgrade_runbook_fixtures(errors: list[str], release_version: str) -
     )
 
 
-def validate_sim_release_workflow(errors: list[str]) -> None:
-    require_markers(errors, SIM_WORKFLOW_PATH, sim_release_workflow_markers())
+def semver_core(version: str) -> tuple[int, int, int] | None:
+    match = SEMVER_RE.fullmatch(version)
+    if match is None:
+        return None
+    return (int(match["major"]), int(match["minor"]), int(match["patch"]))
 
 
-def validate_sim_release_notes(errors: list[str]) -> None:
-    require_markers(errors, RELEASE_WORKFLOW_PATH, sim_release_notes_markers())
+def documented_release(
+    errors: list[str], contract: ReleaseContract, expected_version: str | None
+) -> str | None:
+    """The release the docs and runbook pin.
 
+    A release check documents the release itself. Between releases, `main`
+    carries the next version (so dev builds sort after the last release) while
+    the docs and the source chart's appVersion stay on the last release.
+    """
 
-def validate_sim_upgrade_docs(errors: list[str]) -> None:
-    require_markers(errors, UPGRADE_ROLLBACK_DOC_PATH, sim_upgrade_docs_markers())
+    if expected_version is not None:
+        require_equal(
+            errors,
+            PYPROJECT_PATH,
+            "vllm-sr version",
+            contract.pyproject_version,
+            expected_version,
+        )
+        return expected_version
+    if SOURCE_HELM_APP_VERSION_RE.fullmatch(contract.helm_app_version) is None:
+        return None
+    released = contract.helm_app_version.removeprefix("v")
+    current, pinned = semver_core(contract.pyproject_version), semver_core(released)
+    if current is not None and pinned is not None and current < pinned:
+        message = (
+            f"vllm-sr version {contract.pyproject_version} is behind the released "
+            f"v{released} that the source chart pins"
+        )
+        errors.append(f"{PYPROJECT_PATH.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(PYPROJECT_PATH, "Version behind release", message)
+    return released
 
 
 def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
@@ -381,10 +402,7 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
         )
         emit_github_error(PYPROJECT_PATH, "Invalid version", contract.pyproject_version)
 
-    expected = expected_version or contract.pyproject_version
-    require_equal(
-        errors, PYPROJECT_PATH, "vllm-sr version", contract.pyproject_version, expected
-    )
+    documented = documented_release(errors, contract, expected_version)
 
     validate_source_helm_app_version(
         errors, contract.helm_app_version, expected_version
@@ -392,16 +410,14 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     validate_helm_workflow(errors)
     validate_release_image_bridge(errors)
     validate_release_notes_images(errors, contract.release_images)
-    validate_upgrade_docs_images(errors, contract.release_images, expected)
-    validate_upgrade_runbook_fixtures(errors, expected)
-    validate_sim_release_workflow(errors)
-    validate_sim_release_notes(errors)
-    validate_sim_upgrade_docs(errors)
+    if documented is not None:
+        validate_upgrade_docs_images(errors, contract.release_images, documented)
+        validate_upgrade_runbook_fixtures(errors, documented)
     # An explicit version is the publication boundary used by release.yml and
     # `make release-check RELEASE_VERSION=...`. Source-only validation may
     # run before maintainers cut the next immutable minor snapshot.
     if expected_version is not None:
-        validate_release_catalog(errors, expected)
+        validate_release_catalog(errors, expected_version)
     return contract, errors
 
 
@@ -412,7 +428,6 @@ def write_github_outputs(
         output.write(f"pyproject_version={contract.pyproject_version}\n")
         output.write(f"helm_chart_version={contract.helm_chart_version}\n")
         output.write(f"helm_app_version={contract.helm_app_version}\n")
-        output.write(f"sim_version={contract.sim_version}\n")
         output.write(f"release_images={','.join(contract.release_images)}\n")
         output.write(
             f"release_images_json={json.dumps(list(contract.release_images))}\n"
@@ -448,7 +463,10 @@ def main() -> int:
     print(f"  vllm-sr package:        {contract.pyproject_version}")
     print(f"  helm chart source:      {contract.helm_chart_version}")
     print(f"  helm source appVersion: {contract.helm_app_version}")
-    print(f"  vllm-sr-sim package:    {contract.sim_version} (independent tag stream)")
+    if args.version is None:
+        print(
+            f"  Documented release:     {contract.helm_app_version} (docs and runbook)"
+        )
     print(f"  Docker release images:  {', '.join(contract.release_images)}")
     catalog_snapshot = catalog_snapshot_for_version(release_version)
     if args.version is not None:

@@ -105,6 +105,7 @@ func classifyKey(request ClassifyRequest) cacheKey {
 func decideKey(request Request) cacheKey {
 	w := newKeyWriter(surfaceDecide)
 	w.string(request.State)
+	w.int(request.MaxTokens)
 	if request.Parts != nil {
 		names := make([]string, 0, len(request.Parts))
 		for name := range request.Parts {
@@ -126,6 +127,11 @@ func decideKey(request Request) cacheKey {
 		w.string(question.Instructions)
 		w.string(question.Preset)
 		w.string(question.Head)
+		if question.Truncate {
+			w.int(1)
+		} else {
+			w.int(0)
+		}
 		if question.Threshold != nil {
 			w.float(*question.Threshold)
 		} else {
