@@ -77,7 +77,16 @@
 {{- if not (get $config "version") -}}
 {{- $_ := set $config "version" "v0.3" -}}
 {{- end -}}
+{{- $decisionModel := trim (.Values.decisionModel | default "") -}}
+{{- if $decisionModel -}}
+{{- $catalog := (get $global "model_catalog") | default (dict) -}}
+{{- $system := (get $catalog "system") | default (dict) -}}
+{{- $_ := set $system "decision_model" $decisionModel -}}
+{{- $_ := set $catalog "system" $system -}}
+{{- $_ := set $global "model_catalog" $catalog -}}
+{{- end -}}
 {{- $liveConfig := include "semantic-router.liveConfig" . -}}
+{{- $appliedDecisionModel := include "semantic-router.appliedDecisionModel" . -}}
 {{- $configMapPolicy := .Values.configMap | default (dict) -}}
 apiVersion: v1
 kind: ConfigMap
@@ -88,8 +97,19 @@ metadata:
     {{- include "semantic-router.labels" . | nindent 4 }}
   annotations:
     semantic-router.vllm.ai/chart-config-revision: {{ get $configMapPolicy "applyValuesRevision" | default "" | quote }}
+    semantic-router.vllm.ai/decision-model: {{ $decisionModel | default $appliedDecisionModel | quote }}
 data:
-  {{- if ne (trim $liveConfig) "" }}
+  {{- if and (ne (trim $liveConfig) "") $decisionModel (ne $decisionModel $appliedDecisionModel) }}
+  {{- $live := fromYaml $liveConfig }}
+  {{- $liveGlobal := (get $live "global") | default (dict) }}
+  {{- $liveCatalog := (get $liveGlobal "model_catalog") | default (dict) }}
+  {{- $liveSystem := (get $liveCatalog "system") | default (dict) }}
+  {{- $_ := set $liveSystem "decision_model" $decisionModel }}
+  {{- $_ := set $liveCatalog "system" $liveSystem }}
+  {{- $_ := set $liveGlobal "model_catalog" $liveCatalog }}
+  {{- $_ := set $live "global" $liveGlobal }}
+  config.yaml: {{ toYaml $live | toJson }}
+  {{- else if ne (trim $liveConfig) "" }}
   config.yaml: {{ $liveConfig | toJson }}
   {{- else }}
   config.yaml: |

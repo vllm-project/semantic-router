@@ -44,7 +44,7 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 	case "feedback_detector":
 		return local(consumer, c.FeedbackDetector.ModelID, c.FeedbackDetector.UseCPU)
 	case "modality_detector":
-		if model, useCPU, ok := c.ModalityDetector.ClassifierModel(); ok {
+		if model, useCPU, ok := c.ModalityClassifierModel(); ok {
 			return local(consumer, model, useCPU)
 		}
 	case "hallucination_detector":
@@ -103,14 +103,20 @@ func sharedDeploymentName(spec *ModelSpec, device string) string {
 // model_runtime deployment that serves it: a built-in model (a registry path
 // or alias) at its pinned revision, or a local package directory. It runs on
 // CPU when useCPU, else on the best available device; a built-in model runs
-// its registered CPU profile on CPU, every other deployment exact.
+// its registered CPU profile on CPU, every other deployment exact. A model
+// that requires a GPU runs on the best available device whatever useCPU says;
+// the model runtime manager refuses it on a host without a GPU.
 func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment, error) {
 	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact"}
+	reference := strings.TrimSpace(model)
+	spec := GetModelByPath(reference)
+	if spec != nil && spec.RequiresGPU {
+		useCPU = false
+	}
 	if useCPU {
 		deployment.Device = "cpu"
 	}
-	reference := strings.TrimSpace(model)
-	if spec := GetModelByPath(reference); spec != nil {
+	if spec != nil {
 		if !servedBuiltIn(spec) {
 			return ModelDeployment{}, fmt.Errorf("model %q has no model_runtime family; run `vllm-sr config migrate` to move to its Vela 1.0 replacement", reference)
 		}

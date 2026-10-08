@@ -13,6 +13,9 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 	if err := r.applyOperatorModelCatalog(canonical, spec); err != nil {
 		return err
 	}
+	if err := applyOperatorDecisionModel(canonical, spec); err != nil {
+		return err
+	}
 	if err := r.applyOperatorStoresAndIntegrations(canonical, spec); err != nil {
 		return err
 	}

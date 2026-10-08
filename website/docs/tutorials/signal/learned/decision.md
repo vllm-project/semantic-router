@@ -33,7 +33,30 @@ your question.
 
 ## Configuration
 
-Name the model as a `model_runtime` deployment, then ask it questions:
+A question that names no `deployment` asks the Router's decision model,
+`global.model_catalog.system.decision_model` (Vela 2.0 0.3B unless you
+[choose a size](model-runtime/choose-a-model.md#choose-a-size)). It joins the
+call that answers the built-in signals, so one model answers every question
+the Router asks of a request in one call:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: needs_tools
+        question:
+          type: noul
+          instructions: Does answering this request need a tool call?
+        predicate:
+          gte: 0.7
+```
+
+With `decision_model: Vela-1.0` the Vela 1.0 specialists answer only the
+built-in signals, so such a question is a load error that asks for a
+`deployment`.
+
+To ask another model, such as a Decision 2.0 model, name it as a
+`model_runtime` deployment and give each question its `deployment`:
 
 ```yaml
 global:
@@ -177,7 +200,10 @@ rule's name if the model answers only `choice`, `noul` and `score` (Decision
 
 While the model is loading, overloaded or slower than `timeout_ms`, the signal
 is unknown. `rules.on_unknown` on the decision, or `on_error: match | no_match`
-on a condition, decides what an unknown answer means. Matched decision signals
+on a condition, decides what an unknown answer means. Every question a request
+asks one deployment, the built-in signals' included, goes in one call; once it
+is sent, each question waits for it as long as the latest of them, since the
+request waits for that call anyway. Matched decision signals
 are listed in the `x-vsr-matched-decision-model` response header.
 
 To choose a model, size and hardware, or to run the model on your own GPU

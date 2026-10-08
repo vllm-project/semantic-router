@@ -148,3 +148,24 @@ def test_the_arms_differ_only_in_their_model_catalog(ab) -> None:
     catalog = vela1["global"]["model_catalog"]
     assert catalog["system"] == ab.VELA1_SYSTEM
     assert catalog["modules"] == base["global"]["model_catalog"]["modules"]
+
+
+def test_a_threshold_keeps_the_decimals_its_operating_point_needs(ab) -> None:
+    spread = [i / 1000 for i in range(1000)]
+    assert ab.shipped_threshold(0.4512, spread, above=True) == 0.45
+    # Scores piled up near 1: two decimals would round 0.9984 to 1.0 and flag
+    # nothing, and three to 0.998, which flags a tenth more of these scores.
+    piled = [
+        0.9970,
+        0.9975,
+        0.9979,
+        0.9982,
+        0.9986,
+        0.9990,
+        0.9993,
+        0.9996,
+        0.9998,
+        0.9999,
+    ]
+    assert ab.shipped_threshold(0.9984, piled, above=True) == 0.9984
+    assert ab.shipped_threshold(0.9987, piled, above=True) == 0.999

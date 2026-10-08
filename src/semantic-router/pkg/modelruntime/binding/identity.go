@@ -16,6 +16,9 @@ var (
 	ErrInputLimit    = errors.New("model input exceeds task budget")
 	ErrInvalidInput  = errors.New("model task input is invalid")
 	ErrInvalidResult = errors.New("model returned an invalid task result")
+	// ErrScanBudget marks an input the model reads in windows with more tokens
+	// than its scan budget: none of it was read.
+	ErrScanBudget = errors.New("model input exceeds its scan budget")
 )
 
 // ResourceIdentity describes physical execution, independently of a recipe or
@@ -144,6 +147,9 @@ type Capability struct {
 	// for a label-distribution binding (domain, attack, ...); such a binding
 	// reads its whole input.
 	Question string
+	// Deployment names the model_runtime deployment a Preset or Question
+	// binding asks, so a request stage sends every question to it in one call.
+	Deployment string
 }
 
 // WindowCapability fixes the scan geometry selected during preparation.

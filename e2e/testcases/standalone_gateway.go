@@ -10,6 +10,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -17,6 +18,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -33,6 +35,11 @@ const (
 )
 
 func init() {
+	pkgtestcases.Register("standalone-chart-defaults", pkgtestcases.TestCase{
+		Description: "The source chart's default image is the development Router image, and that Router passes readiness",
+		Tags:        []string{"standalone", "helm", "kubernetes"},
+		Fn:          testStandaloneChartDefaults,
+	})
 	pkgtestcases.Register("standalone-chat-completions", pkgtestcases.TestCase{
 		Description: "A chat completion through the standalone Router's Service is routed and served with no Envoy",
 		Tags:        []string{"standalone", "gateway", "kubernetes"},
@@ -112,6 +119,44 @@ func (r standaloneReply) servedBy(model, decision string) error {
 		return fmt.Errorf("the backend received model %v from %v, want %q from provider-mocker", r.echo["model"], r.echo["mock"], model)
 	}
 	return nil
+}
+
+// testStandaloneChartDefaults checks the Router the profile installed with no
+// image overrides: it runs the chart's default image, the development image,
+// and that Router reports ready through its Service.
+func testStandaloneChartDefaults(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	deployment, err := client.AppsV1().Deployments(standaloneNamespace).Get(ctx, standaloneRouter, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("read the Router deployment: %w", err)
+	}
+	containers := deployment.Spec.Template.Spec.Containers
+	if len(containers) == 0 || containers[0].Image != helm.DevelopmentRouterImage {
+		return fmt.Errorf("the Router runs %v, want the chart's development default %s", containerImages(containers), helm.DevelopmentRouterImage)
+	}
+	if !rolloutComplete(deployment) {
+		return fmt.Errorf("the Router deployment is not available: %d of %d replicas", deployment.Status.AvailableReplicas, deployment.Status.Replicas)
+	}
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	response, err := fixtures.DoGETRequest(ctx, session.HTTPClient(30*time.Second), session.URL("/ready"))
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("GET /ready status %d: %s", response.StatusCode, truncateString(string(response.Body), 400))
+	}
+	return nil
+}
+
+func containerImages(containers []corev1.Container) []string {
+	images := make([]string, 0, len(containers))
+	for _, container := range containers {
+		images = append(images, container.Image)
+	}
+	return images
 }
 
 func testStandaloneChatCompletions(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
