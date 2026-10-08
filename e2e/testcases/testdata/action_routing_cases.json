@@ -18,7 +18,7 @@
   {
     "name": "Generate request - new code",
     "description": "generate_action matches a request that asks to write new code",
-    "query": "Write me a function that parses a CSV file and returns the unique values in a column",
+    "query": "Write a Python script that counts how many times each word appears in a text file",
     "expected_decision": "generate_action",
     "expected_matched_signal": "generate",
     "should_match": true
@@ -34,7 +34,7 @@
   {
     "name": "Math request - keep domain routing",
     "description": "A non-coding math question should keep the math domain decision even if the action classifier reads it as explain",
-    "query": "What is 2 + 2?",
+    "query": "What is the derivative of x squared with respect to x?",
     "expected_decision": "math_decision",
     "expected_matched_signal": "explain",
     "should_match": true

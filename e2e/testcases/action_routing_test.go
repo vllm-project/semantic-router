@@ -17,7 +17,7 @@ func TestActionRoutingDomainControls(t *testing.T) {
 		query    string
 		decision string
 	}{
-		{query: "What is 2 + 2?", decision: "math_decision"},
+		{query: "What is the derivative of x squared with respect to x?", decision: "math_decision"},
 		{query: "Tell me about cellular biology", decision: "biology_decision"},
 	} {
 		t.Run(control.decision, func(t *testing.T) {
