@@ -232,12 +232,21 @@ waiting or was dequeued because its branch could not be updated.
 
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.
+
+If that merge includes workflow changes, an HTTPS push using an OAuth token
+or personal access token (classic) without the `workflow` scope can also be
+refused. Use **Update branch**, push over SSH, or use GitHub's **Sync fork**
+to update your fork's `main` before retrying the push. GitHub permits workflow
+files without that scope when the same paths and contents already exist on
+another branch in the fork. See [GitHub's scope documentation][oauth-scopes].
+
 Once PR Gate passes on the new head and the required approvals still hold,
 the rule requeues the PR automatically. The `@mergifyio queue` command and
 **Requeue** checkbox require write permission by default; contributors do not
 need them for this recovery.
 
 [fork-permissions]: https://docs.github.com/en/pull-requests/how-tos/work-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork
+[oauth-scopes]: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
 
 ## Repository map
 
