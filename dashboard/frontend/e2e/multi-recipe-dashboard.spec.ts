@@ -189,10 +189,10 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await page.goto('/config/signals')
   const signalScope = page.getByLabel('Routing profile')
   await expect(signalScope).toHaveValue('balanced')
-  await expect(page.getByRole('button', { name: 'View Keywords-balanced-keyword' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View keyword-balanced-keyword' })).toBeVisible()
   await signalScope.selectOption('privacy')
-  await expect(page.getByRole('button', { name: 'View PII-private-pii' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'View Keywords-balanced-keyword' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'View pii-private-pii' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View keyword-balanced-keyword' })).toHaveCount(0)
 
   await page.goto('/config/projections')
   const projectionScope = page.getByLabel('Routing profile')

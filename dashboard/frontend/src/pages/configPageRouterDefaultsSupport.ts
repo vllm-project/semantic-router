@@ -20,7 +20,11 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
-import { DECISION_MODEL_HINT, DECISION_MODELS } from './decisionModelSupport'
+import {
+  configuredDecisionModel,
+  DECISION_MODEL_HINT,
+  DECISION_MODELS,
+} from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -425,12 +429,28 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         },
         { label: 'Backend', value: asObject(section?.backend) ? 'Configured' : 'Local' },
       ]
-    case 'system_models':
+    case 'system_models': {
+      const decisionModel = configuredDecisionModel({
+        global: { model_catalog: { system: section } },
+      })
+      const inheritedBinding =
+        decisionModel === 'Vela-1.0' ? 'Vela 1.0 specialist' : `Follows ${decisionModel}`
       return [
-        { label: 'Prompt Guard', value: compactPathLikeString(section?.prompt_guard) },
-        { label: 'Domain', value: compactPathLikeString(section?.domain_classifier) },
-        { label: 'PII', value: compactPathLikeString(section?.pii_classifier) },
+        {
+          label: 'Decision Model',
+          value: section?.decision_model ? decisionModel : `${decisionModel} (default)`,
+        },
+        {
+          label: 'Prompt Guard',
+          value: compactPathLikeString(section?.prompt_guard, inheritedBinding),
+        },
+        {
+          label: 'Domain',
+          value: compactPathLikeString(section?.domain_classifier, inheritedBinding),
+        },
+        { label: 'PII', value: compactPathLikeString(section?.pii_classifier, inheritedBinding) },
       ]
+    }
     case 'embedding_models':
       return embeddingModelsSummary(data)
     case 'prompt_compression':
@@ -527,11 +547,11 @@ function badgesForKey(
   }
 
   if (key === 'system_models') {
-    const configuredRefs = Object.values(section || {}).filter(
-      (value) => typeof value === 'string' && value.trim(),
+    const configuredRefs = Object.entries(section || {}).filter(
+      ([name, value]) => name !== 'decision_model' && typeof value === 'string' && value.trim(),
     ).length
     badges.push({
-      label: `${configuredRefs} bindings`,
+      label: `${configuredRefs} explicit ${configuredRefs === 1 ? 'binding' : 'bindings'}`,
       tone: configuredRefs > 0 ? 'active' : 'inactive',
     })
   }
@@ -1094,6 +1114,14 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     }
   }
   const objectData = asObject(data)
+  if (key === 'system_models') {
+    return {
+      ...objectData,
+      decision_model: configuredDecisionModel({
+        global: { model_catalog: { system: objectData } },
+      }),
+    }
+  }
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
 }
 

@@ -2,12 +2,66 @@ import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_SECTIONS } from './configPageRouterDefaultsCatalog'
 import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
+import type { CanonicalSystemModels } from './configPageSupport'
 import {
   embeddingModelsCatalogValue,
   embeddingModelsEditData,
 } from './configPageEmbeddingModelsSupport'
 
 describe('Vela defaults and explicit legacy models', () => {
+  const systemModelCard = (system?: CanonicalSystemModels) =>
+    buildRouterSectionCards({
+      config: null,
+      routerConfig: { system_models: system },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    }).find((card) => card.key === 'system_models')!
+
+  it('shows the decision model and inherited bindings instead of missing models', () => {
+    const card = systemModelCard({ decision_model: 'Vela-2.0-4B' })
+
+    expect(card.title).toBe('Decision Model & Bindings')
+    expect(card.summary).toEqual([
+      { label: 'Decision Model', value: 'Vela-2.0-4B' },
+      { label: 'Prompt Guard', value: 'Follows Vela-2.0-4B' },
+      { label: 'Domain', value: 'Follows Vela-2.0-4B' },
+      { label: 'PII', value: 'Follows Vela-2.0-4B' },
+    ])
+    expect(card.badges).toContainEqual({ label: '0 explicit bindings', tone: 'inactive' })
+  })
+
+  it('shows the default decision model and the Vela 1.0 specialist fallback accurately', () => {
+    const defaults = systemModelCard()
+    expect(defaults.summary[0]).toEqual({
+      label: 'Decision Model',
+      value: 'Vela-2.0-0.3B (default)',
+    })
+    expect(defaults.editData.decision_model).toBe('Vela-2.0-0.3B')
+
+    const specialists = systemModelCard({ decision_model: 'Vela-1.0' })
+    expect(specialists.summary[1]).toEqual({
+      label: 'Prompt Guard',
+      value: 'Vela 1.0 specialist',
+    })
+  })
+
+  it('preserves explicit bindings when the configured decision model is changed', () => {
+    const card = systemModelCard({
+      decision_model: 'Vela-2.0-4B',
+      pii_classifier: 'models/custom-pii',
+    })
+
+    expect(card.summary).toContainEqual({ label: 'PII', value: 'models/custom-pii' })
+    expect(card.badges).toContainEqual({ label: '1 explicit binding', tone: 'active' })
+    expect(card.save({ ...card.editData, decision_model: 'Vela-2.0-0.8B' })).toEqual({
+      model_catalog: {
+        system: { decision_model: 'Vela-2.0-0.8B', pii_classifier: 'models/custom-pii' },
+      },
+    })
+  })
+
   it('keeps the fallback editor defaults aligned with the Vela 2.0 0.3B defaults', () => {
     // The modules follow the decision model; a per-module line would pin one.
     expect(DEFAULT_SECTIONS.system_models).toEqual({ decision_model: 'Vela-2.0-0.3B' })

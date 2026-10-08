@@ -5,15 +5,14 @@ import ViewModal from '../components/ViewModal'
 import ProductLoadingState from '../components/ProductLoadingState'
 import ProductIcon from '../components/ProductIcon'
 import {
-  getLoadedModelCount,
   getRouterModelConsumers,
   getModelStatusSummary,
-  getTotalKnownModelCount,
   type RouterModelInfo,
   type SystemStatus,
 } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
 import DashboardRoutingProfiles from './DashboardRoutingProfiles'
+import DashboardRouterIntelligence from './DashboardRouterIntelligence'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
   categorizeDecisions,
@@ -110,8 +109,6 @@ const DashboardPage: React.FC = () => {
   )
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
-  const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
-  const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -414,27 +411,13 @@ const DashboardPage: React.FC = () => {
         />
       ) : null}
 
-      <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div>
-            <h2 className={styles.cardTitle}>Router Intelligence</h2>
-            {knownModels > 0 && (
-              <span className={styles.cardSubtitle}>
-                {loadedModels}/{knownModels} runtimes ready
-              </span>
-            )}
-          </div>
-          <button type="button" className={styles.cardAction} onClick={() => navigate('/status')}>
-            Status &rsaquo;
-          </button>
-        </div>
-        <RouterModelInventory
-          mode="preview"
-          modelsInfo={status?.models}
-          emptyMessage="Learned routing models will appear here when the router loads them."
-          onSelectModel={setSelectedRuntimeModel}
-        />
-      </div>
+      <DashboardRouterIntelligence
+        config={config}
+        modelsInfo={status?.models}
+        onConfigure={() => navigate('/config/global-config#global-section-system_models')}
+        onOpenStatus={() => navigate('/status')}
+        onSelectModel={setSelectedRuntimeModel}
+      />
 
       {selectedRuntimeModel && (
         <ViewModal

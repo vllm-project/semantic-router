@@ -344,9 +344,10 @@ export const SECTION_META: Record<
     description: 'Named admission policies used to qualify models before routing.',
   },
   system_models: {
-    title: 'System Model Bindings',
+    title: 'Decision Model & Bindings',
     eyebrow: 'Model Catalog',
-    description: 'Stable capability-to-model bindings for the router-owned built-in model catalog.',
+    description:
+      'Choose the Vela decision model for built-in signals and decision questions, with optional per-signal model overrides.',
   },
   embedding_models: {
     title: 'Embedding Models',

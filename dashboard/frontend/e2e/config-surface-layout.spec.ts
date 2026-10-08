@@ -269,6 +269,44 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
+  test('opens decision model settings directly and saves without pinning inherited bindings', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await mockConfigSurface(page);
+
+    let systemModels: Record<string, string> = {
+      decision_model: 'Vela-2.0-4B',
+      pii_classifier: 'models/custom-pii',
+    };
+    await page.route('**/api/router/config/global', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ model_catalog: { system: systemModels } }),
+      });
+    });
+    await page.route('**/api/router/config/global/update', async route => {
+      systemModels = route.request().postDataJSON().model_catalog.system;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success"}' });
+    });
+
+    await page.goto('/config/global-config#global-section-system_models');
+    const card = page.locator('#global-section-system_models');
+    await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
+    await expect(card.getByText('Vela-2.0-4B', { exact: true })).toBeVisible();
+    await expect(card.getByText('Follows Vela-2.0-4B').first()).toBeVisible();
+    await expect(card.getByText('1 explicit binding', { exact: true })).toBeVisible();
+    await card.getByRole('button', { name: 'Edit', exact: true }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
+    await expect(modal.getByLabel('Decision Model', { exact: true })).toHaveValue('Vela-2.0-4B');
+    await modal.getByLabel('Decision Model', { exact: true }).selectOption('Vela-2.0-0.8B');
+    await modal.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(modal).toBeHidden();
+    expect(systemModels).toEqual({ decision_model: 'Vela-2.0-0.8B', pii_classifier: 'models/custom-pii' });
+    await expect(card.getByText('Vela-2.0-0.8B', { exact: true })).toBeVisible();
+    await expect(card.getByText('Follows Vela-2.0-0.8B').first()).toBeVisible();
+  });
+
   test('keeps signal controls readable and aligned in the shared editor', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await mockConfigSurface(page);
@@ -430,7 +468,7 @@ test.describe('Config surface layout regressions', () => {
     await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
 
     const systemBindingsCard = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'System Model Bindings' }),
+      has: page.getByRole('heading', { name: 'Decision Model & Bindings' }),
     }).first();
     const embeddingsCard = page.locator('article').filter({
       has: page.getByRole('heading', { name: 'Embedding Models' }),
