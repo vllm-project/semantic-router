@@ -247,8 +247,12 @@ not finish its safety scan within it.
 - For a runtime you started, look at `vllm_srun_request_duration_seconds` and
   `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
   `Server-Timing` header of its responses.
-- On CPU, models of one process share the CPU threads. Start the runtime with
-  `--threads` set to the cores you can give it.
+- On many-core CPU hosts, first [bound the router's CPU budget](./deploy.md#bound-the-cpu-budget-on-many-core-hosts)
+  with a cpuset or affinity mask before startup. Managed runtime children,
+  including late ones, inherit the allowed range. A thread ceiling alone can
+  regress latency; `GOMAXPROCS` and `--threads` do not confine CPUs. Set a
+  separate CPU range for a runtime you start yourself, then size its threads
+  within that range.
 - CPU models slow down sharply when other work holds some of their cores,
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on

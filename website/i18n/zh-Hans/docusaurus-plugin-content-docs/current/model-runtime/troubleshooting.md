@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "9995d68856b15ba944b16614d3e497a952691a10"
+  source_commit: "31205bfe63d4528013853d6973b9c1abba09cbe1"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -204,7 +204,11 @@ global:
   传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
 - 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
   `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
-- 在 CPU 上，同一进程中的模型共享 CPU 线程。用 `--threads` 指定你能分给运行时的核数来启动它。
+- 在多核 CPU 主机上，先在启动前用 cpuset 或亲和性掩码
+  [限制路由器的 CPU 预算](model-runtime/deploy.md#bound-the-cpu-budget-on-many-core-hosts)。
+  托管运行时的子进程（包括后加载的进程）会继承允许使用的 CPU 范围。
+  只设置线程上限可能让延迟更差；`GOMAXPROCS` 和 `--threads` 并不限制 CPU 范围。
+  对于你自己启动的运行时，单独设置 CPU 范围，再按该范围设置线程数。
 - 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
   的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
 - GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
