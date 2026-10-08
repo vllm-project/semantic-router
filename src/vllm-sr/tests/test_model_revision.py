@@ -2,15 +2,14 @@
 
 from types import SimpleNamespace
 
+import huggingface_hub
 import pytest
-
 from cli.model_revision import builtin_releases, resolve_model_revision
+from huggingface_hub import HfApi, constants
 
 
 @pytest.fixture
 def hub(monkeypatch):
-    from huggingface_hub import HfApi, constants
-
     monkeypatch.setattr(constants, "HF_HUB_OFFLINE", False)
     calls = []
 
@@ -58,9 +57,6 @@ def test_invalid_refs_fail_before_resolution(hub, revision):
 
 
 def test_offline_ref_uses_cached_snapshot_without_network(monkeypatch, hub):
-    import huggingface_hub
-    from huggingface_hub import constants
-
     monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
     monkeypatch.setattr(
         huggingface_hub,
@@ -78,8 +74,6 @@ def test_offline_ref_uses_cached_snapshot_without_network(monkeypatch, hub):
 
 
 def test_hub_must_return_an_immutable_commit(monkeypatch, hub):
-    from huggingface_hub import HfApi
-
     monkeypatch.setattr(
         HfApi, "model_info", lambda *args, **kwargs: SimpleNamespace(sha="main")
     )
@@ -88,8 +82,6 @@ def test_hub_must_return_an_immutable_commit(monkeypatch, hub):
 
 
 def test_hub_errors_do_not_echo_response_or_credentials(monkeypatch, hub):
-    from huggingface_hub import HfApi
-
     def denied(*args, **kwargs):
         raise OSError("secret-token in signed URL")
 

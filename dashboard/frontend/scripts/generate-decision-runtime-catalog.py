@@ -55,7 +55,7 @@ def release_projection():
                 factory = factories[model.func.id]
                 bindings.update(
                     (arg.arg, value)
-                    for arg, value in zip(factory.args.args, model.args)
+                    for arg, value in zip(factory.args.args, model.args, strict=False)
                 )
                 bindings.update((item.arg, item.value) for item in model.keywords)
                 constructor = next(

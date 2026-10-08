@@ -16,8 +16,8 @@ from cli.config_generator import (
 from cli.consts import (
     DEFAULT_NOFILE_LIMIT,
     MIN_NOFILE_LIMIT,
-    PLATFORM_ROCM,
     PLATFORM_CUDA,
+    PLATFORM_ROCM,
 )
 from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_compiler_cache, router_runtime_env

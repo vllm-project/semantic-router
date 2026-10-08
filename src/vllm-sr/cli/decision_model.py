@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from cli.consts import PLATFORM_ROCM, PLATFORM_CUDA
+from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.model_runtime_defaults import effective_model_deployments_document
 
 DEFAULT_DECISION_MODEL = "primary"

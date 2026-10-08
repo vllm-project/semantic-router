@@ -9,7 +9,7 @@ import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
 from cli.config_schema import routing_surface_catalog
-from cli.consts import PLATFORM_ROCM, PLATFORM_CUDA
+from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.utils import get_logger
 
 log = get_logger(__name__)

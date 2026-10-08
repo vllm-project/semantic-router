@@ -18,8 +18,8 @@ from contextlib import contextmanager, suppress
 import yaml
 
 from cli.consts import (
-    PLATFORM_ROCM,
     PLATFORM_CUDA,
+    PLATFORM_ROCM,
     VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
 )

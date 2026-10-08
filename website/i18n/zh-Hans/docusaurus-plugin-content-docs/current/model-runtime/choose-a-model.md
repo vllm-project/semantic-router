@@ -239,8 +239,8 @@ global:
 
 按 CPU 上每个参数约 4 字节、GPU 上每个参数约 2 字节估算，再为请求留出余量：
 一个 307M 的任务模型在 CPU 上约需 1.3 GB，Decision 2.0 Lux-9B 在 GPU 上约需 18 GB。
-运行时会拒绝加载放不进设备的模型并说明原因。要让大模型彼此隔离，给它们各自的 process
-（见[与路由器一起运行](model-runtime/deploy.md#group-models-into-processes)）。
+运行时会拒绝加载放不进设备的模型并说明原因。每个模型副本都运行在独立的进程中，可通过 `replicas` 配置设备位置
+（见[放置和扩展副本](model-runtime/deploy.md#place-and-scale-replicas)）。
 
 ## 你自己的模型 {#your-own-models}
 

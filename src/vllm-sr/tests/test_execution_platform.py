@@ -3,7 +3,6 @@
 import json
 
 import pytest
-
 from cli import execution_platform as platform
 from cli.config_translator import _apply_gateway_and_platform
 

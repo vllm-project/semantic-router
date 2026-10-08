@@ -7,8 +7,12 @@ import re
 from importlib.resources import files
 from pathlib import Path
 
+import huggingface_hub
+from huggingface_hub import constants
+
 COMMIT = re.compile(r"[0-9a-fA-F]{40}\Z")
 RELEASE_FILENAME = "releases.generated.json"
+MIN_REVISION_PREFIX_LENGTH = 7
 
 
 def builtin_releases() -> dict[str, str]:
@@ -49,21 +53,30 @@ def resolve_model_revision(artifact: str, revision: str | None) -> str | None:
     )
     if known and revision is None:
         return known
-    if known and revision and len(revision) >= 7 and known.startswith(revision.lower()):
+    if (
+        known
+        and revision
+        and len(revision) >= MIN_REVISION_PREFIX_LENGTH
+        and known.startswith(revision.lower())
+    ):
         return known
-
-    from huggingface_hub import HfApi, constants, try_to_load_from_cache
 
     if constants.HF_HUB_OFFLINE:
         for filename in ("config.json", "MODEL_MANIFEST.json"):
-            cached = try_to_load_from_cache(artifact, filename, revision=revision)
+            cached = huggingface_hub.try_to_load_from_cache(
+                artifact, filename, revision=revision
+            )
             if isinstance(cached, str) and COMMIT.fullmatch(Path(cached).parent.name):
                 return Path(cached).parent.name.lower()
         raise ValueError(
             "Model revision is not cached; connect to the Hub or specify a cached commit"
         )
     try:
-        commit = HfApi().model_info(artifact, revision=revision, timeout=15).sha
+        commit = (
+            huggingface_hub.HfApi()
+            .model_info(artifact, revision=revision, timeout=15)
+            .sha
+        )
     except Exception as error:
         # Hub exceptions can include request/endpoint details. Do not echo
         # credentials, signed URLs or response bodies in the CLI error.

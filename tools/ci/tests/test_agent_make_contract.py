@@ -450,6 +450,53 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn("go test -json -count=1 ./...", backend)
         self.assertNotIn("VLLM_SR_EVALUATION_TEST_PYTHON", backend)
 
+    def test_precommit_toolchain_path_selects_an_isolated_python(self) -> None:
+        dockerfile = (REPO_ROOT / "tools/docker/Dockerfile.precommit").read_text()
+        environment = re.search(r'^ENV PATH="([^"\n]+)"$', dockerfile, re.M)
+        self.assertIsNotNone(environment)
+        image_path = environment.group(1)
+        venv_path = image_path.split(":", 1)[0].removesuffix("/bin")
+        self.assertIn(f"RUN python3 -m venv {venv_path}", dockerfile)
+        self.assertNotIn("--break-system-packages", dockerfile)
+        self.assertNotIn("PIP_BREAK_SYSTEM_PACKAGES", dockerfile)
+        # Exercise the image's PATH selection with a real isolated interpreter.
+        # A pip upgrade must not select the distro Python/site-packages merely
+        # because the parent process is already running in a different venv.
+        with tempfile.TemporaryDirectory() as directory:
+            venv = Path(directory) / "toolchain"
+            subprocess.run(
+                [sys.executable, "-m", "venv", "--without-pip", str(venv)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            environment = dict(os.environ)
+            environment.pop("PYTHONPATH", None)
+            environment.pop("PYTHONHOME", None)
+            environment["PATH"] = image_path.replace(venv_path, str(venv)).replace(
+                "${PATH}", os.environ["PATH"]
+            )
+            facts = json.loads(
+                subprocess.check_output(
+                    [
+                        "python",
+                        "-c",
+                        "import json,sys,sysconfig; print(json.dumps({"
+                        "'prefix':sys.prefix,'base':sys.base_prefix,"
+                        "'install':sysconfig.get_path('purelib')}))",
+                    ],
+                    env=environment,
+                    text=True,
+                )
+            )
+            self.assertEqual(str(venv), facts["prefix"])
+            self.assertNotEqual(facts["base"], facts["prefix"])
+            self.assertTrue(Path(facts["install"]).is_relative_to(venv))
+            self.assertIn(
+                "include-system-site-packages = false",
+                (venv / "pyvenv.cfg").read_text(),
+            )
+
     def test_precommit_image_includes_the_ci_helm_toolchain(self) -> None:
         workflow = yaml.safe_load(
             (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text(

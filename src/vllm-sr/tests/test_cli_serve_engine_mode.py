@@ -5,8 +5,6 @@ from copy import deepcopy
 
 import pytest
 import yaml
-from click.testing import CliRunner
-
 from cli import decision_model, execution_platform, runtime_lifecycle
 from cli.commands import runtime
 from cli.commands.runtime_mode_config import (
@@ -17,6 +15,7 @@ from cli.commands.runtime_serve_config import _prepare_docker_runtime_config
 from cli.main import main
 from cli.models import UserConfig
 from cli.validator import validate_user_config
+from click.testing import CliRunner
 
 MODEL = "vllm-sr/Decision-2.0-Kai-0.6B"
 

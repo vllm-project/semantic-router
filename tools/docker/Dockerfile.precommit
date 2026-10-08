@@ -1,9 +1,5 @@
 FROM golang:1.25
 
-# Allow pip install without --break-system-packages inside the container.
-# Needed because the repository check environment calls pip directly.
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
-
 # System dependencies — matches CI "Install system dependencies" step.
 # shellcheck is the native apt binary (CI does NOT use shellcheck-py).
 RUN apt-get update && apt-get install -y \
@@ -28,9 +24,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
 # markdownlint-cli pinned — matches the harness bootstrap version
 RUN npm install -g markdownlint-cli@0.43.0
 
+# Keep pip-managed tools separate from Debian packages and their metadata.
+# The repository harness can still create its own .venv-agent environment.
+RUN python3 -m venv /opt/precommit-venv
+ENV PATH="/opt/precommit-venv/bin:${PATH}"
+
 # Python tooling — versions match tools/agent/requirements.txt so that
 # `make check` and `make precommit-check` both work out of the box.
-RUN pip install --break-system-packages \
+RUN python -m pip install \
     PyYAML==6.0.3 \
     codespell==2.4.1 \
     pre-commit==4.3.0 \
@@ -41,7 +42,9 @@ RUN pip install --break-system-packages \
     tree-sitter-python==0.25.0 \
     tree-sitter-rust==0.24.0 \
     tree-sitter-typescript==0.23.2 \
-    yamllint==1.38.0
+    yamllint==1.38.0 \
+    && python -m pip check \
+    && python -c 'from pathlib import Path; import sys, packaging, pre_commit; root = Path(sys.prefix); assert root == Path("/opt/precommit-venv") and sys.prefix != sys.base_prefix; assert all(Path(module.__file__).resolve().is_relative_to(root) for module in (packaging, pre_commit))'
 
 # golangci-lint version is pinned once in tools/linter/go/golangci-lint.version and shared with CI and Makefiles
 COPY tools/linter/go/golangci-lint.version /tmp/golangci-version

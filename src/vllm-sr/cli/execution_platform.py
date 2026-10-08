@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
-from cli.container_runtime import get_container_runtime
 from cli.container_gpu_isolation import AMD_ROUTER_VISIBLE_DEVICES_ENV
+from cli.container_runtime import get_container_runtime
 
 PLATFORMS = ("auto", "cpu", "cuda", "rocm")
 RENDER_NODE_GLOB = "renderD*/device/vendor"  # codespell:ignore renderd
