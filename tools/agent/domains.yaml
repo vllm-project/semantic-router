@@ -379,6 +379,8 @@ domains:
     owner: dashboard
     paths:
       - dashboard/**
+      # Dashboard backend tests load the maintained recipes and pin the mom-v1 probes.
+      - config/recipes/**
       - src/semantic-router/pkg/config/**
       - src/semantic-router/pkg/dsl/**
       - src/semantic-router/pkg/modelinventory/**
@@ -400,6 +402,24 @@ domains:
       - deploy/helm/semantic-router/crds/**
     checks: [make generate-api-check]
     verifications: [operator]
+
+  # The release version contract reads these files. The harness tests check
+  # the development-cycle contract on the real tree, so a change to any of them
+  # runs that check; the release commit is checked with --version.
+  release-contract:
+    owner: maintainers
+    paths:
+      - tools/release/check_version_contract.py
+      - tools/release/release_contract_markers.py
+      - tools/make/release.mk
+      - src/vllm-sr/scripts/release.sh
+      - src/vllm-sr/pyproject.toml
+      - deploy/helm/semantic-router/Chart.yaml
+      - deploy/helm/semantic-router/values.yaml
+      - deploy/helm/semantic-router/templates/**
+      - website/docs/installation/upgrade-rollback.md
+    checks: [make release-check]
+    verifications: [harness-tools]
 
   helm:
     owner: deployment
@@ -693,6 +713,7 @@ profiles:
       - e2e/profiles/standalone/**
       - e2e/testcases/standalone_gateway.go
       - e2e/testcases/routing_error_codes.go
+      - deploy/helm/semantic-router/Chart.yaml
       - deploy/helm/semantic-router/templates/**
       - deploy/helm/semantic-router/values.yaml
       - src/semantic-router/pkg/gateway/**
