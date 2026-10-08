@@ -13,7 +13,7 @@ import (
 // managed model runtime.
 func setupRealJailbreakClassifier(t *testing.T) *Classifier {
 	t.Helper()
-	defaults := config.DefaultGlobalConfig()
+	defaults := vela1SpecialistsConfig()
 	modelPath := requireRealModel(t, "VLLM_SR_JAILBREAK_MODEL", defaults.PromptGuard.ModelID)
 	mappingPath := filepath.Join(modelPath, "jailbreak_type_mapping.json")
 	mapping, err := LoadJailbreakMapping(mappingPath)

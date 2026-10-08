@@ -21,6 +21,7 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 	if decider == nil {
 		decider = modelservice.Default()
 	}
+	scan := r.Config.ModelDeployments[cfg.Deployment].ScanBudget()
 	invoke := func(
 		ctx context.Context,
 		instructions string,
@@ -29,11 +30,12 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 	) (selection.DecisionModelAnswer, error) {
 		callCtx, cancel := context.WithTimeout(ctx, cfg.EffectiveTimeout())
 		defer cancel()
-		question := modelservice.Question{ID: decisionSelectorQuestionID, Type: config.DecisionQuestionChoice, Instructions: instructions}
+		// Selection routes, so a long state is read only as far as its first tokens.
+		question := modelservice.Question{ID: decisionSelectorQuestionID, Type: config.DecisionQuestionChoice, Instructions: instructions, Truncate: true}
 		for _, choice := range choices {
 			question.Choices = append(question.Choices, modelservice.Choice{Key: choice.Key, Description: choice.Description})
 		}
-		response, err := decider.Decide(callCtx, cfg.Deployment, modelservice.Request{State: state, Questions: []modelservice.Question{question}})
+		response, err := decider.Decide(callCtx, cfg.Deployment, modelservice.Request{State: state, Questions: []modelservice.Question{question}, MaxTokens: scan})
 		if err != nil {
 			modelservice.RecordUnknown(cfg.Deployment, modelservice.ErrorReason(err), 1)
 			return selection.DecisionModelAnswer{}, err

@@ -18,6 +18,41 @@ import (
 type Labelled struct {
 	PIILabels []string
 	BroadHead bool
+	// ScanTokens is the scan budget (its card's max_scan_tokens): a state part
+	// with more words fails every question that reads it whole (no overflow:
+	// truncate) with scan_budget_exceeded. Zero means four inputs
+	// (4 * MaxInputTokens); a request's max_tokens overrides it, down to one input.
+	ScanTokens int
+}
+
+// scanTokens is the model's scan budget.
+func (l Labelled) scanTokens(model Model) int {
+	if l.ScanTokens > 0 {
+		return l.ScanTokens
+	}
+	return 4 * model.MaxInputTokens
+}
+
+// unscanned fails the questions that read the state whole when a part of it
+// has more words than the request's scan budget.
+func unscanned(model Model, body api.DecisionRequest, response *api.DecisionResponse) {
+	budget := model.Labelled.scanTokens(model)
+	if body.Options != nil && body.Options.MaxTokens != nil {
+		budget = max(*body.Options.MaxTokens, model.MaxInputTokens)
+	}
+	over := false
+	for _, text := range stateParts(body.State) {
+		over = over || len(words(text)) > budget
+	}
+	if !over {
+		return
+	}
+	for id, question := range body.Questions {
+		if question.Overflow != nil && *question.Overflow == api.QuestionOverflowTruncate {
+			continue
+		}
+		response.Answers[id] = api.Answer{Type: question.Type, Error: itemError("scan_budget_exceeded")}
+	}
 }
 
 // SystemOneTypes are the question types every decision model answers.
@@ -86,7 +121,7 @@ func (r *Runtime) decideLabelled(model Model, body api.DecisionRequest) api.Deci
 		case "":
 			response.Answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_question")}
 		default:
-			response.Answers[id] = answer(question)
+			response.Answers[id] = jointAnswer(model, question, len(body.Questions))
 		}
 	}
 	response.Sets, response.Spans, response.Thresholds = &sets, &spans, &thresholds

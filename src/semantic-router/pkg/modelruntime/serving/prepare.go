@@ -31,6 +31,8 @@ type target struct {
 	card       modelservice.ModelCard
 	head       modelservice.HeadCard
 	resource   *binding.Resource
+	// scan is a question deployment's scan budget (0: the model's own).
+	scan int
 }
 
 // deploymentPlanner is implemented by services that can start a deployment
