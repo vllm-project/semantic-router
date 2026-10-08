@@ -38,7 +38,8 @@ def _assert_no_log_decoration(value: str) -> None:
 def test_validate_result_uses_clean_stdout() -> None:
     config_path = REPO_ROOT / "config/config.yaml"
 
-    result = _run_cli("config", "validate", "--config", str(config_path))
+    # This stream contract must not depend on a Router image cached on the host.
+    result = _run_cli("config", "validate", "--offline", "--config", str(config_path))
 
     assert result.returncode == 0, result.stderr
     assert "✓ Configuration is valid" in result.stdout
