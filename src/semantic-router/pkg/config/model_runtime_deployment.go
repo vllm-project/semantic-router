@@ -200,8 +200,7 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 	case "modality_detector":
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeModality)
 	case "preference":
-		_, bound := scoped.EffectiveModelBindings(scoped.Signals, scoped.ModelBindings)["preference"]
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypePreference) && (bound || (!scoped.PreferenceModel.ContrastiveEnabled() && scoped.FindExternalModelByRole(ModelRolePreference) == nil))
+		return scoped.UsesSignalTypeInReachableRouting(SignalTypePreference) && scoped.PreferenceUsesDecisionTask()
 	case "reask":
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeReask) && scoped.ReaskUsesDecisionTask()
 	case "complexity":

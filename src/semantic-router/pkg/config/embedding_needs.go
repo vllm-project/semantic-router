@@ -44,7 +44,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 			}
 		}
 	}
-	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceModel.ContrastiveEnabled() {
+	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceUsesPrototypes() {
 		model := strings.ToLower(strings.TrimSpace(cfg.PreferenceModel.EmbeddingModel))
 		if model == "" {
 			model = "mmbert"
