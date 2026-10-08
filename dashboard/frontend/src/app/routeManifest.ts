@@ -3,6 +3,7 @@ export type ShellRoutePage =
   | 'config-reference'
   | 'dashboard'
   | 'decision-model'
+  | 'decision-model-playground'
   | 'evaluation'
   | 'insights'
   | 'insights-record'
@@ -30,6 +31,7 @@ export interface RedirectRouteDefinition {
 export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/dashboard', page: 'dashboard' },
   { path: '/decision-model', page: 'decision-model' },
+  { path: '/decision-model/playground', page: 'decision-model-playground' },
   { path: '/monitoring', page: 'monitoring' },
   {
     path: '/playground',

@@ -26,6 +26,7 @@
   background: var(--color-bg-secondary);
 }
 .panel h2 {
+  scroll-margin-top: 1.5rem;
   margin: 0 0 0.9rem;
   font-size: 1.1rem;
 }
@@ -68,26 +69,6 @@
 }
 .summary strong {
   font-size: 0.95rem;
-}
-.statistics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.75rem;
-  margin: 1.2rem 0;
-}
-.statistics > div {
-  padding: 0.85rem;
-  border-radius: 8px;
-  background: var(--color-bg-tertiary);
-}
-.statistics dt {
-  color: var(--color-text-secondary);
-  font-size: 0.75rem;
-}
-.statistics dd {
-  margin: 0.6rem 0 0;
-  font-size: 1.15rem;
-  font-weight: 600;
 }
 .advanced > summary {
   cursor: pointer;
@@ -156,20 +137,6 @@
 .options:disabled .option {
   cursor: default;
 }
-.deployments {
-  display: grid;
-  gap: 1rem;
-}
-.deployment {
-  border: 1px solid var(--color-border);
-  border-radius: 9px;
-  padding: 1rem;
-  min-width: 0;
-}
-.deploymentTitle {
-  overflow-wrap: anywhere;
-  font-size: 0.8rem;
-}
 .facts dt {
   margin-bottom: 0.25rem;
 }
@@ -226,5 +193,456 @@
   .summary,
   .facts {
     grid-template-columns: 1fr;
+  }
+}
+/* Runtime monitoring uses real history; empty series retain their quiet state. */
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.6rem;
+}
+.testLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 0.82rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.testLink:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-text-secondary);
+}
+.page button:focus-visible,
+.testLink:focus-visible,
+.page select:focus-visible,
+.page summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.statusPanel {
+  background: linear-gradient(115deg, var(--color-bg-tertiary), var(--color-bg-secondary) 60%);
+}
+.statusPanel h2 {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.statusPanel .summary {
+  gap: 1.5rem;
+}
+.statusPanel .summary > div + div {
+  padding-left: 1.2rem;
+  border-left: 1px solid var(--color-border);
+}
+.statusPanel .summary strong {
+  font-size: 1.03rem;
+  letter-spacing: -0.015em;
+}
+.monitoringPanel {
+  padding: 0;
+  overflow: hidden;
+}
+.monitoringHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.4rem 1.4rem 1.2rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.eyebrow {
+  display: block;
+  margin-bottom: 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.monitoringHeader h2 {
+  margin-bottom: 0.35rem;
+}
+.monitoringHeader p {
+  margin: 0;
+}
+.timeWindows {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-bg-primary);
+}
+.page .timeWindows button {
+  padding: 0.42rem 0.8rem;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+.page .timeWindows button[aria-pressed='true'] {
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+}
+.monitoringPanel > .notice {
+  margin: 1rem 1.4rem 0;
+}
+.unavailableMetrics {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+.deployment {
+  min-width: 0;
+  padding: 1.4rem;
+}
+.deploymentTitle {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.deploymentIdentity {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.deploymentIdentity > div:last-child {
+  min-width: 0;
+}
+.runtimeIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+.repository {
+  margin: 0.3rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.73rem;
+}
+.runtimeState {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+}
+.runtimeState i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ready {
+  color: #49bba5;
+  background: rgb(73 187 165 / 7%);
+}
+.pending {
+  color: #dca965;
+  background: rgb(220 169 101 / 7%);
+}
+.deploymentSelect {
+  max-width: 100%;
+  padding: 0.35rem 1.5rem 0.35rem 0.5rem;
+  color: var(--color-text);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font: inherit;
+}
+.runtimeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1.5rem;
+  padding: 1rem 0;
+  margin: 0.4rem 0 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.runtimeMeta > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+}
+.runtimeMeta dt {
+  color: var(--color-text-secondary);
+}
+.runtimeMeta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.metricsCaption {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+  font-size: 0.68rem;
+  color: var(--color-text-secondary);
+}
+.captionSeparator {
+  padding: 0 0.25rem;
+  opacity: 0.5;
+}
+.statistics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0 0 1.2rem;
+}
+.statistics > div {
+  min-width: 0;
+  padding: 0.85rem 0.85rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+}
+.statistics dt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.8rem;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.legendDot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.statistics dd {
+  margin: 0.45rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+.statistics dd.metricUnknown {
+  font-size: 0.95rem;
+  line-height: 1.42rem;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.sparkline {
+  width: 100%;
+  height: 34px;
+  margin-top: 0.4rem;
+}
+.sparklineEmpty {
+  display: block;
+  padding-top: 0.65rem;
+  font-size: 0.59rem;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+}
+.monitoringCharts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.chartCard {
+  min-width: 0;
+  padding: 1.05rem 0.8rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-primary);
+}
+.chartHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0 0.2rem;
+}
+.chartHeader h4 {
+  margin: 0;
+  font-size: 0.83rem;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+.chartHeader p {
+  margin: 0.4rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.67rem;
+  line-height: 1.55;
+}
+.chartUnit {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  font-size: 0.59rem;
+}
+.chartLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.9rem 0.2rem 0.8rem;
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+}
+.chartLegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.chartLegend i {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+.chartCanvas {
+  width: 100%;
+  height: 200px;
+  min-width: 0;
+}
+.cacheChart {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr);
+  grid-template-rows: auto 1fr;
+  column-gap: 1rem;
+  padding-bottom: 1rem;
+}
+.cacheChart .chartHeader {
+  display: block;
+}
+.cacheChart .chartUnit {
+  display: block;
+  margin-top: 0.6rem;
+}
+.cacheChart .chartLegend {
+  align-self: start;
+}
+.cacheChart .chartCanvas {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  height: 125px;
+}
+.chartEmpty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-size: 0.67rem;
+  line-height: 1.5;
+}
+.chartEmpty svg {
+  margin-bottom: 0.3rem;
+  opacity: 0.5;
+}
+.chartEmpty strong {
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+.metricsFootnote {
+  margin: 1rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+}
+.deployment .hashes {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+.runtimeEmpty {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.runtimeEmpty p {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+@media (min-width: 1280px) {
+  .statistics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .statusPanel .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .statusPanel .summary > div + div {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .monitoringCharts {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .toolbarActions {
+    flex-wrap: wrap;
+  }
+  .monitoringPanel {
+    padding: 0;
+  }
+  .monitoringHeader {
+    padding: 1rem;
+    flex-wrap: wrap;
+  }
+  .deployment {
+    padding: 1rem;
+  }
+  .deploymentTitle {
+    align-items: flex-start;
+  }
+  .runtimeIcon {
+    display: none;
+  }
+  .deploymentTitle h3 {
+    font-size: 0.82rem;
+  }
+  .statistics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .runtimeMeta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 0.75rem;
+  }
+  .runtimeMeta > div {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .cacheChart {
+    display: block;
+  }
+  .cacheChart .chartUnit {
+    display: none;
+  }
+  .cacheChart .chartCanvas {
+    height: 160px;
   }
 }

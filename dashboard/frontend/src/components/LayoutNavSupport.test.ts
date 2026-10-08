@@ -10,14 +10,22 @@ import {
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
-  it('exposes the decision model manager in System runtime navigation', () => {
-    const manager = OPERATE_MENU_CATEGORIES.find((category) => category.key === 'runtime')
+  it('keeps decision model management and testing in separate Build categories', () => {
+    const manager = BUILD_MENU_CATEGORIES.find((category) => category.key === 'routing')
       ?.sections.flatMap((section) => section.items)
       .find((item) => item.kind === 'route' && item.to === '/decision-model')
     expect(manager).toMatchObject({ label: 'Decision Model' })
-    expect(findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/decision-model', false)).toBe(
-      'runtime',
+    expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/decision-model', false)).toBe(
+      'routing',
     )
+    expect(
+      findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/decision-model/playground', false),
+    ).toBe('testing')
+    expect(
+      findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/decision-model', false),
+    ).toBeUndefined()
+    expect(findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/models', false)).toBe('runtime')
+    expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/models', false)).toBeUndefined()
   })
 
   it('closes an open workflow menu before a primary route is revealed', () => {
@@ -44,7 +52,7 @@ describe('layout navigation route matching', () => {
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
   })
 
-  it('keeps Model Hub, Models, and Mixture-of-Models together in the first Routing column', () => {
+  it('keeps Decision Model, Models, and Mixture-of-Models together in the first Routing column', () => {
     const models = BUILD_MENU_CATEGORIES.find(
       (category) => category.key === 'routing',
     )?.sections.find((section) => section.title === 'Models')
@@ -54,8 +62,8 @@ describe('layout navigation route matching', () => {
 
     expect(models?.items[0]).toMatchObject({
       kind: 'route',
-      label: 'Model Hub',
-      to: '/models',
+      label: 'Decision Model',
+      to: '/decision-model',
     })
     expect(models?.items[1]).toMatchObject({
       kind: 'config',

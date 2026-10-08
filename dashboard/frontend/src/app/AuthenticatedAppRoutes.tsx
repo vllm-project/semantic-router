@@ -21,6 +21,7 @@ import {
   loadConfigSchemaReferencePage,
   loadDashboardPage,
   loadDecisionModelPage,
+  loadSystemOnePlaygroundPage,
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
@@ -60,6 +61,9 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,
   'decision-model': (
     <RecoverableLazyRoute loader={loadDecisionModelPage} routeLabel="Decision Model" />
+  ),
+  'decision-model-playground': (
+    <RecoverableLazyRoute loader={loadSystemOnePlaygroundPage} routeLabel="Decision Model Test" />
   ),
   evaluation: <RecoverableLazyRoute loader={loadEvaluationPage} routeLabel="Evaluation" />,
   insights: <RecoverableLazyRoute loader={loadInsightsPage} routeLabel="Insights" />,

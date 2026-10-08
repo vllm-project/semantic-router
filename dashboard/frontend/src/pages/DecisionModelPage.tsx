@@ -41,7 +41,7 @@ export default function DecisionModelPage() {
 
   return (
     <ConfigPageManagerLayout
-      eyebrow="System"
+      eyebrow="Routing / Models"
       title="Decision Model"
       description="Choose the model that powers router intelligence, deploy it, and inspect its live runtime."
     >
@@ -52,13 +52,31 @@ export default function DecisionModelPage() {
               ? `Last checked ${model.updatedAt.toLocaleTimeString()} · refreshes every 10 seconds`
               : 'Waiting for observations'}
           </span>
-          <button
-            type="button"
-            onClick={() => void model.refresh()}
-            disabled={model.refreshing || model.deploying}
-          >
-            {model.refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
+          <div className={styles.toolbarActions}>
+            {writable && (
+              <a className={styles.testLink} href="#decision-model-choose-title">
+                Change model
+              </a>
+            )}
+            <Link className={styles.testLink} to="/decision-model/playground">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="m5 3 8 5-8 5V3Z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Test decision model
+            </Link>
+            <button
+              type="button"
+              onClick={() => void model.refresh()}
+              disabled={model.refreshing || model.deploying}
+            >
+              {model.refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
         {model.errors.length > 0 && (
           <div className={styles.notice} role="alert">
@@ -68,7 +86,10 @@ export default function DecisionModelPage() {
           </div>
         )}
 
-        <section className={styles.panel} aria-labelledby="decision-model-status-title">
+        <section
+          className={`${styles.panel} ${styles.statusPanel}`}
+          aria-labelledby="decision-model-status-title"
+        >
           <h2 id="decision-model-status-title">Deployment status</h2>
           <div className={styles.summary}>
             <div>
@@ -119,6 +140,12 @@ export default function DecisionModelPage() {
             </p>
           </details>
         </section>
+
+        <DecisionModelRuntimePanel
+          inventory={model.inventory}
+          refreshedAt={model.updatedAt}
+          engineOnly={engineOnly}
+        />
 
         <section className={styles.panel} aria-labelledby="decision-model-choose-title">
           <h2 id="decision-model-choose-title">Choose a decision model</h2>
@@ -202,12 +229,6 @@ export default function DecisionModelPage() {
             </div>
           )}
         </section>
-
-        <DecisionModelRuntimePanel
-          inventory={model.inventory}
-          refreshedAt={model.updatedAt}
-          engineOnly={engineOnly}
-        />
 
         <details className={`${styles.panel} ${styles.advanced}`}>
           <summary>Advanced bindings</summary>

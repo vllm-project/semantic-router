@@ -100,7 +100,7 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Models',
         description: 'Connect models and compose public model endpoints.',
         items: [
-          { kind: 'route', label: 'Model Hub', icon: 'model', to: '/models' },
+          { kind: 'route', label: 'Decision Model', icon: 'model', to: '/decision-model' },
           { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',
@@ -130,6 +130,25 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: [
           { kind: 'route', label: 'Brain', icon: 'topology', to: '/topology' },
           { kind: 'route', label: 'Builder', icon: 'code', to: '/builder' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'testing',
+    label: 'Testing',
+    description: 'Try decision-model questions and inspect their answers.',
+    sections: [
+      {
+        title: 'Decision Models',
+        description: 'Test Choice, Score, Noul, Set, and Span with the System One API.',
+        items: [
+          {
+            kind: 'route',
+            label: 'Decision Model Test',
+            icon: 'evaluation',
+            to: '/decision-model/playground',
+          },
         ],
       },
     ],
@@ -207,9 +226,9 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
     description: 'Check service readiness and diagnose the live routing path.',
     sections: [
       {
-        title: 'Intelligence',
-        description: 'Choose, deploy, and inspect the router decision model.',
-        items: [{ kind: 'route', label: 'Decision Model', icon: 'model', to: '/decision-model' }],
+        title: 'Models',
+        description: 'Explore model capabilities and deployment requirements.',
+        items: [{ kind: 'route', label: 'Model Hub', icon: 'model', to: '/models' }],
       },
       {
         title: 'Health',

@@ -128,6 +128,9 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
+	decisionModel := handlers.DecisionModelHandler(cfg.RouterAPIURL, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/capabilities", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), decisionModel)
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/decision-model/test", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), decisionModel)
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/models/catalog", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/models/discover", auth.PermConfigWrite, "model.discover", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.ModelDiscoveryHandler(nil))
 	registerRouteFunc(mux, auth.ProtectedDelegatedAuditRoute("/api/models/verify", auth.PermEvalRun, "model.inference_verify", auth.SensitivitySensitive, auth.ResourceOwnerInference, 2<<20, http.MethodPost), handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))

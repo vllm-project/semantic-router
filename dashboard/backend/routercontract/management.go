@@ -42,7 +42,7 @@ func buildManagementPolicies() []ManagementPolicy {
 	add(http.MethodGet, configRead, false,
 		"/api/v1/config/hash", "/api/v1/config/schema",
 		"/api/v1/inventory/models", "/api/v1/inventory/classifier", "/api/v1/inventory/embedding-models",
-		"/api/v1/inventory/model-runtime",
+		"/api/v1/inventory/model-runtime", "/api/v1/diagnostics/models/systemone",
 		"/api/v1/plugins", "/api/v1/plugins/{type}", "/api/v1/plugins/{type}/bindings",
 		"/api/v1/diagnostics/models",
 		"/api/v1/storage/response-cache/capabilities", "/api/v1/storage/response-cache/health", "/api/v1/storage/response-cache/stats",
@@ -59,7 +59,7 @@ func buildManagementPolicies() []ManagementPolicy {
 		"/api/v1/routing/preview", "/api/v1/plugins/context_compression/preview",
 		"/api/v1/plugins/response_jailbreak/preview", "/api/v1/plugins/hallucination/preview",
 		"/api/v1/storage/response-cache/test",
-		"/api/v1/diagnostics/models/labels", "/api/v1/diagnostics/models/label-scores", "/api/v1/diagnostics/models/tokens", "/api/v1/diagnostics/models/embeddings", "/api/v1/diagnostics/models/rerank",
+		"/api/v1/diagnostics/models/systemone", "/api/v1/diagnostics/models/labels", "/api/v1/diagnostics/models/label-scores", "/api/v1/diagnostics/models/tokens", "/api/v1/diagnostics/models/embeddings", "/api/v1/diagnostics/models/rerank",
 		"/api/v1/diagnostics/classify/intent", "/api/v1/diagnostics/classify/pii", "/api/v1/diagnostics/classify/security", "/api/v1/diagnostics/classify/fact-check", "/api/v1/diagnostics/classify/user-feedback", "/api/v1/diagnostics/classify/combined", "/api/v1/diagnostics/classify/batch",
 		"/api/v1/diagnostics/nli", "/api/v1/diagnostics/embeddings", "/api/v1/diagnostics/similarity", "/api/v1/diagnostics/similarity/batch")
 	addAll(http.MethodPost, []string{evaluationRun, configRead}, false, "/api/v1/plugins/rag/preview", "/api/v1/plugins/tools/preview", "/api/v1/plugins/tool_selection/preview")

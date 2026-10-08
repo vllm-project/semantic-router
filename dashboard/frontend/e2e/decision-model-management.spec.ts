@@ -6,7 +6,7 @@ async function mockDecisionModelManager(
   options: {
     readonly?: boolean
     defaultModel?: boolean
-    metrics?: 'reported' | 'empty' | 'unavailable'
+    metrics?: 'reported' | 'empty' | 'unavailable' | 'partial'
     engine?: boolean
     applyStatus?: 'success' | 'restart_required' | 'persisted' | 'failed'
   } = {},
@@ -41,11 +41,17 @@ async function mockDecisionModelManager(
     body: JSON.stringify(data),
   })
   const metricsRequests: string[] = []
+  const metricsRanges: URLSearchParams[] = []
   let metricsMode = options.metrics
-  await page.route('**/embedded/prometheus/api/v1/query?*', (route) => {
-    const query = new URL(route.request().url()).searchParams.get('query') ?? ''
+  await page.route('**/embedded/prometheus/api/v1/query_range?*', (route) => {
+    const params = new URL(route.request().url()).searchParams
+    const query = params.get('query') ?? ''
     metricsRequests.push(query)
-    if (metricsMode === 'unavailable')
+    metricsRanges.push(params)
+    if (
+      metricsMode === 'unavailable' ||
+      (metricsMode === 'partial' && query.includes('outcome!="ok"'))
+    )
       return route.fulfill({ status: 503, body: 'Prometheus unavailable' })
     const value = query.includes('histogram_quantile')
       ? '0.125'
@@ -58,17 +64,25 @@ async function mockDecisionModelManager(
             : query.includes('duration_seconds_sum')
               ? '0.025'
               : '2.5'
+    const start = Number(params.get('start'))
+    const end = Number(params.get('end'))
+    const step = Number(params.get('step'))
+    const values = []
+    for (let timestamp = start; timestamp <= end; timestamp += step) {
+      const variation = timestamp === end ? 1 : 1 + Math.sin((timestamp - start) / step / 8) * 0.15
+      values.push([timestamp, String(Number(value) * variation)])
+    }
     return route.fulfill(
       reply({
         status: 'success',
         data: {
-          resultType: 'vector',
+          resultType: 'matrix',
           result:
             metricsMode === 'empty'
               ? []
               : [
-                  { metric: { deployment: `@${observed}/auto` }, value: [1, value] },
-                  { metric: { deployment: 'backend-llm' }, value: [1, '999'] },
+                  { metric: { deployment: `@${observed}/auto` }, values },
+                  { metric: { deployment: 'backend-llm' }, values: [[end, '999']] },
                 ],
         },
       }),
@@ -196,6 +210,10 @@ async function mockDecisionModelManager(
   return {
     requests,
     metricsRequests,
+    metricsRanges,
+    setMetrics: (mode: typeof metricsMode) => {
+      metricsMode = mode
+    },
     failMetrics: () => {
       metricsMode = 'unavailable'
     },
@@ -249,11 +267,77 @@ test.describe('Decision model management', () => {
     await expect(page.getByRole('heading', { name: 'Explicit signal overrides' })).toHaveCount(0)
   })
 
+  test('changes real monitoring windows, handles partial failure, and recovers from missing observations', async ({
+    page,
+  }) => {
+    const fixture = await mockDecisionModelManager(page)
+    await page.goto('/decision-model')
+    const stats = page.locator('dl[aria-label="Model statistics"]')
+    await expect(stats).toContainText('2.50')
+    await expect(
+      page.getByRole('region', { name: 'Traffic & reliability' }).locator('svg.recharts-surface'),
+    ).toHaveCount(1)
+    await expect(
+      page.getByRole('region', { name: 'Latency breakdown' }).locator('svg.recharts-surface'),
+    ).toHaveCount(1)
+    await expect(
+      page.getByRole('region', { name: 'Result cache efficiency' }).locator('svg.recharts-surface'),
+    ).toHaveCount(1)
+    const windows = page.getByRole('group', { name: 'Monitoring time range' })
+    await expect(windows.getByRole('button', { name: '1h' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    const checkRange = (seconds: number) => {
+      const params = fixture.metricsRanges.at(-1)!
+      expect(Number(params.get('end')) - Number(params.get('start'))).toBe(seconds)
+      expect(seconds / Number(params.get('step')) + 1).toBeLessThanOrEqual(181)
+    }
+    checkRange(3600)
+    fixture.setMetrics('partial')
+    await windows.getByRole('button', { name: '6h' }).click()
+    await expect(page.getByText(/Unavailable: Unsuccessful calls/)).toBeVisible()
+    await expect(stats).toContainText('2.50')
+    await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(1)
+    checkRange(21600)
+    fixture.setMetrics('empty')
+    await windows.getByRole('button', { name: '15m' }).click()
+    await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(6)
+    await expect(
+      page
+        .getByRole('region', { name: 'Traffic & reliability' })
+        .getByText('No samples in this window'),
+    ).toBeVisible()
+    checkRange(900)
+    fixture.setMetrics('reported')
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect(stats).toContainText('2.50')
+    await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(0)
+    await expect(
+      page.getByRole('link', { name: 'Test decision model', exact: true }),
+    ).toHaveAttribute('href', '/decision-model/playground')
+  })
+
+  test('keeps charts and model controls usable on a narrow viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await mockDecisionModelManager(page)
+    await page.goto('/decision-model')
+    await expect(page.locator('dl[aria-label="Model statistics"]')).toContainText('2.50')
+    await expect(page.getByRole('button', { name: '6h', exact: true })).toBeVisible()
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await page.getByRole('region', { name: 'Latency breakdown' }).scrollIntoViewIfNeeded()
+    await expect(page.getByRole('region', { name: 'Latency breakdown' })).toBeInViewport()
+    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
+    await expect(page.getByRole('button', { name: 'Deploy selected model' })).toBeEnabled()
+  })
+
   test('bounds stalled metrics independently of configuration deployment', async ({ page }) => {
     await page.clock.install()
     const fixture = await mockDecisionModelManager(page)
     let queries = 0
-    await page.route('**/embedded/prometheus/api/v1/query?*', () => {
+    await page.route('**/embedded/prometheus/api/v1/query_range?*', () => {
       queries += 1
     })
     await page.goto('/decision-model')
@@ -297,14 +381,14 @@ test.describe('Decision model management', () => {
     await expect(page.getByRole('status')).toContainText('Restart required')
   })
 
-  test('opens from System and shows model, hardware, runtime and binding details', async ({
+  test('opens from Routing Models and shows model, hardware, runtime and binding details', async ({
     page,
   }) => {
     await mockDecisionModelManager(page)
     await page.goto('/status')
-    await page.getByRole('button', { name: 'System', exact: true }).click()
-    const menu = page.getByRole('navigation', { name: 'System' })
-    await menu.getByRole('tab', { name: /Runtime/ }).click()
+    await page.getByRole('button', { name: 'Build', exact: true }).click()
+    const menu = page.getByRole('navigation', { name: 'Build' })
+    await menu.getByRole('tab', { name: /Routing/ }).click()
     await menu.getByRole('link', { name: 'Decision Model', exact: true }).click()
     await expect(page).toHaveURL('/decision-model')
     await expect(page.getByRole('heading', { name: 'Decision Model', exact: true })).toBeVisible()

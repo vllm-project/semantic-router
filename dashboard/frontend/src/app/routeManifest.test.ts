@@ -28,6 +28,10 @@ describe('dashboard route manifest', () => {
       path: '/decision-model',
       page: 'decision-model',
     })
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/decision-model/playground',
+      page: 'decision-model-playground',
+    })
   })
 
   it('keeps legacy redirects pointed at canonical dashboard routes', () => {

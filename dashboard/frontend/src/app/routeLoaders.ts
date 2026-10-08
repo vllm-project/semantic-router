@@ -10,6 +10,7 @@ export const loadConfigPage = () => import('../pages/ConfigPage')
 export const loadConfigSchemaReferencePage = () => import('../pages/ConfigSchemaReferencePage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
 export const loadDecisionModelPage = () => import('../pages/DecisionModelPage')
+export const loadSystemOnePlaygroundPage = () => import('../pages/SystemOnePlaygroundPage')
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
 export const loadInsightsRecordPage = () => import('../pages/InsightsRecordPage')
@@ -33,6 +34,10 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/invite/'), load: loadInviteAcceptPage },
   { matches: (pathname) => pathname.startsWith('/setup'), load: loadSetupWizardPage },
   { matches: (pathname) => pathname.startsWith('/dashboard'), load: loadDashboardPage },
+  {
+    matches: (pathname) => pathname.startsWith('/decision-model/playground'),
+    load: loadSystemOnePlaygroundPage,
+  },
   { matches: (pathname) => pathname.startsWith('/decision-model'), load: loadDecisionModelPage },
   {
     matches: (pathname) => pathname.startsWith('/playground/fullscreen'),

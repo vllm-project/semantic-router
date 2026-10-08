@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DECISION_MODEL_TIME_WINDOWS,
+  decisionModelChartPoints,
   decisionModelMetricQueries,
+  decisionModelMetricRange,
   formatDecisionModelMetric,
-  readDecisionModelMetricVector,
+  readDecisionModelMetricMatrix,
 } from './decisionModelMetrics'
+
+const matrix = (result: unknown[]) => ({
+  status: 'success',
+  data: { resultType: 'matrix', result },
+})
+const range = { start: 100, end: 160, step: 15 }
 
 describe('decision model runtime metrics', () => {
   it('uses exact escaped deployment labels for router runtime counters and histograms', () => {
@@ -23,48 +32,128 @@ describe('decision model runtime metrics', () => {
     expect(queries.p95).toContain('sum by (deployment, le)')
   })
 
-  it('preserves a measured zero but treats missing, idle ratios and invalid observations as unknown', () => {
-    const result = readDecisionModelMetricVector(
-      {
-        status: 'success',
-        data: {
-          resultType: 'vector',
-          result: [
-            { metric: { deployment: 'zero' }, value: [1, '0'] },
-            { metric: { deployment: 'active' }, value: [1, '0.125'] },
-            { metric: { deployment: 'idle' }, value: [1, 'NaN'] },
-            { metric: { deployment: 'infinite' }, value: [1, '+Inf'] },
-            { metric: { deployment: 'negative' }, value: [1, '-1'] },
-            { metric: { deployment: 'empty' }, value: [1, ''] },
-            { metric: { deployment: 'unrelated-backend-llm' }, value: [1, '999'] },
+  it('bounds history requests and includes the most recent observation for every window', () => {
+    for (const window of DECISION_MODEL_TIME_WINDOWS) {
+      const result = decisionModelMetricRange(window.seconds, 1_800_000_123_456)
+      expect(result.end).toBe(1_800_000_123)
+      expect(result.end - result.start).toBe(window.seconds)
+      expect(result.step).toBeGreaterThanOrEqual(15)
+      expect((result.end - result.start) / result.step + 1).toBeLessThanOrEqual(181)
+      expect((result.end - result.start) % result.step).toBe(0)
+    }
+  })
+
+  it('retains measured zero and missing intervals while filtering unrelated or invalid samples', () => {
+    const result = readDecisionModelMetricMatrix(
+      matrix([
+        {
+          metric: { deployment: 'model' },
+          values: [
+            [100, '0'],
+            [115, '0.125'],
+            [145, 'NaN'],
+            [160, '+Inf'],
+            [85, '999'],
+            [175, '999'],
+            [101, '999'],
+            ['130', '999'],
+            [NaN, '999'],
           ],
         },
-      },
-      ['zero', 'active', 'idle', 'infinite', 'negative', 'empty', 'missing'],
+        { metric: { deployment: 'backend-llm' }, values: [[160, '999']] },
+      ]),
+      ['model'],
+      range,
     )
-    expect(result).toEqual({ zero: 0, active: 0.125 })
-    expect(formatDecisionModelMetric(result.zero, 'percent')).toBe('0.0%')
-    expect(formatDecisionModelMetric(result.active, 'seconds')).toBe('125.0 ms')
-    expect(formatDecisionModelMetric(result.idle, 'percent')).toBe('Not reported')
-    expect(formatDecisionModelMetric(result.missing, 'rate')).toBe('Not reported')
+    expect(result).toEqual({
+      model: [
+        { time: 100_000, value: 0 },
+        { time: 115_000, value: 0.125 },
+        { time: 130_000, value: null },
+        { time: 145_000, value: null },
+        { time: 160_000, value: null },
+      ],
+    })
+    expect(formatDecisionModelMetric(result.model[0].value, 'percent')).toBe('0.0%')
+    expect(formatDecisionModelMetric(result.model[1].value, 'seconds')).toBe('125.0 ms')
+    expect(formatDecisionModelMetric(result.model[result.model.length - 1]?.value, 'percent')).toBe(
+      'Not reported',
+    )
+  })
+
+  it('does not reuse an earlier healthy sample after a series stops reporting', () => {
+    const result = readDecisionModelMetricMatrix(
+      matrix([
+        {
+          metric: { deployment: 'model' },
+          values: [
+            [100, '0.5'],
+            [115, '0.6'],
+          ],
+        },
+      ]),
+      ['model'],
+      range,
+    )
+    const points = decisionModelChartPoints({ calls: result }, 'model')
+    expect(points[1]).toEqual({ time: 115_000, calls: 0.6 })
+    expect(points[points.length - 1]).toEqual({ time: 160_000, calls: null })
+  })
+
+  it('treats negative, blank and malformed observations as gaps, not successful calls', () => {
+    const result = readDecisionModelMetricMatrix(
+      matrix([
+        {
+          metric: { deployment: 'model' },
+          values: [[100, '-1'], [115, ''], [130, null], [145, 'NaN'], null],
+        },
+        { metric: { deployment: 'missing' } },
+      ]),
+      ['model', 'missing'],
+      range,
+    )
+    expect(result.model.every(({ value }) => value === null)).toBe(true)
+    expect(result.missing).toBeUndefined()
+  })
+
+  it('merges independent metrics by timestamp without inventing values for failed queries', () => {
+    const points = decisionModelChartPoints(
+      {
+        calls: {
+          model: [
+            { time: 1_000, value: 0 },
+            { time: 2_000, value: 1 },
+          ],
+        },
+        p95: {
+          model: [
+            { time: 1_000, value: 0.12 },
+            { time: 2_000, value: null },
+          ],
+        },
+        cache: { other: [{ time: 2_000, value: 99 }] },
+      },
+      'model',
+    )
+    expect(points).toEqual([
+      { time: 1_000, calls: 0, p95: 0.12 },
+      { time: 2_000, calls: 1, p95: null },
+    ])
+    expect(formatDecisionModelMetric(points[points.length - 1]?.errors, 'percent')).toBe(
+      'Not reported',
+    )
   })
 
   it('rejects failed or malformed Prometheus responses instead of reporting zero', () => {
+    expect(() => readDecisionModelMetricMatrix({ status: 'error' }, [], range)).toThrow()
+    expect(() => readDecisionModelMetricMatrix(null, [], range)).toThrow()
     expect(() =>
-      readDecisionModelMetricVector({ status: 'error', error: 'unavailable' }, []),
-    ).toThrow()
-    expect(() => readDecisionModelMetricVector(null, [])).toThrow()
-    expect(() =>
-      readDecisionModelMetricVector(
-        { status: 'success', data: { resultType: 'matrix', result: [] } },
-        [],
-      ),
-    ).toThrow()
-    expect(
-      readDecisionModelMetricVector(
+      readDecisionModelMetricMatrix(
         { status: 'success', data: { resultType: 'vector', result: [] } },
-        ['model'],
+        [],
+        range,
       ),
-    ).toEqual({})
+    ).toThrow()
+    expect(readDecisionModelMetricMatrix(matrix([]), ['model'], range)).toEqual({})
   })
 })
