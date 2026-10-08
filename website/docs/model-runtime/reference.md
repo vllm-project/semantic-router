@@ -200,7 +200,7 @@ exceed the budget, and adds `"tokens_lower_bound": true`.
 
 A model that reads an input in windows reads it up to a scan budget, in
 tokens. Classify with `overflow: window` reads at most `max_tokens`. A
-Vela 2.0 question reads a long state part whole, in windows, up to its card's
+Vela 2.0 question that supports windowing reads a long state part whole up to its card's
 `limits.max_scan_tokens`: four inputs on a CPU (32,768 tokens for Vela 2.0
 0.3B) and 32 on a GPU. A decisions request's `options.max_tokens`, or the
 models-file option `max_scan_tokens`, sets another. A question with

@@ -1,11 +1,27 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v2"
 )
+
+func TestDecisionBalanceReplayActivatesPIIEvidence(t *testing.T) {
+	raw, err := os.ReadFile("../../../../config/recipes/decision-balance/config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseYAMLBytes(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := cfg.EffectiveRouterReplayConfig(nil)
+	if policy == nil || policy.CapturesPersonalData() || !cfg.ReplayNeedsPIIEvidence() || !cfg.NeedsPIIMappingForRouting() {
+		t.Fatal("DecisionBalance must prepare PII to suppress personal replay content")
+	}
+}
 
 func TestReplayGlobalDefaultsAndExplicitDecisionOverrides(t *testing.T) {
 	no, yes, zero := false, true, 0

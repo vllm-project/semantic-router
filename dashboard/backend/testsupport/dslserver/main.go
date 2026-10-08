@@ -19,9 +19,15 @@ import (
 )
 
 func main() {
+	if err := serve(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func serve() error {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	mux := http.NewServeMux()
 	for _, operation := range []string{"compile", "validate", "parse", "decompile", "format"} {
@@ -44,6 +50,7 @@ func main() {
 	}()
 	fmt.Println("http://" + listener.Addr().String())
 	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }

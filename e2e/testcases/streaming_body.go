@@ -157,10 +157,10 @@ func testStreamingCacheRoundtrip(ctx context.Context, client *kubernetes.Clients
 		}
 		time.Sleep(wait)
 
-		resp2, err := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
-		if err != nil {
+		resp2, requestErr := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
+		if requestErr != nil {
 			if attempt == 4 {
-				return fmt.Errorf("similar request failed: %w", err)
+				return fmt.Errorf("similar request failed: %w", requestErr)
 			}
 			continue
 		}
@@ -330,10 +330,10 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 		}
 		time.Sleep(wait)
 
-		resp2, err := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
-		if err != nil {
+		resp2, requestErr := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
+		if requestErr != nil {
 			if attempt == 4 {
-				return fmt.Errorf("similar request failed: %w", err)
+				return fmt.Errorf("similar request failed: %w", requestErr)
 			}
 			continue
 		}

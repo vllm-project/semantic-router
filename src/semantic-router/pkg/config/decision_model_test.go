@@ -23,29 +23,6 @@ func mustParseDecisionModel(t *testing.T, raw string) *RouterConfig {
 	return cfg
 }
 
-func moduleModels(cfg *RouterConfig) map[string]string {
-	model, _, _ := cfg.ModalityClassifierModel()
-	return map[string]string{
-		"safety":                 cfg.SafetyModels.Safety.ModelID,
-		"prompt_guard":           cfg.PromptGuard.ModelID,
-		"domain_classifier":      cfg.CategoryModel.ModelID,
-		"pii_classifier":         cfg.PIIModel.ModelID,
-		"fact_check_classifier":  cfg.HallucinationMitigation.FactCheckModel.ModelID,
-		"hallucination_detector": cfg.HallucinationMitigation.HallucinationModel.ModelID,
-		"feedback_detector":      cfg.FeedbackDetector.ModelID,
-		"modality_detector":      model,
-	}
-}
-
-func systemLineValue(system *CanonicalSystemModels, key string) *string {
-	for _, line := range systemLines {
-		if line.key == key {
-			return line.value(system)
-		}
-	}
-	return nil
-}
-
 func withDecisionQuestion(raw string) string {
 	return strings.Replace(raw, "  signals:\n", "  signals:\n    decision:\n      - name: needs_tools\n"+
 		"        question: {type: noul, instructions: \"Does the request need a tool?\"}\n", 1)

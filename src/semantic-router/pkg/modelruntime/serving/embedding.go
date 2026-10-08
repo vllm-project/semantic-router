@@ -216,10 +216,13 @@ func embeddingResults(model string, response modelservice.EmbedResponse, inputs 
 	}
 	results := make([]tasks.EmbeddingResult, inputs)
 	for i := range results {
-		if code := response.Errors[i]; code != "" {
-			return nil, itemError(code)
+		if i < len(response.Errors) && response.Errors[i] != "" {
+			return nil, itemError(response.Errors[i])
 		}
-		results[i] = tasks.EmbeddingResult{Embedding: response.Embeddings[i], Input: inputUsage(response.Inputs[i]), ModelType: model}
+		results[i] = tasks.EmbeddingResult{Embedding: response.Embeddings[i], ModelType: model}
+		if i < len(response.Inputs) {
+			results[i].Input = inputUsage(response.Inputs[i])
+		}
 		if results[i].Input != nil {
 			results[i].SequenceLength = results[i].Input.ProcessedTokens
 		}
@@ -336,6 +339,9 @@ func (p *EmbeddingProvider) FitsInputWithOptions(ctx context.Context, text strin
 	if err != nil {
 		return false, err
 	}
+	if !embedded[0].InputKnown {
+		return false, fmt.Errorf("%w: embedding response omitted input coverage", binding.ErrCapability)
+	}
 	return !embedded[0].Truncated, nil
 }
 
@@ -440,7 +446,7 @@ func (p *EmbeddingProvider) embedMissing(ctx context.Context, inputs []modelserv
 			return err
 		}
 		for j, result := range results {
-			vectors[start+j] = embedding.Embedded{Vector: result.Embedding, Truncated: result.Input != nil && result.Input.Truncated}
+			vectors[start+j] = embedding.Embedded{Vector: result.Embedding, Truncated: result.Input != nil && result.Input.Truncated, InputKnown: result.Input != nil}
 		}
 		return nil
 	}

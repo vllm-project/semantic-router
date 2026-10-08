@@ -39,6 +39,13 @@ type InputChecker interface {
 	FitsInput(context.Context, string) (bool, error)
 }
 
+// FullInputProvider embeds a complete input or returns an error. Providers whose
+// protocol rejects oversized inputs rather than truncating them can expose this
+// contract without a separate tokenizer or an input-usage extension.
+type FullInputProvider interface {
+	EmbedFullInput(context.Context, string) ([]float32, error)
+}
+
 // ConfigurableInputChecker answers FitsInput at another output view.
 type ConfigurableInputChecker interface {
 	FitsInputWithOptions(context.Context, string, Options) (bool, error)
@@ -54,6 +61,36 @@ func Embed(ctx context.Context, provider Provider, text string, options Options)
 		return advanced.EmbedWithOptions(ctx, text, options)
 	}
 	return provider.Embed(ctx, text)
+}
+
+// EmbedFullInput requires complete coverage before a vector can be used for a
+// semantic comparison. Unknown coverage and truncation remain explicit errors.
+func EmbedFullInput(ctx context.Context, provider Provider, text string, options Options) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if provider == nil {
+		return nil, fmt.Errorf("embedding provider was not prepared")
+	}
+	if complete, ok := provider.(FullInputProvider); ok {
+		return complete.EmbedFullInput(ctx, text)
+	}
+	var fits bool
+	var err error
+	if checker, ok := provider.(ConfigurableInputChecker); ok {
+		fits, err = checker.FitsInputWithOptions(ctx, text, options)
+	} else if checker, ok := provider.(InputChecker); ok {
+		fits, err = checker.FitsInput(ctx, text)
+	} else {
+		return nil, fmt.Errorf("%w: embedding provider does not report input coverage", binding.ErrCapability)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !fits {
+		return nil, fmt.Errorf("%w: embedding requires complete input coverage", binding.ErrInputLimit)
+	}
+	return Embed(ctx, provider, text, options)
 }
 
 func Image(ctx context.Context, provider Provider, imageRef string, dimension int) ([]float32, error) {
@@ -98,6 +135,10 @@ func (p *providerView) Dimension() int {
 
 func (p *providerView) Embed(ctx context.Context, text string) ([]float32, error) {
 	return Embed(ctx, p.Provider, text, p.options)
+}
+
+func (p *providerView) EmbedFullInput(ctx context.Context, text string) ([]float32, error) {
+	return EmbedFullInput(ctx, p.Provider, text, p.options)
 }
 
 func (p *providerView) EmbedWithOptions(ctx context.Context, text string, options Options) ([]float32, error) {

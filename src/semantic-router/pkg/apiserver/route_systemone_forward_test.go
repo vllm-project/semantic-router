@@ -99,11 +99,14 @@ func TestSystemOneForwardUsesActiveListenerAndRetainsGeneration(t *testing.T) {
 			server := &ClassificationAPIServer{config: pending.Config(), configPath: configPath, runtimeRegistry: registry}
 			mux := server.setupRoutes()
 			invoke := func(key, model, listener string, discovery bool) *httptest.ResponseRecorder {
-				request := systemone.ForwardRequest{Listener: listener, Method: http.MethodPost, Path: "/v1/systemone", Authorization: "Bearer " + key,
-					Request: json.RawMessage(`{"model":"` + model + `","state":"text","questions":{"z":{"type":"noul"},"a":{"type":"choice"}}}`)}
+				request := systemone.ForwardRequest{
+					Listener: listener, Method: http.MethodPost, Path: "/v1/systemone", Authorization: "Bearer " + key,
+					Request: json.RawMessage(`{"model":"` + model + `","state":"text","questions":{"z":{"type":"noul"},"a":{"type":"choice"}}}`),
+				}
 				if discovery {
 					request.Method, request.Path, request.Request = http.MethodGet, "/v1/systemone/models", nil
 				}
+				// #nosec G117 -- Test-only keys exercise authenticated forwarding; no real credentials are logged or persisted.
 				body, err := json.Marshal(request)
 				if err != nil {
 					t.Fatal(err)

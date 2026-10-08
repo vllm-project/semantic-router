@@ -72,16 +72,3 @@ func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *R
 	}
 	return []config.Decision{}
 }
-
-// decisionCandidatesForRequestModel resolves every routing alias through the
-// same recipe table; algorithms are selected by decisions, never model strings.
-func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []config.Decision {
-	if r == nil || r.Config == nil {
-		return nil
-	}
-	recipe, ok := r.Config.RecipeForRoutingModel(modelName)
-	if !ok {
-		return nil
-	}
-	return recipe.Profile.Decisions
-}

@@ -89,28 +89,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	return router, nil
 }
 
-func newOpenAIRouterForServer(
-	configPath string,
-	runtimeRegistry *routerruntime.Registry,
-	pool *binding.Pool,
-) (*OpenAIRouter, error) {
-	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
-	if err != nil {
-		return nil, err
-	}
-
-	router, err := buildOpenAIRouterFromConfig(cfg, pool)
-	if err != nil {
-		return nil, err
-	}
-
-	if publishGlobal {
-		config.Replace(cfg)
-	}
-	logLoadedRouterConfig(configPath, cfg)
-	return router, nil
-}
-
 func resolveInitialRouterConfig(
 	configPath string,
 	runtimeRegistry *routerruntime.Registry,

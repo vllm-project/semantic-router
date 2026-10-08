@@ -64,7 +64,7 @@ func BuiltinTasks() []TaskDefinition {
 		labels("pii_spans", "Personal data locations", "Locate personal and sensitive identifying information in the input.", "span", "request", "text", PIICategoryLabels()),
 		noul("hallucination", "Grounded answer", "Does the answer contain any factual claim that is unsupported by or contradicts the supplied grounding context? Judge the answer against context, not outside knowledge.", "response", "grounded"),
 		labels("hallucination_spans", "Unsupported answer locations", "Locate claims in the answer that are unsupported by or contradict the grounding context. Return locations in the answer only.", "span", "response", "grounded", []Choice{{"unsupported", "a claim not supported by the grounding context"}}),
-		noul("reask", "Repeated user intent", "Does the current user request repeat the same unresolved intent as the prior user request, including paraphrases?", "request", "pair"),
+		noul("reask", "Repeated user intent", "Does the current user request seek the same information or action as the prior user request, including paraphrases and retries that add feedback? A different topic, objective or requested operation is not a repeat.", "request", "pair"),
 		choice("model_selection", "Choose a candidate model", "Which candidate model is best suited to answer this request? Choose only a listed candidate.", false,
 			Choice{"fast", "fast model for straightforward requests"}, Choice{"reasoning", "model for complex reasoning"}),
 	}

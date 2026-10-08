@@ -27,7 +27,7 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 		return moduleModel{module: module, model: strings.TrimSpace(model), useCPU: useCPU}, strings.TrimSpace(model) != ""
 	}
 	switch consumer {
-	case "preference", "reask", "complexity":
+	case "preference", "complexity":
 		return local(consumer, c.DecisionModelSpec().Model, true)
 	case "domain_classifier":
 		if c.CategoryModel.Backend == nil {

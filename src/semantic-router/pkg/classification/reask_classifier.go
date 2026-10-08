@@ -43,6 +43,9 @@ func (c *ReaskClassifier) Classify(currentUserTurn string, priorUserTurns []stri
 }
 
 func (c *ReaskClassifier) ClassifyContext(ctx context.Context, currentUserTurn string, priorUserTurns []string) ([]ReaskMatch, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	currentUserTurn = strings.TrimSpace(currentUserTurn)
 	if currentUserTurn == "" || len(c.rules) == 0 || len(priorUserTurns) == 0 {
 		return nil, nil
@@ -53,13 +56,12 @@ func (c *ReaskClassifier) ClassifyContext(ctx context.Context, currentUserTurn s
 	if c.judgment != nil {
 		similarities, err = c.semanticSimilarities(ctx, currentUserTurn, priorUserTurns)
 	} else {
-		var currentEmbedding []float32
-		currentEmbedding, err = c.embedText(currentUserTurn)
-		if err == nil {
-			similarities, err = c.computeSimilarities(currentEmbedding, priorUserTurns, minimumReaskThreshold(c.rules))
-		}
+		similarities, err = c.computeSimilarities(ctx, currentUserTurn, priorUserTurns, minimumReaskThreshold(c.rules))
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -86,19 +88,34 @@ func (c *ReaskClassifier) ClassifyContext(ctx context.Context, currentUserTurn s
 	return retainMaxLookbackReaskMatches(matches), nil
 }
 
-func (c *ReaskClassifier) computeSimilarities(currentEmbedding []float32, priorUserTurns []string, minimumThreshold float64) ([]float64, error) {
+func (c *ReaskClassifier) computeSimilarities(ctx context.Context, current string, priorUserTurns []string, minimumThreshold float64) ([]float64, error) {
+	var currentEmbedding []float32
 	cache := make(map[string][]float32, len(priorUserTurns))
 	similarities := make([]float64, 0, len(priorUserTurns))
 
 	for index := len(priorUserTurns) - 1; index >= 0; index-- {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		priorTurn := strings.TrimSpace(priorUserTurns[index])
 		if priorTurn == "" {
 			continue
 		}
+		if priorTurn == current {
+			similarities = append(similarities, 1)
+			continue
+		}
+		if currentEmbedding == nil {
+			var err error
+			currentEmbedding, err = c.embedFullText(ctx, current)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compute current user turn embedding: %w", err)
+			}
+		}
 
 		priorEmbedding, ok := cache[priorTurn]
 		if !ok {
-			embedding, err := c.embedText(priorTurn)
+			embedding, err := c.embedFullText(ctx, priorTurn)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compute prior user turn embedding: %w", err)
 			}
@@ -127,8 +144,8 @@ func minimumReaskThreshold(rules []config.ReaskRule) float64 {
 	return minimumThreshold
 }
 
-func (c *ReaskClassifier) embedText(text string) ([]float32, error) {
-	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
+func (c *ReaskClassifier) embedFullText(ctx context.Context, text string) ([]float32, error) {
+	return embedding.EmbedFullInput(ctx, c.provider, text, embedding.Options{})
 }
 
 func evaluateReaskStreak(similarities []float64, threshold float64, lookbackTurns int) (float64, int) {

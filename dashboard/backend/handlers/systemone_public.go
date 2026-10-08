@@ -39,6 +39,7 @@ func PublicSystemOneHandler(upstream string, providers ...routerauth.CredentialP
 		var payload bytes.Buffer
 		encoder := json.NewEncoder(&payload)
 		encoder.SetEscapeHTML(false)
+		// #nosec G117 -- Forward client credentials only over the authenticated management transport for active listener authorization; never log or persist them.
 		if err := encoder.Encode(forwarded); err != nil {
 			decisionModelError(w, 400, "invalid_request", "Unable to encode native request")
 			return

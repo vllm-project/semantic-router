@@ -543,6 +543,7 @@ routing:
 global:
   services:
     router_replay:
+      enabled: true
       capture_personal_data: false
   model_catalog:
     deployments:

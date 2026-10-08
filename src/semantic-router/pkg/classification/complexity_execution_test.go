@@ -12,7 +12,8 @@ import (
 func TestComplexityConstructionKeepsPrototypeMarginsWithDefaultDecisionModel(t *testing.T) {
 	models, services := preparedJudgmentModels(t)
 	hard, easy := .025, -.08
-	models.cfg.ComplexityRules = []config.ComplexityRule{{Name: "difficulty", HardAbove: &hard, EasyBelow: &easy,
+	models.cfg.ComplexityRules = []config.ComplexityRule{{
+		Name: "difficulty", HardAbove: &hard, EasyBelow: &easy,
 		Hard: config.ComplexityCandidates{Candidates: []string{"hard example"}},
 		Easy: config.ComplexityCandidates{Candidates: []string{"easy example"}},
 	}}
@@ -56,7 +57,8 @@ func TestComplexityConstructionCombinesPrototypeAndGenericJudgmentRules(t *testi
 func TestComplexityExplicitDecisionBindingUsesNativeNormalizedScore(t *testing.T) {
 	models, services := preparedJudgmentModels(t)
 	hard, easy := .7, .3
-	models.cfg.ComplexityRules = []config.ComplexityRule{{Name: "difficulty", HardAbove: &hard, EasyBelow: &easy,
+	models.cfg.ComplexityRules = []config.ComplexityRule{{
+		Name: "difficulty", HardAbove: &hard, EasyBelow: &easy,
 		Hard: config.ComplexityCandidates{Candidates: []string{"hard example"}},
 		Easy: config.ComplexityCandidates{Candidates: []string{"easy example"}},
 	}}
@@ -68,12 +70,12 @@ func TestComplexityExplicitDecisionBindingUsesNativeNormalizedScore(t *testing.T
 	}
 	builder := newClassifierOptionBuilder(models.cfg, nil)
 	builder.models = models
-	option, err := builder.buildComplexityClassifierOption()
+	configureComplexity, err := builder.buildComplexityClassifierOption()
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := &Classifier{}
-	option(owner)
+	configureComplexity(owner)
 	results, err := owner.complexityClassifier.classifyDetailedWithImageCached(t.Context(), "hard example", "", nil)
 	if err != nil || len(results) != 1 || results[0].FusedMargin != .1 || results[0].Difficulty != "easy" || results[0].SignalSource != "decision_score" {
 		t.Fatalf("native score or units changed: %+v %v", results, err)
@@ -93,11 +95,11 @@ func buildComplexityExecutionTest(t *testing.T, models *classifierModelRuntime) 
 	// The fixture owns its tiny embedding provider; construction and scoring
 	// otherwise follow the production classifier option path.
 	builder.providerInitOnce.Do(func() {})
-	option, err := builder.buildComplexityClassifierOption()
+	configureComplexity, err := builder.buildComplexityClassifierOption()
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := &Classifier{}
-	option(owner)
+	configureComplexity(owner)
 	return owner.complexityClassifier
 }

@@ -3062,6 +3062,9 @@ decisions:
         description: Retrieve deployment evidence.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3075,6 +3078,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_text_tool_result_synthesis__text_tool_result_beyond_240k
     display_prompt: Synthesize the verified text-tool result after a context longer than 240K tokens, preserving
       its sentinel and factual conclusion.
@@ -3111,6 +3118,9 @@ decisions:
         description: Retrieve audit evidence.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3124,6 +3134,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_image_tool_result_synthesis__image_tool_result_collision
     messages:
     - role: user
@@ -3196,6 +3210,9 @@ decisions:
         description: Inspect an architecture diagram.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3210,6 +3227,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_image_tool_result_synthesis__image_tool_result_beyond_240k
     display_prompt: Synthesize the verified image-tool result after a context longer than 240K tokens, preserving
       its sentinel and visual finding.
@@ -3250,6 +3271,9 @@ decisions:
         description: Inspect an extended architecture diagram.
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
+      The complete current turn exceeds the embedding model input limit, so reask and its dependent
+      projections must remain unknown. Tool continuation still selects reasoning; a clipped comparison
+      or any missing, changed, or additional signal error must fail this probe.
     tags:
     - language:en
     - multi_turn
@@ -3264,6 +3288,10 @@ decisions:
     expected_signals:
       conversation:
       - tool_loop
+    expected_signal_errors:
+      reask:repeat: reask_evaluation_failed
+      projection:recovery: projection_input_failed
+      projection:retry: projection_input_failed
   - id: accuracy_confidence_escalation__confidence_over_multi_round_collision
     query: Fact-check and escalate if uncertain while exploring multiple reasoning paths recursively.
     tags:

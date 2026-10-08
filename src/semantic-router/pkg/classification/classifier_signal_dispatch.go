@@ -67,7 +67,7 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 		{
 			config.SignalTypeReask, "Reask",
 			func(ctx context.Context) {
-				c.evaluateBoundedReaskSignalContext(ctx, results, mu, input.CurrentUserText, input.PriorUserMessages)
+				c.evaluateReaskSignalContext(ctx, results, mu, input.CurrentUserText, input.PriorUserMessages)
 			},
 		},
 		{
@@ -129,36 +129,6 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 			},
 		},
 	}
-}
-
-func (c *Classifier) evaluateBoundedReaskSignal(
-	results *SignalResults,
-	mu *sync.Mutex,
-	currentUserText string,
-	priorUserMessages []string,
-) {
-	c.evaluateBoundedReaskSignalContext(context.Background(), results, mu, currentUserText, priorUserMessages)
-}
-
-func (c *Classifier) evaluateBoundedReaskSignalContext(ctx context.Context, results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
-	if c.reaskClassifier != nil && c.reaskClassifier.judgment != nil {
-		c.evaluateReaskSignalContext(ctx, results, mu, currentUserText, priorUserMessages)
-		return
-	}
-	c.evaluateReaskSignalContext(ctx,
-		results,
-		mu,
-		textForRoutingSignal(config.SignalTypeReask, currentUserText),
-		boundedReaskMessages(priorUserMessages),
-	)
-}
-
-func boundedReaskMessages(messages []string) []string {
-	bounded := make([]string, len(messages))
-	for index, message := range messages {
-		bounded[index] = textForRoutingSignal(config.SignalTypeReask, message)
-	}
-	return bounded
 }
 
 // modelBackedSignalTypes call model deployments; their goroutines join the

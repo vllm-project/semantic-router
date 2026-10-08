@@ -208,6 +208,13 @@ global:
           overflow: window
 ```
 
+For prompt guard and safety signals, if a native model rejects the length of
+one input, the router retries overlapping windows that cover the entire text,
+with bounded concurrency. It keeps the highest window risk and requires
+complete input coverage from each window. An unfinished scan stays unresolved;
+the scan budget and deadline still apply. Direct `/v1/decisions` calls retain
+the model's input limits.
+
 A jailbreak or PII rule matches content its model did not read in full: an
 input over the model's `max_tokens` under `reject`, over its cap, truncated, or
 not scanned within the signals' deadline. The match reports the type

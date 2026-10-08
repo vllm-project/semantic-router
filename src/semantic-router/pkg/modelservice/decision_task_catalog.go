@@ -90,6 +90,11 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 		response.GlobalBindings[name] = binding
 	}
 	for _, consumer := range taskConsumers(cfg) {
+		if consumer.name == "reask" {
+			// There is no implicit native binding: unbound reask uses cosine
+			// similarity, whose thresholds are not Noul probabilities.
+			continue
+		}
 		name, _, ok, _ := cfg.ImplicitTaskDeployment(consumer.name)
 		if !ok {
 			name = response.DefaultDeployment

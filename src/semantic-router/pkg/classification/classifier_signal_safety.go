@@ -180,7 +180,7 @@ func (c *Classifier) evaluateSafetySignals(ctx context.Context, results *SignalR
 		if classifier == nil {
 			return labelClassification{}, fmt.Errorf("safety head is unavailable")
 		}
-		result, err := classifier.Classify(ctx, text)
+		result, err := classifySafetyWindows(ctx, classifier, text)
 		cache[key] = safetyCachedResult{result, err}
 		return result, err
 	}
@@ -305,7 +305,7 @@ func (c *Classifier) prefetchSafetyHeads(ctx context.Context, text string, used 
 	}
 	results := make([]safetyCachedResult, len(keys))
 	modelservice.Fan(ctx, len(keys), func(i int) {
-		results[i].result, results[i].err = heads[keys[i]].Classify(ctx, text)
+		results[i].result, results[i].err = classifySafetyWindows(ctx, heads[keys[i]], text)
 	})
 	cache := make(map[string]safetyCachedResult, len(keys))
 	for i, key := range keys {

@@ -10,6 +10,7 @@ func TestEmbeddingModelsNeededJudgmentConsumersDoNotLoadEmbedding(t *testing.T) 
 	cfg.DecisionModel = "primary"
 	cfg.PreferenceRules = []PreferenceRule{{Name: "brief"}}
 	cfg.ReaskRules = []ReaskRule{{Name: "repeat"}}
+	cfg.ModelBindings = map[string]ModelBinding{"reask": {Deployment: "primary", Contract: DecisionTaskContract}}
 	cfg.ComplexityRules = []ComplexityRule{{Name: "difficulty"}}
 	cfg.Decisions = []Decision{{Rules: RuleCombination{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypePreference, Name: "brief"}, {Type: SignalTypeReask, Name: "repeat"}, {Type: SignalTypeComplexity, Name: "difficulty:hard"}}}}}
 	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); len(got) != 0 {
