@@ -23,6 +23,8 @@ RECEIPT_PLUGIN = "memory_persistence"
 RECEIPT_DECISION = "persistence_receipt_route"
 RECEIPT_MARKER = "PERSISTENCE_RECEIPT_MARKER"
 RECEIPT_LOG_EVENT = "memory_persistence_outcome"
+# The routing core logs as "extproc" behind Envoy and as "router" standalone.
+RECEIPT_LOG_COMPONENTS = ("extproc", "router")
 LABEL_PATTERN = re.compile(r'(\w+)="([^"]*)"')
 
 # Every status memoryPersistenceReceipt.record treats as terminal. "scheduled"
@@ -374,7 +376,7 @@ class PersistenceReceiptSupport(MemoryFeaturesTest):
             if (
                 isinstance(record, dict)
                 and record.get("event") == RECEIPT_LOG_EVENT
-                and record.get("component") == "extproc"
+                and record.get("component") in RECEIPT_LOG_COMPONENTS
             ):
                 records.append(record)
         return records
