@@ -4,6 +4,9 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from cli.bootstrap import DASHBOARD_SETUP_MODE_ENV, SETUP_MODE_ENV
+from cli.commands.runtime_management_credentials import (
+    management_credential_env_names,
+)
 from cli.commands.runtime_paths import _runtime_config_filename, resolve_state_root_dir
 from cli.consts import HEALTH_CHECK_TIMEOUT, IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
@@ -23,8 +26,11 @@ from cli.container_mounts import (
 )
 from cli.gateway_mode import GATEWAY_EXTPROC, runs_envoy
 from cli.logo import print_vllm_logo
+from cli.management_credential import stack_management_credential
 from cli.pending_activation import (
     REASON_RESTART,
+    SERVE_STARTING,
+    SERVE_WAITING,
     clear_pending_activation,
     read_pending_activation,
     serve_heartbeat,
@@ -35,6 +41,7 @@ from cli.recipe_activation_recovery import (
     recover_pending_recipe_activation_for_stack,
 )
 from cli.recipe_directory import resolve_active_recipe_directory
+from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_config_coordination import runtime_config_lock_scope
 from cli.runtime_config_lock import RuntimeConfigLock
 from cli.runtime_lifecycle import (
@@ -242,7 +249,7 @@ def _start_vllm_sr_locked(
     pending = read_pending_activation(runtime_config_file)
     if pending is not None and pending.reason == REASON_RESTART:
         log.info(
-            "Applying the change saved in the Dashboard that needed a restart"
+            f"Applying the change saved {pending.saved_by()} that needed a restart"
             + (f": {pending.detail}" if pending.detail else "")
         )
     # This start serves whatever the Dashboard saved, so a pending activation
@@ -255,8 +262,8 @@ def _start_vllm_sr_locked(
             listener["port"],
             name=f"listener {listener.get('name', 'unknown')} host port",
         )
-    readiness_token_env = _configured_management_readiness_token_env(
-        user_config, env_vars
+    readiness_token_env = _readiness_token_env(
+        user_config, env_vars, runtime_config_file, state_root_dir, stack_layout
     )
 
     log_startup_banner(source_config_file, listeners, stack_layout)
@@ -288,54 +295,18 @@ def _start_vllm_sr_locked(
     )
 
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
-    return_code, _stdout, stderr = _start_runtime_containers(
-        source_config_file,
-        runtime_config_file,
-        listeners,
-        runtime_topology,
-        runtime_network_name,
-        stack_layout,
-        state_root_dir,
-        dashboard_disabled,
-        env_vars,
-        image,
-        router_image,
-        envoy_image,
-        dashboard_image,
-        pull_policy,
-        gateway,
-    )
-    if return_code != 0:
-        log.error(f"Failed to start container: {stderr}")
-        raise SystemExit(1)
-
-    log.info("vLLM Semantic Router container started successfully")
-    connect_runtime_container(shared_network_name, stack_layout)
-    if setup_mode:
-        # Until setup activates a config this command changes nothing, and the
-        # Dashboard's activation needs the runtime config lock.
-        with (
-            runtime_lock.released() if runtime_lock else nullcontext(),
-            serve_heartbeat(runtime_config_file),
-        ):
-            maybe_finish_setup_mode(
-                setup_mode,
-                dashboard_disabled,
-                stack_layout,
-                startup_timeout=startup_timeout,
-                envoy=runs_envoy(gateway),
-            )
-            activated = _wait_for_setup_activation(runtime_config_file, stack_layout)
-        if not activated:
-            return
-        user_config, listeners = _start_activated_runtime(
+    # The Dashboard reads the heartbeat to tell a Router this command is
+    # starting from a stopped one; it has no container runtime to ask.
+    with serve_heartbeat(runtime_config_file) as heartbeat:
+        return_code, _stdout, stderr = _start_runtime_containers(
             source_config_file,
             runtime_config_file,
+            listeners,
             runtime_topology,
             runtime_network_name,
-            shared_network_name,
             stack_layout,
             state_root_dir,
+            dashboard_disabled,
             env_vars,
             image,
             router_image,
@@ -344,19 +315,63 @@ def _start_vllm_sr_locked(
             pull_policy,
             gateway,
         )
-        management_port = _configured_management_port(user_config)
-        readiness_token_env = _configured_management_readiness_token_env(
-            user_config, env_vars
-        )
+        if return_code != 0:
+            log.error(f"Failed to start container: {stderr}")
+            raise SystemExit(1)
 
-    _wait_and_verify_runtime(
-        stack_layout,
-        dashboard_disabled,
-        management_port,
-        readiness_token_env,
-        startup_timeout=startup_timeout,
-        envoy=runs_envoy(gateway),
-    )
+        log.info("vLLM Semantic Router container started successfully")
+        connect_runtime_container(shared_network_name, stack_layout)
+        if setup_mode:
+            # Until setup activates a config this command changes nothing, and
+            # the Dashboard's activation needs the runtime config lock.
+            heartbeat(SERVE_WAITING)
+            with runtime_lock.released() if runtime_lock else nullcontext():
+                maybe_finish_setup_mode(
+                    setup_mode,
+                    dashboard_disabled,
+                    stack_layout,
+                    startup_timeout=startup_timeout,
+                    envoy=runs_envoy(gateway),
+                )
+                activated = _wait_for_setup_activation(
+                    runtime_config_file, stack_layout
+                )
+            if not activated:
+                return
+            heartbeat(SERVE_STARTING)
+            user_config, listeners = _start_activated_runtime(
+                source_config_file,
+                runtime_config_file,
+                runtime_topology,
+                runtime_network_name,
+                shared_network_name,
+                stack_layout,
+                state_root_dir,
+                env_vars,
+                image,
+                router_image,
+                envoy_image,
+                dashboard_image,
+                pull_policy,
+                gateway,
+            )
+            management_port = _configured_management_port(user_config)
+            readiness_token_env = _readiness_token_env(
+                user_config,
+                env_vars,
+                runtime_config_file,
+                state_root_dir,
+                stack_layout,
+            )
+
+        _wait_and_verify_runtime(
+            stack_layout,
+            dashboard_disabled,
+            management_port,
+            readiness_token_env,
+            startup_timeout=startup_timeout,
+            envoy=runs_envoy(gateway),
+        )
     log_runtime_summary(
         listeners,
         stack_layout,
@@ -366,6 +381,26 @@ def _start_vllm_sr_locked(
         config=user_config,
         gateway=gateway,
     )
+
+
+def _readiness_token_env(
+    user_config, env_vars, runtime_config_file, state_root_dir, stack_layout
+):
+    """The env name the Router's readiness check authenticates with.
+
+    The check runs in the Router container and reads the value there. The
+    stack's management credential counts as available whenever the config
+    binds it, because this command gives it to the Router then.
+    """
+
+    available = dict(env_vars)
+    if MANAGEMENT_CREDENTIAL_ENV in management_credential_env_names(
+        runtime_config_file
+    ):
+        available[MANAGEMENT_CREDENTIAL_ENV] = stack_management_credential(
+            state_root_dir, stack_layout=stack_layout
+        )
+    return _configured_management_readiness_token_env(user_config, available)
 
 
 def _start_support_services(
@@ -736,7 +771,7 @@ def show_status(service: str = "all"):
     if status == "exited":
         heading("Runtime status")
         fields((("State", "Container exited (error)"),))
-        echo("View logs with: vllm-sr logs <envoy|router>")
+        echo("View logs with: vllm-sr logs router")
         return
     if status != "running":
         heading("Runtime status")
@@ -787,7 +822,7 @@ def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
     pending = read_pending_activation(runtime_config)
     if pending is not None and pending.reason == REASON_RESTART:
         return (
-            "Restart required: a change saved in the Dashboard needs "
+            f"Restart required: a change saved {pending.saved_by()} needs "
             "`vllm-sr serve` to apply it"
             + (f" ({pending.detail})." if pending.detail else ".")
         )

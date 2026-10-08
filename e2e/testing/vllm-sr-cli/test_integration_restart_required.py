@@ -72,6 +72,7 @@ class TestRestartRequired(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         try:
             with self._running_mock_upstream(mock_container):
                 self._send_mock_chat_completion(mock_container)
+                self.assert_dashboard_holds_no_container_runtime()
                 token = self._dashboard(
                     "/api/auth/bootstrap/register",
                     {

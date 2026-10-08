@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -46,25 +45,14 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
-// Config transport tests own temporary files, never the host's running stack.
-// Lifecycle behavior is exercised separately with explicitly seeded containers.
+// Config transport tests own temporary files, never the host's running stack,
+// and the Dashboard never runs a container CLI.
 func isolateConfigMutationRuntime(t *testing.T) {
 	t.Helper()
-	fakeDocker := writeFakeLifecycleDockerCLI(t)
-	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
-	for _, key := range []string{"TEST_ROUTER_CONTAINER", "TEST_ENVOY_CONTAINER", "TEST_DASHBOARD_CONTAINER"} {
-		t.Setenv(key, "")
-	}
+	containerCLICalls := trapContainerCLIs(t)
 	t.Cleanup(func() {
-		calls, err := os.ReadFile(fakeDocker.logPath)
-		if err != nil && !os.IsNotExist(err) {
-			t.Errorf("read isolated runtime calls: %v", err)
-		}
-		for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
-			if call != "" && !strings.HasPrefix(call, "inspect ") {
-				t.Errorf("config transport attempted to mutate an unconfigured runtime: %s", call)
-			}
+		if calls := containerCLICalls(); len(calls) != 0 {
+			t.Errorf("config transport ran a container CLI: %q", calls)
 		}
 	})
 }
@@ -574,27 +562,16 @@ func TestSetupActivateHandler(t *testing.T) {
 	assertSnapshotPermissions(t, tempDir)
 }
 
-func activateSetupWithFakeDocker(t *testing.T) (string, fakeLifecycleDocker) {
+func activateSetupWithTrappedContainerCLIs(t *testing.T) (string, func() []string) {
 	t.Helper()
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
-	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	containerCLICalls := trapContainerCLIs(t)
 	configureSetupRuntimeCLI(t)
-	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
 	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
 	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
 	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
-	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
-	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
-	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
-	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
-	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
-	for _, path := range []string{fakeDocker.routerStatusPath, fakeDocker.envoyStatusPath} {
-		if err := os.WriteFile(path, []byte("created\n"), 0o644); err != nil {
-			t.Fatalf("failed to seed container status: %v", err)
-		}
-	}
-	return configPath, fakeDocker
+	return configPath, containerCLICalls
 }
 
 func postSetupActivation(t *testing.T, configPath string) *httptest.ResponseRecorder {
@@ -610,7 +587,7 @@ func postSetupActivation(t *testing.T, configPath string) *httptest.ResponseReco
 }
 
 func TestSetupActivationLeavesTheRouterToTheCLI(t *testing.T) {
-	configPath, fakeDocker := activateSetupWithFakeDocker(t)
+	configPath, containerCLICalls := activateSetupWithTrappedContainerCLIs(t)
 	t.Setenv("VLLM_SR_GATEWAY", "standalone")
 
 	w := postSetupActivation(t, configPath)
@@ -618,13 +595,9 @@ func TestSetupActivationLeavesTheRouterToTheCLI(t *testing.T) {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// The Dashboard holds no container runtime: setup starts, stops and execs nothing.
-	if logData, err := os.ReadFile(fakeDocker.logPath); err == nil {
-		for _, action := range []string{"start ", "restart ", "stop ", "exec "} {
-			if strings.Contains(string(logData), action) {
-				t.Fatalf("setup ran a container %q: %s", action, logData)
-			}
-		}
+	// The Dashboard holds no container runtime: setup runs no container CLI.
+	if calls := containerCLICalls(); len(calls) != 0 {
+		t.Fatalf("setup ran a container CLI: %q", calls)
 	}
 	data, err := os.ReadFile(pendingActivationPath(configPath, pendingActivationSuffix))
 	if err != nil {
@@ -645,16 +618,19 @@ func TestSetupActivationLeavesTheRouterToTheCLI(t *testing.T) {
 
 func TestSetupActivationSaysTheRouterIsStartingWhileTheCLIWaits(t *testing.T) {
 	for _, tc := range []struct {
-		gateway string
-		message string
+		gateway   string
+		heartbeat string
+		message   string
 	}{
-		{"standalone", "Setup saved. The Router is starting."},
-		{"extproc", "Setup saved. The Router and Envoy are starting."},
+		{"standalone", `{"pid": 1, "state": "waiting"}`, "Setup saved. The Router is starting."},
+		{"extproc", `{"pid": 1, "state": "waiting"}`, "Setup saved. The Router and Envoy are starting."},
+		// A CLI from before the heartbeat had a state beat only while it waited.
+		{"standalone", `{"pid": 1}`, "Setup saved. The Router is starting."},
 	} {
 		t.Run(tc.gateway, func(t *testing.T) {
-			configPath, _ := activateSetupWithFakeDocker(t)
+			configPath, _ := activateSetupWithTrappedContainerCLIs(t)
 			t.Setenv("VLLM_SR_GATEWAY", tc.gateway)
-			if err := os.WriteFile(pendingActivationPath(configPath, serveHeartbeatSuffix), []byte(`{"pid": 1}`), 0o644); err != nil {
+			if err := os.WriteFile(pendingActivationPath(configPath, serveHeartbeatSuffix), []byte(tc.heartbeat), 0o644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -683,8 +659,15 @@ func TestAStaleHeartbeatMeansNoCLIWaits(t *testing.T) {
 	if err := os.Chtimes(watch, old, old); err != nil {
 		t.Fatal(err)
 	}
-	if serveAttached(configPath) {
+	if serveAttached(configPath) || serveRunning(configPath) {
 		t.Fatal("a stale heartbeat must not count")
+	}
+	// A CLI that starts the stack applies nothing recorded meanwhile.
+	if err := os.WriteFile(watch, []byte(`{"pid": 1, "state": "starting"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if serveAttached(configPath) || !serveRunning(configPath) {
+		t.Fatal("a starting CLI must count as running, not as waiting to apply a change")
 	}
 	if got := pendingActivationPath("/app/.vllm-sr/runtime-config.lane.yaml", pendingActivationSuffix); got != "/app/.vllm-sr/runtime-config.lane.pending-activation.json" {
 		t.Fatalf("hand-off path %q", got)

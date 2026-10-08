@@ -45,7 +45,8 @@ looper 执行器的分析继续适用。
    amd64 和 arm64）、`vllm-sr-rocm` 和 `vllm-sr-cuda`（amd64），覆盖 docker 和 kubernetes、两种模式以及 engine 模式。
    原来的 `extproc` 和 `extproc-rocm` 镜像在一个版本内作为同一 digest 的别名 tag。上游 Envoy 只用于 docker 上的
    `extproc`。
-6. Router 与模型 runtime 之间仍是 Unix 域套接字上的 HTTP/JSON；测出开销之后再考虑二进制快路径。
+6. Router 与模型 runtime 之间仍是 Unix 域套接字上的 HTTP/JSON；测出开销之后再考虑二进制快路径。在 CPU 上测得
+   传输约占一次 runtime 调用的 2%，所以不做快路径（见[结果](#结果)）。
 7. 首发必须支持 timeout、retry、fallback。
 8. looper 请求图完全在 Router 内部闭环，不再绕回 Envoy。
 9. 配置体系模块化、版本化，支持热更新和回滚，借鉴 Envoy 配置设计的核心思想。
@@ -482,22 +483,44 @@ looper 不再是“绕回 Envoy”的特殊流程，而是在 Router 内部执�
 - **打包：** 在只有 Docker 的主机上，用 CLI 的 wheel 装进干净的 venv，`vllm-sr serve` 两种网关模式都可用，
   `vllm-sr serve MODEL` 在 CPU 上可用。ROCm 镜像里的 Router 按 chart 的方式运行（uid 65532、只读根文件系统、
   无 capability），只通过 render 组访问 GPU。
-- **性能：** 每种模式、每个并发度 10 轮交错，每轮 2,000 个不命中任何 decision 的请求；取各轮均值，95% 区间
-  在 5% 以内，只有 standalone 在 32 和 64 个客户端时的 p99 约为 ±1.9 ms。Envoy 用 8 个核，ext_proc 模式的
-  Router 用 16 个；standalone 的 Router 在 1 和 8 个客户端时用 16 个核，在 32 和 64 个时用 24 个。
+- **性能：** 每种模式、每个并发度 10 轮交错，请求不命中任何 decision；取各轮均值，带 95% 区间。Envoy 用 8 个核，
+  ext_proc 模式的 Router 用 16 个。
+  - **合入时的代码**（每轮 2,000 个请求），standalone 的 Router 在 1 和 8 个客户端时用 16 个核，在 32 和 64 个时
+    用 24 个：
 
-  | 客户端数 | p50，ext_proc → standalone | p99，ext_proc → standalone | 每秒请求数，ext_proc → standalone |
-  | --- | --- | --- | --- |
-  | 1 | 0.74 → 0.57 ms | 2.02 → 1.82 ms | 1,280 → 1,644 |
-  | 8 | 0.87 → 0.64 ms | 1.77 → 1.56 ms | 7,771 → 9,737 |
-  | 32 | 2.17 → 2.20 ms | 4.55 → 6.28 ms | 14,067 → 13,435 |
-  | 64 | 4.20 → 5.06 ms | 9.36 → 10.92 ms | 14,561 → 13,080 |
+    | 客户端数 | p50，ext_proc → standalone | p99，ext_proc → standalone | 每秒请求数，ext_proc → standalone |
+    | --- | --- | --- | --- |
+    | 1 | 0.74 → 0.57 ms | 2.02 → 1.82 ms | 1,280 → 1,644 |
+    | 8 | 0.87 → 0.64 ms | 1.77 → 1.56 ms | 7,771 → 9,737 |
+    | 32 | 2.17 → 2.20 ms | 4.55 → 6.28 ms | 14,067 → 13,435 |
+    | 64 | 4.20 → 5.06 ms | 9.36 → 10.92 ms | 14,561 → 13,080 |
 
-  中等并发以内 standalone 模式更快。从 32 个客户端起，它在比 Envoy + ext_proc 低 5–10% 的吞吐处饱和，
-  加核也几乎不提高上限；对这条路径做 profiling 是后续工作。
+    从 32 个客户端起，standalone 模式在比 Envoy 模式低 5–10% 的吞吐处饱和，加核也几乎不提高上限。
+  - **[#4666](https://github.com/vllm-project/semantic-router/issues/4666) 之后**，同一节点（每轮 2,000 个请求），
+    standalone 的 Router 在各并发度都用 24 个核，与 Envoy 模式的总核数相同：
+
+    | 客户端数 | p50，ext_proc → standalone | p99，ext_proc → standalone | 每秒请求数，ext_proc → standalone |
+    | --- | --- | --- | --- |
+    | 1 | 0.57 → 0.41 ms | 1.12 → 0.95 ms | 1,692 → 2,318 |
+    | 8 | 0.66 → 0.43 ms | 1.40 → 1.34 ms | 10,831 → 14,523 |
+    | 32 | 1.03 → 0.93 ms | 2.54 → 3.46 ms | 26,744 → 27,935 |
+    | 64 | 1.97 → 1.70 ms | 4.52 → 8.43 ms | 30,152 → 29,473 |
+
+    上限来自两种模式共用的路由核心。每个请求都在一把全局锁下更新 TTFT 历史，随后又在这把锁下把历史复制出来，
+    于是一次被垃圾回收拖住的复制会卡住排在它后面的所有请求。每个请求还分配约 300 KB，大部分是 provider 目录的
+    防御性副本，以及随后被采样器丢弃的日志字段。去掉这些之后，两种模式都快了约一倍。standalone 模式在各负载下
+    都响应更快，到 32 个客户端为止每秒处理的请求也更多。64 个客户端时，在每轮 2,000 个请求（按这个速率约 70 ms）
+    的测量里两者持平（−680 ± 721 请求/秒）；每轮 10,000 个请求时，standalone 模式在 64 个客户端下每秒处理
+    30,319 个请求，Envoy 模式 28,837 个，32 个客户端下为 28,830 对 26,370。从 32 个客户端起它的 p99 更高：两个
+    Router 此时都受 CPU 限制，垃圾回收仍占它们三分之一以上的 CPU。`internal/gatewayparity` 里的
+    `BenchmarkNativeGatewayClients` 在进程内从 1、8、32 和 64 个客户端经 standalone 路径发送同样的请求，不需要
+    Envoy 或 Docker 就能看出请求路径上的退化。
 - **Router 到 runtime 的占比：** 一个 CPU 上的 jailbreak 信号（307M 的 Vela Guard）下，standalone 请求耗时
-  13.9 ms，其中 12.4 ms（89%）在 runtime 调用里。runtime 还不报告自己的计算时间，所以这次调用里传输占多少
-  尚未测出；先测出它，再考虑任何快路径。
+  13.9 ms，其中 12.4 ms（89%）在 runtime 调用里。runtime 现在为每个请求报告自己的耗时，Router 记录每次调用的
+  传输时间（[#4667](https://github.com/vllm-project/semantic-router/issues/4667)）。在 CPU 上，推理占一次调用的
+  95–99%；传输在 Vela 2.0 0.3B 默认信号上占 0.6%，在 Vela 1.0 信号上占 1.9–2.2%，单独的 Guard 上占 2.1%，runtime
+  自身的 HTTP 和 JSON 处理占 0.4–1.6%。快路径最多只能让一个请求快约 0.8 ms，所以 Router 继续使用 HTTP/JSON
+  （[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/runtime-transport-cpu.md)）。
 
 ## 风险与对策
 

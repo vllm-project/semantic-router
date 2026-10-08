@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""First-run setup on the docker target, with no container socket in the Dashboard.
+"""First-run setup on the docker target, with no container runtime in the Dashboard.
 
 `vllm-sr serve` in an empty directory opens the Dashboard's setup and keeps
 waiting. Setup through the Dashboard's API writes the config, and the waiting
 CLI then creates the Router itself, from the activated config: the test moves
 the listener from setup's port to another one, and a chat request routes
-through the Router on the new port. The Dashboard mounts no container socket.
+through the Router on the new port. The Dashboard mounts no container socket,
+has no container CLI, and reports the Router waiting for setup, then running.
 After setup, the Dashboard still saves config changes: one the Router
 hot-reloads is accepted while the stack runs.
 """
@@ -20,8 +21,6 @@ from urllib import request as urllib_request
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from serve_session import ServeSessionMixin
-
-SOCKETS = ("/var/run/docker.sock", "/run/docker.sock", "/run/podman/podman.sock")
 
 
 @unittest.skipUnless(
@@ -48,6 +47,10 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 return json.loads(response.read())
         except urllib_error.HTTPError as error:
             self.fail(f"{path}: HTTP {error.code}: {error.read().decode()[:500]}")
+
+    def _status_service(self, name):
+        services = self._dashboard("/api/status")["services"]
+        return next(service for service in services if service["name"] == name)
 
     def _activation_config(self, mock_container):
         return {
@@ -94,12 +97,11 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             self.assertEqual(
                 self._explicit_container_status(self.ROUTER_CONTAINER_NAME), "created"
             )
-            code, mounts, stderr = self.inspect_container(
-                "{{json .Mounts}}", container_name=self.DASHBOARD_CONTAINER_NAME
-            )
-            self.assertEqual(code, 0, stderr)
-            destinations = {mount["Destination"] for mount in json.loads(mounts)}
-            self.assertFalse(destinations & set(SOCKETS), destinations)
+            self.assert_dashboard_holds_no_container_runtime()
+            # Without a container runtime, the Dashboard reads the stack's
+            # state from the setup config and the CLI's heartbeat.
+            router = self._status_service("Router")
+            self.assertEqual(router["status"], "standby", router)
 
             token = self._dashboard(
                 "/api/auth/bootstrap/register",
@@ -121,9 +123,16 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                     activated["message"], "Setup saved. The Router is starting."
                 )
                 # serve starts the Router, waits for it and exits.
-                self._wait_for_serve_success(serve_process)
+                output = "".join(self._wait_for_serve_success(serve_process))
+                # A standalone first run names no Envoy, and no older stack's
+                # orphaned volumes on a host that never ran one.
+                self.assertIn("with the Router on standby", output)
+                self.assertNotIn("Envoy", output)
+                self.assertNotIn("orphaned volumes", output)
                 headers = self._send_mock_chat_completion(mock_container)
                 self.assertEqual(headers.get("x-vsr-selected-model"), "test-model")
+                router = self._status_service("Router")
+                self.assertTrue(router["healthy"], router)
 
                 edited = self._activation_config(mock_container)
                 edited["routing"]["decisions"][0]["description"] = "Edited after setup"

@@ -152,12 +152,11 @@ spec:
     # Prompt guard / jailbreak detection
     prompt_guard:
       enabled: true
-      model_id: "models/Vela-1.0-Encoder-307M-Guard"
-      threshold: "0.5"
+      model_id: "models/Vela-2.0-0.3B"
+      threshold: "0.75"
       use_cpu: true
-      jailbreak_mapping_path: "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json"
 
-    # Domain and PII classifiers use the Vela defaults.
+    # Domain and PII classifiers use the Vela 2.0 0.3B defaults.
 
     # Reasoning mode configuration per model family
     # Default reasoning effort level

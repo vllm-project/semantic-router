@@ -165,21 +165,23 @@ func certificateReloadLogger(listener string) func(error) {
 }
 
 func logAccess(record gateway.AccessRecord) {
-	logging.ComponentEvent("gateway", "access", map[string]interface{}{
-		"start_time":            record.Start.UTC().Format(time.RFC3339Nano),
-		"method":                record.Method,
-		"path":                  record.Path,
-		"protocol":              record.Protocol,
-		"response_code":         record.Status,
-		"bytes_received":        record.BytesReceived,
-		"bytes_sent":            record.BytesSent,
-		"duration_ms":           record.Duration.Milliseconds(),
-		"upstream_service_time": record.UpstreamServiceTime.Milliseconds(),
-		"x_forwarded_for":       record.ForwardedFor,
-		"user_agent":            record.UserAgent,
-		"request_id":            record.RequestID,
-		"authority":             record.Authority,
-		"upstream_host":         record.UpstreamHost,
+	logging.ComponentEventFunc("gateway", "access", func() map[string]interface{} {
+		return map[string]interface{}{
+			"start_time":            record.Start.UTC().Format(time.RFC3339Nano),
+			"method":                record.Method,
+			"path":                  record.Path,
+			"protocol":              record.Protocol,
+			"response_code":         record.Status,
+			"bytes_received":        record.BytesReceived,
+			"bytes_sent":            record.BytesSent,
+			"duration_ms":           record.Duration.Milliseconds(),
+			"upstream_service_time": record.UpstreamServiceTime.Milliseconds(),
+			"x_forwarded_for":       record.ForwardedFor,
+			"user_agent":            record.UserAgent,
+			"request_id":            record.RequestID,
+			"authority":             record.Authority,
+			"upstream_host":         record.UpstreamHost,
+		}
 	})
 }
 

@@ -179,16 +179,20 @@ func (s *ClassificationAPIServer) validateHotReloadFromServing(persisted []byte,
 		if len(persisted) == 0 {
 			return nil
 		}
-		return validateHotReloadCompatibility(persisted, next)
+		return validateHotReloadCompatibilityInMode(s.gatewayMode, persisted, next)
 	}
 	nextCfg, err := config.ParseYAMLBytes(next)
 	if err != nil {
 		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
 	}
-	return validateParsedHotReloadCompatibility(serving, nextCfg)
+	return validateParsedHotReloadCompatibilityInMode(s.gatewayMode, serving, nextCfg)
 }
 
 func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
+	return validateHotReloadCompatibilityInMode(config.GatewayExtProc, currentYAML, nextYAML)
+}
+
+func validateHotReloadCompatibilityInMode(mode config.GatewayMode, currentYAML []byte, nextYAML []byte) error {
 	currentCfg, err := config.ParseYAMLBytes(currentYAML)
 	if err != nil {
 		return fmt.Errorf("failed to parse current config for reload validation: %w", err)
@@ -197,10 +201,21 @@ func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
 	}
-	return validateParsedHotReloadCompatibility(currentCfg, nextCfg)
+	return validateParsedHotReloadCompatibilityInMode(mode, currentCfg, nextCfg)
 }
 
 func validateParsedHotReloadCompatibility(
+	currentCfg *config.RouterConfig,
+	nextCfg *config.RouterConfig,
+) error {
+	return validateParsedHotReloadCompatibilityInMode(config.GatewayExtProc, currentCfg, nextCfg)
+}
+
+// validateParsedHotReloadCompatibilityInMode checks a reload in the Router's
+// gateway mode. In standalone mode the Router binds only its listeners at
+// startup; its upstream layer rebuilds provider backends on every reload.
+func validateParsedHotReloadCompatibilityInMode(
+	mode config.GatewayMode,
 	currentCfg *config.RouterConfig,
 	nextCfg *config.RouterConfig,
 ) error {
@@ -215,6 +230,14 @@ func validateParsedHotReloadCompatibility(
 		return fmt.Errorf(
 			"tracing configuration changed; the tracer provider is initialized at startup and cannot be activated by the Router hot-reload API; activate the candidate through the deployment workflow",
 		)
+	}
+	if mode == config.GatewayStandalone {
+		if currentCfg != nil && nextCfg != nil && !reflect.DeepEqual(currentCfg.Listeners, nextCfg.Listeners) {
+			return fmt.Errorf(
+				"listeners changed; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate them; restart the Router with this configuration",
+			)
+		}
+		return nil
 	}
 	if !reflect.DeepEqual(
 		envoyDeploymentProjectionFromConfig(currentCfg),
@@ -286,11 +309,18 @@ func normalizeRouterConfigDocument(doc map[string]any) ([]byte, error) {
 	return normalizeRouterConfigDocumentWithParser(doc, config.ParseYAMLBytes)
 }
 
-func normalizeRouterConfigDocumentWithoutEnv(doc map[string]any) ([]byte, error) {
-	return normalizeRouterConfigDocumentWithParser(
-		doc,
-		config.ParseYAMLBytesWithoutEnvExpansion,
-	)
+// normalizeRouterConfigDocumentWithoutEnv validates doc as the Router loads
+// it, with environment references unresolved, and returns its warnings.
+func normalizeRouterConfigDocumentWithoutEnv(doc map[string]any) ([]byte, []config.ConfigWarning, error) {
+	warnings := []config.ConfigWarning{}
+	normalized, err := normalizeRouterConfigDocumentWithParser(doc, func(data []byte) (*config.RouterConfig, error) {
+		cfg, err := config.ParseYAMLBytesWithoutEnvExpansion(data)
+		if err == nil {
+			warnings = append(warnings, config.Warnings(cfg)...)
+		}
+		return cfg, err
+	})
+	return normalized, warnings, err
 }
 
 func normalizeRouterConfigDocumentWithParser(

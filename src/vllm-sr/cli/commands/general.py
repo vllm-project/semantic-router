@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
+import os
 from pathlib import Path
 
 import click
 
+from cli import router_validation
 from cli.commands.common import exit_with_logged_error
 from cli.commands.config import (
     config_command,
@@ -15,9 +16,10 @@ from cli.commands.config import (
     migrate_config_command,
 )
 from cli.commands.config_management import CONFIG_MANAGEMENT_COMMANDS
+from cli.commands.runtime_paths import resolve_state_root_dir
 from cli.commands.validate import validate_command
+from cli.gateway_mode import GATEWAY_ENV, VALID_GATEWAYS, resolve_gateway
 from cli.router_management_client import RouterManagementClient
-from cli.terminal import echo
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -31,11 +33,12 @@ def config(ctx: click.Context) -> None:
     Print generated configuration or run config subcommands.
 
     Examples:
-        vllm-sr config envoy
-        vllm-sr config router
         vllm-sr config init --output config.yaml
-        vllm-sr config envoy --config my-config.yaml
+        vllm-sr config validate --config config.yaml
+        vllm-sr config apply --config config.yaml
+        vllm-sr config router
         vllm-sr config migrate --config old.yaml
+        vllm-sr config envoy    # with --gateway extproc
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -174,7 +177,23 @@ def config_migrate(config_path: str, output: str | None, force: bool) -> None:
 @click.option(
     "--endpoint",
     default=None,
-    help="Also validate with this running Router's authoritative parser.",
+    help="Validate with this running Router instead of the local Router image.",
+)
+@click.option(
+    "--image",
+    default=None,
+    help="Router image whose own validation to run (default: the stack's, if present).",
+)
+@click.option(
+    "--gateway",
+    type=click.Choice(VALID_GATEWAYS),
+    default=None,
+    help="The gateway mode the configuration is served in (default: standalone).",
+)
+@click.option(
+    "--offline",
+    is_flag=True,
+    help="Run only the CLI's own checks, without the Router's validation.",
 )
 @click.option("--timeout", type=float, default=15, show_default=True)
 @click.option("--token-env", default="VSR_MGMT_TOKEN", show_default=True)
@@ -182,24 +201,45 @@ def config_migrate(config_path: str, output: str | None, force: bool) -> None:
 def config_validate(
     config: str,
     endpoint: str | None,
+    image: str | None,
+    gateway: str | None,
+    offline: bool,
     timeout: float,
     token_env: str,
 ) -> None:
     """
     Validate configuration file.
 
+    The CLI's own checks run first. The Router's validation then decides, as
+    it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
+    Router in its local image (never pulled), or the running Router --endpoint
+    names.
+
     Examples:
         vllm-sr config validate
         vllm-sr config validate --config my-config.yaml
+        vllm-sr config validate --endpoint http://localhost:8080
     """
-    validate_command(config)
-    if endpoint:
-        response = RouterManagementClient(
-            endpoint,
-            timeout=timeout,
-            token_env=token_env,
-        ).validate_config(Path(config).read_text(encoding="utf-8"))
-        echo(json.dumps(response.payload, indent=2, sort_keys=True))
+    config_path = Path(config)
+    if offline:
+        router_verdict = None
+    elif endpoint:
+        client = RouterManagementClient(endpoint, timeout=timeout, token_env=token_env)
+
+        def router_verdict():
+            return router_validation.validate_with_endpoint(config_path, client)
+
+    else:
+
+        def router_verdict():
+            return router_validation.validate_with_image(
+                config_path,
+                router_validation.validation_image(image),
+                gateway=resolve_gateway(gateway or os.getenv(GATEWAY_ENV)),
+                models_dir=Path(resolve_state_root_dir(config)) / "models",
+            )
+
+    validate_command(config, router_verdict=router_verdict)
 
 
 for command in CONFIG_MANAGEMENT_COMMANDS:

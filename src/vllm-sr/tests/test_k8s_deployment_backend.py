@@ -14,7 +14,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli.commands import runtime as rt  # noqa: E402
 from cli.deployment_backend import resolve_target  # noqa: E402
-from cli.k8s_backend import K8sBackend, client_service_port  # noqa: E402
+from cli.k8s_backend import (  # noqa: E402
+    PUBLISHED_CHART,
+    K8sBackend,
+    client_service_port,
+    published_chart_version,
+)
 from cli.main import main  # noqa: E402
 from click.testing import CliRunner  # noqa: E402
 
@@ -803,3 +808,78 @@ def test_kubernetes_summary_port_forwards_the_client_port(capsys):
     out = capsys.readouterr().out
     assert "kubectl port-forward -n test-ns svc/sr 8899:8899" in out
     assert "8080:8080" not in out
+
+
+class TestK8sChartResolution:
+    """Only deploy needs a chart; without a checkout it runs the published one."""
+
+    @staticmethod
+    def _pull_into_untardir(calls: list[list[str]], returncode: int = 0):
+        def run(cmd, check=True, **_kwargs):
+            calls.append(cmd)
+            if returncode == 0:
+                chart = Path(cmd[cmd.index("--untardir") + 1]) / "semantic-router"
+                chart.mkdir(parents=True)
+                (chart / "Chart.yaml").write_text("name: semantic-router\n")
+            return subprocess.CompletedProcess(
+                cmd, returncode, "", "Error: unauthorized"
+            )
+
+        return staticmethod(run)
+
+    def test_a_backend_away_from_a_checkout_needs_no_chart(self, tmp_path, monkeypatch):
+        # status, logs, stop and dashboard build the backend too (#4710).
+        monkeypatch.chdir(tmp_path)
+
+        backend = rt._build_backend("kubernetes", namespace="sr")
+
+        assert backend.chart_dir is None
+
+    def test_deploy_fetches_the_published_chart_once(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        calls: list[list[str]] = []
+        monkeypatch.setattr(K8sBackend, "_run", self._pull_into_untardir(calls))
+        backend = K8sBackend()
+
+        chart = backend._resolve_chart_dir()
+
+        assert backend._resolve_chart_dir() == chart
+        assert (Path(chart) / "Chart.yaml").is_file()
+        assert len(calls) == 1
+        assert calls[0][:5] == [
+            "helm",
+            "pull",
+            PUBLISHED_CHART,
+            "--version",
+            published_chart_version(),
+        ]
+
+    def test_a_failed_fetch_names_the_way_out(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            K8sBackend, "_run", self._pull_into_untardir([], returncode=1)
+        )
+
+        with pytest.raises(SystemExit, match=r"unauthorized\. Pass --chart-dir"):
+            K8sBackend()._resolve_chart_dir()
+
+    def test_a_chart_dir_or_a_checkout_is_used_as_is(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            K8sBackend, "_run", self._pull_into_untardir([], returncode=1)
+        )
+        assert (
+            K8sBackend(chart_dir="/charts/mine")._resolve_chart_dir() == "/charts/mine"
+        )
+
+        checkout = tmp_path / "deploy" / "helm" / "semantic-router"
+        checkout.mkdir(parents=True)
+        (checkout / "Chart.yaml").write_text("name: semantic-router\n")
+        monkeypatch.chdir(tmp_path)
+        assert K8sBackend()._resolve_chart_dir() == str(checkout)
+
+    def test_the_published_chart_follows_the_image_channel(self, monkeypatch):
+        assert published_chart_version("0.5.0.dev20261007101233") == "0.0.0-latest"
+        monkeypatch.setattr(
+            "cli.k8s_backend.image_tag_for_cli_version", lambda version: f"v{version}"
+        )
+        assert published_chart_version("0.5.0") == "0.5.0"

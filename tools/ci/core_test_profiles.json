@@ -97,7 +97,7 @@
       "test": "TestVela2RouterMatchesSystemOne",
       "source": "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
       "profile": "external-vela2-runtime",
-      "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on a live runtime serving a Vela 2.0 model (VLLM_SRUN_VELA2_ENDPOINT); the Vela 2.0 repositories are private, so core runs the fixture-backed set, span and binding tests instead."
+      "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on a live runtime serving a Vela 2.0 model (VLLM_SRUN_VELA2_ENDPOINT); core CI serves no Vela 2.0 model, so core runs the fixture-backed set, span and binding tests instead."
     },
     {
       "package": "./pkg/extproc",
