@@ -20916,6 +20916,12 @@
                                   "fallback_reason": {
                                     "type": "string"
                                   },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "runner_up": {
+                                    "type": "string"
+                                  },
                                   "score_kind": {
                                     "type": "string"
                                   },
@@ -25067,6 +25073,12 @@
                               "type": "string"
                             },
                             "fallback_reason": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "runner_up": {
                               "type": "string"
                             },
                             "score_kind": {
@@ -32615,6 +32627,12 @@
                         "fallback_reason": {
                           "type": "string"
                         },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "runner_up": {
+                          "type": "string"
+                        },
                         "score_kind": {
                           "type": "string"
                         },
@@ -36050,6 +36068,12 @@
                               "type": "string"
                             },
                             "fallback_reason": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "runner_up": {
                               "type": "string"
                             },
                             "score_kind": {
