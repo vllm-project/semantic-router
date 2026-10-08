@@ -12,6 +12,7 @@ vi.mock('@/lib/dslCompiler', () => ({
     parseAST: vi.fn(),
     decompile: vi.fn(),
     format: vi.fn(),
+    cancelPending: vi.fn(),
   },
 }))
 
@@ -76,5 +77,18 @@ describe('asynchronous compiler ordering', () => {
     result.resolve({ dsl: 'imported DSL' })
     await expect(request).rejects.toThrow('source changed during import')
     expect(useDSLStore.getState().dslSource).toBe('unsaved edits')
+  })
+
+  it('cancels page work on departure without discarding edits or launching a late parse', async () => {
+    const result = deferred<DecompileResult>()
+    vi.mocked(dslCompiler.decompile).mockReturnValue(result.promise)
+    const request = useDSLStore.getState().importYaml('configuration')
+    useDSLStore.setState({ dslSource: 'unsaved draft', dirty: true })
+    useDSLStore.getState().pauseEditorWork()
+    result.resolve({ dsl: 'late import' })
+    await expect(request).rejects.toThrow('source changed during import')
+    expect(dslCompiler.cancelPending).toHaveBeenCalledOnce()
+    expect(dslCompiler.parseAST).not.toHaveBeenCalled()
+    expect(useDSLStore.getState()).toMatchObject({ dslSource: 'unsaved draft', dirty: true })
   })
 })

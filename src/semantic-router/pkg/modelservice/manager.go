@@ -40,6 +40,8 @@ type Manager struct {
 	cores           int
 	closed          bool
 
+	dispatchSequence uint64
+
 	autoOnce sync.Once
 	auto     string
 }

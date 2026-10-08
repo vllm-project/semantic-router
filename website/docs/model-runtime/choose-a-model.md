@@ -296,7 +296,7 @@ GPU, plus room for the requests: a 307M task model needs about 1.3 GB on a
 CPU, and Decision 2.0 Lux-9B about 18 GB on a GPU. The runtime refuses to load
 a model that does not fit its device and says why. To keep large models apart,
 give them their own process (see
-[Run it with the router](./deploy.md#group-models-into-processes)).
+[Run it with the router](./deploy.md#place-and-scale-replicas)).
 
 ## Your own models
 

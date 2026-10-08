@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SystemStatus } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import type { CanonicalGlobalConfig } from './configPageSupport'
@@ -14,7 +14,8 @@ import {
   withDecisionModel,
   type DecisionModelName,
 } from './decisionModelSupport'
-import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { useDashboardObservation } from '../utils/useDashboardObservation'
+import { invalidateDashboardObservations } from '../utils/dashboardObservationCache'
 import { withRequestTimeout } from '../utils/boundedRequest'
 import {
   withDecisionRuntimeDeployment,
@@ -27,130 +28,77 @@ async function fetchSnapshot<T>(path: string, signal: AbortSignal): Promise<T> {
   return response.json() as Promise<T>
 }
 
+let observedConfigurationRevision: string | null = null
+const configPath = '/api/router/config/all'
+const globalPath = '/api/router/config/global'
+
 export function useDecisionModelManagement() {
-  const [config, setConfig] = useState<RouterConfig | null>(null)
-  const [global, setGlobal] = useState<CanonicalGlobalConfig | null>(null)
-  const [status, setStatus] = useState<SystemStatus | null>(null)
-  const [inventory, setInventory] = useState<ModelRuntimeInventory | null>(null)
-  const [activation, setActivation] = useState<DecisionModelActivation | null>(null)
+  const configObservation = useDashboardObservation<RouterConfig>(configPath, {
+    freshMs: 60_000,
+    pollMs: 0,
+  })
+  const globalObservation = useDashboardObservation<CanonicalGlobalConfig>(globalPath, {
+    freshMs: 60_000,
+    pollMs: 0,
+  })
+  const statusObservation = useDashboardObservation<SystemStatus>('/api/status')
+  const inventoryObservation = useDashboardObservation<ModelRuntimeInventory>(
+    '/api/router/api/v1/inventory/model-runtime',
+  )
+  const activationObservation = useDashboardObservation<DecisionModelActivation>(
+    '/api/router/api/v1/config/hash',
+  )
+  const config = configObservation.data
+  // Authored config and effective defaults are different contracts. Cache both,
+  // but never make runtime observations wait for either configuration view.
+  const global = globalObservation.data
+  const status = statusObservation.data
+  const inventory = inventoryObservation.data
+  const activation = activationObservation.data
   const [choice, setChoice] = useState<DecisionModelName | null>(null)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [deploying, setDeploying] = useState(false)
   const [applyResult, setApplyResult] = useState<DecisionModelApplyResult | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const mutationInProgress = useRef(false)
-  const lifetime = useRef<AbortController | null>(null)
-  const configurationNeeded = useRef(true)
-  const observedConfiguration = useRef<string | null>(null)
-
-  const refreshSnapshot = useCallback(async () => {
-    const mounted = lifetime.current
-    if (mutationInProgress.current || !mounted || mounted.signal.aborted) return
-    setRefreshing(true)
-    const reads = new AbortController()
-    const cancel = () => reads.abort()
-    mounted.signal.addEventListener('abort', cancel, { once: true })
-    const timeout = window.setTimeout(() => {
-      reads.abort(new Error('Status request timed out after 10 seconds.'))
-    }, 10_000)
-    const readConfiguration = configurationNeeded.current
-    configurationNeeded.current = false
-    const observe = async <T>(path: string, label: string, update: (value: T | null) => void) => {
-      try {
-        const value = await fetchSnapshot<T>(path, reads.signal)
-        if (mounted.signal.aborted) return
-        update(value)
-        setErrors((current) => ({ ...current, [label]: '' }))
-        return value
-      } catch (cause) {
-        if (mounted.signal.aborted) return
-        // A failed observation cannot keep an earlier ready state alive.
-        update(null)
-        setErrors((current) => ({
-          ...current,
-          [label]: `${label}: ${cause instanceof Error ? cause.message : 'Unavailable'}`,
-        }))
-        if (path === '/api/router/config/all' || path === '/api/router/config/global') {
-          configurationNeeded.current = true
-        }
-      }
-    }
-    const readSavedConfiguration = () =>
+  const { refresh: refreshConfig } = configObservation
+  const { refresh: refreshGlobal } = globalObservation
+  const { refresh: refreshStatus } = statusObservation
+  const { refresh: refreshInventory } = inventoryObservation
+  const { refresh: refreshActivation } = activationObservation
+  const refreshSnapshot = useCallback(
+    () =>
       Promise.all([
-        observe<RouterConfig>('/api/router/config/all', 'Routing configuration', setConfig),
-        observe<CanonicalGlobalConfig>(
-          '/api/router/config/global',
-          'Saved decision model',
-          setGlobal,
-        ).finally(() => {
-          if (!mounted.signal.aborted) setLoading(false)
-        }),
-      ])
-    const readActivation = async () => {
-      const value = await observe<DecisionModelActivation>(
-        '/api/router/api/v1/config/hash',
-        'Configuration activation',
-        setActivation,
-      )
-      const revision = value?.generated_runtime_hash
-      if (!revision || mounted.signal.aborted) return
-      const changed = observedConfiguration.current !== revision
-      observedConfiguration.current = revision
-      // The revision only invalidates a cached observation. It never gates
-      // deployment or demands equality with the active runtime. Read within
-      // this poll so external changes appear promptly without polling config.
-      if (changed && !readConfiguration) await readSavedConfiguration()
-    }
-    // Render each observation when it arrives. A slow inventory endpoint must
-    // not hide an already available saved selection or deployment controls.
-    await Promise.all([
-      ...(readConfiguration ? [readSavedConfiguration()] : []),
-      observe<SystemStatus>('/api/status', 'Service status', setStatus),
-      observe<ModelRuntimeInventory>(
-        '/api/router/api/v1/inventory/model-runtime',
-        'Runtime deployments',
-        setInventory,
-      ),
-      readActivation(),
-    ]).finally(() => {
-      window.clearTimeout(timeout)
-      mounted.signal.removeEventListener('abort', cancel)
-    })
-    if (mounted.signal.aborted) return
-    setUpdatedAt(new Date())
-    setLoading(false)
-    setRefreshing(false)
-  }, [])
-  const request = useMemo(() => createVisibilityAwareRequest(refreshSnapshot), [refreshSnapshot])
-
+        refreshConfig(),
+        refreshGlobal(),
+        refreshStatus(),
+        refreshInventory(),
+        refreshActivation(),
+      ]),
+    [refreshConfig, refreshGlobal, refreshStatus, refreshInventory, refreshActivation],
+  )
   useEffect(() => {
-    const mounted = new AbortController()
-    lifetime.current = mounted
-    configurationNeeded.current = true
-    observedConfiguration.current = null
-    void request.run({ allowHidden: true })
-    const refreshVisible = () => {
-      void request.run()
+    const revision = activation?.generated_runtime_hash
+    if (!revision) return
+    if (observedConfigurationRevision && observedConfigurationRevision !== revision) {
+      invalidateDashboardObservations([configPath, globalPath])
     }
-    const configurationChanged = () => {
-      configurationNeeded.current = true
-      void request.run()
-    }
-    window.addEventListener('config-deployed', configurationChanged)
-    document.addEventListener('visibilitychange', refreshVisible)
-    const interval = window.setInterval(refreshVisible, 10_000)
-    return () => {
-      mounted.abort()
-      if (lifetime.current === mounted) lifetime.current = null
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', refreshVisible)
-      window.removeEventListener('config-deployed', configurationChanged)
-    }
-  }, [request])
-
+    observedConfigurationRevision = revision
+  }, [activation?.generated_runtime_hash])
+  const observationState = {
+    config: configObservation,
+    global: globalObservation,
+    status: statusObservation,
+    inventory: inventoryObservation,
+    activation: activationObservation,
+  }
+  const observations = Object.entries(observationState)
+  const errors = observations.flatMap(([label, observation]) =>
+    observation.error ? [`${label}: ${observation.error}`] : [],
+  )
+  const latest = Math.max(...observations.map(([, value]) => value.updatedAt ?? 0))
+  const updatedAt = latest ? new Date(latest) : null
+  const loading = globalObservation.loading
+  const refreshing = observations.some(([, value]) => value.refreshing)
   const savedModel = global ? configuredDecisionModel({ global }) : null
   const selectedModel = choice ?? savedModel
   const deploy = async () => {
@@ -159,9 +107,6 @@ export function useDecisionModelManagement() {
     setDeploying(true)
     setApplyResult(null)
     setApplyError(null)
-    // Finish an earlier poll before the write, so it cannot replace the result
-    // of the post-write refresh with an older saved configuration.
-    await request.run({ allowHidden: true })
     try {
       const current = await withRequestTimeout((signal) =>
         fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
@@ -180,9 +125,8 @@ export function useDecisionModelManagement() {
       throw cause
     } finally {
       mutationInProgress.current = false
-      configurationNeeded.current = true
-      await request.run({ allowHidden: true })
       setDeploying(false)
+      void refreshSnapshot()
     }
   }
 
@@ -192,7 +136,6 @@ export function useDecisionModelManagement() {
     setDeploying(true)
     setApplyResult(null)
     setApplyError(null)
-    await request.run({ allowHidden: true })
     try {
       // Read immediately before writing: the manager's static snapshot may be
       // older than edits made in another configuration page or browser.
@@ -210,9 +153,8 @@ export function useDecisionModelManagement() {
       return result
     } finally {
       mutationInProgress.current = false
-      configurationNeeded.current = true
-      await request.run({ allowHidden: true })
       setDeploying(false)
+      void refreshSnapshot()
     }
   }
 
@@ -221,7 +163,6 @@ export function useDecisionModelManagement() {
     mutationInProgress.current = true
     setDeploying(true)
     try {
-      await request.run({ allowHidden: true })
       const current = await withRequestTimeout((signal) =>
         fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
       )
@@ -236,9 +177,8 @@ export function useDecisionModelManagement() {
       return result
     } finally {
       mutationInProgress.current = false
-      configurationNeeded.current = true
-      await request.run({ allowHidden: true })
       setDeploying(false)
+      void refreshSnapshot()
     }
   }
 
@@ -251,7 +191,8 @@ export function useDecisionModelManagement() {
     savedModel,
     selectedModel,
     selectModel: setChoice,
-    errors: Object.values(errors).filter(Boolean),
+    errors,
+    observationState,
     loading,
     refreshing,
     deploying,
@@ -261,9 +202,6 @@ export function useDecisionModelManagement() {
     deploy,
     deployRuntime,
     updateConfig,
-    refresh: () => {
-      configurationNeeded.current = true
-      return request.run({ allowHidden: true })
-    },
+    refresh: refreshSnapshot,
   }
 }

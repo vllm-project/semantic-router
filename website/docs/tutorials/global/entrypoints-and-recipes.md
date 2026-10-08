@@ -172,7 +172,7 @@ By default, the Router skips a candidate whose declared context window is
 smaller than the estimated input, or whose declared capabilities lack a
 required input such as images. It does not check output limits, so a request
 for 16,384 output tokens can still reach `local-coder`. With
-[`candidate_requirements`](../../installation/configuration#recipe-wide-candidate-and-replay-policies)
+[`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements)
 on the recipe, the Router also checks output limits and tool, reasoning, and
 structured-output declarations before scoring. A request that fits only some
 candidates goes to one of them, and one that fits none is rejected before

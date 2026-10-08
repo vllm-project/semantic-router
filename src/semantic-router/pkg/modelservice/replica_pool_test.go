@@ -101,16 +101,16 @@ func TestReplicaPoolBalancesOutstandingWorkAndBoundsAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer releaseFirst(false)
+	defer releaseFirst(replicaOK)
 	second, releaseSecond, err := pool.retain(10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer releaseSecond(false)
+	defer releaseSecond(replicaOK)
 	if first.id == second.id {
 		t.Fatal("outstanding work did not choose the idle replica")
 	}
-	releases := []func(bool){releaseFirst, releaseSecond}
+	releases := []func(replicaOutcome){releaseFirst, releaseSecond}
 	for i := 2; i < 2*replicaAdmissionLimit; i++ {
 		_, release, err := pool.retain(1)
 		if err != nil {
@@ -122,7 +122,7 @@ func TestReplicaPoolBalancesOutstandingWorkAndBoundsAdmission(t *testing.T) {
 		t.Fatalf("unbounded admission: %v", err)
 	}
 	for _, release := range releases {
-		release(false)
+		release(replicaOK)
 	}
 	for _, replica := range pool.status().Replicas {
 		if replica.Inflight != 0 || replica.EstimatedWork != 0 {
@@ -233,7 +233,7 @@ func TestReplicaPoolBackoffAndNilBodyAreExplicit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	release(true)
+	release(replicaFailed)
 	status := pool.status()
 	if status.Ready || status.ReadyReplicas != 0 || status.Replicas[0].Ready || status.Replicas[0].State != "backoff" {
 		t.Fatalf("backoff availability inconsistent: %+v", status)
@@ -307,12 +307,12 @@ func TestReplicaPoolOverlappingGenerationsShareAdmissionAndDrainState(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer releaseOld(false)
+	defer releaseOld(replicaOK)
 	newWorker, releaseNew, err := current.retain(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer releaseNew(false)
+	defer releaseNew(replicaOK)
 	if oldWorker.id == newWorker.id {
 		t.Fatal("new generation ignored prior generation's outstanding work")
 	}

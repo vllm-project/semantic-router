@@ -46,6 +46,7 @@ const BuilderPage: React.FC = () => {
     crdOutput,
     compileError,
     initCompiler,
+    pauseEditorWork,
     compile,
     validate,
     parseAST,
@@ -142,7 +143,8 @@ const BuilderPage: React.FC = () => {
   // Check compiler availability on mount
   useEffect(() => {
     initCompiler()
-  }, [initCompiler])
+    return () => pauseEditorWork()
+  }, [initCompiler, pauseEditorWork])
 
   // The visual workspace is the primary authoring entrypoint. DSL remains one
   // click away for precision edits and round-trip inspection.

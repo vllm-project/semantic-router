@@ -44,12 +44,12 @@ export default function DecisionMonitoringPage() {
             ))}
           </div>
         )}
-        <DecisionTaskMonitoring refreshedAt={runtime.updatedAt} />
         <DecisionModelRuntimePanel
           inventory={runtime.inventory}
           refreshedAt={runtime.updatedAt}
           loading={runtime.loading}
         />
+        <DecisionTaskMonitoring refreshedAt={runtime.updatedAt} />
       </div>
     </ConfigPageManagerLayout>
   )

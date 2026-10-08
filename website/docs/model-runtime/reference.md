@@ -454,7 +454,7 @@ Frontend (port 9190), available in both modes:
 | `vsr_model_runtime_replica_ready` | `deployment`, `replica` | Physical worker readiness. Inventory additionally checks compatibility and dispatch backoff. |
 | `vsr_model_runtime_replica_inflight` | `deployment`, `replica` | Locally admitted exchanges awaiting complete responses. |
 | `vsr_model_runtime_replica_admitted_bytes` | `deployment`, `replica` | Bytes in those outstanding requests; not the worker's internal queue or token count. |
-| `vsr_model_runtime_replica_requests_total` | `deployment`, `replica`, `outcome` | Completed dispatches by replica and transport outcome. |
+| `vsr_model_runtime_replica_requests_total` | `deployment`, `replica`, `outcome` | Completed dispatches: `ok`, `failed`, `rejected`, `canceled`, or `timeout`. Cancellation and caller deadlines release admission without marking the worker healthy or unhealthy. |
 | `vsr_model_runtime_ready` | `deployment` | 1 while the deployment answers. |
 | `vsr_model_runtime_requests_total` | `deployment`, `outcome` | Calls by outcome: `ok`, `timeout`, `unavailable`, `overloaded`, `rejected`, `failed`. |
 | `vsr_model_runtime_request_duration_seconds` | `deployment`, `surface` | Latency of calls that reached the runtime. |

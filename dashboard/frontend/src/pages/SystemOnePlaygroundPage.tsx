@@ -17,6 +17,7 @@ import {
 } from './systemOnePlayground'
 import { useSystemOnePlayground } from './useSystemOnePlayground'
 import { useDecisionTasks } from './useDecisionTasks'
+import { systemOneDeploymentOption } from './systemOneDeploymentPresentation'
 import styles from './SystemOnePlaygroundPage.module.css'
 
 function QuestionEditor({
@@ -398,15 +399,7 @@ export default function SystemOnePlaygroundPage() {
             onChange={runtime.setSelectedId}
             placeholder={runtime.loading ? 'Discovering models…' : 'No runtime available'}
             disabled={runtime.loading || runtime.running}
-            options={(runtime.capabilities?.deployments ?? []).map((item) => ({
-              value: item.id,
-              label: item.model,
-              description: [
-                ...(item.model === item.id ? [] : [item.id]),
-                item.ready ? 'Ready' : 'Unavailable',
-                `${item.question_types.length} question types`,
-              ].join(' · '),
-            }))}
+            options={(runtime.capabilities?.deployments ?? []).map(systemOneDeploymentOption)}
           />
           {selected && (
             <span className={selected.ready ? styles.successPill : styles.warningPill}>

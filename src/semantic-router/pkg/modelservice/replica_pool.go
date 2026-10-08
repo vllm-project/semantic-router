@@ -29,6 +29,16 @@ type ReplicaStatus struct {
 
 const replicaAdmissionLimit = 32
 
+type replicaOutcome string
+
+const (
+	replicaOK       replicaOutcome = "ok"
+	replicaFailed   replicaOutcome = "failed"
+	replicaRejected replicaOutcome = "rejected"
+	replicaCanceled replicaOutcome = "canceled"
+	replicaTimeout  replicaOutcome = "timeout"
+)
+
 // replicaLoad belongs to a physical worker, so overlapping generations and
 // native/Router leases observe the same outstanding work and health backoff.
 type replicaLoad struct {
@@ -37,6 +47,8 @@ type replicaLoad struct {
 	work     int64
 	backoff  time.Time
 	failures int
+	// Protected by the manager lock, shared across overlapping generations.
+	lastAssigned uint64
 }
 
 type replicaWorker struct {
@@ -288,7 +300,7 @@ func (p *replicaPool) status() DeploymentStatus {
 // retain selects one worker for an already fused exchange. The physical
 // reference lasts through response consumption, so closing old generations
 // drains accepted work before stopping an otherwise unused managed process.
-func (p *replicaPool) retain(cost int64) (replicaWorker, func(bool), error) {
+func (p *replicaPool) retain(cost int64) (replicaWorker, func(replicaOutcome), error) {
 	ready, _ := p.readyWorkers()
 	p.manager.mu.Lock()
 	defer p.manager.mu.Unlock()
@@ -297,6 +309,7 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(bool), error) {
 	}
 	var chosen *replicaWorker
 	best := int64(0)
+	var oldest uint64
 	for i := range ready {
 		w := &ready[i]
 		g := w.member.group
@@ -308,9 +321,12 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(bool), error) {
 		available := load.inflight < replicaAdmissionLimit && !time.Now().Before(load.backoff)
 		score := load.work
 		load.mu.Unlock()
-		if available && (chosen == nil || score < best) {
+		// An idle or equally loaded pool rotates through physical workers.
+		// Readiness filtering and a new configuration generation cannot reset it.
+		if available && (chosen == nil || score < best || score == best && load.lastAssigned < oldest) {
 			chosen = w
 			best = score
+			oldest = load.lastAssigned
 		}
 	}
 	if chosen == nil {
@@ -321,6 +337,8 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(bool), error) {
 	}
 	w := *chosen
 	load := &w.member.served.load
+	p.manager.dispatchSequence++
+	load.lastAssigned = p.manager.dispatchSequence
 	load.mu.Lock()
 	load.inflight++
 	load.work += cost
@@ -329,28 +347,24 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(bool), error) {
 	load.mu.Unlock()
 	w.member.group.refs++
 	var once sync.Once
-	release := func(failed bool) {
+	release := func(outcome replicaOutcome) {
 		once.Do(func() {
 			load.mu.Lock()
 			load.inflight--
 			load.work -= cost
 			replicaInflightGauge.WithLabelValues(p.name, w.id).Set(float64(load.inflight))
 			replicaWorkGauge.WithLabelValues(p.name, w.id).Set(float64(load.work))
-			outcome := "ok"
-			if failed {
-				outcome = "failed"
-			}
-			replicaRequestsTotal.WithLabelValues(p.name, w.id, outcome).Inc()
-			if failed {
+			replicaRequestsTotal.WithLabelValues(p.name, w.id, string(outcome)).Inc()
+			if outcome == replicaFailed {
 				load.failures++
 				delay := time.Duration(1<<min(load.failures-1, 5)) * 100 * time.Millisecond
 				load.backoff = time.Now().Add(delay)
-			} else {
+			} else if outcome == replicaOK {
 				load.failures = 0
 				load.backoff = time.Time{}
 			}
 			load.mu.Unlock()
-			if failed {
+			if outcome == replicaFailed {
 				w.member.group.requestProbe()
 			}
 			p.manager.release([]*group{w.member.group})

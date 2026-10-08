@@ -93,7 +93,7 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 记录的 worker benchmark 在 16 个 CPU 核上约需 0.2 秒。`POST /v1/decisions` 是
 `/v1/systemone` 的别名，都要求明确的公开模型 ID。原生模型发现使用
 `/v1/systemone/models`，`/v1/models` 仍属于 Chat。classify、embeddings、rerank
-和 bundle 属于独立的 worker API，参见[任务指南](./guides/classify.md)。
+和 bundle 属于独立的 worker API，参见[任务指南](model-runtime/guides/classify.md)。
 
 ## 4. 在路由器中使用 {#4-use-it-from-the-router}
 
@@ -181,7 +181,7 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 如果运行时之后重启，在模型恢复之前该信号为未知，`on_unknown: no_match` 会在此期间把请求送到 `default-route`。
 
 Engine 与 Router 共享同一个受管理实例。若要接入独立运营的 worker，明确配置
-`endpoint` 和 `served_name`；[部署指南](./deploy.md) 说明其独立 API 和生命周期。
+`endpoint` 和 `served_name`；[部署指南](model-runtime/deploy.md) 说明其独立 API 和生命周期。
 
 ## 下一步 {#next-steps}
 

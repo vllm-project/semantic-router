@@ -17,7 +17,9 @@ const response = {
     entities: { type: 'span' },
     needs: { type: 'set' },
   },
-  spans: { entities: [{ label: 'person', start: 5, end: 14, text: 'Maya Chen', probability: 0.96 }] },
+  spans: {
+    entities: [{ label: 'person', start: 5, end: 14, text: 'Maya Chen', probability: 0.96 }],
+  },
   sets: {
     needs: {
       selected: ['coding', 'reasoning'],
@@ -37,6 +39,7 @@ async function mockPlayground(
     classicOnly?: boolean
     unready?: boolean
     sameIdentity?: boolean
+    repo?: string
   } = {},
 ) {
   await mockAuthenticatedAppShell(
@@ -63,6 +66,7 @@ async function mockPlayground(
           {
             id: '@vela/auto',
             model: options.sameIdentity ? '@vela/auto' : 'vela-test',
+            repo: options.repo,
             ready: !options.unready,
             question_types: options.classicOnly ? types.slice(0, 3) : types,
             surfaces: ['decisions'],
@@ -72,10 +76,12 @@ async function mockPlayground(
       }),
     }),
   )
-  await page.route('**/api/decision-model/tasks', (route) => route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({ tasks: [], deployments: [], bindings: [] }),
-  }))
+  await page.route('**/api/decision-model/tasks', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ tasks: [], deployments: [], bindings: [] }),
+    }),
+  )
   const requests: Record<string, unknown>[] = []
   await page.route('**/api/decision-model/test', (route) => {
     requests.push(route.request().postDataJSON())
@@ -86,7 +92,7 @@ async function mockPlayground(
     page.getByRole('heading', { name: 'Decision Playground', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toContainText(
-    options.sameIdentity ? '@vela/auto' : 'vela-test',
+    options.repo || (options.sameIdentity ? '@vela/auto' : 'vela-test'),
   )
   return requests
 }
@@ -103,6 +109,43 @@ async function loadExample(page: Page, label: string) {
   await page.getByRole('combobox', { name: 'Load example', exact: true }).click()
   await page.getByRole('option', { name: new RegExp(label) }).click()
 }
+
+test('names the actual runtime model while keeping the deployment as the request target', async ({
+  page,
+}) => {
+  const requests = await mockPlayground(page, { sameIdentity: true, repo: 'vllm-sr/Vela-2.0-4B' })
+  const target = page.getByRole('combobox', { name: 'Runtime target', exact: true })
+  await expect(target).toContainText('vllm-sr/Vela-2.0-4B')
+  await target.click()
+  const option = page.getByRole('option', { name: /vllm-sr\/Vela-2.0-4B/ })
+  await expect(option).toContainText('Deployment: @vela/auto')
+  await option.click()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await expect(page.getByRole('article', { name: 'Result for task' })).toBeVisible()
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({ deployment: '@vela/auto' })
+})
+
+test('shows runtime deployments before task observations in monitoring', async ({ page }) => {
+  await mockAuthenticatedAppShell(page)
+  await page.route('**/api/router/api/v1/inventory/model-runtime', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ deployments: [] }),
+    }),
+  )
+  await page.route('**/api/decision-model/tasks', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ tasks: [], deployments: [], bindings: [] }),
+    }),
+  )
+  await page.goto('/decision-model/monitoring')
+  const headings = page.getByRole('heading', {
+    name: /^(Model runtime deployments|Task observations)$/,
+  })
+  await expect(headings).toHaveText(['Model runtime deployments', 'Task observations'])
+})
 
 test('runs a native request and presents real probabilities with API details collapsed', async ({
   page,
@@ -180,7 +223,9 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
   await expect(page.getByRole('article', { name: 'Result for needs_reasoning' })).toContainText(
     '88.0%',
   )
-  await expect(page.getByRole('article', { name: 'Result for needs' })).toContainText('✓ reasoning')
+  await expect(page.getByRole('article', { name: 'Result for needs', exact: true })).toContainText(
+    '✓ reasoning',
+  )
   const spans = page.getByRole('article', { name: 'Result for entities' })
   await expect(spans.getByLabel('Highlighted spans').locator('mark')).toContainText('Maya Chen')
   await expect(spans.getByRole('cell', { name: '5–14', exact: true })).toBeVisible()

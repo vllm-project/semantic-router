@@ -10,14 +10,15 @@ import DecisionTaskBindings, { withDecisionTaskBinding } from './DecisionTaskBin
 import { useDecisionModelManagement } from './useDecisionModelManagement'
 import { useDecisionTasks } from './useDecisionTasks'
 import { useInstanceDeployment } from './useInstanceDeployment'
-import InstanceModePanel from './InstanceModePanel'
 import DecisionReplicaPanel from './DecisionReplicaPanel'
+import DecisionObservationStatus from './DecisionObservationStatus'
 import styles from './DecisionModelPage.module.css'
 
 export default function DecisionModelPage() {
   const { user } = useAuth()
   const { isReadonly, isLoading: accessLoading } = useReadonly()
   const instance = useInstanceDeployment()
+  const instanceBusy = !instance.stale && instance.busy
   const model = useDecisionModelManagement()
   const tasks = useDecisionTasks()
   const observedMode =
@@ -41,7 +42,7 @@ export default function DecisionModelPage() {
     <ConfigPageManagerLayout
       eyebrow="Build / System One"
       title="Decision Models"
-      description="Manage decision models, runtime capacity and task bindings. Enable routing when you need it."
+      description="Manage decision models, runtime capacity and task bindings. Serving mode follows the instance startup configuration."
     >
       <div className={styles.page}>
         <div className={styles.toolbar}>
@@ -59,7 +60,7 @@ export default function DecisionModelPage() {
             </Link>
             <button
               type="button"
-              disabled={model.refreshing || instance.busy}
+              disabled={model.refreshing || instanceBusy}
               onClick={() => {
                 void model.refresh()
                 void instance.refresh()
@@ -85,9 +86,15 @@ export default function DecisionModelPage() {
           <div className={styles.deploymentHeading}>
             <div>
               <span className={styles.statusEyebrow}>Current deployment</span>
-              <h2 id="decision-model-status-title">{activeLabel || 'Model not reported'}</h2>
+              <h2 id="decision-model-status-title">
+                {activeLabel ||
+                  (instance.loading || model.observationState.inventory.loading
+                    ? 'Loading active model…'
+                    : 'Model not reported')}
+              </h2>
             </div>
             <span className={styles.modeBadge}>
+              {instance.stale ? 'Last observed: ' : ''}
               {observedMode === 'router'
                 ? 'Router mode'
                 : observedMode === 'engine'
@@ -98,18 +105,39 @@ export default function DecisionModelPage() {
           <div className={styles.deploymentFacts}>
             <div>
               <span>Model readiness</span>
-              <strong>{runtimeState}</strong>
+              <strong>
+                {model.observationState.inventory.loading
+                  ? 'Checking runtime…'
+                  : `${model.observationState.inventory.stale ? 'Last observed: ' : ''}${runtimeState}`}
+              </strong>
+              <DecisionObservationStatus
+                label="Runtime"
+                observation={model.observationState.inventory}
+              />
             </div>
             <div>
               <span>Deployment phase</span>
-              <strong>{phase.replace(/_/g, ' ')}</strong>
+              <strong>
+                {instance.loading
+                  ? 'Checking instance…'
+                  : `${instance.stale ? 'Last observed: ' : ''}${phase.replace(/_/g, ' ')}`}
+              </strong>
+              <DecisionObservationStatus label="Instance" observation={instance} />
             </div>
             <div>
               <span>Saved configuration</span>
-              <strong>{decisionActivationLabel(model.activation)}</strong>
+              <strong>
+                {model.observationState.activation.loading
+                  ? 'Checking configuration…'
+                  : `${model.observationState.activation.stale ? 'Last observed: ' : ''}${decisionActivationLabel(model.activation)}`}
+              </strong>
+              <DecisionObservationStatus
+                label="Activation"
+                observation={model.observationState.activation}
+              />
             </div>
           </div>
-          {instance.busy && (
+          {instanceBusy && (
             <div className={styles.deploymentProgress} role="status">
               <span />
               Deployment in progress. This page remains available while the runtime changes.
@@ -147,12 +175,15 @@ export default function DecisionModelPage() {
             </p>
           </details>
         </section>
-        <InstanceModePanel instance={instance} writable={writable && !model.deploying} />
         <section className={styles.panel} aria-labelledby="decision-model-choose-title">
+          <DecisionObservationStatus
+            label="Model configuration"
+            observation={model.observationState.global}
+          />
           <DecisionModelCatalog
             model={model}
             writable={writable}
-            busy={instance.busy}
+            busy={instanceBusy}
             onDeploy={() => void model.deploy().catch(() => {})}
             tasks={tasks.data}
           />
@@ -167,11 +198,12 @@ export default function DecisionModelPage() {
             </p>
           )}
         </section>
-        <DecisionReplicaPanel model={model} writable={writable && !instance.busy} />
+        <DecisionReplicaPanel model={model} writable={writable && !instanceBusy} />
         <DecisionTaskBindings
           data={tasks.data}
           error={tasks.error}
-          writable={writable && !model.deploying && !instance.busy}
+          observation={tasks}
+          writable={writable && !model.deploying && !instanceBusy && !tasks.stale}
           save={(binding, deployment) =>
             model.updateConfig((current) => withDecisionTaskBinding(current, binding, deployment))
           }

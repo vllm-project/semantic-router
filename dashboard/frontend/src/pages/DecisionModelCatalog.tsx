@@ -32,7 +32,13 @@ export default function DecisionModelCatalog({ model, writable, busy, onDeploy, 
   const totalPages = Math.max(1, Math.ceil(options.length / pageSize))
   const currentPage = Math.min(page, totalPages)
   const selected = DECISION_MODEL_OPTIONS.find((option) => option.name === model.selectedModel)
-  const disabled = !writable || busy || model.deploying || !model.global
+  const disabled =
+    !writable ||
+    busy ||
+    model.deploying ||
+    !model.global ||
+    model.observationState.config.stale ||
+    model.observationState.global.stale
   const projection = tasks?.models?.find((item) => item.model === selected?.artifact)
   const updateFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value)

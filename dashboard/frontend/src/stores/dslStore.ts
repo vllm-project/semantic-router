@@ -48,6 +48,8 @@ let sourceRevision = 0
 let compileRequestId = 0
 let analysisRequestId = 0
 let importRequestId = 0
+let initRequestId = 0
+let editorRequests = new AbortController()
 
 // ---------- Store ----------
 
@@ -56,15 +58,34 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   async initCompiler() {
     if (get().compilerReady) return
+    const requestId = ++initRequestId
     set({ loading: true, compilerError: null })
     try {
       await dslCompiler.init()
+      if (requestId !== initRequestId) return
       set({ compilerReady: true, loading: false })
     } catch (err) {
+      if (requestId !== initRequestId) return
       const msg = err instanceof Error ? err.message : String(err)
       set({ compilerError: msg, loading: false })
       console.error('[DSLStore] Compiler init failed:', msg)
     }
+  },
+
+  pauseEditorWork() {
+    if (validateTimer) clearTimeout(validateTimer)
+    sourceRevision++
+    compileRequestId++
+    analysisRequestId++
+    importRequestId++
+    renderedYamlRequestId++
+    initRequestId++
+    editorRequests.abort()
+    editorRequests = new AbortController()
+    dslCompiler.cancelPending()
+    // Preserve the draft and outputs across navigation; only cancel reads and
+    // compiler work. An already submitted deployment keeps its own lifecycle.
+    set({ loading: false })
   },
 
   setDslSource(source: string) {
@@ -121,12 +142,13 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       })
       if (compiledYaml) {
         const requestId = ++renderedYamlRequestId
-        void renderCanonicalYaml(compiledYaml, dslSource, baseConfigYaml)
+        void renderCanonicalYaml(compiledYaml, dslSource, baseConfigYaml, editorRequests.signal)
           .then((renderedYamlOutput) => {
             if (requestId !== renderedYamlRequestId || get().yamlOutput !== compiledYaml) return
             set({ renderedYamlOutput })
           })
           .catch((error) => {
+            if (requestId !== renderedYamlRequestId) return
             console.warn('[dslStore.compile] Full YAML preview unavailable:', error)
           })
       }
@@ -307,7 +329,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (!compilerReady) throw new Error('Compiler not ready')
 
     const revision = sourceRevision
-    const resp = await fetch('/api/router/config/yaml')
+    const resp = await fetch('/api/router/config/yaml', { signal: editorRequests.signal })
     if (!resp.ok) {
       throw new Error(`Failed to fetch config: HTTP ${resp.status}`)
     }

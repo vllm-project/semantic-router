@@ -1,6 +1,4 @@
-import { useEffect, useState } from 'react'
-import { withRequestTimeout } from '../utils/boundedRequest'
-import { responseErrorMessage } from './configPageRequestErrors'
+import { useDashboardObservation } from '../utils/useDashboardObservation'
 import type { SystemOneQuestion } from './systemOnePlayground'
 
 export interface DecisionTask {
@@ -66,54 +64,18 @@ export interface DecisionTasks {
   bindings: DecisionTaskBinding[]
 }
 export function useDecisionTasks(enabled = true) {
-  const [data, setData] = useState<DecisionTasks | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [revision, setRevision] = useState(0)
-  useEffect(() => {
-    if (!enabled) return
-    const controller = new AbortController()
-    void withRequestTimeout(
-      async (signal) => {
-        const response = await fetch('/api/decision-model/tasks', { signal })
-        if (!response.ok) throw new Error(await responseErrorMessage(response))
-        const result = (await response.json()) as DecisionTasks
-        if (
-          !Array.isArray(result.tasks) ||
-          !Array.isArray(result.deployments) ||
-          !Array.isArray(result.bindings)
-        )
-          throw new Error('Task discovery returned an invalid response.')
-        if (!controller.signal.aborted) {
-          setData(result)
-          setError(null)
-        }
-      },
-      controller.signal,
-      10000,
-    ).catch((cause: unknown) => {
-      if (!controller.signal.aborted) {
-        setData(null)
-        setError(cause instanceof Error ? cause.message : 'Task capabilities are unavailable.')
-      }
-    })
-    return () => controller.abort()
-  }, [revision, enabled])
-  useEffect(() => {
-    if (!enabled) return
-    const refresh = () => setRevision((current) => current + 1)
-    const refreshVisible = () => {
-      if (document.visibilityState !== 'hidden') refresh()
-    }
-    window.addEventListener('config-deployed', refresh)
-    window.addEventListener('instance-deployed', refresh)
-    document.addEventListener('visibilitychange', refreshVisible)
-    const timer = window.setInterval(refreshVisible, 10000)
-    return () => {
-      window.removeEventListener('config-deployed', refresh)
-      window.removeEventListener('instance-deployed', refresh)
-      document.removeEventListener('visibilitychange', refreshVisible)
-      window.clearInterval(timer)
-    }
-  }, [enabled])
-  return { data, error, refresh: () => setRevision((current) => current + 1) }
+  const observation = useDashboardObservation<DecisionTasks>('/api/decision-model/tasks', {
+    enabled,
+  })
+  const data = observation.data
+  const invalid =
+    data &&
+    (!Array.isArray(data.tasks) ||
+      !Array.isArray(data.deployments) ||
+      !Array.isArray(data.bindings))
+  return {
+    ...observation,
+    data: invalid ? null : data,
+    error: invalid ? 'Task discovery returned an invalid response.' : observation.error,
+  }
 }

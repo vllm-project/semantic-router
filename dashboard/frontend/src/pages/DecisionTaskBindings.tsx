@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { RouterConfig } from './dashboardPageTypes'
 import type { DecisionTaskBinding, DecisionTasks } from './useDecisionTasks'
+import type { Observation } from '../utils/dashboardObservation'
+import DecisionObservationStatus from './DecisionObservationStatus'
 import SystemOneSelect from './SystemOneSelect'
 import styles from './DecisionModelPage.module.css'
 
@@ -171,11 +173,13 @@ function BindingRow({
 export default function DecisionTaskBindings({
   data,
   error,
+  observation,
   writable,
   save,
 }: {
   data: DecisionTasks | null
   error: string | null
+  observation: Observation<DecisionTasks>
   writable: boolean
   save: (binding: DecisionTaskBinding, deployment: string | null) => Promise<unknown>
 }) {
@@ -185,11 +189,7 @@ export default function DecisionTaskBindings({
       <p className={styles.muted}>
         See which model each task uses. Override a task here, or restore its default binding.
       </p>
-      {error && (
-        <p className={styles.notice} role="alert">
-          {error}
-        </p>
-      )}
+      <DecisionObservationStatus label="Task bindings" observation={observation} />
       {data?.bindings.length ? (
         <div className={styles.tableScroll}>
           <table>

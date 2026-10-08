@@ -2,7 +2,9 @@ package modelservice
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -25,15 +27,15 @@ func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	outcome := replicaRejected
+	defer func() { release(outcome) }()
 	rewritten, err := rewriteExchangeModel(body, worker.member.served.name, request.URL.Path == "/v1/bundle")
 	if err != nil {
-		release(false)
 		return nil, err
 	}
 	physical := worker.member.group.client
 	base, err := url.Parse(physical.base)
 	if err != nil {
-		release(false)
 		return nil, err
 	}
 	target := request.Clone(request.Context())
@@ -47,18 +49,18 @@ func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
 	target.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(rewritten)), nil }
 	target.Body = io.NopCloser(bytes.NewReader(rewritten))
 	target.ContentLength = int64(len(rewritten))
+	outcome = replicaFailed
 	response, err := physical.httpClient.Do(target)
 	if err != nil {
-		release(request.Context().Err() == nil)
+		outcome = replicaTransportError(request.Context())
 		return nil, err
 	}
 	// Hold the worker through network body consumption. Decode only transport
 	// selectors; semantic payloads remain raw, including native answer fields.
 	defer response.Body.Close()
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, ManagedRequestBytes+1))
-	failed := response.StatusCode >= 500 || readErr != nil && request.Context().Err() == nil
-	release(failed)
 	if readErr != nil {
+		outcome = replicaTransportError(request.Context())
 		return nil, readErr
 	}
 	if len(data) > ManagedRequestBytes {
@@ -73,7 +75,23 @@ func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
 	response.Body = io.NopCloser(bytes.NewReader(data))
 	response.ContentLength = int64(len(data))
 	response.Header.Del("Content-Length")
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		outcome = replicaOK
+	} else if response.StatusCode < 500 {
+		outcome = replicaRejected
+	}
 	return response, nil
+}
+
+func replicaTransportError(ctx context.Context) replicaOutcome {
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return replicaTimeout
+	case errors.Is(ctx.Err(), context.Canceled):
+		return replicaCanceled
+	default:
+		return replicaFailed
+	}
 }
 
 func rewriteResponseModel(data []byte, model string) ([]byte, error) {

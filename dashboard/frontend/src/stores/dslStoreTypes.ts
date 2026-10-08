@@ -81,6 +81,9 @@ interface DSLActions {
   /** Reset editor state to initial values. */
   reset(): void
 
+  /** Cancel page-owned reads/compiler work without discarding the draft. */
+  pauseEditorWork(): void
+
   /** Load DSL source without preserving an imported full-config deploy base. */
   loadDsl(source: string): void
 
