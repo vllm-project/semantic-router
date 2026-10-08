@@ -50,7 +50,7 @@
 .page button.primary {
   flex-shrink: 0;
   background: var(--color-primary);
-  color: #fff;
+  color: #09090a;
 }
 .summary,
 .facts {
