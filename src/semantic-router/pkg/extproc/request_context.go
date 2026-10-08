@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -487,6 +488,9 @@ type RequestContext struct {
 	// so that any later mutation does not poison the read-only config tree.
 	// nil means the matched decision had no EMIT retention block.
 	EmittedRetention *config.RetentionDirective
+	// RetentionOutcome is the provider-neutral backend acknowledgement receipt.
+	// It is explicit when no adapter is available and never claims enforcement.
+	RetentionOutcome *retention.Outcome
 }
 
 // embeddingContext returns the request-scoped context for outbound embedding

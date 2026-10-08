@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 )
 
 func retBool(b bool) *bool { return &b }
@@ -91,6 +92,23 @@ func TestApplyEmittedRetentionNoMatch(t *testing.T) {
 	}
 	if ctx.EmittedRetention != nil {
 		t.Fatalf("expected EmittedRetention to stay nil")
+	}
+}
+
+func TestApplyEmittedRetentionRecordsUnsupportedBackendOutcome(t *testing.T) {
+	decision := &config.Decision{Emits: []config.EmitDirective{{
+		Kind:      "retention",
+		Retention: &config.RetentionDirective{Drop: retBool(true)},
+	}}}
+	ctx := &RequestContext{}
+	if got := applyEmittedRetention(decision, ctx); got == nil {
+		t.Fatal("expected retention directive")
+	}
+	if ctx.RetentionOutcome == nil || ctx.RetentionOutcome.Status != retention.StatusUnsupported {
+		t.Fatalf("retention outcome = %+v, want unsupported", ctx.RetentionOutcome)
+	}
+	if ctx.RetentionOutcome.Acknowledged != nil || ctx.RetentionOutcome.Observed != nil {
+		t.Fatalf("unsupported outcome fabricated lifecycle stages: %+v", ctx.RetentionOutcome)
 	}
 }
 
