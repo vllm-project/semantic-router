@@ -49,8 +49,9 @@ func embeddingCacheBytes() int {
 // embeddingRequest is one embeddings call: inputs of any served modality at
 // one output view.
 type embeddingRequest struct {
-	Inputs  []modelservice.EmbedInput
-	Options embedding.Options
+	Inputs    []modelservice.EmbedInput
+	Options   embedding.Options
+	FullInput bool
 }
 
 // EmbeddingProvider serves one embedding binding through a model_runtime
@@ -98,11 +99,14 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 	embed := func(ctx context.Context, call embeddingRequest) ([]tasks.EmbeddingResult, error) {
 		request := template
 		request.Inputs, request.Dimensions, request.Layer = call.Inputs, call.Options.Dimension, call.Options.Layer
+		if call.FullInput {
+			request.Overflow = "reject"
+		}
 		response, embedErr := services.Embed(ctx, deployment, request)
 		if embedErr != nil {
 			return nil, embedErr
 		}
-		return embeddingResults(card.ID, response, len(call.Inputs))
+		return embeddingResults(card.ID, response, len(call.Inputs), call.FullInput)
 	}
 	// One warmup through the transport, decoding and validation fixes the
 	// default view's dimension before the binding is published.
@@ -195,6 +199,17 @@ func validateEmbeddingResults(request embeddingRequest, results []tasks.Embeddin
 		return fmt.Errorf("embedding results do not match the inputs")
 	}
 	for _, result := range results {
+		if request.FullInput {
+			if result.Input == nil {
+				return fmt.Errorf("%w: embedding response omitted input coverage", binding.ErrCapability)
+			}
+			if result.Input.Truncated || result.Input.ProcessedTokens != result.Input.OriginalTokens {
+				return fmt.Errorf("%w: embedding requires complete input coverage", binding.ErrInputLimit)
+			}
+			if result.Input.OriginalTokens <= 0 {
+				return fmt.Errorf("%w: embedding response omitted token counts", binding.ErrCapability)
+			}
+		}
 		if len(result.Embedding) == 0 {
 			return fmt.Errorf("embedding vector is empty")
 		}
@@ -210,7 +225,7 @@ func validateEmbeddingResults(request embeddingRequest, results []tasks.Embeddin
 	return nil
 }
 
-func embeddingResults(model string, response modelservice.EmbedResponse, inputs int) ([]tasks.EmbeddingResult, error) {
+func embeddingResults(model string, response modelservice.EmbedResponse, inputs int, fullInput bool) ([]tasks.EmbeddingResult, error) {
 	if len(response.Embeddings) != inputs {
 		return nil, fmt.Errorf("%w: %d embeddings for %d inputs", binding.ErrInvalidResult, len(response.Embeddings), inputs)
 	}
@@ -221,7 +236,13 @@ func embeddingResults(model string, response modelservice.EmbedResponse, inputs 
 		}
 		results[i] = tasks.EmbeddingResult{Embedding: response.Embeddings[i], ModelType: model}
 		if i < len(response.Inputs) {
-			results[i].Input = inputUsage(response.Inputs[i])
+			usage := response.Inputs[i]
+			// The task projection keeps token counts but not the worker's lower
+			// bound flag. Reject partial tokenization before losing that proof.
+			if fullInput && usage != nil && usage.TokensLowerBound != nil && *usage.TokensLowerBound {
+				return nil, fmt.Errorf("%w: embedding token count is only a lower bound", binding.ErrInputLimit)
+			}
+			results[i].Input = inputUsage(usage)
 		}
 		if results[i].Input != nil {
 			results[i].SequenceLength = results[i].Input.ProcessedTokens
@@ -326,6 +347,24 @@ func (p *EmbeddingProvider) EmbedWithOptions(ctx context.Context, text string, o
 	return embedded[0].Vector, nil
 }
 
+// EmbedFullInput rejects over-budget text before the runtime's model forward.
+func (p *EmbeddingProvider) EmbedFullInput(ctx context.Context, text string) ([]float32, error) {
+	return p.EmbedFullInputWithOptions(ctx, text, p.options)
+}
+
+// EmbedFullInputWithOptions keeps ordinary truncating embeddings independent
+// from semantic comparisons that require complete tokenizer coverage.
+func (p *EmbeddingProvider) EmbedFullInputWithOptions(ctx context.Context, text string, options embedding.Options) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	embedded, err := p.embedWithPolicy(ctx, []modelservice.EmbedInput{{Text: text}}, options, true)
+	if err != nil {
+		return nil, err
+	}
+	return embedded[0].Vector, nil
+}
+
 // FitsInput reports whether the model reads text whole at the default view.
 // The answer comes with the vector, which the cache keeps for the next call.
 func (p *EmbeddingProvider) FitsInput(ctx context.Context, text string) (bool, error) {
@@ -396,8 +435,18 @@ func (p *EmbeddingProvider) EmbedAudio(ctx context.Context, request embedding.Au
 // embed answers inputs from the shared cache and embeds the rest in calls of
 // at most maxInputs inputs.
 func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.EmbedInput, options embedding.Options) ([]embedding.Embedded, error) {
+	return p.embedWithPolicy(ctx, inputs, options, false)
+}
+
+func (p *EmbeddingProvider) embedWithPolicy(ctx context.Context, inputs []modelservice.EmbedInput, options embedding.Options, fullInput bool) ([]embedding.Embedded, error) {
 	if p.closed.Load() {
 		return nil, binding.ErrClosed
+	}
+	numerics := p.numerics
+	if fullInput {
+		// A cached truncated vector or response without coverage cannot satisfy
+		// the stricter policy, including while an ordinary call is in flight.
+		numerics += ":full-input:reject"
 	}
 	keys := make([]embedding.VectorKey, len(inputs))
 	for i, input := range inputs {
@@ -408,7 +457,7 @@ func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.Emb
 		case input.AudioWAV != "":
 			kind, content = embedding.InputAudio, input.AudioWAV
 		}
-		keys[i] = embedding.NewVectorKey(p.numerics, options, kind, []byte(content))
+		keys[i] = embedding.NewVectorKey(numerics, options, kind, []byte(content))
 	}
 	// Inside a request bundle, waiting on another participant's call would
 	// hold the bundle until its window ends; the bundle carries both calls'
@@ -418,7 +467,7 @@ func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.Emb
 		resolve = sharedVectors.ResolveAlone
 	}
 	return resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
-		return p.embedMissing(ctx, inputs, missing, options)
+		return p.embedMissing(ctx, inputs, missing, options, fullInput)
 	})
 }
 
@@ -429,7 +478,7 @@ const concurrentEmbedBatches = 8
 // embedMissing embeds inputs[missing] in batches of the card's input limit,
 // up to concurrentEmbedBatches at a time. Inside a request bundle the
 // concurrent batches park in it and travel in one round trip.
-func (p *EmbeddingProvider) embedMissing(ctx context.Context, inputs []modelservice.EmbedInput, missing []int, options embedding.Options) ([]embedding.Embedded, error) {
+func (p *EmbeddingProvider) embedMissing(ctx context.Context, inputs []modelservice.EmbedInput, missing []int, options embedding.Options, fullInput bool) ([]embedding.Embedded, error) {
 	size := len(missing)
 	if p.maxInputs > 0 {
 		size = min(size, p.maxInputs)
@@ -441,7 +490,7 @@ func (p *EmbeddingProvider) embedMissing(ctx context.Context, inputs []modelserv
 		for _, i := range missing[start:end] {
 			batch = append(batch, inputs[i])
 		}
-		results, err := p.call.Call(ctx, p.recipe, embeddingRequest{Inputs: batch, Options: options})
+		results, err := p.call.Call(ctx, p.recipe, embeddingRequest{Inputs: batch, Options: options, FullInput: fullInput})
 		if err != nil {
 			return err
 		}

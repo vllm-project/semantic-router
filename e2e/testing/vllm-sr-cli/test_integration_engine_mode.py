@@ -7,7 +7,6 @@ and Router modes with the supported serve flags. It owns an isolated stack.
 """
 
 import copy
-import json
 import math
 import os
 import shutil
@@ -26,6 +25,7 @@ QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
 )
 API_KEY = "engine-e2e-key"
+MANAGEMENT_KEY = "engine-e2e-management-key"
 PUBLIC_MODEL = "test/decision"
 
 
@@ -62,6 +62,7 @@ class TestEngineMode(unittest.TestCase):
             "VLLM_SR_STACK_NAME": self.stack,
             "VLLM_SR_PORT_OFFSET": str(self.offset),
             "HF_HUB_OFFLINE": "1",
+            "ENGINE_E2E_MANAGEMENT_KEY": MANAGEMENT_KEY,
         }
         self.container = f"{self.stack}-vllm-sr-router-container"
         self.base = f"http://127.0.0.1:{8899 + self.offset}"
@@ -99,6 +100,7 @@ class TestEngineMode(unittest.TestCase):
                         "decisions": [
                             {
                                 "name": "saved",
+                                "priority": 1,
                                 "rules": {"operator": "AND", "conditions": []},
                                 "modelRefs": [{"model": "answer"}],
                             }
@@ -117,7 +119,22 @@ class TestEngineMode(unittest.TestCase):
                                 }
                             },
                         },
-                        "services": {"observability": {"tracing": {"enabled": False}}},
+                        "services": {
+                            "management_api": {
+                                "bind_address": "0.0.0.0",
+                                "port": 8080,
+                                "auth": {
+                                    "mode": "bearer",
+                                    "tokens": [
+                                        {
+                                            "env": "ENGINE_E2E_MANAGEMENT_KEY",
+                                            "role": "admin",
+                                        }
+                                    ],
+                                },
+                            },
+                            "observability": {"tracing": {"enabled": False}},
+                        },
                     },
                 }
             )
@@ -205,9 +222,15 @@ class TestEngineMode(unittest.TestCase):
         self.assertEqual(alias["answers"], response["answers"])
         for mode in ("router", "engine"):
             self.serve(engine=mode == "engine")
-            state = json.loads(
-                self.cli("instance", "--config", str(self.config), "status")
+            management_base = f"http://127.0.0.1:{8080 + self.offset}"
+            status, _ = call(management_base, "/api/v1/instance")
+            self.assertEqual(status, 401)
+            status, state = call(
+                management_base,
+                "/api/v1/instance",
+                headers={"Authorization": "Bearer " + MANAGEMENT_KEY},
             )
+            self.assertEqual(status, 200, state)
             self.assertEqual(state["observed_mode"], mode, state)
             status, _ = call(self.base, "/v1/systemone/models")
             self.assertEqual(status, 401)

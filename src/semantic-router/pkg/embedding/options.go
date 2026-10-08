@@ -46,6 +46,12 @@ type FullInputProvider interface {
 	EmbedFullInput(context.Context, string) ([]float32, error)
 }
 
+// ConfigurableFullInputProvider preserves the requested output view while
+// requiring the model to read the complete input.
+type ConfigurableFullInputProvider interface {
+	EmbedFullInputWithOptions(context.Context, string, Options) ([]float32, error)
+}
+
 // ConfigurableInputChecker answers FitsInput at another output view.
 type ConfigurableInputChecker interface {
 	FitsInputWithOptions(context.Context, string, Options) (bool, error)
@@ -71,6 +77,9 @@ func EmbedFullInput(ctx context.Context, provider Provider, text string, options
 	}
 	if provider == nil {
 		return nil, fmt.Errorf("embedding provider was not prepared")
+	}
+	if complete, ok := provider.(ConfigurableFullInputProvider); ok {
+		return complete.EmbedFullInputWithOptions(ctx, text, options)
 	}
 	if complete, ok := provider.(FullInputProvider); ok {
 		return complete.EmbedFullInput(ctx, text)
@@ -123,6 +132,11 @@ func WithOptions(provider Provider, options Options) Provider {
 	if provider == nil {
 		return nil
 	}
+	// A new view replaces the old view, including zero selecting full output.
+	// Do not let an inner view reinterpret zero as its own configured options.
+	if view, ok := provider.(*providerView); ok {
+		provider = view.Provider
+	}
 	return &providerView{Provider: provider, options: options}
 }
 
@@ -139,6 +153,13 @@ func (p *providerView) Embed(ctx context.Context, text string) ([]float32, error
 
 func (p *providerView) EmbedFullInput(ctx context.Context, text string) ([]float32, error) {
 	return EmbedFullInput(ctx, p.Provider, text, p.options)
+}
+
+func (p *providerView) EmbedFullInputWithOptions(ctx context.Context, text string, options Options) ([]float32, error) {
+	if options == (Options{}) {
+		options = p.options
+	}
+	return EmbedFullInput(ctx, p.Provider, text, options)
 }
 
 func (p *providerView) EmbedWithOptions(ctx context.Context, text string, options Options) ([]float32, error) {
