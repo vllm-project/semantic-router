@@ -17,8 +17,8 @@ import (
 // it was trained on, with the options in the label order of the Vela 1.0
 // head each signal ran on, so a consumer's label mapping, thresholds and
 // policies read the answer as they read the head's. In a request stage the
-// questions travel in one /v1/decisions call with the deployment's other
-// questions about the same text and read policy (see modelservice.Bundle).
+// questions travel in one /v1/decisions call with the stage's other
+// questions to the deployment (see modelservice.Bundle).
 //
 // A routing question (domain, fact check, feedback, modality) reads only the
 // first tokens of a long text (overflow: truncate; one forward on a CPU). A
@@ -181,8 +181,8 @@ func (r *Runtime) questionSequence(ctx context.Context, spec config.ResolvedMode
 	}
 	capability := binding.Capability{
 		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Labels: question.labels(),
-		Question: question.key,
-		Limits:   binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
+		Question: question.key, Deployment: spec.Binding.Deployment,
+		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
 	t := &target{spec: spec, deployment: spec.Binding.Deployment, card: card, resource: resource, scan: scan}
 	asked := question.question(spec)

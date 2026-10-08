@@ -211,7 +211,8 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 
 	// One request stage, one bundle: the model calls of every signal reach each
-	// runtime process as a single /v1/bundle call, before the signals' deadline.
+	// runtime process as a single /v1/bundle call, before the signals' deadline,
+	// and every question the stage asks one decision model goes in one call.
 	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
 	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
 	defer cancel()
@@ -224,7 +225,8 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
 
-	runSignalDispatchers(dispatchers, usedSignals, ready, bundle, &wg)
+	asks := func(signalType string) []string { return c.signalQuestionDeployments(signalType, usedSignals) }
+	runSignalDispatchers(stage, dispatchers, usedSignals, ready, bundle, asks, &wg)
 
 	wg.Wait()
 	results = c.applySignalGroups(results)
