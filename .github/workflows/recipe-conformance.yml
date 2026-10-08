@@ -106,6 +106,13 @@ jobs:
         if: inputs.prebuilt-images
         with:
           images: '["vllm-sr"]'
+      - name: Allocate CPUs for serial long-context probes
+        if: matrix.shard == 'built-in-latest-mom-v1'
+        run: |
+          # This shard runs one probe at a time, including full-context embeddings.
+          cpu_threads="$(nproc)"
+          printf 'VLLM_SRUN_CPU_THREADS=%s\n' "$cpu_threads" >> "$GITHUB_ENV"
+          printf 'Serial long-context worker threads: %s\n' "$cpu_threads"
       - name: Run maintained recipe probes
         env:
           RECIPE_CONFORMANCE_RECIPES: ${{ matrix.recipes }}

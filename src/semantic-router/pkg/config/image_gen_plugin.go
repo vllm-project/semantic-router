@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // ModalityDetectionMethod defines how modality is detected
 const (
@@ -27,12 +31,12 @@ type ModalityDetectorConfig struct {
 // should be routed to an AR (text) model, a Diffusion (image) model, or both.
 type ModalityDetectionConfig struct {
 	// Method specifies the detection strategy: "classifier", "keyword", or "hybrid" (default).
-	//   - "classifier": Use mmBERT-32K ML classifier only — requires classifier.model_path
+	//   - "classifier": Use the ML classifier only — classifier.model_path, the decision model by default
 	//   - "keyword":    Use keyword pattern matching only — requires keywords list
 	//   - "hybrid":     Classifier primary + keyword fallback — requires at least one of the above
 	Method string `json:"method,omitempty" yaml:"method,omitempty"`
 
-	// Classifier configuration (required when method is "classifier"; recommended for "hybrid")
+	// Classifier configuration (optional for "classifier"; recommended for "hybrid")
 	Classifier *ModalityClassifierConfig `json:"classifier,omitempty" yaml:"classifier,omitempty"`
 
 	// Keywords for image generation detection (required when method is "keyword"; recommended for "hybrid")
@@ -59,8 +63,8 @@ type ModalityDetectionConfig struct {
 // ModalityClassifierConfig configures the ML-based modality classifier
 type ModalityClassifierConfig struct {
 	MaxSequenceLength int `json:"max_sequence_length,omitempty" yaml:"max_sequence_length,omitempty"`
-	// ModelPath is the path to the merged modality classifier model directory.
-	// Required when method is "classifier" or "hybrid" with a classifier.
+	// ModelPath is the modality classifier's model: a built-in model or a
+	// package directory. Empty runs the decision model.
 	ModelPath string `json:"model_path,omitempty" yaml:"model_path,omitempty"`
 
 	// UseCPU forces CPU inference even when GPU is available.
@@ -75,6 +79,33 @@ func (c *ModalityDetectionConfig) GetMethod() string {
 		return ""
 	}
 	return c.Method
+}
+
+// classifierModel returns the model the modality classifier runs and whether
+// it runs on CPU: classifier.model_path, else defaultModel for the classifier
+// method or a classifier block that names no model. ok is false when the
+// detector runs no classifier.
+func (c *ModalityDetectionConfig) classifierModel(defaultModel string) (path string, useCPU bool, ok bool) {
+	if c == nil || c.Method == ModalityDetectionKeyword {
+		return "", false, false
+	}
+	if c.Classifier != nil {
+		if path := strings.TrimSpace(c.Classifier.ModelPath); path != "" {
+			return path, c.Classifier.UseCPU, true
+		}
+		return defaultModel, c.Classifier.UseCPU, true
+	}
+	if c.Method == ModalityDetectionClassifier {
+		return defaultModel, true, true
+	}
+	return "", false, false
+}
+
+// ModalityClassifierModel returns the model the modality classifier runs and
+// whether it runs on CPU: classifier.model_path, else the decision model's.
+// ok is false when the detector runs no classifier.
+func (c *RouterConfig) ModalityClassifierModel() (path string, useCPU bool, ok bool) {
+	return c.ModalityDetector.classifierModel(c.DecisionModelSpec().Modality)
 }
 
 // GetConfidenceThreshold returns the configured confidence threshold.
@@ -100,12 +131,24 @@ func (c *ModalityDetectionConfig) GetLowerThresholdRatio() float32 {
 // Validate validates the modality detection configuration.
 // It ensures that:
 //   - Method (if set) is one of "classifier", "keyword", or "hybrid"
-//   - For "classifier": Classifier config with a non-empty model_path is required
+//   - For "classifier": the classifier runs classifier.model_path, or the decision model without one
 //   - For "keyword": At least one keyword must be configured
 //   - For "hybrid": At least one of Classifier or Keywords must be configured
 //   - ConfidenceThreshold (if set) is in the range (0, 1]
 //   - ConfidenceThreshold is required when method is "classifier" or "hybrid"
 func (c *ModalityDetectionConfig) Validate() error {
+	return c.validate(false)
+}
+
+// ValidateBound validates a detector whose classifier is a modality_detector
+// binding's deployment, so a hybrid detector needs no classifier block.
+func (c *ModalityDetectionConfig) ValidateBound() error {
+	return c.validate(true)
+}
+
+// validate reports every problem of the detector at once, so one edit can fix
+// them all.
+func (c *ModalityDetectionConfig) validate(bound bool) error {
 	if c == nil {
 		return nil // nil config is valid (not referenced by any signal when unset)
 	}
@@ -114,15 +157,21 @@ func (c *ModalityDetectionConfig) Validate() error {
 	if err := validateModalityDetectionMethod(method); err != nil {
 		return err
 	}
-	if err := c.validateMethodRequirements(method); err != nil {
-		return err
+	var problems []string
+	if err := c.validateMethodRequirements(method, bound); err != nil {
+		problems = append(problems, err.Error())
 	}
-	return c.validateThresholds(method)
+	problems = append(problems, c.thresholdProblems(method)...)
+	if len(problems) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(problems, "; "))
 }
 
 func validateModalityDetectionMethod(method string) error {
 	if method == "" {
-		return fmt.Errorf("modality_detection.method is required (one of %q, %q, or %q)",
+		return fmt.Errorf("modality_detection.method is required: %q with confidence_threshold (0.51 for the default Vela 2.0 0.3B), "+
+			"%q with keywords, or %q with confidence_threshold, lower_threshold_ratio and a classifier or keywords",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid)
 	}
 	if method != ModalityDetectionClassifier && method != ModalityDetectionKeyword && method != ModalityDetectionHybrid {
@@ -132,41 +181,36 @@ func validateModalityDetectionMethod(method string) error {
 	return nil
 }
 
-func (c *ModalityDetectionConfig) validateMethodRequirements(method string) error {
+func (c *ModalityDetectionConfig) validateMethodRequirements(method string, bound bool) error {
 	switch method {
-	case ModalityDetectionClassifier:
-		if c.Classifier == nil || c.Classifier.ModelPath == "" {
-			return fmt.Errorf("modality_detection: method %q requires classifier.model_path to be set", method)
-		}
-
 	case ModalityDetectionKeyword:
 		if len(c.Keywords) == 0 {
 			return fmt.Errorf("modality_detection: method %q requires at least one entry in keywords", method)
 		}
 
 	case ModalityDetectionHybrid:
-		hasClassifier := c.Classifier != nil && c.Classifier.ModelPath != ""
+		hasClassifier := bound || c.Classifier != nil
 		hasKeywords := len(c.Keywords) > 0
 		if !hasClassifier && !hasKeywords {
-			return fmt.Errorf("modality_detection: method %q requires at least one of classifier.model_path or keywords to be configured", method)
+			return fmt.Errorf("modality_detection: method %q requires at least one of classifier or keywords to be configured", method)
 		}
 	}
 	return nil
 }
 
-func (c *ModalityDetectionConfig) validateThresholds(method string) error {
+func (c *ModalityDetectionConfig) thresholdProblems(method string) []string {
+	var problems []string
 	if c.ConfidenceThreshold != 0 && (c.ConfidenceThreshold < 0 || c.ConfidenceThreshold > 1) {
-		return fmt.Errorf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold)
+		problems = append(problems, fmt.Sprintf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold))
 	}
 	if (method == ModalityDetectionClassifier || method == ModalityDetectionHybrid) && c.ConfidenceThreshold == 0 {
-		return fmt.Errorf("modality_detection.confidence_threshold is required when method is %q (e.g. 0.6)", method)
+		problems = append(problems, fmt.Sprintf("modality_detection.confidence_threshold is required when method is %q (0.51 for the default Vela 2.0 0.3B)", method))
 	}
 	if c.LowerThresholdRatio != 0 && (c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1) {
-		return fmt.Errorf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio)
+		problems = append(problems, fmt.Sprintf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio))
 	}
 	if method == ModalityDetectionHybrid && c.LowerThresholdRatio == 0 {
-		return fmt.Errorf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method)
+		problems = append(problems, fmt.Sprintf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method))
 	}
-
-	return nil
+	return problems
 }

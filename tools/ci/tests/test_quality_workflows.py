@@ -37,25 +37,18 @@ class QualityWorkflowTests(unittest.TestCase):
         for step in (references, source, website, receipt):
             self.assertFalse(step.get("continue-on-error", False))
 
-    def test_generated_native_contracts_do_not_block_source_quality(self):
+    def test_generated_contracts_do_not_block_source_quality(self):
         parent = workflow("ci.yml")["jobs"]
         self.assertEqual(parent["quality"]["needs"], "plan")
-        self.assertEqual(parent["generated"]["needs"], ["plan", "native-build"])
+        self.assertEqual(parent["generated"]["needs"], ["plan"])
         self.assertEqual(
             parent["generated"]["uses"], "./.github/workflows/check-generated.yml"
         )
         generated = workflow("check-generated.yml")["jobs"]
         self.assertEqual(set(generated), {"generated"})
         job = generated["generated"]
-        loader = next(
-            step
-            for step in job["steps"]
-            if step.get("uses") == "./.github/actions/load-native-artifact"
-        )
-        self.assertNotIn("if", loader)
         check = step_with_command(job, "make config-schema-check")
         self.assertIn("api-docs-check docs-crd-check", check["run"])
-        self.assertLess(job["steps"].index(loader), job["steps"].index(check))
         self.assertEqual(parent["gate"]["if"], "always()")
         self.assertIn("generated", parent["gate"]["needs"])
 

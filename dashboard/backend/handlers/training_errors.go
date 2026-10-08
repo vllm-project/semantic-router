@@ -10,10 +10,10 @@ import (
 )
 
 // TrainingErrorEnvelope also gives shared auth, CSRF, method and body-limit
-// rejections the v1 APIError shape. Successful downloads stream directly.
+// rejections the v2 APIError shape. Successful downloads stream directly.
 func TrainingErrorEnvelope(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/training/v1" && !strings.HasPrefix(r.URL.Path, "/api/training/v1/") {
+		if r.URL.Path != c.APIBasePath && !strings.HasPrefix(r.URL.Path, c.APIBasePath+"/") {
 			next.ServeHTTP(w, r)
 			return
 		}

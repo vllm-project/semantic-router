@@ -105,7 +105,9 @@ class BlockAttentionTests(unittest.TestCase):
             attention_dropout=0,
         )
         config._attn_implementation = "sdpa"
-        original = Qwen3Model(config).eval()
+        # Float64: FP32 rounding through the two layers varies by host CPU (up to
+        # 1.5e-4 on a CI runner), while a masking error moves outputs by over 1.
+        original = Qwen3Model(config).eval().double()
         bounded = copy.deepcopy(original)
         install_export_attention(bounded)
         ids = torch.randint(0, 128, (1, 513))
@@ -123,8 +125,8 @@ class BlockAttentionTests(unittest.TestCase):
                 actual = bounded(
                     ids, attention_mask={"full_attention": mask}, use_cache=False
                 ).last_hidden_state
-            torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
-            torch.testing.assert_close(flash, expected, atol=2e-6, rtol=2e-5)
+            torch.testing.assert_close(actual, expected, atol=1e-10, rtol=1e-8)
+            torch.testing.assert_close(flash, expected, atol=1e-10, rtol=1e-8)
 
 
 class CausalMaskTests(unittest.TestCase):

@@ -52,7 +52,7 @@ func (p omniProbe) checkEmbeddingOwners(ctx context.Context) error {
 			}
 			for key, expected := range map[string]string{
 				"deployment": recipe, "contract": "embedding.v1", "model_type": "vela_omni",
-				"provider": "ort", "default_dimension": dimension, "modalities": "text,image,audio",
+				"provider": "model_runtime", "default_dimension": dimension, "modalities": "text,image,audio",
 			} {
 				if model.Metadata[key] != expected {
 					return fmt.Errorf("%s embedding owner metadata %s=%q, expected %q", recipe, key, model.Metadata[key], expected)

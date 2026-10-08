@@ -2,6 +2,7 @@ package training
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,7 +20,7 @@ import (
 
 func openService(t *testing.T, root string) (*Service, *workflowstore.Store) {
 	t.Helper()
-	store, err := workflowstore.Open(filepath.Join(root, "workflow.db"), workflowstore.Options{})
+	store, err := workflowstore.Open(filepath.Join(root, "workflow.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,8 +471,14 @@ func TestDependencyFailurePropagatesWithUnorderedTasks(t *testing.T) {
 }
 
 func TestPublicationRollsBackWhenEventPersistenceFails(t *testing.T) {
-	s, store := openService(t, t.TempDir())
+	root := t.TempDir()
+	s, store := openService(t, root)
 	defer func() { _ = store.Close() }()
+	db, err := sql.Open("sqlite3", filepath.Join(root, "workflow.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
 	req := seed(t, s, "alice", fixture(t, "selector"))
 	req.Spec.Tasks = req.Spec.Tasks[:1]
 	g, err := s.Submit(t.Context(), "alice", req)
@@ -487,7 +494,7 @@ func TestPublicationRollsBackWhenEventPersistenceFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Inject a storage failure after outputs and graph updates, before commit.
-	_, err = store.DB().Exec(`CREATE TRIGGER reject_training_event BEFORE INSERT ON training_events BEGIN SELECT RAISE(ABORT,'test persistence failure'); END`)
+	_, err = db.Exec(`CREATE TRIGGER reject_training_event BEFORE INSERT ON training_events BEGIN SELECT RAISE(ABORT,'test persistence failure'); END`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +507,7 @@ func TestPublicationRollsBackWhenEventPersistenceFails(t *testing.T) {
 	if err != nil || len(artifacts) != 0 || len(saved.Outputs.ArtifactIDs) != 0 || saved.Tasks[0].Status != c.Running {
 		t.Fatalf("partial state survived failed transaction: %+v %v", saved, err)
 	}
-	if _, operationErr := store.DB().Exec(`DROP TRIGGER reject_training_event`); operationErr != nil {
+	if _, operationErr := db.Exec(`DROP TRIGGER reject_training_event`); operationErr != nil {
 		t.Fatal(operationErr)
 	}
 	saved, err = s.Complete(t.Context(), "alice", g.Run.ID, work.AttemptID, result)

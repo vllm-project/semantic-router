@@ -4,7 +4,7 @@ sidebar_label: 常见错误
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/troubleshooting/common-errors.md"
-  outdated: false
+  outdated: true
 ---
 
 # 常见错误
@@ -14,7 +14,7 @@ translation:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 vllm-sr config validate --config config.yaml
 ```
 
@@ -46,6 +46,105 @@ vllm-sr config validate --config config.yaml
 - 受管配方是否在另一个工作区生成了运行时配置。
 
 检查容器挂载前，先用 `vllm-sr status` 确认活动工作区。
+
+## 入口 / 配方校验 {#entrypoint--recipe-validation}
+
+`vllm-sr config validate`（或 `vllm-sr validate`）会为常见的多配方接线错误给出修复提示。
+
+### 未知配方 {#unknown-recipe}
+
+```text
+Entrypoint references unknown recipe 'missing-recipe'
+Hint: Change this to the name of a recipe defined under recipes.
+```
+
+错误写法：
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: missing-recipe
+recipes:
+  - name: production
+```
+
+修正后：
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+recipes:
+  - name: production
+```
+
+### 配方名重复 {#duplicate-recipe-name}
+
+```text
+Duplicate recipe name 'production'
+Hint: Rename one recipe so every recipe has a unique name.
+```
+
+为每个配方设置不同的 `name`，再更新引用被改名配方的 entrypoint：
+
+```yaml
+recipes:
+  - name: production
+  - name: staging
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+```
+
+### 默认入口名冲突 {#model-or-reserved-alias-collision}
+
+```text
+Entrypoint model 'vllm-sr/auto' is mapped more than once
+```
+
+`vllm-sr/auto` 默认发布 default 配方，除非显式声明替换它的默认入口。
+把同一名称交给另一个命名配方会产生重复。
+
+错误写法：
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: production
+```
+
+修正后：
+
+```yaml
+entrypoints:
+  - model_names: [customer-production]
+    recipe: production
+```
+
+### 入口名与后端模型冲突 {#looper-alias-names-a-model}
+
+公开 recipe 入口必须使用独立名字。与后端模型同名的入口会被拒绝，
+Fusion、ReMoM 和 Flow 也遵循同一规则，没有单独的隐式分发名字。
+
+如果 `openai/gpt-oss-20b` 是后端模型，请为工作流声明不同的入口：
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: flow
+```
+
+将 `algorithm.type: workflows` 的决策放在 `flow` recipe 中。
+
+## 请求返回路由错误码 {#a-request-returns-a-routing-error-code}
+
+先在[路由错误](../api/router.md#routing-errors)中查到该原因码，再按请求的 `x-request-id` 在 Router 日志中找到 Router 自己的原因：
+
+```bash
+vllm-sr logs router | grep '<x-request-id>'
+```
+
+对于 `no_route`，`entrypoint_routing_no_selection` 日志行会给出模型、配方以及已匹配的决策。Fusion、Flow 和 ReMoM 由 recipe 中的决策选择；先检查 entrypoint 映射和 recipe 规则。
 
 ## 响应缓存无法启动
 
@@ -287,26 +386,13 @@ providers:
 
 ## 分类器或嵌入模型无法加载
 
-模型加载错误因实现而异，但通常包含失败路径：
+每个模型都运行在[模型运行时](model-runtime/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
 
-```text
-models directory does not exist: <path>
-<name> model directory does not exist: <path>
-failed to initialize <name> model from <path>: <error>
-failed to load pre-trained model <path>: <error>
+```bash
+curl -s localhost:8100/v1/models
 ```
 
-检查运行时内的路径，而不仅是宿主机上的路径。普通本地工作区把 `models/` 挂到 `/app/models`；受管配方把可变模型状态放在其工作区下，并挂到同一容器路径。
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        bert_model_path: /app/models/all-MiniLM-L12-v2
-```
-
-同时确认产物格式、标签映射和已配置的嵌入维度与所选实现匹配。
+每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](model-runtime/troubleshooting.md) 列出了每种原因及修复方法。
 
 ## 容器镜像没有匹配的平台
 
@@ -346,7 +432,7 @@ vllm-sr status
 
 # Read component logs without depending on generated container names.
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 
 # Check the public listener and model catalog.
 curl -sS http://localhost:8899/v1/models

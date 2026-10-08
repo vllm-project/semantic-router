@@ -267,8 +267,8 @@ func TestEntrypointNameCollisionsRejected(t *testing.T) {
 		},
 		{
 			name:          "auto alias",
-			entrypoint:    DefaultVSRAutoModelName,
-			wantErrSubstr: "already an auto-model alias",
+			entrypoint:    DefaultEntrypointModel,
+			wantErrSubstr: "conflicts with a named recipe",
 		},
 	}
 	for _, testCase := range cases {

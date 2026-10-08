@@ -166,3 +166,34 @@ func decodeSignedPCM(sample []byte) float32 {
 	}
 	return float32(value) / float32(sign)
 }
+
+// EncodeFloatWAV writes request as an IEEE float32 WAV, the lossless form in
+// which a decoded signal travels to a model runtime. The request must be valid:
+// Validate bounds its rate, channels and length, so the header fields fit.
+//
+//nolint:gosec // header widths are bounded by AudioRequest.Validate
+func EncodeFloatWAV(request AudioRequest) []byte {
+	frames := len(request.PCM) / request.Channels
+	dataSize := 4 * len(request.PCM)
+	out := make([]byte, 44+dataSize)
+	copy(out[0:], "RIFF")
+	binary.LittleEndian.PutUint32(out[4:], uint32(36+dataSize))
+	copy(out[8:], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(out[16:], 16)
+	binary.LittleEndian.PutUint16(out[20:], 3)
+	binary.LittleEndian.PutUint16(out[22:], uint16(request.Channels))
+	binary.LittleEndian.PutUint32(out[24:], uint32(request.SampleRate))
+	binary.LittleEndian.PutUint32(out[28:], uint32(request.SampleRate*request.Channels*4))
+	binary.LittleEndian.PutUint16(out[32:], uint16(request.Channels*4))
+	binary.LittleEndian.PutUint16(out[34:], 32)
+	copy(out[36:], "data")
+	binary.LittleEndian.PutUint32(out[40:], uint32(dataSize))
+	offset := 44
+	for frame := 0; frame < frames; frame++ {
+		for channel := 0; channel < request.Channels; channel++ {
+			binary.LittleEndian.PutUint32(out[offset:], math.Float32bits(request.PCM[channel*frames+frame]))
+			offset += 4
+		}
+	}
+	return out
+}

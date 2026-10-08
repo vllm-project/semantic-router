@@ -3,9 +3,6 @@ name: Dashboard Tests
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        type: string
-        default: ""
       verification:
         type: string
         default: ""
@@ -67,11 +64,6 @@ jobs:
           install-mode: goinstall
           args: --help
 
-      - name: Load shared native libraries
-        if: inputs.native-artifact != ''
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
 
       - name: Check, test, and build Dashboard with one dependency installation
         run: make dashboard-check dashboard-test-wasm dashboard-test-e2e-evaluation dashboard-build

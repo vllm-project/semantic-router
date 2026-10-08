@@ -1,11 +1,11 @@
 # Durable training management
 
 This package persists training resources, run/task attempts, events and published
-outputs. Dashboard exposes management operations under `/api/training/v1`,
+outputs. Dashboard exposes management operations under `/api/training/v2`,
 independently of the legacy `ML_PIPELINE_ENABLED` flag. See the
 [shared contract](../../../src/training/README.md#training-control-plane-contract)
 for resource definitions and the
-[OpenAPI reference](../../../src/semantic-router/pkg/trainingcontract/training-v1.openapi.yaml)
+[OpenAPI reference](../../../src/semantic-router/pkg/trainingcontract/training-v2.openapi.yaml)
 for routes, request limits, validation, idempotency, cancellation and retry.
 
 New runs remain `pending` until a coordinator dispatches work. Capability planning,

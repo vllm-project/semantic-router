@@ -8,7 +8,7 @@ import (
 	c "github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingcontract"
 )
 
-// TrainingRecord keeps ownership private to management. Its public body is a v1 resource.
+// TrainingRecord keeps ownership private to management. Its public body is a v2 resource.
 type TrainingRecord struct {
 	Kind, ID, Owner string
 	Body            json.RawMessage

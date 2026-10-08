@@ -1,0 +1,513 @@
+{
+  "vllm-sr/Decision-1.0-Eos-0.8B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.2785976033971811,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.23944071711776505,
+            "1": 0.5190608346742143,
+            "2": 0.2414984482080207
+          },
+          "score": 1.0020577310902556,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9858394799167169,
+          "probabilities": {
+            "code": 0.9920034703201491,
+            "math": 0.0061639904034322245,
+            "other": 0.0018325392764186542
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.6144479513168335,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.27395595051005683,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.241263039670496,
+            "1": 0.5159683669814954,
+            "2": 0.2427685933480086
+          },
+          "score": 1.0015055536775126,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9859510997041604,
+          "probabilities": {
+            "code": 0.9920506714228822,
+            "math": 0.006099571718721789,
+            "other": 0.0018497568583960664
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.61601599359417,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "2ca39a23e3f4500873ebcd8f97394268e27d3167"
+  },
+  "vllm-sr/Decision-1.0-Kai-0.6B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.0005161518163901979,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3372982144355774,
+            "1": 0.3336101174354553,
+            "2": 0.3290916979312897
+          },
+          "score": 0.9917935132980347,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9052180051803589,
+          "probabilities": {
+            "code": 0.9480215907096863,
+            "math": 0.009174796752631664,
+            "other": 0.04280358552932739
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.32387080788612366,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.0005161972566067874,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3372982144355774,
+            "1": 0.3336101174354553,
+            "2": 0.3290916681289673
+          },
+          "score": 0.9917934536933899,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9052178487181664,
+          "probabilities": {
+            "code": 0.9480214715003967,
+            "math": 0.009174834936857224,
+            "other": 0.04280362278223038
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.3238709568977356,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "79263ba4c4befac3845e7c1111c2c679d0716623"
+  },
+  "vllm-sr/Decision-1.0-Lex-0.6B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.23865082794700065,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.28612762689590454,
+            "1": 0.48871636390686035,
+            "2": 0.2251560240983963
+          },
+          "score": 0.939028412103653,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.44725213944911957,
+          "probabilities": {
+            "code": 0.6686314344406128,
+            "math": 0.10998918861150742,
+            "other": 0.22137929499149323
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.09631721675395966,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.2386511921194161,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.28612738847732544,
+            "1": 0.48871663212776184,
+            "2": 0.2251559942960739
+          },
+          "score": 0.9390286207199097,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.4472523033618927,
+          "probabilities": {
+            "code": 0.6686316132545471,
+            "math": 0.10998909175395966,
+            "other": 0.22137930989265442
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.09631756693124771,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "a5ba6895347218eb8acd818420001b59a00b64c2"
+  },
+  "vllm-sr/Decision-1.0-Lux-9B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.543848378957201,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.5397738147929,
+            "1": 0.43309571774365374,
+            "2": 0.027130467463446273
+          },
+          "score": 0.4873566526705463,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.940501673078993,
+          "probabilities": {
+            "code": 0.9623604421356794,
+            "math": 0.021858769056686427,
+            "other": 0.015780788807634206
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.6748646296601107,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.5432169299845906,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.5375896411901154,
+            "1": 0.4350965392166691,
+            "2": 0.027313819593215456
+          },
+          "score": 0.4897241784031,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9411696984486034,
+          "probabilities": {
+            "code": 0.9627703029484923,
+            "math": 0.021600604499888886,
+            "other": 0.01562909255161885
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.6813399588662398,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "2064c84daf599447f840719ef8e86db152a56851"
+  },
+  "vllm-sr/Decision-1.0-Nox-4B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.6381966171376862,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3502062137165702,
+            "1": 0.6417337428909892,
+            "2": 0.008060043392440631
+          },
+          "score": 0.6578538296758705,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9439085127147627,
+          "probabilities": {
+            "code": 0.9638665573420663,
+            "math": 0.016175398030630197,
+            "other": 0.01995804462730354
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.8162049176723498,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.6361196065782913,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.35492988429228167,
+            "1": 0.6370598495828029,
+            "2": 0.008010266124915347
+          },
+          "score": 0.6530803818326336,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9436967207604379,
+          "probabilities": {
+            "code": 0.9635324119205619,
+            "math": 0.016631896919313934,
+            "other": 0.019835691160124125
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.8181470984772713,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "7f65e1db2c55a11ab8b558a8027c8883752f192d"
+  },
+  "vllm-sr/Decision-1.0-Route-0.6B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.0005161972535946413,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3372982144355774,
+            "1": 0.3336101472377777,
+            "2": 0.3290916681289673
+          },
+          "score": 0.9917934834957123,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9486775305122137,
+          "probabilities": {
+            "code": 0.9741302728652954,
+            "math": 0.0004169755266048014,
+            "other": 0.025452742353081703
+          },
+          "type": "choice"
+        },
+        "preset:domain": {
+          "choice": "computer science",
+          "confidence": 0.9967260877601802,
+          "probabilities": {
+            "biology": 1.4500888028123882e-05,
+            "business": 2.8520264095277525e-05,
+            "chemistry": 9.8372011052561e-06,
+            "computer science": 0.9981111288070679,
+            "economics": 8.638849067210685e-06,
+            "engineering": 0.0013850410468876362,
+            "health": 1.2968795090273488e-05,
+            "history": 1.1701969015120994e-05,
+            "law": 9.24160940485308e-06,
+            "math": 0.0002630389644764364,
+            "other": 0.00010966266563627869,
+            "philosophy": 1.3561193554778583e-05,
+            "physics": 1.1954902220168151e-05,
+            "psychology": 1.0155064046557527e-05
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.3384108245372772,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.0005161972566067874,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3372982144355774,
+            "1": 0.3336101174354553,
+            "2": 0.3290916681289673
+          },
+          "score": 0.9917934536933899,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9486776199191809,
+          "probabilities": {
+            "code": 0.9741302728652954,
+            "math": 0.00041697255801409483,
+            "other": 0.02545265294611454
+          },
+          "type": "choice"
+        },
+        "preset:domain": {
+          "choice": "computer science",
+          "confidence": 0.9967262088321149,
+          "probabilities": {
+            "biology": 1.4500778888759669e-05,
+            "business": 2.8520267733256333e-05,
+            "chemistry": 9.837164725468028e-06,
+            "computer science": 0.9981112480163574,
+            "economics": 8.638800863991491e-06,
+            "engineering": 0.001385039184242487,
+            "health": 1.2968771443411242e-05,
+            "history": 1.1701881703629624e-05,
+            "law": 9.241584848496132e-06,
+            "math": 0.0002630397502798587,
+            "other": 0.00010966131230816245,
+            "philosophy": 1.3561143532569986e-05,
+            "physics": 1.1954845831496641e-05,
+            "psychology": 1.0155006748391315e-05
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.33841201663017273,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "deed1f29dad146d2138588025afb83dbdaf3c133"
+  },
+  "vllm-sr/Decision-1.0-Sol-2B": {
+    "answers": {
+      "cpu": {
+        "difficulty": {
+          "confidence": 0.5966497299030038,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3745061533890063,
+            "1": 0.6054536824300708,
+            "2": 0.02004016418092289
+          },
+          "score": 0.6455340107919166,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9469208145186397,
+          "probabilities": {
+            "code": 0.9706609663769201,
+            "math": 0.005598881764799513,
+            "other": 0.023740151858280358
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.397374492805436,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.5960295746635651,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3753757269678348,
+            "1": 0.6044899371608518,
+            "2": 0.020134335871313448
+          },
+          "score": 0.6447586089034787,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.9463934021349228,
+          "probabilities": {
+            "code": 0.9704457634413355,
+            "math": 0.005501875252251924,
+            "other": 0.024052361306412626
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.4014283775431885,
+          "type": "noul"
+        }
+      }
+    },
+    "revision": "5c698b1ad76abf7c35fc4957519c47668f54d23a"
+  }
+}

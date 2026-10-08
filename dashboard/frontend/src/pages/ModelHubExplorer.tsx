@@ -34,7 +34,8 @@ const ModelHubCatalogPanel: React.FC<{
 const ModelHubDetailLayer: React.FC<{
   catalog: BuiltInModelCatalog
   hub: ModelHubPageController
-}> = ({ catalog, hub }) => (
+  evidenceReady?: boolean
+}> = ({ catalog, hub, evidenceReady = true }) => (
   <div
     ref={hub.detailLayerRef}
     className={`${styles.detailLayer} ${hub.detailOpen ? styles.detailLayerOpen : ''}`}
@@ -51,6 +52,7 @@ const ModelHubDetailLayer: React.FC<{
       key={hub.selected?.model.id ?? 'empty'}
       row={hub.selected}
       catalog={catalog}
+      evidenceReady={evidenceReady}
       modal={hub.compact && hub.detailOpen}
       closeButtonRef={hub.detailCloseRef}
       onClose={hub.closeDetail}
@@ -61,7 +63,8 @@ const ModelHubDetailLayer: React.FC<{
 export const ModelHubExplorer: React.FC<{
   catalog: BuiltInModelCatalog
   hub: ModelHubPageController
-}> = ({ catalog, hub }) => (
+  evidenceReady?: boolean
+}> = ({ catalog, hub, evidenceReady = true }) => (
   <section className={styles.explorer} id="catalog-explorer" aria-label="Built-in models">
     <div className={styles.explorerHeading}>
       <h2>Models</h2>
@@ -85,7 +88,7 @@ export const ModelHubExplorer: React.FC<{
       <div className={styles.directoryContent}>
         <div className={styles.workspace}>
           <ModelHubCatalogPanel hub={hub} />
-          <ModelHubDetailLayer catalog={catalog} hub={hub} />
+          <ModelHubDetailLayer catalog={catalog} hub={hub} evidenceReady={evidenceReady} />
         </div>
       </div>
     </div>

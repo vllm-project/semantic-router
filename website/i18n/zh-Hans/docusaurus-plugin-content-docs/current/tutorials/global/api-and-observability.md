@@ -2,7 +2,7 @@
 translation:
   source_commit: "cd975c6129460d700dd9c116ddd3356cdd90e915"
   source_file: "docs/tutorials/global/api-and-observability.md"
-  outdated: false
+  outdated: true
 ---
 
 # API 与可观测性
@@ -67,7 +67,7 @@ global:
 
 `routing_preview` 作用于 `POST /api/v1/routing/preview`。推理时限从请求体解析完成后开始计算，默认 120 秒。`request_timeout_seconds` 可设为 1 至 3600 秒，应根据实际输入长度和部署硬件的测量结果选择。该设置支持配置热更新；其他 HTTP 路由保留现有超时设置。
 
-达到时限后，API 返回 `504 REQUEST_TIMEOUT`，并取消排队中或可取消的推理。已经执行的原生推理可能稍后才结束；在其结束前，模型资源和并发名额都会保留，关闭服务时也不例外。`max_concurrency` 是正整数，默认允许 16 个推理任务并发执行，不提供等待队列；名额用完后，新请求返回 `429 OVERLOADED`。修改此并发上限需要重新部署并重启服务，热更新会拒绝该变更。
+达到时限后，API 返回 `504 REQUEST_TIMEOUT`，并取消该 Preview 的模型调用：模型运行时跳过尚未开始的工作，已在运行的一次计算会完成。这些调用返回后，该 Preview 的并发名额即被释放。`max_concurrency` 是正整数，默认允许 16 个推理任务并发执行，不提供等待队列；名额用完后，新请求返回 `429 OVERLOADED`。修改此并发上限需要重新部署并重启服务，热更新会拒绝该变更。
 
 响应写入另有 5 秒余量，用于发送结果或超时响应。Dashboard Topology 使用配置的 Preview 时限加上该余量，并传递客户端取消信号。Recipe 探测仍使用 `probes.yaml` 中独立的 `evaluation.request_timeout_seconds` 客户端时限；应按实际测试配置。如果外部 HTTP 客户端或代理需要收到 Router 的超时响应，其时限应至少多留 5 秒。
 
@@ -123,6 +123,7 @@ global:
 | 路由 | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | 选择 | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
 | Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
+| 请求图 | `llm_request_graph_node_duration_seconds` （按 `node_type` 和 `template`） |
 | 缓存 | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | 会话 | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
@@ -193,7 +194,8 @@ global:
 Helm chart 通过顶层值（`router.skipProcessing.enabled`）暴露同一开关，因此可在安装时启用，而无需编辑嵌入的规范配置：
 
 ```bash
-helm install vsr ./deploy/helm/semantic-router \
+helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
   --set router.skipProcessing.enabled=true
 ```
 

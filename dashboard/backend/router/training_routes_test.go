@@ -28,7 +28,7 @@ type trainingHTTP struct {
 
 func openTrainingHTTP(t *testing.T, root string, authService *auth.Service) trainingHTTP {
 	t.Helper()
-	store, err := workflowstore.Open(filepath.Join(root, "workflow.db"), workflowstore.Options{})
+	store, err := workflowstore.Open(filepath.Join(root, "workflow.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func trainingRequest(t *testing.T, h http.Handler, token, method, path string, v
 			t.Fatal(err)
 		}
 	}
-	req := httptest.NewRequest(method, "/api/training/v1"+path, bytes.NewReader(body))
+	req := httptest.NewRequest(method, "/api/training/v2"+path, bytes.NewReader(body))
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -296,7 +296,7 @@ func TestTrainingHTTPRejectsBoundaryViolations(t *testing.T) {
 		{tokens["alice"], "POST", "/data-assets", []byte(`{"name":"data","target_contract":"selector.model-choice/v1","owner":"bob"}`), 400},
 		{tokens["alice"], "POST", "/data-assets", []byte(`{"name":"data","target_contract":"selector.model-choice/v1"} {}`), 400},
 		{tokens["alice"], "POST", "/data-assets", []byte(`null`), 400},
-		{tokens["alice"], "POST", "/runs", []byte(`{"schema_version":"semantic-router.training/v1","idempotency_key":"example","spec":{"snapshot_id":"/tmp/data"}}`), 400},
+		{tokens["alice"], "POST", "/runs", []byte(`{"schema_version":"semantic-router.training/v2","idempotency_key":"example","spec":{"snapshot_id":"/tmp/data"}}`), 400},
 		{tokens["alice"], "POST", "/uploads", c.DataAssetSpec{}, 400},
 		{tokens["alice"], "GET", "/runs?experiment_id=/tmp/data", nil, 400},
 		{tokens["alice"], "POST", "/binding-proposals", nil, 403},
@@ -304,7 +304,7 @@ func TestTrainingHTTPRejectsBoundaryViolations(t *testing.T) {
 		trainingRequest(t, server.handler, test.token, test.method, test.path, test.body, test.status)
 	}
 	// Shared middleware's early Content-Length rejection still uses APIError.
-	req := httptest.NewRequest("POST", "/api/training/v1/uploads", strings.NewReader("small"))
+	req := httptest.NewRequest("POST", "/api/training/v2/uploads", strings.NewReader("small"))
 	req.Header.Set("Authorization", "Bearer "+tokens["alice"])
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.ContentLength = training.MaxFileBytes + 1

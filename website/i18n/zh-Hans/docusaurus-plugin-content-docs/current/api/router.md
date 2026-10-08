@@ -7,7 +7,7 @@ translation:
 
 # 路由器接口 {#router-api}
 
-Router 数据面通过 Envoy 监听器接收模型请求。在标准本地栈中，监听器为 `http://localhost:8899`；配方可在 `listeners` 下选择不同地址或端口。
+Router 数据面在配置的监听器上接收模型请求。默认的 standalone 模式下由 Router 自己服务这些请求；使用 `--gateway extproc` 时由 Envoy 服务，并通过 ext_proc 调用 Router。在标准本地栈中，监听器为 `http://localhost:8899`；配方可在 `listeners` 下选择不同地址或端口。
 
 推理请使用数据面。健康检查、配置、诊断和回放查询请使用管理 API，通常绑定到 `127.0.0.1:8080`。见 [Router 管理 API](./apiserver)。
 
@@ -26,6 +26,13 @@ Router 数据面通过 Envoy 监听器接收模型请求。在标准本地栈中
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | 模型名在请求体中，需要启用 Responses 服务 |
 | `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | 模型名在请求体中 |
 | `GET` | `/v1/models` | OpenAI Models | 列出当前 Router 配置暴露的模型 |
+| `POST` | `/v1/systemone`、`/v1/decisions` | 原生 System One | standalone listener 上显式发布的决策模型回答问题 |
+| `GET` | `/v1/systemone/models` | 原生模型发现 | 列出该 listener 发布的 System One 模型 |
+
+Engine 模式关闭配方路由，并提供原生 System One 接口。在
+`listeners[].systemone.models` 中发布原生模型 ID；Chat 的 `models` 名单不会授权
+原生访问。两类接口都使用 listener 的 API keys。完整请求见
+[模型运行时快速开始](../model-runtime/quickstart.md)。
 
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
 
@@ -33,13 +40,13 @@ Router 数据面通过 Envoy 监听器接收模型请求。在标准本地栈中
 
 ## 发送路由请求 {#send-a-routed-request}
 
-希望 Router 选择后端时，使用自动模型或配方入口。希望绕过语义模型选择并直接打到某个模型时，使用具体模型名。
+希望 Router 选择后端时，使用 `vllm-sr/auto` 或显式声明的配方入口。希望绕过语义模型选择并直接打到某个模型时，使用具体模型名。
 
 ```bash
 curl -sS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {
         "role": "user",
@@ -81,7 +88,7 @@ providers:
 curl -sS http://localhost:8899/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "input": "Summarize the trade-offs of retrieval-augmented generation."
   }'
 ```
@@ -95,7 +102,7 @@ curl -sS http://localhost:8899/v1/messages \
   -H 'Content-Type: application/json' \
   -H 'anthropic-version: 2023-06-01' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "max_tokens": 256,
     "messages": [
       {
@@ -113,6 +120,40 @@ curl -sS http://localhost:8899/v1/messages \
 deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从请求体读取模型名。监听器配置 `api_keys` 时，Router 用客户端的 `api-key` 验证请求，并在转发给 provider 前移除该请求头。
 
 GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-protocol-warnings` 中说明。
+
+## 路由错误 {#routing-errors}
+
+Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误外，消息不包含模型、决策或请求内容：
+
+```json
+{"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
+```
+
+| 代码 | 状态码 | `error.type` | 含义 |
+| --- | --- | --- | --- |
+| `model_not_found` | 400 | `invalid_request_error` | 请求指定的模型不由该 Router 提供。 |
+| `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。配方入口会回退到已配置的 `providers.defaults.model`；Looper 入口遵循同样的配方规则，名称本身不会选择算法。 |
+| `context_length_exceeded` | 400 或 422 | `invalid_request_error` | 请求超出了可服务它的模型的容量：400 来自[请求预算检查](#request-budget-errors)，422 来自模型的 `context_window_size`。 |
+| `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
+| `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-applied-unknown-policy` 会给出该决策。 |
+| `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
+
+Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-request-id`、原因码和 Router 自己的原因：请求指定的模型、到达的配方和决策，以及错误本身。Anthropic Messages 客户端会在 Anthropic 的错误信封中收到相同的状态码和消息；该信封没有 code 字段。
+
+## 请求预算错误 {#request-budget-errors}
+
+设置 `candidate_requirements.context: known_limits` 后，Router 会用候选模型配置的上限检查估算的输入加上有效输出额度。如果所有候选模型都只因预算检查失败，Router 返回 HTTP 400：
+
+| 错误码 | 含义 |
+| --- | --- |
+| `context_length_exceeded` | 准备好的输入与请求的输出放不下。 |
+| `max_output_tokens_exceeded` | 请求的输出超过了配置的模型上限。 |
+
+缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context-compression.md)。
+
+这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。
+
+在生成开始前被拒绝的流式请求，收到的是同样的非 2xx JSON 错误，而不是成功的 SSE 流。启用回放时，回放会记录失败的状态码和响应体；Router 的预算拒绝使用 `terminal_reason: request_budget_exceeded`。
 
 ## 路由回放 {#router-replay}
 
@@ -150,7 +191,7 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Insights 会显示对话边界和完整 ID。
 
-Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。配方设置 `data_policy.replay: false` 后，其请求不会进入回放，包括被拒绝的请求。
+Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值。全局或插件设置 `capture_personal_data: false` 后，检测到 PII 或无法确认 PII 状态时会省略正文、提示词和工具内容，保留路由元数据。
 
 启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
 

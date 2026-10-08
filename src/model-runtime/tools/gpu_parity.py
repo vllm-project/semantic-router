@@ -11,9 +11,9 @@ The package is verified and loaded through the decision2 family and the native e
 Every prompt is answered as one request with the profile's batching (``exact``: the request's questions in one
 padded batch, split only by the forward token budget) and compared with the released runtime's answers for the
 same panel and prompt ID (the ``--answers`` file of ``v2/release/examples.py parity``, produced on the same device
-class with the same autotune cache). Per panel: prompts, identical prompts (canonical JSON equality), category
-changes, missing answers and the largest absolute difference of any probability, Noul or Score value. Exits 1
-unless every prompt is identical.
+class with the same autotune cache; a built-in model runs with its pinned kernel choices, the released runtime's).
+Per panel: prompts, identical prompts (canonical JSON equality), category changes, missing answers and the largest
+absolute difference of any probability, Noul or Score value. Exits 1 unless every prompt is identical.
 """
 
 from __future__ import annotations
@@ -28,22 +28,24 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.families.decision2.family import Decision2Family  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.accel.autotune import KernelChoices  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_srun.families.decision2.family import Decision2Family  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     EngineOptions,
     Job,
     PackageRef,
     RegistryOptions,
 )
-from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
-from vllm_sr_runtime.profiles.shared_context import (  # noqa: E402
+from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
+from vllm_srun.profiles.shared_context import (  # noqa: E402
     SharedContextProfile,
     SharePolicy,
 )
+from vllm_srun.registry import builtin  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}
@@ -90,6 +92,13 @@ def load(args: argparse.Namespace):
     accelerator = ACCELERATORS[kind]()
     devices = accelerator.devices()
     device = devices[int(index or 0)] if kind != "cpu" else devices[0]
+    recorded = builtin.kernel_choices(
+        package.model_sha256, device.accelerator, device.arch
+    ) or family.kernel_choices(package, device)
+    if recorded:
+        choices = KernelChoices(recorded)
+        if choices.install() is None:
+            choices.pin_thread()
     options = EngineOptions(graphs=not args.no_graphs, fused_kernels=not args.no_fused)
     engine_model = NativeEngine().load(spec, accelerator, device, options)
     return family.load(package, spec, engine_model)
@@ -107,7 +116,7 @@ def system_one(
         indices = [index for _, part in batch.parts for index in part]
         items = [plan.items[i] for i in indices]
         if batch.shared_prefix:
-            values = model.run(items, shared_prefix=batch.shared_prefix)
+            values = model.run_shared(items, batch.shared_prefix)
         else:
             values = model.run(items)
         for index, value in zip(indices, values, strict=True):
@@ -153,6 +162,7 @@ def main() -> int:
     unavailable = profile.available(model)
     if unavailable:
         raise SystemExit(f"profile {args.profile} is unavailable: {unavailable}")
+    profile.bind(model)
     load_seconds = time.perf_counter() - started
     sink = args.answers.open("x", encoding="utf-8") if args.answers else None
     panels = {}

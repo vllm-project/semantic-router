@@ -1,7 +1,7 @@
 ---
 title: 文档指南
 translation:
-  source_commit: "f53d10fbf1021f9204e03afe2dd9a3374979e829"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/community/documentation.md"
   outdated: false
 ---
@@ -74,9 +74,9 @@ make check BASE_REF=origin/main
 | 公开运维 skill | `tools/agent/skills/vllm-sr-agent-operations/` | `make agent-skill-sync` | `make agent-skill-check` |
 | GitHub 社区统计 | 生成器、身份信息与带日期的 GitHub 快照 | 在 `website/` 运行 `npm run contributors:rank` / `npm run committers:activity` | `make docs-community-check` |
 
-`make docs-generated-check` 检查 catalog、CLI 参考、配置目录与公开 skill，不依赖原生库构建。每次 PR 和 main 校验都执行该检查，包括只改源文件或文档的情况。`npm run build` 和 `npm test` 也会先执行这些参考检查。它们需要 Python 3.10 或更新版本以及 `website/requirements.txt` 中的依赖；可通过 `VLLM_SR_DOCS_PYTHON` 指定 Python 解释器。
+`make docs-generated-check` 检查 catalog、CLI 参考、配置目录与公开 skill，无需构建 router。每次 PR 和 main 校验都执行该检查，包括只改源文件或文档的情况。`npm run build` 和 `npm test` 也会先执行这些参考检查。它们需要 Python 3.10 或更新版本以及 `website/requirements.txt` 中的依赖；可通过 `VLLM_SR_DOCS_PYTHON` 指定 Python 解释器。
 
-`make generated-contract-check` 还会检查配置 schema、OpenAPI 与 Operator 参考，使用现有 Go/原生库构建前置条件。`make generated-contract-generate` 按依赖顺序刷新这些公开参考。应修改源文件或生成器，不要手改生成块。
+`make generated-contract-check` 还会检查配置 schema、OpenAPI 与 Operator 参考，使用常规的 Go 构建前置条件。`make generated-contract-generate` 按依赖顺序刷新这些公开参考。应修改源文件或生成器，不要手改生成块。
 
 社区统计是外部动态数据的带日期快照。离线检查同时验证生成源和生成内容的摘要，不与持续变化的 GitHub 活跃度比较。修改生成器或身份信息后必须成功刷新；网络失败不能静默复用源文件已过期的快照。
 

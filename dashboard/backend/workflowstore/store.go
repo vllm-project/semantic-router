@@ -1,6 +1,6 @@
 // Package workflowstore provides server-owned durable state for dashboard workflows
-// (ML pipeline jobs, OpenClaw collaboration entities). Live SSE/WebSocket client maps
-// remain in handlers; this store holds reconstructable job and entity records.
+// (ML pipeline jobs, MCP servers). Live SSE/WebSocket client maps remain in
+// handlers; this store holds reconstructable job and entity records.
 package workflowstore
 
 import (
@@ -14,13 +14,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Options configures opening the workflow database.
-type Options struct {
-	// LegacyOpenClawDir, if set, is scanned once for containers.json / teams.json /
-	// rooms.json / room-messages/*.json and imported when the OpenClaw tables are empty.
-	LegacyOpenClawDir string
-}
-
 // Store is a SQLite-backed workflow control-plane store.
 type Store struct {
 	db *sql.DB
@@ -28,7 +21,7 @@ type Store struct {
 }
 
 // Open opens or creates the workflow SQLite database at dbPath.
-func Open(dbPath string, opts Options) (*Store, error) {
+func Open(dbPath string) (*Store, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("workflowstore: create dir: %w", err)
@@ -47,12 +40,6 @@ func Open(dbPath string, opts Options) (*Store, error) {
 	if err := s.initSchema(); err != nil {
 		_ = db.Close()
 		return nil, err
-	}
-
-	if opts.LegacyOpenClawDir != "" {
-		if err := s.maybeImportLegacyOpenClaw(opts.LegacyOpenClawDir); err != nil {
-			log.Printf("workflowstore: legacy OpenClaw import: %v", err)
-		}
 	}
 
 	log.Printf("Workflow database initialized at: %s", dbPath)
@@ -86,30 +73,6 @@ CREATE TABLE IF NOT EXISTS ml_pipeline_progress_events (
 );
 CREATE INDEX IF NOT EXISTS idx_ml_prog_job ON ml_pipeline_progress_events(job_id, id);
 
-CREATE TABLE IF NOT EXISTS openclaw_container (
-	name TEXT PRIMARY KEY,
-	json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS openclaw_team (
-	id TEXT PRIMARY KEY,
-	json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS openclaw_room (
-	id TEXT PRIMARY KEY,
-	json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS openclaw_room_message (
-	seq INTEGER PRIMARY KEY AUTOINCREMENT,
-	room_id TEXT NOT NULL,
-	message_id TEXT NOT NULL,
-	json TEXT NOT NULL,
-	UNIQUE(room_id, message_id)
-);
-CREATE INDEX IF NOT EXISTS idx_oc_msg_room ON openclaw_room_message(room_id, seq);
-
 CREATE TABLE IF NOT EXISTS mcp_server (
 	id TEXT PRIMARY KEY,
 	json TEXT NOT NULL
@@ -124,9 +87,4 @@ CREATE TABLE IF NOT EXISTS mcp_server (
 // Close releases the database handle.
 func (s *Store) Close() error {
 	return s.db.Close()
-}
-
-// DB exposes the raw connection for health checks (row queries only).
-func (s *Store) DB() *sql.DB {
-	return s.db
 }

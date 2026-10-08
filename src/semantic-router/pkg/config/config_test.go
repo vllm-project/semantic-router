@@ -50,7 +50,6 @@ func migrateLegacyBertModelForTest(raw map[string]interface{}) bool {
 	}
 
 	embeddingModels := ensureLegacyEmbeddingModelsForTest(raw)
-	copyLegacyBertModelField(legacyBert, embeddingModels, "model_id", "bert_model_path")
 	copyLegacyBertModelField(legacyBert, embeddingModels, "use_cpu", "use_cpu")
 	copyLegacyBertThresholdForTest(legacyBert, embeddingModels)
 	delete(raw, "bert_model")
@@ -183,13 +182,11 @@ classifier:
     model_id: "test-category-model"
     threshold: 0.7
     use_cpu: false
-    use_modernbert: true
     category_mapping_path: "/path/to/category.json"
   pii_model:
     model_id: "test-pii-model"
     threshold: 0.6
     use_cpu: true
-    use_modernbert: false
     pii_mapping_path: "/path/to/pii.json"
 
 categories:
@@ -257,13 +254,11 @@ tools:
 				Expect(cfg).NotTo(BeNil())
 
 				// Verify migrated similarity embedding config
-				Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("test-bert-model"))
 				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.8)))
 				Expect(cfg.EmbeddingModels.UseCPU).To(BeTrue())
 
 				// Verify classifier config
 				Expect(cfg.CategoryModel.ModelID).To(Equal("test-category-model"))
-				Expect(cfg.CategoryModel.UseModernBERT).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))
@@ -530,7 +525,6 @@ bert_model:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
-				Expect(cfg.EmbeddingModels.BertModelPath).To(BeEmpty())
 				Expect(cfg.DefaultModel).To(BeEmpty())
 			})
 		})
@@ -736,7 +730,7 @@ classifier:
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
 			})
 
-			It("should return false when mapping path is missing", func() {
+			It("should return true for a local model without a mapping path", func() {
 				configContent := `
 classifier:
   pii_model:
@@ -748,7 +742,8 @@ classifier:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
+				// The served model's card supplies the labels.
+				Expect(cfg.IsPIIClassifierEnabled()).To(BeTrue())
 			})
 		})
 
@@ -966,7 +961,6 @@ categories:
 
 			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("model/with/slashes"))
 			Expect(cfg.DefaultModel).To(Equal("model-with-hyphens_and_underscores"))
 			Expect(cfg.Categories[0].Name).To(Equal("category with spaces"))
 		})
@@ -2004,7 +1998,6 @@ default_model: "gpt-4"
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify migrated similarity embedding config
-				Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
 				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.6)))
 				Expect(cfg.EmbeddingModels.UseCPU).To(BeFalse())
 
@@ -2174,108 +2167,6 @@ api:
 			Expect(metricsConfig.HighResolutionTiming).To(BeFalse())
 			Expect(len(metricsConfig.DurationBuckets)).To(Equal(0))
 			Expect(len(metricsConfig.SizeBuckets)).To(Equal(0))
-		})
-	})
-
-	Describe("AutoModelName Configuration", func() {
-		Context("GetEffectiveAutoModelName", func() {
-			It("should return configured AutoModelName when set", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "CustomAuto",
-					},
-				}
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomAuto"))
-			})
-
-			It("should return default 'MoM' when AutoModelName is not set", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "",
-					},
-				}
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
-			})
-
-			It("should return default 'MoM' for empty RouterConfig", func() {
-				cfg := &RouterConfig{}
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
-			})
-		})
-
-		Context("IsAutoModelName", func() {
-			It("should recognize 'auto' as auto model name for backward compatibility", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "MoM",
-					},
-				}
-				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
-			})
-
-			It("should recognize configured AutoModelName", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "CustomAuto",
-					},
-				}
-				Expect(cfg.IsAutoModelName("CustomAuto")).To(BeTrue())
-			})
-
-			It("should recognize default 'MoM' when AutoModelName is not set", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "",
-					},
-				}
-				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
-			})
-
-			It("should not recognize other model names as auto", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "MoM",
-					},
-				}
-				Expect(cfg.IsAutoModelName("gpt-4")).To(BeFalse())
-				Expect(cfg.IsAutoModelName("claude")).To(BeFalse())
-			})
-
-			It("should support both 'auto' and configured name", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "MoM",
-					},
-				}
-				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
-				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
-				Expect(cfg.IsAutoModelName("other")).To(BeFalse())
-			})
-		})
-
-		Context("YAML parsing with AutoModelName", func() {
-			It("should parse AutoModelName from YAML", func() {
-				yamlContent := `
-auto_model_name: "CustomRouter"
-default_model: "test-model"
-`
-				var cfg RouterConfig
-				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.RouterOptions.AutoModelName).To(Equal("CustomRouter"))
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomRouter"))
-			})
-
-			It("should handle missing AutoModelName in YAML", func() {
-				yamlContent := `
-default_model: "test-model"
-`
-				var cfg RouterConfig
-				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.RouterOptions.AutoModelName).To(Equal(""))
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
-			})
 		})
 	})
 

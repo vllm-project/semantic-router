@@ -25,7 +25,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 		}
 		if strings.HasPrefix(name, "classifier.") {
 			if rule := classifierSignalRuleByName(scoped.ClassifierRules, strings.TrimPrefix(name, "classifier.")); rule != nil {
-				*rule = projectGenericClassifierRule(*rule, spec.Deployment)
+				*rule = projectGenericClassifierRule(*rule, spec.Binding.Deployment, spec.Deployment)
 			}
 			continue
 		}
@@ -33,18 +33,13 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 		if spec.Deployment.Provider == "http" {
 			remote = &RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}
 		}
-		artifact := ResolveModelPath(spec.Deployment.Artifact)
+		artifact := ResolveModelPath(spec.Deployment.ServedModel(spec.Binding.Deployment))
 		mapping := spec.Binding.MappingPath
 		switch name {
 		case "domain_classifier":
 			scoped.CategoryModel.ModelID = artifact
 			scoped.CategoryModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.CategoryModel.Backend = remote
-			// The provider adapter is already validated/resolved separately. These
-			// legacy family flags must not override an explicit recipe binding.
-			scoped.CategoryModel.Variant = ""
-			scoped.CategoryModel.UseModernBERT = false
-			scoped.CategoryModel.UseMmBERT32K = false
 			if mapping != "" {
 				scoped.CategoryMappingPath = mapping
 			}
@@ -59,15 +54,19 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			scoped.PromptGuard.ModelID = artifact
 			scoped.PromptGuard.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.PromptGuard.Backend = remote
-			scoped.PromptGuard.Variant = ""
 			if mapping != "" {
 				scoped.PromptGuard.JailbreakMappingPath = mapping
 			}
 		case "complexity":
-			if remote == nil {
+			if remote == nil && !spec.Deployment.IsModelRuntime() {
 				return nil, fmt.Errorf("complexity binding requires a remote score or distribution adapter")
 			}
 			scoped.ComplexityModel.Backend = remote
+		case "preference":
+			if spec.Deployment.IsModelRuntime() {
+				disabled := false
+				scoped.PreferenceModel.UseContrastive = &disabled
+			}
 		case "fact_check_classifier":
 			scoped.HallucinationMitigation.FactCheckModel.ModelID = artifact
 			scoped.HallucinationMitigation.FactCheckModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens
@@ -87,7 +86,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 				scoped.HallucinationMitigation.HallucinationModel.ModelID = external.ModelName
 				scoped.HallucinationMitigation.HallucinationModel.Backend = HallucinationBackendEndpoint
 			} else {
-				scoped.HallucinationMitigation.HallucinationModel.Backend = "candle"
+				scoped.HallucinationMitigation.HallucinationModel.Backend = HallucinationBackendLocal
 				scoped.HallucinationMitigation.HallucinationModel.Endpoint = ""
 			}
 		case "modality_detector":
@@ -97,8 +96,6 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 				classifier.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 				scoped.ModalityDetector.Classifier = &classifier
 			}
-		case "hallucination_explainer":
-			scoped.HallucinationMitigation.NLIModel.ModelID = artifact
 		}
 	}
 	return &scoped, nil

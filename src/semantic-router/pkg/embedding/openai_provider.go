@@ -54,6 +54,13 @@ type OpenAICompatibleProvider struct {
 	client            *http.Client
 }
 
+// EmbedFullInput relies on the OpenAI embeddings contract: an input beyond the
+// model's limit is rejected. The client sends the complete text and never asks
+// the server to truncate it; endpoint errors remain errors for the consumer.
+func (p *OpenAICompatibleProvider) EmbedFullInput(ctx context.Context, text string) ([]float32, error) {
+	return p.Embed(ctx, text)
+}
+
 type embeddingsRequest struct {
 	Model      string   `json:"model"`
 	Input      []string `json:"input"`

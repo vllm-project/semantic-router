@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/training"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
+	c "github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingcontract"
 )
 
 func setupTrainingRoutes(mux routeRegistrar, cfg *config.Config, store *workflowstore.Store) {
@@ -23,7 +24,7 @@ func setupTrainingRoutes(mux routeRegistrar, cfg *config.Config, store *workflow
 }
 
 func registerTrainingRoutes(mux routeRegistrar, s *training.Service) {
-	const base = "/api/training/v1"
+	const base = c.APIBasePath
 	h := handlers.NewTrainingHandler(s)
 	read := func(path string, handler http.HandlerFunc) {
 		registerRouteFunc(mux, auth.ProtectedRoute(base+path, auth.PermMlPipeline, auth.SensitivitySecret, auth.ResourceOwnerML, http.MethodGet), handler)

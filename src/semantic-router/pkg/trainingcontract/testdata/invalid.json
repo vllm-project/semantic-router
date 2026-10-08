@@ -37,7 +37,7 @@
     "name": "raw snapshot path",
     "definition": "SubmitRunRequest",
     "value": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "idempotency_key": "selector-fixture",
       "spec": {
         "experiment_id": "experiment_selector",
@@ -88,7 +88,7 @@
     "name": "raw output field",
     "definition": "SubmitRunRequest",
     "value": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "idempotency_key": "selector-fixture",
       "spec": {
         "experiment_id": "experiment_selector",
@@ -137,10 +137,10 @@
     }
   },
   {
-    "name": "unknown version",
+    "name": "previous contract version",
     "definition": "SubmitRunRequest",
     "value": {
-      "schema_version": "semantic-router.training/v99",
+      "schema_version": "semantic-router.training/v1",
       "idempotency_key": "selector-fixture",
       "spec": {
         "experiment_id": "experiment_selector",
@@ -389,7 +389,7 @@
     "name": "malformed snapshot created_at",
     "definition": "DataSnapshot",
     "value": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "snapshot_neural",
       "created_at": "not-a-timestamp",
       "asset_id": "asset_neural",
