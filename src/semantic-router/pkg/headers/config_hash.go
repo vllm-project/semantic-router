@@ -7,6 +7,10 @@ const SRBenchExpectedConfigHash = "x-sr-bench-expected-config-hash"
 // VSRConfigHash acknowledges the actual request-owned runtime generation.
 const VSRConfigHash = "x-vsr-config-hash"
 
+// VSRConfigVersion names the version of the configuration snapshot that
+// served.
+const VSRConfigVersion = "x-vsr-config-version"
+
 func ValidConfigHash(value string) bool {
 	if len(value) != 64 {
 		return false

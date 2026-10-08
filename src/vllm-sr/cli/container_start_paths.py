@@ -18,6 +18,7 @@ from cli.commands.runtime_paths import (
     _container_readonly_source_config_path,
     _container_runtime_config_path,
     _runtime_config_output_path,
+    cli_user_share_gid,
     materialize_runtime_config,
 )
 from cli.container_log_spool import prepare_runtime_log_spool
@@ -26,6 +27,10 @@ from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+# The group the Dashboard's entrypoint gives the Recipe store, so that the
+# CLI's user can read the packages and recover activations the Dashboard wrote.
+RECIPE_STORE_GID_ENV = "VLLM_SR_RECIPE_STORE_GID"
 
 
 def _prepare_runtime_directories(
@@ -137,6 +142,7 @@ def _prepare_runtime_paths(
             "container_recipe_store_dir": (
                 f"/app/.vllm-sr/recipe-store/{stack_layout.stack_name}"
             ),
+            "recipe_store_gid": str(cli_user_share_gid()),
             "envoy_config_path": envoy_config_path,
             "runtime_container_config": runtime_container_config,
             "active_recipe_root": str(active_recipe.root) if active_recipe else "",

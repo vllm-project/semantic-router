@@ -1,7 +1,16 @@
-import type { Listener } from "@/types/config";
 import type { DSLFieldObject } from "@/types/dsl";
 
-export type EditableListener = Listener & { timeout: string };
+export interface EditableListener {
+  name: string;
+  address: string;
+  port: number;
+  timeout: string;
+  // The listener as the config has it: an edit writes every field the editor
+  // doesn't show (tls, api_keys, identity, ...) back unchanged.
+  source: DSLFieldObject;
+}
+
+export type EditableListenerField = Exclude<keyof EditableListener, "source">;
 
 export const DEFAULT_LISTENER_PORT = 8899;
 
@@ -69,7 +78,20 @@ export function getListeners(
         address: getStr(obj, "address", "0.0.0.0"),
         port,
         timeout: getStr(obj, "timeout", "300s"),
+        source: obj,
       };
     })
     .filter((listener): listener is EditableListener => listener !== null);
+}
+
+export function serializeListeners(
+  listeners: EditableListener[],
+): DSLFieldObject[] {
+  return listeners.map(({ name, address, port, timeout, source }) => ({
+    ...source,
+    name,
+    address,
+    port,
+    timeout,
+  }));
 }

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -17,18 +17,15 @@ var (
 	domainErr  error
 )
 
-// Model quality is asserted by the required real-model regression suite. This
-// microbenchmark measures owned Domain inference without an optional gold dataset.
+// Model quality is asserted by the runtime's golden answers. This
+// microbenchmark measures Domain inference without an optional gold dataset.
 func BenchmarkClassifyDomain(b *testing.B) {
 	domainOnce.Do(func() {
 		spec := benchmarkModel(b, "domain", "label_distribution.v1")
 		domainTask, domainErr = benchmarkRuntime.Sequence(context.Background(), spec)
 	})
 	if domainErr != nil {
-		if missingBenchModels(domainErr) {
-			b.Skipf("Failed to initialize domain classifier: %v", domainErr)
-		}
-		b.Fatalf("prepare owned Vela Domain: %v", domainErr)
+		b.Fatalf("prepare Vela Domain: %v", domainErr)
 	}
 	recordModelIdentity(b, "domain")
 	b.ReportAllocs()

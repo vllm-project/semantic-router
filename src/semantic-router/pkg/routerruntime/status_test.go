@@ -127,6 +127,7 @@ func TestStartupStateOwnsMutableFields(t *testing.T) {
 	healthy, keySet := true, true
 	state := startupstatus.State{
 		Phase: "loading", PendingModels: []string{"original-model"},
+		ModelDeployments: []startupstatus.ModelDeploymentStatus{{Name: "original-deployment", State: "loading"}},
 		EmbeddingProvider: &startupstatus.EmbeddingProviderStatus{
 			Model: "original-provider", Healthy: &healthy, APIKeyEnvSet: &keySet,
 		},
@@ -136,11 +137,13 @@ func TestStartupStateOwnsMutableFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	state.PendingModels[0] = "changed-model"
+	state.ModelDeployments[0].Name = "changed-deployment"
 	state.EmbeddingProvider.Model = "changed-provider"
 	healthy, keySet = false, false
 	for range 2 {
 		snapshot := registry.StartupState()
 		if snapshot.PendingModels[0] != "original-model" ||
+			snapshot.ModelDeployments[0].Name != "original-deployment" ||
 			snapshot.EmbeddingProvider.Model != "original-provider" ||
 			!*snapshot.EmbeddingProvider.Healthy || !*snapshot.EmbeddingProvider.APIKeyEnvSet {
 			t.Fatalf("mutable startup state escaped: %+v", snapshot)
@@ -149,6 +152,7 @@ func TestStartupStateOwnsMutableFields(t *testing.T) {
 			t.Fatal(err)
 		}
 		snapshot.PendingModels[0] = "changed-snapshot"
+		snapshot.ModelDeployments[0].Name = "changed-snapshot-deployment"
 		snapshot.EmbeddingProvider.Model = "changed-snapshot-provider"
 		*snapshot.EmbeddingProvider.Healthy = false
 		*snapshot.EmbeddingProvider.APIKeyEnvSet = false

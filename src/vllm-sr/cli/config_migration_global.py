@@ -86,7 +86,41 @@ def place_global_block(global_config: dict[str, Any], key: str, value: Any) -> N
         return
     if value in (None, "", [], {}):
         return
+    present = {
+        path for path in _PLACEMENT_BLOCKS if _dict_at(global_config, path) is not None
+    }
+    _place_global_value(global_config, key, value)
+    # Drop the blocks this placement created but left empty, deepest first.
+    for path in reversed(_PLACEMENT_BLOCKS):
+        if path not in present and _dict_at(global_config, path) == {}:
+            parent = _dict_at(global_config, path[:-1]) if path[:-1] else global_config
+            parent.pop(path[-1])
 
+
+# Every block a placement may create, parents before children.
+_PLACEMENT_BLOCKS = (
+    ("router",),
+    ("services",),
+    ("stores",),
+    ("integrations",),
+    ("model_catalog",),
+    ("model_catalog", "embeddings"),
+    ("model_catalog", "modules"),
+    ("model_catalog", "modules", "classifier"),
+    ("model_catalog", "modules", "hallucination_mitigation"),
+)
+
+
+def _dict_at(root: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any] | None:
+    value: Any = root
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            return None
+        value = value[key]
+    return value if isinstance(value, dict) else None
+
+
+def _place_global_value(global_config: dict[str, Any], key: str, value: Any) -> None:
     router = _ensure_dict(global_config, "router")
     services = _ensure_dict(global_config, "services")
     stores = _ensure_dict(global_config, "stores")

@@ -11,7 +11,7 @@ of risk, so you can choose a suitable response. Prompt injection and jailbreak
 detection use the separate Guard model.
 
 To use the published models, follow
-[Safety models](../installation/runtime/safety.md). This guide covers training
+[Safety models](../model-runtime/guides/safety.md). This guide covers training
 your own compatible checkpoints.
 
 ## Define the outputs
@@ -127,13 +127,13 @@ the weights, tokenizer, and runtime mappings. An ONNX deployment requires
 graphs exported from those same weights.
 
 Configure the models through
-[local bindings](../installation/runtime/in-process.md) or a supported
+[local bindings](../model-runtime/deploy.md) or a supported
 [external service](../installation/runtime/external.md).
 The [Safety signal guide](/docs/tutorials/signal/learned/safety) explains how
 to use a binary risk rule or a category condition. In a category-specific
 Safety rule, the router runs Hazard after Safety passes its threshold.
 
-Use [route preview](../installation/runtime/lifecycle-diagnostics.md) to verify
+Use [route preview](model-runtime/troubleshooting.md) to verify
 scores, decisions, errors, and latency with your actual serving configuration.
 
 ## Earlier Safety models

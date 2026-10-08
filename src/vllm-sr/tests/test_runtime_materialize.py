@@ -216,10 +216,9 @@ def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
     document = yaml.safe_load(source.read_text())
     deployments = {
         "gpu-embedding": {
-            "artifact": "models/mmbert-embedding",
-            "provider": "ort",
-            "device": "migraphx:0",
-            "precision": "native",
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+            "device": "rocm:0",
             "input": {"max_tokens": 128, "overflow": "reject"},
         }
     }

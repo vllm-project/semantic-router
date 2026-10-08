@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -33,7 +34,7 @@ type ToolsDatabase struct {
 	mu                  sync.RWMutex
 	similarityThreshold float32
 	enabled             bool
-	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
+	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3")
 	targetDim           int    // Target dimension for embeddings
 	provider            embedding.Provider
 }
@@ -143,11 +144,8 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 	// Calculate similarities
 	results := make([]ToolSimilarity, 0, len(db.entries))
 	for _, entry := range db.entries {
-		// Calculate similarity
-		var dotProduct float32
-		for i := 0; i < len(queryEmbedding) && i < len(entry.Embedding); i++ {
-			dotProduct += queryEmbedding[i] * entry.Embedding[i]
-		}
+		n := min(len(queryEmbedding), len(entry.Embedding))
+		dotProduct := vecmath.Dot(queryEmbedding[:n], entry.Embedding[:n])
 
 		if !finiteScore(dotProduct) {
 			return nil, fmt.Errorf("tools: similarity score must be finite")

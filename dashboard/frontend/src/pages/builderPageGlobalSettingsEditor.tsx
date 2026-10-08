@@ -11,7 +11,8 @@ import {
   DEFAULT_LISTENER_PORT,
   getListeners,
   getObj,
-  type EditableListener,
+  serializeListeners,
+  type EditableListenerField,
 } from './builderPageGlobalSettingsSupport'
 import { GlobalSettingsRoutingSection } from './builderPageGlobalSettingsRoutingSection'
 import { DslPreviewPanel, generateGlobalOverridePreview } from './builderPageSharedDslEditors'
@@ -85,19 +86,8 @@ const GlobalSettingsEditor: React.FC<{
     (endpoint) => endpoint.backendType === 'provider_profile',
   )
 
-  const serializeListeners = useCallback(
-    (listeners: EditableListener[]): DSLFieldValue[] =>
-      listeners.map((listener) => ({
-        name: listener.name,
-        address: listener.address,
-        port: listener.port,
-        timeout: listener.timeout,
-      })),
-    [],
-  )
-
   const updateListener = useCallback(
-    (index: number, field: keyof EditableListener, value: string | number) => {
+    (index: number, field: EditableListenerField, value: string | number) => {
       setLocal((previous) => {
         const current = getListeners(previous, 'listeners')
         const next = current.map((listener, listenerIndex) =>
@@ -106,7 +96,7 @@ const GlobalSettingsEditor: React.FC<{
         return { ...previous, listeners: serializeListeners(next) }
       })
     },
-    [serializeListeners],
+    [],
   )
 
   const addListener = useCallback(() => {
@@ -126,27 +116,25 @@ const GlobalSettingsEditor: React.FC<{
             address: '0.0.0.0',
             port: nextPort,
             timeout: '300s',
+            source: {},
           },
         ]),
       }
     })
-  }, [serializeListeners])
+  }, [])
 
-  const removeListener = useCallback(
-    (index: number) => {
-      setLocal((previous) => {
-        const current = getListeners(previous, 'listeners')
-        if (current.length <= 1) return previous
-        return {
-          ...previous,
-          listeners: serializeListeners(
-            current.filter((_, listenerIndex) => listenerIndex !== index),
-          ),
-        }
-      })
-    },
-    [serializeListeners],
-  )
+  const removeListener = useCallback((index: number) => {
+    setLocal((previous) => {
+      const current = getListeners(previous, 'listeners')
+      if (current.length <= 1) return previous
+      return {
+        ...previous,
+        listeners: serializeListeners(
+          current.filter((_, listenerIndex) => listenerIndex !== index),
+        ),
+      }
+    })
+  }, [])
 
   return (
     <div className={styles.globalEditor}>

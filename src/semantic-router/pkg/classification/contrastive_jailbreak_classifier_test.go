@@ -39,14 +39,8 @@ func TestContrastiveJailbreakClassifierMatchesExplicitPositiveDeterministically(
 	}
 }
 
-func TestBoundedContrastiveJailbreakWorkersCapsLongContextFanout(t *testing.T) {
-	if workers := boundedContrastiveJailbreakWorkers(10_000); workers != maxContrastiveJailbreakWorkers {
-		t.Fatalf("workers = %d, want %d", workers, maxContrastiveJailbreakWorkers)
-	}
-}
-
 func TestContrastiveJailbreakClassifierEmbedsChunksConcurrently(t *testing.T) {
-	started := make(chan struct{}, maxContrastiveJailbreakWorkers)
+	started := make(chan struct{}, maxEmbeddingConcurrency)
 	release := make(chan struct{})
 	provider, err := embedding.NewFuncProvider("test", 2, func(context.Context, string) ([]float32, error) {
 		started <- struct{}{}
@@ -62,14 +56,14 @@ func TestContrastiveJailbreakClassifierEmbedsChunksConcurrently(t *testing.T) {
 		exactJailbreaks:     map[string]struct{}{},
 		provider:            provider,
 	}
-	messages := make([]string, maxContrastiveJailbreakWorkers*2)
+	messages := make([]string, maxEmbeddingConcurrency*2)
 	for index := range messages {
 		messages[index] = "message"
 	}
 
 	resultCh := make(chan ContrastiveJailbreakResult, 1)
 	go func() { resultCh <- classifier.AnalyzeMessages(messages) }()
-	for completed := 0; completed < maxContrastiveJailbreakWorkers; completed++ {
+	for completed := 0; completed < maxEmbeddingConcurrency; completed++ {
 		select {
 		case <-started:
 		case <-time.After(time.Second):

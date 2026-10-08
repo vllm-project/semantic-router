@@ -1,0 +1,329 @@
+{
+  "case": "streaming-code-route",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "accept",
+          "value": "text/event-stream"
+        },
+        {
+          "name": "content-length",
+          "value": "104"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-streaming-code-route"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Show me golang generics.\"}]}",
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "X-Tenant",
+              "value": "parity-corpus"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer parity-static-key"
+            },
+            {
+              "name": "x-selected-model",
+              "value": "general-large"
+            },
+            {
+              "name": ":path",
+              "value": "/v1/chat/completions"
+            },
+            {
+              "name": "x-route-source",
+              "value": "parity-corpus"
+            },
+            {
+              "name": "content-length",
+              "value": "219"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key"
+          ]
+        },
+        "body": {
+          "body": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a careful senior engineer.\"},{\"role\":\"user\",\"content\":\"Show me golang generics.\"}],\"stream\":true,\"stream_options\":{\"include_usage\":true}}"
+        },
+        "clear_route_cache": true
+      }
+    },
+    {
+      "phase": "response_headers",
+      "header": [
+        {
+          "name": ":status",
+          "value": "200"
+        },
+        {
+          "name": "content-type",
+          "value": "text/event-stream"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-vsr-schema-version",
+              "value": "2"
+            },
+            {
+              "name": "x-vsr-response-path",
+              "value": "upstream"
+            },
+            {
+              "name": "x-vsr-config-version",
+              "value": "1"
+            },
+            {
+              "name": "x-vsr-selected-recipe",
+              "value": "default"
+            },
+            {
+              "name": "x-vsr-selected-decision",
+              "value": "code_route"
+            },
+            {
+              "name": "x-vsr-selected-algorithm",
+              "value": "static"
+            },
+            {
+              "name": "x-vsr-selected-model",
+              "value": "general-large"
+            },
+            {
+              "name": "x-vsr-routing-latency-ms",
+              "value": "<volatile>"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-vsr-effective-input-tokens",
+            "x-vsr-effective-max-output-tokens"
+          ]
+        },
+        "response_body_mode": "streamed"
+      }
+    },
+    {
+      "phase": "response_body",
+      "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+      "effect": {
+        "body": {
+          "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n",
+      "effect": {
+        "body": {
+          "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n"
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":2,\"total_tokens\":11}}\n\ndata: [DONE]\n\n",
+      "effect": {
+        "body": {
+          "body": "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"created\":0,\"id\":\"chatcmpl-parity\",\"model\":\"upstream-model\",\"object\":\"chat.completion.chunk\"}\n\n"
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "end_of_stream": true,
+      "effect": {
+        "body": {
+          "body": "data: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "route": "general-large",
+  "upstream": {
+    "header": [
+      {
+        "name": ":method",
+        "value": "POST"
+      },
+      {
+        "name": ":authority",
+        "value": "localhost:8899"
+      },
+      {
+        "name": ":scheme",
+        "value": "http"
+      },
+      {
+        "name": ":path",
+        "value": "/v1/chat/completions"
+      },
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "accept",
+        "value": "text/event-stream"
+      },
+      {
+        "name": "x-forwarded-proto",
+        "value": "http"
+      },
+      {
+        "name": "x-request-id",
+        "value": "parity-streaming-code-route"
+      },
+      {
+        "name": "accept-encoding",
+        "value": ""
+      },
+      {
+        "name": "x-tenant",
+        "value": "parity-corpus"
+      },
+      {
+        "name": "authorization",
+        "value": "Bearer parity-static-key"
+      },
+      {
+        "name": "x-selected-model",
+        "value": "general-large"
+      },
+      {
+        "name": "x-route-source",
+        "value": "parity-corpus"
+      },
+      {
+        "name": "content-length",
+        "value": "219"
+      }
+    ],
+    "body": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a careful senior engineer.\"},{\"role\":\"user\",\"content\":\"Show me golang generics.\"}],\"stream\":true,\"stream_options\":{\"include_usage\":true}}"
+  },
+  "response": {
+    "status": 200,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "text/event-stream"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "2"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "upstream"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "x-vsr-selected-recipe",
+        "value": "default"
+      },
+      {
+        "name": "x-vsr-selected-decision",
+        "value": "code_route"
+      },
+      {
+        "name": "x-vsr-selected-algorithm",
+        "value": "static"
+      },
+      {
+        "name": "x-vsr-selected-model",
+        "value": "general-large"
+      },
+      {
+        "name": "x-vsr-routing-latency-ms",
+        "value": "<volatile>"
+      }
+    ],
+    "chunks": [
+      "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+      "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n",
+      "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"created\":0,\"id\":\"chatcmpl-parity\",\"model\":\"upstream-model\",\"object\":\"chat.completion.chunk\"}\n\n",
+      "data: [DONE]\n\n"
+    ]
+  },
+  "evidence": {
+    "recipe": "default",
+    "decision": "code_route",
+    "confidence": 1,
+    "model": "general-large",
+    "selection_method": "static",
+    "reasoning_mode": "off",
+    "signals": {
+      "keyword": [
+        "code_keywords"
+      ]
+    }
+  }
+}

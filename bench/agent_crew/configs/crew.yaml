@@ -130,8 +130,6 @@ global:
       semantic:
         mmbert_model_path: ""
         qwen3_model_path: ""
-        gemma_model_path: ""
-        bert_model_path: ""
         multimodal_model_path: ""
     modules:
       prompt_guard:

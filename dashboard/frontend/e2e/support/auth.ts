@@ -42,8 +42,6 @@ const defaultUser: SessionUser = {
     'mcp.manage',
     'mcp.read',
     'mlpipeline.manage',
-    'openclaw.manage',
-    'openclaw.read',
     'replay.read',
     'tools.use',
     'topology.read',

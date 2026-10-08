@@ -4,7 +4,9 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
-	Endpoint           string              `yaml:"endpoint"`
+	// Endpoint is deprecated and ignored: the Router makes a Looper's model
+	// calls in process. It is still accepted for one release.
+	Endpoint           string              `yaml:"endpoint,omitempty"`
 	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
 	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
 	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
@@ -12,10 +14,6 @@ type LooperConfig struct {
 	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
 	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
 	Flow               FlowRuntimeConfig   `yaml:"flow,omitempty"`
-}
-
-func (l *LooperConfig) IsEnabled() bool {
-	return l.Endpoint != ""
 }
 
 func (l *LooperConfig) GetTimeout() int {
@@ -200,9 +198,6 @@ type ResponseCacheStoreConfig struct {
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
-	// PolarityGuard configures the negation/antonym guard; nil means the
-	// lexical default with the NLI tier off.
-	PolarityGuard *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
 }
 
 // SemanticCache is retained for source compatibility.

@@ -16,16 +16,6 @@ import type {
 
 const API_BASE = '/api/mcp'
 
-export const OPENCLAW_MCP_SERVER_ID = '0f9f4c36-7d5b-4f13-9fe8-63f34ad37d9a'
-export const OPENCLAW_MCP_SERVER_NAME = 'OpenClaw Team & Worker MCP'
-export const OPENCLAW_MCP_TOOL_NAMESPACE = 'openclaw'
-const OPENCLAW_MCP_ENDPOINT_PATH = '/api/openclaw/mcp'
-
-function buildOpenClawEndpoint(origin?: string): string {
-  const base = (origin || window.location.origin).replace(/\/$/, '')
-  return `${base}${OPENCLAW_MCP_ENDPOINT_PATH}`
-}
-
 /**
  * 获取所有 MCP 服务器状态
  */
@@ -36,60 +26,6 @@ export async function getServers(signal?: AbortSignal): Promise<MCPServerState[]
   }
   const data: MCPServersResponse = await response.json()
   return data.servers || []
-}
-
-/**
- * Ensure built-in OpenClaw MCP server exists and is connected.
- * This is used by Playground Claw Mode to bootstrap the required MCP tools.
- */
-export async function ensureOpenClawServerConnected(origin?: string): Promise<MCPServerState> {
-  const endpointURL = buildOpenClawEndpoint(origin)
-  const servers = await getServers()
-
-  let server = servers.find(
-    (s) =>
-      s.config.id === OPENCLAW_MCP_SERVER_ID ||
-      s.config.connection?.url === endpointURL ||
-      s.config.name === OPENCLAW_MCP_SERVER_NAME,
-  )
-
-  if (!server) {
-    try {
-      await createServer({
-        id: OPENCLAW_MCP_SERVER_ID,
-        name: OPENCLAW_MCP_SERVER_NAME,
-        description: 'Built-in MCP server for OpenClaw team, worker, and connection management',
-        transport: 'streamable-http',
-        connection: { url: endpointURL },
-        enabled: true,
-        options: { timeout: 30000 },
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const alreadyExists = message.includes('already exists')
-      if (!alreadyExists) {
-        throw error
-      }
-    }
-
-    const refreshedServers = await getServers()
-    server = refreshedServers.find(
-      (s) =>
-        s.config.id === OPENCLAW_MCP_SERVER_ID ||
-        s.config.connection?.url === endpointURL ||
-        s.config.name === OPENCLAW_MCP_SERVER_NAME,
-    )
-  }
-
-  if (!server) {
-    throw new Error('OpenClaw MCP server is not available')
-  }
-
-  if (server.status === 'connected') {
-    return server
-  }
-
-  return connectServer(server.config.id)
 }
 
 /**

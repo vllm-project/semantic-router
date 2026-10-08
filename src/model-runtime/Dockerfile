@@ -1,7 +1,7 @@
 # CPU image of the vLLM Semantic Router model runtime.
 #
-#   docker build -t vllm-sr-runtime src/model-runtime
-#   docker run -p 8100:8100 vllm-sr-runtime \
+#   docker build -t vllm-srun src/model-runtime
+#   docker run -p 8100:8100 vllm-srun \
 #     serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --host 0.0.0.0
 FROM python:3.12-slim
 
@@ -11,19 +11,19 @@ ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    HF_HOME=/var/cache/vllm-sr-runtime
+    HF_HOME=/var/cache/vllm-srun
 
 RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}"
 
-WORKDIR /opt/vllm-sr-runtime
+WORKDIR /opt/vllm-srun
 COPY pyproject.toml README.md ./
-COPY vllm_sr_runtime ./vllm_sr_runtime
-RUN pip install . \
+COPY vllm_srun ./vllm_srun
+RUN pip install ".[multimodal]" \
     && useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin runtime \
     && mkdir -p "$HF_HOME" \
     && chown runtime "$HF_HOME"
 
 USER 65532
 EXPOSE 8100
-ENTRYPOINT ["vllm-sr-runtime"]
+ENTRYPOINT ["vllm-srun"]
 CMD ["--help"]
