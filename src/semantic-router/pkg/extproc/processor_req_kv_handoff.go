@@ -47,14 +47,15 @@ func (a *CoordinatedKVHandoff) PlanDispatch(ctx context.Context, d KVDispatch) (
 	if a == nil || a.Targets == nil {
 		return nil, kvtransfer.ReasonDisabled
 	}
-	target, export, load, ok := a.Targets.ResolveKVTarget(d.TargetModel, d.BackendName)
+	target, _, load, ok := a.Targets.ResolveKVTarget(d.TargetModel, d.BackendName)
 	if !ok {
 		return nil, kvtransfer.ReasonUnavailableBackend
 	}
 	return a.Coordinator.Plan(ctx, kvtransfer.Request{
 		AuthenticatedPrincipal: d.Principal, SessionID: d.SessionID,
 		SessionProvenance: d.SessionProvenance, Target: target,
-		SourceCanExport: export, TargetCanLoad: load, Now: time.Now(),
+		// Only the source resolver can confirm export capability.
+		TargetCanLoad: load, Now: time.Now(),
 	}, d.Turn)
 }
 

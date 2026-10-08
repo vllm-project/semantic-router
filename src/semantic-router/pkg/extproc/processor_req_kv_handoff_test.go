@@ -3,10 +3,13 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
-	"testing"
 )
 
 type kvPlannerStub struct {
@@ -20,6 +23,7 @@ func (p *kvPlannerStub) PlanDispatch(_ context.Context, d KVDispatch) (*kvtransf
 	p.dispatch = d
 	return p.hint, kvtransfer.ReasonEligible
 }
+
 func TestKVHandoffSelectedSwitch(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-only-secret")
 	p := &kvPlannerStub{hint: &kvtransfer.Hint{Namespace: cache.UserScopeNamespace("tenant"), CacheID: "cache", MapperID: "mapper"}}
@@ -41,6 +45,7 @@ func TestKVHandoffSelectedSwitch(t *testing.T) {
 		t.Fatalf("hint %v dispatch %+v", h, p.dispatch)
 	}
 }
+
 func TestKVHandoffStripsCallerHint(t *testing.T) {
 	r := &OpenAIRouter{KVHandoff: &kvPlannerStub{}}
 	b, e := r.encodeKVHandoff([]byte(`{"model":"target","kv_transfer_params":{"namespace":"other"}}`), llmprotocol.OpenAIChatV1, &RequestContext{RequestModel: "target", PreviousModel: "target"})
@@ -55,6 +60,7 @@ func TestKVHandoffStripsCallerHint(t *testing.T) {
 		t.Fatal("caller hint survived")
 	}
 }
+
 func TestKVHandoffSkipPreservesRequest(t *testing.T) {
 	p := &kvPlannerStub{}
 	r := &OpenAIRouter{KVHandoff: p}
@@ -91,5 +97,59 @@ func TestKVHandoffLooperStripsCallerHint(t *testing.T) {
 	}
 	if _, ok := w["kv_transfer_params"]; ok || p.calls != 0 {
 		t.Fatal("looper forwarded caller hint or planned handoff")
+	}
+}
+
+type kvTargetStub struct {
+	identity kvtransfer.ModelIdentity
+	export   bool
+}
+
+func (s kvTargetStub) ResolveKVTarget(_, _ string) (kvtransfer.ModelIdentity, bool, bool, bool) {
+	return s.identity, s.export, true, true
+}
+
+type kvSourceStub struct{ source kvtransfer.SourceCache }
+
+func (s kvSourceStub) LookupSource(context.Context, string, string) (*kvtransfer.SourceCache, error) {
+	return &s.source, nil
+}
+
+func TestKVHandoffSourceExportCapability(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-only-secret")
+	sourceIdentity := kvtransfer.ModelIdentity{Model: "source", WeightRevision: strings.Repeat("a", 40), Tokenizer: "shared", TokenizerRevision: strings.Repeat("c", 40), Precision: "bf16", TensorParallel: 1, KVHeads: 8, HeadDim: 128, HeadOrder: "contiguous"}
+	targetIdentity := sourceIdentity
+	targetIdentity.Model = "target"
+	targetIdentity.WeightRevision = strings.Repeat("b", 40)
+	source := kvtransfer.SourceCache{Namespace: cache.UserScopeNamespace("tenant"), SessionID: "session", CacheID: "cache", Endpoint: "source:8000", Model: sourceIdentity, ExpiresAt: time.Now().Add(time.Hour)}
+	for _, tc := range []struct {
+		name          string
+		targetExports bool
+		sourceExports *bool
+		wantHint      bool
+	}{
+		{name: "unknown source with exporting target", targetExports: true},
+		{name: "non-exporting source with exporting target", targetExports: true, sourceExports: boolPtr(false)},
+		{name: "exporting source with load-only target", sourceExports: boolPtr(true), wantHint: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			coordinator := &kvtransfer.Coordinator{Lookup: kvSourceStub{source: source}, Policies: []kvtransfer.PairPolicy{{Mapper: kvtransfer.Mapper{ID: "mapper", Source: sourceIdentity, Target: targetIdentity}, Enabled: true, MaxTransferTurn: 1}}}
+			if tc.sourceExports != nil {
+				coordinator.CanExport = func(candidate kvtransfer.SourceCache) bool {
+					if candidate.Endpoint != source.Endpoint {
+						t.Fatal("wrong source resolved")
+					}
+					return *tc.sourceExports
+				}
+			}
+			adapter := &CoordinatedKVHandoff{Coordinator: coordinator, Targets: kvTargetStub{identity: targetIdentity, export: tc.targetExports}}
+			hint, reason := adapter.PlanDispatch(context.Background(), KVDispatch{Principal: "tenant", SessionID: "session", SessionProvenance: "header", TargetModel: "target", BackendName: "target-backend", Turn: 1})
+			if (hint != nil) != tc.wantHint {
+				t.Fatalf("hint = %v, reason = %s", hint, reason)
+			}
+			if !tc.wantHint && reason != kvtransfer.ReasonUnavailableBackend {
+				t.Fatalf("unexpected fallback: %s", reason)
+			}
+		})
 	}
 }
