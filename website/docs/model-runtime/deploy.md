@@ -187,7 +187,7 @@ explicit public name. Add listener `api_keys` when clients must authenticate.
 The native grant is separate from the Chat `listeners[].models` allowlist and
 works in either startup mode. An existing grant stays unchanged when a model
 is replaced or scaled; update it when you intend to publish another model.
-See the [quickstart](./quickstart.md#3-send-a-request) for a complete native
+See the [quickstart](model-runtime/quickstart.md#3-send-a-request) for a complete native
 request. Publication does not guarantee readiness; inspect it with
 `vllm-sr instance --config config.yaml models`.
 

@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import unittest
+from http import HTTPStatus
 
 import requests
 
@@ -85,7 +86,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 timeout=60,
             )
 
-            if response.status_code >= 500:
+            if response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
                 self.skipTest(
                     f"Envoy server returned server error: {response.status_code}"
                 )
@@ -98,7 +99,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
         # Check router metrics endpoint
         try:
             response = requests.get(ROUTER_METRICS_URL, timeout=2)
-            if response.status_code != 200:
+            if response.status_code != HTTPStatus.OK:
                 self.skipTest(
                     "Router metrics server is not responding. Is the router running?"
                 )
@@ -207,7 +208,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
             results[test_case["name"]] = actual_model
 
             model_match = actual_model == expected_model
-            passed = response.status_code < 400 and model_match
+            passed = response.status_code < HTTPStatus.BAD_REQUEST and model_match
 
             self.print_response_info(
                 response,

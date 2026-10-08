@@ -194,6 +194,17 @@ const hourlyHistory = (name: string) => ({
   })),
 })
 
+const decisionModelCatalog = {
+  system: { decision_model: { deployment: 'routing-judge' } },
+  deployments: {
+    'routing-judge': {
+      provider: 'model_runtime',
+      artifact: 'vllm-sr/Vela-2.0-4B',
+      device: 'rocm:0',
+    },
+  },
+}
+
 async function mockRouterInventoryShell(
   page: Page,
   status: unknown = statusPayload,
@@ -234,9 +245,9 @@ test.describe('Router model inventory surfaces', () => {
       { name: 'correction', question: { type: 'noul' } },
     ]
     const config = {
-      global: { model_catalog: { system: { decision_model: 'Vela-2.0-4B' } } },
+      global: { model_catalog: decisionModelCatalog },
       providers: { models: [] },
-      entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/auto'] }],
+      entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/balanced'] }],
       recipes: [
         {
           name: 'balanced',
@@ -261,7 +272,7 @@ test.describe('Router model inventory surfaces', () => {
         state: 'ready',
         model_path: 'a'.repeat(64),
         metadata: {
-          deployment: '@Vela-2.0-4B/auto',
+          deployment: 'routing-judge',
           resource_id: 'shared-vela',
           provider: 'model_runtime',
           device: 'rocm:0',
@@ -279,7 +290,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(
       intelligence.getByText('5 questions · 3 other signals · 2 projections'),
     ).toBeVisible()
-    await intelligence.locator('summary').click()
+    await intelligence.locator('summary').filter({ hasText: 'balanced' }).click()
     for (const question of questions) {
       await expect(intelligence.getByText(question.name, { exact: true })).toBeVisible()
     }
@@ -301,7 +312,7 @@ test.describe('Router model inventory surfaces', () => {
     page,
   }) => {
     await mockRouterInventoryShell(page, statusPayload, {
-      global: { model_catalog: { system: { decision_model: 'Vela-2.0-4B' } } },
+      global: { model_catalog: decisionModelCatalog },
     })
     await page.goto('/dashboard')
     const overview = page.getByTestId('decision-model-overview')
