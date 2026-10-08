@@ -89,7 +89,7 @@ returns HTTP 503 when the decision remains unknown. A scored unsafe request
 selects the configured handling route. Diagnostics expose matched rule names in
 `x-vsr-matched-safety`, the classification result, dashboard and replay record.
 
-See [shared model configuration](/docs/installation/runtime/safety)
+See [shared model configuration](/docs/model-runtime/guides/safety)
 for native context budgets, external endpoints and failure policies, and the
 [complete HTTP example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 for a category-specific policy.
@@ -97,9 +97,9 @@ for a category-specific policy.
 ## Select Vela Shield
 
 The built-in Safety module uses
-[Vela Safety](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Safety)
+[Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety)
 by default.
-[Vela Shield](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Shield)
+[Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield)
 is a separately trained alternative with the same `safe`/`unsafe` labels, so
 existing rules and thresholds apply without other changes. Validate thresholds
 again after switching models.
@@ -123,16 +123,15 @@ global:
   model_catalog:
     deployments:
       shield:
-        artifact: models/Vela-1.0-Encoder-307M-Shield
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
-        provider: candle
 recipes:
   - name: care
     routing:
       model_bindings:
         safety.unsafe-content:
           deployment: shield
-          adapter: modernbert
           contract: label_distribution.v1
       signals:
         safety:
@@ -148,7 +147,7 @@ load them and does not download them.
 
 ## Long-input scanning
 
-Native heads use whole-input inference by default. A separately calibrated
+Safety heads use whole-input inference by default. A separately calibrated
 window policy can scan local risks throughout a long request:
 
 ```yaml
@@ -190,7 +189,7 @@ supplied 2,048-token windows and 32K document policy; configuring a larger
 document budget does not qualify that operating point for a different scan.
 
 Choose thresholds evaluated with the exact model, window size, overlap and
-precision you deploy. Window scanning can recover local risks that a whole-input
+[profile](../../../model-runtime/profiles.md) you deploy. Window scanning can recover local risks that a whole-input
 classifier misses, but it cannot interpret a distant refusal or protective
 purpose outside the same window. Validate quoted material and other long-range
 context in your application. Omit `window` when whole-input semantics are needed.

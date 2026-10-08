@@ -228,7 +228,7 @@ def main() -> None:
     parser.add_argument("--audio-encoder-name", required=True)
     parser.add_argument(
         "--text-encoder-name",
-        default="llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+        default="vllm-sr/mmbert-embed-32k-2d-matryoshka",
     )
     parser.add_argument("--max-text-length", type=int, default=32768)
     parser.add_argument("--device", default="cuda:0")

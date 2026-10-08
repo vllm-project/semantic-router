@@ -50,7 +50,7 @@ func TestFullDuplex_ProtocolConfigDefersBodyResponse(t *testing.T) {
 	assert.Empty(t, stream.Responses)
 }
 
-func TestFullDuplex_DisabledAccumulationPassesChunkThrough(t *testing.T) {
+func TestFullDuplex_DisabledAccumulationFailsClosed(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	ctx := &RequestContext{FullDuplexRequestBody: true}
 	chunk := []byte(`{"model":"gpt-4"}`)
@@ -59,10 +59,12 @@ func TestFullDuplex_DisabledAccumulationPassesChunkThrough(t *testing.T) {
 	}, ctx)
 
 	require.NoError(t, err)
-	streamed := response.GetRequestBody().GetResponse().GetBodyMutation().GetStreamedResponse()
-	require.NotNil(t, streamed)
-	assert.Equal(t, chunk, streamed.GetBody())
-	assert.True(t, streamed.GetEndOfStream())
+	immediate := response.GetImmediateResponse()
+	require.NotNil(t, immediate, "full-duplex body without streamed_body must fail closed, not relay")
+	if immediate.Status == nil || immediate.Status.Code != typev3.StatusCode_ServiceUnavailable {
+		t.Fatalf("expected 503 immediate response, got %v", immediate.Status)
+	}
+	assert.Contains(t, string(immediate.Body), "streamed_body")
 }
 
 func TestFullDuplex_FinalResponseUsesStreamedMutation(t *testing.T) {
@@ -335,8 +337,6 @@ func TestFullDuplex_RequestsWithoutBodyRoutingReplyAtOnce(t *testing.T) {
 }
 
 func TestFullDuplex_PassthroughTrailersFollowTheBody(t *testing.T) {
-	passthrough := fullDuplexRoutingRouter()
-	passthrough.Config.StreamedBodyMode = false
 	skipping := newRouterWithSkipProcessingGate(true)
 	skipping.Config.StreamedBodyMode = true
 	tests := []struct {
@@ -344,7 +344,6 @@ func TestFullDuplex_PassthroughTrailersFollowTheBody(t *testing.T) {
 		router  *OpenAIRouter
 		headers *ext_proc.ProcessingRequest
 	}{
-		{name: "without body accumulation", router: passthrough, headers: fullDuplexHeadersRequest(false)},
 		{name: "skip processing", router: skipping, headers: fullDuplexHeadersRequest(false,
 			&core.HeaderValue{Key: headers.VSRSkipProcessing, RawValue: []byte("true")})},
 	}

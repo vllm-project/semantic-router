@@ -22,7 +22,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 	defer func() {
 		duration := time.Since(startTime).Seconds()
-		RecordMemoryRetrieval(backend, operation, status, opts.UserID, duration, resultCount)
+		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
 	limit, threshold, err := m.normalizeRetrieveOpts(opts)

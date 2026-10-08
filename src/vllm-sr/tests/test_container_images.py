@@ -36,11 +36,20 @@ def clear_runtime_image_env(monkeypatch):
         ("0.4.0", "v0.4.0"),
         ("0.4.1", "v0.4.1"),
         ("0.4.0.dev20260924000100", "latest"),
+        # `main` carries the next version before its release snapshot exists.
+        ("0.5.0", "latest"),
+        ("0.5.0.dev20261007063125", "latest"),
         ("unknown", "latest"),
     ],
 )
 def test_official_image_tag_follows_stable_cli_version(cli_version, image_tag):
     assert image_tag_for_cli_version(cli_version) == image_tag
+
+
+def test_a_release_build_runs_its_release_images():
+    assert (
+        image_tag_for_cli_version("0.5.0", released={"v0.5"}.__contains__) == "v0.5.0"
+    )
 
 
 def test_default_runtime_images_match_installed_cli_release(monkeypatch):

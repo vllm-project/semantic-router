@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 
-import { useDSLStore } from '@/stores/dslStore'
+import { selectHasUnsavedChanges, useDSLStore } from '@/stores/dslStore'
 import type { EditorMode } from '@/types/dsl'
 
 import styles from './BuilderPage.module.css'
@@ -41,7 +41,6 @@ const BuilderPage: React.FC = () => {
     wasmError,
     loading,
     mode,
-    dirty,
     renderedYamlOutput,
     yamlOutput,
     crdOutput,
@@ -67,6 +66,11 @@ const BuilderPage: React.FC = () => {
     deployPreviewLoading,
     deployPreviewError,
   } = useDSLStore()
+
+  // Derived from the store: the source differs from the last load, import, reset, or
+  // successful deploy snapshot. The reload guard and the (unsaved) label read this.
+  const unsaved = useDSLStore(selectHasUnsavedChanges)
+
   const { serverReadonly, runtimeConfigWritable, isLoading: readonlyLoading } = useReadonly()
   const { user } = useAuth()
   const hasDeployPermission = canDeployConfig(user)
@@ -394,7 +398,7 @@ const BuilderPage: React.FC = () => {
   return (
     <div className={styles.page}>
       <BuilderToolbar
-        dirty={dirty}
+        unsaved={unsaved}
         mode={mode}
         wasmReady={wasmReady}
         wasmError={wasmError}

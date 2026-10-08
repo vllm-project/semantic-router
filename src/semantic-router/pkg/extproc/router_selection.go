@@ -51,7 +51,7 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 func createModelSelectorRegistry(
 	cfg *config.RouterConfig,
 	lt lookuptable.LookupTableStorage,
-	embed func(string, selection.EmbeddingConfig) ([]float32, error),
+	embed func(context.Context, string, selection.EmbeddingConfig) ([]float32, error),
 	defaultEmbeddingConfig selection.EmbeddingConfig,
 ) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
@@ -64,7 +64,7 @@ func createModelSelectorRegistry(
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(embed, defaultEmbeddingConfig)
+	selectionFactory = selectionFactory.WithContextEmbeddingFunc(embed, defaultEmbeddingConfig)
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
@@ -84,13 +84,9 @@ func createModelSelectorRegistry(
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(context.Context, string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = models.EmbeddingBackend()
-	}
-	modelType := selectionEmbeddingModelType(models, backend)
+	modelType := selectionEmbeddingModelType(models, models.EmbeddingBackend())
 	defaultConfig := selection.EmbeddingConfig{
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),
@@ -100,12 +96,12 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.
 	if len(sets) > 0 {
 		prepared = sets[0]
 	}
-	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
+	return func(ctx context.Context, text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
 		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
 		if err != nil {
 			return nil, err
 		}
-		return provider.Embed(context.Background(), text)
+		return provider.Embed(ctx, text)
 	}, defaultConfig
 }
 
@@ -327,8 +323,8 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 	mlCfg := intelligentRouting.ModelSelection.ML
 	// Same normalization as selectionEmbeddingModelType, and for the same
 	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
-	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
-	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
+	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and miss
+	// the prepared provider, which is keyed by the normalized name.
 	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
 	if mlCfg.ModelsPath == "" &&
 		mlCfg.KNN.PretrainedPath == "" &&

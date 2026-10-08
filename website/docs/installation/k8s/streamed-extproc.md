@@ -41,6 +41,8 @@ global:
 
 Keep `max_bytes` high enough for your largest prompt or multimodal payload. Keep `timeout_sec` greater than the expected upload time between the first body chunk and end-of-stream.
 
+The router measures that upload time in `llm_streamed_body_arrival_seconds`, from the first body chunk to end-of-stream, labeled by `recipe`. Size `timeout_sec` above its p99 or maximum over a representative window, for example `histogram_quantile(0.99, sum by (le) (rate(llm_streamed_body_arrival_seconds_bucket[1h])))`. `llm_streamed_body_bytes` gives the same view of accumulated body size for sizing `max_bytes`, and `llm_streamed_body_chunks` shows how many body messages the gateway sent. These series are recorded only in STREAMED and FULL_DUPLEX_STREAMED modes, after the request resolves an entrypoint; requests that name a concrete backend model use `recipe="unknown"`.
+
 The 10 MiB and 30-second values above are example guardrails matching the
 streaming e2e profile in `e2e/profiles/streaming/values.yaml`; they are not
 runtime defaults or experimentally calibrated limits. Omitting either value or
@@ -282,8 +284,8 @@ With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Sem
 ## Troubleshooting
 
 - **Gateway accepts requests but Semantic Router never sees body chunks**: the ExtProc filter still uses buffered or skipped request body mode. Set Envoy `requestBodyMode: STREAMED` or agentgateway `requestBodyMode: FullDuplexStreamed`.
-- **Request fails with 413**: the accumulated body exceeds `global.router.streamed_body.max_bytes`. Increase `max_bytes` or reduce request size.
-- **Request fails with 408**: body chunks did not finish before `timeout_sec`. Increase `timeout_sec` or investigate client upload speed.
+- **Request fails with 413**: the accumulated body exceeds `global.router.streamed_body.max_bytes`. Compare `max_bytes` with `llm_streamed_body_bytes`, then increase `max_bytes` or reduce request size.
+- **Request fails with 408**: body chunks did not finish before `timeout_sec`. Compare `timeout_sec` with the upper quantiles of `llm_streamed_body_arrival_seconds`, then increase `timeout_sec` or investigate client upload speed.
 - **Client expected SSE but got JSON**: the OpenAI request did not include `"stream": true`, or the matched path is a non-streaming immediate response. Add `"stream": true` for Chat Completions looper routes and verify the matched decision.
 - **agentgateway rejects `Streamed`**: agentgateway supports `FullDuplexStreamed`, not `Streamed`. Use `requestBodyMode: FullDuplexStreamed`.
 - **Duplicate or partial upstream request body**: gateway and Semantic Router streamed modes are mismatched. Enable both the gateway streamed request-body mode and Semantic Router `streamed_body.enabled`.

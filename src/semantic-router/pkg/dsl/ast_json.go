@@ -67,6 +67,8 @@ type ProjectionScoreDeclJSON struct {
 type ProjectionScoreInputJSON struct {
 	SignalType  string  `json:"signalType"`
 	SignalName  string  `json:"signalName"`
+	KB          string  `json:"kb,omitempty"`
+	Metric      string  `json:"metric,omitempty"`
 	Weight      float64 `json:"weight"`
 	ValueSource string  `json:"valueSource,omitempty"`
 	Match       float64 `json:"match,omitempty"`
@@ -321,6 +323,8 @@ func appendProjectionScoreDecls(result *ProgramJSON, scores []*ProjectionScoreDe
 			scoreJSON.Inputs = append(scoreJSON.Inputs, &ProjectionScoreInputJSON{
 				SignalType:  input.SignalType,
 				SignalName:  input.SignalName,
+				KB:          input.KB,
+				Metric:      input.Metric,
 				Weight:      input.Weight,
 				ValueSource: input.ValueSource,
 				Match:       input.Match,

@@ -241,8 +241,10 @@ func selectionFallbackReasonForError(err error) string {
 		return selectionFallbackInvalidOutput
 	case errors.Is(err, selection.ErrPromptUndeclaredCandidate):
 		return selectionFallbackUndeclaredCandidate
-	case errors.Is(err, selection.ErrPromptInvocation):
+	case errors.Is(err, selection.ErrPromptInvocation), errors.Is(err, selection.ErrDecisionModelInvocation):
 		return selectionFallbackInvocation
+	case errors.Is(err, selection.ErrDecisionModelAnswer):
+		return selectionFallbackInvalidOutput
 	default:
 		return selectionFallbackError
 	}

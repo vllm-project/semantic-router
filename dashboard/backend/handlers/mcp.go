@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -48,6 +49,10 @@ func prepareMCPServerConfig(w http.ResponseWriter, config *mcp.ServerConfig) boo
 	}
 	if config.Transport != mcp.TransportStdio && config.Transport != mcp.TransportStreamableHTTP {
 		http.Error(w, "Invalid transport type. Must be 'stdio' or 'streamable-http'", http.StatusBadRequest)
+		return false
+	}
+	if err := mcp.ValidateSecurity(config.Security); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
 	if config.Transport == mcp.TransportStdio && config.Connection.Command == "" {
@@ -164,6 +169,10 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
+		if err := mcp.ValidateSecurity(config.Security); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if err := h.manager.UpdateServer(&config); err != nil {
 			writeMCPInternalError(w, "Update server", err)
 			return
@@ -250,6 +259,10 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.Connect(ctx, id); err != nil {
+			if errors.Is(err, mcp.ErrUnsupportedSecurity) {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
 			writeMCPInternalError(w, "Connect server", err)
 			return
 		}
@@ -360,11 +373,15 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 		}
 		if err := h.manager.TestConnection(ctx, &config); err != nil {
 			log.Printf("[MCP-Handler] Test connection failed: error_class=%T", err)
+			message := "Connection test failed"
+			if errors.Is(err, mcp.ErrUnsupportedSecurity) {
+				message = err.Error()
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   "Connection test failed",
+				"error":   message,
 			})
 			return
 		}

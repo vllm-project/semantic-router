@@ -225,7 +225,7 @@
   display: grid;
   min-height: 0;
   align-items: center;
-  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1.5rem, 4vh, 2.75rem);
+  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1rem, 2.5vh, 1.75rem);
   pointer-events: none;
 }
 
@@ -239,48 +239,68 @@
 .intro {
   position: relative;
   display: grid;
-  gap: 1.1rem;
-  justify-items: center;
-  justify-self: center;
-  text-align: center;
+  width: 100%;
+  justify-items: start;
+  gap: 1.3rem;
+  text-align: left;
   pointer-events: auto;
+}
+
+.introCopy {
+  display: grid;
+  max-width: 62rem;
+  gap: 1.15rem;
+  min-width: 0;
 }
 
 .stage .title {
   margin: 0;
   color: var(--site-text);
-  font-size: clamp(2.1rem, 3.4vw, 3.15rem);
-  font-weight: 460;
+  font-size: clamp(2.6rem, 5.2vw, 4.75rem);
+  font-weight: 560;
   letter-spacing: -0.045em;
-  line-height: 1.04;
-  text-align: center;
+  line-height: 1.08;
   text-wrap: balance;
 }
 
 .stage .title .accent {
+  display: block;
   color: var(--site-accent-strong);
-  font-weight: 720;
+  font-weight: inherit;
 }
 
-.nowrap {
-  white-space: nowrap;
+.dek {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(1rem, 1.3vw, 1.125rem);
+  line-height: 1.5;
+}
+
+.dek strong {
+  color: var(--site-text);
+  font-weight: 700;
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  width: min(100%, 24.5rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
   gap: 0.75rem;
-  justify-content: center;
 }
 
 .actions .primaryCta,
 .actions .secondaryCta {
-  min-width: 12rem;
-  min-height: 3rem;
-  border-radius: 0.25rem;
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  min-height: 3.1rem;
+  gap: 0.55rem;
+  padding-inline: 0.85rem;
+  border-radius: 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 /* Match the shared CTA and hover palette in both color modes. */
@@ -296,20 +316,6 @@
   border-color: var(--site-cta-border-hover);
   background: var(--site-cta-bg-hover);
   color: var(--site-cta-text);
-}
-
-.actions .secondaryCta {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-glass);
-  color: var(--site-text);
-  box-shadow: none;
-}
-
-.actions .secondaryCta:hover,
-.actions .secondaryCta:focus-visible {
-  border-color: var(--site-hover-border-strong);
-  background: var(--site-hover-surface-bg);
-  color: var(--site-hover-text);
 }
 
 .film {
@@ -406,27 +412,17 @@
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 0.75rem;
-  padding: 0.9rem 0 1.15rem;
+  min-height: 5.75rem;
+  align-items: center;
+  padding: 1.05rem 0 1.2rem;
   background: linear-gradient(180deg, color-mix(in srgb, var(--site-bg) 16%, transparent), color-mix(in srgb, var(--site-bg) 94%, transparent) 38%);
-}
-
-.modelBandLabel {
-  justify-self: center;
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  font-weight: 650;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
 }
 
 .modelViewport {
   overflow: hidden;
   width: 100%;
-  padding: 0 1.5rem;
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
 }
 
 .modelTrack,
@@ -451,21 +447,21 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.85rem;
   color: var(--site-muted);
   white-space: nowrap;
 }
 
 .model svg {
-  width: 1.75rem;
-  height: 1.75rem;
-  opacity: 0.82;
+  width: 2.4rem;
+  height: 2.4rem;
+  opacity: 0.9;
 }
 
 .model strong {
   color: var(--site-muted-bright);
-  font-size: 1rem;
-  font-weight: 570;
+  font-size: 1.1rem;
+  font-weight: 590;
   letter-spacing: -0.01em;
 }
 
@@ -496,7 +492,8 @@
 @media (max-width: 640px) {
   .stage {
     --terrain-model-gap: 1.6rem;
-    grid-template-rows: minmax(31rem, 1fr) auto;
+    grid-template-rows: auto auto;
+    min-height: 0;
   }
 
   .terrainCanvas {
@@ -521,23 +518,17 @@
   }
 
   .hero {
-    padding: 2rem 0 1.75rem;
+    padding: 1.75rem 0 0.75rem;
   }
 
   .stage .title {
-    font-size: clamp(1.95rem, 8.6vw, 2.5rem);
-  }
-
-  .actions {
-    display: grid;
-    width: 100%;
-    grid-template-columns: 1fr;
+    font-size: clamp(2.4rem, 8.8vw, 3.5rem);
   }
 
   .actions .primaryCta,
   .actions .secondaryCta {
-    width: 100%;
-    min-width: 0;
+    font-size: 0.83rem;
+    padding-inline: 0.55rem;
   }
 
   .film {
@@ -565,20 +556,17 @@
   }
 
   .modelBand {
-    padding-bottom: 0.95rem;
-  }
-
-  .modelViewport {
-    padding: 0 0.75rem;
+    min-height: 5.2rem;
+    padding: 1rem 0 1.1rem;
   }
 
   .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 2.1rem;
+    height: 2.1rem;
   }
 
   .model strong {
-    font-size: 0.86rem;
+    font-size: 0.98rem;
   }
 }
 
@@ -593,18 +581,24 @@
   }
 
   .modelBand {
-    gap: 0.45rem;
-    padding-top: 0.55rem;
-    padding-bottom: 0.7rem;
+    min-height: 4.8rem;
+    padding: 0.8rem 0;
   }
 
   .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 2rem;
+    height: 2rem;
   }
 
   .model strong {
-    font-size: 0.86rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .actions {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 

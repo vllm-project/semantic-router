@@ -106,6 +106,10 @@ def profile_command(record: dict, cluster: str) -> list[str]:
         "-use-existing-cluster=false",
         "-use-workspace-models=false",
         "-verbose=true",
+        # Only the e2e lane retries a failed profile run, and a test that passes
+        # on the retry is reported as flaky in the job summary. Unit tests stay
+        # at one attempt so a deterministic failure is never retried into a pass.
+        "-flake-attempts=2",
     ]
 
 

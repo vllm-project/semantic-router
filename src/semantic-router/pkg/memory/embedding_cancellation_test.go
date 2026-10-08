@@ -21,7 +21,7 @@ func TestEmbeddingCancellationPreservesProviderError(t *testing.T) {
 				return nil, providerErr
 			})
 			require.NoError(t, err)
-			cfg := EmbeddingConfig{Model: EmbeddingModelBERT, Provider: provider}
+			cfg := EmbeddingConfig{Model: EmbeddingModelQwen3, Provider: provider}
 			backend := NewInMemoryStoreWithConfig(cfg)
 			switch operation {
 			case "embed":
@@ -33,7 +33,7 @@ func TestEmbeddingCancellationPreservesProviderError(t *testing.T) {
 			}
 			require.ErrorIs(t, ctx.Err(), context.Canceled)
 			require.ErrorIs(t, err, providerErr)
-			require.ErrorContains(t, err, "bert embedding failed:")
+			require.ErrorContains(t, err, "qwen3 embedding failed:")
 			require.Empty(t, backend.memories)
 		})
 	}

@@ -2,28 +2,28 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>Make Your Mixture-of-Models Programmable.</strong></p>
+<p>An open, programmable <strong>decision layer</strong> for models and compute.</p>
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
   <a href="https://app.vllm-sr.ai/playground">Playground</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
-  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a> |
+  <a href="https://huggingface.co/vllm-sr">Hugging Face</a> |
   <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
 
-<a href="https://trendshift.io/repositories/15581?utm_source=repository-badge&utm_medium=badge&utm_campaign=badge-repository-15581" target="_blank" rel="noopener noreferrer">
-  <img src="https://trendshift.io/api/badge/repositories/15581" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
-</a>
 <a href="https://trendshift.io/repositories/15581?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-15581" target="_blank" rel="noopener noreferrer">
   <img src="https://trendshift.io/api/badge/trendshift/repositories/15581/daily?language=Go" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
+</a>
+<a href="https://huggingface.co/collections/vllm-sr/decision-20">
+  <img src="website/static/img/hf-trending.svg" alt="Decision 2.0 — #1 on Hugging Face Trending Collections, October 6, 2026" width="300" height="55"/>
 </a>
 
 [![Main](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml/badge.svg)](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml)
 ![GitHub Release](https://img.shields.io/github/v/release/vllm-project/semantic-router?sort=semver)
 ![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vllm-project/semantic-router)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-6E56CF)](https://deepwiki.com/vllm-project/semantic-router)
 
 </div>
 
@@ -31,16 +31,18 @@
 
 ## About
 
-vLLM Semantic Router is a programmable routing layer for building Mixture-of-Models systems across heterogeneous LLM infrastructure. It evaluates request signals, user preferences, and application policies to select—or compose—the right model path for each request.
+**Intelligence beyond any one model.**
 
-Use it to improve quality, cost, latency, privacy, and safety without hard-coding routing logic into applications.
+Give your agent harness one API for many models. vLLM Semantic Router selects or combines models for each call, guided by your policy.
+
+Your harness keeps the agent loop, tools, and task state. The Router chooses among configured backends across local, private, and cloud compute.
 
 | Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
-| **Models** | Models specialize in different work. | Compose personalized model paths. |
-| **Compute** | GPUs, accelerators, edge, and cloud coexist. | Route across heterogeneous compute. |
-| **Location** | Inference spans edge, private, and cloud. | Keep data within its boundaries. |
-| **Preference** | "Best" changes by user and workload. | Make every preference executable. |
+| **Models** | Different models excel at different tasks. | Select or combine models. |
+| **Compute** | Hardware varies in speed and capacity. | Choose among configured backends. |
+| **Location** | Edge, private, and cloud. | Keep calls within approved locations. |
+| **Preference** | Priorities change by task. | Set quality, latency, and cost priorities. |
 
 [Explore how it works →](https://vllm-sr.ai/docs/intro/)
 
@@ -54,6 +56,12 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
+### Connect your agent harness
+
+Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
+
+Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for setup and compatibility.
+
 ### Online playground
 
 Try the online playground at <https://app.vllm-sr.ai/playground>.
@@ -65,14 +73,22 @@ Credentials:
 
 ## Latest News
 
-- [2026/07/21] New Blog: [Beyond a Single Model: Building Mixture-of-Models Systems with vLLM Semantic Router](https://vllm.ai/blog/2026-07-21-vllm-sr-new-chapter-mom)
-- [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
-- [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
-- [2026/06/05] v0.3 Released: [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm.ai/blog/2026-06-05-v0.3-vllm-sr-themis-release)
+- [2026/10/06] [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20) reached #1 on Hugging Face Trending Collections.
+- [2026/10/06] [Vela 2.0: Towards Open Foundation Routing Models](https://vllm-sr.ai/blog/vela-2-0-open-foundation-routing-models/)
+- [2026/09/24] [vLLM Semantic Router v0.4 Hermes: Many Models, One Improving System](https://vllm-sr.ai/blog/v0.4-vllm-sr-hermes-release/)
+- [2026/09/22] [Introducing Decision 1.0: Open Decision Foundation Models](https://vllm-sr.ai/blog/decision-models/)
+- [2026/09/18] [Introducing Vela 1.0](https://vllm-sr.ai/blog/vela-models/)
+- [2026/08/24] [Find Your Focus: How to Join and Work Together](https://vllm-sr.ai/blog/join-vllm-sr-workgroups/)
+- [2026/08/05] [LettuceDetect v2 in Semantic Router: Generative Hallucination Detection as a vLLM Endpoint](https://vllm-sr.ai/blog/lettucedetect-v2-generative-hallucination-detection/)
 
 <details>
 <summary>Earlier announcements</summary>
 
+- [2026/07/21] [Beyond a Single Model: Building Mixture-of-Models Systems with vLLM Semantic Router](https://vllm-sr.ai/blog/vllm-sr-new-chapter-mom/)
+- [2026/07/09] [Adding Cursor-Style Auto Model Selection to OpenCode with vLLM Semantic Router](https://vllm-sr.ai/blog/opencode-auto-mode/)
+- [2026/06/29] [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm-sr.ai/blog/micro-agent-frontier-models/)
+- [2026/06/16] [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm-sr.ai/blog/vllm-sr-fusion-api/)
+- [2026/06/05] [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm-sr.ai/blog/v0.3-vllm-sr-themis-release/)
 - [2026/03/24] Vision Paper Released: [The Workload-Router-Pool Architecture for LLM Inference Optimization](https://vllm-sr.ai/vision-paper)
 - [2026/03/10] v0.2 Released: [vLLM Semantic Router v0.2 Athena Release](https://vllm.ai/blog/v0.2-vllm-sr-athena-release)
 - [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-sr.ai/white-paper/)
@@ -125,18 +141,12 @@ If you find Semantic Router helpful in your research or projects, please conside
 }
 ```
 
-## Sponsors
+## Ecosystem & partnerships
 
-We are grateful to our sponsors who support us:
-
----
-
-[**AMD**](https://www.amd.com) provides us with GPU resources and [ROCm™](https://www.amd.com/en/products/software/rocm.html) software for training and researching frontier router models, enhancing E2E testing, and building the online models playground.
+An open ecosystem spanning research, infrastructure, and enterprise adoption.
 
 <div align="center">
-<a href="https://www.amd.com">
-  <img src="website/static/img/amd-logo.svg" alt="AMD" width="40%"/>
-</a>
+  <a href="https://vllm-sr.ai/#ecosystem">
+    <img src="website/static/img/ecosystem/ecosystem.webp" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+  </a>
 </div>
-
----

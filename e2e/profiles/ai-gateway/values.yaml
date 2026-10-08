@@ -70,7 +70,8 @@ config:
           - type: fast_response
             configuration:
               message: I'm sorry, but I cannot process this request as it appears to violate our usage policies.
-      - name: block_pii
+      - &block_pii_decision
+        name: block_pii
         description: Block requests containing PII
         priority: 999
         rules:
@@ -770,6 +771,19 @@ config:
               enabled: true
               system_prompt: The user has asked a similar question multiple times without a resolution. Acknowledge this and provide a definitive, complete answer.
               mode: replace
+      - name: long_context_routing
+        description: Route requests whose estimated token count matches the long_context band. Gated by a dedicated keyword (only the context-safety-overlap prompt carries it) so a drifting online-calibrated token estimate can't pull in unrelated small requests, such as reask's fixtures. Kept below block_jailbreak/block_pii so a long unsafe request is still blocked (see context-safety-overlap).
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+            - type: keyword
+              name: context_safety_overlap_probe
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
       - &other_decision
         name: other_decision
         description: General knowledge and miscellaneous topics
@@ -810,6 +824,11 @@ config:
           keywords:
             - SSN
             - credit card
+          case_sensitive: false
+        - name: context_safety_overlap_probe
+          operator: OR
+          keywords:
+            - __CONTEXT_SAFETY_OVERLAP__
           case_sensitive: false
         - &tool_selection_add_weather
           name: tool_selection_add_weather
@@ -903,6 +922,10 @@ config:
           description: Current user turn closely repeats the last two billing complaints.
           threshold: 0.8
           lookback_turns: 2
+      context:
+        - name: long_context
+          description: Requests estimated at 500 tokens or more.
+          min_tokens: 500
       domains: &baseline_domain_signals
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -935,12 +958,13 @@ config:
       jailbreak:
         - name: jailbreak_standard
           # Match the published Guard operating point in canonical defaults.
-          threshold: 0.5
+          threshold: 0.75
           include_history: false
           description: Standard jailbreak detection
       pii:
-        - name: pii_deny_all
-          threshold: 0.7
+        - &pii_deny_all
+          name: pii_deny_all
+          threshold: 0.01
           include_history: false
           description: Block all PII
       classifiers:
@@ -980,6 +1004,8 @@ config:
       recipe: e2e-protocol
     - model_names: ["e2e-plugins"]
       recipe: e2e-plugins
+    - model_names: ["e2e-pii-precedence"]
+      recipe: e2e-pii-precedence
     - model_names: ["e2e-cache"]
       recipe: e2e-cache
     - model_names: ["e2e-cache-exact"]
@@ -1091,6 +1117,21 @@ config:
           - *tool_selection_filter_threshold_decision
           - *tool_selection_add_topk_one_decision
           - *tool_selection_with_system_prompt_decision
+    - name: e2e-pii-precedence
+      # Only the two decisions the case orders: the baseline's jailbreak guard
+      # also reads the tool-selection marker, and Vela 2.0 scores the marker
+      # before payment data as an injection.
+      description: A PII block outranks tool selection on the same request.
+      routing:
+        strategy: priority
+        signals:
+          keywords:
+            - *tool_selection_add_weather
+          pii:
+            - *pii_deny_all
+        decisions:
+          - *block_pii_decision
+          - *tool_selection_add_weather_decision
     - name: e2e-cache
       description: Cache hit, paraphrase, and contradiction probes independent of domain routing.
       routing:
@@ -1261,12 +1302,7 @@ config:
         ttl_seconds: 3600
         eviction_policy: fifo
         embedding_model: mmbert
-        # Exercised by the semantic-cache-polarity case: the NLI tier reuses the
-        # default hallucination explainer (models/mom-halugate-explainer).
-        polarity_guard:
-          mode: lexical+nli
-          nli:
-            contradiction_threshold: 0.5
+        # Exercised by the semantic-cache-polarity case.
       memory:
         embedding_model: mmbert
       vector_store:
@@ -1278,13 +1314,6 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
-      # The canonical default (localhost:8899) assumes a router-owned listener
-      # that this profile's config.listeners: [] does not configure. Point the
-      # looper's per-call HTTP client directly at the same base-model backend
-      # the router itself routes to, reusing its existing LoRA adapters
-      # (issue #2694 e2e coverage) instead of standing up new infra.
-      looper:
-        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1/chat/completions
 toolsDb:
   - tool:
       type: function

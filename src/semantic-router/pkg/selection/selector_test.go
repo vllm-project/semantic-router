@@ -689,7 +689,7 @@ func TestFactoryPassesSelectorEmbeddingConfigToRuntime(t *testing.T) {
 	if !ok {
 		t.Fatal("RouterDC selector was not registered")
 	}
-	routerDCResult, err := routerDCSelector.embeddingFunc("query")
+	routerDCResult, err := routerDCSelector.embeddingFunc(context.Background(), "query")
 	if err != nil || len(routerDCResult) != 1 || routerDCResult[0] != 768 {
 		t.Fatalf("RouterDC embedding = %v, err = %v; want default embedding request", routerDCResult, err)
 	}
@@ -698,7 +698,7 @@ func TestFactoryPassesSelectorEmbeddingConfigToRuntime(t *testing.T) {
 	if !ok {
 		t.Fatal("KNN ML selector was not registered")
 	}
-	mlResult, err := mlSelector.embeddingFunc("query")
+	mlResult, err := mlSelector.embeddingFunc(context.Background(), "query")
 	if err != nil || len(mlResult) != 1 || mlResult[0] != 1024 {
 		t.Fatalf("ML selector embedding = %v, err = %v; want configured ML embedding request", mlResult, err)
 	}

@@ -1,0 +1,11 @@
+# Fitted weights and calibration dumps stay outside Git
+outputs/
+data/
+*.safetensors
+*.pt
+*.bin
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/

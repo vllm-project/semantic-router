@@ -117,10 +117,7 @@ func (c FlowRuntimeConfig) EffectiveModelNames() []string {
 }
 
 func (c *RouterConfig) ExposedFlowModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasFlowDecision() {
+	if c == nil || !c.HasFlowDecision() {
 		return nil
 	}
 	return c.Looper.Flow.EffectiveModelNames()

@@ -21,7 +21,7 @@ var BaselineRouterContract = []string{
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
-	// NLI polarity tier of the semantic cache (issue #2751)
+	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"exact-cache-multilingual-negation",
 	"pii-detection",
@@ -53,10 +53,16 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// A request the Router cannot route carries a stable reason code (issue #4653)
+	"routing-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
 	"plugin-short-circuit-no-dispatch",
+	// Streaming dispatch always requests the usage chunk, even for
+	// byte-replay-eligible requests, and the client only sees usage it asked
+	// for (issue #3182)
+	"streaming-usage-settlement",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
@@ -67,6 +73,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
+	"context-safety-overlap",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.

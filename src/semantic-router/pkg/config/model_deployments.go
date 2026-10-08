@@ -2,9 +2,7 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -12,15 +10,24 @@ import (
 // inference service. Artifact aliases and module policy remain in the catalog;
 // recipe bindings select the adapter and head separately from execution.
 type ModelDeployment struct {
-	Artifact            string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
-	Revision            string           `yaml:"revision,omitempty" json:"revision,omitempty"`
-	ExternalModel       string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
-	Provider            string           `yaml:"provider" json:"provider"`
-	Device              string           `yaml:"device,omitempty" json:"device,omitempty"`
-	Precision           string           `yaml:"precision,omitempty" json:"precision,omitempty"`
-	CustomOpsProfile    string           `yaml:"custom_ops_profile,omitempty" json:"custom_ops_profile,omitempty"`
-	CompilationCacheDir string           `yaml:"compilation_cache_dir,omitempty" json:"compilation_cache_dir,omitempty"`
-	Input               ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
+	Artifact      string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
+	Revision      string           `yaml:"revision,omitempty" json:"revision,omitempty"`
+	ExternalModel string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
+	Provider      string           `yaml:"provider" json:"provider"`
+	Device        string           `yaml:"device,omitempty" json:"device,omitempty"`
+	Input         ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
+	// Profile selects a model_runtime numerics profile: exact (the default,
+	// byte-identical to the released packages) or an opt-in faster profile.
+	Profile string `yaml:"profile,omitempty" json:"profile,omitempty"`
+	// Endpoint attaches a model_runtime deployment to an engine the Router does
+	// not manage (unix:///path, http://host:port or https://host:port).
+	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	// Process groups managed model_runtime deployments into one runtime
+	// process; without it the Router runs one process per device.
+	Process string `yaml:"process,omitempty" json:"process,omitempty"`
+	// ServedName selects the model on an attached runtime that serves several
+	// (default: the deployment name).
+	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
@@ -72,18 +79,12 @@ func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModel
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
-	if d.CustomOpsProfile == "none" {
-		d.CustomOpsProfile = ""
-	}
-	if d.Provider != "http" {
+	if d.Provider == ModelRuntimeProvider {
 		if d.Device == "" {
-			d.Device = "cpu"
-			if d.Provider == "openvino" {
-				d.Device = "CPU"
-			}
+			d.Device = "auto"
 		}
-		if d.Precision == "" {
-			d.Precision = "native"
+		if d.Profile == "" {
+			d.Profile = "exact"
 		}
 	}
 	if d.Input.Overflow == "" {
@@ -92,59 +93,46 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 	return d
 }
 
+// ScanBudget is the scan budget a decision deployment declares with input
+// {overflow: window, max_tokens}: the most tokens of one state part a model
+// that reads a long part in windows (Vela 2.0) reads. Zero keeps the model's
+// own budget.
+func (d ModelDeployment) ScanBudget() int {
+	if d.Input.Overflow == "window" {
+		return d.Input.MaxTokens
+	}
+	return 0
+}
+
+// ValidateDecisionInput checks the input of a deployment that answers
+// decisions: none, or a scan budget. Decision models never truncate.
+func (d ModelDeployment) ValidateDecisionInput(name string) error {
+	input := d.WithDefaults().Input
+	if (input.MaxTokens == 0 && input.Overflow == "reject") || (input.Overflow == "window" && input.MaxTokens > 0) {
+		return nil
+	}
+	return fmt.Errorf("deployment %q: decision models never truncate; input takes overflow: window with max_tokens, the scan budget of a model that reads a long part in windows, or nothing", name)
+}
+
 func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	switch d.Provider {
-	case "candle", "ort":
-		if strings.TrimSpace(d.Artifact) == "" || d.ExternalModel != "" {
-			return fmt.Errorf("local deployment requires artifact and cannot set external_model")
-		}
-		if d.Device != "cpu" {
-			parts := strings.Split(d.Device, ":")
-			if len(parts) != 2 {
-				return fmt.Errorf("device must name cpu or an explicit provider:index")
-			}
-			index, err := strconv.Atoi(parts[1])
-			if err != nil || index < 0 {
-				return fmt.Errorf("device index must be a non-negative integer")
-			}
-			if (d.Provider == "ort" && parts[0] != "migraphx" && parts[0] != "rocm") || (d.Provider == "candle" && parts[0] != "cuda" && parts[0] != "metal") {
-				return fmt.Errorf("device %q is incompatible with provider %q", d.Device, d.Provider)
-			}
-		}
-		if d.Precision != "native" && d.Precision != "fp32" && d.Precision != "fp16" {
-			return fmt.Errorf("precision must be native, fp32 or fp16")
-		}
-	case "openvino":
-		if strings.TrimSpace(d.Artifact) == "" || d.ExternalModel != "" {
-			return fmt.Errorf("local deployment requires artifact and cannot set external_model")
-		}
-		if strings.TrimSpace(d.Device) != d.Device || d.Device == "" || strings.ContainsRune(d.Device, 0) {
-			return fmt.Errorf("OpenVINO device must be non-empty and trimmed")
-		}
-		if d.Precision != "native" {
-			return fmt.Errorf("OpenVINO executes the exported IR with native precision")
-		}
-		if d.Input.Overflow == "window" {
-			return fmt.Errorf("OpenVINO supports reject or truncate input policy")
-		}
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
 			return fmt.Errorf("http deployment requires external_model and cannot set artifact")
 		}
-		if d.Device != "" || d.Precision != "" {
-			return fmt.Errorf("external service device and precision are not controlled by the router")
+		if d.Device != "" {
+			return fmt.Errorf("external service devices are not controlled by the router")
 		}
 		if _, err := findNamedExternalModel(cfg, d.ExternalModel); err != nil {
 			return err
 		}
+	case ModelRuntimeProvider:
+		return d.validateModelRuntime()
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
-	if d.CustomOpsProfile != "" && (d.CustomOpsProfile != "ck_flash_attention" || d.Provider != "ort" || !strings.HasPrefix(d.Device, "rocm:")) {
-		return fmt.Errorf("custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment")
-	}
-	if err := d.ValidateCompilationCache(); err != nil {
-		return err
+	if d.Profile != "" || d.Endpoint != "" || d.Process != "" || d.ServedName != "" {
+		return fmt.Errorf("profile, endpoint, process and served_name apply only to model_runtime deployments")
 	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")
@@ -153,21 +141,6 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	case "reject", "truncate", "window":
 	default:
 		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
-	}
-	return nil
-}
-
-// ValidateCompilationCache checks an explicitly selected provider cache. An
-// empty directory disables caching; runtime preparation checks artifact paths.
-func (d ModelDeployment) ValidateCompilationCache() error {
-	if d.CompilationCacheDir == "" {
-		return nil
-	}
-	if d.Provider != "ort" || !strings.HasPrefix(d.Device, "migraphx:") {
-		return fmt.Errorf("compilation_cache_dir requires an ORT migraphx:index deployment")
-	}
-	if strings.TrimSpace(d.CompilationCacheDir) != d.CompilationCacheDir || strings.ContainsRune(d.CompilationCacheDir, '\x00') || !filepath.IsAbs(d.CompilationCacheDir) {
-		return fmt.Errorf("compilation_cache_dir must be an absolute, trimmed path without null bytes")
 	}
 	return nil
 }
@@ -227,18 +200,6 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 			}
 			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
 		}
-		// The legacy `backend: endpoint` scalar is shorthand for a binding the
-		// recipe did not write out. Desugar it here so the runtime has one
-		// selection mechanism; an explicit binding for the consumer wins.
-		if _, declared := bindings["hallucination_detector"]; !declared {
-			decl, deployment, legacy, err := LegacyHallucinationBinding(&cfg.HallucinationMitigation.HallucinationModel)
-			if err != nil {
-				return nil, fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
-			}
-			if legacy {
-				bindings["hallucination_detector"] = ResolvedModelBinding{Recipe: recipe.Name, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[decl.Deployment]}
-			}
-		}
 		plan.recipes[recipe.Name] = bindings
 	}
 	return plan, nil
@@ -269,8 +230,6 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		want = RemoteClassifierContractTokenSpans
 	case "hallucination_detector":
 		want = RemoteClassifierContractTokenSpans
-	case "hallucination_explainer":
-		want = "text_pair_distribution.v1"
 	case "embedding":
 		want = "embedding.v1"
 	case RAGRerankerConsumer:
@@ -304,7 +263,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if decl.Contract != want {
 		return fmt.Errorf("contract must be %q for %s", want, name)
 	}
-	if strings.TrimSpace(decl.Adapter) == "" {
+	if strings.TrimSpace(decl.Adapter) == "" && !deployment.IsModelRuntime() {
 		return fmt.Errorf("adapter is required")
 	}
 	if name == "complexity" && deployment.Provider != "http" {
@@ -314,7 +273,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		return fmt.Errorf("remote task cannot bind a local head")
 	}
 	if deployment.Provider == "http" {
-		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" || name == "hallucination_explainer" {
+		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" {
 			return fmt.Errorf("%s has no HTTP task adapter", name)
 		}
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
@@ -325,27 +284,11 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		}
 	}
 	if decl.Adapter == "vela_halu" {
-		if name != "hallucination_detector" || (deployment.Provider != "candle" && deployment.Provider != "ort") {
+		if name != "hallucination_detector" || !deployment.IsModelRuntime() {
 			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
 		}
 		if deployment.Input.MaxTokens > 8192 {
 			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
-		}
-	}
-	if deployment.Provider == "ort" && (name == "hallucination_explainer" || (name == "hallucination_detector" && decl.Adapter != "vela_halu")) {
-		return fmt.Errorf("%s has no ORT task adapter", name)
-	}
-	if deployment.Provider == "openvino" {
-		if want != "embedding.v1" && want != RemoteClassifierContractLabelDistribution {
-			return fmt.Errorf("OpenVINO supports text embedding and sequence label distributions only")
-		}
-		switch decl.Adapter {
-		case "auto", "bert", "modernbert", "mmbert", "mmbert32k", "mmbert-32k":
-		default:
-			return fmt.Errorf("unsupported OpenVINO adapter %q", decl.Adapter)
-		}
-		if decl.Head != "" && filepath.Ext(decl.Head) != ".xml" {
-			return fmt.Errorf("OpenVINO head must identify a complete IR XML graph")
 		}
 	}
 	// Artifact-specific capacity is checked by the loaded provider. Config
@@ -380,6 +323,9 @@ func validateModelDeploymentContracts(cfg *RouterConfig) error {
 	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
 			return fmt.Errorf("model deployment name must be non-empty and trimmed")
+		}
+		if strings.HasPrefix(name, ImplicitDeploymentPrefix) {
+			return fmt.Errorf("global.model_catalog.deployments.%s: names starting with %q are reserved for module defaults", name, ImplicitDeploymentPrefix)
 		}
 		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
 			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)

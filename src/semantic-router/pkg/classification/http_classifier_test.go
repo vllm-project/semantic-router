@@ -236,7 +236,7 @@ func TestHTTPClassifierJailbreakInferenceClassify_AlignsLabelsToMapping(t *testi
 // HTTPClassifierInference - not just alignScoresToMapping in isolation -
 // works end to end (construction, request, response parsing, validation)
 // with a second, independently-shaped mapping type. The label set below
-// matches LLM-Semantic-Router/category_classifier_modernbert-base_model, a
+// matches vllm-sr/category_classifier_modernbert-base_model, a
 // real 14-label model this was manually validated against over the exact
 // http_classify wire contract before this generalization.
 func TestHTTPClassifierInferenceClassify_CategoryMapping(t *testing.T) {

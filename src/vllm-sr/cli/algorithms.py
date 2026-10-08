@@ -1,15 +1,38 @@
 """Algorithm configuration models for multi-model orchestration."""
 
 import math
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from cli.config_schema import surface_types
 
 from .config_contract import QuorumFailurePolicy
+from .models_decision import DecisionSelectionConfig
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
+
+# Types the Router retired, whose blocks are refused rather than passed on as
+# a Router build's own algorithm.
+RETIRED_ALGORITHM_TYPES = frozenset(
+    {
+        "session_aware",
+        "elo",
+        "rl_driven",
+        "gmtrouter",
+        "bandit",
+        "personalization",
+        "thompson",
+        "router_r1",
+    }
+)
 
 
 class ModelRef(BaseModel):
@@ -133,9 +156,10 @@ class FusionGroundingConfig(BaseModel):
     """Configuration for grounding-aware fusion.
 
     Scores each panel response for faithfulness before the judge synthesizes,
-    then ranks/filters the panel. Uses local encoder models (hallucination
-    detector + NLI) and makes no extra LLM calls. Bounds here MUST match the Go
-    validator in pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
+    then ranks/filters the panel. Uses the router's hallucination detector
+    (against the request's context, else against each peer response) and makes
+    no extra LLM calls. Bounds here MUST match the Go validator in
+    pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -149,7 +173,7 @@ class FusionGroundingConfig(BaseModel):
     policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
-    nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
+    contradiction_penalty: float | None = Field(default=1.0, ge=0)
     on_error: Literal["skip", "fail"] | None = "skip"
 
 
@@ -511,16 +535,49 @@ class AlgorithmConfig(BaseModel):
 
     type: str
 
+    # The block of an algorithm type a Router build registers beyond the
+    # generated contract, under the type's name. The Router validates it.
+    extensions: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_extension_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        algorithm_type = str(data.get("type", "")).strip().lower()
+        if (
+            algorithm_type in SUPPORTED_ALGORITHM_TYPES
+            or algorithm_type in RETIRED_ALGORITHM_TYPES
+            or algorithm_type not in data
+        ):
+            return data
+        data = dict(data)
+        data["extensions"] = {algorithm_type: data.pop(algorithm_type)}
+        return data
+
     @field_validator("type")
     @classmethod
-    def validate_algorithm_type(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in SUPPORTED_ALGORITHM_TYPES:
+    def normalize_algorithm_type(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @model_validator(mode="after")
+    def validate_algorithm_type(self):
+        if (
+            self.type not in SUPPORTED_ALGORITHM_TYPES
+            and self.type not in self.extensions
+        ):
             supported = ", ".join(sorted(SUPPORTED_ALGORITHM_TYPES))
             raise ValueError(
-                f"unsupported algorithm type {value!r}; choose one of: {supported}"
+                f"unsupported algorithm type {self.type!r}; choose one of: {supported}"
             )
-        return normalized
+        return self
+
+    @model_serializer(mode="wrap")
+    def inline_extension_block(self, handler):
+        data = handler(self)
+        if isinstance(data, dict):
+            data.update(self.extensions)
+        return data
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None
@@ -536,6 +593,7 @@ class AlgorithmConfig(BaseModel):
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
     prompt: PromptSelectionConfig | None = None
+    decision: DecisionSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
 
@@ -550,4 +608,8 @@ class AlgorithmConfig(BaseModel):
                 raise ValueError("prompt on_error must be fallback")
         elif self.prompt is not None:
             raise ValueError("prompt configuration requires algorithm.type=prompt")
+        if self.type == "decision" and self.decision is None:
+            raise ValueError("algorithm.type=decision requires decision configuration")
+        if self.type != "decision" and self.decision is not None:
+            raise ValueError("decision configuration requires algorithm.type=decision")
         return self

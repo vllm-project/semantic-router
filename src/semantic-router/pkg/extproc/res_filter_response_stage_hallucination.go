@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -29,9 +30,9 @@ func (r *OpenAIRouter) hallucinationSignalDeclared(ctx *RequestContext) bool {
 	return len(r.hallucinationRules(ctx)) > 0
 }
 
-// evaluateHallucinationSignal checks the model's answer against the grounding
-// context the request carried, for every hallucination rule the selected
-// recipe declares.
+// hallucinationCheck checks the model's answer against the grounding context
+// the request carried, for every hallucination rule the selected recipe
+// declares.
 //
 // It is driven by the rules, not by the plugin: the observation is published
 // whether or not the selected decision carries a plugin that acts on it. The
@@ -39,72 +40,73 @@ func (r *OpenAIRouter) hallucinationSignalDeclared(ctx *RequestContext) bool {
 // signal said the prompt makes claims worth grounding and the request carried
 // context to ground them against; without the former the rule is not
 // applicable and stays unpublished, without the latter it is unavailable.
-func (r *OpenAIRouter) evaluateHallucinationSignal(ctx *RequestContext, assistantContent string) {
+func (r *OpenAIRouter) hallucinationCheck(ctx *RequestContext, assistantContent string) responseStageCheck {
 	if ctx == nil || r == nil {
-		return
+		return responseStageCheck{}
 	}
 	rules := r.hallucinationRules(ctx)
 	if len(rules) == 0 || !ctx.FactCheckNeeded {
-		return
+		return responseStageCheck{}
+	}
+	unresolved := func(code string) responseStageCheck {
+		return responseStageCheck{publish: func() { r.publishHallucinationSignal(ctx, rules, nil, code) }}
 	}
 
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil || !classifier.IsHallucinationDetectionEnabled() {
 		// Declared but unbacked. Unresolved rather than clean.
-		r.publishHallucinationSignal(ctx, rules, nil, classification.HallucinationSignalFailedCode)
-		return
+		return unresolved(classification.HallucinationSignalFailedCode)
 	}
 	if !ctx.HasToolsForFactCheck || ctx.ToolResultsContext == "" {
 		// Nothing to ground the answer against: "could not look" is not
 		// "looked and found nothing". This is the unverified-factual case the
 		// plugin has its own action for.
-		r.publishHallucinationSignal(ctx, rules, nil, classification.HallucinationSignalContextUnavailable)
-		return
+		return unresolved(classification.HallucinationSignalContextUnavailable)
 	}
 	if assistantContent == "" {
 		// A response made entirely of tool calls or media has no answer to check.
-		r.publishHallucinationSignal(ctx, rules, nil, classification.HallucinationSignalFailedCode)
-		return
+		return unresolved(classification.HallucinationSignalFailedCode)
 	}
 
-	start := time.Now()
-	evidence, err := r.detectHallucinationEvidence(classifier, ctx, assistantContent, hallucinationRulesUseNLI(rules))
-	latency := time.Since(start).Seconds()
-	metrics.RecordHallucinationDetectionLatency(latency)
-	if err != nil {
-		logging.Errorf("Hallucination signal evaluation failed: %v", err)
-		metrics.RecordPluginError("hallucination", "detection_error")
-		r.publishHallucinationSignal(ctx, rules, nil, classification.HallucinationSignalFailedCode)
-		return
+	var (
+		evidence *ResponseHallucinationEvidence
+		err      error
+		latency  float64
+	)
+	return responseStageCheck{
+		run: func(call context.Context) {
+			start := time.Now()
+			evidence, err = r.detectHallucinationEvidence(call, classifier, ctx, assistantContent)
+			latency = time.Since(start).Seconds()
+		},
+		publish: func() {
+			metrics.RecordHallucinationDetectionLatency(latency)
+			if err != nil {
+				logging.Errorf("Hallucination signal evaluation failed: %v", err)
+				metrics.RecordPluginError("hallucination", "detection_error")
+				r.publishHallucinationSignal(ctx, rules, nil, classification.HallucinationSignalFailedCode)
+				return
+			}
+			for _, rule := range rules {
+				classifier.RecordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
+			}
+			r.publishHallucinationSignal(ctx, rules, evidence, "")
+		},
 	}
-	for _, rule := range rules {
-		classifier.RecordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
-	}
-	r.publishHallucinationSignal(ctx, rules, evidence, "")
-}
-
-// hallucinationRulesUseNLI reports whether any declared rule asks for NLI
-// explanations. One rule asking is enough: the detector runs once and every
-// rule reads the same evidence.
-func hallucinationRulesUseNLI(rules []config.HallucinationRule) bool {
-	for _, rule := range rules {
-		if rule.UseNLI {
-			return true
-		}
-	}
-	return false
 }
 
 // detectHallucinationEvidence runs the detector once for the response and
 // shapes its output the way the plugin's actions and Router Replay read it.
+// It only reads the request context, so it may run beside the stage's other
+// model calls.
 func (r *OpenAIRouter) detectHallucinationEvidence(
+	call context.Context,
 	classifier *classification.Classifier,
 	ctx *RequestContext,
 	answer string,
-	useNLI bool,
 ) (*ResponseHallucinationEvidence, error) {
-	if !useNLI {
-		result, err := classifier.DetectHallucination(ctx.embeddingContext(), ctx.ToolResultsContext, ctx.UserContent, answer)
+	if !hallucinationSpanDetails(classifier) {
+		result, err := classifier.DetectHallucination(call, ctx.ToolResultsContext, ctx.UserContent, answer)
 		if err != nil {
 			return nil, err
 		}
@@ -119,20 +121,26 @@ func (r *OpenAIRouter) detectHallucinationEvidence(
 		}, nil
 	}
 
-	result, err := classifier.DetectHallucinationWithNLI(ctx.embeddingContext(), ctx.ToolResultsContext, ctx.UserContent, answer)
+	result, err := classifier.DetectHallucinationWithExplanations(call, ctx.ToolResultsContext, ctx.UserContent, answer)
 	if err != nil {
 		return nil, err
 	}
 	if result == nil {
 		return nil, fmt.Errorf("hallucination detector returned no result")
 	}
-	return hallucinationEvidenceFromNLI(result), nil
+	return hallucinationEvidenceWithSpans(result), nil
 }
 
-// hallucinationEvidenceFromNLI shapes one NLI detection the way both response
-// paths record it, so the signal path and the plugin-owned path cannot report
-// the same detection differently.
-func hallucinationEvidenceFromNLI(result *classification.EnhancedHallucinationResult) *ResponseHallucinationEvidence {
+// hallucinationSpanDetails reports whether the detector explains its spans
+// (include_explanation); otherwise detection returns plain spans.
+func hallucinationSpanDetails(classifier *classification.Classifier) bool {
+	return classifier != nil && classifier.Config != nil && classifier.Config.HallucinationMitigation.HallucinationModel.IncludeExplanation
+}
+
+// hallucinationEvidenceWithSpans shapes one detection with span details the
+// way both response paths record it, so the signal path and the plugin-owned
+// path cannot report the same detection differently.
+func hallucinationEvidenceWithSpans(result *classification.EnhancedHallucinationResult) *ResponseHallucinationEvidence {
 	evidence := &ResponseHallucinationEvidence{
 		Detected:       result.HallucinationDetected,
 		Confidence:     result.Confidence,
@@ -154,9 +162,6 @@ func hallucinationEvidenceFromNLI(result *classification.EnhancedHallucinationRe
 			End:                     span.End,
 			HallucinationConfidence: span.HallucinationConfidence,
 			ScoreAvailable:          span.ScoreAvailable,
-			NLILabel:                span.NLILabelStr,
-			NLIConfidence:           span.NLIConfidence,
-			NLIScoreAvailable:       span.NLILabel != classification.NLIUnknown,
 			Severity:                span.Severity,
 			Explanation:             span.Explanation,
 		})

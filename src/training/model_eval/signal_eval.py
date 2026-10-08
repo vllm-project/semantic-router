@@ -403,7 +403,7 @@ DATASET_REGISTRY = {
         "dimension": "fact_check",
         "name": "Fact Check (English)",
         "description": "Binary fact-check classification",
-        "hf_dataset": "llm-semantic-router/fact-check-classification-dataset",
+        "hf_dataset": "vllm-sr/fact-check-classification-dataset",
         "split": "test",
         "text_col": "text",
         "label_col": "label_id",
@@ -418,7 +418,7 @@ DATASET_REGISTRY = {
         "dimension": "user_feedback",
         "name": "User Feedback (English)",
         "description": "4-class user feedback detection",
-        "hf_dataset": "llm-semantic-router/feedback-detector-dataset",
+        "hf_dataset": "vllm-sr/feedback-detector-dataset",
         "split": "validation",
         "text_col": "text",
         "label_col": "label_name",  # Actual column name in dataset

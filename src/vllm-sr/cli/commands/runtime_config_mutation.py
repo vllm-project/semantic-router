@@ -89,7 +89,7 @@ GPU_OVERRIDE_PREVIEW_LIMIT = 8
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
 # Platforms with GPU defaults for router internal models. AMD semantic
-# embeddings retain their setting: MIGraphX mmBERT requires an authored budget.
+# embeddings retain their authored use_cpu setting.
 GPU_DEFAULT_PLATFORMS = (PLATFORM_AMD, PLATFORM_NVIDIA)
 SEMANTIC_EMBEDDING_USE_CPU_PATH = (
     "global",
@@ -119,14 +119,6 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "detector",
         "use_cpu",
     ),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "explainer",
-        "use_cpu",
-    ),
     ("global", "model_catalog", "modules", "feedback_detector", "use_cpu"),
     (
         "global",
@@ -136,6 +128,9 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "classifier",
         "use_cpu",
     ),
+    # Safety runs the decision model too: on a GPU it shares the other
+    # signals' deployment instead of loading a CPU copy.
+    ("global", "model_catalog", "modules", "safety", "safety", "use_cpu"),
 )
 
 
@@ -265,8 +260,7 @@ def apply_platform_gpu_defaults(
 
     AMD (ROCm) and NVIDIA (CUDA) platforms default local signal models to GPU.
     AMD semantic embeddings retain their authored `use_cpu` value, defaulting
-    to true when absent. MIGraphX mmBERT embeddings require an explicit deployment
-    with an input budget; platform defaults never construct or modify bindings.
+    to true when absent. Platform defaults never construct or modify bindings.
     Set
     VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
     or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off

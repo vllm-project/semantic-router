@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -20,11 +21,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -35,7 +38,12 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	rerankers            map[config.RecipeName]modelruntime.PairScorer
+	// signals is the signal runtime this router extracts signals with; a
+	// later generation can share it.
+	signals   *signalRuntime
+	rerankers map[config.RecipeName]modelruntime.PairScorer
+	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
+	decisionDecider      modelservice.Decider
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
 	cacheEmbeddings      *embedding.Set
@@ -82,7 +90,9 @@ type OpenAIRouter struct {
 	MemoryStore          memory.Store
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
-	looperClient         *looper.Client
+	// hopCaller, when set, sends Looper hops instead of the configuration
+	// snapshot's upstream set.
+	hopCaller graph.Caller
 
 	memoryPersistence *memory.PersistenceRunner
 
@@ -103,9 +113,15 @@ type OpenAIRouter struct {
 	RecipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCaller              fallbackTransportCaller
 
-	routerLearningMu        sync.Mutex
-	routerLearningRuntime   *routerLearningRuntime
-	generation              *routerGeneration
+	routerLearningMu      sync.Mutex
+	routerLearningRuntime *routerLearningRuntime
+	generation            *routerGeneration
+	// configVersion is the version of the configuration snapshot this router
+	// serves, 0 when it serves without the lifecycle.
+	configVersion atomic.Uint64
+	// extensions holds the decoded payloads of extension plugins by their
+	// configuration, so a generation decodes each one once.
+	extensions              sync.Map
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
 
@@ -286,10 +302,28 @@ func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fall
 	if r == nil {
 		return nil
 	}
+	orch := r.FallbackOrchestrator
 	if ctx != nil && ctx.Routing.RecipeName() != "" && r.RecipeFallbackOrchestrators != nil {
-		if orch, ok := r.RecipeFallbackOrchestrators[ctx.Routing.RecipeName()]; ok && orch != nil {
-			return orch
+		if recipe, ok := r.RecipeFallbackOrchestrators[ctx.Routing.RecipeName()]; ok && recipe != nil {
+			orch = recipe
 		}
 	}
-	return r.FallbackOrchestrator
+	return orch.For(fallbackOverrides(ctx)...)
+}
+
+// fallbackOverrides are the layers a request sets over its recipe's fallback
+// policy, the least specific first: the matched decision's, then, for a
+// request-graph hop, its step's.
+func fallbackOverrides(ctx *RequestContext) []*fallback.FallbackOverride {
+	if ctx == nil {
+		return nil
+	}
+	var overrides []*fallback.FallbackOverride
+	if ctx.VSRSelectedDecision != nil {
+		overrides = append(overrides, ctx.VSRSelectedDecision.Fallback)
+	}
+	if ctx.Hop != nil {
+		overrides = append(overrides, ctx.Hop.Fallback)
+	}
+	return overrides
 }

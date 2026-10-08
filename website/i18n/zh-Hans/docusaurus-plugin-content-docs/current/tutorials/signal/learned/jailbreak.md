@@ -2,7 +2,7 @@
 translation:
   source_commit: "96eb530f67c9d6fbd59fd1a82e857b3a7eb330ba"
   source_file: "docs/tutorials/signal/learned/jailbreak.md"
-  outdated: false
+  outdated: true
 ---
 
 # 越狱检测信号 {#jailbreak-signal}
@@ -67,7 +67,7 @@ routing:
 
 ### 本地分类器的 Token 窗口 {#token-windows-for-a-local-classifier}
 
-隐式本地 `mmbert32k` 默认配置按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token。文档预算来自已注册的默认 Guard 模型，目前为包含特殊 token 在内的 32,768 token。此行为仅适用于未指定配方模型绑定或 `window`，且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
+默认的 prompt guard 模型 Vela 2.0 0.3B 完整读取每段文本（最多 8,192 个 token），不使用窗口（见[选择模型](model-runtime/choose-a-model.md#vela-20)）。模块运行 Vela 1.0 Guard 时，按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token，文档预算为该模型的 32,768 token（含特殊 token）。此行为仅适用于未指定配方模型绑定或 `window`，且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
 
 显式模型绑定、文档预算、窗口策略与远程后端保持各自的配置行为。例如，经过资格验证并设置 `input.overflow: reject` 的 8K 部署仍在其预算内处理整个片段。
 
@@ -78,7 +78,6 @@ global:
   model_catalog:
     modules:
       prompt_guard:
-        variant: mmbert32k
         max_sequence_length: 32768
         window:
           size: 128
@@ -89,9 +88,9 @@ global:
 
 请求规则、检测 API 和响应扫描使用相同的窗口间最大正类风险。对于多个正类标签，运行时先在各窗口内累加其概率，再选择风险最高的窗口。标签和置信度保留该窗口的完整概率分布。对比式规则保持现有文本窗口策略。
 
-在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。本地 Candle 和 ORT 模型绑定也可选择 token 窗口，但加载的适配器和计算图必须支持请求的执行形状。
+在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。绑定到[模型运行时](model-runtime/guides/safety.md)部署的模型也可选择 token 窗口，但模型必须支持所请求的窗口大小。
 
-后端若声明输入被截断或未处理完整，该次扫描即为未解析。请求规则、文本检测 API 和响应扫描不能使用其概率宣称完整输入干净。另一个已完整打分片段上的检测仍然有效；错误继续遵循配置的 `on_error` 与响应规则策略。
+后端若声明输入被截断或未处理完整，该输入即为未扫描；在 `reject` 下超过防护模型输入上限、或超过其[扫描预算](../../../model-runtime/reference.md#long-inputs)的输入也一样。请求规则、文本检测 API 和响应扫描不能使用其概率宣称完整输入干净：无论 `on_error` 如何设置，规则都以类型 `unscanned` 匹配它，因此填充提示词无法让攻击绕过防护。未能在信号截止时间（`global.model_catalog.signal_timeout_ms`）内完成的扫描也一样。设置 `prompt_guard.on_unscanned: allow` 可让这类内容改为遵循 `on_error`。另一个已完整打分片段上的检测仍然算作检测；后端故障继续遵循配置的 `on_error` 与响应规则策略。
 
 ### 方向 {#direction}
 

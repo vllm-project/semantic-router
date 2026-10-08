@@ -31,7 +31,7 @@ resulting representations comparable.
 
 ## Small model
 
-[`multi-modal-embed-small`](https://huggingface.co/llm-semantic-router/multi-modal-embed-small)
+[`multi-modal-embed-small`](https://huggingface.co/vllm-sr/multi-modal-embed-small)
 combines compact pretrained towers with a two-layer fusion Transformer. Its
 normalized 384-dimensional output is supervised at dimensions 32, 64, 128,
 256, and 384 so deployments can trade vector size for quality.
@@ -72,7 +72,7 @@ provides a short accelerator smoke run.
 
 ## Large model
 
-[`multi-modal-embed-large`](https://huggingface.co/llm-semantic-router/multi-modal-embed-large)
+[`multi-modal-embed-large`](https://huggingface.co/vllm-sr/multi-modal-embed-large)
 uses the long-context mmBERT embedder, a larger SigLIP2 vision tower, and a
 larger Whisper audio tower. Each tower is projected into a shared
 768-dimensional space. Unlike the small fusion architecture, the production

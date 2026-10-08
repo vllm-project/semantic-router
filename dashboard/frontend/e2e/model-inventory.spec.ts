@@ -10,7 +10,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-intent-classifier-merged',
     registry: {
       local_path: 'models/mmbert32k-intent-classifier-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-intent-classifier-merged',
+      repo_id: 'vllm-sr/mmbert32k-intent-classifier-merged',
       purpose: 'domain-classification',
       description: 'Merged intent classifier for multilingual routing decisions.',
       parameter_size: '307M',
@@ -19,7 +19,7 @@ const routerModels = [
       num_classes: 14,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-intent-classifier-merged',
       tags: ['text-classification', 'intent-classification'],
     },
     metadata: {
@@ -35,7 +35,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-factcheck-classifier-merged',
     registry: {
       local_path: 'models/mmbert32k-factcheck-classifier-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+      repo_id: 'vllm-sr/mmbert32k-factcheck-classifier-merged',
       purpose: 'hallucination-sentinel',
       description: 'Fact-check classifier used during hallucination mitigation.',
       parameter_size: '307M',
@@ -44,7 +44,7 @@ const routerModels = [
       num_classes: 2,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-factcheck-classifier-merged',
       tags: ['text-classification', 'fact-check'],
     },
     metadata: {
@@ -61,7 +61,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-feedback-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-feedback-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-feedback-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-feedback-detector-merged',
       purpose: 'feedback-detection',
       description: 'User feedback classifier for satisfaction and correction signals.',
       parameter_size: '307M',
@@ -70,7 +70,7 @@ const routerModels = [
       num_classes: 4,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-feedback-detector-merged',
       tags: ['text-classification', 'feedback-detection'],
     },
     metadata: {
@@ -87,7 +87,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-jailbreak-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-jailbreak-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-jailbreak-detector-merged',
       purpose: 'jailbreak-detection',
       description: 'Prompt injection and jailbreak detector aligned with the router registry.',
       parameter_size: '307M',
@@ -96,7 +96,7 @@ const routerModels = [
       num_classes: 2,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-jailbreak-detector-merged',
       tags: ['text-classification', 'security'],
     },
     metadata: {
@@ -113,20 +113,20 @@ const routerModels = [
     model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     registry: {
       local_path: 'models/mmbert-embed-32k-2d-matryoshka',
-      repo_id: 'llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
+      repo_id: 'vllm-sr/mmbert-embed-32k-2d-matryoshka',
       purpose: 'embedding',
       description: 'Multilingual 2D Matryoshka embedding model with long-context support.',
       parameter_size: '307M',
       embedding_dim: 768,
       max_context_length: 32768,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka',
       tags: ['embedding', 'matryoshka', 'multilingual'],
     },
     metadata: {
       model_type: 'mmbert',
-      provider: 'ort',
-      device: 'migraphx:0',
+      provider: 'model_runtime',
+      device: 'rocm:0',
       effective_input_tokens: '32768',
       max_sequence_length: '32768',
       default_dimension: '768',
@@ -141,7 +141,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-pii-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-pii-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-pii-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-pii-detector-merged',
       purpose: 'pii-detection',
       description: 'PII detector for multilingual redaction and routing.',
       parameter_size: '307M',
@@ -149,7 +149,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 35,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-pii-detector-merged',
       tags: ['token-classification', 'pii'],
     },
     metadata: {
@@ -274,8 +274,8 @@ test.describe('Router model inventory surfaces', () => {
     await expect(details).toContainText('Recipe')
     await expect(details).toContainText('default')
     await expect(details).toContainText('Provider')
-    await expect(details.getByText('ort', { exact: true })).toBeVisible()
-    await expect(details).toContainText('migraphx:0')
+    await expect(details.getByText('model_runtime', { exact: true })).toBeVisible()
+    await expect(details).toContainText('rocm:0')
     await expect(details).toContainText('32768')
     await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
       'href',

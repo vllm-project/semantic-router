@@ -1,8 +1,6 @@
 package extproc
 
 import (
-	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -88,7 +86,7 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
-		inflight.End(decisionState.selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return response, nil
 	}
@@ -177,10 +175,16 @@ func (r *OpenAIRouter) handleEntrypointRouting(
 	}
 
 	logging.ComponentWarnEvent("extproc", "entrypoint_routing_no_selection", map[string]interface{}{
-		"request_id": ctx.RequestID,
+		"request_id":       ctx.RequestID,
+		"code":             routingFailureNoRoute.code,
+		"model":            originalModel,
+		"recipe":           ctx.Routing.RecipeName(),
+		"decision":         decisionName,
+		"looper_algorithm": r.looperAliasAlgorithm(originalModel),
+		"reason":           "the Entrypoint selected no model",
 	})
 	metrics.RecordRequestError(originalModel, "no_model_selected")
-	return r.createErrorResponse(http.StatusBadRequest, "unable to route request: the Entrypoint selected no model"), nil
+	return r.routingFailureResponse(ctx, routingFailureNoRoute), nil
 }
 
 // handleEntrypointModelRouting dispatches the Model selected by a Recipe.
@@ -327,8 +331,9 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	}
 	logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
 		"request_id": requestID,
+		"code":       routingFailureModelNotFound.code,
 		"model":      model,
 	})
 	metrics.RecordRequestError(model, "model_not_found")
-	return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", model))
+	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
 }

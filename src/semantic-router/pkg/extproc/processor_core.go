@@ -54,7 +54,16 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	// Decide mode based on config: only use streaming handler when explicitly enabled
 	streamedMode := r.Config != nil && r.Config.StreamedBodyMode
 	if ctx.FullDuplexRequestBody && !streamedMode {
-		return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), eos), nil
+		// Envoy negotiated FULL_DUPLEX_STREAMED while streamed_body is
+		// disabled. Relaying the chunks would deliver the request upstream
+		// without decoding, classification, or any other routing policy, so
+		// the mismatch must fail closed instead of silently bypassing the
+		// router. Official Envoy templates ship BUFFERED bodies; this state
+		// only arises from a hand-edited Envoy config.
+		logging.ComponentWarnEvent("extproc", "full_duplex_without_streamed_body", map[string]interface{}{
+			"request_id": ctx.RequestID,
+		})
+		return r.createErrorResponse(503, "Router streamed_body is disabled but Envoy negotiated full-duplex request bodies; fix the Envoy processing mode or enable global.router.streamed_body"), nil
 	}
 	// STREAMED may contain just one EOS body message; it still needs the guards.
 	if streamedMode {
@@ -84,6 +93,12 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
+		// Error and panic returns skip the receive-error cleanup, so an
+		// in-flight admission taken before a dispatch error would otherwise
+		// inflate the model's in-flight count until the tracker's max age.
+		// Requests that ended through a normal path already zeroed the token,
+		// making this a no-op.
+		releaseInflightAdmission(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}
@@ -92,8 +107,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 	// Initialize request context
 	ctx = &RequestContext{
-		Headers:      make(map[string]string),
-		TraceContext: stream.Context(),
+		Headers:       make(map[string]string),
+		TraceContext:  stream.Context(),
+		ConfigVersion: r.configVersion.Load(),
 	}
 
 	for {
@@ -132,8 +148,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	if ctx.InflightToken != 0 {
-		inflight.End(ctx.RequestModel, ctx.InflightToken)
-		ctx.InflightToken = 0
+		releaseInflightAdmission(ctx)
 	}
 
 	state, reason := replayLifecycleForReceiveError(err)
@@ -219,7 +234,9 @@ func (r *OpenAIRouter) handleProcessRequest(
 	ctx *RequestContext,
 ) error {
 	if protocolConfig := req.GetProtocolConfig(); protocolConfig != nil {
-		ctx.FullDuplexRequestBody = protocolConfig.GetRequestBodyMode() == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+		mode := protocolConfig.GetRequestBodyMode()
+		ctx.FullDuplexRequestBody = mode == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+		ctx.BufferedRequestBody = mode == http_ext.ProcessingMode_BUFFERED || mode == http_ext.ProcessingMode_BUFFERED_PARTIAL
 	}
 
 	switch v := req.Request.(type) {
@@ -246,13 +263,10 @@ func (r *OpenAIRouter) processRequestHeaders(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleRequestHeaders(v, ctx)
+	response, err := r.requestHeadersReply(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestHeaders failed: %v", err)
 		return err
 	}
-	response = r.encodeImmediateResponseForClient(response, ctx)
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if r.holdFullDuplexHeaderReply(v, response, ctx) {
 		return nil
 	}
@@ -283,16 +297,11 @@ func (r *OpenAIRouter) sendRequestBodyResult(
 	err error,
 	ctx *RequestContext,
 ) (bool, error) {
+	response, err = r.requestBodyReply(response, err, ctx)
 	if err != nil {
-		var ok bool
-		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
-			logging.Errorf("handleRequestBody failed: %v", err)
-			return false, err
-		}
+		return false, err
 	}
-	response = r.encodeImmediateResponseForClient(response, ctx)
-	r.bindBenchmarkConfigResponse(response, ctx)
-	r.persistImmediateResponseObject(response, ctx)
+	r.addEnvoyReliabilityHeaders(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.
@@ -339,18 +348,14 @@ func (r *OpenAIRouter) processResponseHeaders(
 	v *ext_proc.ProcessingRequest_ResponseHeaders,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleResponseHeaders(v, ctx)
+	response, err := r.responseHeadersReply(v, ctx)
 	if err != nil {
 		return err
 	}
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "response header"); err != nil {
 		return err
 	}
-	finishImmediateResponseTrace(ctx, response)
-	if v.ResponseHeaders.GetEndOfStream() {
-		finishRequestTrace(ctx, nil)
-	}
+	responseHeadersReplySent(ctx, response, v.ResponseHeaders.GetEndOfStream())
 	return nil
 }
 
@@ -359,18 +364,14 @@ func (r *OpenAIRouter) processResponseBody(
 	v *ext_proc.ProcessingRequest_ResponseBody,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleResponseBody(v, ctx)
+	response, err := r.responseBodyReply(v, ctx)
 	if err != nil {
 		return err
 	}
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "response body"); err != nil {
 		return err
 	}
-	finishImmediateResponseTrace(ctx, response)
-	if v.ResponseBody.GetEndOfStream() || ctx.StreamingComplete {
-		finishRequestTrace(ctx, nil)
-	}
+	responseBodyReplySent(ctx, response, v.ResponseBody.GetEndOfStream())
 	return nil
 }
 
@@ -391,4 +392,18 @@ func processUnknownRequest(
 	}
 
 	return sendResponse(stream, response, "unknown")
+}
+
+// releaseInflightAdmission ends the request's in-flight admission, if one is
+// still open. The token and its model key travel together on the context, so
+// every cleanup path — normal response completion, receive errors, dispatch
+// errors, and panics — releases the exact bucket the request was admitted to
+// even when the routing model was rewritten in between. Double release is a
+// no-op because every caller clears the token afterwards.
+func releaseInflightAdmission(ctx *RequestContext) {
+	if ctx == nil || ctx.InflightToken == 0 {
+		return
+	}
+	inflight.End(ctx.InflightModel, ctx.InflightToken)
+	ctx.InflightToken = 0
 }

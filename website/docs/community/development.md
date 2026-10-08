@@ -72,20 +72,17 @@ make check CHANGED_FILES="path/one path/two"
 Common targeted suites include:
 
 ```bash
-# Router and native bindings
+# Router
 make test-semantic-router
-make test-binding
 
-# Classifiers
-make test-category-classifier
-make test-pii-classifier
-make test-jailbreak-classifier
+# Model runtime (tiny fixtures, CPU)
+make model-runtime-test
+
+# Published models through the model runtime
+make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# Fleet simulator
-make vllm-sr-sim-test
 ```
 
 Select integration or E2E explicitly when a change is visible through startup,

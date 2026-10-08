@@ -25,6 +25,7 @@ export const initialDSLState: DSLState = {
   compileError: null,
   mode: 'visual',
   dirty: false,
+  savedSource: '',
   lastCompileAt: null,
   deploying: false,
   deployStep: null,

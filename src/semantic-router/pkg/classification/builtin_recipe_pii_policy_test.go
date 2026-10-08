@@ -54,7 +54,9 @@ func TestBuiltinVaultRetainsOtherPIICategories(t *testing.T) {
 			for _, rule := range c.Config.PIIRules {
 				denied := findDeniedEntities(map[string]bool{entity: true}, rule.PIITypesAllowed)
 				want := rule.Name == "personal_data"
-				if (len(denied) != 0) != want || rule.Threshold != .7 || !rule.IncludeHistory {
+				// 0.01 accepts every span Vela 2.0 0.3B returns, the operating point of
+				// Vela 1.0 PII's 0.7 (docs/records/vela2-router-signals.md).
+				if (len(denied) != 0) != want || rule.Threshold != .01 || !rule.IncludeHistory {
 					t.Fatalf("category %s, rule %+v: denied=%v", entity, rule, denied)
 				}
 			}
