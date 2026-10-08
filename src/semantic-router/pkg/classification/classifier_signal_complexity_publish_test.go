@@ -20,7 +20,7 @@ func TestPublishComplexityValuesKeysBySource(t *testing.T) {
 		want   []string
 	}{
 		"remote score": {
-			result: ComplexityRuleResult{RuleName: "r", SignalSource: complexitySignalSourceScore, FusedMargin: 7.3},
+			result: ComplexityRuleResult{RuleName: "r", SignalSource: complexitySignalSourceScore, Value: 7.3},
 			want:   []string{"complexity:r:score"},
 		},
 		"remote labels": {
@@ -28,7 +28,7 @@ func TestPublishComplexityValuesKeysBySource(t *testing.T) {
 			want:   nil,
 		},
 		"local text": {
-			result: ComplexityRuleResult{RuleName: "r", SignalSource: "text", FusedMargin: 0.2},
+			result: ComplexityRuleResult{RuleName: "r", SignalSource: "text", Value: 0.2},
 			want: []string{
 				"complexity:r:image_easy_score", "complexity:r:image_hard_score", "complexity:r:image_margin",
 				"complexity:r:margin",
@@ -58,7 +58,7 @@ func TestPublishComplexityValuesKeysBySource(t *testing.T) {
 	}
 
 	values := map[string]float64{}
-	publishComplexityValues(values, ComplexityRuleResult{RuleName: "r", SignalSource: complexitySignalSourceScore, FusedMargin: 7.3})
+	publishComplexityValues(values, ComplexityRuleResult{RuleName: "r", SignalSource: complexitySignalSourceScore, Value: 7.3})
 	if values["complexity:r:score"] != 7.3 {
 		t.Fatalf("score published as %v, want 7.3 in the model's own units", values["complexity:r:score"])
 	}

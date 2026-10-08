@@ -26,7 +26,7 @@ func publishComplexityValues(values map[string]float64, result ComplexityRuleRes
 	prefix := "complexity:" + result.RuleName
 	switch result.SignalSource {
 	case complexitySignalSourceScore:
-		values[prefix+":score"] = result.FusedMargin
+		values[prefix+":score"] = result.Value
 	case complexitySignalSourceLabels:
 		return
 	default:
@@ -36,7 +36,7 @@ func publishComplexityValues(values map[string]float64, result ComplexityRuleRes
 		values[prefix+":image_hard_score"] = result.ImageHardScore
 		values[prefix+":image_easy_score"] = result.ImageEasyScore
 		values[prefix+":image_margin"] = result.ImageMargin
-		values[prefix+":margin"] = result.FusedMargin
+		values[prefix+":margin"] = result.Value
 	}
 }
 

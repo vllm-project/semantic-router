@@ -25,7 +25,7 @@ func (c *ComplexityClassifier) classifyRuleWithEmbeddings(
 		ImageHardScore: imageHardScore.Score,
 		ImageEasyScore: imageEasyScore.Score,
 		ImageMargin:    imageSignal,
-		FusedMargin:    fusedSignal,
+		Value:          fusedSignal,
 		Confidence:     math.Abs(fusedSignal),
 		SignalSource:   signalSource,
 		// |margin| is a genuine confidence - distance from the undecided
@@ -95,7 +95,7 @@ func logComplexityRuleResult(
 			result.ImageMargin,
 			complexityImageSourceLabel(requestImageProvided),
 			result.SignalSource,
-			result.FusedMargin,
+			result.Value,
 			result.Difficulty,
 		)
 		return
@@ -105,7 +105,7 @@ func logComplexityRuleResult(
 		rule.Name,
 		result.TextHardScore,
 		result.TextEasyScore,
-		result.FusedMargin,
+		result.Value,
 		result.Difficulty,
 	)
 }

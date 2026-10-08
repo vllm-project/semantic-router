@@ -81,8 +81,8 @@ func TestComplexityRemoteScore_PublishesTheRawScore(t *testing.T) {
 		t.Fatalf("evaluateComplexityScore: %v", err)
 	}
 
-	if results[0].FusedMargin != 42.5 {
-		t.Fatalf("published value = %v, want the raw 42.5", results[0].FusedMargin)
+	if results[0].Value != 42.5 {
+		t.Fatalf("published value = %v, want the raw 42.5", results[0].Value)
 	}
 }
 
