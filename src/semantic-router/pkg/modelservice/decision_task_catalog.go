@@ -73,7 +73,13 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 		if !card.Serves("decisions") && (cfg == nil || status.Name != cfg.DecisionModel) {
 			continue
 		}
-		response.Deployments = append(response.Deployments, TaskCatalogDeployment{TaskCatalogModel: projectTaskModel(card, definitions), Deployment: status.Name, Ready: status.Ready})
+		model := projectTaskModel(card, definitions)
+		artifact := ""
+		if cfg != nil {
+			artifact = cfg.ModelDeployments[status.Name].Artifact
+		}
+		model.Model = taskCatalogModelName(status, artifact)
+		response.Deployments = append(response.Deployments, TaskCatalogDeployment{TaskCatalogModel: model, Deployment: status.Name, Ready: status.Ready})
 	}
 	if cfg == nil {
 		sort.Slice(response.Deployments, func(i, j int) bool { return response.Deployments[i].Deployment < response.Deployments[j].Deployment })
@@ -146,13 +152,8 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 					source = "module"
 				}
 			}
-			model := cfg.ModelDeployments[binding.Deployment].Artifact
 			status := observed[binding.Deployment]
-			if status.Card != nil {
-				model = status.Card.ID
-			} else if status.Model != "" {
-				model = status.Model
-			}
+			model := taskCatalogModelName(status, cfg.ModelDeployments[binding.Deployment].Artifact)
 			response.Bindings = append(response.Bindings, TaskCatalogBinding{
 				TaskID: consumer.task, Consumer: consumer.name, Recipe: string(recipe.Name),
 				Deployment: binding.Deployment, Model: model, Source: source, Ready: status.Ready, Editable: true,
@@ -161,6 +162,24 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 		}
 	}
 	return response
+}
+
+// Runtime card IDs address logical deployments or served aliases. Display the
+// observed artifact when available without changing those execution identities.
+func taskCatalogModelName(status DeploymentStatus, declaredArtifact string) string {
+	if status.Card != nil && status.Card.Repo != "" {
+		return status.Card.Repo
+	}
+	if status.Artifact != "" {
+		return status.Artifact
+	}
+	if declaredArtifact != "" {
+		return declaredArtifact
+	}
+	if status.Card != nil && status.Card.ID != "" {
+		return status.Card.ID
+	}
+	return status.Model
 }
 
 func projectTaskModel(card ModelCard, definitions []TaskDefinition) TaskCatalogModel {

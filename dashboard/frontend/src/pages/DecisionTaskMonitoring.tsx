@@ -108,7 +108,7 @@ export default function DecisionTaskMonitoring({ refreshedAt }: { refreshedAt: D
           options={deployments.map((item) => ({
             value: item.deployment,
             label: item.model || item.deployment,
-            description: item.deployment,
+            description: item.model && item.model !== item.deployment ? item.deployment : undefined,
           }))}
         />
         <SystemOneSelect

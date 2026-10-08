@@ -74,7 +74,12 @@ function BindingRow({
     .map((item) => ({
       value: item.deployment,
       label: item.model || item.deployment,
-      description: `${item.deployment} · ${item.ready ? 'Ready' : 'Starts when deployed'}`,
+      description: [
+        item.model && item.model !== item.deployment ? item.deployment : '',
+        item.ready ? 'Ready' : 'Starts when deployed',
+      ]
+        .filter(Boolean)
+        .join(' · '),
     }))
   return (
     <tr>
@@ -96,7 +101,9 @@ function BindingRow({
         ) : (
           <>
             <span>{binding.model || binding.deployment || 'Unbound'}</span>
-            <small className={styles.bindingMeta}>{binding.deployment}</small>
+            {binding.model && binding.deployment && binding.model !== binding.deployment && (
+              <small className={styles.bindingMeta}>{binding.deployment}</small>
+            )}
           </>
         )}
       </td>

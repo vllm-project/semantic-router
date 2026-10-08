@@ -1,5 +1,7 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { withDecisionTaskBinding } from './DecisionTaskBindings'
+import DecisionTaskBindings, { withDecisionTaskBinding } from './DecisionTaskBindings'
 import type { RouterConfig } from './dashboardPageTypes'
 import type { DecisionTaskBinding } from './useDecisionTasks'
 
@@ -16,6 +18,26 @@ const binding: DecisionTaskBinding = {
   binding: { deployment: 'old', contract: 'decision.v1' },
 }
 describe('inline task binding mutations', () => {
+  it.each(['org/actual-model', 'primary', ''])(
+    'displays model %s without duplicating its deployment',
+    (model) => {
+      const html = renderToStaticMarkup(
+        createElement(DecisionTaskBindings, {
+          data: {
+            default_deployment: 'primary',
+            tasks: [],
+            deployments: [],
+            bindings: [{ ...binding, deployment: 'primary', model }],
+          },
+          error: null,
+          writable: false,
+          save: async () => undefined,
+        }),
+      )
+      expect(html.match(/>primary</g)).toHaveLength(1)
+      if (model && model !== 'primary') expect(html).toContain(`<span>${model}</span>`)
+    },
+  )
   it('replaces specialist adapters when choosing a generic decision deployment', () => {
     const specialist: DecisionTaskBinding = {
       ...binding,
