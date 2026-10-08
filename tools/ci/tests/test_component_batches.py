@@ -24,7 +24,6 @@ from ci_plan import github_outputs, make_plan  # noqa: E402
 
 SHA = "a" * 40
 
-
 class ComponentBatchTests(unittest.TestCase):
     def test_nine_contracts_use_nine_workers_without_changing_selection(self):
         full = make_plan([], source_sha=SHA, full=True)
@@ -309,7 +308,6 @@ class ComponentBatchTests(unittest.TestCase):
                 with self.assertRaises(FileExistsError):
                     runner.run_batch(batch, output)
             return passed, plan, receipts, raw, calls
-
 
 if __name__ == "__main__":
     unittest.main()
