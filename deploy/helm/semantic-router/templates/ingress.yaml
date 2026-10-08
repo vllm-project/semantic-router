@@ -1,4 +1,8 @@
 {{- if .Values.ingress.enabled -}}
+{{- $defaultPort := .Values.service.api.port -}}
+{{- if eq (include "semantic-router.gatewayMode" .) "standalone" -}}
+{{- $defaultPort = (include "semantic-router.primaryListener" . | fromYaml).port -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -36,7 +40,7 @@ spec:
               service:
                 name: {{ include "semantic-router.fullname" $ }}
                 port:
-                  number: {{ .servicePort }}
+                  number: {{ .servicePort | default $defaultPort }}
           {{- end }}
     {{- end }}
 {{- end }}

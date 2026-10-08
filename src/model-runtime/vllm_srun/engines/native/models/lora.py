@@ -31,7 +31,7 @@ class LoRALinear(nn.Module):
         return self.base_layer.out_features
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        result = self.base_layer(x)
+        result: torch.Tensor = self.base_layer(x)
         result_dtype = result.dtype
         adapter_dtype = self.lora_A.weight.dtype
         if x.dtype != adapter_dtype and x.is_floating_point():

@@ -11,7 +11,6 @@ def validate_prompt_dependencies(
     model_by_name = {model.name: model for model in config.providers.models}
     model_cards = {model.name: model for model in config.routing.model_cards}
     auto_model_names = _auto_model_names(config)
-    looper_endpoint = _looper_endpoint(config.global_)
     profiles = [("decisions", config.routing)]
     profiles.extend(
         (f"recipes.{recipe.name}.decisions", recipe.routing)
@@ -35,27 +34,7 @@ def validate_prompt_dependencies(
                     auto_model_names,
                 )
             )
-            if not looper_endpoint:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' prompt selection requires global.integrations.looper.endpoint",
-                        field=f"{field_prefix}.{decision.name}.algorithm.prompt",
-                    )
-                )
     return errors
-
-
-def _looper_endpoint(global_config) -> str | None:
-    if not isinstance(global_config, dict):
-        return None
-    integrations = global_config.get("integrations")
-    if not isinstance(integrations, dict):
-        return None
-    looper = integrations.get("looper")
-    if not isinstance(looper, dict):
-        return None
-    endpoint = looper.get("endpoint")
-    return endpoint if isinstance(endpoint, str) else None
 
 
 def _prompt_model_errors(

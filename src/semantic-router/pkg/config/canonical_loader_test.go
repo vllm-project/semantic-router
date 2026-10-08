@@ -558,13 +558,13 @@ global:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 
-	if cfg.CategoryModel.ModelID != "models/Vela-1.0-Encoder-307M-Domain" {
+	if cfg.CategoryModel.ModelID != DefaultSystemModels().DomainClassifier {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
-	if cfg.PIIModel.ModelID != "models/Vela-1.0-Encoder-307M-PII" {
+	if cfg.PIIModel.ModelID != DefaultSystemModels().PIIClassifier {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
 	}
-	if cfg.PromptGuard.ModelID != "models/Vela-1.0-Encoder-307M-Guard" {
+	if cfg.PromptGuard.ModelID != DefaultSystemModels().PromptGuard {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
 	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {

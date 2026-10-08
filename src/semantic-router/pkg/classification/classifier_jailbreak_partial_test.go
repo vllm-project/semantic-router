@@ -64,7 +64,9 @@ func TestJailbreakPartialInputCannotProduceCleanAPIResult(t *testing.T) {
 	}
 }
 
-func TestJailbreakPartialInputPreservesOnErrorPolicy(t *testing.T) {
+// The guard read only part of the input, so the rest is unscanned: the rule
+// matches whatever on_error says, as a policy match without a risk score.
+func TestJailbreakPartialInputMatchesWhateverOnErrorSays(t *testing.T) {
 	for _, policy := range []string{config.OnErrorAllow, config.OnErrorBlock} {
 		t.Run(policy, func(t *testing.T) {
 			c := newRiskTestClassifier(&partialGuardBackend{usage: &tasks.InputUsage{OriginalTokens: 5, ProcessedTokens: 4}})
@@ -72,15 +74,14 @@ func TestJailbreakPartialInputPreservesOnErrorPolicy(t *testing.T) {
 			c.Config.JailbreakRules = []config.JailbreakRule{{Name: "guard", Threshold: .5}}
 			results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalConfidences: map[string]float64{}}
 			c.evaluateJailbreakSignal(context.Background(), results, &sync.Mutex{}, "sample", nil)
-			if results.SignalErrors["jailbreak:guard"] != jailbreakEvaluationFailedCode {
+			if results.SignalErrors["jailbreak:guard"] != signalInputLimitCode {
 				t.Fatalf("missing partial-input diagnostic: %+v", results.SignalErrors)
 			}
 			if results.JailbreakScoreAvailable {
 				t.Fatal("partial input published a usable risk score")
 			}
-			wantBlock := policy == config.OnErrorBlock
-			if (len(results.MatchedJailbreakRules) > 0) != wantBlock || results.SignalErrorMatches["jailbreak:guard"] != wantBlock {
-				t.Fatalf("on_error contract changed: matches=%v error_matches=%v", results.MatchedJailbreakRules, results.SignalErrorMatches)
+			if len(results.MatchedJailbreakRules) != 1 || !results.SignalErrorMatches["jailbreak:guard"] || results.JailbreakType != JailbreakUnscannedType {
+				t.Fatalf("unscanned input passed the guard: matches=%v error_matches=%v type=%q", results.MatchedJailbreakRules, results.SignalErrorMatches, results.JailbreakType)
 			}
 		})
 	}
@@ -107,7 +108,7 @@ func TestJailbreakCompletePositiveSurvivesPartialInput(t *testing.T) {
 	c.Config.JailbreakRules = []config.JailbreakRule{{Name: "guard", Threshold: .5}}
 	results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalConfidences: map[string]float64{}}
 	c.evaluateJailbreakSignal(context.Background(), results, &sync.Mutex{}, text, nil)
-	if len(results.MatchedJailbreakRules) != 1 || results.SignalErrors["jailbreak:guard"] != jailbreakEvaluationFailedCode || results.SignalErrorMatches["jailbreak:guard"] {
+	if len(results.MatchedJailbreakRules) != 1 || results.SignalErrors["jailbreak:guard"] != signalInputLimitCode || results.SignalErrorMatches["jailbreak:guard"] {
 		t.Fatalf("request signal must retain a real detection and the partial diagnostic: %+v", results)
 	}
 }

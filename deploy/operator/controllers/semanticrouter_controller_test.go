@@ -846,7 +846,7 @@ func TestGenerateVolumes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			volumes := r.generateVolumes(tt.sr, "gateway-integration")
+			volumes := r.generateVolumes(tt.sr)
 
 			if len(volumes) != tt.expectedVolume {
 				t.Errorf("expected %d volumes, got %d", tt.expectedVolume, len(volumes))

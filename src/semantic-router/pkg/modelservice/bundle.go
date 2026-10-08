@@ -45,6 +45,7 @@ type bundleCall struct {
 	task     api.BundleTask
 	done     chan struct{}
 	result   api.BundleResult
+	timing   exchangeTiming
 	err      error
 	decision *decisionCall
 }
@@ -139,21 +140,21 @@ func (b *Bundle) Flushes() int {
 	return b.flushes
 }
 
-func (b *Bundle) submit(ctx context.Context, client *Client, task api.BundleTask) (api.BundleResult, error) {
+func (b *Bundle) submit(ctx context.Context, client *Client, task api.BundleTask) (api.BundleResult, exchangeTiming, error) {
 	call := &bundleCall{ctx: ctx, task: task, done: make(chan struct{})}
 	if err := b.park(client, call); err != nil {
-		return api.BundleResult{}, err
+		return api.BundleResult{}, exchangeTiming{}, err
 	}
-	return call.result, call.err
+	return call.result, call.timing, call.err
 }
 
 // decide parks a decisions call and returns its own answers.
-func (b *Bundle) decide(ctx context.Context, client *Client, decision *decisionCall, body api.DecisionRequest) (Response, error) {
+func (b *Bundle) decide(ctx context.Context, client *Client, decision *decisionCall, body api.DecisionRequest) (Response, exchangeTiming, error) {
 	call := &bundleCall{ctx: ctx, task: api.BundleTask{Decisions: &body}, done: make(chan struct{}), decision: decision}
 	if err := b.park(client, call); err != nil {
-		return Response{}, err
+		return Response{}, exchangeTiming{}, err
 	}
-	return decision.response, call.err
+	return decision.response, call.timing, call.err
 }
 
 // park adds a call to the bundle and waits until it is answered or its
@@ -250,8 +251,11 @@ func (b *Bundle) send(client *Client, tasks []*bundleTask) {
 		request[index] = task.task
 	}
 	bundleTasks.Observe(float64(len(request)))
-	results, err := client.Bundle(ctx, request)
+	results, timing, err := client.sendBundle(ctx, request)
 	for index, task := range tasks {
+		for _, call := range task.calls {
+			call.timing = timing
+		}
 		switch {
 		case err != nil:
 			task.answer(api.BundleResult{}, err)

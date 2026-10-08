@@ -1,10 +1,7 @@
 package extproc
 
 import (
-	"strings"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // hydrateLooperRoutingContext restores the parent request's recipe boundary on
@@ -15,7 +12,7 @@ func (r *OpenAIRouter) hydrateLooperRoutingContext(ctx *RequestContext) {
 		return
 	}
 
-	recipeName := config.RecipeName(strings.TrimSpace(headerValueCI(ctx, headers.VSRSelectedRecipe)))
+	recipeName := config.RecipeName(looperHopRecipe(ctx))
 	if recipeName == "" {
 		return
 	}
@@ -53,7 +50,7 @@ func (r *OpenAIRouter) looperDecisionForRoutingContext(
 
 	// A present but unknown recipe header must not fall through to another
 	// recipe's same-named decision.
-	if strings.TrimSpace(headerValueCI(ctx, headers.VSRSelectedRecipe)) != "" {
+	if looperHopRecipe(ctx) != "" {
 		return nil
 	}
 

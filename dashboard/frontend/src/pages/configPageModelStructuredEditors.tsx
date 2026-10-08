@@ -231,6 +231,31 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     step: 1,
     placeholder: '50',
   },
+  { key: 'connect_timeout', label: 'Connect timeout', placeholder: '10s' },
+  { key: 'total_timeout', label: 'Total timeout', placeholder: 'listener timeout' },
+  { key: 'idle_timeout', label: 'Stream idle timeout', placeholder: 'listener timeout' },
+  { key: 'per_try_timeout', label: 'Per-try timeout', placeholder: 'none' },
+  { key: 'first_byte_timeout', label: 'First-byte timeout (standalone mode)', placeholder: 'none' },
+  { key: 'retry_back_off_base', label: 'Retry back-off base', placeholder: '25ms' },
+  { key: 'retry_back_off_max', label: 'Retry back-off max', placeholder: '250ms' },
+  { key: 'retry_after_max', label: 'Honor Retry-After up to', placeholder: 'off' },
+  {
+    key: 'retry_budget_percent',
+    label: 'Retry budget percent',
+    type: 'number',
+    min: 0,
+    max: 100,
+    step: 1,
+    placeholder: 'off',
+  },
+  {
+    key: 'retry_budget_min_concurrency',
+    label: 'Retry budget minimum',
+    type: 'number',
+    min: 0,
+    step: 1,
+    placeholder: '3',
+  },
 ]
 
 function backendRefLabel(item: BackendRefEntry, index: number): string {

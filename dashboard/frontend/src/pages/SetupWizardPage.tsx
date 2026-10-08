@@ -44,6 +44,12 @@ import {
 } from "./setupWizardSupport";
 import { type ProviderKind } from "./setupWizardProviderCatalog";
 import styles from "./SetupWizardPage.module.css";
+import { SetupDecisionModelSection } from "./SetupWizardDecisionModel";
+import {
+  configuredDecisionModel,
+  withDecisionModel,
+  type DecisionModelName,
+} from "./decisionModelSupport";
 
 const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -51,6 +57,8 @@ const SetupWizardPage: React.FC = () => {
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
   const [currentStep, setCurrentStep] = useState<SetupStep>(0);
+  const [decisionModelChoice, setDecisionModelChoice] =
+    useState<DecisionModelName | null>(null);
   const [models, setModels] = useState<ModelDraft[]>([createModelDraft(1)]);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
   const [routingMode, setRoutingMode] = useState<SetupRoutingMode>("scratch");
@@ -193,12 +201,19 @@ const SetupWizardPage: React.FC = () => {
       : routingMode === "remote"
         ? "From remote"
         : "From scratch";
-  const draftConfig =
+  const routeConfig =
     routingMode === "preset"
       ? (presetImportedConfig?.config ?? null)
       : routingMode === "remote"
         ? (importedRemoteConfig?.config ?? null)
         : scratchConfig;
+  // A route keeps the decision model it names until one is chosen here.
+  const draftConfig =
+    routeConfig && decisionModelChoice
+      ? withDecisionModel(routeConfig, decisionModelChoice)
+      : routeConfig;
+  const selectedDecisionModel =
+    decisionModelChoice ?? configuredDecisionModel(routeConfig);
   const generatedCounts =
     routingMode === "preset"
       ? (presetImportedConfig?.counts ?? createSetupConfigCounts())
@@ -669,6 +684,12 @@ const SetupWizardPage: React.FC = () => {
               onSelectPreset={(id) => void handleSelectPreset(id)}
               onImportPresetConfig={() => void handleImportPresetConfig()}
               onRetryPresets={() => void loadPresets()}
+            />
+          )}
+          {currentStep === 1 && (
+            <SetupDecisionModelSection
+              value={selectedDecisionModel}
+              onChange={setDecisionModelChoice}
             />
           )}
           {currentStep === 2 && (

@@ -15,7 +15,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestDefaultOperatorSamplesSelectVelaModels(t *testing.T) {
+func TestDefaultOperatorSamplesSelectTheVela2Defaults(t *testing.T) {
 	for _, name := range []string{
 		"vllm_v1alpha1_semanticrouter.yaml",
 		"vllm.ai_v1alpha1_semanticrouter_openshift.yaml",
@@ -30,17 +30,16 @@ func TestDefaultOperatorSamplesSelectVelaModels(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			const prefix = "models/Vela-1.0-Encoder-307M-"
-			if cfg.MmBertModelPath != prefix+"Embedding" {
+			if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" {
 				t.Fatalf("embedding artifact = %q", cfg.MmBertModelPath)
 			}
-			if cfg.PromptGuard.ModelID != prefix+"Guard" {
+			if cfg.PromptGuard.ModelID != routerconfig.Vela2SignalModel || cfg.PromptGuard.Threshold != .75 {
 				t.Fatalf("guard model = %+v", cfg.PromptGuard)
 			}
-			if cfg.CategoryModel.ModelID != prefix+"Domain" {
+			if cfg.CategoryModel.ModelID != routerconfig.Vela2SignalModel {
 				t.Fatalf("domain model = %+v", cfg.CategoryModel)
 			}
-			if cfg.PIIModel.ModelID != prefix+"PII" || cfg.PIIMappingPath != "" {
+			if cfg.PIIModel.ModelID != routerconfig.Vela2SignalModel || cfg.PIIMappingPath != "" {
 				t.Fatalf("PII model = %+v", cfg.PIIModel)
 			}
 		})

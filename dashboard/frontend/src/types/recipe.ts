@@ -140,8 +140,11 @@ export interface RecipeActivationConfirmation {
   confirm_stack_recreation: boolean
 }
 
+// restart_required: committed, and the next `vllm-sr serve` creates the
+// containers anew; message says so.
 export interface RecipePackageActivationResult {
-  status: 'active'
+  status: 'active' | 'restart_required'
+  message?: string
   recipe_digest: string
   previous_recipe_digest?: string
   plan_digest: string
@@ -149,7 +152,8 @@ export interface RecipePackageActivationResult {
 }
 
 export interface RecipePackageDeactivationResult {
-  status: 'inactive'
+  status: 'inactive' | 'restart_required'
+  message?: string
   previous_recipe_digest?: string
   plan_digest?: string
   mode?: RecipeActivationMode
