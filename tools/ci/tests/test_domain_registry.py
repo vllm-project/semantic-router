@@ -180,6 +180,38 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn("cli-unit", result.selected_jobs)
                 self.assertNotIn("vllm-sr-cli", result.domains)
 
+    def test_model_resolution_selects_the_published_model_contract(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/config/decision_model.go",
+            "src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go",
+            "src/semantic-router/pkg/classification/classifier_pii_window_default.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("published-model-tests", result.domains)
+                self.assertIn("platform.models-cpu", result.selected_jobs)
+
+    def test_vela2_serving_and_fusion_select_the_published_model_contract(self) -> None:
+        for path in (
+            "src/model-runtime/vllm_srun/families/vela2/encoder_layout.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/registry/golden_answers_vela2.json",
+            "src/model-runtime/vllm_srun/plugins/decisions.py",
+            "src/semantic-router/pkg/config/model_runtime_implicit.go",
+            "src/semantic-router/pkg/modelruntime/serving/signal_question.go",
+            "src/semantic-router/pkg/modelservice/bundle.go",
+            "src/semantic-router/pkg/modelservice/fusion_decisions.go",
+            "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
+            "src/semantic-router/pkg/classification/testdata/vela2_published_answers.json",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("published-model-tests", result.domains)
+                self.assertIn("platform.models-cpu", result.selected_jobs)
+
     def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
         domains = matching_domains(
             (

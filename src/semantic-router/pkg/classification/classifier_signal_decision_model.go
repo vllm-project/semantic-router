@@ -124,6 +124,9 @@ func (c *Classifier) evaluateDecisionDeployment(
 // decisionCallContext bounds a deployment's call by the shortest timeout its
 // rules set. Questions to the decision model that set none join the built-in
 // signals' call, so they take its deadline rather than the default timeout.
+// Once the stage sends a call, its questions wait for it as long as its
+// latest caller does: a timeout bounds the wait for the other askers, never
+// an answer of a call the stage waits for anyway (modelservice.Bundle).
 func decisionCallContext(ctx context.Context, rules []config.DecisionSignalRule) (context.Context, context.CancelFunc) {
 	var timeout time.Duration
 	for _, rule := range rules {
