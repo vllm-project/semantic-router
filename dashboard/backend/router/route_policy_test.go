@@ -86,6 +86,7 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/config/deploy", auth.PermConfigDeploy},
+		{http.MethodGet, "/api/tools/web-search/stats", auth.PermToolsUse},
 		{http.MethodPost, "/api/mcp/tools/execute", auth.PermToolsUse},
 		{http.MethodPatch, "/api/admin/users/user-1", auth.PermUsersManage},
 		{http.MethodGet, "/api/mcp/servers", auth.PermMcpRead},
@@ -110,6 +111,24 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		if response.Code != http.StatusForbidden {
 			t.Errorf("unknown route %s status=%d", path, response.Code)
 		}
+	}
+}
+
+func TestWebSearchRateLimitStatsRouteIsReadOnly(t *testing.T) {
+	server := setupRouteInventoryServer(t)
+	policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/tools/web-search/stats")
+	if lookup != auth.RouteFound || policy.Permission != auth.PermToolsUse ||
+		policy.Sensitivity != auth.SensitivityOperational ||
+		policy.ResourceOwner != auth.ResourceOwnerTools ||
+		policy.AuditMode != auth.AuditNone || policy.AuditAction != "tools.use.read" ||
+		policy.Revalidate || policy.MaxBodyBytes != 0 {
+		t.Fatalf("stats route policy=%+v lookup=%v, want operational read-only tools route", policy, lookup)
+	}
+	if _, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, "/api/tools/web-search/stats"); lookup != auth.RouteMethodNotAllowed {
+		t.Fatalf("POST stats route lookup=%v, want method not allowed", lookup)
+	}
+	if _, lookup := server.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/tools/web-search/stats/extra"); lookup != auth.RouteNotFound {
+		t.Fatalf("nested stats route lookup=%v, want not found", lookup)
 	}
 }
 
@@ -180,6 +199,7 @@ func TestDashboardProductionRoutePermissionsGrantAndRevokeIndependently(t *testi
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/ml-pipeline/train", auth.PermMlPipeline},
 		{http.MethodPost, "/api/mcp/servers", auth.PermMcpManage},
+		{http.MethodGet, "/api/tools/web-search/stats", auth.PermToolsUse},
 	}
 	setPermission := func(permission string, allowed bool) {
 		t.Helper()

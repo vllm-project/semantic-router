@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -219,6 +220,106 @@ func TestRateLimitKeyPrefersSessionOverAddress(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := rateLimitKey(searchRequest(tt.remoteAddr, tt.forwardedFor, tt.userID)); got != tt.want {
 				t.Fatalf("rateLimitKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRateLimiterStatsExcludeExpiredEntries(t *testing.T) {
+	limiter := newTestRateLimiter()
+	now := time.Now()
+	limiter.requests["user:fresh"] = []time.Time{now.Add(-time.Second)}
+	limiter.requests["user:mixed"] = []time.Time{
+		now.Add(-rateLimitWindow - time.Second),
+		now.Add(-time.Second),
+	}
+	limiter.requests["user:stale"] = []time.Time{now.Add(-rateLimitWindow - time.Second)}
+	limiter.globalReqs = []time.Time{
+		now.Add(-rateLimitWindow - time.Second),
+		now.Add(-time.Second),
+	}
+
+	trackedClients, globalRequests := limiter.getStats()
+	if trackedClients != 2 {
+		t.Fatalf("tracked clients = %d, want 2", trackedClients)
+	}
+	if globalRequests != 1 {
+		t.Fatalf("global requests = %d, want 1", globalRequests)
+	}
+}
+
+func TestWebSearchRateLimitStatsHandlerReturnsAggregateOnly(t *testing.T) {
+	resetRateLimiter(t)
+	now := time.Now()
+	globalRateLimiter.requests["user:secret"] = []time.Time{now.Add(-time.Second)}
+	globalRateLimiter.globalReqs = []time.Time{now.Add(-time.Second), now.Add(-2 * time.Second)}
+
+	beforeClients, beforeGlobal := globalRateLimiter.getStats()
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/tools/web-search/stats", nil)
+	WebSearchRateLimitStatsHandler()(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if got := response.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+
+	body := response.Body.String()
+	var payload WebSearchRateLimitStatsResponse
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode stats response: %v; body=%s", err, body)
+	}
+	if payload.TrackedClients != beforeClients || payload.GlobalRequests != beforeGlobal {
+		t.Fatalf("stats = %+v, want tracked=%d global=%d", payload, beforeClients, beforeGlobal)
+	}
+	if payload.WindowSeconds != int(rateLimitWindow/time.Second) ||
+		payload.PerClientLimit != rateLimitMaxReqs || payload.GlobalLimit != globalRateLimit {
+		t.Fatalf("stats limits = %+v, want window=%d per-client=%d global=%d", payload,
+			int(rateLimitWindow/time.Second), rateLimitMaxReqs, globalRateLimit)
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &fields); err != nil {
+		t.Fatalf("decode stats fields: %v", err)
+	}
+	if len(fields) != 5 {
+		t.Fatalf("response fields = %d, want exactly 5: %v", len(fields), fields)
+	}
+	for _, field := range []string{"tracked_clients", "global_requests", "window_seconds", "per_client_limit", "global_limit"} {
+		if _, ok := fields[field]; !ok {
+			t.Fatalf("response is missing field %q: %v", field, fields)
+		}
+	}
+	for _, forbidden := range []string{"user:secret", "query", "192.0.2."} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("response contains forbidden value %q: %s", forbidden, body)
+		}
+	}
+
+	afterClients, afterGlobal := globalRateLimiter.getStats()
+	if afterClients != beforeClients || afterGlobal != beforeGlobal {
+		t.Fatalf("stats read changed limiter: before=(%d,%d) after=(%d,%d)",
+			beforeClients, beforeGlobal, afterClients, afterGlobal)
+	}
+}
+
+func TestWebSearchRateLimitStatsHandlerRejectsUnsupportedMethods(t *testing.T) {
+	resetRateLimiter(t)
+	for _, method := range []string{http.MethodPost, http.MethodOptions} {
+		t.Run(method, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(method, "/api/tools/web-search/stats", nil)
+			WebSearchRateLimitStatsHandler()(response, request)
+			if response.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+			}
+			if response.Header().Get("Allow") != http.MethodGet {
+				t.Fatalf("Allow = %q, want GET", response.Header().Get("Allow"))
 			}
 		})
 	}

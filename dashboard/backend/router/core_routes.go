@@ -170,6 +170,9 @@ func registerToolRoutes(mux routeRegistrar, cfg *config.Config) {
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/web-search", auth.PermToolsUse, "tools.web_search", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/tools/web-search/stats", auth.PermToolsUse, auth.SensitivityOperational, auth.ResourceOwnerTools, http.MethodGet), handlers.WebSearchRateLimitStatsHandler())
+	log.Printf("Web Search rate-limit stats API endpoint registered: /api/tools/web-search/stats")
+
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/open-web", auth.PermToolsUse, "tools.open_web", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 

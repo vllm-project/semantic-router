@@ -318,6 +318,16 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
 - **The `-openclaw*` flags are deprecated and ignored.** OpenClaw was removed. `-openclaw`, `-openclaw-url`, `-openclaw-data` and `-openclaw-token` still parse for this release, so an older manifest keeps starting, and the backend logs one `DEPRECATED` line naming the flags and `OPENCLAW_*` variables it was given. The next release no longer accepts the flags.
 
+## WebSearch rate-limit diagnostics
+
+Authenticated callers with `tools.use` can read the current WebSearch limiter
+snapshot from `GET /api/tools/web-search/stats`. The response contains only
+aggregate counts and fixed limits: active limiter keys, upstream reservations,
+the 60-second rolling window, and the existing per-client and global limits.
+`global_requests` counts reservations in the current Dashboard process, not
+successful requests or a multi-replica deployment total. The endpoint does not
+return identities, IP addresses, client keys, or query content.
+
 ## Router contract access
 
 The **System → Platform & Access → Router API Docs** entry opens the running
