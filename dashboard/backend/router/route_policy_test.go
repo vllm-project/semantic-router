@@ -86,6 +86,7 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/config/deploy", auth.PermConfigDeploy},
+		{http.MethodGet, "/api/router/api/v1/inventory/model-runtime", auth.PermConfigRead},
 		{http.MethodPost, "/api/mcp/tools/execute", auth.PermToolsUse},
 		{http.MethodPatch, "/api/admin/users/user-1", auth.PermUsersManage},
 		{http.MethodGet, "/api/mcp/servers", auth.PermMcpRead},

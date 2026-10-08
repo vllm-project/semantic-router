@@ -24,6 +24,10 @@ describe('dashboard route manifest', () => {
 
   it('registers Model Hub as an authenticated shell page', () => {
     expect(shellRouteDefinitions).toContainEqual({ path: '/models', page: 'models' })
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/decision-model',
+      page: 'decision-model',
+    })
   })
 
   it('keeps legacy redirects pointed at canonical dashboard routes', () => {

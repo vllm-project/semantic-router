@@ -1,0 +1,205 @@
+.page {
+  display: grid;
+  gap: 1.25rem;
+}
+.toolbar,
+.deployBar,
+.deploymentTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.toolbar,
+.muted,
+.hardware,
+.facts dt {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.panel {
+  min-width: 0;
+  padding: 1.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+}
+.panel h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.1rem;
+}
+.panel h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.page button {
+  padding: 0.65rem 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+}
+.page button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.page button.primary {
+  flex-shrink: 0;
+  background: var(--color-primary);
+  color: #fff;
+}
+.summary,
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.summary > div {
+  display: grid;
+  gap: 0.5rem;
+}
+.summary span {
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+.summary strong {
+  font-size: 0.95rem;
+}
+.notice {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-tertiary);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+.notice p {
+  margin: 0.3rem 0;
+}
+.hashes {
+  margin-top: 1rem;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+.hashes summary {
+  cursor: pointer;
+}
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+  border: 0;
+  padding: 0;
+  margin: 1.2rem 0;
+}
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  padding: 1rem;
+  cursor: pointer;
+}
+.option > span {
+  display: grid;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.option strong {
+  font-size: 0.95rem;
+}
+.option em {
+  font-size: 0.75rem;
+  font-style: normal;
+  color: var(--color-primary);
+}
+.selected {
+  border-color: var(--color-primary);
+  background: var(--color-bg-tertiary);
+}
+.option input {
+  margin-top: 0.3rem;
+  accent-color: var(--color-primary);
+}
+.options:disabled .option {
+  cursor: default;
+}
+.deployments {
+  display: grid;
+  gap: 1rem;
+}
+.deployment {
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  padding: 1rem;
+  min-width: 0;
+}
+.deploymentTitle {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+.facts dt {
+  margin-bottom: 0.25rem;
+}
+.facts dd {
+  margin: 0;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.tableScroll {
+  overflow-x: auto;
+}
+.tableScroll table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8rem;
+  text-align: left;
+}
+.tableScroll th,
+.tableScroll td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+.scope {
+  margin: 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.scope p {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 640px) {
+  .toolbar,
+  .deployBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .panel {
+    padding: 1rem;
+  }
+  .summary,
+  .facts {
+    grid-template-columns: 1fr;
+  }
+}

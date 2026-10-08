@@ -340,10 +340,10 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, auth.Per
 	}
 }
 
-func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
+func TestRouterAPIProxyExposesRuntimeInventoryAndDocumentation(t *testing.T) {
 	t.Parallel()
 
-	requested := make([]string, 0, 3)
+	requested := make([]string, 0, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requested = append(requested, r.URL.RequestURI())
 		w.Header().Set("Content-Type", "application/json")
@@ -362,6 +362,7 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 		"/api/router/api/v1",
 		"/api/router/openapi.json?path=%2Fconfig%2Frouter&method=PATCH",
 		"/api/router/docs",
+		"/api/router/api/v1/inventory/model-runtime",
 	} {
 		recorder := httptest.NewRecorder()
 		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
@@ -374,6 +375,7 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 		"/api/v1",
 		"/openapi.json?method=PATCH&path=%2Fconfig%2Frouter",
 		"/docs",
+		"/api/v1/inventory/model-runtime",
 	}
 	if strings.Join(requested, ",") != strings.Join(want, ",") {
 		t.Fatalf("Router requests = %v, want %v", requested, want)

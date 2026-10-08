@@ -25,6 +25,7 @@ import {
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
 import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { describeServingMode } from './dashboardServingMode'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
@@ -109,6 +110,7 @@ const DashboardPage: React.FC = () => {
   )
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
+  const servingMode = describeServingMode(status?.serving_mode)
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -147,6 +149,10 @@ const DashboardPage: React.FC = () => {
             <p className={styles.subtitle}>
               Design, connect, and understand every Mixture-of-Models.
             </p>
+            <div className={styles.servingMode} data-testid="dashboard-serving-mode">
+              <span className={styles.servingModeBadge}>{servingMode.label}</span>
+              <span>{servingMode.description}</span>
+            </div>
           </div>
         </div>
         <div className={styles.headerActions}>
@@ -414,7 +420,7 @@ const DashboardPage: React.FC = () => {
       <DashboardRouterIntelligence
         config={config}
         modelsInfo={status?.models}
-        onConfigure={() => navigate('/config/global-config#global-section-system_models')}
+        onConfigure={() => navigate('/decision-model')}
         onOpenStatus={() => navigate('/status')}
         onSelectModel={setSelectedRuntimeModel}
       />

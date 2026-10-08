@@ -44,7 +44,7 @@ export default function DashboardRouterIntelligence({
       <div className={styles.header}>
         <h2 id="router-intelligence-title">Router Intelligence</h2>
         <button type="button" className={styles.action} onClick={onConfigure}>
-          Configure decision model &rsaquo;
+          Manage decision model &rsaquo;
         </button>
       </div>
 

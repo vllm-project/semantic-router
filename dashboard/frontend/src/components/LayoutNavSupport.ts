@@ -207,6 +207,11 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
     description: 'Check service readiness and diagnose the live routing path.',
     sections: [
       {
+        title: 'Intelligence',
+        description: 'Choose, deploy, and inspect the router decision model.',
+        items: [{ kind: 'route', label: 'Decision Model', icon: 'model', to: '/decision-model' }],
+      },
+      {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
         items: [{ kind: 'route', label: 'Status', icon: 'status', to: '/status' }],

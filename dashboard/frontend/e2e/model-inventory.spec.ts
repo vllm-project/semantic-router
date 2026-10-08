@@ -293,8 +293,8 @@ test.describe('Router model inventory surfaces', () => {
     await expect(page.getByRole('dialog', { name: 'Runtime model details' })).toBeVisible()
     await page.keyboard.press('Escape')
 
-    await intelligence.getByRole('button', { name: 'Configure decision model' }).click()
-    await expect(page).toHaveURL('/config/global-config#global-section-system_models')
+    await intelligence.getByRole('button', { name: 'Manage decision model' }).click()
+    await expect(page).toHaveURL('/decision-model')
   })
 
   test('does not claim a configured decision model is ready without runtime evidence', async ({

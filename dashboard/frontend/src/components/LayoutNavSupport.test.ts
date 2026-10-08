@@ -10,6 +10,16 @@ import {
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
+  it('exposes the decision model manager in System runtime navigation', () => {
+    const manager = OPERATE_MENU_CATEGORIES.find((category) => category.key === 'runtime')
+      ?.sections.flatMap((section) => section.items)
+      .find((item) => item.kind === 'route' && item.to === '/decision-model')
+    expect(manager).toMatchObject({ label: 'Decision Model' })
+    expect(findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/decision-model', false)).toBe(
+      'runtime',
+    )
+  })
+
   it('closes an open workflow menu before a primary route is revealed', () => {
     const layout = readFileSync(new URL('./Layout.tsx', import.meta.url), 'utf8')
     const topNavRenderer = layout.slice(
@@ -80,9 +90,7 @@ describe('layout navigation route matching', () => {
   })
 
   it('links directly to the running Router OpenAPI UI without making Dashboard the contract owner', () => {
-    const routerAPI = OPERATE_MENU_CATEGORIES.find(
-      (category) => category.key === 'platform-access',
-    )
+    const routerAPI = OPERATE_MENU_CATEGORIES.find((category) => category.key === 'platform-access')
       ?.sections.flatMap((section) => section.items)
       .find((item) => item.kind === 'route' && item.to === '/api/router/docs')
 
