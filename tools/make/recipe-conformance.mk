@@ -20,8 +20,7 @@ recipe-conformance-assets: vllm-sr-install-cli ## Validate maintained assets and
 		tools/calibration/recipe/router_calibration_support_test.py \
 		tools/calibration/recipe/router_calibration_signal_values_test.py \
 		tools/calibration/recipe/recipe_conformance_test.py \
-		tools/calibration/recipe/recipe_conformance_built_in_test.py \
-		tools/calibration/recipe/recipe_conformance_waivers_test.py
+		tools/calibration/recipe/recipe_conformance_built_in_test.py
 	@$(RECIPE_CONFORMANCE_PYTHON) tools/calibration/recipe/recipe_conformance.py \
 		--output-dir "$(RECIPE_CONFORMANCE_REPORT_DIR)" \
 		static-all

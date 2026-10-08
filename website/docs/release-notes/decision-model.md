@@ -49,10 +49,10 @@ specialists
 
 | Decision model | Held-out domain accuracy | Held-out prompt guard AUC | p50 on a GPU | p50 on 12 CPU cores |
 | --- | ---: | ---: | ---: | ---: |
-| `Vela-2.0-0.3B` | −0.037 | +0.026 | 6.9 ms | 79 ms |
-| `Vela-2.0-0.8B` | +0.063 | +0.067 | 40.7 ms | about 3 s |
-| `Vela-2.0-4B` | +0.122 | +0.098 | 56.8 ms | GPU only |
-| `Vela-2.0-9B` | +0.138 | +0.097 | 79.0 ms | GPU only |
+| `Vela-2.0-0.3B` | −0.037 | +0.026 | 6.6 ms | 79 ms |
+| `Vela-2.0-0.8B` | +0.063 | +0.067 | 40.1 ms | about 3 s |
+| `Vela-2.0-4B` | +0.122 | +0.098 | 55.2 ms | GPU only |
+| `Vela-2.0-9B` | +0.138 | +0.097 | 76.5 ms | GPU only |
 
 The 4B and 9B are ahead of Vela 1.0 on almost every signal. Every size is
 behind on user feedback's fresh file and on PII in distribution.

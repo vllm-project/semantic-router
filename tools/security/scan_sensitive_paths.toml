@@ -1,6 +1,8 @@
 # Regex signatures for scan_malicious_code.py (base64-encoded).
 # Credential paths, cloud metadata, obfuscation, and exfiltration live here
 # so the Python scanner is not flagged by endpoint antivirus.
+# The scanner scans this file too: a message must not contain text that a
+# pattern matches.
 
 [meta]
 purpose = "supply_chain_regex_signatures"
@@ -38,7 +40,7 @@ message = "Dynamic exec after gzip decompress"
 [[obfuscation]]
 pattern_b64 = "bWFyc2hhbFwubG9hZHNccypcKA=="
 severity = "HIGH"
-message = "marshal.loads() bytecode deserialization"
+message = "marshal.loads bytecode deserialization"
 
 [[obfuscation]]
 pattern_b64 = "dHlwZXNcLkNvZGVUeXBlXHMqXCg="

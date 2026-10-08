@@ -190,6 +190,44 @@ global:
 overlapping windows and combines their results, which is what PII and safety
 scans should use so nothing is missed.
 
+`window` reads at most `max_tokens`: a longer input fails with
+`scan_budget_exceeded`. Through Vela 2.0, routing questions read a long
+request's first tokens (8,192 on a CPU for Vela 2.0 0.3B) and safety questions
+read it whole up to the model's scan budget (four inputs on a CPU). To let the
+safety questions read more, give the deployment a scan budget:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        input:
+          max_tokens: 131072
+          overflow: window
+```
+
+A jailbreak or PII rule matches content its model did not read in full: an
+input over the model's `max_tokens` under `reject`, over its cap, truncated, or
+not scanned within the signals' deadline. The match reports the type
+`unscanned` and the reason (`input_limit`, `scan_budget` or `deadline`)
+whatever `on_error` says, so padding a prompt cannot carry an attack or
+personal data past the check. Set `on_unscanned: allow` on the module to let
+such content follow `on_error` instead. The other signals report the reason
+and follow their own `on_error`
+([Reference](model-runtime/reference.md#long-inputs)).
+
+## A request waits on a slow model
+
+A model-runtime signal that has not answered by the signals' deadline resolves
+through its policy, so one slow model does not fail the whole request: a
+routing signal through `on_error`, a safety signal as unscanned. The deadline
+is the request's less a tenth of the time left, or 45 s for a served request;
+set `global.model_catalog.signal_timeout_ms` to shorten it. On a CPU, Vela 2.0
+0.3B reads about 1,000 tokens a second on four cores, so a long request may
+not finish its safety scan within it.
+
 ## The router cannot reach an attached runtime
 
 - The runtime listens on `127.0.0.1` unless you start it with `--host 0.0.0.0`.

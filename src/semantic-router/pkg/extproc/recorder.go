@@ -643,7 +643,7 @@ func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRu
 		outcome.Verdict = "unavailable"
 		outcome.Reason = code
 		outcome.Metadata["score_available"] = "false"
-		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
+		if t := ctx.ResponseJailbreakType; t == classification.JailbreakClassificationErrorType || t == classification.JailbreakUnscannedType {
 			outcome.Metadata["policy_match"] = "true"
 		}
 		return outcome

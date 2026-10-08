@@ -7,16 +7,28 @@ When a row does not fit the member's input, the part no question reads
 shrinks first (to at least 64 tokens, then to one), then the parts the
 questions read; a schema that alone does not fit fails its questions with
 ``max_length_exceeded``.
+
+A part is tokenized only as far as its budgets need (``read_parts`` reads
+``need`` tokens of it with ``bounds.read``). A part with more tokens than the
+scan budget fails every question that reads it whole with
+``scan_budget_exceeded`` (``fail_unscanned``): the model would read it in more
+windows than the budget allows, so none of it is scanned. Every other question
+reads the part's first tokens, which are all any truncation keeps of it. A
+question that truncates (``overflow: truncate``) reads only the part's first
+tokens up to its own budget (``EncodedPart.cut``).
 """
 
 from __future__ import annotations
 
+import bisect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from ...errors import SCAN_BUDGET_EXCEEDED
+from ...text import bounds
 from .request import Plan, Question
 from .words import Words, words_of
 
@@ -32,17 +44,31 @@ class SchemaTooLongError(ValueError):
 
 @dataclass(frozen=True)
 class EncodedPart:
-    """A part's token IDs; offsets and words only for parts a span question reads."""
+    """A part's token IDs; offsets and words only for parts a span question reads.
+
+    ``complete`` is False for a part read only as far as its budgets need:
+    ``ids`` are then only its first tokens.
+    """
 
     role: str
     ids: NDArray[np.int32]
     offsets: NDArray[np.int32] | None = None
     words: Words | None = None
+    complete: bool = True
 
     def window(self, start: int, end: int, words: Words | None) -> EncodedPart:
         """Tokens ``[start, end)`` of the part, with the words a window reads."""
         offsets = None if self.offsets is None else self.offsets[start:end]
         return EncodedPart(self.role, self.ids[start:end], offsets, words)
+
+    def cut(self, length: int) -> EncodedPart:
+        """The part's first ``length`` tokens, with the words they start."""
+        if len(self.ids) <= length:
+            return self
+        words = None
+        if self.words is not None:
+            words = window_words(self.words, 0, length)[0]
+        return self.window(0, length, words)
 
 
 @dataclass
@@ -129,33 +155,86 @@ class Tokens:
 
     ``encode`` returns an encoding with IDs and offsets (parts); ``ids`` the
     IDs of a short string (questions, options, labels, layout pieces), which a
-    model may cache across requests.
+    model may cache across requests; ``tokenizer`` reads a part's first tokens
+    (``bounds.read``).
     """
 
     encode: Callable[[str], Any]
     ids: Callable[[str], list[int]]
+    tokenizer: Any = None
 
-    def part(self, role: str, text: str, with_words: bool) -> EncodedPart:
-        """A part's token IDs; with ``with_words`` (a span reads it) also its offsets and words."""
-        encoding = self.encode(text)
-        ids = np.asarray(encoding.ids, np.int32)
+    def part(
+        self, role: str, text: str, with_words: bool, need: int | None = None
+    ) -> EncodedPart:
+        """A part's token IDs; with ``with_words`` (a span reads it) also its offsets and words.
+
+        With ``need``, a part with at least that many tokens is read only that
+        far and comes back incomplete, as its first ``need`` tokens.
+        """
+        count, complete = None, True
+        if need is None or self.tokenizer is None:
+            encoding = self.encode(text)
+        else:
+            read = bounds.read(self.tokenizer, text, need)
+            encoding = read.encoding
+            if read.tokens >= need:
+                count, complete = need, False
+        ids = np.asarray(encoding.ids[:count], np.int32)
         if not with_words:
-            return EncodedPart(role, ids)
-        offsets = np.asarray(encoding.offsets, np.int32).reshape(-1, 2)
-        return EncodedPart(role, ids, offsets, words_of(text, offsets))
+            return EncodedPart(role, ids, complete=complete)
+        offsets = np.asarray(encoding.offsets[:count], np.int32).reshape(-1, 2)
+        end = int(offsets[-1][1]) if count is not None and len(offsets) else len(text)
+        words = words_of(text[:end], offsets)
+        return EncodedPart(role, ids, offsets, words, complete)
 
 
-def rows_of(plan: Plan, tokens: Tokens) -> list[Row]:
-    """The request's rows; every part is tokenized once and shared by the rows that read it."""
-    spans = [q for q in plan.questions if q.type == "span"]
-    rest = [q for q in plan.questions if q.type != "span"]
-    groups = [rest + spans[:1]] + [[span] for span in spans[1:]]
-    span_roles = {span.over for span in spans}
-    parts = [
-        tokens.part(part.role, part.text, part.role in span_roles)
+def read_parts(
+    plan: Plan, tokens: Tokens, need: int | None = None
+) -> list[EncodedPart]:
+    """Every part of the state, tokenized once (as far as ``need``) and shared by the rows that read it."""
+    span_roles = {q.over for q in plan.questions if q.type == "span"}
+    return [
+        tokens.part(part.role, part.text, part.role in span_roles, need)
         for part in plan.state.parts
     ]
-    return [Row(questions, parts) for questions in groups if questions]
+
+
+def fail_unscanned(
+    plan: Plan, questions: list[Question], parts: list[EncodedPart], budget: int
+) -> list[Question]:
+    """``questions`` without those that read a part longer than ``budget``, which
+    fail with ``scan_budget_exceeded`` (recorded in ``plan.errors``)."""
+    over = {part.role for part in parts if len(part.ids) > budget}
+    kept = []
+    for question in questions:
+        if over.intersection(question.roles):
+            plan.errors[question.id] = {
+                "type": question.kind,
+                "error": SCAN_BUDGET_EXCEEDED,
+            }
+        else:
+            kept.append(question)
+    return kept
+
+
+def rows_for(questions: list[Question], parts: list[EncodedPart]) -> list[Row]:
+    """The rows of ``questions`` over ``parts``: one for every question but the
+    second and later span questions, which get a row each."""
+    spans = [q for q in questions if q.type == "span"]
+    rest = [q for q in questions if q.type != "span"]
+    groups = [rest + spans[:1]] + [[span] for span in spans[1:]]
+    return [Row(group, parts) for group in groups if group]
+
+
+def rows_of(plan: Plan, tokens: Tokens, need: int | None = None) -> list[Row]:
+    """The request's rows, each question reading parts whole; with ``need`` (one
+    more than the scan budget), a part over the budget fails the questions that
+    read it (``fail_unscanned``)."""
+    parts = read_parts(plan, tokens, need)
+    questions = plan.questions
+    if need is not None:
+        questions = fail_unscanned(plan, questions, parts, need - 1)
+    return rows_for(questions, parts)
 
 
 def word_windows(
@@ -168,17 +247,23 @@ def word_windows(
     out, start = [], starts[0]
     while True:
         limit = start + window
-        inside = [s for s in starts if start < s < limit]
+        # The last word start strictly inside (start, limit), if any.
+        inside = bisect.bisect_left(starts, limit) - 1
         end = (
             length
             if limit >= length
-            else (max(inside) if inside else min(length, limit))
+            else (
+                starts[inside]
+                if inside >= 0 and starts[inside] > start
+                else min(length, limit)
+            )
         )
         out.append((start, end))
         if end >= length:
             break
-        later = [s for s in starts if start + stride <= s < end]
-        start = later[0] if later else end
+        # The first word start in [start + stride, end), if any.
+        later = bisect.bisect_left(starts, start + stride)
+        start = starts[later] if later < len(starts) and starts[later] < end else end
     return out
 
 

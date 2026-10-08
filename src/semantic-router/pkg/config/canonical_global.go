@@ -83,6 +83,9 @@ type CanonicalModelCatalog struct {
 	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
 	Modules     CanonicalModelModules      `yaml:"modules"`
 	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
+	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
+	// below the request's; 0 derives it from the request's deadline.
+	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -339,6 +342,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
 	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
+	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
