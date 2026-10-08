@@ -12,9 +12,8 @@ import (
 // finish long after its deadline without ever observing it.
 //
 // Probes run at message and turn boundaries during preparation and between
-// passes over retained text during extraction. The longest work between two
-// probes is one linear pass over one turn's retained text, which is at most
-// MaxTurnBytes.
+// bounded extraction stages. Work between probes is limited to one turn's
+// retained text, at most MaxTurnBytes, and the fixed structural caps.
 type cancellationProbe struct {
 	ctx         context.Context
 	deadline    time.Time
