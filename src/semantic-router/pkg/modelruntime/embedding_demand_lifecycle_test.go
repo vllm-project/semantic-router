@@ -123,7 +123,7 @@ func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
 			fake := runtimetest.New(runtimetest.Model{ID: "global", Embedding: &runtimetest.Embedder{Dimensions: []int{8}, Layers: []int{6}}})
 			server := httptest.NewServer(fake.Handler())
 			defer server.Close()
-			cfg := &config.RouterConfig{RouterOptions: config.RouterOptions{AutoModelNames: []string{}}}
+			cfg := &config.RouterConfig{}
 			cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "mmbert", TargetDimension: 8, TargetLayer: 6}
 			cfg.Memory.Milvus.Dimension = 8
 			cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL}}

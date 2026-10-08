@@ -19,7 +19,7 @@ import (
 )
 
 func TestFullDuplex_NonEOSChunkDefersResponse(t *testing.T) {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	ctx := &RequestContext{
 		Headers:               make(map[string]string),
 		FullDuplexRequestBody: true,
@@ -33,7 +33,7 @@ func TestFullDuplex_NonEOSChunkDefersResponse(t *testing.T) {
 }
 
 func TestFullDuplex_ProtocolConfigDefersBodyResponse(t *testing.T) {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	ctx := &RequestContext{Headers: make(map[string]string)}
 	stream := NewMockStream(nil)
 	req := &ext_proc.ProcessingRequest{

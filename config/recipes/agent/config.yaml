@@ -33,8 +33,6 @@ global:
         ssl_mode: disable
         table_name: router_replay_records
   router:
-    auto_model_names:
-      - vllm-sr/auto
     learning:
       enabled: true
       adaptation:
@@ -1530,3 +1528,7 @@ routing:
       modelRefs:
         - model: qwen/qwen3.6-rocm
           use_reasoning: false
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

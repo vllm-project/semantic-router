@@ -13,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 RUNTIME = ROOT / "src/model-runtime/vllm_srun"
 OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json"
+BACKEND_OUTPUT = (
+    ROOT / "src/semantic-router/pkg/modelservice/decision_catalog.generated.json"
+)
 
 
 def assignment(path, name):
@@ -20,10 +23,12 @@ def assignment(path, name):
     return next(
         node.value
         for node in tree.body
-        if isinstance(node, ast.Assign)
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
         and any(
             isinstance(target, ast.Name) and target.id == name
-            for target in node.targets
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            )
         )
     )
 
@@ -92,18 +97,79 @@ def projection():
     return {"questionTypes": kinds, "models": models}
 
 
+def backend_projection(data):
+    """The shared semantic task resolver consumes the same native facts."""
+    models = [
+        {
+            "id": item["id"],
+            "family": item["family"],
+            "question_types": data["questionTypes"],
+        }
+        for item in data["models"]
+    ]
+    kinds_node = assignment(RUNTIME / "families/vela2/request.py", "QUESTION_TYPES")
+    kinds = []
+    for kind in kinds_node.elts:
+        if (
+            isinstance(kind, ast.Starred)
+            and isinstance(kind.value, ast.Name)
+            and kind.value.id == "SYSTEM_ONE_TYPES"
+        ):
+            kinds.extend(data["questionTypes"])
+        elif (
+            isinstance(kind, ast.Starred)
+            and isinstance(kind.value, ast.Name)
+            and kind.value.id == "LABELLED_TYPES"
+        ):
+            kinds.extend(
+                ast.literal_eval(
+                    assignment(RUNTIME / "families/vela2/request.py", "LABELLED_TYPES")
+                )
+            )
+        else:
+            kinds.append(ast.literal_eval(kind))
+    organization = ast.literal_eval(
+        assignment(RUNTIME / "registry/tables/common.py", "ORG")
+    )
+    entries = assignment(RUNTIME / "registry/tables/vela2.py", "MODELS")
+    for entry in entries.elts:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "_vela"
+        ):
+            raise ValueError("Vela release entries require an updated task projection")
+        size = ast.literal_eval(entry.args[0])
+        models.append(
+            {
+                "id": f"{organization}/Vela-2.0-{size}",
+                "family": "vela2",
+                "question_types": kinds,
+            }
+        )
+    return {"models": models}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    content = json.dumps(projection(), indent=2) + "\n"
+    data = projection()
+    content = json.dumps(data, indent=2) + "\n"
+    backend = json.dumps(backend_projection(data), indent=2) + "\n"
     if args.check:
-        if not OUTPUT.exists() or json.loads(OUTPUT.read_text()) != json.loads(content):
+        if (
+            not OUTPUT.exists()
+            or json.loads(OUTPUT.read_text()) != json.loads(content)
+            or not BACKEND_OUTPUT.exists()
+            or json.loads(BACKEND_OUTPUT.read_text()) != json.loads(backend)
+        ):
             raise SystemExit(
                 "Decision runtime projection is stale; run dashboard/frontend/scripts/generate-decision-runtime-catalog.py"
             )
     else:
         OUTPUT.write_text(content)
+        BACKEND_OUTPUT.write_text(backend)
 
 
 if __name__ == "__main__":

@@ -65,6 +65,9 @@ func (m *StatusMonitor) Handler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.stack, m.credentialProvider...)
+		if instanceEngineActive(r.Context()) {
+			status.ServingMode = servingModeEngine
+		}
 		status.History = readStatusHistory(r, m.historyStore, status.Services)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {

@@ -202,3 +202,12 @@ ROUTE fast (description = "Everything else goes to Qwen3.8-27B with thinking off
   MODEL "qwen/qwen3.8-27b" (reasoning = false)
   ALGORITHM static
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}

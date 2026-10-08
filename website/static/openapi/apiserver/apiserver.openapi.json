@@ -3123,6 +3123,9 @@
                           "description": {
                             "type": "string"
                           },
+                          "entrypoint_source": {
+                            "type": "string"
+                          },
                           "entrypoints": {
                             "nullable": true,
                             "type": "array",
@@ -3143,6 +3146,7 @@
                           }
                         },
                         "required": [
+                          "entrypoint_source",
                           "name",
                           "routing",
                           "entrypoints",
@@ -3674,6 +3678,9 @@
                     "description": {
                       "type": "string"
                     },
+                    "entrypoint_source": {
+                      "type": "string"
+                    },
                     "entrypoints": {
                       "nullable": true,
                       "type": "array",
@@ -3694,6 +3701,7 @@
                     }
                   },
                   "required": [
+                    "entrypoint_source",
                     "name",
                     "routing",
                     "entrypoints",
@@ -15727,6 +15735,249 @@
                         }
                       }
                     },
+                    "states": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "answers": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "abstain_probability": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "choice": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "error": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
+                                "legend": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "message": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
+                                "noul": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "probabilities": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                },
+                                "score": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "type": {
+                                  "nullable": true,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ]
+                            }
+                          },
+                          "meta": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "accelerator": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "compute_ms": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "device": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "engine": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "head": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "model_sha256": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "numerics": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "profile": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "queue_ms": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "representation": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "dimension": {
+                                    "type": "integer"
+                                  },
+                                  "layer": {
+                                    "type": "integer"
+                                  },
+                                  "modality": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "model_sha256": {
+                                    "type": "string"
+                                  },
+                                  "normalized": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "dimension",
+                                  "layer",
+                                  "model_sha256"
+                                ]
+                              },
+                              "revision": {
+                                "nullable": true,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "revision"
+                            ]
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "sets": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "probabilities": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                },
+                                "selected": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "probabilities",
+                                "selected"
+                              ]
+                            }
+                          },
+                          "span_heads": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "spans": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "end": {
+                                    "type": "integer"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "probability": {
+                                    "type": "number"
+                                  },
+                                  "start": {
+                                    "type": "integer"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "end",
+                                  "label",
+                                  "probability",
+                                  "start",
+                                  "text"
+                                ]
+                              }
+                            }
+                          },
+                          "thresholds": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          },
+                          "usage": {
+                            "type": "object",
+                            "properties": {
+                              "input_tokens": {
+                                "type": "integer"
+                              },
+                              "output_tokens": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "input_tokens",
+                              "output_tokens"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "answers",
+                          "model",
+                          "usage"
+                        ]
+                      }
+                    },
                     "thresholds": {
                       "nullable": true,
                       "type": "object",
@@ -15901,6 +16152,50 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -16263,6 +16558,9 @@
                   "deployment": {
                     "type": "string"
                   },
+                  "expected_artifact": {
+                    "type": "string"
+                  },
                   "request": {
                     "type": "object",
                     "properties": {
@@ -16377,7 +16675,106 @@
                           "additionalProperties": false
                         }
                       },
-                      "state": {}
+                      "state": {},
+                      "states": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "questions": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                  "choices": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "description": {
+                                          "nullable": true
+                                        },
+                                        "key": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "description",
+                                        "key"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "criteria": {
+                                    "nullable": true
+                                  },
+                                  "head": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "instructions": {
+                                    "nullable": true
+                                  },
+                                  "labels": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "description": {
+                                          "nullable": true
+                                        },
+                                        "key": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "description",
+                                        "key"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "levels": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {}
+                                  },
+                                  "over": {
+                                    "nullable": true
+                                  },
+                                  "overflow": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "preset": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  },
+                                  "threshold": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "type": {
+                                    "nullable": true,
+                                    "type": "string"
+                                  }
+                                },
+                                "additionalProperties": false
+                              }
+                            },
+                            "state": {}
+                          },
+                          "required": [
+                            "questions",
+                            "state"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
                     },
                     "required": [
                       "questions",
@@ -16397,6 +16794,610 @@
         },
         "x-vllm-sr-permission": "classify.invoke",
         "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-plane": "diagnostic",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "advanced"
+      }
+    },
+    "/api/v1/diagnostics/models/tasks": {
+      "get": {
+        "summary": "List shared judgment task templates, structural model capabilities and binding provenance",
+        "description": "List shared judgment task templates, structural model capabilities and binding provenance",
+        "operationId": "get_api_v1_diagnostics_models_tasks",
+        "tags": [
+          "diagnostics"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task templates, capabilities and effective bindings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bindings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "binding": {
+                            "type": "object",
+                            "properties": {
+                              "adapter": {
+                                "type": "string"
+                              },
+                              "contract": {
+                                "type": "string"
+                              },
+                              "deployment": {
+                                "type": "string"
+                              },
+                              "head": {
+                                "type": "string"
+                              },
+                              "mapping_path": {
+                                "type": "string"
+                              },
+                              "operating_point": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "sha256": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "sha256"
+                                ]
+                              },
+                              "pair_scorer": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "dimension": {
+                                    "type": "integer"
+                                  },
+                                  "layer": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "deployment",
+                              "contract",
+                              "adapter"
+                            ]
+                          },
+                          "consumer": {
+                            "type": "string"
+                          },
+                          "deployment": {
+                            "type": "string"
+                          },
+                          "editable": {
+                            "type": "boolean"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "recipe": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "task_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "task_id",
+                          "consumer",
+                          "recipe",
+                          "deployment",
+                          "model",
+                          "source",
+                          "ready",
+                          "editable",
+                          "path",
+                          "binding"
+                        ]
+                      }
+                    },
+                    "default_bindings": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "adapter": {
+                            "type": "string"
+                          },
+                          "contract": {
+                            "type": "string"
+                          },
+                          "deployment": {
+                            "type": "string"
+                          },
+                          "head": {
+                            "type": "string"
+                          },
+                          "mapping_path": {
+                            "type": "string"
+                          },
+                          "operating_point": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "sha256": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "sha256"
+                            ]
+                          },
+                          "pair_scorer": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "dimension": {
+                                "type": "integer"
+                              },
+                              "layer": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "deployment",
+                          "contract",
+                          "adapter"
+                        ]
+                      }
+                    },
+                    "default_deployment": {
+                      "type": "string"
+                    },
+                    "deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "deployment": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "native_question_types": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "tasks": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "implementation": {
+                                  "type": "string"
+                                },
+                                "quality": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "supported": {
+                                  "type": "boolean"
+                                },
+                                "task_id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "task_id",
+                                "supported",
+                                "quality"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "model",
+                          "native_question_types",
+                          "tasks",
+                          "deployment",
+                          "ready"
+                        ]
+                      }
+                    },
+                    "global_bindings": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "adapter": {
+                            "type": "string"
+                          },
+                          "contract": {
+                            "type": "string"
+                          },
+                          "deployment": {
+                            "type": "string"
+                          },
+                          "head": {
+                            "type": "string"
+                          },
+                          "mapping_path": {
+                            "type": "string"
+                          },
+                          "operating_point": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "sha256": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "sha256"
+                            ]
+                          },
+                          "pair_scorer": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "dimension": {
+                                "type": "integer"
+                              },
+                              "layer": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "deployment",
+                          "contract",
+                          "adapter"
+                        ]
+                      }
+                    },
+                    "models": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "model": {
+                            "type": "string"
+                          },
+                          "native_question_types": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "tasks": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "implementation": {
+                                  "type": "string"
+                                },
+                                "quality": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "supported": {
+                                  "type": "boolean"
+                                },
+                                "task_id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "task_id",
+                                "supported",
+                                "quality"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "model",
+                          "native_question_types",
+                          "tasks"
+                        ]
+                      }
+                    },
+                    "tasks": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "consumers": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "binding": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "optional": {
+                                  "type": "boolean"
+                                },
+                                "type": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "type"
+                              ]
+                            }
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "full_input": {
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "input": {
+                            "type": "string"
+                          },
+                          "output": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string"
+                          },
+                          "template": {
+                            "type": "object",
+                            "properties": {
+                              "questions": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": true
+                              },
+                              "state": {}
+                            },
+                            "required": [
+                              "state",
+                              "questions"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "description",
+                          "stage",
+                          "input",
+                          "output",
+                          "full_input",
+                          "template"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "default_deployment",
+                    "global_bindings",
+                    "default_bindings",
+                    "tasks",
+                    "models",
+                    "deployments",
+                    "bindings"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config",
         "x-vllm-sr-plane": "diagnostic",
         "x-vllm-sr-audiences": [
           "agent",
@@ -58170,6 +59171,9 @@
                           "routing": {
                             "type": "object",
                             "properties": {
+                              "api": {
+                                "type": "string"
+                              },
                               "default_route": {
                                 "type": "boolean"
                               },
@@ -58181,9 +59185,13 @@
                               },
                               "selectable": {
                                 "type": "boolean"
+                              },
+                              "source": {
+                                "type": "string"
                               }
                             },
                             "required": [
+                              "api",
                               "resolution",
                               "selectable"
                             ]

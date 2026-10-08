@@ -35,6 +35,7 @@ type routerComponents struct {
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
 	modelLease                  *modelservice.Lease
+	decisionCards               map[string]modelservice.ModelCard
 	serving                     *serving.Runtime
 	rerankers                   map[config.RecipeName]modelruntime.PairScorer
 	cfg                         *config.RouterConfig
@@ -306,6 +307,10 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	components.useSignals(signals)
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	var err error
+	components.decisionCards, err = prepareDecisionSelectionCards(cfg, components.modelLease)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
 
 	components.categoryDescriptions = cfg.GetCategoryDescriptions()
 	logging.ComponentDebugEvent("extproc", "category_descriptions_loaded", map[string]interface{}{
@@ -530,6 +535,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		serviceEmbeddings:           components.serviceEmbeddings,
 		cacheEmbeddings:             components.cacheEmbeddings,
 		rerankers:                   components.rerankers,
+		decisionCards:               components.decisionCards,
 		CategoryDescriptions:        components.categoryDescriptions,
 		Classifier:                  components.classifier,
 		RecipeClassifiers:           components.recipeClassifiers,

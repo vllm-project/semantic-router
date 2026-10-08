@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
@@ -63,6 +62,8 @@ type RoutingRecipe struct {
 type EntrypointMapping struct {
 	ModelNames []string
 	Recipe     RecipeName
+	API        InferenceAPI
+	Source     EntrypointSource
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The
@@ -168,8 +169,8 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 }
 
 // RecipeForRequestModel resolves a request model name through the entrypoint
-// table. It returns false when the name matches no entrypoint; callers fall
-// back to auto-model or specified-model handling.
+// table. It returns false when the name matches no entrypoint; callers then
+// resolve a concrete backend model.
 func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, bool) {
 	if c == nil {
 		return nil, false
@@ -178,26 +179,21 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 	if trimmed == "" {
 		return nil, false
 	}
-	for _, entrypoint := range c.Entrypoints {
-		if slices.Contains(entrypoint.ModelNames, trimmed) {
-			return c.RecipeByName(entrypoint.Recipe)
+	if entrypoint, ok := c.ResolveEntrypoint(ChatAPI, trimmed); ok {
+		if entrypoint.Recipe == DefaultRecipeName {
+			return c.DefaultRecipe(), true
 		}
+		return c.RecipeByName(entrypoint.Recipe)
 	}
 	return nil, false
 }
 
-// RecipeForRoutingModel resolves every request-facing routing model. Built-in
-// auto and direct-looper aliases select the default recipe; named entrypoints
+// RecipeForRoutingModel resolves every request-facing routing model. Effective entrypoints
 // select their mapped recipe. Concrete backend model IDs intentionally do not
 // resolve to a recipe.
 func (c *RouterConfig) RecipeForRoutingModel(modelName string) (*RoutingRecipe, bool) {
 	if c == nil {
 		return nil, false
-	}
-	trimmed := strings.TrimSpace(modelName)
-	if c.IsAutoModelName(trimmed) || c.IsReMoMModelName(trimmed) || c.IsFusionModelName(trimmed) || c.IsFlowModelName(trimmed) {
-		recipe := c.DefaultRecipe()
-		return recipe, recipe != nil
 	}
 	return c.RecipeForRequestModel(modelName)
 }
@@ -213,11 +209,8 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 	}
 
 	reachable := make(map[RecipeName]struct{}, len(c.Entrypoints)+1)
-	if c.defaultRecipeHasRoutingEntrypoint() {
-		reachable[DefaultRecipeName] = struct{}{}
-	}
-	for _, entrypoint := range c.Entrypoints {
-		if len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
+	for _, entrypoint := range c.EffectiveEntrypoints(ChatAPI) {
+		if len(normalizeEntrypointNames(entrypoint.ModelNames)) > 0 {
 			reachable[entrypoint.Recipe] = struct{}{}
 		}
 	}
@@ -244,24 +237,6 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 func (c *RouterConfig) IsRecipeReachableForRouting(name RecipeName) bool {
 	for _, recipe := range c.ReachableRoutingRecipes() {
 		if recipe != nil && recipe.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *RouterConfig) defaultRecipeHasRoutingEntrypoint() bool {
-	if len(c.EffectiveAutoModelNames()) > 0 {
-		return true
-	}
-	if len(c.ExposedReMoMModelNames()) > 0 ||
-		len(c.ExposedFusionModelNames()) > 0 ||
-		len(c.ExposedFlowModelNames()) > 0 {
-		return true
-	}
-	for _, entrypoint := range c.Entrypoints {
-		if entrypoint.Recipe == DefaultRecipeName &&
-			len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
 			return true
 		}
 	}

@@ -544,9 +544,17 @@ global:
   services:
     router_replay:
       capture_personal_data: false
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm
+        profile: exact
     system:
-      decision_model: Vela-2.0-4B
+      decision_model:
+        deployment: primary
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

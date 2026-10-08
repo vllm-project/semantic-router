@@ -69,6 +69,16 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 			used[name] = deployment.WithDefaults()
 		}
 	}
+	for _, listener := range cfg.Listeners {
+		if listener.SystemOne == nil {
+			continue
+		}
+		for _, publicName := range listener.SystemOne.Models {
+			if name, _, err := cfg.ResolveSystemOneDeployment(publicName); err == nil {
+				mark(name)
+			}
+		}
+	}
 	scan := func(signals Signals, decisions []Decision) {
 		for _, rule := range signals.DecisionRules {
 			mark(rule.Deployment)
@@ -178,6 +188,14 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 			(scoped.ownsDefaultAPIConsumer() && len(scoped.RoutingProfileSignals().UserFeedbackRules) > 0)
 	case "modality_detector":
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeModality)
+	case "preference":
+		_, bound := scoped.EffectiveModelBindings(scoped.Signals, scoped.ModelBindings)["preference"]
+		return scoped.UsesSignalTypeInReachableRouting(SignalTypePreference) && (bound || (!scoped.PreferenceModel.ContrastiveEnabled() && scoped.FindExternalModelByRole(ModelRolePreference) == nil))
+	case "reask":
+		return scoped.UsesSignalTypeInReachableRouting(SignalTypeReask)
+	case "complexity":
+		_, bound := scoped.EffectiveModelBindings(scoped.Signals, scoped.ModelBindings)["complexity"]
+		return scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) && (bound || (scoped.ComplexityModel.Backend == nil && !HasImageCandidatesInRules(scoped.ComplexityRules)))
 	case "hallucination_detector":
 		return scoped.NeedsHallucinationDetectorForRouting() ||
 			(scoped.ownsDefaultAPIConsumer() && scoped.HallucinationMitigation.Enabled)

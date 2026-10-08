@@ -16,8 +16,6 @@ global:
       enabled: false
       backend_type: memory
   router:
-    auto_model_names:
-      - vllm-sr/auto
     learning:
       enabled: true
       adaptation:
@@ -2647,3 +2645,7 @@ routing:
         name: wrong_answer
       - description: Explicit request to restate the answer more clearly.
         name: need_clarification
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

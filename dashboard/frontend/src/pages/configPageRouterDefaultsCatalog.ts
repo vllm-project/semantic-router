@@ -21,14 +21,11 @@ import type {
   ToolIntegrationConfig,
   VectorStoreConfig,
 } from './configPageSupport'
-import { DEFAULT_DECISION_MODEL } from './decisionModelSupport'
 
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
-    auto_model_name: 'vllm-sr/auto',
-    auto_model_names: ['vllm-sr/auto', 'auto', 'MoM'],
-    include_config_models_in_list: false,
+    list_backend_models: false,
     clear_route_cache: true,
     model_selection: {
       enabled: true,
@@ -173,7 +170,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   admission: {},
   // Every module follows the decision model unless a line binds it.
   system_models: {
-    decision_model: DEFAULT_DECISION_MODEL,
+    decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',

@@ -264,15 +264,13 @@ def test_selector_without_deployment_asks_the_decision_model():
 
     assert _errors(_config(omit)) == []
 
-    def vela1(document):
+    def alternate(document):
         omit(document)
-        document["global"]["model_catalog"]["system"] = {"decision_model": "Vela-1.0"}
+        document["global"]["model_catalog"]["system"] = {
+            "decision_model": {"deployment": "decision-kai"}
+        }
 
-    assert any(
-        "deployment is required: the decision model is Vela-1.0" in error
-        and "deployment for the selector" in error
-        for error in _errors(_config(vela1))
-    )
+    assert _errors(_config(alternate)) == []
 
     def blank(document):
         document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"] = " "
@@ -370,3 +368,44 @@ def test_decision_deployments_reject_an_input_budget():
         deployment["input"] = {"max_tokens": 4096, "overflow": "truncate"}
 
     assert any("never truncate" in e for e in _errors(_config(budget)))
+
+
+@pytest.mark.parametrize(
+    "models,expected",
+    [
+        (["vllm-sr/Decision-2.0-Kai-0.6B"], None),
+        (["decision-kai"], "is not declared"),
+        (["small"], "is not declared"),
+    ],
+)
+def test_systemone_listener_uses_public_identity_not_chat_or_resource_key(
+    models, expected
+):
+    document = copy.deepcopy(BASE)
+    document["listeners"][0]["models"] = ["small"]
+    document["listeners"][0]["systemone"] = {"models": models}
+    errors = _errors(document)
+    assert (
+        not errors if expected is None else any(expected in error for error in errors)
+    )
+
+
+def test_systemone_duplicate_identity_requires_explicit_public_names():
+    document = copy.deepcopy(BASE)
+    catalog = document["global"]["model_catalog"]["deployments"]
+    catalog["second"] = dict(catalog["decision-kai"])
+    document["listeners"][0]["systemone"] = {
+        "models": [catalog["decision-kai"]["artifact"]]
+    }
+    assert any("multiple deployments" in error for error in _errors(document))
+    catalog["second"]["public_name"] = "alternate"
+    assert _errors(document) == []
+
+
+def test_decision_window_input_is_a_supported_scan_budget():
+    document = copy.deepcopy(BASE)
+    document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+        "max_tokens": 4096,
+        "overflow": "window",
+    }
+    assert _errors(document) == []

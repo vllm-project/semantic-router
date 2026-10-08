@@ -43,6 +43,9 @@ func validateListenerContracts(cfg *RouterConfig) error {
 		if err := validateListenerModels(listener); err != nil {
 			return err
 		}
+		if err := validateListenerSystemOne(cfg, listener); err != nil {
+			return err
+		}
 		if listener.Identity == nil {
 			continue
 		}
@@ -54,6 +57,53 @@ func validateListenerContracts(cfg *RouterConfig) error {
 		}
 	}
 	return nil
+}
+
+func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
+	if listener.SystemOne == nil {
+		return nil
+	}
+	if len(listener.SystemOne.Models) == 0 {
+		return fmt.Errorf("listener %q: systemone.models must explicitly name at least one public model", listener.Name)
+	}
+	seen := map[string]bool{}
+	for _, model := range listener.SystemOne.Models {
+		if model == "" || model != strings.TrimSpace(model) || seen[model] {
+			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
+		}
+		seen[model] = true
+		if _, _, err := cfg.ResolveSystemOneDeployment(model); err != nil {
+			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
+		}
+	}
+	return nil
+}
+
+// ResolveSystemOneDeployment maps a public inference identity to exactly one
+// concrete deployment. Internal keys and attached-runtime served names are not
+// public aliases. Virtual recipe resolution belongs to ResolveEntrypoint.
+func (c *RouterConfig) ResolveSystemOneDeployment(model string) (string, ModelDeployment, error) {
+	var name string
+	var deployment ModelDeployment
+	if model == "" {
+		return "", deployment, fmt.Errorf("a public System One model is required")
+	}
+	for key, candidate := range c.ModelDeployments {
+		if candidate.PublicModelName() != model {
+			continue
+		}
+		if name != "" {
+			return "", ModelDeployment{}, fmt.Errorf("public System One model %q names multiple deployments; assign distinct public_name values", model)
+		}
+		name, deployment = key, candidate
+	}
+	if name == "" {
+		return "", ModelDeployment{}, fmt.Errorf("public System One model %q is not declared", model)
+	}
+	if deployment.Provider != ModelRuntimeProvider {
+		return "", ModelDeployment{}, fmt.Errorf("public System One model %q requires a model_runtime deployment", model)
+	}
+	return name, deployment, nil
 }
 
 // validateListenerModels checks that every allowed model is a distinct name

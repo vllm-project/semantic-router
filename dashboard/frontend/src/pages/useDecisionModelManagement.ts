@@ -1,16 +1,20 @@
+import { engineModelInventory } from './decisionRuntimeInventory'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SystemStatus } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import type { CanonicalGlobalConfig } from './configPageSupport'
 import { responseErrorMessage } from './configPageRequestErrors'
 import {
-  decisionModelPatch,
   readDecisionModelApplyResult,
   type DecisionModelActivation,
   type DecisionModelApplyResult,
   type ModelRuntimeInventory,
 } from './decisionModelManagement'
-import { configuredDecisionModel, type DecisionModelName } from './decisionModelSupport'
+import {
+  configuredDecisionModel,
+  withDecisionModel,
+  type DecisionModelName,
+} from './decisionModelSupport'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import { withRequestTimeout } from '../utils/boundedRequest'
 import {
@@ -24,7 +28,7 @@ async function fetchSnapshot<T>(path: string, signal: AbortSignal): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function useDecisionModelManagement() {
+export function useDecisionModelManagement(engine = false) {
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [global, setGlobal] = useState<CanonicalGlobalConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -107,11 +111,11 @@ export function useDecisionModelManagement() {
       ...(readConfiguration ? [readSavedConfiguration()] : []),
       observe<SystemStatus>('/api/status', 'Service status', setStatus),
       observe<ModelRuntimeInventory>(
-        '/api/router/api/v1/inventory/model-runtime',
+        engine ? '/api/instance/models' : '/api/router/api/v1/inventory/model-runtime',
         'Runtime deployments',
-        setInventory,
+        (value) => setInventory(value && engine ? engineModelInventory(value) : value),
       ),
-      readActivation(),
+      ...(engine ? [] : [readActivation()]),
     ]).finally(() => {
       window.clearTimeout(timeout)
       mounted.signal.removeEventListener('abort', cancel)
@@ -120,7 +124,7 @@ export function useDecisionModelManagement() {
     setUpdatedAt(new Date())
     setLoading(false)
     setRefreshing(false)
-  }, [])
+  }, [engine])
   const request = useMemo(() => createVisibilityAwareRequest(refreshSnapshot), [refreshSnapshot])
 
   useEffect(() => {
@@ -160,15 +164,21 @@ export function useDecisionModelManagement() {
     // of the post-write refresh with an older saved configuration.
     await request.run({ allowHidden: true })
     try {
-      const response = await fetch('/api/router/config/global/update', {
+      const current = await withRequestTimeout((signal) =>
+        fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
+      )
+      const next = withDecisionModel(current, selectedModel)
+      const response = await fetch('/api/router/config/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(decisionModelPatch(selectedModel)),
+        body: JSON.stringify(next),
       })
       setApplyResult(await readDecisionModelApplyResult(response))
       window.dispatchEvent(new Event('config-deployed'))
+      return next
     } catch (cause) {
       setApplyError(cause instanceof Error ? cause.message : 'The deployment request failed.')
+      throw cause
     } finally {
       mutationInProgress.current = false
       configurationNeeded.current = true
@@ -207,6 +217,32 @@ export function useDecisionModelManagement() {
     }
   }
 
+  const updateConfig = async (mutate: (current: RouterConfig) => RouterConfig) => {
+    if (mutationInProgress.current) throw new Error('Another configuration request is in progress.')
+    mutationInProgress.current = true
+    setDeploying(true)
+    try {
+      await request.run({ allowHidden: true })
+      const current = await withRequestTimeout((signal) =>
+        fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
+      )
+      const response = await fetch('/api/router/config/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mutate(current)),
+      })
+      const result = await readDecisionModelApplyResult(response)
+      setApplyResult(result)
+      window.dispatchEvent(new Event('config-deployed'))
+      return result
+    } finally {
+      mutationInProgress.current = false
+      configurationNeeded.current = true
+      await request.run({ allowHidden: true })
+      setDeploying(false)
+    }
+  }
+
   return {
     config,
     global,
@@ -225,6 +261,7 @@ export function useDecisionModelManagement() {
     updatedAt,
     deploy,
     deployRuntime,
+    updateConfig,
     refresh: () => {
       configurationNeeded.current = true
       return request.run({ allowHidden: true })

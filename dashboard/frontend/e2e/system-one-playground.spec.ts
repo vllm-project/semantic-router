@@ -6,26 +6,26 @@ const types = ['choice', 'score', 'noul', 'span', 'set']
 const response = {
   model: 'vela-test',
   answers: {
-    choice_1: {
+    task: {
       type: 'choice',
       choice: 'code',
       probabilities: { code: 0.93, writing: 0.05, other: 0.02 },
       confidence: 0.93,
     },
-    score_1: { type: 'score', score: 1.64, probabilities: { '0': 0.06, '1': 0.24, '2': 0.7 } },
-    noul_1: { type: 'noul', noul: 0.88 },
-    span_4: { type: 'span' },
-    set_5: { type: 'set' },
+    difficulty: { type: 'score', score: 1.64, probabilities: { '0': 0.06, '1': 0.24, '2': 0.7 } },
+    needs_reasoning: { type: 'noul', noul: 0.88 },
+    entities: { type: 'span' },
+    needs: { type: 'set' },
   },
-  spans: { span_4: [{ label: 'person', start: 5, end: 14, text: 'Maya Chen', probability: 0.96 }] },
+  spans: { entities: [{ label: 'person', start: 5, end: 14, text: 'Maya Chen', probability: 0.96 }] },
   sets: {
-    set_5: {
+    needs: {
       selected: ['coding', 'reasoning'],
       probabilities: { coding: 0.94, reasoning: 0.91, creative: 0.09 },
     },
   },
-  thresholds: { set_5: 0.5, span_4: 0.5 },
-  span_heads: { span_4: 'router' },
+  thresholds: { needs: 0.5, entities: 0.5 },
+  span_heads: { entities: 'router' },
   usage: { input_tokens: 84, output_tokens: 17 },
   meta: { compute_ms: 24.2, profile: 'exact', engine: 'native', device: 'cpu' },
 }
@@ -72,6 +72,10 @@ async function mockPlayground(
       }),
     }),
   )
+  await page.route('**/api/decision-model/tasks', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ tasks: [], deployments: [], bindings: [] }),
+  }))
   const requests: Record<string, unknown>[] = []
   await page.route('**/api/decision-model/test', (route) => {
     requests.push(route.request().postDataJSON())
@@ -107,8 +111,8 @@ test('runs a native request and presents real probabilities with API details col
   await expect(page.getByText('Build / System One', { exact: true })).toBeVisible()
   await expect(page.getByText(/^(Router|Engine) mode$/)).toHaveCount(0)
   await expect(page.getByText('From context to a decision')).toBeVisible()
-  await page.getByRole('button', { name: 'Run test', exact: true }).click()
-  const result = page.getByRole('article', { name: 'Result for choice_1' })
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  const result = page.getByRole('article', { name: 'Result for task' })
   await expect(result.getByRole('meter', { name: 'code' })).toHaveAttribute('aria-valuenow', '93')
   await expect(result).toContainText('93.0% confidence')
   expect(requests).toHaveLength(1)
@@ -117,7 +121,7 @@ test('runs a native request and presents real probabilities with API details col
     request: {
       options: { return_meta: true },
       questions: {
-        choice_1: {
+        task: {
           type: 'choice',
           choices: [
             { key: 'code', description: 'Programming or debugging' },
@@ -172,10 +176,12 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
     .getByRole('textbox', { name: 'Input context', exact: true })
     .fill('Hi 👋 Maya Chen! Write and explain a Python sorting algorithm.')
   await page.getByRole('button', { name: 'Run 5 questions', exact: true }).click()
-  await expect(page.getByRole('article', { name: 'Result for score_1' })).toContainText('1.64')
-  await expect(page.getByRole('article', { name: 'Result for noul_1' })).toContainText('88.0%')
-  await expect(page.getByRole('article', { name: 'Result for set_5' })).toContainText('✓ reasoning')
-  const spans = page.getByRole('article', { name: 'Result for span_4' })
+  await expect(page.getByRole('article', { name: 'Result for difficulty' })).toContainText('1.64')
+  await expect(page.getByRole('article', { name: 'Result for needs_reasoning' })).toContainText(
+    '88.0%',
+  )
+  await expect(page.getByRole('article', { name: 'Result for needs' })).toContainText('✓ reasoning')
+  const spans = page.getByRole('article', { name: 'Result for entities' })
   await expect(spans.getByLabel('Highlighted spans').locator('mark')).toContainText('Maya Chen')
   await expect(spans.getByRole('cell', { name: '5–14', exact: true })).toBeVisible()
   await expect(page.getByRole('article')).toHaveCount(5)
@@ -225,7 +231,7 @@ test('uses discovered question support and runtime readiness to gate inference',
   ).toBeDisabled()
   expect(requests).toHaveLength(0)
   await mockPlayground(page, { unready: true })
-  await expect(page.getByRole('button', { name: 'Run test', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
   await expect(page.getByText('The runtime is still loading.')).toBeVisible()
 })
 
@@ -234,7 +240,7 @@ test('allows a configuration reader to author and inspect without running infere
 }) => {
   const requests = await mockPlayground(page, { reader: true })
   await page.getByLabel('Question name', { exact: true }).fill('my_question')
-  await expect(page.getByRole('button', { name: 'Run test', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
   await expect(
     page.getByText('Your account needs evaluation.run permission to send a test.'),
   ).toBeVisible()
@@ -253,7 +259,7 @@ test('shows partial question failures and native service errors without inventin
       body: JSON.stringify({
         ...response,
         answers: {
-          choice_1: {
+          task: {
             type: 'choice',
             error: 'invalid_question',
             message: 'This question exceeds the model option limit.',
@@ -262,7 +268,7 @@ test('shows partial question failures and native service errors without inventin
       }),
     }),
   )
-  await page.getByRole('button', { name: 'Run test', exact: true }).click()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
   await expect(page.getByRole('alert')).toContainText(
     'This question exceeds the model option limit.',
   )
@@ -276,10 +282,10 @@ test('shows partial question failures and native service errors without inventin
       }),
     }),
   )
-  await page.getByRole('button', { name: 'Run test', exact: true }).click()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
   await expect(page.getByRole('alert')).toContainText('The model runtime is unavailable.')
   await expect(page.getByRole('article')).toHaveCount(0)
-  await expect(page.getByLabel('Question name', { exact: true })).toHaveValue('choice_1')
+  await expect(page.getByLabel('Question name', { exact: true })).toHaveValue('task')
 })
 
 test('cancels the browser wait and discards a late response', async ({ page }) => {
@@ -294,14 +300,14 @@ test('cancels the browser wait and discards a late response', async ({ page }) =
       .fulfill({ contentType: 'application/json', body: JSON.stringify(response) })
       .catch(() => {})
   })
-  await page.getByRole('button', { name: 'Run test', exact: true }).click()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
   await expect(page.getByText('Your model is thinking')).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Input context', exact: true })).toBeDisabled()
   await page.getByRole('button', { name: 'Cancel request' }).click()
   await expect(page.getByRole('status')).toContainText('Stopped waiting for this request.')
   resolve?.()
   await expect(page.getByRole('article')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Run test', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeEnabled()
 })
 
 test('validates structured input and sends explicit span state fields unchanged', async ({
@@ -310,7 +316,7 @@ test('validates structured input and sends explicit span state fields unchanged'
   const requests = await mockPlayground(page)
   await page.getByRole('button', { name: 'Structured', exact: true }).click()
   await page.getByRole('textbox', { name: 'Input context', exact: true }).fill('{')
-  await expect(page.getByRole('button', { name: 'Run test', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
   await expect(page.getByText('The structured state is not valid JSON.')).toBeVisible()
   await page
     .getByRole('textbox', { name: 'Input context', exact: true })
@@ -318,12 +324,12 @@ test('validates structured input and sends explicit span state fields unchanged'
   await page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }).click()
   await page.getByText('Question settings', { exact: true }).click()
   await page.getByLabel('State field', { exact: false }).fill('answer')
-  await page.getByRole('button', { name: 'Run test', exact: true }).click()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
   await expect(page.getByText('Response received')).toBeVisible()
   expect(requests[0]).toMatchObject({
     request: {
       state: { request: 'Who is this?', answer: 'Maya' },
-      questions: { choice_1: { type: 'span', over: 'answer' } },
+      questions: { task: { type: 'span', over: 'answer' } },
     },
   })
 })
@@ -343,7 +349,7 @@ test('refreshes failed discovery instead of accepting stale runtime capabilities
   )
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Cannot discover model capabilities.')
-  await expect(page.getByRole('button', { name: 'Run test', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
 })
 
 test('supports select keyboard navigation, escape, tab, and outside dismissal without changing drafts', async ({
@@ -414,13 +420,13 @@ test('loads the language span example and sends its labels unchanged', async ({ 
   await expect(page.getByRole('textbox', { name: 'label 3 description', exact: true })).toHaveValue(
     'The programming language',
   )
-  await page.getByRole('button', { name: 'Run test', exact: true }).click()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
   await expect(page.getByText('Response received')).toBeVisible()
   expect(requests[0]).toMatchObject({
     request: {
       state: expect.stringContaining('Python'),
       questions: {
-        span_1: {
+        entities: {
           type: 'span',
           labels: expect.arrayContaining([
             { key: 'language', description: 'The programming language' },

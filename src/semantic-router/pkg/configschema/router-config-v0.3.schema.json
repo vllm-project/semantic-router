@@ -743,6 +743,14 @@
                 "overflow": "reject"
               },
               "profile": "exact"
+            },
+            "primary": {
+              "artifact": "vllm-sr/Vela-2.0-0.3B",
+              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {},
+              "profile": "max_speed"
             }
           }
         },
@@ -1094,16 +1102,7 @@
         "strategy": {
           "type": "string"
         },
-        "auto_model_name": {
-          "type": "string"
-        },
-        "auto_model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "include_config_models_in_list": {
+        "list_backend_models": {
           "type": "boolean"
         },
         "clear_route_cache": {
@@ -1387,7 +1386,7 @@
     "CanonicalSystemModels": {
       "properties": {
         "decision_model": {
-          "type": "string"
+          "$ref": "#/$defs/DecisionModelBinding"
         },
         "safety": {
           "type": "string"
@@ -2029,6 +2028,19 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "DecisionModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deployment"
+      ]
     },
     "DecisionPlugin": {
       "allOf": [
@@ -2835,12 +2847,6 @@
     },
     "FlowRuntimeConfig": {
       "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "state": {
           "$ref": "#/$defs/WorkflowStateRuntimeConfig"
         }
@@ -2951,18 +2957,6 @@
         },
         "max_completion_tokens": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "FusionRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3470,6 +3464,9 @@
           },
           "type": "array"
         },
+        "systemone": {
+          "$ref": "#/$defs/ListenerSystemOne"
+        },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
         },
@@ -3486,6 +3483,18 @@
           "type": "boolean"
         },
         "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerSystemOne": {
+      "properties": {
+        "models": {
           "items": {
             "type": "string"
           },
@@ -3559,12 +3568,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "remom": {
-          "$ref": "#/$defs/ReMoMRuntimeConfig"
-        },
-        "fusion": {
-          "$ref": "#/$defs/FusionRuntimeConfig"
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
@@ -4352,6 +4355,9 @@
           "type": "string"
         },
         "served_name": {
+          "type": "string"
+        },
+        "public_name": {
           "type": "string"
         }
       },
@@ -5512,18 +5518,6 @@
         },
         "max_responses_per_round": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ReMoMRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,

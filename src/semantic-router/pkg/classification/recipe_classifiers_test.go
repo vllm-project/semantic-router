@@ -14,9 +14,9 @@ func TestUnreachableDefaultDoesNotPrepareRoutingArtifacts(t *testing.T) {
 		ModelBindings: map[string]config.ModelBinding{"classifier.risk": {Deployment: "dormant", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution}},
 	}
 	cfg := &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: defaultProfile}, {Name: "active"}},
-		Entrypoints:   []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
+
+		Recipes:     []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: defaultProfile}, {Name: "active"}},
+		Entrypoints: []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
 	}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: config.ModelRuntimeProvider, Device: "cpu"}}
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
@@ -131,8 +131,8 @@ func TestBuildRecipeClassifiersKeepsUnreachableRecipeValidationButSkipsRuntimeLi
 
 func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
+
+		Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
 	}
 
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)

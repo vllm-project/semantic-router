@@ -542,3 +542,12 @@ ROUTE simple_general (description = "Simple or otherwise unmatched traffic uses 
   TIER 6
   MODEL "qwen/qwen3.6-rocm" (reasoning = false)
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}

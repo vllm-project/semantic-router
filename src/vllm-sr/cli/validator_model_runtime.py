@@ -10,6 +10,7 @@ from cli.validation_error import ValidationError
 from cli.validator_decision_model import (
     model_runtime_deployment_error,
     validate_decision_model_references,
+    validate_systemone_listener_models,
 )
 from cli.validator_pii_window import validate_pii_windows
 
@@ -27,6 +28,7 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
             )
         )
     deployments = effective_model_deployments(config)
+    errors.extend(validate_systemone_listener_models(config, deployments))
     external_names = {item.get("name") for item in catalog.get("external", [])}
     for name, deployment in deployments.items():
         message = _deployment_error(name, deployment, external_names)

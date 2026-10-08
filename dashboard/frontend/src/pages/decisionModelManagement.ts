@@ -1,8 +1,4 @@
-import { getRouterDecisionModelName } from '../components/routerModelPresentation'
-import type { RouterModelsInfo } from '../utils/routerRuntime'
 import { responseErrorMessage } from './configPageRequestErrors'
-import { getDecisionRuntimeSummary } from './dashboardRouterIntelligenceSupport'
-import type { DecisionModelName } from './decisionModelSupport'
 
 export interface ModelRuntimeDeployment {
   name: string
@@ -12,7 +8,7 @@ export interface ModelRuntimeDeployment {
   ready: boolean
   state: string
   reason?: string
-  restarts: number
+  restarts?: number
   family?: string
   repo?: string
   revision?: string
@@ -43,10 +39,6 @@ export interface DecisionModelApplyResult {
   message: string
 }
 
-export function decisionModelPatch(model: DecisionModelName) {
-  return { model_catalog: { system: { decision_model: model } } }
-}
-
 export async function readDecisionModelApplyResult(
   response: Response,
 ): Promise<DecisionModelApplyResult> {
@@ -73,39 +65,17 @@ export async function readDecisionModelApplyResult(
   )
 }
 
-export function decisionRuntimeModelName(deployment: ModelRuntimeDeployment): string | undefined {
-  return getRouterDecisionModelName({
-    name: deployment.name,
-    type: 'model_runtime',
-    loaded: deployment.ready,
-    metadata: { provider: 'model_runtime', deployment: deployment.name },
-  })
+export function decisionRuntimeModelName(deployment: ModelRuntimeDeployment): string {
+  return deployment.repo?.split('/').slice(-1)[0] || deployment.served_name || deployment.name
 }
 
 export function decisionModelRuntimeState(
-  model: DecisionModelName,
+  deployment: string,
   inventory: ModelRuntimeInventory | null,
-  consumers?: RouterModelsInfo | null,
 ): string {
-  if (model === 'Vela-1.0') return 'Specialist models'
-  if (inventory) {
-    const matching = inventory.deployments.filter(
-      (deployment) => decisionRuntimeModelName(deployment) === model,
-    )
-    if (!matching.length) return 'Not reported'
-    return matching.every((deployment) => deployment.ready && deployment.state === 'ready')
-      ? 'Matching runtime ready'
-      : 'Runtime needs attention'
-  }
-  const state = getDecisionRuntimeSummary(
-    { global: { model_catalog: { system: { decision_model: model } } } },
-    consumers,
-  ).state
-  return state === 'ready'
-    ? 'Matching runtime ready'
-    : state === 'attention'
-      ? 'Runtime needs attention'
-      : 'Not reported'
+  const observed = inventory?.deployments.find((entry) => entry.name === deployment)
+  if (!observed) return 'Not reported'
+  return observed.ready && observed.state === 'ready' ? 'Ready' : 'Needs attention'
 }
 
 export function decisionActivationLabel(activation: DecisionModelActivation | null): string {
@@ -114,12 +84,7 @@ export function decisionActivationLabel(activation: DecisionModelActivation | nu
     return 'Restart required'
   if (activation.activation?.status === 'failed' || activation.activation?.status === 'rejected')
     return 'Activation failed'
-  if (
-    activation.activation_status === 'active' &&
-    activation.generated_runtime_hash &&
-    activation.generated_runtime_hash === activation.active_runtime_hash
-  )
-    return 'Active'
+  if (activation.activation_status === 'active') return 'Active'
   if (activation.activation_status === 'pending' || activation.activation?.status === 'pending')
     return 'Activation pending'
   return activation.activation_status || activation.activation?.status || 'Not reported'

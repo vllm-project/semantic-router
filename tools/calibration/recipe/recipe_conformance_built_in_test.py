@@ -113,7 +113,6 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
 
     def test_global_overrides_are_limited_to_fixture_deployment_fields(self):
         authored = copy.deepcopy(self.authored)
-        authored["global"]["router"]["auto_model_names"] = ["MoM"]
         authored["global"].setdefault("services", {})["management_api"] = {
             "bind_address": "127.0.0.1",
             "auth": {"mode": "disabled"},
@@ -122,7 +121,6 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         composed = copy.deepcopy(self.config)
         composed["global"]["services"]["management_api"]["port"] = 9080
         runtime.verify_composed_policy(authored, composed)
-        self.assertEqual(authored["global"]["router"]["auto_model_names"], ["MoM"])
 
         # The fixture owns bind/auth, but cannot discard another authored field
         # merely because it shares the management_api parent mapping.

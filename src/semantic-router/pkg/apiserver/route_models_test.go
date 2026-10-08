@@ -112,7 +112,7 @@ func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
 			},
 		},
 		RouterOptions: config.RouterOptions{
-			IncludeConfigModelsInList: includeConfiguredModels,
+			ListBackendModels: includeConfiguredModels,
 		},
 	}
 }

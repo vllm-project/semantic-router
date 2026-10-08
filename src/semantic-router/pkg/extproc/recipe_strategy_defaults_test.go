@@ -41,7 +41,7 @@ entrypoints:
 	}
 	router := &OpenAIRouter{Config: cfg}
 	for _, example := range []struct{ model, winner string }{
-		{config.DefaultVSRAutoModelName, "high-confidence"},
+		{config.DefaultEntrypointModel, "high-confidence"},
 		{"public/independent", "high-priority"},
 	} {
 		ctx := &RequestContext{}

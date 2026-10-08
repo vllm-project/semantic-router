@@ -162,7 +162,6 @@ func TestBuildModelSpecsAccountsForDefaultAutoReachability(t *testing.T) {
 	}
 	assertExactModelSpecs(t, specs, []string{defaultModel})
 
-	cfg.AutoModelNames = []string{}
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() with auto aliases disabled error = %v", err)

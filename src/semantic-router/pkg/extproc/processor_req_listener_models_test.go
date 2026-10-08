@@ -11,9 +11,11 @@ import (
 
 func TestRestrictedListenerListsOnlyItsModels(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{"router/balanced"}},
-		Entrypoints:   []config.EntrypointMapping{{ModelNames: []string{"router/flash"}, Recipe: "speed-first"}},
-		Recipes:       []config.RoutingRecipe{{Name: "speed-first"}},
+		Entrypoints: []config.EntrypointMapping{
+			{ModelNames: []string{"router/balanced"}, Recipe: config.DefaultRecipeName},
+			{ModelNames: []string{"router/flash"}, Recipe: "speed-first"},
+		},
+		Recipes: []config.RoutingRecipe{{Name: "speed-first"}},
 	}}
 	response, err := router.handleModelsRequest("/v1/models", routing.ListenerModels{"router/flash", "not-in-the-catalog"})
 	if err != nil {

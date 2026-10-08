@@ -22,7 +22,7 @@ func TestDecisionModelApplyPreservesOverridesAndReportsRestart(t *testing.T) {
 global:
   model_catalog:
     system:
-      decision_model: Vela-2.0-0.3B
+      decision_model: {deployment: primary}
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
   router:
     strategy: priority
@@ -35,7 +35,7 @@ global:
 	propagateConfig = func(string, string) error {
 		return &restartNeededError{detail: "decision model deployment changed"}
 	}
-	patch := []byte(`{"model_catalog":{"system":{"decision_model":"Vela-2.0-0.8B"}}}`)
+	patch := []byte(`{"model_catalog":{"deployments":{"selected":{"provider":"model_runtime","artifact":"vllm-sr/Vela-2.0-0.8B","device":"auto"}},"system":{"decision_model":{"deployment":"selected"}}}}`)
 	response := httptest.NewRecorder()
 	UpdateRouterDefaultsHandler(path, false, root)(response,
 		httptest.NewRequest(http.MethodPost, "/api/router/config/global/update", bytes.NewReader(patch)))
@@ -56,7 +56,7 @@ global:
 	}
 	global := requireMapValue(t, document, "global")
 	system := requireMapValue(t, requireMapValue(t, global, "model_catalog"), "system")
-	if system["decision_model"] != "Vela-2.0-0.8B" || system["pii_classifier"] != "models/Vela-1.0-Encoder-307M-PII" || len(system) != 2 {
+	if requireMapValue(t, system, "decision_model")["deployment"] != "selected" || system["pii_classifier"] != "models/Vela-1.0-Encoder-307M-PII" || len(system) != 2 {
 		t.Fatalf("selection changed explicit or inherited bindings: %+v", system)
 	}
 	if requireMapValue(t, global, "router")["strategy"] != "priority" {

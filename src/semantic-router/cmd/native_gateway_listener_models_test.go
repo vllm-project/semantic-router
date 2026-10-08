@@ -61,7 +61,7 @@ providers:
       backend_refs: [{endpoint: BACKEND, protocol: http, provider: vllm}]
 global:
   router:
-    include_config_models_in_list: true
+    list_backend_models: true
     skip_processing:
       enabled: true
   stores:

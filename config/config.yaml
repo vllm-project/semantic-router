@@ -22,7 +22,10 @@ listeners:
       key_file: certs/tls.key
     # Standalone mode: accept only these request models (exact `model` values);
     # others get 403 model_not_allowed. Absent or empty accepts every model.
-    models: [exhaustive-reference]
+    models: [vllm-sr/exhaustive-default]
+    # Native System One inference has its own explicit public-model scope.
+    systemone:
+      models: [decision-public]
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -1902,12 +1905,7 @@ global:
   router:
     config_source: file
     strategy: priority
-    auto_model_name: exhaustive-reference
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - exhaustive-reference
-    include_config_models_in_list: true
+    list_backend_models: true
     clear_route_cache: true
     fallback:
       version: 1
@@ -2462,15 +2460,7 @@ global:
       timeout_seconds: 120
       headers:
         X-Trace-Source: looper
-      remom:
-        model_names:
-          - vllm-sr/remom
-      fusion:
-        model_names:
-          - vllm-sr/fusion
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -2491,6 +2481,12 @@ global:
     bindings: {}
     # Named physical deployments and their shared admission budgets.
     deployments:
+      primary:
+        provider: model_runtime
+        public_name: decision-public
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+        profile: exact
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
       # engine started elsewhere with `vllm-sr serve <hf-model>`.
@@ -2551,18 +2547,12 @@ global:
           max_retries: 2
           max_response_bytes: 16777216
           dimensions: 1024
-    # The decision model answers every built-in signal it covers, and every
-    # routing.signals.decision question that names no deployment, in one call
-    # per request: Vela-2.0-0.3B (the default), Vela-2.0-0.8B, Vela-2.0-4B or
-    # Vela-2.0-9B (the 4B and 9B need a GPU), or Vela-1.0 for the Vela 1.0
-    # specialists. Each module takes the thresholds of the model it runs where
-    # it sets none. Hazard keeps its Vela 1.0 model. A line per module binds
-    # one signal to another model, for example:
-    #   prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-    #   safety, domain_classifier, pii_classifier, fact_check_classifier,
-    #   hallucination_detector and feedback_detector likewise.
+    # Default judgment tasks resolve this exact deployment. Task bindings may
+    # select another resource. Model capabilities, rather than family names,
+    # determine which tasks are available. Omission selects primary (Vela 0.3B).
     system:
-      decision_model: Vela-2.0-0.3B
+      decision_model:
+        deployment: primary
       hazard: models/Vela-1.0-Encoder-307M-Hazard
     # admission bounds concurrent inference per system model deployment.
     # Keys must match global.model_catalog.system entries (prompt_guard,

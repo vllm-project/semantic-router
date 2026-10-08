@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   decisionActivationLabel,
-  decisionModelPatch,
   decisionModelRuntimeState,
   readDecisionModelApplyResult,
   type ModelRuntimeDeployment,
 } from './decisionModelManagement'
 
 const deployment: ModelRuntimeDeployment = {
-  name: '@Vela-2.0-4B/auto',
+  name: 'primary',
   managed: true,
   process: 'model-runtime-1',
   served_name: 'vela',
@@ -18,12 +17,6 @@ const deployment: ModelRuntimeDeployment = {
 }
 
 describe('decision model deployment management', () => {
-  it('updates only the selected model, without rewriting explicit signal overrides', () => {
-    expect(decisionModelPatch('Vela-2.0-9B')).toEqual({
-      model_catalog: { system: { decision_model: 'Vela-2.0-9B' } },
-    })
-  })
-
   it.each(['restart_required', 'persisted'] as const)(
     'keeps a 202 %s result distinct from an applied configuration',
     async (status) => {
@@ -51,22 +44,18 @@ describe('decision model deployment management', () => {
     ).rejects.toThrow('GPU unavailable')
   })
 
-  it('uses live deployment identities and does not hide a failed deployment', () => {
-    expect(decisionModelRuntimeState('Vela-2.0-4B', { deployments: [deployment] })).toBe(
-      'Matching runtime ready',
-    )
-    expect(decisionModelRuntimeState('Vela-2.0-9B', { deployments: [deployment] })).toBe(
-      'Not reported',
-    )
+  it('uses the exact live resource, even when another deployment has the same artifact', () => {
+    expect(decisionModelRuntimeState('primary', { deployments: [deployment] })).toBe('Ready')
+    expect(decisionModelRuntimeState('another', { deployments: [deployment] })).toBe('Not reported')
     expect(
-      decisionModelRuntimeState('Vela-2.0-4B', {
+      decisionModelRuntimeState('primary', {
         deployments: [
-          deployment,
-          { ...deployment, name: '@Vela-2.0-4B/cpu', ready: false, state: 'failed' },
+          { ...deployment, ready: false, state: 'failed' },
+          { ...deployment, name: 'another' },
         ],
       }),
-    ).toBe('Runtime needs attention')
-    expect(decisionModelRuntimeState('Vela-1.0', { deployments: [] })).toBe('Specialist models')
+    ).toBe('Needs attention')
+    expect(decisionModelRuntimeState('primary', null)).toBe('Not reported')
   })
 
   it('distinguishes pending, rejected, restart-required and observed active configuration', () => {
@@ -76,7 +65,7 @@ describe('decision model deployment management', () => {
       decisionActivationLabel({
         activation_status: 'active',
         generated_runtime_hash: 'a',
-        active_runtime_hash: 'a',
+        active_runtime_hash: 'different-observation',
       }),
     ).toBe('Active')
     expect(

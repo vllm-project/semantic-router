@@ -25,7 +25,6 @@ const runtimeLabels = {
   ready: 'Shared runtime ready',
   attention: 'Runtime needs attention',
   unreported: 'Runtime not reported',
-  specialists: 'Specialist models',
 }
 
 export default function DashboardRouterIntelligence({
@@ -53,11 +52,7 @@ export default function DashboardRouterIntelligence({
           <div>
             <span className={styles.eyebrow}>Configured decision model</span>
             <h3>{runtime.model}</h3>
-            <p>
-              {runtime.model === 'Vela-1.0'
-                ? 'Specialist models answer built-in signals. Custom questions need their own deployment.'
-                : 'Default model for learned signals, custom questions and decision selectors.'}
-            </p>
+            <p>Default model for learned signals, custom questions and decision selectors.</p>
           </div>
           <div className={styles.runtime}>
             <span className={runtime.state === 'ready' ? styles.ready : styles.pending}>

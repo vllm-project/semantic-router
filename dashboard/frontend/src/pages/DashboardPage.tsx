@@ -25,11 +25,13 @@ import {
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
 import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { useInstanceDeployment } from './useInstanceDeployment'
 import { describeServingMode } from './dashboardServingMode'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
+  const instance = useInstanceDeployment()
 
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -110,7 +112,11 @@ const DashboardPage: React.FC = () => {
   )
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
-  const servingMode = describeServingMode(status?.serving_mode)
+  const servingMode = describeServingMode(
+    instance.status?.observed_mode === 'unknown'
+      ? status?.serving_mode
+      : (instance.status?.observed_mode ?? status?.serving_mode),
+  )
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),

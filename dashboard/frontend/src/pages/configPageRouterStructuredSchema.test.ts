@@ -67,7 +67,7 @@ describe('router defaults structured schemas', () => {
 
   it('normalizes typed lists and objects while preserving advanced keys', () => {
     const normalized = normalizeRouterStructuredFields('router_core', {
-      auto_model_names: [' vllm-sr/auto ', 'MoM'],
+      list_backend_models: true,
       streamed_body: {
         enabled: true,
         max_bytes: 1024,
@@ -77,7 +77,7 @@ describe('router defaults structured schemas', () => {
       skip_processing: { enabled: true },
     })
 
-    expect(normalized.auto_model_names).toEqual(['vllm-sr/auto', 'MoM'])
+    expect(normalized.list_backend_models).toBe(true)
     expect(normalized.streamed_body).toEqual({
       enabled: true,
       max_bytes: 1024,
@@ -87,7 +87,7 @@ describe('router defaults structured schemas', () => {
     expect(normalized.skip_processing).toEqual({ enabled: true })
   })
 
-  it('preserves omitted auto aliases instead of turning them into an explicit empty list', () => {
+  it('does not reintroduce removed automatic model fields', () => {
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: { router_core: { strategy: 'priority' } },
@@ -210,11 +210,13 @@ describe('router defaults structured schemas', () => {
   })
 
   it('rejects duplicate list values and invalid typed numbers', () => {
-    const aliases = ROUTER_STRUCTURED_FIELDS.router_core?.auto_model_names.schema
+    const aliases = ROUTER_STRUCTURED_FIELDS.prompt_compression?.skip_signals.schema
     const streamedBody = ROUTER_STRUCTURED_FIELDS.router_core?.streamed_body.schema
     expect(aliases).toBeDefined()
     expect(streamedBody).toBeDefined()
-    expect(() => normalizeRouterStructuredValue(aliases!, ['auto', 'AUTO'])).toThrow(/unique/i)
+    expect(() => normalizeRouterStructuredValue(aliases!, ['jailbreak', 'jailbreak'])).toThrow(
+      /unique/i,
+    )
     expect(() =>
       normalizeRouterStructuredValue(streamedBody!, { enabled: true, max_bytes: 0 }),
     ).toThrow(/at least 1/i)
@@ -250,8 +252,8 @@ describe('router defaults structured schemas', () => {
     })
 
     const routerCore = cards.find((card) => card.key === 'router_core')
-    expect(routerCore?.editFields.find((field) => field.name === 'auto_model_names')?.type).toBe(
-      'custom',
+    expect(routerCore?.editFields.find((field) => field.name === 'list_backend_models')?.type).toBe(
+      'boolean',
     )
     const selectionCard = cards.find((card) => card.key === 'model_selection')
     expect(

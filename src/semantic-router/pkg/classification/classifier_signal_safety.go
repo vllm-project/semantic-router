@@ -43,6 +43,19 @@ func (b *classifierOptionBuilder) buildSafetyClassifiersOption() (option, error)
 		}
 	}
 	prepare := func(consumer, model string, labels []string, multiLabel bool) (labelClassifier, string, error) {
+		window := b.cfg.SafetyModels.Safety.Window
+		if multiLabel {
+			window = b.cfg.SafetyModels.Hazard.Window
+		}
+		if model == "" && window == nil {
+			judgment, err := prepareDecisionSafety(runtime, consumer, labels, multiLabel)
+			if err != nil {
+				return nil, "", err
+			}
+			if judgment != nil {
+				return judgment, consumer, nil
+			}
+		}
 		spec, window, err := b.safetySpec(runtime, consumer, model, multiLabel)
 		if err != nil {
 			return nil, "", err

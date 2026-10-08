@@ -179,7 +179,11 @@ func (r *OpenAIRouter) runLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*looper.Response, *ext_proc.ProcessingResponse) {
-	program, err := looper.Template(&r.Config.Looper, decision.Algorithm.Type, r.WorkflowStateService)
+	runtimeConfig := r.Config.Looper
+	for _, entrypoint := range r.Config.EffectiveEntrypoints(config.ChatAPI) {
+		runtimeConfig.EntrypointModels = append(runtimeConfig.EntrypointModels, entrypoint.ModelNames...)
+	}
+	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, r.WorkflowStateService)
 	if err != nil {
 		return nil, r.looperConstructionFailed(decision, reqCtx, err)
 	}

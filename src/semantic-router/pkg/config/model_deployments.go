@@ -28,6 +28,21 @@ type ModelDeployment struct {
 	// ServedName selects the model on an attached runtime that serves several
 	// (default: the deployment name).
 	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
+	// PublicName is the inference API identity. It never identifies a socket,
+	// local package path, or internal deployment key.
+	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
+}
+
+// PublicModelName returns a safe public identity, independently of the name
+// used by an attached upstream runtime. Local artifacts require public_name.
+func (d ModelDeployment) PublicModelName() string {
+	if name := strings.TrimSpace(d.PublicName); name != "" {
+		return name
+	}
+	if !strings.HasPrefix(d.Artifact, "models/") && !strings.HasPrefix(d.Artifact, "./") && !strings.HasPrefix(d.Artifact, "../") && hubRepositoryID.MatchString(d.Artifact) {
+		return d.Artifact
+	}
+	return ""
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
@@ -51,6 +66,11 @@ type ModelBinding struct {
 	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
 	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
 }
+
+// DecisionTaskContract binds a semantic judgment without requiring token
+// positions or a classifier head. Its concrete typed question comes from the
+// consumer's task definition.
+const DecisionTaskContract = "decision.v1"
 
 // ResolvedModelBinding is immutable preparation input, containing no engine
 // handles or secrets. The runtime attaches the corresponding typed task handle
@@ -115,6 +135,9 @@ func (d ModelDeployment) ValidateDecisionInput(name string) error {
 }
 
 func (d ModelDeployment) validate(cfg *RouterConfig) error {
+	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
+		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
+	}
 	switch d.Provider {
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
@@ -206,6 +229,13 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
+	if decl.Contract == DecisionTaskContract {
+		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
+		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
+			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
+		}
+		return nil
+	}
 	want := ""
 	if decl.OperatingPoint != nil {
 		if !strings.HasPrefix(name, "classifier.") {

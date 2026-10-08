@@ -20,11 +20,7 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
-import {
-  configuredDecisionModel,
-  DECISION_MODEL_HINT,
-  DECISION_MODELS,
-} from './decisionModelSupport'
+import { configuredDecisionModel } from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -251,12 +247,9 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       return [
         { label: 'Config source', value: stringOrFallback(section?.config_source, 'file') },
         { label: 'Default strategy', value: stringOrFallback(section?.strategy, 'priority') },
-        { label: 'Auto model name', value: stringOrFallback(section?.auto_model_name) },
         {
-          label: 'Auto model aliases',
-          value: Array.isArray(section?.auto_model_names)
-            ? section.auto_model_names.join(', ')
-            : 'Not set',
+          label: 'List backend models',
+          value: section?.list_backend_models ? 'Enabled' : 'Disabled',
         },
       ]
     case 'learning':
@@ -432,8 +425,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       const decisionModel = configuredDecisionModel({
         global: { model_catalog: { system: section } },
       })
-      const inheritedBinding =
-        decisionModel === 'Vela-1.0' ? 'Vela 1.0 specialist' : `Follows ${decisionModel}`
+      const inheritedBinding = `Follows ${decisionModel}`
       return [
         {
           label: 'Decision Model',
@@ -600,15 +592,8 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           description: 'Used when a recipe omits strategy. Priority is the built-in default.',
         },
         {
-          name: 'auto_model_name',
-          label: 'Auto Model Name',
-          type: 'text',
-          placeholder: 'vllm-sr/auto',
-        },
-        routerStructuredField(key, 'auto_model_names'),
-        {
-          name: 'include_config_models_in_list',
-          label: 'Include Config Models In List',
+          name: 'list_backend_models',
+          label: 'List Backend Models',
           type: 'boolean',
         },
         routerStructuredField(key, 'streamed_body'),
@@ -837,13 +822,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
       return [routerStructuredField(key, 'items')]
     case 'system_models':
       return [
-        {
-          name: 'decision_model',
-          label: 'Decision Model',
-          type: 'select',
-          options: [...DECISION_MODELS],
-          description: `Answers the built-in signals and every decision question or decision selector that names no deployment. ${DECISION_MODEL_HINT}. A binding below keeps its signal on another model.`,
-        },
+        routerStructuredField(key, 'decision_model'),
         {
           name: 'prompt_guard',
           label: 'Prompt Guard Binding',
@@ -1064,12 +1043,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       ...(router || {}),
       config_source: router?.config_source,
       strategy: router?.strategy,
-      auto_model_name: router?.auto_model_name,
-      auto_model_names: Array.isArray(router?.auto_model_names) ? router.auto_model_names : [],
-      auto_model_names_configured: Boolean(
-        router && Object.prototype.hasOwnProperty.call(router, 'auto_model_names'),
-      ),
-      include_config_models_in_list: router?.include_config_models_in_list,
+      list_backend_models: router?.list_backend_models,
       streamed_body: asObject(router?.streamed_body) || {},
     }
   }
@@ -1117,9 +1091,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'system_models') {
     return {
       ...objectData,
-      decision_model: configuredDecisionModel({
-        global: { model_catalog: { system: objectData } },
-      }),
+      decision_model: asObject(objectData?.decision_model) || { deployment: 'primary' },
     }
   }
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
@@ -1152,20 +1124,12 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     ) as Partial<ConfigData>
   }
   if (key === 'router_core') {
-    const autoModelNames = Array.isArray(data.auto_model_names) ? data.auto_model_names : []
     const routerCore: Record<string, unknown> = {
       ...data,
       config_source: data.config_source,
       strategy: data.strategy,
-      auto_model_name: data.auto_model_name,
-      include_config_models_in_list: Boolean(data.include_config_models_in_list),
+      list_backend_models: Boolean(data.list_backend_models),
       streamed_body: asObject(data.streamed_body) || {},
-    }
-    delete routerCore.auto_model_names_configured
-    if (data.auto_model_names_configured === true || autoModelNames.length > 0) {
-      routerCore.auto_model_names = autoModelNames
-    } else {
-      delete routerCore.auto_model_names
     }
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, routerCore) as Partial<ConfigData>
   }

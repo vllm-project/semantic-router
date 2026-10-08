@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 type ReaskMatch struct {
@@ -20,6 +21,7 @@ type ReaskClassifier struct {
 	rules     []config.ReaskRule
 	modelType string
 	provider  embedding.Provider
+	judgment  *decisionJudgment
 }
 
 func NewReaskClassifierWithProvider(rules []config.ReaskRule, modelType string, provider embedding.Provider) (*ReaskClassifier, error) {
@@ -37,17 +39,26 @@ func NewReaskClassifierWithProvider(rules []config.ReaskRule, modelType string, 
 }
 
 func (c *ReaskClassifier) Classify(currentUserTurn string, priorUserTurns []string) ([]ReaskMatch, error) {
+	return c.ClassifyContext(context.Background(), currentUserTurn, priorUserTurns)
+}
+
+func (c *ReaskClassifier) ClassifyContext(ctx context.Context, currentUserTurn string, priorUserTurns []string) ([]ReaskMatch, error) {
 	currentUserTurn = strings.TrimSpace(currentUserTurn)
 	if currentUserTurn == "" || len(c.rules) == 0 || len(priorUserTurns) == 0 {
 		return nil, nil
 	}
 
-	currentEmbedding, err := c.embedText(currentUserTurn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute current user turn embedding: %w", err)
+	var similarities []float64
+	var err error
+	if c.judgment != nil {
+		similarities, err = c.semanticSimilarities(ctx, currentUserTurn, priorUserTurns)
+	} else {
+		var currentEmbedding []float32
+		currentEmbedding, err = c.embedText(currentUserTurn)
+		if err == nil {
+			similarities, err = c.computeSimilarities(currentEmbedding, priorUserTurns, minimumReaskThreshold(c.rules))
+		}
 	}
-
-	similarities, err := c.computeSimilarities(currentEmbedding, priorUserTurns, minimumReaskThreshold(c.rules))
 	if err != nil {
 		return nil, err
 	}
@@ -156,4 +167,36 @@ func retainMaxLookbackReaskMatches(matches []ReaskMatch) []ReaskMatch {
 		}
 	}
 	return filtered
+}
+
+// semanticSimilarities asks each pair about repeated intent. The code below
+// still owns ordering and consecutive counting; no model invents a counter.
+func (c *ReaskClassifier) semanticSimilarities(ctx context.Context, current string, prior []string) ([]float64, error) {
+	turns := make([]string, 0, len(prior))
+	for i := len(prior) - 1; i >= 0; i-- {
+		if text := strings.TrimSpace(prior[i]); text != "" {
+			turns = append(turns, text)
+		}
+	}
+	unique, positions := []string{}, map[string]int{}
+	for _, turn := range turns {
+		if _, seen := positions[turn]; !seen {
+			positions[turn] = len(unique)
+			unique = append(unique, turn)
+		}
+	}
+	judgments, failures := make([]float64, len(unique)), make([]error, len(unique))
+	modelservice.Fan(ctx, len(unique), func(i int) {
+		answer, err := c.judgment.ask(ctx, modelservice.Request{Parts: map[string]string{"current": current, "prior": unique[i]}})
+		judgments[i], failures[i] = answer.Noul, err
+	})
+	scores := make([]float64, len(turns))
+	for i, turn := range turns {
+		index := positions[turn]
+		if failures[index] != nil {
+			return nil, fmt.Errorf("reask pair %d is unknown: %w", i, failures[index])
+		}
+		scores[i] = judgments[index]
+	}
+	return scores, nil
 }

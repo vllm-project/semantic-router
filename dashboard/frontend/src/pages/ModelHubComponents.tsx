@@ -121,7 +121,7 @@ export const HubPagination: React.FC<{
     <label className={styles.pageSize}>
       <span>Per page</span>
       <select value={pagination.pageSize} onChange={(event) => setPageSize(+event.target.value)}>
-        {[10, 20, 50].map((size) => (
+        {[3, 6].map((size) => (
           <option value={size} key={size}>
             {size}
           </option>

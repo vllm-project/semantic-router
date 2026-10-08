@@ -42,9 +42,19 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 		modelVerificationAuditor: options.modelVerificationAuditor,
 	})
 	registerToolRoutes(mux, cfg)
+	for _, operation := range []string{"compile", "validate", "parse", "decompile", "format"} {
+		registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/dsl/"+operation, auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.DSLEditorHandler(operation))
+	}
 	registerStatusRoutes(mux, cfg, options.statusHandler, stackState(cfg, setupResolver), store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler(cfg.ReadonlyMode))
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler(cfg.ReadonlyMode))
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/instance/deploy", auth.PermConfigDeploy, "instance.deploy", auth.SensitivityOperational, auth.ResourceOwnerConfig, 16<<10, http.MethodPost), handlers.InstanceHandler(cfg.ReadonlyMode || !cfg.RuntimeConfigWritable))
+	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
+		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.AbsConfigPath))
+	}
+	registerRouteFunc(mux, auth.PublicRoute("/v1/systemone/models", http.MethodGet), handlers.PublicSystemOneHandler(cfg.AbsConfigPath))
 }
 
 func registerRecipeRoutes(mux routeRegistrar, cfg *config.Config, stores ...*recipe.Store) {
@@ -129,6 +139,7 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
 	decisionModel := handlers.DecisionModelHandler(cfg.RouterAPIURL, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/tasks", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.DecisionTaskCatalogHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/capabilities", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), decisionModel)
 	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/decision-model/test", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), decisionModel)
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/models/catalog", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))

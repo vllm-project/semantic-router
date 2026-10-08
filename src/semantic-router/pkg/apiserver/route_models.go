@@ -10,8 +10,8 @@ import (
 )
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
-// It returns the configured auto model name and optionally the underlying models from config.
-// Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
+// It returns effective entrypoints and optionally concrete backend models.
+// Whether to include configured models is controlled by the config's ListBackendModels setting (default: false)
 func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *http.Request) {
 	resp := publicmodels.NewOpenAIModelList(s.currentConfig(), time.Now().Unix())
 	s.writeJSONResponse(w, http.StatusOK, resp)

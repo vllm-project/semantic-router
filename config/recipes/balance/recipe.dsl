@@ -756,3 +756,12 @@ ROUTE casual_chat (description = "Absolute final fallback that guarantees a rout
     max_body_bytes: 4096
   }
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}

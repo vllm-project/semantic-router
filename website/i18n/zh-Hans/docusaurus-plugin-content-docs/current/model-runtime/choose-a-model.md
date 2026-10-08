@@ -152,27 +152,34 @@ global:
 配置自己设置的规则阈值保持不变。内置配方的规则按 0.3B 校准，因此改回 Vela 1.0 的信号要连同它的 Vela 1.0
 规则阈值一起改回。在 `mom-v1` 中，它们是 prompt guard 0.5、safety 0.5 和 PII 0.7；记录列出了每个配方的值。
 
-`decision_model: Vela-1.0`（见下文）一行即可恢复全部专用模型。
+专用模型通过明确的任务绑定选择；切换默认决策模型会保留这些覆盖。
 
 ## 选择规模 {#choose-a-size}
 
-决策模型是回答 Router 自身问题的 Vela 模型：上面的每个内置信号，以及每个未指定 `deployment` 的
-[`decision` 问题](tutorials/signal/learned/decision.md)，每个请求一次调用。一个参数或一行配置即可选择：
+默认决策绑定引用一个已声明的 deployment，用于 Router 判断任务及未指定覆盖的
+[`decision` 问题](tutorials/signal/learned/decision.md)。模型、设备和 profile 仅在该资源中声明；
+省略绑定时使用内置 `primary`，即 CPU 上的 Vela 2.0 0.3B：
 
 ```bash
-vllm-sr serve --decision-model Vela-2.0-4B --platform amd
+vllm-sr serve --decision-model primary --platform amd
 ```
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm
     system:
-      decision_model: Vela-2.0-4B
+      decision_model:
+        deployment: primary
 ```
 
 `serve` 把这一行作为新版本写入当前生效的配置，`vllm-sr config versions` 会列出它，
 `vllm-sr config rollback` 可以撤销；之后的启动会保留它，`vllm-sr status` 会显示它。Helm chart 的
-`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置的是同一个字段。名称不区分大小写。
+`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置相同绑定。deployment key 必须精确匹配，区分大小写。
 
 通过 Router 在 router signal suite 上与 Vela 1.0 专用模型对比测得，延迟针对延迟记录的五个请求信号
 （[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)）：
@@ -191,9 +198,8 @@ global:
   在模型运行时找不到 GPU 的地方，Router 也会拒绝。在 GPU 上，无论模块的 `use_cpu` 如何设置，它们都在 GPU 上运行。
 - **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
 - **每个规模** 在 user feedback 的新留出文件（CrossWOZ）和分布内的 PII 上都落后于 Vela 1.0。带区间的逐信号数据见记录。
-- **`Vela-1.0`** 恢复九个专用模型。它们只回答内置信号，因此此时未指定 `deployment` 的 `decision` 问题会导致加载错误。
-- **其他名称** 都会报错。Decision 2.0 模型（Kai、Eos、Sol、Nox、Lux、Vega）回答你自己的问题：
-  把它声明为 deployment，并在问题的 `deployment` 中指定它。
+- **Decision 1.0 和 Decision 2.0** 都可作为默认判断模型；可用任务取决于其原生能力，不按家族名称限制。
+- **专用模型** 通过任务绑定覆盖默认值，并可与默认决策模型同时运行。
 
 每个规模都有自己的模块阈值；切换时，未设置阈值的模块会采用它们：
 

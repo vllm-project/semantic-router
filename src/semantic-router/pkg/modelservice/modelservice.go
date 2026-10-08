@@ -34,6 +34,9 @@ func ReadyTimeout() time.Duration {
 // Truncate asks a model with a scan budget to read a long part's first tokens
 // only (one forward on a CPU) instead of whole.
 type Question struct {
+	// TaskID and Stage describe the internal consumer; they are not wire fields.
+	TaskID       string
+	Stage        string
 	ID           string
 	Type         string
 	Instructions string

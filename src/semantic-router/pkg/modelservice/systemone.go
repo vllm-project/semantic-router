@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 )
 
 const SystemOneResponseLimit = 4 << 20
+
+var ErrSystemOneArtifactChanged = errors.New("published model artifact differs from requested identity")
 
 // SystemOneResult preserves the native System One response, including per-question
 // errors, probabilities, usage, spans and metadata that routing adapters discard.
@@ -26,6 +29,13 @@ type SystemOneResult struct {
 // that process across a config reload and never interprets a browser-supplied URL.
 // Probes bypass the Router result cache so each run measures actual inference.
 func (m *Manager) SystemOne(ctx context.Context, deployment string, body json.RawMessage) (SystemOneResult, error) {
+	return m.SystemOneForArtifact(ctx, deployment, "", body)
+}
+
+// SystemOneForArtifact pins publication and artifact admission under the same
+// lock. Saving a new resource under an existing key cannot call the old model
+// through the new public identity while its deployment is still pending.
+func (m *Manager) SystemOneForArtifact(ctx context.Context, deployment, expectedArtifact string, body json.RawMessage) (SystemOneResult, error) {
 	m.mu.Lock()
 	lease := m.published
 	if lease == nil || m.closed {
@@ -36,6 +46,26 @@ func (m *Manager) SystemOne(ctx context.Context, deployment string, body json.Ra
 	if err != nil {
 		m.mu.Unlock()
 		return SystemOneResult{}, err
+	}
+	if expectedArtifact != "" {
+		artifact := ""
+		for _, entry := range member.group.plan.models {
+			if entry.Name == member.served.name {
+				artifact = entry.Model
+				break
+			}
+		}
+		if artifact == "" && !member.group.managed {
+			member.group.mu.Lock()
+			if member.served.card != nil {
+				artifact = member.served.card.Repo
+			}
+			member.group.mu.Unlock()
+		}
+		if artifact != expectedArtifact {
+			m.mu.Unlock()
+			return SystemOneResult{}, ErrSystemOneArtifactChanged
+		}
 	}
 	member.group.refs++
 	m.mu.Unlock()

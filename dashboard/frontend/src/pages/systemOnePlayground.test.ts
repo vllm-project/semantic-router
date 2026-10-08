@@ -17,19 +17,19 @@ describe('System One request authoring', () => {
     expect(result.error).toBeNull()
     expect(result.request?.state).toEqual({ request: 'hello', answer: 'world' })
     expect(Object.keys(result.request?.questions ?? {})).toEqual([
-      'choice_1',
-      'score_1',
-      'noul_1',
-      'span_1',
-      'set_1',
+      'task',
+      'difficulty',
+      'needs_reasoning',
+      'entities',
+      'needs',
     ])
-    expect(result.request?.questions.noul_1).toEqual({
+    expect(result.request?.questions.needs_reasoning).toEqual({
       type: 'noul',
       instructions: 'Does answering this request require multi-step reasoning?',
     })
-    expect(result.request?.questions.score_1.levels).toHaveLength(3)
-    expect(result.request?.questions.set_1.labels).toHaveLength(3)
-    expect(result.request?.questions.span_1.labels).toContainEqual({
+    expect(result.request?.questions.difficulty.levels).toHaveLength(3)
+    expect(result.request?.questions.needs.labels).toHaveLength(3)
+    expect(result.request?.questions.entities.labels).toContainEqual({
       key: 'language',
       description: 'The programming language',
     })

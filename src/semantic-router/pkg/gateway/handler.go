@@ -24,8 +24,11 @@ type Upstream interface {
 
 // Serving is what one request is served with, all from one configuration.
 type Serving struct {
-	Engine   routing.Engine
-	Upstream Upstream
+	// SystemOne serves native decision inference under this generation's own
+	// listener grant. It does not enter the Chat routing pipeline.
+	SystemOne http.Handler
+	Engine    routing.Engine
+	Upstream  Upstream
 	// APIKeys, when set, are the only client keys the listener accepts.
 	APIKeys []string
 	// Models, when set, are the only request models the listener accepts;
@@ -138,6 +141,14 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	defer release()
+	if r.URL.Path == "/v1/systemone" || r.URL.Path == "/v1/decisions" || r.URL.Path == "/v1/systemone/models" {
+		if serving.SystemOne == nil {
+			http.NotFound(w, r)
+			return
+		}
+		serving.SystemOne.ServeHTTP(w, r)
+		return
+	}
 	if !newAPIKeys(serving.APIKeys).authorize(r) {
 		writeUnauthorized(w)
 		return

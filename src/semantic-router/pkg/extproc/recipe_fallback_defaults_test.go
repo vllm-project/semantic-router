@@ -50,7 +50,7 @@ entrypoints:
 				RecipeFallbackOrchestrators: components.recipeFallbackOrchestrators,
 			}
 			defaultCtx := &RequestContext{}
-			router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, defaultCtx)
+			router.resolveEntrypointForRequest(config.DefaultEntrypointModel, defaultCtx)
 			if policy := router.fallbackOrchestratorForContext(defaultCtx).Policy(); !policy.Enabled || policy.MaxAttempts != 2 {
 				t.Fatalf("default recipe lost its own fallback: %+v", policy)
 			}

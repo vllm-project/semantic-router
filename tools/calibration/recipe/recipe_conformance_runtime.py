@@ -160,7 +160,6 @@ def builtin_provider_fixture() -> dict[str, Any]:
             ]
         },
         "global": {
-            "router": {"auto_model_names": []},
             "services": {
                 "management_api": {
                     "bind_address": "0.0.0.0",
@@ -190,7 +189,6 @@ def verify_composed_policy(authored: dict, composed: dict) -> None:
     # Keep the allowlist at owned leaves: sharing the management_api mapping
     # does not permit dropping unrelated authored settings such as its port.
     for path in (
-        ("router", "auto_model_names"),
         ("services", "management_api", "bind_address"),
         ("services", "management_api", "auth"),
     ):

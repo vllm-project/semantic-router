@@ -4,8 +4,11 @@ import {
   type RouterModelsInfo,
 } from '../utils/routerRuntime'
 import { listRoutingScopes } from '../utils/routingScopes'
-import { getRouterDecisionModelName } from '../components/routerModelPresentation'
-import { configuredDecisionModel, type DecisionModelName } from './decisionModelSupport'
+import {
+  configuredDecisionModel,
+  configuredDecisionDeployment,
+  type DecisionModelName,
+} from './decisionModelSupport'
 import type { RouterConfig } from './dashboardPageTypes'
 
 interface NamedItem {
@@ -62,7 +65,7 @@ export function buildIntelligenceRoutingScopes(config: RouterConfig): Intelligen
 
 export interface DecisionRuntimeSummary {
   model: DecisionModelName
-  state: 'ready' | 'attention' | 'unreported' | 'specialists'
+  state: 'ready' | 'attention' | 'unreported'
   resources: number
   bindings: number
 }
@@ -76,18 +79,18 @@ export function getDecisionRuntimeSummary(
   // configured decision model. A healthy Router or a matching artifact name
   // cannot establish readiness of this model.
   const bindings = (inventory?.models ?? []).filter(
-    (entry) => getRouterDecisionModelName(entry) === model,
+    (entry) =>
+      entry.metadata?.provider === 'model_runtime' &&
+      entry.metadata.deployment === configuredDecisionDeployment(config),
   )
   const resources = getRouterModelResources(bindings)
   const state =
-    model === 'Vela-1.0'
-      ? 'specialists'
-      : resources.length === 0
-        ? 'unreported'
-        : resources.every(
-              ({ model: entry }) => entry.loaded && getRouterModelState(entry) === 'ready',
-            )
-          ? 'ready'
-          : 'attention'
+    resources.length === 0
+      ? 'unreported'
+      : resources.every(
+            ({ model: entry }) => entry.loaded && getRouterModelState(entry) === 'ready',
+          )
+        ? 'ready'
+        : 'attention'
   return { model, state, resources: resources.length, bindings: bindings.length }
 }

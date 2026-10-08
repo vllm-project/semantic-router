@@ -1,10 +1,8 @@
 """The Router's decision model: global.model_catalog.system.decision_model.
 
-The decision model is the Vela model that answers the Router's own questions:
-every built-in signal it covers, and every routing.signals.decision question
-that names no deployment, in one call per request. The Router owns the
-contract (pkg/config/decision_model.go); the CLI checks the name and the
-hardware before it serves, and writes the choice into the active config.
+The binding selects one declared model_runtime deployment for the Router's
+judgment tasks. Model identity and runtime requirements belong to that resource.
+The Router owns defaults; the CLI selects exact keys and validates the resource.
 """
 
 from __future__ import annotations
@@ -16,90 +14,65 @@ from pathlib import Path
 import yaml
 
 from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
+from cli.model_runtime_defaults import effective_model_deployments_document
 
-DECISION_MODELS = (
-    "Vela-2.0-0.3B",
-    "Vela-2.0-0.8B",
-    "Vela-2.0-4B",
-    "Vela-2.0-9B",
-    "Vela-1.0",
-)
-DEFAULT_DECISION_MODEL = DECISION_MODELS[0]
-VELA1_DECISION_MODEL = "Vela-1.0"
-GPU_DECISION_MODELS = frozenset({"Vela-2.0-4B", "Vela-2.0-9B"})
+DEFAULT_DECISION_MODEL = "primary"
 DECISION_MODEL_FIELD = "global.model_catalog.system.decision_model"
-_DECISION_2_FAMILIES = frozenset({"kai", "eos", "sol", "nox", "lux", "vega"})
-
-
-def _choices() -> str:
-    names = list(DECISION_MODELS)
-    return f"{names[0]} (the default), {', '.join(names[1:-1])} or {names[-1]}"
-
-
-def _is_decision_2(name: str) -> bool:
-    lower = name.lower()
-    if lower.startswith(("decision-2", "decision2")):
-        return True
-    words = lower.replace("_", "-").replace(" ", "-").replace(".", "-").split("-")
-    return any(word in _DECISION_2_FAMILIES for word in words)
 
 
 def canonical_decision_model(name: str | None) -> str:
-    """The canonical name of a decision model, matched case-insensitively.
-
-    Raises ValueError with the Router's wording for anything else.
-    """
-
-    trimmed = (name or "").strip() or DEFAULT_DECISION_MODEL
-    for known in DECISION_MODELS:
-        if known.lower() == trimmed.lower():
-            return known
-    base = trimmed.rsplit("/", 1)[-1]
-    for known in DECISION_MODELS:
-        if known.lower() == base.lower():
-            raise ValueError(
-                f"decision_model {name!r}: name the model {known}, without a "
-                "repository or path"
-            )
-    if _is_decision_2(base):
+    """Validate an exact deployment key, without model-family aliases."""
+    if name is None:
+        return DEFAULT_DECISION_MODEL
+    if not isinstance(name, str) or not name or name.strip() != name:
         raise ValueError(
-            f"decision_model {name!r} is a Decision 2.0 model. The built-in "
-            "signals ask the questions a Vela model was trained on, so the "
-            f"decision model is {_choices()}. A Decision 2.0 model answers your "
-            "own questions: declare it as a model_runtime deployment under "
-            "global.model_catalog.deployments and name that deployment in a "
-            "routing.signals.decision question"
+            "decision_model.deployment must be a non-empty, trimmed deployment key"
         )
-    raise ValueError(
-        f"decision_model {name!r} is not a decision model; choose {_choices()}"
-    )
-
-
-def requires_gpu(name: str) -> bool:
-    return canonical_decision_model(name) in GPU_DECISION_MODELS
+    return name
 
 
 def configured_decision_model(document: dict | None) -> str:
-    """The decision model a config document names, canonical; the default when unset."""
-
+    """Return the authored deployment key, or the canonical default key."""
     system = (((document or {}).get("global") or {}).get("model_catalog") or {}).get(
         "system"
     ) or {}
-    return canonical_decision_model(system.get("decision_model"))
+    if "decision_model" not in system:
+        return DEFAULT_DECISION_MODEL
+    binding = system["decision_model"]
+    if not isinstance(binding, dict) or set(binding) != {"deployment"}:
+        raise ValueError(
+            "decision_model must be {deployment: <declared deployment key>}"
+        )
+    return canonical_decision_model(binding["deployment"])
+
+
+def decision_model_deployment(document: dict | None, name: str | None = None) -> dict:
+    """Resolve a declaration using the Router-owned defaults, never an artifact alias."""
+    key = (
+        canonical_decision_model(name)
+        if name is not None
+        else configured_decision_model(document)
+    )
+    deployment = effective_model_deployments_document(document).get(key)
+    if deployment is None:
+        raise ValueError(f"decision_model.deployment: unknown deployment {key!r}")
+    if deployment.get("provider") != "model_runtime":
+        raise ValueError(
+            f"decision_model.deployment {key!r} must use provider model_runtime"
+        )
+    return deployment
 
 
 def set_decision_model(document: dict, name: str) -> bool:
-    """Write the decision model into a config document; True when it changed."""
-
-    canonical = canonical_decision_model(name)
+    """Select one declared deployment; retain its resource and every other binding."""
+    key = canonical_decision_model(name)
+    decision_model_deployment(document, key)
     catalog = document.setdefault("global", {}).setdefault("model_catalog", {})
-    system = catalog.get("system")
-    if not isinstance(system, dict):
-        system = {}
-        catalog["system"] = system
-    if system.get("decision_model") == canonical:
+    system = catalog.setdefault("system", {})
+    binding = {"deployment": key}
+    if system.get("decision_model") == binding:
         return False
-    system["decision_model"] = canonical
+    system["decision_model"] = binding
     return True
 
 
@@ -115,28 +88,24 @@ def host_has_gpu(platform: str) -> bool:
     return False
 
 
-def gpu_requirement_error(name: str, platform: str, *, local_host: bool) -> str | None:
-    """Why a decision model cannot serve on a platform, or None.
+def gpu_requirement_error(
+    deployment: dict, platform: str, *, local_host: bool
+) -> str | None:
+    """Validate a managed deployment's explicit accelerator against the host.
 
-    The 4B and 9B run on a GPU only: --platform cpu (the default) cannot serve
-    them, nor can a local host without the platform's GPU devices.
+    Attached runtimes own their hardware. Automatic device selection and model
+    package requirements remain the runtime's responsibility.
     """
-
-    canonical = canonical_decision_model(name)
-    if canonical not in GPU_DECISION_MODELS:
+    if deployment.get("endpoint"):
         return None
-    if platform not in (PLATFORM_AMD, PLATFORM_NVIDIA):
-        return (
-            f"the decision model {canonical} needs a GPU; serve it with "
-            "--platform amd or --platform nvidia, or choose Vela-2.0-0.3B or "
-            "Vela-2.0-0.8B, which run on a CPU"
-        )
+    device = (deployment.get("device") or "auto").split(":", 1)[0]
+    expected_platform = {"rocm": PLATFORM_AMD, "cuda": PLATFORM_NVIDIA}.get(device)
+    if expected_platform is None:
+        return None
+    if platform != expected_platform:
+        return f"the decision deployment device {device} requires --platform {expected_platform}"
     if local_host and not host_has_gpu(platform):
-        return (
-            f"the decision model {canonical} needs a GPU, and this host shows no "
-            f"{platform.upper()} GPU devices; serve it on a GPU host, or choose "
-            "Vela-2.0-0.3B or Vela-2.0-0.8B, which run on a CPU"
-        )
+        return f"the decision deployment device {device} requires a GPU, and this host shows no {platform.upper()} GPU devices"
     return None
 
 

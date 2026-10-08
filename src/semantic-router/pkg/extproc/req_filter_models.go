@@ -15,7 +15,7 @@ type (
 )
 
 // handleModelsRequest handles GET /v1/models requests and returns a direct response
-// Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
+// Whether to include configured models is controlled by the config's ListBackendModels setting (default: false)
 // A listener restricted to some models lists only those of them the catalog has.
 func (r *OpenAIRouter) handleModelsRequest(_ string, allowed routing.ListenerModels) (*ext_proc.ProcessingResponse, error) {
 	resp := publicmodels.NewOpenAIModelList(r.Config, time.Now().Unix())

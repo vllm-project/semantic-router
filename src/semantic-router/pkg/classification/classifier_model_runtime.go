@@ -84,6 +84,11 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 	if spec, ok := m.plan.Lookup(m.recipe, name); ok {
 		return spec, nil
 	}
+	if deploymentName, deployment, ok, err := m.cfg.ImplicitTaskDeployment(name); ok && err == nil && deploymentName == m.cfg.DecisionModel {
+		return config.ResolvedModelBinding{Recipe: m.recipe, Name: name,
+			Binding:    config.ModelBinding{Deployment: deploymentName, Adapter: adapter, Contract: contract},
+			Deployment: deployment, Admission: m.cfg.ModelAdmission[deploymentName]}, nil
+	}
 	limit := 0
 	if len(maxTokens) > 0 {
 		limit = maxTokens[0]
@@ -225,7 +230,7 @@ func (b *ownedTokenBackend) readsWholeText() bool {
 	}
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return b.handle != nil && b.handle.Capability().Preset != ""
+	return b.handle != nil && (b.handle.Capability().Preset != "" || b.handle.Capability().Question != "")
 }
 
 func (b *ownedTokenBackend) Init(_ string, _ bool, _ int) error {

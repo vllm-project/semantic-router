@@ -122,9 +122,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
 	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
-	if ctx.RouterReplayContentOmitted {
-		omitReplayContent(&record)
-	}
+	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
@@ -468,13 +466,13 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
-	if len(responseBody) > 0 && !ctx.RouterReplayContentOmitted {
+	if len(responseBody) > 0 && replayResponseContentAllowed(ctx) {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
 	if isFinal {
 		attachPrimaryOutputDigest(ctx, recorder)
 	}
-	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); !ctx.RouterReplayContentOmitted && responseTrace != nil {
+	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); replayResponseContentAllowed(ctx) && responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
 		}
@@ -547,7 +545,7 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 
 	spans := ctx.HallucinationSpans
 	details := hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo)
-	if ctx.RouterReplayContentOmitted {
+	if !replayResponseContentAllowed(ctx) {
 		// Detector excerpts and explanations are response content too.
 		spans, details = nil, nil
 	}

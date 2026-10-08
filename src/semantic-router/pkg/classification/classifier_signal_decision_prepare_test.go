@@ -2,7 +2,6 @@ package classification
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -61,7 +60,9 @@ routing:
 global:
   model_catalog:
     system:
-      decision_model: Vela-2.0-4B
+      decision_model: {deployment: primary}
+    deployments:
+      primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-4B, device: auto, profile: exact}
 `
 
 func preparedSetQuestion(t *testing.T, card modelservice.ModelCard) (*cardServices, error) {
@@ -85,11 +86,15 @@ func TestASetQuestionWithoutDeploymentIsCheckedOnTheDecisionModel(t *testing.T) 
 	if err != nil {
 		t.Fatalf("a set question on the Vela 2.0 decision model must prepare: %v", err)
 	}
-	if len(services.asked) != 1 || services.asked[0] != "@Vela-2.0-4B/auto" {
+	if len(services.asked) != 1 || services.asked[0] != "primary" {
 		t.Fatalf("preparation asked %v, want the decision model's deployment", services.asked)
 	}
 	systemOne := modelservice.ModelCard{ID: "vllm-sr/Decision-2.0-Kai-0.6B", Surfaces: []string{"decisions"}}
-	if _, err = preparedSetQuestion(t, systemOne); err == nil || !strings.Contains(err.Error(), `deployment "@Vela-2.0-4B/auto" serves vllm-sr/Decision-2.0-Kai-0.6B`) {
-		t.Fatalf("a model without set questions must fail with the deployment it serves, got %v", err)
+	if _, err = preparedSetQuestion(t, systemOne); err != nil {
+		t.Fatalf("a model with Noul must prepare a composed Set: %v", err)
+	}
+	unsupported := modelservice.ModelCard{ID: "choice-only", Surfaces: []string{"decisions"}, QuestionTypes: []string{"choice"}}
+	if _, err = preparedSetQuestion(t, unsupported); err == nil {
+		t.Fatal("missing Set and Noul must reject preparation")
 	}
 }

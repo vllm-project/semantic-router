@@ -69,6 +69,7 @@ func TestSystemOneHTTPUsesPublishedDeploymentAndNativeTypes(t *testing.T) {
 		status int
 	}{
 		{`{"deployment":"unknown","request":{}}`, 404},
+		{`{"deployment":"selected","expected_artifact":"different/new-model","request":{}}`, 409},
 		{`{"deployment":"selected","request":[],"url":"http://untrusted"}`, 400},
 		{`{"deployment":"selected","request":[]}`, 400},
 		{`{"deployment":"selected","request":` + strings.Repeat(" ", systemOneRequestLimit) + `{}}`, 413},

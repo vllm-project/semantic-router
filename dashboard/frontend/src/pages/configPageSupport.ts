@@ -708,7 +708,7 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
-  decision_model?: string
+  decision_model?: { deployment: string }
   safety?: string
   hazard?: string
   prompt_guard?: string
@@ -780,9 +780,7 @@ export interface CanonicalEmbeddingCatalogConfig {
 export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
-  auto_model_name?: string
-  auto_model_names?: string[]
-  include_config_models_in_list?: boolean
+  list_backend_models?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }
@@ -847,6 +845,7 @@ export interface CanonicalModelDeployment {
 }
 
 export interface CanonicalModelCatalogConfig {
+  bindings?: Record<string, { deployment: string; contract: string }>
   deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels

@@ -34,18 +34,19 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
 	t.Cleanup(unblock)
 	var realCalls, forbiddenCalls atomic.Int32
-	forbidden := func(context.Context, string, string, string) ([]string, float32, error) {
+	forbidden := func(context.Context, string, string, string) (looper.GroundingEvidence, error) {
 		forbiddenCalls.Add(1)
-		return nil, 0, nil
+		return looper.GroundingEvidence{}, nil
 	}
-	real := func(ctx context.Context, _, _, _ string) ([]string, float32, error) {
+	real := func(ctx context.Context, _, _, _ string) (looper.GroundingEvidence, error) {
 		realCalls.Add(1)
 		startOnce.Do(func() { close(entered) })
 		select {
 		case <-release:
-			return []string{"unsupported"}, 0.25, nil
+			score := float32(0.25)
+			return looper.GroundingEvidence{Unsupported: true, Spans: []string{"unsupported"}, Probability: &score}, nil
 		case <-ctx.Done():
-			return nil, 0, ctx.Err()
+			return looper.GroundingEvidence{}, ctx.Err()
 		}
 	}
 	done := make(chan answerRecord, 1)
@@ -65,8 +66,9 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 	require.True(t, placebo.GroundingPresent)
 	require.Len(t, placebo.Panel, 2)
 
-	other := produceArm(fusion, client, opt, it, entry, "C", &looper.GroundingBackends{Detect: func(context.Context, string, string, string) ([]string, float32, error) {
-		return []string{"unsupported"}, 0.75, nil
+	other := produceArm(fusion, client, opt, it, entry, "C", &looper.GroundingBackends{Detect: func(context.Context, string, string, string) (looper.GroundingEvidence, error) {
+		score := float32(0.75)
+		return looper.GroundingEvidence{Unsupported: true, Spans: []string{"unsupported"}, Probability: &score}, nil
 	}})
 	assertArmScores(t, other, 0.25)
 	unblock()

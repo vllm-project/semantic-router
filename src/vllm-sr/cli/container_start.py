@@ -562,7 +562,11 @@ def _build_envoy_runtime_command(
         container_name=stack_layout.envoy_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
-        env_vars={},
+        env_vars={
+            key: common_env[key]
+            for key in ("VLLM_SR_INSTANCE_OPERATION",)
+            if key in common_env
+        },
         mount_specs=[
             f"{runtime_paths['envoy_config_path']}:/etc/envoy/envoy.yaml:z",
             runtime_paths["log_spool_envoy_mount"],
@@ -671,6 +675,7 @@ def _build_dashboard_runtime_command(
     )
     dashboard_mount_specs.extend(
         [
+            f"{runtime_paths['instance_socket_dir']}:/app/instance-control:ro,z",
             runtime_paths["log_spool_dashboard_mount"],
             f"{runtime_paths['log_spool_root']}:{LOG_SPOOL_READER_DIR}:ro,z",
         ]
@@ -712,6 +717,7 @@ def _build_dashboard_runtime_command(
         | inherited_sensitive_env
         | set(secret_names)
         | ({bench_runtime.token_env} if bench_runtime else set()),
+        supplemental_gids=[int(runtime_paths["recipe_store_gid"])],
     )
 
 
@@ -798,6 +804,11 @@ def _build_dashboard_runtime_env(
     gateway: str = GATEWAY_EXTPROC,
 ):
     dashboard_env = dict(common_env)
+    dashboard_env["VLLM_SR_INSTANCE_SOCKET"] = "/app/instance-control/control.sock"
+    if os.getenv("VLLM_SR_SYSTEMONE_LISTENER"):
+        dashboard_env["VLLM_SR_SYSTEMONE_LISTENER"] = os.environ[
+            "VLLM_SR_SYSTEMONE_LISTENER"
+        ]
     dashboard_env.pop("DASHBOARD_JWT_SECRET", None)
     for feature_flag in ("ML_PIPELINE_ENABLED",):
         if feature_flag in os.environ:

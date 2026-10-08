@@ -70,7 +70,7 @@ configOverride:
     model_catalog:
       kbs: []
     router:
-      include_config_models_in_list: true
+      list_backend_models: true
       fallback:
         version: 1
         enabled: true

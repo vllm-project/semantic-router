@@ -360,6 +360,23 @@ func decodeAnswer(answer api.Answer) Answer {
 		decoded.Error = string(*answer.Error)
 		return decoded
 	}
+	// Missing scalar values are unknown evidence, never Go's zero/false.
+	switch decoded.Type {
+	case "noul":
+		if answer.Noul == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "score":
+		if answer.Score == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "choice":
+		if answer.Choice == nil || *answer.Choice == "" {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	default:
+		return Answer{Type: decoded.Type, Error: "invalid_model_output"}
+	}
 	if answer.Choice != nil {
 		decoded.Choice = *answer.Choice
 	}

@@ -97,6 +97,13 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 	if len(b.cfg.ReaskRules) == 0 {
 		return nil, nil
 	}
+	judgment, err := newDecisionJudgment(b.models, "reask", "reask", nil)
+	if err != nil {
+		return nil, err
+	}
+	if judgment != nil {
+		return withReaskClassifier(&ReaskClassifier{rules: append([]config.ReaskRule(nil), b.cfg.ReaskRules...), judgment: judgment}), nil
+	}
 	provider, err := b.embeddingProviderForRules()
 	if err != nil {
 		return nil, err
@@ -120,6 +127,13 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 	// carrying one. This is the same conclusion the startup advisory reports.
 	if b.cfg.ComplexityModel.Backend != nil {
 		return nil, nil
+	}
+	judgment, err := prepareDecisionComplexity(b.models, b.cfg.ComplexityRules)
+	if err != nil {
+		return nil, err
+	}
+	if judgment != nil {
+		return withComplexityClassifier(judgment), nil
 	}
 	modelType := b.defaultEmbeddingModelType()
 	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {

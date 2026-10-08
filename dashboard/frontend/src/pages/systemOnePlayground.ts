@@ -80,7 +80,14 @@ export const QUESTION_TYPES: {
 ]
 
 export function newQuestion(type: QuestionType, index = 1): QuestionDraft {
-  const common = { id: crypto.randomUUID(), name: `${type}_${index}` }
+  const names: Record<QuestionType, string> = {
+    choice: 'task',
+    score: 'difficulty',
+    noul: 'needs_reasoning',
+    span: 'entities',
+    set: 'needs',
+  }
+  const common = { id: crypto.randomUUID(), name: `${names[type]}${index > 1 ? `_${index}` : ''}` }
   switch (type) {
     case 'choice':
       return {
@@ -145,8 +152,29 @@ export function newQuestion(type: QuestionType, index = 1): QuestionDraft {
   }
 }
 
-export const EXAMPLE_STATES = [
+export interface SystemOneExample {
+  id: string
+  label: string
+  description: string
+  state: string
+  questions: Record<string, SystemOneQuestion>
+}
+
+export function exampleDrafts(example: SystemOneExample): QuestionDraft[] {
+  return Object.entries(example.questions).map(([name, question]) => ({
+    id: crypto.randomUUID(),
+    name,
+    question: structuredClone(question),
+  }))
+}
+
+export const EXAMPLE_STATES: SystemOneExample[] = [
   {
+    questions: {
+      task: newQuestion('choice').question,
+      difficulty: newQuestion('score').question,
+      needs_reasoning: newQuestion('noul').question,
+    },
     id: 'coding',
     label: 'Code & reasoning',
     description: 'Choice, Score, and Noul · assess a coding request',
@@ -154,6 +182,26 @@ export const EXAMPLE_STATES = [
       'Write a Python function that merges two sorted lists without allocating another list. Explain why it works and analyze its time and space complexity.',
   },
   {
+    questions: {
+      intent: {
+        type: 'choice',
+        instructions: 'What does the customer need help with?',
+        choices: [
+          { key: 'billing', description: 'A charge, payment, or refund' },
+          { key: 'delivery', description: 'An order shipment or delivery' },
+          { key: 'account', description: 'Account access or settings' },
+        ],
+      },
+      needs: {
+        type: 'set',
+        instructions: 'Which actions does the customer request?',
+        labels: [
+          { key: 'refund', description: 'Request a refund or billing correction' },
+          { key: 'explanation', description: 'Explain a policy or process' },
+          { key: 'draft_message', description: 'Draft a message to the support team' },
+        ],
+      },
+    },
     id: 'support',
     label: 'Customer support',
     description: 'Choice and Set · classify a support request',
@@ -161,6 +209,7 @@ export const EXAMPLE_STATES = [
       'I was charged twice for order #4821 yesterday. Please explain how to request a refund and help me write a polite message to the support team.',
   },
   {
+    questions: { entities: newQuestion('span').question },
     id: 'entities',
     label: 'Entity extraction',
     description: 'Span · find people, organizations, and languages',

@@ -16,7 +16,7 @@ func TestModelRuntimeEmbeddingDeploymentsFollowConsumerOwnership(t *testing.T) {
 		return DecisionPlugin{Type: kind, Configuration: MustStructuredPayload(map[string]any{"enabled": enabled})}
 	}
 	namedPlugin := func(cfg *RouterConfig, kind string, reachable bool) {
-		cfg.AutoModelNames = []string{}
+
 		cfg.Recipes = []RoutingRecipe{{Name: DefaultRecipeName}, {Name: "named", Profile: RoutingProfile{
 			Decisions: []Decision{{Plugins: []DecisionPlugin{plugin(kind, true)}}},
 		}}}
@@ -36,7 +36,7 @@ func TestModelRuntimeEmbeddingDeploymentsFollowConsumerOwnership(t *testing.T) {
 			localBinding(cfg)
 			cfg.Projections.Scores = []ProjectionScore{{Name: "quality", Inputs: []ProjectionScoreInput{{Type: ProjectionInputKBMetric, KB: "catalog-kb"}}}}
 		}, want: []string{"local"}},
-		{name: "unreachable default KB", setup: func(cfg *RouterConfig) { kbSignal(cfg); cfg.AutoModelNames = []string{} }},
+		{name: "unreachable named KB", setup: func(cfg *RouterConfig) { kbSignal(cfg); moveTestRoutingToUnmappedRecipe(cfg) }},
 		{name: "disabled memory plugin", setup: func(cfg *RouterConfig) {
 			cfg.Decisions = []Decision{{Plugins: []DecisionPlugin{plugin("memory", false)}}}
 		}},

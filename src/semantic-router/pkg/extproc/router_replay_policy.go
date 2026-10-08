@@ -5,8 +5,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-// personalDataReplayAllowed uses the resolved request policy and verified PII
-// evidence. Missing or incomplete detection never implies personal-data-free.
+// personalDataReplayAllowed concerns only the exact prompt, not the whole
+// body, tool arguments, history or a response generated later.
 func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
 	if ctx == nil {
 		return false
@@ -14,11 +14,37 @@ func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
 	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
 		return true
 	}
-	// Tool schemas are captured but are not read by the text PII classifier.
-	if ctx.SemanticRequest != nil && len(ctx.SemanticRequest.Tools) > 0 {
+	prompt, _ := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	if prompt == "" {
 		return false
 	}
-	return ctx.PIIContentVerified && !ctx.PIIDetected
+	for _, evidence := range ctx.PIIEvidence {
+		if evidence.CoversClean("request", prompt) {
+			return true
+		}
+	}
+	return false
+}
+
+// No existing response-stage task scans personal data. A request-stage clean
+// result never grants access to generated text; do not add inference for Replay.
+func replayResponseContentAllowed(ctx *RequestContext) bool {
+	return ctx != nil && ctx.RouterReplayPluginConfig.CapturesPersonalData()
+}
+
+func applyReplayPrivacyEvidence(ctx *RequestContext, record *routerreplay.RoutingRecord, promptAllowed bool) {
+	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
+		return
+	}
+	// Raw bodies contain arbitrary metadata and structured fields outside the
+	// text task input. Tools and response excerpts have no matching evidence.
+	record.RequestBody, record.RequestBodyTruncated = "", false
+	record.ResponseBody, record.ResponseBodyTruncated = "", false
+	record.ToolDefinitions, record.ToolDefinitionsTruncated = "", false
+	record.ToolTrace = nil
+	if !promptAllowed {
+		record.Prompt, record.PromptTruncated = "", false
+	}
 }
 
 // omitReplayContent keeps a record's routing evidence, including which PII

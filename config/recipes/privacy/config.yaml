@@ -12,8 +12,6 @@ global:
       enabled: false
       backend_type: memory
   router:
-    auto_model_names:
-      - vllm-sr/auto
 
 providers:
   defaults:
@@ -780,3 +778,7 @@ routing:
             enabled: true
             max_records: 50000
             max_body_bytes: 2048
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

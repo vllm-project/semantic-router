@@ -38,8 +38,14 @@ of it:
 ```yaml
 global:
   model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm
     system:
-      decision_model: Vela-2.0-4B
+      decision_model:
+        deployment: primary
 
 routing:
   signals:
@@ -78,9 +84,9 @@ routing:
 ```
 
 The selector asks after the decision matches, in its own call to the same
-deployment. With `decision_model: Vela-1.0` the specialists answer only the
-built-in signals, so a selector without a `deployment` is a load error that
-asks for one.
+deployment. The default binding may select Vela or Decision 1.0/2.0;
+the selected resource must support the choice task. An explicit deployment
+on the selector overrides the default binding.
 
 To let another model choose, such as a Decision 2.0 model, name a
 `model_runtime` deployment:

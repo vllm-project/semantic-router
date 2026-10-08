@@ -5,10 +5,27 @@ import (
 	"testing"
 )
 
+func TestEmbeddingModelsNeededJudgmentConsumersDoNotLoadEmbedding(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.DecisionModel = "primary"
+	cfg.PreferenceRules = []PreferenceRule{{Name: "brief"}}
+	cfg.ReaskRules = []ReaskRule{{Name: "repeat"}}
+	cfg.ComplexityRules = []ComplexityRule{{Name: "difficulty"}}
+	cfg.Decisions = []Decision{{Rules: RuleCombination{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypePreference, Name: "brief"}, {Type: SignalTypeReask, Name: "repeat"}, {Type: SignalTypeComplexity, Name: "difficulty:hard"}}}}}
+	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); len(got) != 0 {
+		t.Fatalf("judgment-only consumers load embedding: %v", got)
+	}
+	enabled := true
+	cfg.PreferenceModel.UseContrastive = &enabled
+	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); !got["mmbert"] {
+		t.Fatal("explicit contrastive policy lost its embedding")
+	}
+}
+
 func TestEmbeddingModelsNeededUsesMLRequest(t *testing.T) {
 	for _, algorithm := range []string{"knn", "kmeans", "svm", "mlp"} {
 		t.Run(algorithm, func(t *testing.T) {
-			cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{"auto"}}}
+			cfg := &RouterConfig{Entrypoints: []EntrypointMapping{{ModelNames: []string{"auto"}, Recipe: DefaultRecipeName}}}
 			cfg.Decisions = []Decision{{Algorithm: &AlgorithmConfig{Type: algorithm}}}
 			cfg.ModelSelection.ML.ModelsPath = "models/ml"
 			cfg.ModelSelection.ML.ModelType = "  Qwen3  "
@@ -46,7 +63,7 @@ func TestEmbeddingModelsNeededMLDefaultsAndInactiveConfig(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{"auto"}}}
+			cfg := &RouterConfig{Entrypoints: []EntrypointMapping{{ModelNames: []string{"auto"}, Recipe: DefaultRecipeName}}}
 			cfg.Decisions = []Decision{{Algorithm: &AlgorithmConfig{Type: tc.algorithm}}}
 			cfg.ModelSelection.ML = tc.ml
 			if got := EmbeddingModelsNeeded(cfg, "mmbert", false); !maps.Equal(got, tc.want) {
@@ -68,19 +85,20 @@ func TestEmbeddingModelsNeededIgnoresUnusedMLArtifacts(t *testing.T) {
 	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); !maps.Equal(got, map[string]bool{"qwen3": true}) {
 		t.Fatalf("active ML should prepare only its configured embedding: %v", got)
 	}
-	cfg.AutoModelNames = []string{}
+
+	moveTestRoutingToUnmappedRecipe(cfg)
 	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); len(got) != 0 {
 		t.Fatalf("unreachable ML decision provisioned an embedding: %v", got)
 	}
 }
 
 func TestEmbeddingModelsNeededMLRecipeIsolation(t *testing.T) {
-	cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{}}}
+	cfg := &RouterConfig{}
 	cfg.ModelSelection.ML.ModelsPath = "models/ml"
 	cfg.ModelSelection.ML.ModelType = "qwen3"
 	cfg.Decisions = []Decision{{Algorithm: &AlgorithmConfig{Type: "svm"}}}
 	cfg.Recipes = []RoutingRecipe{
-		{Name: DefaultRecipeName, Profile: RoutingProfile{Decisions: cfg.Decisions}},
+		{Name: DefaultRecipeName},
 		{Name: "ml", Profile: RoutingProfile{Decisions: cfg.Decisions}},
 		{Name: "static", Profile: RoutingProfile{Decisions: []Decision{{Algorithm: &AlgorithmConfig{Type: "static"}}}}},
 	}

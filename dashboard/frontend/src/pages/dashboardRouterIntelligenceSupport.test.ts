@@ -7,8 +7,13 @@ import {
 } from './dashboardRouterIntelligenceSupport'
 
 const config: RouterConfig = {
-  global: { model_catalog: { system: { decision_model: 'Vela-2.0-4B' } } },
-  entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/auto'] }],
+  global: {
+    model_catalog: {
+      system: { decision_model: { deployment: 'judge' } },
+      deployments: { judge: { artifact: 'vllm-sr/Vela-2.0-4B' } },
+    },
+  },
+  entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/balanced'] }],
   recipes: [
     {
       name: 'balanced',
@@ -33,7 +38,7 @@ const binding = (overrides: Partial<RouterModelInfo> = {}): RouterModelInfo => (
   type: 'pii_detection',
   loaded: true,
   state: 'ready',
-  metadata: { deployment: '@Vela-2.0-4B/auto', resource_id: 'shared', provider: 'model_runtime' },
+  metadata: { deployment: 'judge', resource_id: 'shared', provider: 'model_runtime' },
   ...overrides,
 })
 
@@ -64,12 +69,12 @@ describe('decision model runtime evidence', () => {
   it('requires an exact decision-model deployment identity', () => {
     expect(
       getDecisionRuntimeSummary(config, {
-        models: [binding({ metadata: { deployment: '@Vela-2.0-4B-other/auto' } })],
+        models: [binding({ metadata: { deployment: 'judge-other' } })],
       }).state,
     ).toBe('unreported')
     expect(
       getDecisionRuntimeSummary(config, {
-        models: [binding({ metadata: { deployment: '@Vela-2.0-4B', provider: 'model_runtime' } })],
+        models: [binding({ metadata: { deployment: 'judge', provider: 'model_runtime' } })],
       }).state,
     ).toBe('ready')
   })
@@ -86,23 +91,16 @@ describe('decision model runtime evidence', () => {
       }).state,
     ).toBe('attention')
   })
-
-  it('does not describe Vela 1.0 specialists as an unreported shared model', () => {
-    expect(
-      getDecisionRuntimeSummary({
-        global: { model_catalog: { system: { decision_model: 'Vela-1.0' } } },
-      }).state,
-    ).toBe('specialists')
-  })
 })
 
 describe('configured routing overview', () => {
   it('keeps questions, signals and projections scoped to their recipe', () => {
     expect(buildIntelligenceRoutingScopes(config)).toEqual([
+      { id: 'default', label: 'Default routing', entrypoints: ['vllm-sr/auto'], questions: [], signals: [], projections: [] },
       {
         id: 'balanced',
         label: 'balanced',
-        entrypoints: ['vllm-sr/auto'],
+        entrypoints: ['vllm-sr/balanced'],
         questions: [{ name: 'task', kind: 'choice' }],
         signals: [
           { type: 'pii', names: ['personal_data'] },

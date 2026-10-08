@@ -15,7 +15,8 @@ import (
 // (via the multimodal embedding model) for contrastive knowledge base comparison.
 // Results are filtered by composer conditions in the classifier layer.
 type ComplexityClassifier struct {
-	rules []config.ComplexityRule
+	rules     []config.ComplexityRule
+	judgments map[string]*decisionJudgment
 
 	// Precomputed text embeddings for hard and easy candidates
 	hardEmbeddings     map[string]map[string][]float32 // ruleName -> candidate -> embedding
@@ -183,6 +184,9 @@ func (c *ComplexityClassifier) ClassifyDetailedWithImage(query string, imageURL 
 func (c *ComplexityClassifier) classifyDetailedWithImageCached(ctx context.Context, query string, imageURL string, cache *requestMediaEmbeddingCache) ([]ComplexityRuleResult, error) {
 	if len(c.rules) == 0 {
 		return nil, nil
+	}
+	if len(c.judgments) > 0 {
+		return c.classifyJudgments(ctx, query)
 	}
 
 	queryEmbeddings, err := c.loadQueryEmbeddingsCached(ctx, query, imageURL, cache)

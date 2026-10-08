@@ -135,10 +135,6 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 
 func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig, recipes []RoutingRecipe) ([]EntrypointMapping, error) {
 	entrypoints := canonical.Entrypoints
-	if len(entrypoints) == 0 {
-		return nil, nil
-	}
-
 	result := make([]EntrypointMapping, 0, len(entrypoints))
 	claimed := make(map[string]struct{})
 	for index, entrypoint := range entrypoints {
@@ -150,7 +146,7 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 			return nil, fmt.Errorf("entrypoints[%d]: unknown recipe %q", index, recipeName)
 		}
 
-		names := normalizeAutoModelNames(entrypoint.ModelNames)
+		names := normalizeEntrypointNames(entrypoint.ModelNames)
 		if len(names) == 0 {
 			return nil, fmt.Errorf("entrypoints[%d].model_names cannot be empty", index)
 		}
@@ -169,6 +165,21 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 			Recipe:     recipeName,
 		})
 	}
+	view := *cfg
+	view.Entrypoints = result
+	for _, entrypoint := range view.EffectiveEntrypoints(ChatAPI) {
+		if entrypoint.Source != EntrypointBuiltin {
+			continue
+		}
+		for _, name := range entrypoint.ModelNames {
+			if _, exists := claimed[name]; exists {
+				return nil, fmt.Errorf("default entrypoint %q conflicts with a named recipe; declare explicit default model_names to replace it", name)
+			}
+			if meaning := configuredEntrypointNameConflict(canonical, name); meaning != "" {
+				return nil, fmt.Errorf("default entrypoint %q is already %s; declare explicit default model_names to replace it", name, meaning)
+			}
+		}
+	}
 	return result, nil
 }
 
@@ -180,14 +191,19 @@ func entrypointNameConflict(cfg *RouterConfig, canonical *CanonicalConfig, name 
 	if conflict := configuredEntrypointNameConflict(canonical, name); conflict != "" {
 		return conflict
 	}
-	return algorithmEntrypointNameConflict(cfg, name)
+	return ""
 }
 
 func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) string {
 	cards := canonicalRoutingModels(canonical.Routing)
 	for _, model := range canonical.Providers.Models {
-		if model.Name == name {
+		if model.Name == name || model.ProviderModelID == name {
 			return "a configured model"
+		}
+		for _, externalID := range model.ExternalModelIDs {
+			if externalID == name {
+				return "a configured provider model alias"
+			}
 		}
 		cardID := model.Catalog
 		if cardID == "" {
@@ -203,20 +219,6 @@ func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) s
 		if routingModelHasLoRA(card, name) {
 			return "a configured LoRA adapter"
 		}
-	}
-	return ""
-}
-
-func algorithmEntrypointNameConflict(cfg *RouterConfig, name string) string {
-	switch {
-	case cfg.IsAutoModelName(name):
-		return "an auto-model alias"
-	case cfg.IsReMoMModelName(name):
-		return "the ReMoM algorithm slug"
-	case cfg.IsFusionModelName(name):
-		return "the Fusion algorithm slug"
-	case cfg.IsFlowModelName(name):
-		return "the Flow algorithm slug"
 	}
 	return ""
 }

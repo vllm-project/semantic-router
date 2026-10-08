@@ -53,7 +53,7 @@ from cli.consts import (
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
-from cli.decision_model import DECISION_MODELS, DEFAULT_DECISION_MODEL
+from cli.decision_model import DEFAULT_DECISION_MODEL
 from cli.deployment_backend import (
     DEFAULT_TARGET,
     TARGET_DOCKER,
@@ -441,14 +441,11 @@ def _execute_serve(
 @click.option(
     "--decision-model",
     default=None,
-    metavar="NAME",
+    metavar="DEPLOYMENT",
     help=(
-        "The Vela model that answers the Router's questions: the built-in signals "
-        "and every routing.signals.decision question without a deployment. "
-        f"{', '.join(DECISION_MODELS)} (case-insensitive; default "
-        f"{DEFAULT_DECISION_MODEL}). The 4B and 9B need a GPU (--platform amd or "
-        "nvidia). serve writes it into the active config as a new configuration "
-        "version; later starts keep it."
+        "Select an exact model_runtime deployment key from global.model_catalog.deployments "
+        f"for the Router's judgment tasks (default {DEFAULT_DECISION_MODEL}). "
+        "Writes {deployment: key} to the active config; later starts keep it."
     ),
 )
 @click.option("--target", default=None, help=TARGET_HELP)

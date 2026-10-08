@@ -66,14 +66,14 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 		},
 		{
 			config.SignalTypeReask, "Reask",
-			func(context.Context) {
-				c.evaluateBoundedReaskSignal(results, mu, input.CurrentUserText, input.PriorUserMessages)
+			func(ctx context.Context) {
+				c.evaluateBoundedReaskSignalContext(ctx, results, mu, input.CurrentUserText, input.PriorUserMessages)
 			},
 		},
 		{
 			config.SignalTypePreference, "Preference",
-			func(context.Context) {
-				c.evaluatePreferenceSignal(results, mu, textForSignal(config.SignalTypePreference))
+			func(ctx context.Context) {
+				c.evaluatePreferenceSignal(ctx, results, mu, textForSignal(config.SignalTypePreference))
 			},
 		},
 		{
@@ -137,7 +137,15 @@ func (c *Classifier) evaluateBoundedReaskSignal(
 	currentUserText string,
 	priorUserMessages []string,
 ) {
-	c.evaluateReaskSignal(
+	c.evaluateBoundedReaskSignalContext(context.Background(), results, mu, currentUserText, priorUserMessages)
+}
+
+func (c *Classifier) evaluateBoundedReaskSignalContext(ctx context.Context, results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
+	if c.reaskClassifier != nil && c.reaskClassifier.judgment != nil {
+		c.evaluateReaskSignalContext(ctx, results, mu, currentUserText, priorUserMessages)
+		return
+	}
+	c.evaluateReaskSignalContext(ctx,
 		results,
 		mu,
 		textForRoutingSignal(config.SignalTypeReask, currentUserText),

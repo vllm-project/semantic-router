@@ -161,6 +161,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
 	ctx.PIIContentVerified = signals.PIIContentVerified
+	ctx.PIIEvidence = append([]classification.PrivacyEvidence(nil), signals.PIIEvidence...)
 	if signals.PIIDetected {
 		ctx.PIIDetected = signals.PIIDetected
 		ctx.PIIEntities = signals.PIIEntities

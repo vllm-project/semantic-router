@@ -23,15 +23,17 @@ const (
 // The request is the runtime's native /v1/systemone document; the deployment
 // determines its model. Nested raw JSON retains question and criteria order.
 type SystemOneDiagnosticRequest struct {
-	Deployment string          `json:"deployment"`
-	Request    json.RawMessage `json:"request"`
+	Deployment       string          `json:"deployment"`
+	ExpectedArtifact string          `json:"expected_artifact,omitempty"`
+	Request          json.RawMessage `json:"request"`
 }
 
 // JSONWire documents the native request using its generated canonical contract.
 func (SystemOneDiagnosticRequest) JSONWire() any {
 	return struct {
-		Deployment string              `json:"deployment"`
-		Request    api.DecisionRequest `json:"request"`
+		Deployment       string              `json:"deployment"`
+		ExpectedArtifact string              `json:"expected_artifact,omitempty"`
+		Request          api.DecisionRequest `json:"request"`
 	}{}
 }
 
@@ -55,8 +57,9 @@ type SystemOneCapabilities struct {
 
 func apiSystemOneRoutes() []apiRoute {
 	return []apiRoute{
+		managedRoute(EndpointMetadata{Path: apiDiagnosticsPath + "/models/tasks", Method: http.MethodGet, Description: "List shared judgment task templates, structural model capabilities and binding provenance"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleDecisionTasks, jsonResponse[modelservice.TaskCatalogResponse](200, "Task templates, capabilities and effective bindings")),
 		managedRoute(EndpointMetadata{Path: systemOneDiagnosticPath, Method: http.MethodGet, Description: "List published model deployments and their native System One question capabilities"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleSystemOneCapabilities, jsonResponse[SystemOneCapabilities](200, "Published deployment capabilities")),
-		managedRoute(EndpointMetadata{Path: systemOneDiagnosticPath, Method: http.MethodPost, Description: "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneDiagnostic, strictJSONBodyFor[SystemOneDiagnosticRequest](), jsonResponse[api.DecisionResponse](200, "Native System One response; per-question errors are preserved"), errorResponses(400, 404, 413, 422, 429, 500, 502, 503, 504)),
+		managedRoute(EndpointMetadata{Path: systemOneDiagnosticPath, Method: http.MethodPost, Description: "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneDiagnostic, strictJSONBodyFor[SystemOneDiagnosticRequest](), jsonResponse[api.DecisionResponse](200, "Native System One response; per-question errors are preserved"), errorResponses(400, 404, 409, 413, 422, 429, 500, 502, 503, 504)),
 	}
 }
 
@@ -111,7 +114,7 @@ func (s *ClassificationAPIServer) handleSystemOneDiagnostic(w http.ResponseWrite
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	result, err := runRetainedAPIWork(ctx, func() {}, func(ctx context.Context) (modelservice.SystemOneResult, error) {
-		return manager.SystemOne(ctx, request.Deployment, request.Request)
+		return manager.SystemOneForArtifact(ctx, request.Deployment, request.ExpectedArtifact, request.Request)
 	})
 	if len(result.Body) > 0 {
 		w.Header().Set("Content-Type", "application/json")
@@ -123,6 +126,8 @@ func (s *ClassificationAPIServer) handleSystemOneDiagnostic(w http.ResponseWrite
 		return
 	}
 	switch {
+	case errors.Is(err, modelservice.ErrSystemOneArtifactChanged):
+		writeSystemOneError(w, 409, "model_deployment_pending", "The published model requires deployment")
 	case errors.Is(err, modelservice.ErrUnknownDeployment):
 		writeSystemOneError(w, 404, "model_not_found", "The selected deployment is not published")
 	case errors.Is(err, modelservice.ErrRejected):

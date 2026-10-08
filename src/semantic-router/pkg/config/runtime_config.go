@@ -4,16 +4,16 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
+	// EntrypointModels is the resolved virtual-model inventory for recursion guards.
+	EntrypointModels []string `yaml:"-"`
 	// Endpoint is deprecated and ignored: the Router makes a Looper's model
 	// calls in process. It is still accepted for one release.
-	Endpoint           string              `yaml:"endpoint,omitempty"`
-	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
-	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
-	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
-	Headers            map[string]string   `yaml:"headers,omitempty"`
-	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
-	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
-	Flow               FlowRuntimeConfig   `yaml:"flow,omitempty"`
+	Endpoint           string            `yaml:"endpoint,omitempty"`
+	GRPCMaxMsgSizeMB   int               `yaml:"grpc_max_msg_size_mb,omitempty"`
+	MaxResponseBytesMB int               `yaml:"max_response_bytes_mb,omitempty"`
+	TimeoutSeconds     int               `yaml:"timeout_seconds,omitempty"`
+	Headers            map[string]string `yaml:"headers,omitempty"`
+	Flow               FlowRuntimeConfig `yaml:"flow,omitempty"`
 }
 
 func (l *LooperConfig) GetTimeout() int {

@@ -7,8 +7,8 @@ import (
 )
 
 // resolveEntrypointForRequest resolves the routing profile before any signal
-// evaluation. Auto and direct-looper aliases select the default recipe, named
-// entrypoints select their mapped recipe, and concrete backend models keep a
+// evaluation. Every virtual entrypoint selects its mapped recipe; concrete
+// backend models keep a
 // nil recipe so they bypass recipe routing entirely.
 func (r *OpenAIRouter) resolveEntrypointForRequest(originalModel string, ctx *RequestContext) {
 	if r == nil || r.Config == nil || ctx == nil {
@@ -49,23 +49,19 @@ func (r *OpenAIRouter) classifierForRequest(ctx *RequestContext) *classification
 }
 
 // requestModelActsAsAuto reports whether the inbound model name is resolved by
-// the router (auto slugs and entrypoint virtual names) rather than forwarded
+// the router through the effective entrypoint table rather than forwarded
 // as a concrete backend model.
 func (r *OpenAIRouter) requestModelActsAsAuto(modelName string) bool {
 	if r == nil || r.Config == nil {
 		return false
 	}
-	return r.Config.IsAutoModelName(modelName) || r.Config.IsEntrypointModelName(modelName)
+	return r.Config.IsEntrypointModelName(modelName)
 }
 
-// decisionCandidatesForRequest scopes evaluation to exactly one recipe. Direct
-// looper aliases additionally filter the default recipe by algorithm type.
+// decisionCandidatesForRequest scopes evaluation to exactly one recipe.
 func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *RequestContext) []config.Decision {
 	if ctx != nil && ctx.Routing.SelectedRecipe() != nil {
 		recipe := ctx.Routing.SelectedRecipe()
-		if r.looperAliasAlgorithm(originalModel) != "" {
-			return r.decisionCandidatesForRequestModel(originalModel)
-		}
 		if recipe.Profile.Decisions == nil {
 			// A recipe with no decisions still scopes evaluation: an empty,
 			// non-nil slice keeps runDecisionEngine from falling back to the
@@ -77,34 +73,15 @@ func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *R
 	return []config.Decision{}
 }
 
+// decisionCandidatesForRequestModel resolves every routing alias through the
+// same recipe table; algorithms are selected by decisions, never model strings.
 func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []config.Decision {
-	algorithm := r.looperAliasAlgorithm(modelName)
-	if algorithm == "" {
+	if r == nil || r.Config == nil {
 		return nil
 	}
-	candidates := make([]config.Decision, 0)
-	for _, decision := range r.Config.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == algorithm {
-			candidates = append(candidates, decision)
-		}
+	recipe, ok := r.Config.RecipeForRoutingModel(modelName)
+	if !ok {
+		return nil
 	}
-	return candidates
-}
-
-// looperAliasAlgorithm returns the decision algorithm a request for a direct
-// Looper alias evaluates, or "" when the name is not one.
-func (r *OpenAIRouter) looperAliasAlgorithm(modelName string) string {
-	if r == nil || r.Config == nil {
-		return ""
-	}
-	switch {
-	case r.Config.IsReMoMModelName(modelName):
-		return config.DecisionAlgorithmReMoM
-	case r.Config.IsFusionModelName(modelName):
-		return config.DecisionAlgorithmFusion
-	case r.Config.IsFlowModelName(modelName):
-		return config.DecisionAlgorithmWorkflows
-	default:
-		return ""
-	}
+	return recipe.Profile.Decisions
 }

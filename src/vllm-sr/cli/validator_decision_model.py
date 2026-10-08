@@ -7,8 +7,8 @@ from urllib.parse import urlparse
 from cli.config_contract import iter_condition_leaves, iter_routing_profiles
 from cli.decision_model import (
     DECISION_MODEL_FIELD,
-    VELA1_DECISION_MODEL,
     configured_decision_model,
+    decision_model_deployment,
 )
 from cli.models import UserConfig
 from cli.models_decision import OPTION_QUESTION_TYPES
@@ -28,6 +28,14 @@ MAX_SELECTOR_CANDIDATES = 255
 
 
 def model_runtime_deployment_error(deployment: dict) -> str | None:
+    public_name = deployment.get("public_name") or ""
+    if public_name and (
+        public_name.strip() != public_name
+        or any(c in public_name for c in "\0\r\n\t ")
+        or public_name.startswith("/")
+        or "://" in public_name
+    ):
+        return "public_name must be a trimmed public model ID, not a path or endpoint"
     if deployment.get("external_model"):
         return "model_runtime deployments cannot set external_model"
     budget = deployment.get("input") or {}
@@ -100,10 +108,15 @@ def _reference_error(deployments: dict, name: str) -> str | None:
     if deployment.get("provider") != MODEL_RUNTIME_PROVIDER:
         return f"deployment '{name}' must use provider {MODEL_RUNTIME_PROVIDER}"
     budget = deployment.get("input") or {}
-    if budget.get("max_tokens") or (budget.get("overflow") or "reject") != "reject":
+    max_tokens = budget.get("max_tokens") or 0
+    overflow = budget.get("overflow") or "reject"
+    if not (
+        (max_tokens == 0 and overflow == "reject")
+        or (max_tokens > 0 and overflow == "window")
+    ):
         return (
             f"deployment '{name}': decision models reject over-length input and "
-            "never truncate; remove input"
+            "never truncate; use input.overflow: window with max_tokens, or omit input"
         )
     return None
 
@@ -112,22 +125,12 @@ def _decision_model(config: UserConfig) -> tuple[str | None, list[ValidationErro
     """The configured decision model, canonical, or the error that names it."""
 
     try:
-        return configured_decision_model({"global": config.global_ or {}}), []
+        document = {"global": config.global_ or {}}
+        key = configured_decision_model(document)
+        decision_model_deployment(document)
+        return key, []
     except ValueError as error:
         return None, [ValidationError(str(error), field=DECISION_MODEL_FIELD)]
-
-
-def _decision_model_question_error(
-    decision_model: str | None, asker: str = "question"
-) -> str | None:
-    if decision_model != VELA1_DECISION_MODEL:
-        return None
-    return (
-        f"deployment is required: the decision model is {decision_model}, whose "
-        "specialists answer only the built-in signals. Name a model_runtime "
-        f"deployment for the {asker}, or choose a Vela 2.0 decision model in "
-        f"{DECISION_MODEL_FIELD}"
-    )
 
 
 def validate_decision_model_references(
@@ -140,7 +143,11 @@ def validate_decision_model_references(
             if rule.deployment:
                 message = _reference_error(deployments, rule.deployment)
             else:
-                message = _decision_model_question_error(decision_model)
+                message = (
+                    _reference_error(deployments, decision_model)
+                    if decision_model
+                    else None
+                )
             if message:
                 errors.append(
                     ValidationError(
@@ -148,7 +155,9 @@ def validate_decision_model_references(
                     )
                 )
         rules = {rule.name: rule for rule in profile.signals.decision or []}
-        errors.extend(_set_label_answer_errors(prefix, list(rules.values())))
+        errors.extend(
+            _set_label_answer_errors(prefix, list(rules.values()), decision_model)
+        )
         for decision in profile.decisions:
             errors.extend(
                 _selector_errors(prefix, decision, deployments, decision_model)
@@ -189,16 +198,16 @@ def _condition_errors(prefix, decision, rules) -> list[ValidationError]:
     return errors
 
 
-def _set_label_answer_errors(prefix, rules) -> list[ValidationError]:
+def _set_label_answer_errors(prefix, rules, decision_model) -> list[ValidationError]:
     """A rule named like a set label's answer key ("<rule>.<label>") on the same deployment."""
-    names = {(rule.deployment or "", rule.name) for rule in rules}
+    names = {(rule.deployment or decision_model or "", rule.name) for rule in rules}
     errors = []
     for rule in rules:
         if rule.question.type != "set":
             continue
         for label in rule.question.labels:
             other = f"{rule.name}.{label.key}"
-            if (rule.deployment or "", other) in names:
+            if (rule.deployment or decision_model or "", other) in names:
                 errors.append(
                     ValidationError(
                         f"the name collides with the answer key of set question "
@@ -220,7 +229,9 @@ def _selector_errors(
     if algorithm.decision.deployment:
         message = _reference_error(deployments, algorithm.decision.deployment)
     else:
-        message = _decision_model_question_error(decision_model, "selector")
+        message = (
+            _reference_error(deployments, decision_model) if decision_model else None
+        )
     models = [ref.model for ref in decision.modelRefs or []]
     if message is None and not (
         MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
@@ -238,3 +249,37 @@ def _selector_errors(
             "decision's modelRefs"
         )
     return [ValidationError(message, field=field)] if message else []
+
+
+def validate_systemone_listener_models(
+    config: UserConfig, deployments: dict
+) -> list[ValidationError]:
+    """Check the separate native API scope without borrowing Chat permissions."""
+    identities = {}
+    for key, deployment in deployments.items():
+        public_name = deployment.get("public_name") or ""
+        artifact = deployment.get("artifact") or ""
+        if not public_name and HUB_REPOSITORY_ID.fullmatch(artifact):
+            public_name = artifact
+        if public_name:
+            identities.setdefault(public_name, []).append((key, deployment))
+    errors = []
+    for listener in config.listeners:
+        if listener.systemone is None:
+            continue
+        for public_name in listener.systemone.models:
+            candidates = identities.get(public_name, [])
+            message = None
+            if not candidates:
+                message = f"public System One model {public_name!r} is not declared"
+            elif len(candidates) != 1:
+                message = f"public System One model {public_name!r} names multiple deployments; assign distinct public_name values"
+            elif candidates[0][1].get("provider") != MODEL_RUNTIME_PROVIDER:
+                message = f"public System One model {public_name!r} requires a model_runtime deployment"
+            if message:
+                errors.append(
+                    ValidationError(
+                        message, field=f"listeners.{listener.name}.systemone.models"
+                    )
+                )
+    return errors

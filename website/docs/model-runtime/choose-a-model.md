@@ -183,31 +183,39 @@ built-in recipes' rules are calibrated to the 0.3B, so a signal moved back
 takes its Vela 1.0 rule thresholds with it. In `mom-v1` those are prompt guard
 0.5, safety 0.5 and PII 0.7; the record lists every recipe's.
 
-`decision_model: Vela-1.0` (below) restores every specialist in one line.
+Specialist overrides remain explicit task bindings; selecting a default
+decision model does not remove them.
 
 ## Choose a size {#choose-a-size}
 
-The decision model is the Vela model that answers the Router's questions:
-every built-in signal above, and every
-[`decision` question](tutorials/signal/learned/decision.md) that names no
-`deployment`, in one call per request. One flag or one line chooses it:
+The default decision binding names a deployment that answers the Router's
+judgment tasks and [`decision` questions](tutorials/signal/learned/decision.md)
+without an override. Declare the resource once, then select its exact key.
+Omission selects the built-in `primary` deployment, Vela 2.0 0.3B on CPU:
 
 ```bash
-vllm-sr serve --decision-model Vela-2.0-4B --platform amd
+vllm-sr serve --decision-model primary --platform amd
 ```
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm
     system:
-      decision_model: Vela-2.0-4B
+      decision_model:
+        deployment: primary
 ```
 
 `serve` writes the line into the active configuration as a new version, which
 `vllm-sr config versions` lists and `vllm-sr config rollback` undoes; later
 starts keep it, and `vllm-sr status` shows it. The Helm chart's
 `decisionModel` value and the operator's `spec.config.decision_model` set the
-same field. Names are case-insensitive.
+same binding. Deployment keys are exact and case-sensitive. Model identity,
+device and profile belong to the deployment, not the binding.
 
 Measured through the Router on the router signal suite, against the Vela 1.0
 specialists, and for the latency record's five request signals
@@ -233,12 +241,11 @@ specialists, and for the latency record's five request signals
 - **Every size** is behind Vela 1.0 on user feedback's fresh file (CrossWOZ)
   and on PII in distribution. Per-signal numbers with intervals are in the
   record.
-- **`Vela-1.0`** restores the nine specialists. They answer only the built-in
-  signals, so a `decision` question without a `deployment` is then a load
-  error.
-- **Anything else** is an error. A Decision 2.0 model (Kai, Eos, Sol, Nox,
-  Lux, Vega) answers your own questions: declare it as a deployment and name
-  it in the question's `deployment`.
+- **Decision 1.0 and Decision 2.0** may be the default judgment deployment.
+  Available tasks follow the model's native capabilities; an unsupported task
+  is unavailable regardless of the model family.
+- **Specialists** remain explicit task overrides and can run alongside the
+  default decision deployment.
 
 Each size has its own module thresholds, which a module that sets none takes
 when you switch:

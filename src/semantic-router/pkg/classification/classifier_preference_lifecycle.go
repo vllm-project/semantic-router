@@ -13,6 +13,9 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 	if len(c.Config.PreferenceRules) == 0 {
 		return false
 	}
+	if c.models != nil && c.Config.DecisionModel != "" {
+		return true
+	}
 
 	if c.Config.PreferenceModel.ContrastiveEnabled() {
 		return true
@@ -28,6 +31,18 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 func (c *Classifier) initializePreferenceClassifier() error {
 	if !c.IsPreferenceClassifierEnabled() {
 		return nil
+	}
+	// An explicitly configured contrastive or external classifier keeps its own
+	// execution contract. Omitted preference-model policy uses shared judgment.
+	if !c.Config.PreferenceModel.ContrastiveEnabled() && c.Config.FindExternalModelByRole(config.ModelRolePreference) == nil {
+		judgment, err := prepareDecisionPreference(c.models, c.Config.PreferenceRules)
+		if err != nil {
+			return err
+		}
+		if judgment != nil {
+			c.preferenceClassifier = &PreferenceClassifier{judgment: judgment, preferenceRules: c.Config.PreferenceRules}
+			return nil
+		}
 	}
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)

@@ -50,7 +50,8 @@ func TestModelRuntimeDeploymentsInUseFollowActiveConsumers(t *testing.T) {
 	if _, ok := ModelRuntimeDeploymentsInUse(cfg)["vela-pii"]; !ok {
 		t.Fatal("a decision that reads the PII signal activates its deployment")
 	}
-	cfg.AutoModelNames = []string{}
+
+	moveTestRoutingToUnmappedRecipe(cfg)
 	if used := ModelRuntimeDeploymentsInUse(cfg); len(used) != 0 {
 		t.Fatalf("an unreachable routing profile starts nothing, in use = %v", used)
 	}

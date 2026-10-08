@@ -60,16 +60,13 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 
 // validateDecisionDeployment checks the deployment a decision question or
 // selector asks: a declared model_runtime deployment, or, when it names none,
-// the decision model, which Vela 1.0 cannot be.
+// the decision model, which must support the requested task.
 func validateDecisionDeployment(cfg *RouterConfig, deployment, asker string) error {
 	if deployment != "" {
 		return validateModelRuntimeReference(cfg, deployment)
 	}
-	if _, _, ok, err := cfg.DecisionModelDeployment(); err != nil {
-		return fmt.Errorf("the decision model %s: %w", cfg.DecisionModelSpec().Name, err)
-	} else if !ok {
-		return fmt.Errorf("deployment is required: the decision model is %s, whose specialists answer only the built-in signals. "+
-			"Name a model_runtime deployment for the %s, or choose a Vela 2.0 decision model in global.model_catalog.system.decision_model", cfg.DecisionModelSpec().Name, asker)
+	if _, _, _, err := cfg.DecisionModelDeployment(); err != nil {
+		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
 	}
 	return nil
 }

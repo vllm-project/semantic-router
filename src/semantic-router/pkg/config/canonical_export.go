@@ -296,12 +296,10 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 	global := &CanonicalGlobal{
 		Router: CanonicalRouterGlobal{
-			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
-			Strategy:                  cfg.RoutingDefaults.Strategy,
-			AutoModelName:             cfg.AutoModelName,
-			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
-			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
-			ClearRouteCache:           cfg.ClearRouteCache,
+			ConfigSource:      normalizedConfigSource(cfg.ConfigSource),
+			Strategy:          cfg.RoutingDefaults.Strategy,
+			ListBackendModels: cfg.ListBackendModels,
+			ClearRouteCache:   cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
 				Enabled:    cfg.StreamedBodyMode,
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
@@ -336,14 +334,6 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	}
 
 	return global
-}
-
-func canonicalAutoModelNames(names []string) *[]string {
-	if names == nil {
-		return nil
-	}
-	cloned := append([]string{}, names...)
-	return &cloned
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
@@ -671,9 +661,7 @@ func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemMod
 		FeedbackDetector:      cfg.FeedbackDetector.ModelID,
 	}
 	spec := cfg.DecisionModelSpec()
-	if spec.Name != DefaultDecisionModel {
-		system.DecisionModel = spec.Name
-	}
+	system.DecisionModel = DecisionModelBinding{Deployment: spec.Name}
 	for _, line := range systemLines {
 		if value := line.value(&system); *value == *line.value(&spec.System) {
 			*value = ""

@@ -7,12 +7,15 @@ import { describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
 const generator = 'dashboard/frontend/scripts/generate-decision-runtime-catalog.py'
+const backendProjection = 'src/semantic-router/pkg/modelservice/decision_catalog.generated.json'
 const projection = 'dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json'
 const runtime = 'src/model-runtime/vllm_srun/'
 const sources = [
   'registry/tables/common.py',
   'registry/tables/decision1.py',
   'registry/tables/decision2.py',
+  'registry/tables/vela2.py',
+  'families/vela2/request.py',
   'systemone.py',
   'families/decision1/questions.py',
   'families/decision1/family.py',
@@ -23,7 +26,7 @@ describe('Decision catalog generation boundary', () => {
   it('checks drift in sources and output without importing the ML runtime or rewriting files', () => {
     const fixture = mkdtempSync(join(tmpdir(), 'decision-catalog-projection-'))
     try {
-      for (const file of [generator, projection, ...sources]) {
+      for (const file of [generator, projection, backendProjection, ...sources]) {
         mkdirSync(dirname(join(fixture, file)), { recursive: true })
         cpSync(join(root, file), join(fixture, file))
       }

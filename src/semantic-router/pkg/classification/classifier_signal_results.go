@@ -86,6 +86,7 @@ type SignalResults struct {
 	// PII detection metadata (populated when PII signal is evaluated)
 	// PIIContentVerified is true only after complete, successful classification with no personal entities.
 	PIIContentVerified bool
+	PIIEvidence        []PrivacyEvidence
 	PIIDetected        bool     // Whether any PII was detected
 	PIIEntities        []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
 

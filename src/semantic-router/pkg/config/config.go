@@ -208,11 +208,18 @@ type Listener struct {
 	// accepts, by exact `model` value; others get 403 model_not_allowed and
 	// /v1/models lists only these. Empty accepts every model.
 	Models []string `yaml:"models,omitempty"`
+	// SystemOne explicitly publishes native decision inference independently
+	// from the Chat/Responses model allow-list. Omission keeps it private.
+	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
 	// Identity, when set, decides whether a standalone Router keeps the client
 	// identity headers that requests on this listener carry.
 	Identity *ListenerIdentity `yaml:"identity,omitempty"`
+}
+
+type ListenerSystemOne struct {
+	Models []string `yaml:"models"`
 }
 
 // ListenerIdentity names the identity sources a standalone listener trusts.
@@ -246,14 +253,12 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
-	ClearRouteCache           bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode          bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes      int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec    int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
+	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
+	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
 }
 
 // SkipProcessingConfig gates the x-vsr-skip-processing request header.

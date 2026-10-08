@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -204,7 +206,12 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		return gateway.Serving{}, nil, errors.New("the serving configuration has no upstream set")
 	}
 	cfg := lease.Snapshot.Config()
+	nativeListener, _ := systemone.SelectListener(cfg.Listeners, listener)
 	return gateway.Serving{
+		SystemOne: systemone.Handler(cfg, nativeListener, func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
+			result, err := lease.Router.SystemOne(ctx, deployment, body)
+			return result.Status, result.Body, err
+		}),
 		Engine:          routing.NewEngine(lease.Router, s.engine),
 		Upstream:        set,
 		APIKeys:         listenerAPIKeys(cfg, listener),

@@ -140,7 +140,18 @@ func (t decisionModelTransport) serveHTTP(w http.ResponseWriter, r *http.Request
 	}
 	executionCtx, executionCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer executionCancel()
-	response, data, err := t.request(executionCtx, http.MethodPost, path, body)
+	var response *decisionModelResponse
+	var data []byte
+	if capabilities.ServingMode == servingModeEngine && instanceEngineActive(executionCtx) {
+		body, err = json.Marshal(request)
+		if err == nil {
+			var code int
+			code, data, err = instanceRequest(executionCtx, http.MethodPost, "/systemone", body)
+			response = &decisionModelResponse{StatusCode: code, Header: make(http.Header)}
+		}
+	} else {
+		response, data, err = t.request(executionCtx, http.MethodPost, path, body)
+	}
 	if err != nil {
 		decisionModelTransportError(w, err)
 		return
@@ -191,6 +202,13 @@ func (t decisionModelTransport) request(ctx context.Context, method, path string
 
 func (t decisionModelTransport) capabilities(ctx context.Context) (decisionModelCapabilities, error) {
 	result := decisionModelCapabilities{ServingMode: servingModeRouter, TimeoutMS: 30000, Deployments: []decisionModelDeployment{}}
+	if instanceEngineActive(ctx) {
+		code, body, err := instanceRequest(ctx, http.MethodGet, "/models", nil)
+		if err != nil {
+			return result, err
+		}
+		return engineDecisionCapabilities(code, body)
+	}
 	response, body, err := t.request(ctx, http.MethodGet, decisionModelDiagnosticPath, nil)
 	if err != nil {
 		return result, err
@@ -216,8 +234,13 @@ func (t decisionModelTransport) capabilities(ctx context.Context) (decisionModel
 	if err != nil {
 		return result, err
 	}
+	return engineDecisionCapabilities(response.StatusCode, body)
+}
+
+func engineDecisionCapabilities(code int, body []byte) (decisionModelCapabilities, error) {
+	result := decisionModelCapabilities{ServingMode: servingModeEngine, TimeoutMS: 30000, Deployments: []decisionModelDeployment{}}
 	var models runtimeapi.ModelList
-	if response.StatusCode != 200 || json.Unmarshal(body, &models) != nil {
+	if code != 200 || json.Unmarshal(body, &models) != nil {
 		return result, errors.New("model inventory unavailable")
 	}
 	result.ServingMode = servingModeEngine

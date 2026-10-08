@@ -72,6 +72,22 @@ class ListenerIdentity(BaseModel):
     )
 
 
+class ListenerSystemOne(BaseModel):
+    """Explicit public models for native System One inference."""
+
+    model_config = ConfigDict(extra="forbid")
+    models: List[str] = Field(min_length=1)
+
+    @field_validator("models")
+    @classmethod
+    def exact_model_names(cls, names):
+        if any(not name or name != name.strip() for name in names):
+            raise ValueError("systemone.models requires exact non-empty public names")
+        if len(set(names)) != len(names):
+            raise ValueError("systemone.models must not contain duplicate names")
+        return names
+
+
 class Listener(BaseModel):
     """Network listener configuration."""
 
@@ -92,6 +108,11 @@ class Listener(BaseModel):
         "'model' value; other models are rejected with HTTP 403 "
         "model_not_allowed and /v1/models lists only these. Empty accepts "
         "every model. Standalone mode enforces it; --gateway extproc rejects it.",
+    )
+    systemone: Optional[ListenerSystemOne] = Field(
+        default=None,
+        description="Publish native System One inference for these exact public "
+        "model IDs. Omitted keeps the API private; Chat model access is unchanged.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,
@@ -636,10 +657,12 @@ class ClassifierSignal(BaseModel):
     def _validate_local(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError("local classifiers require at least two labels")
-        if self.model or self.instructions or self.disable_rationale:
+        if self.model or self.disable_rationale:
             raise ValueError(
-                "local classifiers do not accept model, instructions or disable_rationale"
+                "local classifiers do not accept model or disable_rationale"
             )
+        if self.model_path and self.instructions:
+            raise ValueError("specialist local classifiers do not accept instructions")
 
     def _validate_llm(self):
         if not self.instructions:
@@ -2560,8 +2583,6 @@ def _validate_unbound_classifier_selectors(profile):
     for rule in profile.signals.classifiers or []:
         if f"classifier.{rule.name}" in profile.model_bindings:
             continue
-        if rule.type == CLASSIFIER_TYPE_LOCAL and not rule.model_path:
-            raise ValueError("local classifiers require model_path or a model binding")
         if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
             raise ValueError(
                 f"{rule.type} classifiers require model or a model binding"

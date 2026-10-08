@@ -22,17 +22,15 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource             `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy          `yaml:"strategy,omitempty"`
-	AutoModelName             string                   `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string                `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                     `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                     `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody    `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig     `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig     `yaml:"model_selection"`
-	Learning                  RouterLearningConfig     `yaml:"learning,omitempty"`
-	Fallback                  *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	ConfigSource      ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy          RoutingStrategy          `yaml:"strategy,omitempty"`
+	ListBackendModels bool                     `yaml:"list_backend_models"`
+	ClearRouteCache   bool                     `yaml:"clear_route_cache"`
+	StreamedBody      CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing    SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
+	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -108,17 +106,16 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
-	// DecisionModel is the Vela model that answers the built-in signals and
-	// the decision questions that name no deployment (decision_model.go).
-	DecisionModel         string `yaml:"decision_model,omitempty"`
-	Safety                string `yaml:"safety,omitempty"`
-	Hazard                string `yaml:"hazard,omitempty"`
-	PromptGuard           string `yaml:"prompt_guard,omitempty"`
-	DomainClassifier      string `yaml:"domain_classifier,omitempty"`
-	PIIClassifier         string `yaml:"pii_classifier,omitempty"`
-	FactCheckClassifier   string `yaml:"fact_check_classifier,omitempty"`
-	HallucinationDetector string `yaml:"hallucination_detector,omitempty"`
-	FeedbackDetector      string `yaml:"feedback_detector,omitempty"`
+	// DecisionModel selects the shared default judgment deployment.
+	DecisionModel         DecisionModelBinding `yaml:"decision_model,omitempty"`
+	Safety                string               `yaml:"safety,omitempty"`
+	Hazard                string               `yaml:"hazard,omitempty"`
+	PromptGuard           string               `yaml:"prompt_guard,omitempty"`
+	DomainClassifier      string               `yaml:"domain_classifier,omitempty"`
+	PIIClassifier         string               `yaml:"pii_classifier,omitempty"`
+	FactCheckClassifier   string               `yaml:"fact_check_classifier,omitempty"`
+	HallucinationDetector string               `yaml:"hallucination_detector,omitempty"`
+	FeedbackDetector      string               `yaml:"feedback_detector,omitempty"`
 }
 
 // CanonicalPromptGuardModule keeps prompt-guard settings visible as a module
@@ -279,12 +276,8 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.RoutingDefaults = RoutingDefaults{Strategy: router.Strategy, Fallback: router.Fallback.Clone()}
 	cfg.ConfigSource = router.ConfigSource
 	cfg.Strategy = router.Strategy
-	cfg.AutoModelName = router.AutoModelName
-	cfg.AutoModelNames = nil
-	if router.AutoModelNames != nil {
-		cfg.AutoModelNames = append([]string{}, (*router.AutoModelNames)...)
-	}
-	cfg.IncludeConfigModelsInList = router.IncludeConfigModelsInList
+
+	cfg.ListBackendModels = router.ListBackendModels
 	cfg.ClearRouteCache = router.ClearRouteCache
 	cfg.StreamedBodyMode = router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes
@@ -326,7 +319,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
-	cfg.DecisionModel = modelCatalog.System.DecisionModel
+	cfg.DecisionModel = modelCatalog.System.DecisionModel.Deployment
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)

@@ -120,36 +120,20 @@ entrypoints:
     recipe: production
 ```
 
-### Looper 别名与模型同名 {#looper-alias-names-a-model}
+### 入口名与后端模型冲突 {#looper-alias-names-a-model}
 
-```text
-Warning: [global.integrations.looper.flow.model_names] Flow alias 'openai/gpt-oss-20b' is also a model that providers.models serves and decisions 'workflow_route', 'default_route' route to; requests for it evaluate only workflows decisions, so the model cannot be requested directly and a request that matches none of them fails with no_route
-Hint: Give the alias a name that no model uses, such as vllm-sr/flow.
-```
+公开 recipe 入口必须使用独立名字。与后端模型同名的入口会被拒绝，
+Fusion、ReMoM 和 Flow 也遵循同一规则，没有单独的隐式分发名字。
 
-配置本身合法，因此会被加载，Router 也会以 `looper_alias_shadows_model` 记录同样的警告。在别名改名之前，该模型的每个请求都会返回 [`no_route`](../api/router.md#routing-errors)，除非它匹配某个 workflows 决策。ReMoM 和 Fusion 别名同理。
-
-错误写法：
+如果 `openai/gpt-oss-20b` 是后端模型，请为工作流声明不同的入口：
 
 ```yaml
-global:
-  integrations:
-    looper:
-      flow:
-        model_names: [openai/gpt-oss-20b]
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: flow
 ```
 
-修正后，Flow 请求改为发送到 `vllm-sr/flow`：
-
-```yaml
-global:
-  integrations:
-    looper:
-      flow:
-        model_names: [vllm-sr/flow]
-```
-
-完整示例见[入口与配方教程](../tutorials/global/entrypoints-and-recipes.md)和[配方教程](../tutorials/global/recipes.md)。
+将 `algorithm.type: workflows` 的决策放在 `flow` recipe 中。
 
 ## 请求返回路由错误码 {#a-request-returns-a-routing-error-code}
 
@@ -159,7 +143,7 @@ global:
 vllm-sr logs router | grep '<x-request-id>'
 ```
 
-对于 `no_route`，`entrypoint_routing_no_selection` 日志行会给出模型、配方以及已匹配的决策。如果出现 `looper_algorithm` 值，说明该模型是只评估该算法决策的 Looper 别名；如果它同时也是某个后端模型的名字，请参阅 [Looper 别名与模型同名](#looper-alias-names-a-model)。
+对于 `no_route`，`entrypoint_routing_no_selection` 日志行会给出模型、配方以及已匹配的决策。Fusion、Flow 和 ReMoM 由 recipe 中的决策选择；先检查 entrypoint 映射和 recipe 规则。
 
 ## 响应缓存无法启动
 

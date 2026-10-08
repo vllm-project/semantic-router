@@ -34,7 +34,8 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if sharedServices && cfg.API.Embeddings.Enabled {
 		needed[primary] = true
 	}
-	if len(cfg.EmbeddingRules) > 0 || len(cfg.ReaskRules) > 0 || len(cfg.KnowledgeBases) > 0 || (len(cfg.ComplexityRules) > 0 && cfg.ComplexityModel.Backend == nil) {
+	judgment := cfg.DecisionModel != ""
+	if len(cfg.EmbeddingRules) > 0 || (len(cfg.ReaskRules) > 0 && !judgment) || len(cfg.KnowledgeBases) > 0 || (len(cfg.ComplexityRules) > 0 && cfg.ComplexityModel.Backend == nil && (!judgment || HasImageCandidatesInRules(cfg.ComplexityRules))) {
 		needed[primary] = true
 	}
 	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceModel.ContrastiveEnabled() {

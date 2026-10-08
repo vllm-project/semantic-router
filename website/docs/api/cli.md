@@ -70,6 +70,12 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List the configuration history, newest first. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
+| [`vllm-sr instance`](#vllm-sr-instance) | Manage the Router/Engine mode of an existing local instance. |
+| [`vllm-sr instance attach`](#vllm-sr-instance-attach) | Attach control to an existing canonical local stack after an image rollout. |
+| [`vllm-sr instance controller`](#vllm-sr-instance-controller) | Run the persistent controller in a host service supervisor. |
+| [`vllm-sr instance deploy`](#vllm-sr-instance-deploy) | Submit a rollback-protected data-plane deployment. |
+| [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
+| [`vllm-sr instance status`](#vllm-sr-instance-status) | Print desired/observed mode and durable operation state. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
 | [`vllm-sr optimize`](#vllm-sr-optimize) | Analyze routing evidence and produce candidate recipe changes. |
 | [`vllm-sr optimize recipe-learning`](#vllm-sr-optimize-recipe-learning) | Analyze replay and outcomes to produce recipe-learning artifacts. |
@@ -951,6 +957,85 @@ vllm-sr dashboard --no-open
 | `--container-runtime CHOICE` | Container runtime: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
+## `vllm-sr instance` {#vllm-sr-instance}
+
+```text
+Usage: vllm-sr instance [OPTIONS] COMMAND [ARGS]...
+```
+
+Manage the Router/Engine mode of an existing local instance.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | Default: config.yaml. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance attach` {#vllm-sr-instance-attach}
+
+```text
+Usage: vllm-sr instance attach [OPTIONS]
+```
+
+Attach control to an existing canonical local stack after an image rollout.
+
+| Parameter | Description |
+| --- | --- |
+| `--runtime-config FILE` | — |
+| `--gateway CHOICE` | Choices: standalone, extproc. Default: extproc. |
+| `--startup-timeout INTEGER RANGE` | [x&gt;=1] Default: 600. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance controller` {#vllm-sr-instance-controller}
+
+```text
+Usage: vllm-sr instance controller [OPTIONS]
+```
+
+Run the persistent controller in a host service supervisor.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance deploy` {#vllm-sr-instance-deploy}
+
+```text
+Usage: vllm-sr instance deploy [OPTIONS]
+```
+
+Submit a rollback-protected data-plane deployment.
+
+| Parameter | Description |
+| --- | --- |
+| `--mode CHOICE` | [required] Choices: router, engine. |
+| `--deployment TEXT` | Configured model deployment (required for Engine). |
+| `--request-id TEXT` | Reuse this ID to safely retry an operation. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance models` {#vllm-sr-instance-models}
+
+```text
+Usage: vllm-sr instance models [OPTIONS]
+```
+
+Print actual native model cards for readiness checks, without inference.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr instance status` {#vllm-sr-instance-status}
+
+```text
+Usage: vllm-sr instance status [OPTIONS]
+```
+
+Print desired/observed mode and durable operation state.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
 ## `vllm-sr logs` {#vllm-sr-logs}
 
 ```text
@@ -1448,7 +1533,7 @@ managed runtimes itself for model_runtime deployments in the config.
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform TEXT` | cpu (default), amd or nvidia, on both targets and in engine mode. It selects the matching image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. On docker and in engine mode 'amd' passes the ROCm devices through and 'nvidia' the NVIDIA GPUs (--gpus all); on kubernetes the Router requests one GPU (amd.com/gpu or nvidia.com/gpu). Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. On macOS the docker target is CPU only. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
-| `--decision-model NAME` | The Vela model that answers the Router's questions: the built-in signals and every routing.signals.decision question without a deployment. Vela-2.0-0.3B, Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B, Vela-1.0 (case-insensitive; default Vela-2.0-0.3B). The 4B and 9B need a GPU (--platform amd or nvidia). serve writes it into the active config as a new configuration version; later starts keep it. |
+| `--decision-model DEPLOYMENT` | Select an exact model_runtime deployment key from global.model_catalog.deployments for the Router's judgment tasks (default primary). Writes &#123;deployment: key&#125; to the active config; later starts keep it. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |

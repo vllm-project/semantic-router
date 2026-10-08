@@ -5,6 +5,7 @@ import (
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -111,6 +112,7 @@ func TestReplayPersonalDataPolicyKeepsMetadataAndLifecycle(t *testing.T) {
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
 			ctx.PIIContentVerified, ctx.PIIDetected = test.verified, test.detected
+			ctx.PIIEvidence = []classification.PrivacyEvidence{classification.NewPrivacyEvidence("request", "Summarize the meeting agenda.", test.verified, !test.detected)}
 			ctx.RouterReplayPluginConfig = cfg.EffectiveRouterReplayConfig(nil)
 			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
 			router.attachRouterReplayResponse(ctx, []byte(`{"text":"Meeting agenda."}`), true)
@@ -227,5 +229,29 @@ func TestReplayRequestPolicyDoesNotBorrowAnotherFallbackCapture(t *testing.T) {
 	after, ok := router.ReplayRecorder.GetRecord(selected.RouterReplayID)
 	if !ok || after.ResponseBody == "" {
 		t.Fatal("decision override lost its own response capture policy")
+	}
+}
+
+func TestReplayCleanPromptDoesNotAuthorizeResponseToolsOrDifferentInput(t *testing.T) {
+	no := false
+	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &no}}
+	router := replayRuntimeRouter(t, cfg)
+	for _, exact := range []bool{false, true} {
+		ctx := replayPolicyRequest(t)
+		input := "a different request"
+		if exact {
+			input = "Summarize the meeting agenda."
+		}
+		ctx.PIIContentVerified = true // This historical aggregate cannot authorize capture.
+		ctx.PIIEvidence = []classification.PrivacyEvidence{classification.NewPrivacyEvidence("request", input, true, true)}
+		router.startRouterReplay(ctx, "public", "model", "")
+		router.attachRouterReplayResponse(ctx, []byte(`{"text":"Contact private@example.invalid"}`), true)
+		record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+		if !ok || (record.Prompt != "") != exact {
+			t.Fatal("prompt did not require exact input evidence")
+		}
+		if record.RequestBody != "" || record.ResponseBody != "" || record.ToolTrace != nil || record.ToolDefinitions != "" {
+			t.Fatal("request evidence certified unscanned structured or response content")
+		}
 	}
 }

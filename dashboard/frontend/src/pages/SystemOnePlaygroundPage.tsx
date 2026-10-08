@@ -8,6 +8,7 @@ import SystemOneSelect from './SystemOneSelect'
 import {
   buildSystemOneRequest,
   EXAMPLE_STATES,
+  exampleDrafts,
   newQuestion,
   QUESTION_TYPES,
   type QuestionDraft,
@@ -15,6 +16,7 @@ import {
   type SystemOneQuestion,
 } from './systemOnePlayground'
 import { useSystemOnePlayground } from './useSystemOnePlayground'
+import { useDecisionTasks } from './useDecisionTasks'
 import styles from './SystemOnePlaygroundPage.module.css'
 
 function QuestionEditor({
@@ -232,9 +234,16 @@ export default function SystemOnePlaygroundPage() {
   const { user } = useAuth()
   const permitted = canRunEvaluation(user)
   const runtime = useSystemOnePlayground()
+  const taskCatalog = useDecisionTasks()
   const [source, setSource] = useState(EXAMPLE_STATES[0].state)
   const [format, setFormat] = useState<'text' | 'json'>('text')
-  const [drafts, setDrafts] = useState<QuestionDraft[]>(() => [newQuestion('choice')])
+  const [drafts, setDrafts] = useState<QuestionDraft[]>(() => exampleDrafts(EXAMPLE_STATES[0]))
+  const [selectedExample, setSelectedExample] = useState(EXAMPLE_STATES[0].id)
+  const [templateBaseline, setTemplateBaseline] = useState<{
+    source: string
+    format: 'text' | 'json'
+    questions: string
+  } | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const questionTabs = useRef<HTMLDivElement>(null)
@@ -281,28 +290,77 @@ export default function SystemOnePlaygroundPage() {
 
   function loadExample(id: string) {
     const example = EXAMPLE_STATES.find((item) => item.id === id)
-    if (!example) return
+    if (!example) {
+      const task = taskCatalog.data?.tasks.find((item) => `task:${item.id}` === id)
+      if (!task) return
+      const text =
+        typeof task.template.state === 'string'
+          ? task.template.state
+          : JSON.stringify(task.template.state, null, 2)
+      const nextFormat = typeof task.template.state === 'string' ? 'text' : 'json'
+      const nextDrafts: QuestionDraft[] = Object.entries(task.template.questions).map(
+        ([name, native]) => {
+          const { criteria, ...question } = structuredClone(native)
+          if (criteria !== undefined) {
+            if (question.type === 'score' && Array.isArray(criteria))
+              question.levels = criteria as string[]
+            else if (criteria && typeof criteria === 'object' && !Array.isArray(criteria)) {
+              const options = Object.entries(criteria).map(([key, description]) => ({
+                key,
+                description: typeof description === 'string' ? description : '',
+              }))
+              if (question.type === 'span' || question.type === 'set') question.labels = options
+              else question.choices = options
+            }
+          }
+          return { id: crypto.randomUUID(), name, question }
+        },
+      )
+      setSource(text)
+      setFormat(nextFormat)
+      setDrafts(nextDrafts)
+      setActiveIndex(0)
+      setSelectedExample(id)
+      setTemplateBaseline({
+        source: text,
+        format: nextFormat,
+        questions: JSON.stringify(
+          Object.fromEntries(nextDrafts.map(({ name, question }) => [name, question])),
+        ),
+      })
+      return
+    }
+    setTemplateBaseline(null)
     setSource(example.state)
     setFormat('text')
-    const types: QuestionType[] =
-      id === 'entities'
-        ? ['span']
-        : id === 'support'
-          ? ['choice', 'set']
-          : ['choice', 'score', 'noul']
-    const next = types
-      .filter((type) => !supported || supported.includes(type))
-      .map((type) => newQuestion(type))
-    if (next.length) {
-      setDrafts(next)
-      setActiveIndex(0)
-    }
+    setSelectedExample(id)
+    setDrafts(exampleDrafts(example))
+    setActiveIndex(0)
   }
 
+  const example = EXAMPLE_STATES.find((item) => item.id === selectedExample)
+  const templateEdited = Boolean(
+    templateBaseline &&
+      (source !== templateBaseline.source ||
+        format !== templateBaseline.format ||
+        JSON.stringify(Object.fromEntries(drafts.map(({ name, question }) => [name, question]))) !==
+          templateBaseline.questions),
+  )
+  const exampleEdited =
+    templateEdited ||
+    Boolean(
+      example &&
+        (source !== example.state ||
+          format !== 'text' ||
+          JSON.stringify(
+            Object.fromEntries(drafts.map(({ name, question }) => [name, question])),
+          ) !== JSON.stringify(example.questions)),
+    )
+
   function addQuestion(type: QuestionType) {
-    let next = newQuestion(type, drafts.length + 1)
-    while (drafts.some((draft) => draft.name === next.name))
-      next = { ...next, name: `${next.name}_new` }
+    let index = 1
+    let next = newQuestion(type, index)
+    while (drafts.some((draft) => draft.name === next.name)) next = newQuestion(type, ++index)
     setDrafts([...drafts, next])
     setActiveIndex(drafts.length)
     setAddOpen(false)
@@ -420,17 +478,27 @@ export default function SystemOnePlaygroundPage() {
                   <SystemOneSelect
                     className={styles.exampleSelect}
                     label="Load example"
-                    value=""
+                    value={selectedExample}
                     onChange={loadExample}
                     placeholder="Choose a starting point"
                     disabled={runtime.running}
-                    options={EXAMPLE_STATES.map((example) => ({
-                      value: example.id,
-                      label: example.label,
-                      description: example.description,
-                    }))}
+                    options={[
+                      ...EXAMPLE_STATES.map((example) => ({
+                        value: example.id,
+                        label: example.label,
+                        description: example.description,
+                      })),
+                      ...(taskCatalog.data?.tasks ?? []).map((task) => ({
+                        value: `task:${task.id}`,
+                        label: task.title,
+                        description: `${task.stage} task · ${task.description}`,
+                      })),
+                    ]}
                   />
-                  <span>{Array.from(source).length.toLocaleString()} characters</span>
+                  <span>
+                    {exampleEdited && <strong>Modified · </strong>}
+                    {Array.from(source).length.toLocaleString()} characters
+                  </span>
                 </div>
               </section>
               <section className={styles.panel} aria-labelledby="questions-heading">

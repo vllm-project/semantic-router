@@ -38,7 +38,7 @@ from cli.commands.runtime_support import (
 from cli.container_services import container_status_strict
 from cli.decision_model import (
     canonical_decision_model,
-    configured_decision_model,
+    decision_model_deployment,
     gpu_requirement_error,
     set_decision_model,
 )
@@ -84,13 +84,7 @@ def validate_decision_model_flag(
 
     if decision_model is None:
         return None
-    canonical = canonical_decision_model(decision_model)
-    error = gpu_requirement_error(
-        canonical, platform, local_host=resolved_target == "docker"
-    )
-    if error:
-        raise ValueError(error)
-    return canonical
+    return canonical_decision_model(decision_model)
 
 
 def _check_served_decision_model(
@@ -99,11 +93,11 @@ def _check_served_decision_model(
     """Fail before startup when the config's decision model needs a GPU it lacks."""
 
     try:
-        decision_model = configured_decision_model(document)
+        deployment = decision_model_deployment(document)
     except ValueError as error:
         raise ValueError(f"global.model_catalog.system.{error}") from error
     error = gpu_requirement_error(
-        decision_model, (platform or "").strip().lower(), local_host=local_host
+        deployment, (platform or "").strip().lower(), local_host=local_host
     )
     if error:
         raise ValueError(error)
@@ -237,6 +231,9 @@ def _prepare_docker_runtime_config(
                 decision_model,
             )
         elif decision_model:
+            candidate = yaml.safe_load(effective_config_path.read_bytes()) or {}
+            set_decision_model(candidate, decision_model)
+            _check_served_decision_model(candidate, platform, local_host=True)
             _apply_decision_model_version(
                 effective_config_path,
                 decision_model,
