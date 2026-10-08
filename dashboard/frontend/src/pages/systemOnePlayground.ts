@@ -121,10 +121,11 @@ export function newQuestion(type: QuestionType, index = 1): QuestionDraft {
         ...common,
         question: {
           type,
-          instructions: 'Find names of people and organizations.',
+          instructions: 'Find names of people, organizations, and programming languages.',
           labels: [
             { key: 'person', description: 'The name of a person' },
             { key: 'organization', description: 'The name of a company or organization' },
+            { key: 'language', description: 'The programming language' },
           ],
         },
       }
@@ -148,20 +149,23 @@ export const EXAMPLE_STATES = [
   {
     id: 'coding',
     label: 'Code & reasoning',
+    description: 'Choice, Score, and Noul · assess a coding request',
     state:
       'Write a Python function that merges two sorted lists without allocating another list. Explain why it works and analyze its time and space complexity.',
   },
   {
     id: 'support',
     label: 'Customer support',
+    description: 'Choice and Set · classify a support request',
     state:
       'I was charged twice for order #4821 yesterday. Please explain how to request a refund and help me write a polite message to the support team.',
   },
   {
     id: 'entities',
-    label: 'People & organizations',
+    label: 'Entity extraction',
+    description: 'Span · find people, organizations, and languages',
     state:
-      'Maya Chen joined Northstar Labs in June. She will collaborate with Daniel Rivera at Open Robotics on a new research project.',
+      'Maya Chen joined Northstar Labs in June. She will collaborate with Daniel Rivera at Open Robotics on a new research project written in Python.',
   },
 ]
 

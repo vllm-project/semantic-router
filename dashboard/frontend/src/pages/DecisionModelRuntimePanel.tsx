@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { canAccessDashboardPath } from '../utils/accessControl'
-import type { ModelRuntimeInventory } from './decisionModelManagement'
+import { decisionRuntimeModelName, type ModelRuntimeInventory } from './decisionModelManagement'
 import {
   DECISION_MODEL_TIME_WINDOWS,
   decisionModelChartPoints,
@@ -19,10 +19,12 @@ export default function DecisionModelRuntimePanel({
   inventory,
   refreshedAt,
   engineOnly,
+  loading,
 }: {
   inventory: ModelRuntimeInventory | null
   refreshedAt: Date | null
-  engineOnly: boolean
+  engineOnly: boolean | null
+  loading: boolean
 }) {
   const { user } = useAuth()
   const [timeWindow, setTimeWindow] = useState<DecisionModelTimeWindow>(3_600)
@@ -33,7 +35,7 @@ export default function DecisionModelRuntimePanel({
   const metrics = useDecisionModelMetrics(
     deployment ? [deployment.name] : [],
     refreshedAt,
-    canReadMetrics && !engineOnly,
+    canReadMetrics && engineOnly === false,
     timeWindow,
   )
   const points = deployment ? decisionModelChartPoints(metrics.series, deployment.name) : []
@@ -83,8 +85,14 @@ export default function DecisionModelRuntimePanel({
       ) : null}
       {!deployment ? (
         <div className={styles.runtimeEmpty}>
-          <strong>No model runtime deployments reported.</strong>
-          <p>Deploy a decision model to inspect its runtime and collected observations.</p>
+          <strong>
+            {loading ? 'Loading runtime deployments…' : 'No model runtime deployments reported.'}
+          </strong>
+          <p>
+            {loading
+              ? 'Fetching the latest deployment observations.'
+              : 'Deploy a decision model to inspect its runtime and collected observations.'}
+          </p>
         </div>
       ) : (
         <article className={styles.deployment} key={deployment.name} aria-label={deployment.name}>
@@ -106,22 +114,25 @@ export default function DecisionModelRuntimePanel({
               </div>
               <div>
                 {deployments.length > 1 ? (
-                  <select
+                  <div
+                    className={styles.deploymentChoices}
+                    role="group"
                     aria-label="Runtime deployment"
-                    className={styles.deploymentSelect}
-                    value={deployment.name}
-                    onChange={(event) => setSelectedDeployment(event.target.value)}
                   >
                     {deployments.map((candidate) => (
-                      <option value={candidate.name} key={candidate.name}>
+                      <button
+                        type="button"
+                        key={candidate.name}
+                        aria-pressed={candidate.name === deployment.name}
+                        onClick={() => setSelectedDeployment(candidate.name)}
+                      >
                         {candidate.name}
-                      </option>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 ) : (
-                  <h3>{deployment.name}</h3>
+                  <h3>{decisionRuntimeModelName(deployment) ?? deployment.name}</h3>
                 )}
-                <p className={styles.repository}>{shown(deployment.repo)}</p>
               </div>
             </div>
             <span className={`${styles.runtimeState} ${ready ? styles.ready : styles.pending}`}>
@@ -148,7 +159,7 @@ export default function DecisionModelRuntimePanel({
               <dd>{deployment.managed ? 'Managed by router' : 'External deployment'}</dd>
             </div>
           </dl>
-          {canReadMetrics && !engineOnly && (
+          {canReadMetrics && engineOnly === false && (
             <>
               <div className={styles.metricsCaption}>
                 <span>
@@ -175,6 +186,14 @@ export default function DecisionModelRuntimePanel({
           <details className={styles.hashes}>
             <summary>Deployment details</summary>
             <dl className={styles.facts}>
+              <div>
+                <dt>Deployment</dt>
+                <dd>{deployment.name}</dd>
+              </div>
+              <div>
+                <dt>Repository</dt>
+                <dd>{shown(deployment.repo)}</dd>
+              </div>
               <div>
                 <dt>Revision</dt>
                 <dd>{shown(deployment.revision)}</dd>

@@ -10,20 +10,23 @@ import {
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
-  it('keeps decision model management and testing in separate Build categories', () => {
-    const manager = BUILD_MENU_CATEGORIES.find((category) => category.key === 'routing')
-      ?.sections.flatMap((section) => section.items)
-      .find((item) => item.kind === 'route' && item.to === '/decision-model')
-    expect(manager).toMatchObject({ label: 'Decision Model' })
-    expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/decision-model', false)).toBe(
-      'routing',
-    )
-    expect(
-      findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/decision-model/playground', false),
-    ).toBe('testing')
-    expect(
-      findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/decision-model', false),
-    ).toBeUndefined()
+  it('closes the decision-model lifecycle in three System One columns', () => {
+    const systemOne = BUILD_MENU_CATEGORIES.find((category) => category.key === 'system-one')
+    expect(systemOne?.label).toBe('System One')
+    expect(systemOne?.sections.map((section) => section.title)).toEqual([
+      'Decision Models',
+      'Decision Playground',
+      'Decision Monitoring',
+    ])
+    expect(systemOne?.sections.every((section) => section.items.length === 1)).toBe(true)
+    for (const path of [
+      '/decision-model',
+      '/decision-model/playground',
+      '/decision-model/monitoring',
+    ]) {
+      expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, path, false)).toBe('system-one')
+      expect(findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, path, false)).toBeUndefined()
+    }
     expect(findActiveLayoutMenuCategory(OPERATE_MENU_CATEGORIES, '/models', false)).toBe('runtime')
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, '/models', false)).toBeUndefined()
   })
@@ -52,7 +55,7 @@ describe('layout navigation route matching', () => {
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
   })
 
-  it('keeps Decision Model, Models, and Mixture-of-Models together in the first Routing column', () => {
+  it('keeps backend Models and Mixture-of-Models in the first Routing column', () => {
     const models = BUILD_MENU_CATEGORIES.find(
       (category) => category.key === 'routing',
     )?.sections.find((section) => section.title === 'Models')
@@ -60,12 +63,8 @@ describe('layout navigation route matching', () => {
       (item) => item.kind === 'config' && item.configSection === 'entrypoints-recipes',
     )
 
+    expect(models?.items).toHaveLength(2)
     expect(models?.items[0]).toMatchObject({
-      kind: 'route',
-      label: 'Decision Model',
-      to: '/decision-model',
-    })
-    expect(models?.items[1]).toMatchObject({
       kind: 'config',
       label: 'Models',
       configSection: 'models',
@@ -75,7 +74,7 @@ describe('layout navigation route matching', () => {
       label: 'Mixture-of-Models',
       configSection: 'entrypoints-recipes',
     })
-    expect(models?.items.indexOf(entrypoints!)).toBe(2)
+    expect(models?.items.indexOf(entrypoints!)).toBe(1)
   })
 
   it('derives config selection from the URL, including legacy aliases', () => {

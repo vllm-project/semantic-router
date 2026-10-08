@@ -1,0 +1,117 @@
+.field {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.field .trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trigger svg,
+.option svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.field .trigger:hover:not(:disabled),
+.field .trigger[aria-expanded='true'] {
+  border-color: var(--text-muted);
+  background: var(--surface-panel);
+}
+
+.placeholder {
+  color: var(--text-secondary);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: 0 14px 36px #0006;
+}
+
+.above {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.field .option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 44px;
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option > span {
+  min-width: 0;
+}
+
+.option strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.option small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.field .option[data-active='true'] {
+  background: var(--surface-canvas);
+  border-color: var(--border-strong);
+}
+
+.option[aria-selected='true'] svg {
+  color: var(--text-primary);
+}

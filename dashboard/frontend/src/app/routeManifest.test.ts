@@ -32,6 +32,10 @@ describe('dashboard route manifest', () => {
       path: '/decision-model/playground',
       page: 'decision-model-playground',
     })
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/decision-model/monitoring',
+      page: 'decision-model-monitoring',
+    })
   })
 
   it('keeps legacy redirects pointed at canonical dashboard routes', () => {

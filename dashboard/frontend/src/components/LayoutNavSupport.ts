@@ -100,7 +100,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Models',
         description: 'Connect models and compose public model endpoints.',
         items: [
-          { kind: 'route', label: 'Decision Model', icon: 'model', to: '/decision-model' },
           { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',
@@ -135,19 +134,36 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
     ],
   },
   {
-    key: 'testing',
-    label: 'Testing',
-    description: 'Try decision-model questions and inspect their answers.',
+    key: 'system-one',
+    label: 'System One',
+    description: 'Manage, test, and monitor the decision models behind routing intelligence.',
     sections: [
       {
         title: 'Decision Models',
-        description: 'Test Choice, Score, Noul, Set, and Span with the System One API.',
+        description: 'Select a decision model, deploy it, and manage its lifecycle.',
+        items: [{ kind: 'route', label: 'Decision Models', icon: 'model', to: '/decision-model' }],
+      },
+      {
+        title: 'Decision Playground',
+        description: 'Explore Choice, Score, Noul, Set, and Span with the System One API.',
         items: [
           {
             kind: 'route',
-            label: 'Decision Model Test',
+            label: 'Decision Playground',
             icon: 'evaluation',
             to: '/decision-model/playground',
+          },
+        ],
+      },
+      {
+        title: 'Decision Monitoring',
+        description: 'Follow readiness, traffic, latency, and cache performance.',
+        items: [
+          {
+            kind: 'route',
+            label: 'Decision Monitoring',
+            icon: 'chart',
+            to: '/decision-model/monitoring',
           },
         ],
       },

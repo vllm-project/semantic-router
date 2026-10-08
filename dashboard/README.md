@@ -322,19 +322,25 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 
 ### Decision models
 
-**Build → Routing → Models → Decision Model** selects the router's decision
-model and shows its observed runtime. Saved configuration, activation and
-readiness are separate states. Changing a selection preserves explicit signal
+**Build → System One** contains three independent pages:
+**Decision Models**, **Decision Playground**, and **Decision Monitoring**.
+Decision Models at `/decision-model` selects and deploys the router's decision
+model. Saved configuration, activation and readiness are separate states. Changing a selection preserves explicit signal
 bindings; the default remains Vela-2.0-0.3B. **System → Runtime → Models → Model
 Hub** contains the model catalog.
 
-The management page charts runtime traffic, unsuccessful calls, latency and
-result-cache behavior using Prometheus samples for each deployment. Select a
+Decision Monitoring at `/decision-model/monitoring` charts runtime traffic,
+unsuccessful calls, latency and result-cache behavior using Prometheus samples for each deployment. Select a
 time range to inspect trends. Missing samples remain unknown; statistics require
 observability read access and aggregate matching deployments across the routers
 scraped by Prometheus.
 
-**Build → Testing → Decision Model Test** is a separate System One workspace at
+Management reads configuration on entry, explicit refresh, deployment, or an
+observed configuration change. Routine polling reads operational state only;
+metrics and chart code load on the monitoring page. Router or Engine mode is
+identified on the Dashboard homepage.
+
+**Decision Playground** is a separate System One workspace at
 `/decision-model/playground`. Compose a state and named Choice, Score, Noul, Set
 or Span questions, then inspect structured answers or the native request and
 response. Available question types come from the running model's capabilities.

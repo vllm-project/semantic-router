@@ -4,6 +4,7 @@ export type ShellRoutePage =
   | 'dashboard'
   | 'decision-model'
   | 'decision-model-playground'
+  | 'decision-model-monitoring'
   | 'evaluation'
   | 'insights'
   | 'insights-record'
@@ -32,6 +33,7 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/dashboard', page: 'dashboard' },
   { path: '/decision-model', page: 'decision-model' },
   { path: '/decision-model/playground', page: 'decision-model-playground' },
+  { path: '/decision-model/monitoring', page: 'decision-model-monitoring' },
   { path: '/monitoring', page: 'monitoring' },
   {
     path: '/playground',

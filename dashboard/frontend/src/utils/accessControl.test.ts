@@ -53,6 +53,8 @@ describe('config write access', () => {
   })
 
   it('maps dashboard routes to their backend read permissions', () => {
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/api/router/docs')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['tools.use'] }, '/api/router/docs')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['topology.read'] }, '/status')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/status')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/logs')).toBe(true)

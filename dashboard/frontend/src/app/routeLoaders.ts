@@ -9,6 +9,7 @@ export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
 export const loadConfigSchemaReferencePage = () => import('../pages/ConfigSchemaReferencePage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
+export const loadDecisionMonitoringPage = () => import('../pages/DecisionMonitoringPage')
 export const loadDecisionModelPage = () => import('../pages/DecisionModelPage')
 export const loadSystemOnePlaygroundPage = () => import('../pages/SystemOnePlaygroundPage')
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
@@ -37,6 +38,10 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   {
     matches: (pathname) => pathname.startsWith('/decision-model/playground'),
     load: loadSystemOnePlaygroundPage,
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/decision-model/monitoring'),
+    load: loadDecisionMonitoringPage,
   },
   { matches: (pathname) => pathname.startsWith('/decision-model'), load: loadDecisionModelPage },
   {

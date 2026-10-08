@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSystemOneRequest,
+  EXAMPLE_STATES,
   newQuestion,
   spanSegments,
   spanSource,
@@ -28,6 +29,11 @@ describe('System One request authoring', () => {
     })
     expect(result.request?.questions.score_1.levels).toHaveLength(3)
     expect(result.request?.questions.set_1.labels).toHaveLength(3)
+    expect(result.request?.questions.span_1.labels).toContainEqual({
+      key: 'language',
+      description: 'The programming language',
+    })
+    expect(EXAMPLE_STATES.find((example) => example.id === 'entities')?.state).toContain('Python')
     expect(result.request?.options).toEqual({ return_meta: true })
   })
 

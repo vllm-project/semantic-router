@@ -79,9 +79,9 @@ async function mockPlayground(
   })
   await page.goto('/decision-model/playground')
   await expect(
-    page.getByRole('heading', { name: 'Decision Model Test', exact: true }),
+    page.getByRole('heading', { name: 'Decision Playground', exact: true }),
   ).toBeVisible()
-  await expect(page.getByLabel('Runtime target', { exact: true })).toContainText(
+  await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toContainText(
     options.sameIdentity ? '@vela/auto' : 'vela-test',
   )
   return requests
@@ -95,10 +95,17 @@ async function addType(page: Page, label: string) {
     .click()
 }
 
+async function loadExample(page: Page, label: string) {
+  await page.getByRole('combobox', { name: 'Load example', exact: true }).click()
+  await page.getByRole('option', { name: new RegExp(label) }).click()
+}
+
 test('runs a native request and presents real probabilities with API details collapsed', async ({
   page,
 }) => {
   const requests = await mockPlayground(page)
+  await expect(page.getByText('Build / System One', { exact: true })).toBeVisible()
+  await expect(page.getByText(/^(Router|Engine) mode$/)).toHaveCount(0)
   await expect(page.getByText('From context to a decision')).toBeVisible()
   await page.getByRole('button', { name: 'Run test', exact: true }).click()
   const result = page.getByRole('article', { name: 'Result for choice_1' })
@@ -158,7 +165,7 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await page.setViewportSize({ width: 1440, height: 1000 })
   await mockPlayground(page)
-  await page.getByLabel('Load example', { exact: true }).selectOption('coding')
+  await loadExample(page, 'Code & reasoning')
   await addType(page, 'Span')
   await addType(page, 'Set')
   await page
@@ -172,6 +179,17 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
   await expect(spans.getByLabel('Highlighted spans').locator('mark')).toContainText('Maya Chen')
   await expect(spans.getByRole('cell', { name: '5–14', exact: true })).toBeVisible()
   await expect(page.getByRole('article')).toHaveCount(5)
+  const inputBounds = await page
+    .getByRole('region', { name: 'Input context', exact: true })
+    .boundingBox()
+  const questionBounds = await page
+    .getByRole('region', { name: 'Questions', exact: true })
+    .boundingBox()
+  const resultBounds = await page
+    .getByRole('region', { name: 'Results', exact: true })
+    .boundingBox()
+  expect(inputBounds!.x + inputBounds!.width).toBeLessThan(resultBounds!.x)
+  expect(questionBounds!.x + questionBounds!.width).toBeLessThan(resultBounds!.x)
   if (process.env.PLAYGROUND_SCREENSHOT_DIR)
     await page.screenshot({
       path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-desktop.png'),
@@ -182,6 +200,8 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
     true,
   )
   await expect(page.getByRole('button', { name: 'Run 5 questions' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Decision Models', exact: false })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Decision Monitoring', exact: false })).toBeVisible()
   if (process.env.PLAYGROUND_SCREENSHOT_DIR)
     await page.screenshot({
       path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-mobile.png'),
@@ -194,9 +214,9 @@ test('uses discovered question support and runtime readiness to gate inference',
   page,
 }) => {
   const requests = await mockPlayground(page, { classicOnly: true, sameIdentity: true })
-  await expect(
-    page.getByRole('region', { name: 'Runtime target', exact: true }).locator('option:checked'),
-  ).toHaveText('@vela/auto')
+  await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toHaveText(
+    '@vela/auto',
+  )
   await expect(
     page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }),
   ).toBeDisabled()
@@ -325,3 +345,145 @@ test('refreshes failed discovery instead of accepting stale runtime capabilities
   await expect(page.getByRole('alert')).toContainText('Cannot discover model capabilities.')
   await expect(page.getByRole('button', { name: 'Run test', exact: true })).toBeDisabled()
 })
+
+test('supports select keyboard navigation, escape, tab, and outside dismissal without changing drafts', async ({
+  page,
+}) => {
+  await mockPlayground(page)
+  const example = page.getByRole('combobox', { name: 'Load example', exact: true })
+  const context = page.getByRole('textbox', { name: 'Input context', exact: true })
+  await context.fill('Keep my draft while I explore examples.')
+  await example.focus()
+  await example.press('ArrowDown')
+  await expect(example).toHaveAttribute('aria-expanded', 'true')
+  await expect(example).toBeFocused()
+  await expect(page.getByRole('option', { name: /Code & reasoning/ })).toHaveAttribute(
+    'data-active',
+    'true',
+  )
+  await example.press('End')
+  await expect(page.getByRole('option', { name: /Entity extraction/ })).toHaveAttribute(
+    'data-active',
+    'true',
+  )
+  await example.press('Home')
+  await example.press('ArrowDown')
+  await expect(page.getByRole('option', { name: /Customer support/ })).toHaveAttribute(
+    'data-active',
+    'true',
+  )
+  await example.press('Escape')
+  await expect(example).toHaveAttribute('aria-expanded', 'false')
+  await expect(example).toBeFocused()
+  await expect(context).toHaveValue('Keep my draft while I explore examples.')
+  await example.press('Enter')
+  await example.press('Tab')
+  await expect(example).toHaveAttribute('aria-expanded', 'false')
+  await expect(example).not.toBeFocused()
+  await example.click()
+  await page.getByRole('heading', { name: 'Input context', exact: true }).click()
+  await expect(example).toHaveAttribute('aria-expanded', 'false')
+  await example.focus()
+  await example.press('c')
+  await expect(example).toHaveAttribute('aria-expanded', 'true')
+  await example.press('ArrowDown')
+  await example.press('Enter')
+  await expect(context).toHaveValue(/charged twice/)
+  await expect(example).toBeFocused()
+
+  const runtime = page.getByRole('combobox', { name: 'Runtime target', exact: true })
+  await runtime.focus()
+  await runtime.press(' ')
+  await expect(page.getByRole('option', { name: /vela-test/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await runtime.press('Escape')
+  await expect(runtime).toBeFocused()
+})
+
+test('loads the language span example and sends its labels unchanged', async ({ page }) => {
+  const requests = await mockPlayground(page)
+  await loadExample(page, 'Entity extraction')
+  await expect(page.getByRole('textbox', { name: 'Input context', exact: true })).toHaveValue(
+    /Python/,
+  )
+  await expect(page.getByRole('textbox', { name: 'label 3 key', exact: true })).toHaveValue(
+    'language',
+  )
+  await expect(page.getByRole('textbox', { name: 'label 3 description', exact: true })).toHaveValue(
+    'The programming language',
+  )
+  await page.getByRole('button', { name: 'Run test', exact: true }).click()
+  await expect(page.getByText('Response received')).toBeVisible()
+  expect(requests[0]).toMatchObject({
+    request: {
+      state: expect.stringContaining('Python'),
+      questions: {
+        span_1: {
+          type: 'span',
+          labels: expect.arrayContaining([
+            { key: 'language', description: 'The programming language' },
+          ]),
+        },
+      },
+    },
+  })
+})
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`keeps example menus readable and inside the mobile viewport with ${colorScheme} OS preference`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      colorScheme,
+    })
+    const page = await context.newPage()
+    await mockPlayground(page)
+    await page.getByRole('combobox', { name: 'Load example', exact: true }).tap()
+    const menu = page.getByRole('listbox', { name: 'Load example', exact: true })
+    await expect(menu).toBeVisible()
+    const bounds = await menu.boundingBox()
+    expect(bounds).not.toBeNull()
+    expect(bounds!.x).toBeGreaterThanOrEqual(0)
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
+    expect(bounds!.y).toBeGreaterThanOrEqual(0)
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844)
+    const contrast = await menu.evaluate((element) => {
+      const luminance = (color: string) => {
+        const rgb = color
+          .match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map(Number)
+          .map((channel) => {
+            const value = channel / 255
+            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+          })
+        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+      }
+      const background = luminance(getComputedStyle(element).backgroundColor)
+      return Array.from(element.querySelectorAll('strong, small')).map((text) => {
+        const foreground = luminance(getComputedStyle(text).color)
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+      })
+    })
+    expect(contrast.every((ratio) => ratio >= 4.5)).toBe(true)
+    if (process.env.PLAYGROUND_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: join(
+          process.env.PLAYGROUND_SCREENSHOT_DIR,
+          `systemone-example-menu-${colorScheme}.png`,
+        ),
+      })
+    await page.getByRole('option', { name: /Entity extraction/ }).tap()
+    await expect(page.getByRole('textbox', { name: 'label 3 key', exact: true })).toHaveValue(
+      'language',
+    )
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await context.close()
+  })
+}

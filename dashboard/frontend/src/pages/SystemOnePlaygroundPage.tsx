@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { canRunEvaluation } from '../utils/accessControl'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import SystemOneResults, { JSONInspector } from './SystemOneResults'
+import SystemOneSelect from './SystemOneSelect'
 import {
   buildSystemOneRequest,
   EXAMPLE_STATES,
@@ -323,8 +324,8 @@ export default function SystemOnePlaygroundPage() {
 
   return (
     <ConfigPageManagerLayout
-      eyebrow="Build / Testing"
-      title="Decision Model Test"
+      eyebrow="Build / System One"
+      title="Decision Playground"
       description="Explore the System One API. Ask typed questions, compare probabilities, and inspect exactly what your decision model sees."
     >
       <div className={styles.page}>
@@ -332,36 +333,27 @@ export default function SystemOnePlaygroundPage() {
           <div className={styles.runtimeIcon} aria-hidden="true">
             ⌘
           </div>
-          <label className={styles.runtimeSelect}>
-            Runtime target
-            <select
-              value={runtime.selectedId}
-              onChange={(event) => runtime.setSelectedId(event.target.value)}
-              disabled={
-                runtime.loading || runtime.running || !runtime.capabilities?.deployments.length
-              }
-            >
-              {!runtime.capabilities?.deployments.length && (
-                <option value="">
-                  {runtime.loading ? 'Discovering models…' : 'No runtime available'}
-                </option>
-              )}
-              {runtime.capabilities?.deployments.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.model === item.id ? item.model : `${item.model} · ${item.id}`}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SystemOneSelect
+            className={styles.runtimeSelect}
+            label="Runtime target"
+            value={runtime.selectedId}
+            onChange={runtime.setSelectedId}
+            placeholder={runtime.loading ? 'Discovering models…' : 'No runtime available'}
+            disabled={runtime.loading || runtime.running}
+            options={(runtime.capabilities?.deployments ?? []).map((item) => ({
+              value: item.id,
+              label: item.model,
+              description: [
+                ...(item.model === item.id ? [] : [item.id]),
+                item.ready ? 'Ready' : 'Unavailable',
+                `${item.question_types.length} question types`,
+              ].join(' · '),
+            }))}
+          />
           {selected && (
             <span className={selected.ready ? styles.successPill : styles.warningPill}>
               <i />
               {selected.ready ? 'Ready' : 'Unavailable'}
-            </span>
-          )}
-          {runtime.capabilities && (
-            <span className={styles.modePill}>
-              {runtime.capabilities.serving_mode === 'engine' ? 'Engine mode' : 'Router mode'}
             </span>
           )}
           <div className={styles.runtimeActions}>
@@ -372,7 +364,8 @@ export default function SystemOnePlaygroundPage() {
             >
               {runtime.loading ? 'Refreshing…' : 'Refresh'}
             </button>
-            <Link to="/decision-model">Manage models ↗</Link>
+            <Link to="/decision-model">Decision Models ↗</Link>
+            <Link to="/decision-model/monitoring">Decision Monitoring ↗</Link>
           </div>
         </section>
         {runtime.capabilityError && (
@@ -424,23 +417,19 @@ export default function SystemOnePlaygroundPage() {
                   }
                 />
                 <div className={styles.contextFooter}>
-                  <label>
-                    Load example
-                    <select
-                      aria-label="Load example"
-                      value=""
-                      onChange={(event) => loadExample(event.target.value)}
-                    >
-                      <option value="" disabled>
-                        Choose a starting point
-                      </option>
-                      {EXAMPLE_STATES.map((example) => (
-                        <option value={example.id} key={example.id}>
-                          {example.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <SystemOneSelect
+                    className={styles.exampleSelect}
+                    label="Load example"
+                    value=""
+                    onChange={loadExample}
+                    placeholder="Choose a starting point"
+                    disabled={runtime.running}
+                    options={EXAMPLE_STATES.map((example) => ({
+                      value: example.id,
+                      label: example.label,
+                      description: example.description,
+                    }))}
+                  />
                   <span>{Array.from(source).length.toLocaleString()} characters</span>
                 </div>
               </section>

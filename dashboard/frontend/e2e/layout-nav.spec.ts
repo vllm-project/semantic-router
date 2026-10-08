@@ -356,6 +356,10 @@ async function mockCommon(
     })
   })
 
+  await page.route(/\/api\/router\/api\/v1\/observability\/replays(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ json: replayRecordsResponse })
+  })
+
   await page.route('**/api/router/api/v1/observability/replays/*', async (route) => {
     const requestURL = new URL(route.request().url())
     const replayID = requestURL.pathname.split('/').pop()
@@ -412,6 +416,50 @@ async function expectBalancedDesktopFrame(page: Page, locator: Locator) {
 }
 
 test.describe('Layout top navigation', () => {
+  test('keeps the three System One pages in separate desktop columns', async ({ page }) => {
+    await mockCommon(page)
+    await page.goto('/dashboard')
+    for (const width of [1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.getByRole('button', { name: 'Build', exact: true }).click()
+      const menu = page.getByRole('navigation', { name: 'Build' })
+      await menu.getByRole('tab', { name: /System One/ }).click()
+      const sections = menu.locator('section')
+      await expect(sections).toHaveCount(3)
+      const boxes = await sections.evaluateAll((elements) =>
+        elements.map((element) => {
+          const { x, y, right } = element.getBoundingClientRect()
+          return { x, y, right }
+        }),
+      )
+      expect(
+        Math.max(...boxes.map((box) => box.y)) - Math.min(...boxes.map((box) => box.y)),
+      ).toBeLessThan(2)
+      expect(boxes[0].right).toBeLessThan(boxes[1].x)
+      expect(boxes[1].right).toBeLessThan(boxes[2].x)
+      expect(boxes[2].right).toBeLessThan(width)
+      await page.keyboard.press('Escape')
+    }
+  })
+
+  test('browsing menus does not fetch an unvisited Model Hub route', async ({ page }) => {
+    await mockCommon(page)
+    const hubRequests: string[] = []
+    page.on('request', (request) => {
+      if (/ModelHubPage|\/api\/models\/catalog|model_catalog\.json/.test(request.url()))
+        hubRequests.push(request.url())
+    })
+    await page.goto('/dashboard')
+    await page.getByRole('button', { name: 'System', exact: true }).click()
+    const menu = page.getByRole('navigation', { name: 'System' })
+    const modelHub = menu.getByRole('link', { name: 'Model Hub', exact: true })
+    await modelHub.hover()
+    // A hover used to trigger an import while a user was only scanning menus.
+    await page.waitForTimeout(350)
+    expect(hubRequests).toEqual([])
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
   test('hides Evaluation and explains direct access when the service is unavailable', async ({
     page,
   }) => {
@@ -515,7 +563,9 @@ test.describe('Layout top navigation', () => {
     await page.goto('/dashboard')
 
     await expect(page.getByRole('group', { name: 'Workflow navigation' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /^(Build|System)$/ })).toHaveCount(0)
+    await expect(
+      page.locator('header').getByRole('button', { name: /^(Build|System)$/ }),
+    ).toHaveCount(0)
 
     await page.setViewportSize({ width: 900, height: 700 })
     const menuButton = page.getByRole('button', { name: 'Toggle menu' })
@@ -577,6 +627,7 @@ test.describe('Layout top navigation', () => {
       'rgb(244, 244, 241)',
     )
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
+    const systemOneTab = buildMenu.getByRole('tab', { name: /System One/ })
     const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
     const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge Base/ })
     const integrationsTab = buildMenu.getByRole('tab', { name: /Integration/ })
@@ -594,6 +645,12 @@ test.describe('Layout top navigation', () => {
 
     await routingTab.focus()
     await page.keyboard.press('ArrowDown')
+    await expect(systemOneTab).toBeFocused()
+    await expect(buildMenu).toHaveAttribute('data-section-count', '3')
+    for (const label of ['Decision Models', 'Decision Playground', 'Decision Monitoring']) {
+      await expect(buildMenu.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
+    await page.keyboard.press('ArrowDown')
     await expect(outcomesTab).toBeFocused()
     await expect(outcomesTab).toHaveAttribute('aria-selected', 'true')
     await page.keyboard.press('ArrowDown')
@@ -606,7 +663,7 @@ test.describe('Layout top navigation', () => {
     await page.keyboard.press('Home')
     await expect(routingTab).toBeFocused()
     await page.keyboard.press('ArrowRight')
-    await expect(buildMenu.getByRole('link', { name: 'Model Hub', exact: true })).toBeFocused()
+    await expect(buildMenu.getByRole('link', { name: 'Models', exact: true })).toBeFocused()
 
     const buildBounds = await buildMenu.boundingBox()
     expect(buildBounds).not.toBeNull()
@@ -922,10 +979,18 @@ test.describe('Layout top navigation', () => {
 
     await expect(page).toHaveURL(/\/insights$/)
     await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible()
-    await expect(page.getByText('Total Saved')).toBeVisible()
-    await expect(page.getByText('Saved %')).toBeVisible()
-    await expect(page.getByText('Baseline Spend')).toBeVisible()
-    await expect(page.getByText('Actual Spend')).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Savings', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Saved %', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Baseline', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Model Cost', { exact: true }),
+    ).toBeVisible()
     await expect(
       page.getByText('See what the router picked, what signals fired, and how much it saved.'),
     ).toBeVisible()
@@ -953,7 +1018,7 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByText('Total Tokens').first()).toBeVisible()
     await expect(
       page.getByText(
-        '1 filtered record excluded from cost totals because usage or pricing data is incomplete.',
+        '1 filtered record excluded from estimates. Each row explains what was not recorded. Historical rows without captured prices are not repriced.',
       ),
     ).toBeVisible()
     await expect(
@@ -962,13 +1027,13 @@ test.describe('Layout top navigation', () => {
       ),
     ).toBeVisible()
     await expect(
-      page.getByRole('article').filter({ hasText: 'Total Saved' }).getByRole('strong'),
+      page.getByRole('article').filter({ hasText: 'Estimated Savings' }).getByRole('strong'),
     ).toHaveText('$0.0060')
     await expect(
       page.getByRole('article').filter({ hasText: 'Saved %' }).getByRole('strong'),
     ).toHaveText('75.0%')
-    await expect(page.getByRole('columnheader', { name: 'Actual Cost' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Saved vs Baseline' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Estimated Cost' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Estimated Savings' })).toBeVisible()
 
     await page.goto('/replay')
     await expect(page).toHaveURL(/\/dashboard$/)

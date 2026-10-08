@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom'
-import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canWriteConfig } from '../utils/accessControl'
 import { getRouterModelStateLabel } from '../utils/routerRuntime'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
-import DecisionModelRuntimePanel from './DecisionModelRuntimePanel'
 import { buildIntelligenceRoutingScopes } from './dashboardRouterIntelligenceSupport'
 import { decisionActivationLabel, decisionModelRuntimeState } from './decisionModelManagement'
 import { DECISION_MODEL_OPTIONS } from './decisionModelSupport'
@@ -19,7 +17,8 @@ export default function DecisionModelPage() {
   const { isReadonly, isLoading: accessLoading } = useReadonly()
   const model = useDecisionModelManagement()
   const engineOnly = model.status?.serving_mode === 'engine'
-  const writable = !engineOnly && !isReadonly && !accessLoading && canWriteConfig(user)
+  const writable =
+    Boolean(model.status) && !engineOnly && !isReadonly && !accessLoading && canWriteConfig(user)
   const questions = model.config
     ? [
         ...new Set(
@@ -37,37 +36,27 @@ export default function DecisionModelPage() {
     ? decisionModelRuntimeState(model.savedModel, model.inventory, model.status?.models)
     : 'Not reported'
 
-  if (model.loading) return <ProductLoadingState label="Loading decision model management" />
-
   return (
     <ConfigPageManagerLayout
-      eyebrow="Routing / Models"
-      title="Decision Model"
-      description="Choose the model that powers router intelligence, deploy it, and inspect its live runtime."
+      eyebrow="Build / System One"
+      title="Decision Models"
+      description="Choose and deploy the models that power routing decisions, then test and monitor them in System One."
     >
       <div className={styles.page}>
         <div className={styles.toolbar}>
           <span>
             {model.updatedAt
-              ? `Last checked ${model.updatedAt.toLocaleTimeString()} · refreshes every 10 seconds`
-              : 'Waiting for observations'}
+              ? `Runtime checked ${model.updatedAt.toLocaleTimeString()} · refreshes every 10 seconds`
+              : model.loading
+                ? 'Loading saved configuration…'
+                : 'Waiting for observations'}
           </span>
           <div className={styles.toolbarActions}>
-            {writable && (
-              <a className={styles.testLink} href="#decision-model-choose-title">
-                Change model
-              </a>
-            )}
             <Link className={styles.testLink} to="/decision-model/playground">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path
-                  d="m5 3 8 5-8 5V3Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Test decision model
+              Decision Playground
+            </Link>
+            <Link className={styles.testLink} to="/decision-model/monitoring">
+              Decision Monitoring
             </Link>
             <button
               type="button"
@@ -101,16 +90,6 @@ export default function DecisionModelPage() {
               <strong>{runtimeState}</strong>
             </div>
             <div>
-              <span>Serving mode</span>
-              <strong>
-                {model.status?.serving_mode === 'router'
-                  ? 'Router'
-                  : model.status?.serving_mode === 'engine'
-                    ? 'Engine'
-                    : 'Not reported'}
-              </strong>
-            </div>
-            <div>
               <span>Configuration activation</span>
               <strong>{decisionActivationLabel(model.activation)}</strong>
             </div>
@@ -140,12 +119,6 @@ export default function DecisionModelPage() {
             </p>
           </details>
         </section>
-
-        <DecisionModelRuntimePanel
-          inventory={model.inventory}
-          refreshedAt={model.updatedAt}
-          engineOnly={engineOnly}
-        />
 
         <section className={styles.panel} aria-labelledby="decision-model-choose-title">
           <h2 id="decision-model-choose-title">Choose a decision model</h2>

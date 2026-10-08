@@ -198,6 +198,7 @@
 /* Runtime monitoring uses real history; empty series retain their quiet state. */
 .toolbarActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   flex-shrink: 0;
   gap: 0.6rem;
@@ -359,14 +360,21 @@
   color: #dca965;
   background: rgb(220 169 101 / 7%);
 }
-.deploymentSelect {
-  max-width: 100%;
-  padding: 0.35rem 1.5rem 0.35rem 0.5rem;
+.deploymentChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.page .deploymentChoices button {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-primary);
+}
+.page .deploymentChoices button[aria-pressed='true'] {
   color: var(--color-text);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font: inherit;
+  border-color: var(--color-primary);
+  background: var(--color-bg-tertiary);
 }
 .runtimeMeta {
   display: flex;
