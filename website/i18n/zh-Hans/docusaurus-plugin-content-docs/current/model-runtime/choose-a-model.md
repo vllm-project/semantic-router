@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "320d5d49a6463feb9f4b87dacfdcdddcbd37f66c"
+  source_commit: "83b848c3b6a8a5cf17e488ca84975103a2855b46"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -179,14 +179,14 @@ global:
 
 | 决策模型 | 硬件 | 留出集上相对 Vela 1.0 的准确度 | GPU 上的 p50 | 12 个 CPU 核上的 p50 |
 | --- | --- | --- | ---: | ---: |
-| `Vela-2.0-0.3B`（默认） | CPU 或 GPU | prompt guard 和 safety 领先，domain、modality 和 feedback 落后 | 6.9 ms | 79 ms |
-| `Vela-2.0-0.8B` | CPU 或 GPU | domain、prompt guard、safety、modality 和 hallucination 领先；PII 落后 | 40.7 ms | 约 3 s |
-| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 56.8 ms | 仅 GPU |
-| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 79.0 ms | 仅 GPU |
+| `Vela-2.0-0.3B`（默认） | CPU 或 GPU | prompt guard 和 safety 领先，domain、modality 和 feedback 落后 | 6.6 ms | 79 ms |
+| `Vela-2.0-0.8B` | CPU 或 GPU | domain、prompt guard、safety、modality 和 hallucination 领先；PII 落后 | 40.1 ms | 约 3 s |
+| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 55.2 ms | 仅 GPU |
+| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 76.5 ms | 仅 GPU |
 | `Vela-1.0` | CPU 或 GPU | 专用模型本身 | 不适用 | 16 ms |
 
-- **GPU：** 一块 AMD Instinct MI325X，顺序请求。并发 16 时，一块 GPU 每秒约处理 146（0.3B）、
-  25（0.8B）、17（4B）和 12（9B）个请求。
+- **GPU：** 一块 AMD Instinct MI325X，顺序请求。并发 16 时，一块 GPU 每秒约处理 154（0.3B）、
+  25（0.8B）、18（4B）和 13（9B）个请求。
 - **4B 和 9B 需要 GPU。** 在 `--platform cpu` 或没有该平台 GPU 的主机上，`vllm-sr serve` 会拒绝它们；
   在模型运行时找不到 GPU 的地方，Router 也会拒绝。在 GPU 上，无论模块的 `use_cpu` 如何设置，它们都在 GPU 上运行。
 - **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
