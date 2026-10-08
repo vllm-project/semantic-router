@@ -486,6 +486,12 @@ class TestK8sBackend:
 
 class TestCLITargetRouting:
     def test_serve_default_target_builds_docker_backend(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            "cli.runtime_lifecycle.get_container_runtime", lambda: "docker"
+        )
+        monkeypatch.setattr(
+            "cli.runtime_lifecycle.container_status_strict", lambda _name: "not found"
+        )
         built = []
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
@@ -509,7 +515,7 @@ class TestCLITargetRouting:
         )
 
         runner = CliRunner()
-        runner.invoke(
+        result = runner.invoke(
             main,
             [
                 "serve",
@@ -520,7 +526,8 @@ class TestCLITargetRouting:
             ],
         )
 
-        assert built and built[0] == "docker"
+        assert result.exit_code == 0, result.output
+        assert built == ["docker"]
 
     def test_stop_target_k8s_builds_k8s_backend(self, monkeypatch):
         built = []
@@ -648,10 +655,7 @@ class TestCLITargetRouting:
         assert effective["global"]["services"] == {}
         assert effective["global"]["stores"] == {}
         assert effective["global"]["integrations"] == {"looper": {}}
-        assert effective["global"]["router"]["enabled"] is True
-        assert effective["global"]["model_catalog"]["system"]["decision_model"] == {
-            "deployment": "primary"
-        }
+        assert effective == source
         assert yaml.safe_load(config_path.read_text()) == source
         assert not (tmp_path / ".vllm-sr").exists()
 

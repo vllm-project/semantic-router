@@ -112,13 +112,19 @@ def apply_instance_options(
     """Apply startup capabilities without widening grants or replacing saved policy."""
     before = deepcopy(document)
     setup = (document.get("setup") or {}).get("mode") is True
-    global_config = document.setdefault("global", {})
-    global_config.setdefault("router", {})["enabled"] = not engine
+    global_config = document.get("global") or {}
+    # Omission already means Router in the canonical contract. Do not turn an
+    # ordinary restart into an authored-config change just to repeat defaults.
+    if engine or (global_config.get("router") or {}).get("enabled") is False:
+        global_config = document.setdefault("global", {})
+        global_config.setdefault("router", {})["enabled"] = not engine
     key = configured_decision_model(document)
-    catalog = global_config.setdefault("model_catalog", {})
-    deployments = catalog.setdefault("deployments", {})
+    catalog = global_config.get("model_catalog") or {}
+    deployments = catalog.get("deployments") or {}
     authored = key in deployments
-    if model_options or not authored:
+    if model_options or (not authored and platform in {"cuda", "rocm"}):
+        catalog = document.setdefault("global", {}).setdefault("model_catalog", {})
+        deployments = catalog.setdefault("deployments", {})
         defaults = decision_model_deployment(document)
         resource = (
             deepcopy(deployments[key])

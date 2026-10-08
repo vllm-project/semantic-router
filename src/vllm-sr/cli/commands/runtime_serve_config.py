@@ -24,11 +24,12 @@ from cli.commands.runtime_observability import (
     validate_package_tracing_mode,
 )
 from cli.commands.runtime_paths import (
-    _atomic_write_private_bytes,
     _runtime_config_output_path,
     _same_document,
     materialize_runtime_config,
+    recover_pending_runtime_config_projection,
     resolve_state_root_dir,
+    write_journaled_runtime_config_projection,
 )
 from cli.commands.runtime_support import (
     build_effective_config_bytes,
@@ -120,6 +121,7 @@ def _prepare_docker_runtime_config(
         timeout_seconds=0,
     )
     try:
+        recover_pending_runtime_config_projection(effective_config_path)
         recover_pending_recipe_activation_for_stack(
             runtime_config_path=effective_config_path,
             state_root_dir=state_root_dir,
@@ -168,6 +170,7 @@ def _prepare_docker_runtime_config(
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
                 replace_active=replace_active_config,
+                preserve_unchanged_source=algorithm is None,
                 before_replace=lambda: _prepare_runtime_config_replacement(
                     effective_config_bytes,
                     stack_layout,
@@ -191,7 +194,9 @@ def _prepare_docker_runtime_config(
             _prepare_runtime_config_replacement(
                 candidate_bytes, stack_layout, minimal=minimal, readonly=readonly
             )
-            _atomic_write_private_bytes(effective_config_path, candidate_bytes)
+            write_journaled_runtime_config_projection(
+                effective_config_path, candidate_bytes
+            )
         setup_mode = is_setup_mode_config(effective_config_path)
         if not setup_mode:
             _check_served_decision_model(

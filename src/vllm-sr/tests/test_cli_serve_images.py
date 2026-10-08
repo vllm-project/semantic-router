@@ -9,6 +9,10 @@ from click.testing import CliRunner
 
 
 def _capture_serve_deployment(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("cli.runtime_lifecycle.get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        "cli.runtime_lifecycle.container_status_strict", lambda _name: "not found"
+    )
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
