@@ -33,6 +33,11 @@ through the production Go algorithms. The native endpoint is the complete
 variable and writes normalized `records.json` plus a runtime receipt with budget
 events:
 
+Before creating output files or contacting a provider, the native runner checks
+the saved configuration digest, experiment identity (including the saved planner
+digest and code revision), and the complete derived matrix. Edited manifests
+must be regenerated with the planner; retaining the old identity is rejected.
+
 Every native dispatch applies the target model's declared temperature and
 top-p, including verification and synthesis calls. Native arms that assign
 conflicting sampling settings to the same provider model slug are rejected,

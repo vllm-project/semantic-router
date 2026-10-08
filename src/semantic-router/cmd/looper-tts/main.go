@@ -183,8 +183,8 @@ func run(opt options) error {
 	if err = json.Unmarshal(data, &plan); err != nil {
 		return fmt.Errorf("parse manifest: %w", err)
 	}
-	if plan.SchemaVersion != "looper-tts.v1" || plan.ExperimentID == "" || plan.ConfigSHA256 == "" || plan.Config.Dataset.EvidenceKind == "" {
-		return fmt.Errorf("manifest is missing schema, experiment identity, config digest or dataset evidence kind")
+	if err = validateFrozenManifest(data, plan); err != nil {
+		return fmt.Errorf("validate manifest: %w", err)
 	}
 	if opt.TimeoutSeconds <= 0 {
 		return fmt.Errorf("--timeout must be positive")
