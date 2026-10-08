@@ -3,7 +3,10 @@ import type { DecisionModelSignal } from '../types/config'
 // Question fields follow the canonical DecisionModelSignal authoring contract;
 // response fields follow src/model-runtime/vllm_srun/api/openapi.yaml.
 export type QuestionType = DecisionModelSignal['question']['type']
-export type SystemOneQuestion = DecisionModelSignal['question'] & { over?: string }
+export type SystemOneQuestion = DecisionModelSignal['question'] & {
+  over?: string
+  require_full_input?: boolean
+}
 export interface QuestionDraft {
   id: string
   name: string
@@ -26,6 +29,7 @@ export interface SystemOneAnswer {
   legend?: Record<string, string>
   error?: string
   message?: string
+  input_coverage?: 'complete'
 }
 export interface SystemOneSpan {
   label: string
@@ -38,7 +42,10 @@ export interface SystemOneResponse {
   model: string
   answers: Record<string, SystemOneAnswer>
   spans?: Record<string, SystemOneSpan[]>
-  sets?: Record<string, { selected: string[]; probabilities: Record<string, number> }>
+  sets?: Record<
+    string,
+    { selected: string[]; probabilities: Record<string, number>; input_coverage?: 'complete' }
+  >
   thresholds?: Record<string, number>
   span_heads?: Record<string, string>
   usage: { input_tokens: number; output_tokens: number }

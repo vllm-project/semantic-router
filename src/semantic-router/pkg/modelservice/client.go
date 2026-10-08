@@ -255,6 +255,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.Preset != "" {
 		preset := question.Preset
 		encoded := api.Question{Preset: &preset, Threshold: question.Threshold}
+		if question.RequireFullInput {
+			required := true
+			encoded.RequireFullInput = &required
+		}
 		if question.Truncate {
 			overflow := api.QuestionOverflowTruncate
 			encoded.Overflow = &overflow
@@ -264,6 +268,10 @@ func encodeQuestion(question Question) api.Question {
 	questionType := question.Type
 	var instructions interface{} = question.Instructions
 	encoded := api.Question{Type: &questionType, Instructions: &instructions, Threshold: question.Threshold}
+	if question.RequireFullInput {
+		required := true
+		encoded.RequireFullInput = &required
+	}
 	if len(question.Labels) > 0 {
 		var criteria interface{} = labelCriteria(question.Labels)
 		encoded.Criteria = &criteria
@@ -305,6 +313,7 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 	decoded := Response{Model: body.Model, Answers: make(map[string]Answer, len(questions)), InputTokens: body.Usage.InputTokens}
 	for _, question := range questions {
 		if answer, ok := decodeQuestionAnswer(body, question); ok {
+			answer = requireInputCoverage(question, answer)
 			decoded.Answers[question.ID] = answer
 		}
 	}
@@ -320,6 +329,9 @@ func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer,
 	threshold, _ := lookup(body.Thresholds, id)
 	if set, ok := lookup(body.Sets, id); ok {
 		decoded := Answer{Type: "set", Probabilities: set.Probabilities, Selected: set.Selected, Threshold: threshold}
+		if set.InputCoverage != nil {
+			decoded.InputCoverage = string(*set.InputCoverage)
+		}
 		return checkedAnswer(decoded), true
 	}
 	if spans, ok := lookup(body.Spans, id); ok && answered {
@@ -356,6 +368,9 @@ func lookupString(values *map[string]string, key string) string {
 
 func decodeAnswer(answer api.Answer) Answer {
 	decoded := Answer{}
+	if answer.InputCoverage != nil {
+		decoded.InputCoverage = string(*answer.InputCoverage)
+	}
 	if answer.Type != nil {
 		decoded.Type = *answer.Type
 	}

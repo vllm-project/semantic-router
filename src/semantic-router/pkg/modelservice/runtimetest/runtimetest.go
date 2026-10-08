@@ -450,6 +450,7 @@ func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionRespon
 	if model.Labelled != nil {
 		response := r.decideLabelled(model, body)
 		unscanned(model, body, &response)
+		proveFullInput(body, &response)
 		response.Meta = &api.ResponseMeta{Revision: &revision}
 		return http.StatusOK, response, nil
 	}
@@ -463,7 +464,36 @@ func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionRespon
 			answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_question")}
 		}
 	}
-	return http.StatusOK, api.DecisionResponse{Model: model.ID, Answers: answers, Usage: api.Usage{InputTokens: 10}, Meta: &api.ResponseMeta{Revision: &revision}}, nil
+	response := api.DecisionResponse{Model: model.ID, Answers: answers, Usage: api.Usage{InputTokens: 10}, Meta: &api.ResponseMeta{Revision: &revision}}
+	proveFullInput(body, &response)
+	return http.StatusOK, response, nil
+}
+
+// The fake evaluates complete strings. Mirror the proof emitted by runtimes
+// that honored a strict request, leaving all failed questions unproven.
+func proveFullInput(body api.DecisionRequest, response *api.DecisionResponse) {
+	complete := api.AnswerInputCoverageComplete
+	setComplete := api.SetAnswerInputCoverageComplete
+	for id, question := range body.Questions {
+		if question.RequireFullInput == nil || !*question.RequireFullInput {
+			continue
+		}
+		if answer, ok := response.Answers[id]; ok && answer.Error != nil {
+			continue
+		}
+		for key, answer := range response.Answers {
+			if (key == id || strings.HasPrefix(key, id+".")) && answer.Error == nil {
+				answer.InputCoverage = &complete
+				response.Answers[key] = answer
+			}
+		}
+		if response.Sets != nil {
+			if set, ok := (*response.Sets)[id]; ok {
+				set.InputCoverage = &setComplete
+				(*response.Sets)[id] = set
+			}
+		}
+	}
 }
 
 // jointAnswer is a question's answer, which on a Joint model depends on how

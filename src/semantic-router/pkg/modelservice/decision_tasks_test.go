@@ -48,9 +48,9 @@ func TestComposedDecisionTaskBatchesLabelsAndRetainsUnknown(t *testing.T) {
 			if deployment != "selected" || request.State != "Alex" || len(request.Questions) != 2 || request.Questions[0].Type != "noul" {
 				t.Fatalf("unexpected execution: %s %+v", deployment, request)
 			}
-			answers := map[string]Answer{request.Questions[0].ID: {Type: "noul", Noul: .9}}
+			answers := map[string]Answer{request.Questions[0].ID: {Type: "noul", Noul: .9, InputCoverage: "complete"}}
 			if !partial {
-				answers[request.Questions[1].ID] = Answer{Type: "noul", Noul: .1}
+				answers[request.Questions[1].ID] = Answer{Type: "noul", Noul: .1, InputCoverage: "complete"}
 			}
 			return Response{Answers: answers}, nil
 		})
@@ -167,8 +167,8 @@ func TestComposedSetMatchesNativeStrictThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 	answer := reduceTaskAnswer(plan, Response{Answers: map[string]Answer{
-		plan.Questions[0].ID: {Type: "noul", Noul: .5},
-		plan.Questions[1].ID: {Type: "noul", Noul: .5001},
+		plan.Questions[0].ID: {Type: "noul", Noul: .5, InputCoverage: "complete"},
+		plan.Questions[1].ID: {Type: "noul", Noul: .5001, InputCoverage: "complete"},
 	}})
 	if answer.Error != "" || len(answer.Selected) != 1 || answer.Selected[0] != "above" {
 		t.Fatalf("composed selection differs from native p > threshold: %+v", answer)

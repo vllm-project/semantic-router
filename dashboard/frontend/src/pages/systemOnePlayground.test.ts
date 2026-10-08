@@ -68,6 +68,19 @@ describe('System One request authoring', () => {
     expect(Object.prototype.hasOwnProperty.call(result.request?.questions, '__proto__')).toBe(true)
     expect(Object.getPrototypeOf(result.request?.questions)).toBe(Object.prototype)
   })
+
+  it('preserves task templates requiring complete input when questions are edited', () => {
+    const question = newQuestion('noul')
+    question.name = 'pii_presence'
+    question.question.require_full_input = true
+    question.question.instructions = '  Does the text contain personal information?  '
+    const result = buildSystemOneRequest('Alex', 'text', [question])
+    expect(result.error).toBeNull()
+    expect(result.request?.questions.pii_presence).toMatchObject({
+      require_full_input: true,
+      instructions: 'Does the text contain personal information?',
+    })
+  })
 })
 
 describe('native span offsets', () => {

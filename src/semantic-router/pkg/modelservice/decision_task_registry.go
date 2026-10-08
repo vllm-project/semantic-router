@@ -130,6 +130,9 @@ type TaskTemplate struct {
 
 func (d TaskDefinition) Template() TaskTemplate {
 	question := map[string]any{"type": d.Question.Type, "instructions": d.Question.Instructions}
+	if d.FullInput {
+		question["require_full_input"] = true
+	}
 	criteria := map[string]string{}
 	for _, choice := range append(append([]Choice(nil), d.Question.Choices...), d.Question.Labels...) {
 		criteria[choice.Key] = choice.Description

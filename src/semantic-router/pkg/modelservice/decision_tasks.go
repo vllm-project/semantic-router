@@ -64,7 +64,11 @@ type TaskResult struct {
 // CompileTask selects an implemented output adapter from the actual card.
 // Family and training ancestry intentionally do not participate in admission.
 func CompileTask(definition TaskDefinition, question Question, card ModelCard) (TaskPlan, error) {
+	question.RequireFullInput = question.RequireFullInput || definition.FullInput
 	plan := TaskPlan{Definition: definition, Question: question, Implementation: "native"}
+	if question.RequireFullInput && question.Truncate {
+		return plan, fmt.Errorf("%w: task %s cannot require complete input and truncate it", ErrRejected, definition.ID)
+	}
 	if question.ID == "" {
 		return plan, fmt.Errorf("%w: task %s requires a question ID", ErrRejected, definition.ID)
 	}
@@ -89,7 +93,8 @@ func CompileTask(definition TaskDefinition, question Question, card ModelCard) (
 	for index, label := range question.Labels {
 		plan.Questions = append(plan.Questions, Question{
 			ID: fmt.Sprintf("%s:label:%d", question.ID, index), Type: "noul", Truncate: question.Truncate,
-			Instructions: question.Instructions + "\nDoes the input satisfy this category: " + label.Key + " — " + label.Description + "?",
+			RequireFullInput: question.RequireFullInput,
+			Instructions:     question.Instructions + "\nDoes the input satisfy this category: " + label.Key + " — " + label.Description + "?",
 		})
 	}
 	return plan, nil
@@ -137,7 +142,7 @@ func ExecuteTaskPlans(ctx context.Context, decider Decider, deployment string, i
 	answers := make(map[string]Answer, len(plans))
 	for _, plan := range plans {
 		answer := reduceTaskAnswer(plan, response)
-		result := TaskResult{TaskID: plan.Definition.ID, Answer: answer, Status: "ok", Coverage: "complete", Implementation: plan.Implementation}
+		result := TaskResult{TaskID: plan.Definition.ID, Answer: answer, Status: "ok", Coverage: "unknown", Implementation: plan.Implementation}
 		if answer.Error != "" {
 			result.Status, result.Coverage = "unknown", "unknown"
 			if !taskAnswerUnknown(answer.Error) {
@@ -145,6 +150,8 @@ func ExecuteTaskPlans(ctx context.Context, decider Decider, deployment string, i
 			}
 		} else if plan.Question.Truncate {
 			result.Coverage = "partial"
+		} else if answer.InputCoverage == "complete" {
+			result.Coverage = "complete"
 		}
 		answers[plan.Question.ID], results[plan.Question.ID] = answer, result
 		recordTaskResult(deployment, plan, result, time.Since(started))
@@ -165,7 +172,7 @@ func reduceTaskAnswer(plan TaskPlan, response Response) Answer {
 		if answer.Error == "" {
 			answer.Error = validateTaskAnswer(plan.Question, answer)
 		}
-		return answer
+		return requireInputCoverage(plan.Question, answer)
 	}
 	answer := Answer{Type: "set", Probabilities: make(map[string]float64), Selected: []string{}, Threshold: .5}
 	if plan.Question.Threshold != nil {
@@ -173,6 +180,7 @@ func reduceTaskAnswer(plan TaskPlan, response Response) Answer {
 	}
 	for index, question := range plan.Questions {
 		item, ok := response.Answers[question.ID]
+		item = requireInputCoverage(question, item)
 		if ok && item.Error != "" {
 			return Answer{Type: "set", Error: item.Error}
 		}
@@ -184,6 +192,18 @@ func reduceTaskAnswer(plan TaskPlan, response Response) Answer {
 		if item.Noul > answer.Threshold {
 			answer.Selected = append(answer.Selected, label)
 		}
+	}
+	if plan.Question.RequireFullInput {
+		answer.InputCoverage = "complete"
+	}
+	return answer
+}
+
+// A legacy or attached runtime may ignore a newly added request field. Its
+// successful scalar is not evidence that the full input was inspected.
+func requireInputCoverage(question Question, answer Answer) Answer {
+	if question.RequireFullInput && answer.Error == "" && answer.InputCoverage != "complete" {
+		return Answer{Type: answer.Type, Error: "input_coverage_unknown"}
 	}
 	return answer
 }
@@ -288,7 +308,7 @@ func validateTaskAnswer(question Question, answer Answer) string {
 
 func taskAnswerUnknown(code string) bool {
 	switch code {
-	case "unknown", "missing_answer", "missing_answer_value", "incomplete_label_judgments", "unavailable", "not_ready", "max_length_exceeded", "input_too_long", "input_limit", "scan_budget_exceeded", "deadline_exceeded":
+	case "unknown", "missing_answer", "missing_answer_value", "incomplete_label_judgments", "input_coverage_unknown", "unavailable", "not_ready", "max_length_exceeded", "input_too_long", "input_limit", "scan_budget_exceeded", "deadline_exceeded":
 		return true
 	}
 	return false

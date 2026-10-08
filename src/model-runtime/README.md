@@ -42,6 +42,27 @@ The contract is
 and the design is
 [`docs/design.md`](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/design.md).
 
+## Complete input coverage
+
+Native questions retain their model's ordinary input-fitting behavior by
+default. An accepted request or its token usage does not prove that every
+supplied part was read. Set `require_full_input: true` on a question when that
+guarantee is required. It covers **all** supplied state parts, including context
+outside `over`, and cannot be combined with `overflow: truncate`.
+
+A strict question succeeds only when every part fits or its supported windows
+cover all tokens and every scored word completely. Otherwise the question
+returns `max_length_exceeded` (or `scan_budget_exceeded` beyond the scan limit).
+Success includes `input_coverage: "complete"` on its answer. Native Set reports
+the proof on `sets.<id>` and every `answers.<id>.<label>` answer; Span reports it
+on `answers.<id>`. Errors and ordinary questions omit this proof.
+
+Router tasks that require full input consume this proof before accepting an
+answer. Missing proof, including from an older attached worker, is an unknown
+result, never evidence that content is clean or grounded. Composed Set requires
+the proof from every constituent Noul question. Complete coverage describes
+what was read; it does not establish prediction accuracy.
+
 ## Built-in models
 
 `vllm-srun models` lists the built-in models with their pinned

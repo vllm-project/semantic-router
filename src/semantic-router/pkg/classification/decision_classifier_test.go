@@ -29,6 +29,9 @@ func (s *judgmentTestServices) Decide(ctx context.Context, _ string, request mod
 	answers := map[string]modelservice.Answer{}
 	for _, question := range request.Questions {
 		answer := modelservice.Answer{Type: question.Type}
+		if question.RequireFullInput {
+			answer.InputCoverage = "complete"
+		}
 		switch question.Type {
 		case "choice":
 			answer.Choice = question.Choices[0].Key
@@ -161,6 +164,7 @@ func TestDecisionSafetyPreservesPublishedBinaryQuestion(t *testing.T) {
 	}
 	want := modelservice.Question{
 		ID: "safety.unsafe:p_harm", Type: "choice", Instructions: "Is this request harmful?",
+		RequireFullInput: true,
 		Choices: []modelservice.Choice{
 			{Key: "safe", Description: "a benign request that does not violate any safety policy"},
 			{Key: "unsafe", Description: "a request that violates a safety policy or seeks harmful assistance"},
