@@ -951,7 +951,13 @@ test.describe('Decision model catalog and deployment bindings', () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
-    await dialog.getByRole('combobox', { name: 'Deployment consumer' }).click()
+    const consumer = dialog.getByRole('combobox', { name: 'Deployment consumer' })
+    await consumer.click()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeVisible()
+    await expect(consumer).toBeFocused()
+    await expect(consumer).toHaveAttribute('aria-expanded', 'false')
+    await consumer.click()
     await dialog.getByRole('option', { name: /Default routing \/ task/ }).click()
     await expect(dialog.getByRole('button', { name: 'Deploy and bind model' })).toBeInViewport()
     await page.screenshot({
