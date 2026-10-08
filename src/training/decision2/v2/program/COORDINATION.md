@@ -207,6 +207,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 17:51 — **`vela2-weights` → parent: PR OPEN: https://github.com/vllm-project/semantic-router/pull/4761. It is one commit, `661f50f05`, on `main` `2fdf026ec`, with label `wg/router-models-inference-runtime` and `Closes #4753`. Please `/accept` #4753, because the linked-issue check needs it. CI is queued and I'm watching it. The node A claim (cores 0–31) stays for re-runs until CI is green; nothing of mine runs there now.**
+  - **What Published Models now checks:** after the Vela 1.0 suites, the runner downloads the pinned 0.3B and 0.8B into the cached runtime cache. It serves each from its own `vllm-srun` on CPU, offline, with the result cache off, at the Router's CPU profile (0.3B `max_speed`, 0.8B `exact`).
+    - **0.3B:** 12 requests and 2 hallucination items, through the Router: every built-in signal question and one decision question of each type.
+    - **0.8B:** a one-state and a three-state request.
+    - **Fused path:** one decisions call per stage with every expected question, and one further state per earlier message (2 and 3 states). Each state equals its questions asked alone within 1e-6; a repeat is bit-identical; the Router reads each signal from its own state.
+    - **Record:** answers within 1e-3 of `testdata/vela2_published_answers.json`, labels and spans exact, recorded decisions at least 0.01 from their boundary. `make record-vela2-answers` re-records.
+    - **Guard:** a test fails if the runtime serves another repository, revision or profile than the Router's registry and CPU profile, or another identity than the record's.
+  - **Parity:** `TestVela2RouterMatchesSystemOne` runs in the job on the served 0.3B (passes, 2.1 s). Its core exclusion moves from `external-vela2-runtime` to `model-runtime`. It can't leave the list, because core CI serves no model and would only skip it.
+  - **"Per-question reference":** I used per state, not per question. The 0.3B reads a state's questions in one sequence; asked alone, its answers move by up to 0.9 and flip decisions in 8 of 10 texts (measured).
+  - **Cost, `make test-models` on 4 pinned node A cores (16 GB, empty Go build cache, models cached):** `main` 188 s → PR 311 s (+123 s).
+
+    | Size | Download | Ready | Suite | Stage call | Peak RSS |
+    | --- | ---: | ---: | ---: | ---: | ---: |
+    | 0.3B | 1.27 GB | 5.0 s | 10.6 s | 0.26–0.48 s | 2.7 GB |
+    | 0.8B | 2.05 GB | 23.9 s | 115.6 s | 17.4 / 24.7 s | 5.1 GB |
+
+    - CI baseline (`main` run 37734365543): the Published Models job takes 12.6 min, and the models cache it saves is 16.6 GB.
+    - Budget for the 0.8B: at most 10 extra minutes on this parallel job. That's met on node A; GitHub's runner numbers follow.
+  - **Drift:** AVX-512 against AVX2 kernels is at most 5.2e-6 (0.3B) and 8e-7 (0.8B), with no label changed.
+  - **Fault checks** (scratch commit, deleted):
+    - a one-character question change fails all 10 single-state items;
+    - with multi-state fusion disabled, the history items fail ("2 (3) decisions calls, want one");
+    - serving the 0.3B at `exact` fails the guard.
+  - **Verification:** `make harness-check` passes. `make check` over the change set passes, except `test-training-contracts`, which fails the same way on `main` in the precommit container (torch without transformers leaves `text_digest` undefined; unrelated).
+  - **CI selection:** the runtime's Vela 2.0 table, golden answers and family, `plugins/decisions.py`, `model_runtime_implicit.go`, the Router's Vela 2.0 question files and `pkg/modelservice` `bundle.go`, `client.go` and `fusion*.go` now select `platform.models-cpu`. The models cache key now follows `run_model_tests.py`.
+  - **Coordination:** no production code changed. `vela2-onecall`'s files are untouched; I only added tests that use its fused path.
+  — `vela2-weights`
+
 - 2026-10-08 16:18 — **`vela2-weights` → parent; cc `vela2-onecall`, `main-green`: START. Issue filed for acceptance: https://github.com/vllm-project/semantic-router/issues/4753 (labels `needs-acceptance`, `wg/router-models-inference-runtime`; please `/accept`). ONE PR to `main`, branch `xunzhuo/vela2-real-weights` from `main` `2fdf026ec`, worktree `vllm-sr-vela2-weights`. Node A claim: CPU cores 0–31 (NUMA node 0, load 0.16 at 16:17), no GPU, about 16:30–24:00.**
   - **Baseline measured (Published Models on `main`, run 37734365543):** 12.6 min wall. The Vela 1.0 downloads take 2.7 min when the models cache misses, and the job then saves a 16.6 GB cache (about 1.7 min). The Vela 2.0 pinned files add 1.27 GB (0.3B) and 2.05 GB (0.8B).
   - **Plan:**
