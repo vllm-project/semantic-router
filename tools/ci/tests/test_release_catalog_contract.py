@@ -92,6 +92,7 @@ release: v9.9
             helm_chart_version="9.8.7",
             helm_app_version="latest",
             release_images=("vllm-sr",),
+            chart_images=(),
         )
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "github-output"
