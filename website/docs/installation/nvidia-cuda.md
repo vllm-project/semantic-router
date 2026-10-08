@@ -19,11 +19,9 @@ It does **not** download a language model or start a vLLM server.
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
 - an x86-64 host when using the current Semantic Router CUDA image;
 - a GPU of compute capability 7.0 or newer (Volta and later) for the Router
-  image, which compiles its local models for that minimum; build with
-  `CUDA_COMPUTE_CAP=<value>` to target an older or newer floor;
-- an NVIDIA driver, and GPU passthrough into the Router container. The CUDA
-  Router image links the driver library directly, so it does not start without
-  passthrough even when every Router-side model is configured for CPU;
+  image, the oldest architecture its PyTorch build (CUDA 12.8) includes;
+- an NVIDIA driver, and GPU passthrough into the Router container for the
+  Router-side models that run on CUDA;
 - Docker and NVIDIA Container Toolkit;
 - enough GPU memory for the vLLM model, KV cache, and any Router-side models;
   and
@@ -132,8 +130,12 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-To run supported Router-side local embeddings and classifiers on CUDA, use
-`--platform nvidia`. A stable CLI selects the matching published release image
+The Router's own models (classifiers, embeddings, decision models) run in the
+[model runtime](model-runtime/overview.md). To run them on CUDA, use
+`--platform nvidia`: the CUDA image ships the runtime with the CUDA build of
+PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
+CUDA support works but is not yet validated; measure it on your hardware.
+A stable CLI selects the matching published release image
 (for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
 use `:latest` unless an image is specified explicitly:
 
@@ -201,16 +203,16 @@ routed request proves the Router, recipe, and backend binding work together.
 
 Configure Docker with `nvidia-ctk`, restart Docker, and repeat NVIDIA's sample
 container command. Debug the container runtime before debugging either vLLM or
-Semantic Router. This is not optional for the CUDA Router image: it links the
-driver library, so without working passthrough the container exits at startup
-with `libcuda.so.1: cannot open shared object file`.
+Semantic Router: without working passthrough, the Router-side models configured
+for CUDA cannot load.
 
 ### The Router uses the CPU
 
 Confirm that `--platform nvidia` selected the `vllm-sr-cuda` image and that
 `VLLM_SR_NVIDIA_PRESERVE_CPU` is not enabled. Check the generated runtime
 configuration and startup logs, not only the source recipe. A recipe without a
-local signal model has nothing to move to CUDA.
+local signal model has nothing to move to CUDA. `GET /v1/models` on a runtime,
+or the Dashboard's model inventory, shows the device each model runs on.
 
 ### vLLM or the Router runs out of GPU memory
 

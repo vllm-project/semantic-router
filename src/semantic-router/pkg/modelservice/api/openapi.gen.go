@@ -12,25 +12,58 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/oapi-codegen/runtime"
 )
 
-// Defines values for AnswerError.
+// Defines values for ClassifyOptionsOverflow.
 const (
-	DeadlineExceeded   AnswerError = "deadline_exceeded"
-	InvalidModelOutput AnswerError = "invalid_model_output"
-	InvalidQuestion    AnswerError = "invalid_question"
-	MaxLengthExceeded  AnswerError = "max_length_exceeded"
-	Unavailable        AnswerError = "unavailable"
+	ClassifyOptionsOverflowReject   ClassifyOptionsOverflow = "reject"
+	ClassifyOptionsOverflowTruncate ClassifyOptionsOverflow = "truncate"
+	ClassifyOptionsOverflowWindow   ClassifyOptionsOverflow = "window"
 )
 
-// Defines values for ErrorResponseErrorCode.
+// Defines values for ClassifyResponseKind.
 const (
-	InternalError   ErrorResponseErrorCode = "internal_error"
-	InvalidRequest  ErrorResponseErrorCode = "invalid_request"
-	ModelNotFound   ErrorResponseErrorCode = "model_not_found"
-	NotReady        ErrorResponseErrorCode = "not_ready"
-	Overloaded      ErrorResponseErrorCode = "overloaded"
-	RequestTooLarge ErrorResponseErrorCode = "request_too_large"
+	ClassifyResponseKindScores   ClassifyResponseKind = "scores"
+	ClassifyResponseKindSequence ClassifyResponseKind = "sequence"
+	ClassifyResponseKindToken    ClassifyResponseKind = "token"
+)
+
+// Defines values for ContentPartType.
+const (
+	ImageUrl   ContentPartType = "image_url"
+	InputAudio ContentPartType = "input_audio"
+	Text       ContentPartType = "text"
+)
+
+// Defines values for EmbeddingsOptionsOverflow.
+const (
+	EmbeddingsOptionsOverflowReject   EmbeddingsOptionsOverflow = "reject"
+	EmbeddingsOptionsOverflowTruncate EmbeddingsOptionsOverflow = "truncate"
+)
+
+// Defines values for EmbeddingsRequestEncodingFormat.
+const (
+	Base64 EmbeddingsRequestEncodingFormat = "base64"
+	Float  EmbeddingsRequestEncodingFormat = "float"
+)
+
+// Defines values for EmbeddingsRequestInputType.
+const (
+	Document EmbeddingsRequestInputType = "document"
+	Query    EmbeddingsRequestInputType = "query"
+)
+
+// Defines values for ErrorBodyCode.
+const (
+	InternalError      ErrorBodyCode = "internal_error"
+	InvalidRequest     ErrorBodyCode = "invalid_request"
+	ModelNotFound      ErrorBodyCode = "model_not_found"
+	NotReady           ErrorBodyCode = "not_ready"
+	Overloaded         ErrorBodyCode = "overloaded"
+	RequestTooLarge    ErrorBodyCode = "request_too_large"
+	UnsupportedSurface ErrorBodyCode = "unsupported_surface"
 )
 
 // Defines values for GoldenStatusStatus.
@@ -41,9 +74,28 @@ const (
 	GoldenStatusStatusUnverified GoldenStatusStatus = "unverified"
 )
 
+// Defines values for HeadCardKind.
+const (
+	HeadCardKindScores   HeadCardKind = "scores"
+	HeadCardKindSequence HeadCardKind = "sequence"
+	HeadCardKindToken    HeadCardKind = "token"
+)
+
+// Defines values for HeadCardOverflow.
+const (
+	HeadCardOverflowReject   HeadCardOverflow = "reject"
+	HeadCardOverflowTruncate HeadCardOverflow = "truncate"
+	HeadCardOverflowWindow   HeadCardOverflow = "window"
+)
+
+// Defines values for HeadCardReduction.
+const (
+	Max       HeadCardReduction = "max"
+	SpanUnion HeadCardReduction = "span_union"
+)
+
 // Defines values for HealthStatus.
 const (
-	HealthStatusAlive    HealthStatus = "alive"
 	HealthStatusDegraded HealthStatus = "degraded"
 	HealthStatusFailed   HealthStatus = "failed"
 	HealthStatusLoading  HealthStatus = "loading"
@@ -52,27 +104,134 @@ const (
 	HealthStatusWarming  HealthStatus = "warming"
 )
 
+// Defines values for ItemError.
+const (
+	DeadlineExceeded   ItemError = "deadline_exceeded"
+	InvalidInput       ItemError = "invalid_input"
+	InvalidModelOutput ItemError = "invalid_model_output"
+	InvalidQuestion    ItemError = "invalid_question"
+	MaxLengthExceeded  ItemError = "max_length_exceeded"
+	ScanBudgetExceeded ItemError = "scan_budget_exceeded"
+	Unavailable        ItemError = "unavailable"
+)
+
+// Defines values for LivenessStatus.
+const (
+	Alive LivenessStatus = "alive"
+)
+
+// Defines values for ModelCardStatus.
+const (
+	ModelCardStatusDegraded ModelCardStatus = "degraded"
+	ModelCardStatusFailed   ModelCardStatus = "failed"
+	ModelCardStatusLoading  ModelCardStatus = "loading"
+	ModelCardStatusReady    ModelCardStatus = "ready"
+	ModelCardStatusStarting ModelCardStatus = "starting"
+	ModelCardStatusWarming  ModelCardStatus = "warming"
+)
+
+// Defines values for ModelHealthStatus.
+const (
+	ModelHealthStatusDegraded ModelHealthStatus = "degraded"
+	ModelHealthStatusFailed   ModelHealthStatus = "failed"
+	ModelHealthStatusLoading  ModelHealthStatus = "loading"
+	ModelHealthStatusReady    ModelHealthStatus = "ready"
+	ModelHealthStatusStarting ModelHealthStatus = "starting"
+	ModelHealthStatusWarming  ModelHealthStatus = "warming"
+)
+
 // Defines values for ProfileInfoNumerics.
 const (
 	Approximate ProfileInfoNumerics = "approximate"
 	Exact       ProfileInfoNumerics = "exact"
 )
 
+// Defines values for QuestionHead.
+const (
+	Broad  QuestionHead = "broad"
+	Router QuestionHead = "router"
+)
+
+// Defines values for QuestionOverflow.
+const (
+	QuestionOverflowTruncate QuestionOverflow = "truncate"
+	QuestionOverflowWindow   QuestionOverflow = "window"
+)
+
+// Defines values for RerankOptionsOverflow.
+const (
+	Reject   RerankOptionsOverflow = "reject"
+	Truncate RerankOptionsOverflow = "truncate"
+)
+
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-// level), probabilities, confidence, legend. A failed question has only type and error.
+// level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
+// knows why, message.
 type Answer struct {
-	Choice        *string             `json:"choice,omitempty"`
-	Confidence    *float64            `json:"confidence,omitempty"`
-	Error         *AnswerError        `json:"error,omitempty"`
-	Legend        *map[string]string  `json:"legend,omitempty"`
+	// AbstainProbability Probability of the model's abstain option, where it has one (not calibrated).
+	AbstainProbability *float64 `json:"abstain_probability,omitempty"`
+	Choice             *string  `json:"choice,omitempty"`
+	Confidence         *float64 `json:"confidence,omitempty"`
+
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error  *ItemError         `json:"error,omitempty"`
+	Legend *map[string]string `json:"legend,omitempty"`
+
+	// Message Why the question failed, naming the field, such as "set questions do not take ['colour']".
+	Message       *string             `json:"message,omitempty"`
 	Noul          *float64            `json:"noul,omitempty"`
 	Probabilities *map[string]float64 `json:"probabilities,omitempty"`
 	Score         *float64            `json:"score,omitempty"`
 	Type          *string             `json:"type"`
 }
 
-// AnswerError defines model for Answer.Error.
-type AnswerError string
+// AudioPart defines model for AudioPart.
+type AudioPart struct {
+	Data string `json:"data"`
+
+	// Format The audio container (default wav).
+	Format *string `json:"format,omitempty"`
+}
+
+// Base64Vector defines model for Base64Vector.
+type Base64Vector = []byte
+
+// BundleRequest defines model for BundleRequest.
+type BundleRequest struct {
+	Options *struct {
+		// DeadlineMs Applies to every task unless a task's own deadline is earlier.
+		DeadlineMs *float64 `json:"deadline_ms,omitempty"`
+	} `json:"options,omitempty"`
+	Tasks []BundleTask `json:"tasks"`
+}
+
+// BundleResponse defines model for BundleResponse.
+type BundleResponse struct {
+	Results []BundleResult `json:"results"`
+}
+
+// BundleResult A task's result; on status 200 its surface field holds the response, otherwise error is set.
+type BundleResult struct {
+	Classify   *ClassifyResponse   `json:"classify,omitempty"`
+	Decisions  *DecisionResponse   `json:"decisions,omitempty"`
+	Embeddings *EmbeddingsResponse `json:"embeddings,omitempty"`
+	Error      *ErrorBody          `json:"error,omitempty"`
+	Id         string              `json:"id"`
+	Rerank     *RerankResponse     `json:"rerank,omitempty"`
+	Status     int                 `json:"status"`
+}
+
+// BundleTask One task; exactly one surface field is set, holding that surface's request body.
+type BundleTask struct {
+	Classify   *ClassifyRequest   `json:"classify,omitempty"`
+	Decisions  *DecisionRequest   `json:"decisions,omitempty"`
+	Embeddings *EmbeddingsRequest `json:"embeddings,omitempty"`
+	Id         string             `json:"id"`
+	Rerank     *RerankRequest     `json:"rerank,omitempty"`
+}
 
 // ChoiceOption defines model for ChoiceOption.
 type ChoiceOption struct {
@@ -80,6 +239,129 @@ type ChoiceOption struct {
 	Description *interface{} `json:"description"`
 	Key         string       `json:"key"`
 }
+
+// ClassifyInput A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
+// `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+type ClassifyInput struct {
+	union json.RawMessage
+}
+
+// ClassifyItem One classify input in object form.
+type ClassifyItem struct {
+	Answer   *string `json:"answer,omitempty"`
+	Context  *string `json:"context,omitempty"`
+	Question *string `json:"question,omitempty"`
+	Text     *string `json:"text,omitempty"`
+	TextPair *string `json:"text_pair,omitempty"`
+}
+
+// ClassifyItemList defines model for ClassifyItemList.
+type ClassifyItemList = []ClassifyItem
+
+// ClassifyOptions defines model for ClassifyOptions.
+type ClassifyOptions struct {
+	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
+
+	// MaxTokens Token budget per input including special tokens (default and ceiling the model's limit).
+	MaxTokens *int `json:"max_tokens,omitempty"`
+
+	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
+	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
+
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
+
+	// ReturnTokens Token heads; include per-token label probabilities.
+	ReturnTokens *bool `json:"return_tokens,omitempty"`
+
+	// Threshold Token heads; the span probability threshold (default the head's).
+	Threshold *float64       `json:"threshold,omitempty"`
+	Window    *WindowOptions `json:"window,omitempty"`
+}
+
+// ClassifyOptionsOverflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
+type ClassifyOptionsOverflow string
+
+// ClassifyRequest defines model for ClassifyRequest.
+type ClassifyRequest struct {
+	// Head The head to run (default the model's primary head).
+	Head *string `json:"head,omitempty"`
+
+	// Input A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
+	// `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+	Input   ClassifyInput    `json:"input"`
+	Model   *string          `json:"model,omitempty"`
+	Options *ClassifyOptions `json:"options,omitempty"`
+}
+
+// ClassifyResponse defines model for ClassifyResponse.
+type ClassifyResponse struct {
+	Head string               `json:"head"`
+	Kind ClassifyResponseKind `json:"kind"`
+
+	// Labels Label order of probabilities and scores.
+	Labels  []string         `json:"labels"`
+	Meta    *ResponseMeta    `json:"meta,omitempty"`
+	Model   string           `json:"model"`
+	Results []ClassifyResult `json:"results"`
+	Usage   Usage            `json:"usage"`
+}
+
+// ClassifyResponseKind defines model for ClassifyResponse.Kind.
+type ClassifyResponseKind string
+
+// ClassifyResult One input's result. sequence: label, probabilities. scores: scores and, with an operating point,
+// selected. token: spans. A windowed input also lists every window. A failed input has only index and
+// error.
+type ClassifyResult struct {
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
+	Input         *InputUsage `json:"input,omitempty"`
+	Label         *string     `json:"label,omitempty"`
+	Probabilities *[]float64  `json:"probabilities,omitempty"`
+	Scores        *[]float64  `json:"scores,omitempty"`
+	Selected      *[]string   `json:"selected,omitempty"`
+	Spans         *[]Span     `json:"spans,omitempty"`
+
+	// Tokens Per-token label probabilities (return_tokens).
+	Tokens  *[]TokenProbabilities `json:"tokens,omitempty"`
+	Windows *[]ClassifyWindow     `json:"windows,omitempty"`
+}
+
+// ClassifyWindow One window of a windowed input; start and end are content-token offsets, end exclusive.
+type ClassifyWindow struct {
+	End           int        `json:"end"`
+	Probabilities *[]float64 `json:"probabilities,omitempty"`
+	Scores        *[]float64 `json:"scores,omitempty"`
+	Start         int        `json:"start"`
+}
+
+// ContentPart `{type: text, text}`, `{type: image_url, image_url: {url}}` (a base64 data URL) or
+// `{type: input_audio, input_audio: {data, format}}` (base64 WAV), for models whose `embedding.modalities`
+// include the part's modality.
+type ContentPart struct {
+	ImageUrl   *ImagePart      `json:"image_url,omitempty"`
+	InputAudio *AudioPart      `json:"input_audio,omitempty"`
+	Text       *string         `json:"text,omitempty"`
+	Type       ContentPartType `json:"type"`
+}
+
+// ContentPartType defines model for ContentPart.Type.
+type ContentPartType string
+
+// ContentPartList defines model for ContentPartList.
+type ContentPartList = []ContentPart
 
 // DecisionRequest defines model for DecisionRequest.
 type DecisionRequest struct {
@@ -90,28 +372,184 @@ type DecisionRequest struct {
 	// Questions Named questions; answers keep this order.
 	Questions map[string]Question `json:"questions"`
 
-	// State The context the questions are about; text, an object or an array of JSON values.
+	// State The context the questions are about; text, an object or an array of JSON values. Models with typed
+	// parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
+	// answer part and every other field as context.
 	State interface{} `json:"state"`
+
+	// States Further states, each with its own questions, answered in the same call: a client asks every question it
+	// has for one model in one request. Each entry is read exactly as a request with its state, its questions
+	// and this request's model and options would be, and its answers come back under the same name in the
+	// response's `states`. Question IDs are unique within an entry.
+	States *map[string]DecisionState `json:"states,omitempty"`
 }
 
 // DecisionResponse defines model for DecisionResponse.
 type DecisionResponse struct {
+	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
 	Answers map[string]Answer `json:"answers"`
 	Meta    *ResponseMeta     `json:"meta,omitempty"`
 	Model   string            `json:"model"`
-	Usage   Usage             `json:"usage"`
+
+	// Sets Set answers by question ID.
+	Sets *map[string]SetAnswer `json:"sets,omitempty"`
+
+	// SpanHeads The span head (router or broad) that answered each Span question, on models with a broad span head.
+	SpanHeads *map[string]string `json:"span_heads,omitempty"`
+
+	// Spans Span answers by question ID.
+	Spans *map[string][]Span `json:"spans,omitempty"`
+
+	// States The answers about each entry of the request's `states`, as that entry's own request would get them. The
+	// response's own fields answer the request's `state`, and its `usage` counts that state alone.
+	States *map[string]DecisionStateResponse `json:"states,omitempty"`
+
+	// Thresholds The threshold applied to each Set or Span question.
+	Thresholds *map[string]float64 `json:"thresholds,omitempty"`
+	Usage      Usage               `json:"usage"`
 }
+
+// DecisionState defines model for DecisionState.
+type DecisionState struct {
+	// Questions Named questions about this state; answers keep this order.
+	Questions map[string]Question `json:"questions"`
+
+	// State The context this entry's questions are about, as a request's `state`.
+	State interface{} `json:"state"`
+}
+
+// DecisionStateResponse The answers about one entry of a request's `states`, with the fields of a response of its own.
+type DecisionStateResponse struct {
+	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+	Answers map[string]Answer `json:"answers"`
+	Meta    *ResponseMeta     `json:"meta,omitempty"`
+	Model   string            `json:"model"`
+
+	// Sets Set answers by question ID.
+	Sets *map[string]SetAnswer `json:"sets,omitempty"`
+
+	// SpanHeads The span head (router or broad) that answered each Span question, on models with a broad span head.
+	SpanHeads *map[string]string `json:"span_heads,omitempty"`
+
+	// Spans Span answers by question ID.
+	Spans *map[string][]Span `json:"spans,omitempty"`
+
+	// Thresholds The threshold applied to each Set or Span question.
+	Thresholds *map[string]float64 `json:"thresholds,omitempty"`
+	Usage      Usage               `json:"usage"`
+}
+
+// Embedding defines model for Embedding.
+type Embedding struct {
+	// Embedding A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
+	Embedding *EmbeddingVector `json:"embedding,omitempty"`
+
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
+	Input  *InputUsage `json:"input,omitempty"`
+	Object string      `json:"object"`
+}
+
+// EmbeddingCard defines model for EmbeddingCard.
+type EmbeddingCard struct {
+	Dimensions []int    `json:"dimensions"`
+	InputTypes []string `json:"input_types"`
+	Layers     []int    `json:"layers"`
+	Modalities []string `json:"modalities"`
+	Normalized bool     `json:"normalized"`
+	Pooling    string   `json:"pooling"`
+}
+
+// EmbeddingVector A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
+type EmbeddingVector struct {
+	union json.RawMessage
+}
+
+// EmbeddingsInput A string, a list of strings, or a list of content parts.
+type EmbeddingsInput struct {
+	union json.RawMessage
+}
+
+// EmbeddingsOptions defines model for EmbeddingsOptions.
+type EmbeddingsOptions struct {
+	DeadlineMs *float64                   `json:"deadline_ms,omitempty"`
+	MaxTokens  *int                       `json:"max_tokens,omitempty"`
+	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
+
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
+}
+
+// EmbeddingsOptionsOverflow defines model for EmbeddingsOptions.Overflow.
+type EmbeddingsOptionsOverflow string
+
+// EmbeddingsRequest defines model for EmbeddingsRequest.
+type EmbeddingsRequest struct {
+	// Dimensions Output dimension, one the model declares (Matryoshka truncation).
+	Dimensions     *int                             `json:"dimensions,omitempty"`
+	EncodingFormat *EmbeddingsRequestEncodingFormat `json:"encoding_format,omitempty"`
+
+	// Input A string, a list of strings, or a list of content parts.
+	Input EmbeddingsInput `json:"input"`
+
+	// InputType The role of the input for instructed embedders.
+	InputType *EmbeddingsRequestInputType `json:"input_type,omitempty"`
+
+	// Layer An early exit the model declares (default its last layer).
+	Layer   *int               `json:"layer,omitempty"`
+	Model   *string            `json:"model,omitempty"`
+	Options *EmbeddingsOptions `json:"options,omitempty"`
+	User    *string            `json:"user,omitempty"`
+}
+
+// EmbeddingsRequestEncodingFormat defines model for EmbeddingsRequest.EncodingFormat.
+type EmbeddingsRequestEncodingFormat string
+
+// EmbeddingsRequestInputType The role of the input for instructed embedders.
+type EmbeddingsRequestInputType string
+
+// EmbeddingsResponse defines model for EmbeddingsResponse.
+type EmbeddingsResponse struct {
+	Data   []Embedding     `json:"data"`
+	Meta   *ResponseMeta   `json:"meta,omitempty"`
+	Model  string          `json:"model"`
+	Object string          `json:"object"`
+	Usage  EmbeddingsUsage `json:"usage"`
+}
+
+// EmbeddingsUsage defines model for EmbeddingsUsage.
+type EmbeddingsUsage struct {
+	PromptTokens int `json:"prompt_tokens"`
+	TotalTokens  int `json:"total_tokens"`
+}
+
+// ErrorBody defines model for ErrorBody.
+type ErrorBody struct {
+	Code    ErrorBodyCode `json:"code"`
+	Message string        `json:"message"`
+}
+
+// ErrorBodyCode defines model for ErrorBody.Code.
+type ErrorBodyCode string
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Error struct {
-		Code    ErrorResponseErrorCode `json:"code"`
-		Message string                 `json:"message"`
-	} `json:"error"`
+	Error ErrorBody `json:"error"`
 }
 
-// ErrorResponseErrorCode defines model for ErrorResponse.Error.Code.
-type ErrorResponseErrorCode string
+// FloatVector defines model for FloatVector.
+type FloatVector = []float32
 
 // GoldenStatus defines model for GoldenStatus.
 type GoldenStatus struct {
@@ -124,15 +562,102 @@ type GoldenStatus struct {
 // GoldenStatusStatus defines model for GoldenStatus.Status.
 type GoldenStatusStatus string
 
-// Health defines model for Health.
+// HeadCard defines model for HeadCard.
+type HeadCard struct {
+	DefaultThreshold *float64 `json:"default_threshold"`
+
+	// Inputs Accepted inputs (text, pair, grounded).
+	Inputs *[]string    `json:"inputs,omitempty"`
+	Kind   HeadCardKind `json:"kind"`
+	Labels []string     `json:"labels"`
+	Name   string       `json:"name"`
+
+	// OperatingPointSha256 SHA-256 of the verified operating_point.json the head applies.
+	OperatingPointSha256 *string            `json:"operating_point_sha256"`
+	Overflow             *HeadCardOverflow  `json:"overflow,omitempty"`
+	Reduction            *HeadCardReduction `json:"reduction"`
+
+	// Thresholds The packaged operating point, one threshold per label.
+	Thresholds *[]float64 `json:"thresholds"`
+
+	// Window The windows the head reads a long input in by default; null when it declares none.
+	Window *HeadWindow `json:"window"`
+}
+
+// HeadCardKind defines model for HeadCard.Kind.
+type HeadCardKind string
+
+// HeadCardOverflow defines model for HeadCard.Overflow.
+type HeadCardOverflow string
+
+// HeadCardReduction defines model for HeadCard.Reduction.
+type HeadCardReduction string
+
+// HeadWindow The windows the head reads a long input in by default; null when it declares none.
+type HeadWindow struct {
+	// Overlap Content tokens shared by neighbouring windows.
+	Overlap int `json:"overlap"`
+
+	// Tokens Window size including special tokens.
+	Tokens int `json:"tokens"`
+}
+
+// Health Readiness of the process and its models (`GET /health`).
 type Health struct {
-	Model  *string      `json:"model"`
-	Reason *string      `json:"reason"`
-	Status HealthStatus `json:"status"`
+	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+	ApiVersion string  `json:"api_version"`
+	Model      *string `json:"model"`
+
+	// Models Per-model states when a process serves several models.
+	Models *map[string]ModelHealth `json:"models,omitempty"`
+	Reason *string                 `json:"reason"`
+	Status HealthStatus            `json:"status"`
 }
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// ImagePart defines model for ImagePart.
+type ImagePart struct {
+	Url string `json:"url"`
+}
+
+// InputText defines model for InputText.
+type InputText = string
+
+// InputUsage Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+// `tokens_lower_bound` is true.
+type InputUsage struct {
+	// ProcessedTokens Tokens the model read (windows counted once per content token).
+	ProcessedTokens int `json:"processed_tokens"`
+
+	// Tokens Tokens of the complete input, or a lower bound when `tokens_lower_bound` is true.
+	Tokens int `json:"tokens"`
+
+	// TokensLowerBound The input was read in part, so `tokens` is a lower bound of its tokens.
+	TokensLowerBound *bool `json:"tokens_lower_bound,omitempty"`
+	Truncated        bool  `json:"truncated"`
+
+	// Windows Windows the input was read in.
+	Windows *int `json:"windows,omitempty"`
+}
+
+// ItemError Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+// scanned.
+type ItemError string
+
+// Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
+type Liveness struct {
+	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+	ApiVersion string         `json:"api_version"`
+	Status     LivenessStatus `json:"status"`
+}
+
+// LivenessStatus defines model for Liveness.Status.
+type LivenessStatus string
 
 // ModelCard defines model for ModelCard.
 type ModelCard struct {
@@ -140,9 +665,11 @@ type ModelCard struct {
 	AcceleratorValidated *bool          `json:"accelerator_validated,omitempty"`
 	Device               *string        `json:"device,omitempty"`
 	Dtype                *string        `json:"dtype,omitempty"`
+	Embedding            *EmbeddingCard `json:"embedding,omitempty"`
 	Engine               *string        `json:"engine,omitempty"`
 	Family               string         `json:"family"`
 	Golden               *GoldenStatus  `json:"golden,omitempty"`
+	Heads                *[]HeadCard    `json:"heads,omitempty"`
 	Id                   string         `json:"id"`
 	Licence              *string        `json:"licence"`
 	Limits               *ModelLimits   `json:"limits,omitempty"`
@@ -152,36 +679,88 @@ type ModelCard struct {
 	OwnedBy              *string        `json:"owned_by,omitempty"`
 	Parameters           *int           `json:"parameters,omitempty"`
 	Plugins              *[]PluginInfo  `json:"plugins,omitempty"`
-	Profile              *string        `json:"profile,omitempty"`
-	Profiles             *[]ProfileInfo `json:"profiles,omitempty"`
-	QuestionTypes        *[]string      `json:"question_types,omitempty"`
-	Ready                bool           `json:"ready"`
-	Repo                 *string        `json:"repo"`
-	Revision             *string        `json:"revision"`
-	Surfaces             []string       `json:"surfaces"`
+
+	// Presets Questions the model defines (Question.preset).
+	Presets       *[]string      `json:"presets,omitempty"`
+	Profile       *string        `json:"profile,omitempty"`
+	Profiles      *[]ProfileInfo `json:"profiles,omitempty"`
+	QuestionTypes *[]string      `json:"question_types,omitempty"`
+	Ready         bool           `json:"ready"`
+	Reason        *string        `json:"reason"`
+	Repo          *string        `json:"repo"`
+	Rerank        *RerankCard    `json:"rerank,omitempty"`
+	Revision      *string        `json:"revision"`
+
+	// Status This model's state.
+	Status   *ModelCardStatus `json:"status,omitempty"`
+	Surfaces []string         `json:"surfaces"`
 }
+
+// ModelCardStatus This model's state.
+type ModelCardStatus string
+
+// ModelHealth defines model for ModelHealth.
+type ModelHealth struct {
+	Reason *string           `json:"reason"`
+	Status ModelHealthStatus `json:"status"`
+}
+
+// ModelHealthStatus defines model for ModelHealth.Status.
+type ModelHealthStatus string
 
 // ModelLimits defines model for ModelLimits.
 type ModelLimits struct {
 	MaxInputTokens *int `json:"max_input_tokens,omitempty"`
-	MaxLevels      *int `json:"max_levels,omitempty"`
-	MaxOptions     *int `json:"max_options,omitempty"`
-	MinLevels      *int `json:"min_levels,omitempty"`
-	MinOptions     *int `json:"min_options,omitempty"`
+
+	// MaxInputs Most inputs or documents one classify, embeddings or rerank request may carry.
+	MaxInputs  *int `json:"max_inputs,omitempty"`
+	MaxLevels  *int `json:"max_levels,omitempty"`
+	MaxOptions *int `json:"max_options,omitempty"`
+
+	// MaxScanTokens Decision models that read a long state part in windows (Vela 2.0): the most tokens of one part a question
+	// reads whole, by default four inputs on a CPU and 32 on a GPU. A longer part fails its questions with
+	// `scan_budget_exceeded`.
+	MaxScanTokens *int `json:"max_scan_tokens,omitempty"`
+	MinLevels     *int `json:"min_levels,omitempty"`
+	MinOptions    *int `json:"min_options,omitempty"`
+
+	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
+	// CPU (one forward) and the scan budget on a GPU.
+	TruncateTokens *int `json:"truncate_tokens,omitempty"`
 }
 
 // ModelList defines model for ModelList.
 type ModelList struct {
-	Data   []ModelCard `json:"data"`
-	Object string      `json:"object"`
+	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+	ApiVersion string      `json:"api_version"`
+	Data       []ModelCard `json:"data"`
+
+	// Limits What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
+	// client splits its work to fit.
+	Limits ProcessLimits `json:"limits"`
+	Object string        `json:"object"`
 }
 
 // PluginInfo defines model for PluginInfo.
 type PluginInfo struct {
-	Distribution *string `json:"distribution"`
-	Group        string  `json:"group"`
-	Name         string  `json:"name"`
-	Version      *string `json:"version"`
+	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
+	// and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
+	// `auto_priority`, where `auto` tries them (lowest first; null: only when named).
+	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
+	Distribution *string                 `json:"distribution"`
+	Group        string                  `json:"group"`
+	Name         string                  `json:"name"`
+	Version      *string                 `json:"version"`
+}
+
+// ProcessLimits What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
+// client splits its work to fit.
+type ProcessLimits struct {
+	// MaxBundleTasks Most tasks one POST /v1/bundle carries.
+	MaxBundleTasks int `json:"max_bundle_tasks"`
+
+	// MaxRequestBytes Largest request body, in bytes.
+	MaxRequestBytes int `json:"max_request_bytes"`
 }
 
 // ProfileInfo defines model for ProfileInfo.
@@ -194,36 +773,171 @@ type ProfileInfo struct {
 // ProfileInfoNumerics defines model for ProfileInfo.Numerics.
 type ProfileInfoNumerics string
 
-// Question defines model for Question.
+// ProfileName exact, or a profile the server enabled for this model (its card's `profiles`).
+type ProfileName = string
+
+// Question One question. `instructions` is required unless `preset` names a question the model defines (see
+// `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
+// its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
+// `head` and `threshold` where the model reads them), and any other field is answered with
+// invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
+// a question takes one or the other.
 type Question struct {
 	// Choices Ordered Choice or Noul options, an alternative to a criteria object.
 	Choices *[]ChoiceOption `json:"choices,omitempty"`
 
-	// Criteria System One criteria. Choice: an object of 2..255 option keys to descriptions (descriptions may be
-	// null). Noul: an optional object with only false and true. Score: an ordered list of 2..10 level
-	// descriptions.
+	// Criteria System One criteria. Choice: an object of 2..255 non-blank option keys to descriptions (descriptions
+	// may be null). Noul: an optional object with only false and true (a null description takes the
+	// model's default). Score: an ordered list of 2..10 level descriptions. Set and Span: an object of
+	// 1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
 	Criteria *interface{} `json:"criteria,omitempty"`
 
-	// Instructions The question; non-empty text, an object or an array.
-	Instructions interface{} `json:"instructions"`
+	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
+	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
+	Head *QuestionHead `json:"head,omitempty"`
+
+	// Instructions The question; non-blank text, an object or an array.
+	Instructions *interface{} `json:"instructions,omitempty"`
+
+	// Labels Ordered Set or Span labels, an alternative to a criteria object.
+	Labels *[]ChoiceOption `json:"labels,omitempty"`
 
 	// Levels Ordered Score level descriptions, an alternative to a criteria list.
 	Levels *[]interface{} `json:"levels,omitempty"`
 
-	// Type choice, noul or score. Unknown types are answered with invalid_question.
-	Type string `json:"type"`
+	// Over The state field a question reads (typed-part models): a field name, or a list of field names it reads
+	// together in state order; default the whole state, or for a span the answer if present, else the
+	// request. A span reads one field.
+	Over *interface{} `json:"over,omitempty"`
+
+	// Overflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+	// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+	// both kinds share their model inputs unless one has to be read in windows.
+	Overflow *QuestionOverflow `json:"overflow,omitempty"`
+
+	// Preset A question the model defines; the model fills in its type, instructions and criteria.
+	Preset *string `json:"preset,omitempty"`
+
+	// Threshold Set or Span decision threshold; the applied threshold is reported in `thresholds`.
+	Threshold *float64 `json:"threshold,omitempty"`
+
+	// Type choice, noul or score; set and span where the model declares them (`question_types` in /v1/models).
+	// Unknown or undeclared types are answered with invalid_question.
+	Type *string `json:"type,omitempty"`
+}
+
+// QuestionHead Span questions on models with a broad span head: the head that answers (default: the model's routing,
+// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
+type QuestionHead string
+
+// QuestionOverflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+// both kinds share their model inputs unless one has to be read in windows.
+type QuestionOverflow string
+
+// Representation The identity of an embedding space; vectors with different representations never mix.
+type Representation struct {
+	Dimension   int     `json:"dimension"`
+	Layer       int     `json:"layer"`
+	Modality    *string `json:"modality,omitempty"`
+	ModelSha256 string  `json:"model_sha256"`
+	Normalized  *bool   `json:"normalized,omitempty"`
 }
 
 // RequestOptions defines model for RequestOptions.
 type RequestOptions struct {
-	// DeadlineMs Questions not started by the deadline return deadline_exceeded.
+	// DeadlineMs Work not started by the deadline is not run; its items return deadline_exceeded.
 	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
 
-	// Profile exact, or the profile the server enabled.
-	Profile *string `json:"profile,omitempty"`
+	// MaxTokens Scan budget: the most tokens of one state part a question reads whole (default its card's
+	// `limits.max_scan_tokens`; a part that fits one model input is always read). A longer part fails the
+	// questions that read it whole with `scan_budget_exceeded`. Only a model whose card has `max_scan_tokens`
+	// takes it.
+	MaxTokens *int `json:"max_tokens,omitempty"`
 
-	// ReturnMeta Include meta in the response (default true).
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
+}
+
+// RerankCard defines model for RerankCard.
+type RerankCard struct {
+	Default RerankExit   `json:"default"`
+	Exits   []RerankExit `json:"exits"`
+}
+
+// RerankExit defines model for RerankExit.
+type RerankExit struct {
+	Dimension int `json:"dimension"`
+	Layer     int `json:"layer"`
+}
+
+// RerankOptions defines model for RerankOptions.
+type RerankOptions struct {
+	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
+	MaxTokens  *int     `json:"max_tokens,omitempty"`
+
+	// Overflow What happens to a query-document pair longer than max_tokens (default reject).
+	Overflow *RerankOptionsOverflow `json:"overflow,omitempty"`
+
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
+}
+
+// RerankOptionsOverflow What happens to a query-document pair longer than max_tokens (default reject).
+type RerankOptionsOverflow string
+
+// RerankRequest defines model for RerankRequest.
+type RerankRequest struct {
+	// Dimensions Pair-scorer exit dimension, one the model declares.
+	Dimensions *int     `json:"dimensions,omitempty"`
+	Documents  []string `json:"documents"`
+
+	// Layer Pair-scorer exit layer, one the model declares (default the served exit).
+	Layer           *int           `json:"layer,omitempty"`
+	Model           *string        `json:"model,omitempty"`
+	Options         *RerankOptions `json:"options,omitempty"`
+	Query           string         `json:"query"`
+	ReturnDocuments *bool          `json:"return_documents,omitempty"`
+	TopN            *int           `json:"top_n,omitempty"`
+}
+
+// RerankResponse defines model for RerankResponse.
+type RerankResponse struct {
+	Meta    *ResponseMeta  `json:"meta,omitempty"`
+	Model   string         `json:"model"`
+	Results []RerankResult `json:"results"`
+	Usage   Usage          `json:"usage"`
+}
+
+// RerankResult defines model for RerankResult.
+type RerankResult struct {
+	Document *string `json:"document,omitempty"`
+
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
+	Input *InputUsage `json:"input,omitempty"`
+
+	// Logit The raw pair-scorer logit.
+	Logit *float64 `json:"logit,omitempty"`
+
+	// RelevanceScore The model's relevance score (sigmoid of the logit for logit heads).
+	RelevanceScore *float64 `json:"relevance_score,omitempty"`
 }
 
 // ResponseMeta defines model for ResponseMeta.
@@ -232,13 +946,44 @@ type ResponseMeta struct {
 	ComputeMs   *float64 `json:"compute_ms,omitempty"`
 	Device      *string  `json:"device,omitempty"`
 	Engine      *string  `json:"engine,omitempty"`
+
+	// Head The head that produced a classify result.
+	Head        *string  `json:"head,omitempty"`
 	ModelSha256 *string  `json:"model_sha256,omitempty"`
 	Numerics    *string  `json:"numerics,omitempty"`
 	Profile     *string  `json:"profile,omitempty"`
 	QueueMs     *float64 `json:"queue_ms,omitempty"`
 
+	// Representation The identity of an embedding space; vectors with different representations never mix.
+	Representation *Representation `json:"representation,omitempty"`
+
 	// Revision The 40-hex Hub revision; null for a local package directory.
 	Revision *string `json:"revision"`
+}
+
+// SetAnswer defines model for SetAnswer.
+type SetAnswer struct {
+	Probabilities map[string]float64 `json:"probabilities"`
+	Selected      []string           `json:"selected"`
+}
+
+// Span A labelled span; offsets are Unicode code points into the text the question read, end exclusive.
+type Span struct {
+	End         int     `json:"end"`
+	Label       string  `json:"label"`
+	Probability float64 `json:"probability"`
+	Start       int     `json:"start"`
+	Text        string  `json:"text"`
+}
+
+// TextList defines model for TextList.
+type TextList = []string
+
+// TokenProbabilities defines model for TokenProbabilities.
+type TokenProbabilities struct {
+	End           int       `json:"end"`
+	Probabilities []float64 `json:"probabilities"`
+	Start         int       `json:"start"`
 }
 
 // Usage defines model for Usage.
@@ -247,14 +992,273 @@ type Usage struct {
 	OutputTokens int `json:"output_tokens"`
 }
 
+// WindowOptions defines model for WindowOptions.
+type WindowOptions struct {
+	// Overlap Content tokens shared by neighbouring windows.
+	Overlap *int `json:"overlap,omitempty"`
+
+	// Tokens Window size including special tokens.
+	Tokens int `json:"tokens"`
+}
+
 // Error defines model for Error.
 type Error = ErrorResponse
+
+// CreateBundleJSONRequestBody defines body for CreateBundle for application/json ContentType.
+type CreateBundleJSONRequestBody = BundleRequest
+
+// CreateClassificationJSONRequestBody defines body for CreateClassification for application/json ContentType.
+type CreateClassificationJSONRequestBody = ClassifyRequest
 
 // CreateDecisionsJSONRequestBody defines body for CreateDecisions for application/json ContentType.
 type CreateDecisionsJSONRequestBody = DecisionRequest
 
+// CreateEmbeddingsJSONRequestBody defines body for CreateEmbeddings for application/json ContentType.
+type CreateEmbeddingsJSONRequestBody = EmbeddingsRequest
+
+// CreateRerankJSONRequestBody defines body for CreateRerank for application/json ContentType.
+type CreateRerankJSONRequestBody = RerankRequest
+
 // CreateSystemOneJSONRequestBody defines body for CreateSystemOne for application/json ContentType.
 type CreateSystemOneJSONRequestBody = DecisionRequest
+
+// AsInputText returns the union data inside the ClassifyInput as a InputText
+func (t ClassifyInput) AsInputText() (InputText, error) {
+	var body InputText
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInputText overwrites any union data inside the ClassifyInput as the provided InputText
+func (t *ClassifyInput) FromInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInputText performs a merge with any union data inside the ClassifyInput, using the provided InputText
+func (t *ClassifyInput) MergeInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTextList returns the union data inside the ClassifyInput as a TextList
+func (t ClassifyInput) AsTextList() (TextList, error) {
+	var body TextList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTextList overwrites any union data inside the ClassifyInput as the provided TextList
+func (t *ClassifyInput) FromTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTextList performs a merge with any union data inside the ClassifyInput, using the provided TextList
+func (t *ClassifyInput) MergeTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsClassifyItemList returns the union data inside the ClassifyInput as a ClassifyItemList
+func (t ClassifyInput) AsClassifyItemList() (ClassifyItemList, error) {
+	var body ClassifyItemList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromClassifyItemList overwrites any union data inside the ClassifyInput as the provided ClassifyItemList
+func (t *ClassifyInput) FromClassifyItemList(v ClassifyItemList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeClassifyItemList performs a merge with any union data inside the ClassifyInput, using the provided ClassifyItemList
+func (t *ClassifyInput) MergeClassifyItemList(v ClassifyItemList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ClassifyInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ClassifyInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsFloatVector returns the union data inside the EmbeddingVector as a FloatVector
+func (t EmbeddingVector) AsFloatVector() (FloatVector, error) {
+	var body FloatVector
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromFloatVector overwrites any union data inside the EmbeddingVector as the provided FloatVector
+func (t *EmbeddingVector) FromFloatVector(v FloatVector) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeFloatVector performs a merge with any union data inside the EmbeddingVector, using the provided FloatVector
+func (t *EmbeddingVector) MergeFloatVector(v FloatVector) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBase64Vector returns the union data inside the EmbeddingVector as a Base64Vector
+func (t EmbeddingVector) AsBase64Vector() (Base64Vector, error) {
+	var body Base64Vector
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBase64Vector overwrites any union data inside the EmbeddingVector as the provided Base64Vector
+func (t *EmbeddingVector) FromBase64Vector(v Base64Vector) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBase64Vector performs a merge with any union data inside the EmbeddingVector, using the provided Base64Vector
+func (t *EmbeddingVector) MergeBase64Vector(v Base64Vector) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t EmbeddingVector) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *EmbeddingVector) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsInputText returns the union data inside the EmbeddingsInput as a InputText
+func (t EmbeddingsInput) AsInputText() (InputText, error) {
+	var body InputText
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInputText overwrites any union data inside the EmbeddingsInput as the provided InputText
+func (t *EmbeddingsInput) FromInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInputText performs a merge with any union data inside the EmbeddingsInput, using the provided InputText
+func (t *EmbeddingsInput) MergeInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTextList returns the union data inside the EmbeddingsInput as a TextList
+func (t EmbeddingsInput) AsTextList() (TextList, error) {
+	var body TextList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTextList overwrites any union data inside the EmbeddingsInput as the provided TextList
+func (t *EmbeddingsInput) FromTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTextList performs a merge with any union data inside the EmbeddingsInput, using the provided TextList
+func (t *EmbeddingsInput) MergeTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsContentPartList returns the union data inside the EmbeddingsInput as a ContentPartList
+func (t EmbeddingsInput) AsContentPartList() (ContentPartList, error) {
+	var body ContentPartList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromContentPartList overwrites any union data inside the EmbeddingsInput as the provided ContentPartList
+func (t *EmbeddingsInput) FromContentPartList(v ContentPartList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeContentPartList performs a merge with any union data inside the EmbeddingsInput, using the provided ContentPartList
+func (t *EmbeddingsInput) MergeContentPartList(v ContentPartList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t EmbeddingsInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *EmbeddingsInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -338,13 +1342,33 @@ type ClientInterface interface {
 	// GetMetrics request
 	GetMetrics(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateBundleWithBody request with any body
+	CreateBundleWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateBundle(ctx context.Context, body CreateBundleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateClassificationWithBody request with any body
+	CreateClassificationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateClassification(ctx context.Context, body CreateClassificationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateDecisionsWithBody request with any body
 	CreateDecisionsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateDecisions(ctx context.Context, body CreateDecisionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateEmbeddingsWithBody request with any body
+	CreateEmbeddingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateEmbeddings(ctx context.Context, body CreateEmbeddingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListModels request
 	ListModels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRerankWithBody request with any body
+	CreateRerankWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRerank(ctx context.Context, body CreateRerankJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSystemOneWithBody request with any body
 	CreateSystemOneWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -388,6 +1412,54 @@ func (c *Client) GetMetrics(ctx context.Context, reqEditors ...RequestEditorFn) 
 	return c.Client.Do(req)
 }
 
+func (c *Client) CreateBundleWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBundleRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBundle(ctx context.Context, body CreateBundleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBundleRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateClassificationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateClassificationRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateClassification(ctx context.Context, body CreateClassificationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateClassificationRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) CreateDecisionsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateDecisionsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -412,8 +1484,56 @@ func (c *Client) CreateDecisions(ctx context.Context, body CreateDecisionsJSONRe
 	return c.Client.Do(req)
 }
 
+func (c *Client) CreateEmbeddingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEmbeddingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEmbeddings(ctx context.Context, body CreateEmbeddingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEmbeddingsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListModels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListModelsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRerankWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRerankRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRerank(ctx context.Context, body CreateRerankJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRerankRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -529,6 +1649,86 @@ func NewGetMetricsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewCreateBundleRequest calls the generic CreateBundle builder with application/json body
+func NewCreateBundleRequest(server string, body CreateBundleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateBundleRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateBundleRequestWithBody generates requests for CreateBundle with any type of body
+func NewCreateBundleRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/bundle")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateClassificationRequest calls the generic CreateClassification builder with application/json body
+func NewCreateClassificationRequest(server string, body CreateClassificationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateClassificationRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateClassificationRequestWithBody generates requests for CreateClassification with any type of body
+func NewCreateClassificationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/classify")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewCreateDecisionsRequest calls the generic CreateDecisions builder with application/json body
 func NewCreateDecisionsRequest(server string, body CreateDecisionsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -550,6 +1750,46 @@ func NewCreateDecisionsRequestWithBody(server string, contentType string, body i
 	}
 
 	operationPath := fmt.Sprintf("/v1/decisions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateEmbeddingsRequest calls the generic CreateEmbeddings builder with application/json body
+func NewCreateEmbeddingsRequest(server string, body CreateEmbeddingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateEmbeddingsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateEmbeddingsRequestWithBody generates requests for CreateEmbeddings with any type of body
+func NewCreateEmbeddingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/embeddings")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -592,6 +1832,46 @@ func NewListModelsRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCreateRerankRequest calls the generic CreateRerank builder with application/json body
+func NewCreateRerankRequest(server string, body CreateRerankJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRerankRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateRerankRequestWithBody generates requests for CreateRerank with any type of body
+func NewCreateRerankRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/rerank")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -688,13 +1968,33 @@ type ClientWithResponsesInterface interface {
 	// GetMetricsWithResponse request
 	GetMetricsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMetricsResponse, error)
 
+	// CreateBundleWithBodyWithResponse request with any body
+	CreateBundleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error)
+
+	CreateBundleWithResponse(ctx context.Context, body CreateBundleJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error)
+
+	// CreateClassificationWithBodyWithResponse request with any body
+	CreateClassificationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClassificationResponse, error)
+
+	CreateClassificationWithResponse(ctx context.Context, body CreateClassificationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClassificationResponse, error)
+
 	// CreateDecisionsWithBodyWithResponse request with any body
 	CreateDecisionsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDecisionsResponse, error)
 
 	CreateDecisionsWithResponse(ctx context.Context, body CreateDecisionsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDecisionsResponse, error)
 
+	// CreateEmbeddingsWithBodyWithResponse request with any body
+	CreateEmbeddingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEmbeddingsResponse, error)
+
+	CreateEmbeddingsWithResponse(ctx context.Context, body CreateEmbeddingsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEmbeddingsResponse, error)
+
 	// ListModelsWithResponse request
 	ListModelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListModelsResponse, error)
+
+	// CreateRerankWithBodyWithResponse request with any body
+	CreateRerankWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRerankResponse, error)
+
+	CreateRerankWithResponse(ctx context.Context, body CreateRerankJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRerankResponse, error)
 
 	// CreateSystemOneWithBodyWithResponse request with any body
 	CreateSystemOneWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneResponse, error)
@@ -728,7 +2028,7 @@ func (r GetHealthResponse) StatusCode() int {
 type GetLivenessResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *Health
+	JSON200      *Liveness
 }
 
 // Status returns HTTPResponse.Status
@@ -768,6 +2068,60 @@ func (r GetMetricsResponse) StatusCode() int {
 	return 0
 }
 
+type CreateBundleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BundleResponse
+	JSON400      *Error
+	JSON413      *Error
+	JSON500      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateBundleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateBundleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateClassificationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ClassifyResponse
+	JSON400      *Error
+	JSON404      *Error
+	JSON413      *Error
+	JSON422      *Error
+	JSON429      *Error
+	JSON500      *Error
+	JSON503      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateClassificationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateClassificationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type CreateDecisionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -775,6 +2129,7 @@ type CreateDecisionsResponse struct {
 	JSON400      *Error
 	JSON404      *Error
 	JSON413      *Error
+	JSON422      *Error
 	JSON429      *Error
 	JSON500      *Error
 	JSON503      *Error
@@ -790,6 +2145,35 @@ func (r CreateDecisionsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateDecisionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateEmbeddingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmbeddingsResponse
+	JSON400      *Error
+	JSON404      *Error
+	JSON413      *Error
+	JSON422      *Error
+	JSON429      *Error
+	JSON500      *Error
+	JSON503      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateEmbeddingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateEmbeddingsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -818,6 +2202,35 @@ func (r ListModelsResponse) StatusCode() int {
 	return 0
 }
 
+type CreateRerankResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RerankResponse
+	JSON400      *Error
+	JSON404      *Error
+	JSON413      *Error
+	JSON422      *Error
+	JSON429      *Error
+	JSON500      *Error
+	JSON503      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRerankResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRerankResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type CreateSystemOneResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -825,6 +2238,7 @@ type CreateSystemOneResponse struct {
 	JSON400      *Error
 	JSON404      *Error
 	JSON413      *Error
+	JSON422      *Error
 	JSON429      *Error
 	JSON500      *Error
 	JSON503      *Error
@@ -873,6 +2287,40 @@ func (c *ClientWithResponses) GetMetricsWithResponse(ctx context.Context, reqEdi
 	return ParseGetMetricsResponse(rsp)
 }
 
+// CreateBundleWithBodyWithResponse request with arbitrary body returning *CreateBundleResponse
+func (c *ClientWithResponses) CreateBundleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error) {
+	rsp, err := c.CreateBundleWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBundleResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateBundleWithResponse(ctx context.Context, body CreateBundleJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error) {
+	rsp, err := c.CreateBundle(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBundleResponse(rsp)
+}
+
+// CreateClassificationWithBodyWithResponse request with arbitrary body returning *CreateClassificationResponse
+func (c *ClientWithResponses) CreateClassificationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClassificationResponse, error) {
+	rsp, err := c.CreateClassificationWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateClassificationResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateClassificationWithResponse(ctx context.Context, body CreateClassificationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClassificationResponse, error) {
+	rsp, err := c.CreateClassification(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateClassificationResponse(rsp)
+}
+
 // CreateDecisionsWithBodyWithResponse request with arbitrary body returning *CreateDecisionsResponse
 func (c *ClientWithResponses) CreateDecisionsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDecisionsResponse, error) {
 	rsp, err := c.CreateDecisionsWithBody(ctx, contentType, body, reqEditors...)
@@ -890,6 +2338,23 @@ func (c *ClientWithResponses) CreateDecisionsWithResponse(ctx context.Context, b
 	return ParseCreateDecisionsResponse(rsp)
 }
 
+// CreateEmbeddingsWithBodyWithResponse request with arbitrary body returning *CreateEmbeddingsResponse
+func (c *ClientWithResponses) CreateEmbeddingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEmbeddingsResponse, error) {
+	rsp, err := c.CreateEmbeddingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEmbeddingsResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateEmbeddingsWithResponse(ctx context.Context, body CreateEmbeddingsJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEmbeddingsResponse, error) {
+	rsp, err := c.CreateEmbeddings(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEmbeddingsResponse(rsp)
+}
+
 // ListModelsWithResponse request returning *ListModelsResponse
 func (c *ClientWithResponses) ListModelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListModelsResponse, error) {
 	rsp, err := c.ListModels(ctx, reqEditors...)
@@ -897,6 +2362,23 @@ func (c *ClientWithResponses) ListModelsWithResponse(ctx context.Context, reqEdi
 		return nil, err
 	}
 	return ParseListModelsResponse(rsp)
+}
+
+// CreateRerankWithBodyWithResponse request with arbitrary body returning *CreateRerankResponse
+func (c *ClientWithResponses) CreateRerankWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRerankResponse, error) {
+	rsp, err := c.CreateRerankWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRerankResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRerankWithResponse(ctx context.Context, body CreateRerankJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRerankResponse, error) {
+	rsp, err := c.CreateRerank(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRerankResponse(rsp)
 }
 
 // CreateSystemOneWithBodyWithResponse request with arbitrary body returning *CreateSystemOneResponse
@@ -964,7 +2446,7 @@ func ParseGetLivenessResponse(rsp *http.Response) (*GetLivenessResponse, error) 
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Health
+		var dest Liveness
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -986,6 +2468,128 @@ func ParseGetMetricsResponse(rsp *http.Response) (*GetMetricsResponse, error) {
 	response := &GetMetricsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseCreateBundleResponse parses an HTTP response from a CreateBundleWithResponse call
+func ParseCreateBundleResponse(rsp *http.Response) (*CreateBundleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateBundleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BundleResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateClassificationResponse parses an HTTP response from a CreateClassificationWithResponse call
+func ParseCreateClassificationResponse(rsp *http.Response) (*CreateClassificationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateClassificationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClassifyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -1032,6 +2636,88 @@ func ParseCreateDecisionsResponse(rsp *http.Response) (*CreateDecisionsResponse,
 			return nil, err
 		}
 		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateEmbeddingsResponse parses an HTTP response from a CreateEmbeddingsWithResponse call
+func ParseCreateEmbeddingsResponse(rsp *http.Response) (*CreateEmbeddingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateEmbeddingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmbeddingsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest Error
@@ -1085,6 +2771,81 @@ func ParseListModelsResponse(rsp *http.Response) (*ListModelsResponse, error) {
 	return response, nil
 }
 
+// ParseCreateRerankResponse parses an HTTP response from a CreateRerankWithResponse call
+func ParseCreateRerankResponse(rsp *http.Response) (*CreateRerankResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRerankResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RerankResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseCreateSystemOneResponse parses an HTTP response from a CreateSystemOneWithResponse call
 func ParseCreateSystemOneResponse(rsp *http.Response) (*CreateSystemOneResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -1126,6 +2887,13 @@ func ParseCreateSystemOneResponse(rsp *http.Response) (*CreateSystemOneResponse,
 			return nil, err
 		}
 		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest Error

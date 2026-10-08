@@ -42,3 +42,18 @@ func appendAnthropicPartialCacheOmission(diagnostics *llmprotocol.Diagnostics, p
 			"usage.cache", "Messages requires numeric cache buckets; the unreported bucket is zero-filled for representation, while settlement retains unknown usage")
 	}
 }
+
+// The output total is the Messages client's single output number. When it is
+// unreported while an output component (reasoning, other) is known, the wire
+// zero-fills the total beside that component, so the omission must be named
+// rather than presented as an exact zero.
+func appendAnthropicPartialOutputOmission(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source llmprotocol.WireFormat, usage llmprotocol.Usage) {
+	if usage.OutputTotal.Value != nil {
+		return
+	}
+	if usage.OutputReasoning.Value == nil && usage.OutputOther.Value == nil {
+		return
+	}
+	appendAccountingOmission(diagnostics, policy, source, llmprotocol.AnthropicMessagesV1,
+		"usage.output", "Messages requires a numeric output total; the unreported total is zero-filled for representation, while settlement retains unknown usage")
+}

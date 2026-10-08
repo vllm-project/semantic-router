@@ -18,7 +18,7 @@ select = [
 ignore = [
   "E501",
   "PLR09",   # numeric function/method counts are review signals, not correctness gates
-  "PLR1702", # nested-block count is covered by the advisory structure report
+  "PLR1702", # nested-block count is a review signal, not a correctness gate
 ]
 
 [lint.per-file-ignores]
@@ -33,38 +33,6 @@ ignore = [
 "src/vllm-sr/cli/models.py" = ["I001", "N815", "PLC0415", "SIM114", "UP006", "UP035", "UP045"]
 "src/vllm-sr/cli/parser.py" = ["B904", "F541", "I001", "UP006", "UP015", "UP035"]
 "src/vllm-sr/cli/validator.py" = ["F401", "I001", "PLR2004", "RUF013", "SIM102", "UP006", "UP035"]
-# Fleet-sim retains its pre-existing local style conventions; correctness rules
-# remain enabled here.
-"src/fleet-sim/**/*.py" = [
-  "B007",
-  "B008",
-  "B904",
-  "B905",
-  "E402",
-  "E741",
-  "F401",
-  "F821",
-  "F841",
-  "N802",
-  "N803",
-  "N806",
-  "N812",
-  "N814",
-  "PLC0415",
-  "PLR2004",
-  "PLW1510",
-  "PLW2901",
-  "RUF001",
-  "RUF002",
-  "RUF003",
-  "RUF005",
-  "RUF012",
-  "RUF022",
-  "RUF046",
-  "SIM105",
-  "SIM108",
-  "SIM115",
-]
 "tools/calibration/tuning/engine.py" = [
   "E402",     # re-exports at bottom of module (after all definitions)
   "F401",     # re-exported names appear unused locally
@@ -86,8 +54,8 @@ ignore = [
 # so the API, registry and CLI stay importable without them.
 "src/model-runtime/**/*.py" = ["N812", "PLC0415"]
 "src/model-runtime/tests/*.py" = ["N812", "PLC0415", "PLR2004"]
-"src/model-runtime/vllm_sr_runtime/engines/native/models/*.py" = ["N801", "N812", "PLC0415"]
-"src/model-runtime/vllm_sr_runtime/accel/triton_*.py" = ["N803", "N806", "N812", "PLC0415", "PLR2004", "SIM108"]
+"src/model-runtime/vllm_srun/engines/native/models/*.py" = ["N801", "N812", "PLC0415"]
+"src/model-runtime/vllm_srun/accel/triton_*.py" = ["N803", "N806", "N812", "PLC0415", "PLR2004", "SIM108"]
 "src/model-runtime/tools/*.py" = ["N812", "PLC0415", "PLR2004", "SIM115"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
@@ -95,8 +63,28 @@ ignore = [
 "src/training/model_classifier/modality_routing_classifier/exploration_lfm25_scx/test_*.py" = ["PLR2004"]
 "bench/test_*.py" = ["PLR2004"]
 "bench/reasoning/test_*.py" = ["PLR2004"]
+"bench/agent_crew/test_*.py" = [
+  "PLR2004",  # expected call counts and costs are readable inline
+  "RUF012",   # stub HTTP handler class attributes are per-test state
+]
+"bench/agent_crew/report.py" = [
+  "PLC0415",  # matplotlib is an optional dependency used only by --figures
+]
+# The crew fixture is a pull request with deliberately defective code. Its bugs
+# are what the arms are scored against, so correctness rules must not remove them.
+"bench/agent_crew/fixture/pr/*.py" = [
+  "E722",     # bare except is a seeded defect
+  "SIM105",   # so is the try/except/pass it sits in
+]
 "bench/reasoning/router_reason_bench_multi_dataset.py" = [
   "PLR2004",  # answer-parsing and token thresholds are readable inline
+]
+"bench/redteam/test_*.py" = ["PLR2004"]
+"bench/redteam/datasets.py" = [
+  "PLC0415",  # datasets is only needed for the Hub-backed prompt source
+]
+"bench/redteam/scorers.py" = [
+  "PLC0415",  # torch/transformers are only needed to score a local artifact
 ]
 "tools/test/services/provider-mocker/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]

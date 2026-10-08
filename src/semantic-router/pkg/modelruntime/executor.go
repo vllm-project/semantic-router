@@ -232,8 +232,8 @@ func (r *executorRun) startTask(ctx context.Context, state *taskState) {
 
 	go func(task Task) {
 		outcome := taskOutcome{name: task.Name}
-		// Initializers call into the Candle CGO bindings and re-run on every
-		// config reload, so an unrecovered panic here aborts a live router —
+		// Initializers re-run on every config reload, so an unrecovered panic
+		// here aborts a live router —
 		// even for BestEffort tasks, whose failures are meant to stay non-fatal.
 		// The send has to happen on both paths or execute() blocks on resultCh
 		// forever. Same intent as goSafely in pkg/extproc (#1843).

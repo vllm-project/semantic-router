@@ -22,7 +22,7 @@
     },
     {
       "name": "diagnostics",
-      "description": "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers."
+      "description": "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and rerankers."
     },
     {
       "name": "inventory",
@@ -504,6 +504,18 @@
                 "schema": {
                   "type": "string"
                 }
+              },
+              "x-vsr-config-hash": {
+                "description": "SHA-256 of the document the serving configuration snapshot was compiled from.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-vsr-config-version": {
+                "description": "Version of the configuration snapshot that serves; it can trail the persisted document while an update activates or after one is rejected.",
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -700,6 +712,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -712,6 +750,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -726,6 +767,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -734,6 +778,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -789,6 +836,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -801,6 +874,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -815,6 +891,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -823,6 +902,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -1282,6 +1364,32 @@
                               "type": "string",
                               "format": "date-time"
                             },
+                            "reasons": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "stage": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stage",
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            },
                             "source": {
                               "type": "string"
                             },
@@ -1294,6 +1402,9 @@
                             },
                             "status": {
                               "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -1308,6 +1419,9 @@
                         "activation_status": {
                           "type": "string"
                         },
+                        "config_version": {
+                          "type": "integer"
+                        },
                         "etag": {
                           "type": "string"
                         },
@@ -1316,6 +1430,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "rollback_of": {
+                          "type": "integer"
                         },
                         "status": {
                           "type": "string"
@@ -1459,6 +1576,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -1471,6 +1614,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -1485,6 +1631,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -1493,6 +1642,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -1548,6 +1700,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -1560,6 +1738,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -1574,6 +1755,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -1582,6 +1766,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -2041,6 +2228,32 @@
                               "type": "string",
                               "format": "date-time"
                             },
+                            "reasons": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "stage": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stage",
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            },
                             "source": {
                               "type": "string"
                             },
@@ -2053,6 +2266,9 @@
                             },
                             "status": {
                               "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -2067,6 +2283,9 @@
                         "activation_status": {
                           "type": "string"
                         },
+                        "config_version": {
+                          "type": "integer"
+                        },
                         "etag": {
                           "type": "string"
                         },
@@ -2075,6 +2294,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "rollback_of": {
+                          "type": "integer"
                         },
                         "status": {
                           "type": "string"
@@ -2209,6 +2431,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -2221,6 +2469,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -2238,8 +2489,81 @@
                     "active_runtime_hash": {
                       "type": "string"
                     },
+                    "active_version": {
+                      "type": "integer"
+                    },
                     "generated_runtime_hash": {
                       "type": "string"
+                    },
+                    "last_rejection": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "attempt": {
+                          "type": "integer"
+                        },
+                        "document_hash": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string"
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "attempt",
+                        "document_hash",
+                        "source",
+                        "status",
+                        "stage",
+                        "started_at"
+                      ]
                     },
                     "source_config_hash": {
                       "type": "string"
@@ -3684,6 +4008,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -3696,6 +4046,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -3710,6 +4063,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -3718,6 +4074,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -3773,6 +4132,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -3785,6 +4170,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -3799,6 +4187,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -3807,6 +4198,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -3862,6 +4256,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -3874,6 +4294,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -3888,6 +4311,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -3896,6 +4322,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -4355,6 +4784,32 @@
                               "type": "string",
                               "format": "date-time"
                             },
+                            "reasons": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "stage": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stage",
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            },
                             "source": {
                               "type": "string"
                             },
@@ -4367,6 +4822,9 @@
                             },
                             "status": {
                               "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -4381,6 +4839,9 @@
                         "activation_status": {
                           "type": "string"
                         },
+                        "config_version": {
+                          "type": "integer"
+                        },
                         "etag": {
                           "type": "string"
                         },
@@ -4389,6 +4850,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "rollback_of": {
+                          "type": "integer"
                         },
                         "status": {
                           "type": "string"
@@ -4557,6 +5021,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -4569,6 +5059,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -4583,6 +5076,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -4591,6 +5087,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -4646,6 +5145,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -4658,6 +5183,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -4672,6 +5200,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -4680,6 +5211,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -5095,6 +5629,32 @@
                               "type": "string",
                               "format": "date-time"
                             },
+                            "reasons": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "stage": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stage",
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            },
                             "source": {
                               "type": "string"
                             },
@@ -5107,6 +5667,9 @@
                             },
                             "status": {
                               "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -5121,6 +5684,9 @@
                         "activation_status": {
                           "type": "string"
                         },
+                        "config_version": {
+                          "type": "integer"
+                        },
                         "etag": {
                           "type": "string"
                         },
@@ -5129,6 +5695,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "rollback_of": {
+                          "type": "integer"
                         },
                         "status": {
                           "type": "string"
@@ -5254,6 +5823,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -5266,6 +5861,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -5280,6 +5878,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -5288,6 +5889,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -5343,6 +5947,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -5355,6 +5985,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -5369,6 +6002,9 @@
                     "activation_status": {
                       "type": "string"
                     },
+                    "config_version": {
+                      "type": "integer"
+                    },
                     "etag": {
                       "type": "string"
                     },
@@ -5377,6 +6013,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "rollback_of": {
+                      "type": "integer"
                     },
                     "status": {
                       "type": "string"
@@ -5836,6 +6475,32 @@
                               "type": "string",
                               "format": "date-time"
                             },
+                            "reasons": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "stage": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stage",
+                                  "code",
+                                  "message"
+                                ]
+                              }
+                            },
                             "source": {
                               "type": "string"
                             },
@@ -5848,6 +6513,9 @@
                             },
                             "status": {
                               "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -5862,6 +6530,9 @@
                         "activation_status": {
                           "type": "string"
                         },
+                        "config_version": {
+                          "type": "integer"
+                        },
                         "etag": {
                           "type": "string"
                         },
@@ -5870,6 +6541,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "rollback_of": {
+                          "type": "integer"
                         },
                         "status": {
                           "type": "string"
@@ -5940,13 +6614,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "config_version": {
+                    "type": "integer"
+                  },
                   "version": {
                     "type": "string"
                   }
                 },
-                "required": [
-                  "version"
-                ],
                 "additionalProperties": false
               }
             }
@@ -6487,11 +7161,35 @@
                     },
                     "valid": {
                       "type": "boolean"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "valid",
-                    "normalized_yaml"
+                    "normalized_yaml",
+                    "warnings"
                   ]
                 }
               }
@@ -6782,8 +7480,20 @@
                   "items": {
                     "type": "object",
                     "properties": {
+                      "active": {
+                        "type": "boolean"
+                      },
+                      "config_version": {
+                        "type": "integer"
+                      },
                       "filename": {
                         "type": "string"
+                      },
+                      "hash": {
+                        "type": "string"
+                      },
+                      "rollback_of": {
+                        "type": "integer"
                       },
                       "source": {
                         "type": "string"
@@ -15255,416 +15965,6 @@
         "x-vllm-sr-visibility": "advanced"
       }
     },
-    "/api/v1/diagnostics/nli": {
-      "post": {
-        "summary": "Natural language inference classification for premise and hypothesis pairs",
-        "description": "Natural language inference classification for premise and hypothesis pairs",
-        "operationId": "post_api_v1_diagnostics_nli",
-        "tags": [
-          "diagnostics"
-        ],
-        "security": [
-          {},
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "confidence": {
-                      "type": "number"
-                    },
-                    "contradiction_prob": {
-                      "type": "number"
-                    },
-                    "entailment_prob": {
-                      "type": "number"
-                    },
-                    "label": {
-                      "type": "string"
-                    },
-                    "neutral_prob": {
-                      "type": "number"
-                    },
-                    "processing_time_ms": {
-                      "type": "integer"
-                    },
-                    "recipe": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "label",
-                    "confidence",
-                    "entailment_prob",
-                    "neutral_prob",
-                    "contradiction_prob",
-                    "processing_time_ms"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The authenticated role lacks the operation permission",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request body too large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "description": "application/json request payload. Limit: 10485760 bytes.",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hypothesis": {
-                    "type": "string"
-                  },
-                  "premise": {
-                    "type": "string"
-                  },
-                  "recipe": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "premise",
-                  "hypothesis"
-                ]
-              }
-            }
-          }
-        },
-        "x-vllm-sr-permission": "classify.invoke",
-        "x-vllm-sr-sensitivity": "operational",
-        "x-vllm-sr-plane": "diagnostic",
-        "x-vllm-sr-audiences": [
-          "operator",
-          "internal"
-        ],
-        "x-vllm-sr-stability": "stable",
-        "x-vllm-sr-visibility": "advanced"
-      }
-    },
     "/api/v1/diagnostics/similarity": {
       "post": {
         "summary": "Calculate pairwise text similarity",
@@ -17022,6 +17322,334 @@
         "x-vllm-sr-visibility": "primary"
       }
     },
+    "/api/v1/inventory/model-runtime": {
+      "get": {
+        "summary": "Get the model_runtime deployments: process, readiness, restarts and served model cards",
+        "description": "Get the model_runtime deployments: process, readiness, restarts and served model cards",
+        "operationId": "get_api_v1_inventory_model_runtime",
+        "tags": [
+          "inventory"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "device": {
+                            "type": "string"
+                          },
+                          "embedding": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "dimensions": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              },
+                              "layers": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              },
+                              "modalities": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "endpoint": {
+                            "type": "string"
+                          },
+                          "engine": {
+                            "type": "string"
+                          },
+                          "family": {
+                            "type": "string"
+                          },
+                          "heads": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "labels": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "kind"
+                              ]
+                            }
+                          },
+                          "managed": {
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "profile": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "rerank": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "default_layer": {
+                                "type": "integer"
+                              },
+                              "layers": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "required": [
+                              "default_layer"
+                            ]
+                          },
+                          "restarts": {
+                            "type": "integer"
+                          },
+                          "revision": {
+                            "type": "string"
+                          },
+                          "served_name": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "surfaces": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "managed",
+                          "process",
+                          "served_name",
+                          "ready",
+                          "state",
+                          "restarts"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deployments",
+                    "count"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
     "/api/v1/inventory/models": {
       "get": {
         "summary": "Get information about loaded models",
@@ -17400,8 +18028,8 @@
     },
     "/api/v1/observability/audit": {
       "get": {
-        "summary": "Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence",
-        "description": "Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence",
+        "summary": "Page through this Router process's bounded management mutation audit, configuration lifecycle outcomes included; filter by action and resume after a sequence",
+        "description": "Page through this Router process's bounded management mutation audit, configuration lifecycle outcomes included; filter by action and resume after a sequence",
         "operationId": "get_api_v1_observability_audit",
         "tags": [
           "observability"
@@ -17457,6 +18085,45 @@
                         "properties": {
                           "action": {
                             "type": "string"
+                          },
+                          "config": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "attempt": {
+                                "type": "integer"
+                              },
+                              "codes": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "hash": {
+                                "type": "string"
+                              },
+                              "result": {
+                                "type": "string"
+                              },
+                              "rollback_of": {
+                                "type": "integer"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "attempt",
+                              "result",
+                              "source"
+                            ]
                           },
                           "hash": {
                             "type": "string"
@@ -17757,9 +18424,6 @@
                     "hallucination_detector": {
                       "type": "boolean"
                     },
-                    "hallucination_explainer": {
-                      "type": "boolean"
-                    },
                     "projection_mapping_count": {
                       "type": "integer"
                     },
@@ -17787,7 +18451,6 @@
                     "unified_classifier",
                     "fact_check_classifier",
                     "hallucination_detector",
-                    "hallucination_explainer",
                     "feedback_detector",
                     "decision_count",
                     "projection_partition_count",
@@ -18978,15 +19641,6 @@
                                 "hallucination_confidence": {
                                   "type": "number"
                                 },
-                                "nli_confidence": {
-                                  "type": "number"
-                                },
-                                "nli_label": {
-                                  "type": "string"
-                                },
-                                "nli_score_available": {
-                                  "type": "boolean"
-                                },
                                 "score_available": {
                                   "type": "boolean"
                                 },
@@ -19005,8 +19659,6 @@
                                 "start",
                                 "end",
                                 "score_available",
-                                "nli_label",
-                                "nli_score_available",
                                 "severity",
                                 "explanation"
                               ]
@@ -23142,15 +23794,6 @@
                           "hallucination_confidence": {
                             "type": "number"
                           },
-                          "nli_confidence": {
-                            "type": "number"
-                          },
-                          "nli_label": {
-                            "type": "string"
-                          },
-                          "nli_score_available": {
-                            "type": "boolean"
-                          },
                           "score_available": {
                             "type": "boolean"
                           },
@@ -23169,8 +23812,6 @@
                           "start",
                           "end",
                           "score_available",
-                          "nli_label",
-                          "nli_score_available",
                           "severity",
                           "explanation"
                         ]
@@ -38750,6 +39391,9 @@
                         "active_hash": {
                           "type": "string"
                         },
+                        "active_version": {
+                          "type": "integer"
+                        },
                         "observed_attempt": {
                           "type": "integer"
                         },
@@ -41103,6 +41747,32 @@
                                 "type": "string",
                                 "format": "date-time"
                               },
+                              "reasons": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string"
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    },
+                                    "path": {
+                                      "type": "string"
+                                    },
+                                    "stage": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "stage",
+                                    "code",
+                                    "message"
+                                  ]
+                                }
+                              },
                               "source": {
                                 "type": "string"
                               },
@@ -41115,6 +41785,9 @@
                               },
                               "status": {
                                 "type": "string"
+                              },
+                              "version": {
+                                "type": "integer"
                               }
                             },
                             "required": [
@@ -41515,6 +42188,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -41527,6 +42226,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -41764,6 +42466,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -41776,6 +42504,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -42277,6 +43008,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -42289,6 +43046,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -42660,6 +43420,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -42672,6 +43458,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -43121,6 +43910,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -43133,6 +43948,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -43370,6 +44188,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -43382,6 +44226,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -43927,6 +44774,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -43939,6 +44812,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -44308,6 +45184,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -44320,6 +45222,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -44385,6 +45290,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -44397,6 +45328,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -44726,6 +45660,32 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "reasons": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "stage",
+                              "code",
+                              "message"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string"
                         },
@@ -44738,6 +45698,9 @@
                         },
                         "status": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -55708,6 +56671,38 @@
                     "message": {
                       "type": "string"
                     },
+                    "model_deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "ready"
+                        ]
+                      }
+                    },
                     "pending_models": {
                       "nullable": true,
                       "type": "array",
@@ -55893,6 +56888,38 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "model_deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "ready"
+                        ]
+                      }
                     },
                     "pending_models": {
                       "nullable": true,

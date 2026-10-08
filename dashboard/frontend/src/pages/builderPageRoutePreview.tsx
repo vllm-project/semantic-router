@@ -423,6 +423,7 @@ function astModelToInput(m: ASTModelRef): RouteModelInput {
     model: m.model,
     reasoning: m.reasoning,
     effort: m.effort,
+    mode: m.mode,
     lora: m.lora,
     paramSize: m.paramSize,
     weight: m.weight,

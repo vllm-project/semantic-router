@@ -70,16 +70,6 @@ updates:
         applies-to: security-updates
         patterns: ["*"]
 
-  - package-ecosystem: cargo
-    directory: /candle-binding
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 0
-    groups:
-      candle-rust-security:
-        applies-to: security-updates
-        patterns: ["*"]
-
   - package-ecosystem: uv
     directory: /src/vllm-sr
     schedule:

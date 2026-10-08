@@ -7,26 +7,22 @@ They are slower than unit tests and should be run with --integration flag.
 
 """
 
-import json
 import os
 import shutil
 import time
 import unittest
-from contextlib import contextmanager
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from cli_test_base import CLITestBase
+from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from serve_session import ServeSessionMixin
 
-DEFAULT_PROVIDER_MOCKER_IMAGE = "semantic-router-ci/provider-mocker:e2e-test"
-PROVIDER_MOCKER_IMAGE_ENV = "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE"
-PROVIDER_MOCKER_PORT = 18080
 PULL_POLICY_PROBE_IMAGE = "example.invalid/vllm-sr-cli/pull-policy-probe:always"
 
 
-class TestServeIntegration(ServeSessionMixin, CLITestBase):
+class TestServeIntegration(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
     """Integration tests for the complete serve workflow."""
 
     # Timeout for waiting for container to be running
@@ -67,134 +63,6 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             },
             pull_log,
         )
-
-    @contextmanager
-    def _running_mock_upstream(
-        self, container_name: str, *, expected_authorization: str | None = None
-    ):
-        """Run the mock OpenAI upstream on the active stack network."""
-        image = os.getenv(PROVIDER_MOCKER_IMAGE_ENV) or os.getenv(
-            "PROVIDER_MOCKER_IMAGE", DEFAULT_PROVIDER_MOCKER_IMAGE
-        )
-        expected_authorization_env = (
-            ["-e", f"PROVIDER_MOCKER_EXPECT_AUTHORIZATION={expected_authorization}"]
-            if expected_authorization is not None
-            else []
-        )
-        result = self._run_subprocess(
-            [
-                self.container_runtime,
-                "run",
-                "-d",
-                "--name",
-                container_name,
-                "--network",
-                self.runtime_stack.network_name,
-                "-e",
-                "PROVIDER_MOCKER_SCENARIO=cli",
-                *expected_authorization_env,
-                "--entrypoint",
-                "python3",
-                image,
-                "-u",
-                "-m",
-                "provider_mocker",
-                "--port",
-                str(PROVIDER_MOCKER_PORT),
-            ],
-            timeout=30,
-        )
-        self.assertEqual(
-            result.returncode,
-            0,
-            f"failed to start mock upstream: {result.stderr}",
-        )
-        self.assertTrue(
-            self.wait_for_container_running(
-                timeout=30,
-                container_name=container_name,
-            ),
-            "mock upstream did not reach running state",
-        )
-        try:
-            yield
-        finally:
-            self._run_subprocess(
-                [self.container_runtime, "rm", "-f", container_name],
-                timeout=30,
-            )
-
-    def _container_log_diagnostics(self, container_names: tuple[str, ...]) -> str:
-        """Collect bounded logs for a failed mock request."""
-        diagnostics = []
-        for container_name in container_names:
-            logs = self._run_subprocess(
-                [
-                    self.container_runtime,
-                    "logs",
-                    "--tail",
-                    "80",
-                    container_name,
-                ],
-                timeout=10,
-            )
-            diagnostics.append(
-                f"{container_name}:\n{(logs.stdout + logs.stderr)[-4000:]}"
-            )
-        return "\n".join(diagnostics)
-
-    def _send_mock_chat_completion(
-        self,
-        mock_container: str,
-        *,
-        request_path: str = "/v1/chat/completions",
-        redact_values: tuple[str, ...] = (),
-        request_headers: dict[str, str] | None = None,
-        model: str = "test-model",
-    ):
-        """Send a chat request, retrying until the local stack is ready."""
-        listener_port = 8888 + self.runtime_stack.port_offset
-        request = urllib_request.Request(
-            f"http://localhost:{listener_port}{request_path}",
-            data=json.dumps(
-                {
-                    "model": model,
-                    "messages": [{"role": "user", "content": "ping"}],
-                }
-            ).encode(),
-            headers={"Content-Type": "application/json", **(request_headers or {})},
-            method="POST",
-        )
-        deadline = time.time() + 60
-        last_error: Exception | None = None
-        while time.time() < deadline:
-            try:
-                with urllib_request.urlopen(request, timeout=10) as response:
-                    self.assertEqual(response.status, 200)
-                    response.read()
-                return
-            except urllib_error.HTTPError as exc:
-                body = exc.read().decode("utf-8", errors="replace")
-                last_error = RuntimeError(f"HTTP {exc.code}: {body}")
-                time.sleep(2)
-            except (
-                urllib_error.URLError,
-                ConnectionError,
-                TimeoutError,
-            ) as exc:
-                last_error = exc
-                time.sleep(2)
-
-        diagnostics = self._container_log_diagnostics(
-            (
-                mock_container,
-                self.ROUTER_CONTAINER_NAME,
-                self.ENVOY_CONTAINER_NAME,
-            )
-        )
-        for value in redact_values:
-            diagnostics = diagnostics.replace(value, "[redacted]")
-        self.fail(f"request did not reach mock upstream: {last_error}\n{diagnostics}")
 
     def _mock_upstream_paths(self, mock_container: str) -> set[str]:
         """Read request paths recorded by the mock upstream."""
@@ -269,6 +137,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         with self._running_serve(ensure_models_dir=True):
             self._check_health_endpoint()
             self._assert_volume_mounting()
+            self.assert_dashboard_holds_no_container_runtime()
             self._assert_status_command()
             self._assert_logs_command()
 
@@ -666,6 +535,8 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         interceptor_env, pull_log = self._pull_interceptor_env()
         cmd = [
             "serve",
+            "--gateway",
+            "extproc",
             "--router-image",
             PULL_POLICY_PROBE_IMAGE,
             "--envoy-image",

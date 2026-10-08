@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 // Command openapi-gen emits the Router Apiserver OpenAPI 3.0 specification and
 // endpoint index documentation from the route catalog. It never starts the

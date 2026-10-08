@@ -1,7 +1,7 @@
 """Standalone eval of the halugate detector pipeline on HaluEval — no router needed.
 
-Runs the public sentinel + detector (the NLI explainer is private, but it only
-filters false positives, so sentinel+detector upper-bounds the full pipeline).
+Runs the sentinel + detector. The NLI explainer that once followed them only
+filtered false positives and is retired, so this is the router's whole pipeline.
 Uses the paper serialization (arXiv:2603.23508 eq.3): Context [SEP] Query [SEP] Response.
 
     python3 -m bench.hallucination.evaluate_halugate --max-samples 1000 --sweep

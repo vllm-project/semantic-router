@@ -34,7 +34,7 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 
 func TestDecisionAlgorithmRegistryOwnsEveryPayloadBlock(t *testing.T) {
 	algorithmType := reflect.TypeOf(AlgorithmConfig{})
-	for _, entry := range decisionAlgorithmRegistry {
+	for _, entry := range registeredSpecs(decisionAlgorithms) {
 		configField := entry.Catalog.ConfigField
 		if configField == "" {
 			if entry.IsConfigured != nil {
