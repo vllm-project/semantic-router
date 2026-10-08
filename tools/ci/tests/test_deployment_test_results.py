@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deployment_test_results import go_unit, kubernetes, operator
 from release_guard_waiver import GUARD_WAIVER
 
-
 class DeploymentResultsTests(unittest.TestCase):
     def test_release_guard_case_remains_failed_and_other_cases_are_required(self):
         report = {
