@@ -9,6 +9,30 @@
       "minimum": 0,
       "description": "Number of Semantic Router pod replicas when autoscaling is disabled."
     },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "standalone",
+            "extproc"
+          ],
+          "description": "standalone: the Router serves config.listeners itself; extproc: the Router serves ext_proc gRPC for a gateway in front of it."
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "secretName": {
+              "type": "string",
+              "description": "Standalone only: a kubernetes.io/tls Secret mounted at /app/config/certs for listener TLS."
+            }
+          }
+        }
+      }
+    },
     "autoscaling": {
       "type": "object",
       "additionalProperties": true,
@@ -159,6 +183,11 @@
       "additionalProperties": true,
       "minProperties": 1,
       "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
+    },
+    "decisionModel": {
+      "type": "string",
+      "pattern": "^((?i)vela-2\\.0-(0\\.3b|0\\.8b|4b|9b)|(?i)vela-1\\.0)?$",
+      "description": "The Router's decision model (global.model_catalog.system.decision_model): Vela-2.0-0.3B, Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0; empty leaves the config's own."
     },
     "configMap": {
       "type": "object",

@@ -58,8 +58,8 @@ The serving layer may queue, reject, or use an explicitly compatible fallback.
 Cross-model fallback still needs its own safety contract because changing a logical
 model is not equivalent to selecting another replica.
 
-Fleet sizing and capacity planning remain offline concerns. The Fleet Simulator can
-evaluate candidate fleet shapes without putting an optimizer in the request path.
+Fleet sizing and capacity planning remain offline concerns, outside the request
+path.
 
 ## Scope and non-goals
 
@@ -82,6 +82,5 @@ Reconsider the boundary if:
 
 ## References
 
-- [Fleet Simulator overview](../fleet-sim/overview)
 - [Latency-aware selection](../tutorials/algorithm/selection/latency-aware)
 - [Model execution fallback](./model-execution-fallback)

@@ -176,13 +176,13 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	semanticrouter.Status.GatewayMode = gatewayMode
 	logger.Info("Gateway mode determined", "mode", gatewayMode)
 
-	if err := r.reconcileEnvoyConfig(ctx, semanticrouter, gatewayMode); err != nil {
-		logger.Error(err, "Failed to reconcile Envoy ConfigMap")
+	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
+		logger.Error(err, "Failed to reconcile Deployment")
 		return err
 	}
 
-	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
-		logger.Error(err, "Failed to reconcile Deployment")
+	if err := r.deleteRetiredEnvoyConfig(ctx, semanticrouter); err != nil {
+		logger.Error(err, "Failed to delete the retired Envoy ConfigMap")
 		return err
 	}
 

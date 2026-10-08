@@ -25,6 +25,9 @@ func singleOptions(spec config.ResolvedModelBinding) classifyOptions {
 	return classifyOptions{overflow: spec.Deployment.Input.Overflow, maxTokens: spec.Deployment.Input.MaxTokens}
 }
 
+// rejectWindowPolicy refuses a head binding whose deployment reads in windows:
+// a head reads windows only through its typed window task. (A deployment
+// that answers questions takes window as its scan budget instead.)
 func rejectWindowPolicy(spec config.ResolvedModelBinding, task string) error {
 	if spec.Deployment.Input.Overflow == "window" {
 		return fmt.Errorf("%w: %s window policy requires the typed window task", binding.ErrCapability, task)
@@ -57,6 +60,8 @@ func itemError(code string) error {
 	switch code {
 	case "max_length_exceeded":
 		return fmt.Errorf("%w: %s", binding.ErrInputLimit, code)
+	case "scan_budget_exceeded":
+		return fmt.Errorf("%w: %s", binding.ErrScanBudget, code)
 	case "invalid_input":
 		return fmt.Errorf("%w: %s", binding.ErrInvalidInput, code)
 	case "invalid_model_output":
@@ -70,14 +75,23 @@ func itemError(code string) error {
 	}
 }
 
-// Sequence binds a categorical head: one label distribution per input.
+// Sequence binds a categorical head: one label distribution per input. A
+// built-in signal bound to a Vela 2.0 model asks it the signal's question
+// instead.
 func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding) (_ *binding.Resolved[string, tasks.LabelDistribution], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
-	if err := rejectWindowPolicy(spec, "sequence"); err != nil {
-		return nil, err
-	}
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if question, ok := questionFor(spec, card); ok {
+		return r.questionSequence(ctx, spec, card, question)
+	}
+	if err = rejectWindowPolicy(spec, "sequence"); err != nil {
+		return nil, err
+	}
 	t, capability, err := r.prepareHead(ctx, spec, kindSequence, inputText)
 	if err != nil {
 		return nil, err
@@ -117,13 +131,21 @@ func (r *Runtime) Scores(ctx context.Context, spec config.ResolvedModelBinding) 
 // Tokens binds a token head; spans arrive in code points and leave in UTF-8
 // byte offsets. A truncated input keeps its valid spans and reports
 // tasks.ErrTokenSpansTruncated so the consumer applies its partial-input policy.
+// A PII binding to a decision model asks its ready-made pii question instead.
 func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) (_ *binding.Resolved[string, tasks.TokenClassificationResult], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
-	if err := rejectWindowPolicy(spec, "token"); err != nil {
-		return nil, err
-	}
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if preset, ok := spanPreset(spec, card); ok {
+		return r.spanTokens(ctx, spec, card, preset)
+	}
+	if err = rejectWindowPolicy(spec, "token"); err != nil {
+		return nil, err
+	}
 	t, capability, err := r.prepareHead(ctx, spec, kindToken, inputText)
 	if err != nil {
 		return nil, err
@@ -143,14 +165,23 @@ func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) 
 }
 
 // Grounded binds a hallucination head: the answer is read against its
-// context and question, and spans refer to the answer.
+// context and question, and spans refer to the answer. A binding to a
+// decision model asks its ready-made halu question at the model's own
+// calibrated threshold instead, so threshold applies to heads only.
 func (r *Runtime) Grounded(ctx context.Context, spec config.ResolvedModelBinding, threshold float32) (_ *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
-	if err := rejectWindowPolicy(spec, "grounded"); err != nil {
-		return nil, err
-	}
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if preset, ok := spanPreset(spec, card); ok {
+		return r.spanGrounded(ctx, spec, card, preset)
+	}
+	if err = rejectWindowPolicy(spec, "grounded"); err != nil {
+		return nil, err
+	}
 	t, capability, err := r.prepareHead(ctx, spec, kindToken, inputGrounded)
 	if err != nil {
 		return nil, err
@@ -170,15 +201,7 @@ func (r *Runtime) Grounded(ctx context.Context, spec config.ResolvedModelBinding
 		if err != nil {
 			return out, err
 		}
-		// An empty span set carries no model evidence: no summary, not confidence 1.
-		if len(out.Entities) > 0 {
-			best := out.Entities[0].Confidence
-			for _, entity := range out.Entities[1:] {
-				best = max(best, entity.Confidence)
-			}
-			out.Summary = &tasks.ScoreResult{Value: float64(best)}
-			out.SummarySemantics = &tasks.ScoreSemantics{Unit: "max_hallucinated_token_score", Direction: tasks.HigherIsPositive, Calibrated: false}
-		}
+		summarizeSpans(&out)
 		return out, nil
 	}, warmup)
 }

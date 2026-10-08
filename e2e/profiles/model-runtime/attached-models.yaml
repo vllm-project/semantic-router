@@ -7,3 +7,6 @@ models:
   - model: /tmp/vsr-fixtures/feedback
     name: feedback-a
     device: cpu
+  - model: /tmp/vsr-fixtures/vela2-attached
+    name: vela2-a
+    device: cpu

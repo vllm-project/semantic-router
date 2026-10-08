@@ -1,24 +1,44 @@
 .section {
+  --ecosystem-bg: var(--site-surface);
+  --ecosystem-text: var(--site-text-strong);
+  --ecosystem-secondary: var(--site-muted-bright);
+  --ecosystem-caption: var(--site-muted-bright);
+  --ecosystem-muted: var(--site-muted);
+  --ecosystem-link-decoration: var(--site-border-strong);
   position: relative;
   isolation: isolate;
   overflow: hidden;
   scroll-margin-top: var(--site-header-height);
   padding: clamp(3rem, 4.5vw, 4rem) 0 clamp(2.75rem, 4vw, 3.5rem);
-  background: #050607;
-  color: #fff;
+  background: var(--ecosystem-bg);
+  color: var(--ecosystem-text);
+}
+
+:global([data-theme='dark']) .section {
+  --ecosystem-bg: #050607;
+  --ecosystem-text: #fff;
+  --ecosystem-secondary: rgba(255, 255, 255, 0.66);
+  --ecosystem-caption: rgba(255, 255, 255, 0.78);
+  --ecosystem-muted: rgba(255, 255, 255, 0.58);
+  --ecosystem-link-decoration: rgba(255, 255, 255, 0.45);
 }
 
 .section::before {
   position: absolute;
   z-index: -1;
   inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 18%, rgba(116, 133, 167, 0.1), transparent 58%),
-    radial-gradient(ellipse at 78% 76%, rgba(82, 104, 124, 0.07), transparent 56%);
+  background: radial-gradient(ellipse at 50% 18%, color-mix(in srgb, var(--site-brand-blue) 5%, transparent), transparent 58%);
   content: '';
 }
 
+:global([data-theme='dark']) .section::before {
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(116, 133, 167, 0.1), transparent 58%),
+    radial-gradient(ellipse at 78% 76%, rgba(82, 104, 124, 0.07), transparent 56%);
+}
+
 .atmosphere {
+  display: none;
   position: absolute;
   z-index: -1;
   inset: 0;
@@ -27,6 +47,10 @@
   opacity: 0.45;
   mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
   pointer-events: none;
+}
+
+:global([data-theme='dark']) .atmosphere {
+  display: block;
 }
 
 .content {
@@ -45,7 +69,6 @@
 }
 
 .wordmark {
-  display: block;
   width: min(31rem, 80%);
   height: auto;
   margin-bottom: 1rem;
@@ -54,7 +77,7 @@
 
 .heading h2 {
   margin: 0;
-  color: #fff;
+  color: var(--ecosystem-text);
   font-size: clamp(1.7rem, 3.2vw, 2.5rem);
   font-weight: 530;
   line-height: 1.15;
@@ -65,14 +88,14 @@
 .heading p {
   max-width: 44rem;
   margin: 0;
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--ecosystem-secondary);
   font-size: 1rem;
   line-height: 1.6;
   text-wrap: balance;
 }
 
 .heading strong {
-  color: #fff;
+  color: var(--ecosystem-text);
   font-weight: 650;
 }
 
@@ -167,8 +190,8 @@
   grid-column: 1 / span 12;
 }
 
+/* ThemedImage owns display so the inactive SSR variant stays hidden. */
 .organization img {
-  display: block;
   width: var(--logo-width);
   max-width: 100%;
   max-height: 4.5rem;
@@ -180,7 +203,7 @@
 }
 
 .logoCaption {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--ecosystem-caption);
   font-size: 0.6875rem;
   font-weight: 500;
   line-height: 1.35;
@@ -201,25 +224,25 @@
 
 .footer p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--ecosystem-muted);
 }
 
 .footer a {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  color: #fff;
-  text-decoration-color: rgba(255, 255, 255, 0.45);
+  color: var(--ecosystem-text);
+  text-decoration-color: var(--ecosystem-link-decoration);
   text-underline-offset: 0.25em;
 }
 
 .footer a:hover {
-  color: #fff;
+  color: var(--ecosystem-text);
   text-decoration: underline;
 }
 
 .footer a:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--ecosystem-text);
   outline-offset: 0.4rem;
 }
 

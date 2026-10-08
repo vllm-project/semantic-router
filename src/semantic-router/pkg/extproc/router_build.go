@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 )
 
 type routerComponents struct {
+	signals                     *signalRuntime
 	embeddings                  *embedding.Set
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
@@ -59,7 +59,6 @@ type routerComponents struct {
 	memoryExtractor             *memory.MemoryExtractor
 	memoryPersistence           *memory.PersistenceRunner
 	protocolCodecs              *protocolcodec.Registry
-	looperClient                *looper.Client
 	credentialResolver          *authz.CredentialResolver
 	rateLimiter                 *ratelimit.RateLimitResolver
 	lookupTableCancel           func()
@@ -168,6 +167,25 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	return components.buildRouter(), nil
 }
 
+// buildOpenAIRouterSharingSignals builds a router for cfg that shares signals,
+// the signal runtime of a generation built from the same signal resources.
+func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Pool, signals *signalRuntime) (*OpenAIRouter, error) {
+	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateResponseCacheScopeSecret(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateStickyToolSelectionSecret(cfg); err != nil {
+		return nil, err
+	}
+	components, err := assembleRouterComponents(cfg, pool, signals)
+	if err != nil {
+		return nil, err
+	}
+	return components.buildRouter(), nil
+}
+
 // validateStickyToolSelectionPhaseSupport rejects any decision that enables
 // tool_selection.sticky.enabled (issue #3347 phase 1 / sub-issue #3392): no
 // production request path consumes ResolveStickyToolIdentity or the
@@ -263,51 +281,31 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	if len(pools) > 0 {
 		pool = pools[0]
 	}
+	return assembleRouterComponents(cfg, pool, nil)
+}
+
+// assembleRouterComponents builds a generation's components around signals,
+// a signal runtime it shares, or around one of its own when signals is nil.
+func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, signals *signalRuntime) (*routerComponents, error) {
 	components := &routerComponents{
 		cfg:                cfg,
 		resources:          newResourceScope(),
 		routerSessionStore: buildRouterLearningStateStore(cfg),
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
-	if err := components.acquireModelServices(pool); err != nil {
-		return nil, rollbackResources(components.resources, err)
-	}
-	registerRouterSessionStore(components.resources, components.routerSessionStore)
-	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.serving)
-	if err != nil {
-		return nil, rollbackResources(components.resources, err)
-	}
-	components.embeddings = embeddings
-	components.resources.add(embeddings.Close)
-	servicesConfig := *cfg
-	// Ingestion owns an independent handle for its longer worker lifetime.
-	servicesConfig.VectorStore = nil
-	components.serviceEmbeddings, err = modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), &servicesConfig, components.serving)
-	if err != nil {
-		return nil, rollbackResources(components.resources, err)
-	}
-	components.resources.add(components.serviceEmbeddings.Close)
-	components.cacheEmbeddings = embeddings
-	if cfg.NeedsSemanticResponseCache() {
-		components.cacheEmbeddings, err = modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, components.serving)
-		if err != nil {
+	if signals != nil {
+		signals.share()
+	} else {
+		var err error
+		if signals, err = buildSignalRuntime(cfg, pool); err != nil {
 			return nil, rollbackResources(components.resources, err)
 		}
-		components.resources.add(components.cacheEmbeddings.Close)
 	}
-	components.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, components.serving)
-	if err != nil {
-		return nil, rollbackResources(components.resources, err)
-	}
-	components.resources.add(func() error { return modelruntime.CloseRerankers(components.rerankers) })
-	if cfg.Looper.IsEnabled() {
-		looperClient, clientErr := looper.NewConnectorClient(&cfg.Looper)
-		if clientErr != nil {
-			return nil, rollbackResources(components.resources, clientErr)
-		}
-		components.looperClient = looperClient
-		components.resources.add(components.looperClient.Close)
-	}
+	// Added first so it closes last, after everything built on it.
+	components.resources.add(signals.release)
+	components.useSignals(signals)
+	registerRouterSessionStore(components.resources, components.routerSessionStore)
+	var err error
 
 	components.categoryDescriptions = cfg.GetCategoryDescriptions()
 	logging.ComponentDebugEvent("extproc", "category_descriptions_loaded", map[string]interface{}{
@@ -421,12 +419,10 @@ func (components *routerComponents) buildEarlyResources() error {
 		return rollbackResources(components.resources, err)
 	}
 
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.serving, Embeddings: components.embeddings})
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
+	// The service wraps the generation's configuration around the recipe
+	// classifiers, which the signal runtime owns.
+	components.classificationSvc = services.NewRecipeClassificationService(components.recipeClassifiers, components.cfg)
 	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
-	components.resources.add(components.recipeClassifiers.Close)
 	components.resources.add(components.classificationSvc.Close)
 	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.cacheEmbeddings)
 	if err != nil {
@@ -436,22 +432,17 @@ func (components *routerComponents) buildEarlyResources() error {
 	return nil
 }
 
-// acquireModelServices leases the generation's model_runtime deployments from
-// the process manager. The lease closes after every binding that uses it,
-// since resources close in reverse order. Without a manager (embedded
-// routers, tests) model_runtime bindings fail preparation.
-func (components *routerComponents) acquireModelServices(pool *binding.Pool) error {
-	var services serving.Services
-	if manager := modelservice.DefaultManager(); manager != nil {
-		lease, err := manager.Acquire(components.cfg)
-		if err != nil {
-			return err
-		}
-		components.modelLease, services = lease, lease
-		components.resources.add(lease.Close)
-	}
-	components.serving = serving.New(services, pool)
-	return nil
+// useSignals takes the signal runtime's pieces into the generation.
+func (components *routerComponents) useSignals(signals *signalRuntime) {
+	components.signals = signals
+	components.modelLease = signals.modelLease
+	components.serving = signals.serving
+	components.embeddings = signals.embeddings
+	components.serviceEmbeddings = signals.serviceEmbeddings
+	components.cacheEmbeddings = signals.cacheEmbeddings
+	components.rerankers = signals.rerankers
+	components.recipeClassifiers = signals.recipeClassifiers
+	components.classifier = signals.classifier
 }
 
 func registerRouterSessionStore(
@@ -528,6 +519,7 @@ func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
+		signals:                     components.signals,
 		Config:                      components.cfg,
 		Embeddings:                  components.embeddings,
 		serviceEmbeddings:           components.serviceEmbeddings,
@@ -553,7 +545,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,
 		ProtocolCodecs:              components.protocolCodecs,
-		looperClient:                components.looperClient,
 		CredentialResolver:          components.credentialResolver,
 		RateLimiter:                 components.rateLimiter,
 		lookupTableCancel:           components.lookupTableCancel,

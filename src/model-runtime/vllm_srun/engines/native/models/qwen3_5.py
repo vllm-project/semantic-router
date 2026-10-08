@@ -6,7 +6,7 @@ Vega-27B is a LoRA over the Qwen3.8-27B text model with the same layout.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import torch
 import torch.nn.functional as F
@@ -23,7 +23,7 @@ from .common import (
     recurrent_mask,
 )
 from .forest import Forest, ForestShape, forest_attention, forest_gated_delta
-from .tree import Tree, tree_gated_delta
+from .tree import Tree, is_tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
 
@@ -61,9 +61,12 @@ class GatedDeltaNet(nn.Module):
         self.in_proj_a = nn.Linear(hidden, self.num_v_heads, bias=False)
 
     def forward(
-        self, hidden_states: torch.Tensor, mask: torch.Tensor | None, kernels: KernelSet
+        self,
+        hidden_states: torch.Tensor,
+        mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
     ) -> torch.Tensor:
-        if getattr(mask, "is_tree", False):
+        if is_tree(mask):
             return tree_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
@@ -107,7 +110,8 @@ class GatedDeltaNet(nn.Module):
         z = z.reshape(-1, self.head_v_dim)
         core = self.norm(core, z)
         core = core.reshape(batch_size, seq_len, -1)
-        return self.out_proj(core)
+        out: torch.Tensor = self.out_proj(core)
+        return out
 
 
 class GatedAttention(nn.Module):
@@ -135,7 +139,13 @@ class GatedAttention(nn.Module):
         self.q_norm = ZeroCenteredRMSNorm(self.head_dim, config["rms_norm_eps"])
         self.k_norm = ZeroCenteredRMSNorm(self.head_dim, config["rms_norm_eps"])
 
-    def forward(self, hidden_states, rotary, mask, kernels: KernelSet):
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
         query, gate = torch.chunk(
@@ -154,7 +164,8 @@ class GatedAttention(nn.Module):
         )
         output = output.reshape(*input_shape, -1).contiguous()
         output = output * torch.sigmoid(gate)
-        return self.o_proj(output)
+        out: torch.Tensor = self.o_proj(output)
+        return out
 
 
 class Qwen3_5Layer(nn.Module):
@@ -176,8 +187,13 @@ class Qwen3_5Layer(nn.Module):
         )
 
     def forward(
-        self, hidden_states, rotary, full_mask, linear_mask, kernels: KernelSet
-    ):
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        full_mask: torch.Tensor | Tree | None,
+        linear_mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         if self.kind == "linear_attention":
@@ -191,8 +207,15 @@ class Qwen3_5Layer(nn.Module):
         return residual + hidden_states
 
     def forward_forest(
-        self, prefix, blocks, rotary, forest: Forest, kernels: KernelSet
-    ):
+        self,
+        prefix: torch.Tensor,
+        blocks: torch.Tensor,
+        rotary: tuple[
+            tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]
+        ],
+        forest: Forest,
+        kernels: KernelSet,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """The layer over prefix rows and blocks (``forest.py``); ``rotary`` holds both tables."""
         normed_prefix = self.input_layernorm(prefix)
         normed_blocks = self.input_layernorm(blocks)
@@ -213,6 +236,8 @@ class Qwen3_5Layer(nn.Module):
 class Qwen3_5Rotary(nn.Module):
     """Interleaved multimodal RoPE; text positions are equal across its three sections."""
 
+    inv_freq: torch.Tensor
+
     def __init__(self, config: dict[str, Any]):
         super().__init__()
         rope = config["rope_parameters"]
@@ -230,7 +255,9 @@ class Qwen3_5Rotary(nn.Module):
         self.mrope_section = rope.get("mrope_section", [11, 11, 10])
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor, position_ids: torch.Tensor):
+    def forward(
+        self, x: torch.Tensor, position_ids: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         inv_freq_expanded = (
             self.inv_freq[None, None, :, None]
             .float()
@@ -298,7 +325,8 @@ class Qwen3_5Backbone(nn.Module):
             hidden_states = layer(
                 hidden_states, rotary, full_mask, linear_mask, self.kernels
             )
-        return self.norm(hidden_states)
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed
 
     def forward_forest(
         self,
@@ -334,7 +362,7 @@ class Qwen3_5Backbone(nn.Module):
         )
         forest = Forest(prefix_mask, block_mask, owner, shape)
         for layer in self.layers:
-            prefix, blocks = layer.forward_forest(
+            prefix, blocks = cast(Qwen3_5Layer, layer).forward_forest(
                 prefix, blocks, rotary, forest, self.kernels
             )
         return self.norm(prefix), self.norm(blocks)
@@ -347,4 +375,5 @@ class Qwen3_5Backbone(nn.Module):
         rotary = self.rotary_emb(hidden_states, rope_positions)
         for layer in self.layers:
             hidden_states = layer(hidden_states, rotary, tree, tree, self.kernels)
-        return self.norm(hidden_states)
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed

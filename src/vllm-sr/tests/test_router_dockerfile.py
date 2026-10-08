@@ -1,6 +1,7 @@
 """Static contracts of the router image Dockerfile (tools/docker/Dockerfile.extproc)."""
 
 import re
+import subprocess
 from pathlib import Path
 
 import tomllib
@@ -21,9 +22,7 @@ STAGES = (
     "torch-rocm",
     "torch-cuda",
     "runtime",
-    "router",
     "vllm-sr",
-    "extproc",
 )
 
 
@@ -53,7 +52,7 @@ def stages() -> dict[str, tuple[str, str]]:
 def test_every_router_image_comes_from_one_stage_graph() -> None:
     graph = stages()
 
-    # extproc stays last: it is the default target of local and E2E builds.
+    # vllm-sr is the only image stage, and the default target of every build.
     assert tuple(graph) == STAGES
     assert graph["runtime"][0] == "torch-${ACCELERATOR}"
     for stage in ("torch-cpu", "torch-rocm-base", "torch-cuda"):
@@ -62,9 +61,7 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     assert graph["rocm-torch-release"][0] == "${IMAGE_REGISTRY}${ROCM_TORCH_IMAGE}"
     assert graph["rocm-lib-slim"][0] == "rocm-torch-release"
     assert graph["torch-rocm"][0] == "python-base"
-    assert graph["router"][0] == "runtime"
-    assert graph["vllm-sr"][0] == "router"
-    assert graph["extproc"][0] == "router"
+    assert graph["vllm-sr"][0] == "runtime"
     assert "ARG ACCELERATOR=cpu" in router_dockerfile()
 
 
@@ -94,12 +91,12 @@ def test_router_binary_needs_only_the_target_c_linker() -> None:
     assert "CGO_ENABLED=1" in build
     assert "gcc-aarch64-linux-gnu" in build
     assert "go build" in build
-    for image_stage in ("python-base", "runtime", "router", "extproc"):
+    for image_stage in ("python-base", "runtime"):
         assert "apt-get" not in graph[image_stage][1], image_stage
     # The CLI's readiness and status probes run curl inside the stack image.
     assert "apt-get install -y --no-install-recommends curl &&" in graph["vllm-sr"][1]
     assert "COPY --link --from=router-build /out/router /usr/local/bin/router" in (
-        graph["router"][1]
+        graph["vllm-sr"][1]
     )
 
 
@@ -158,7 +155,7 @@ def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:
 
 
 def test_router_images_share_the_model_assets() -> None:
-    router = stages()["router"][1]
+    router = stages()["vllm-sr"][1]
 
     assert (
         "COPY --link --from=image-routing-assets /out/ /app/share/image-routing/"
@@ -192,14 +189,53 @@ def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
     assert 'VOLUME ["/app/models"]' in vllm_sr
 
 
-def test_extproc_image_runs_the_router_with_the_reference_config() -> None:
-    extproc = stages()["extproc"][1]
+def test_kubernetes_launchers_run_the_router_with_the_mounted_config() -> None:
+    vllm_sr = stages()["vllm-sr"][1]
 
-    assert "COPY config/config.yaml /app/config/config.yaml" in extproc
+    # The reference config is the default for an image run with no mount.
+    assert "COPY config/config.yaml /app/config/config.yaml" in vllm_sr
+    assert "CMD " not in vllm_sr
+    content = START_ROUTER.read_text(encoding="utf-8")
+    dispatch = content.index('if [ $# -eq 0 ] || [ "${1#-}" != "$1" ]; then')
     assert (
-        'ENTRYPOINT ["/usr/local/bin/router", "--config=/app/config/config.yaml"]'
-        in extproc
+        content.index(
+            'exec /usr/local/bin/router --config=/app/config/config.yaml "$@"'
+        )
+        > dispatch
     )
+    # Only the CLI stack's path marks the management listener container-internal.
+    assert content.index("VLLM_SR_MANAGEMENT_INTERNAL_LISTENER=true") > dispatch
+
+
+def test_entrypoint_dispatches_flags_and_config_paths(tmp_path: Path) -> None:
+    router = tmp_path / "router"
+    router.write_text('#!/bin/sh\necho "router $*"\n', encoding="utf-8")
+    router.chmod(0o755)
+    script = START_ROUTER.read_text(encoding="utf-8").replace(
+        "/usr/local/bin/router", str(router)
+    )
+    entrypoint = tmp_path / "start-router.sh"
+    entrypoint.write_text(script, encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    config.write_text("version: v0.3\n", encoding="utf-8")
+
+    def run(*args: str) -> str:
+        return (
+            subprocess.run(
+                ["bash", str(entrypoint), *args],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            .stdout.strip()
+            .splitlines()[-1]
+        )
+
+    assert run() == "router --config=/app/config/config.yaml"
+    assert run("-gateway=standalone", "--secure=false") == (
+        "router --config=/app/config/config.yaml -gateway=standalone --secure=false"
+    )
+    assert run(str(config)).startswith(f"router -config={config} -port=50051")
 
 
 def test_base_images_are_fully_qualified_for_podman() -> None:

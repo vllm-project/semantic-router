@@ -13,18 +13,18 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from ..text.windows import (
     Encoded,
     Envelope,
-    InputTooLongError,
     Window,
     encode,
     fit_prefix,
     merge_token_windows,
+    over_budget,
     plan_windows,
 )
 from .sequence import text_input
@@ -36,6 +36,9 @@ from .task import (
     TaskHead,
     token_probabilities,
 )
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # Rust's char::is_whitespace (Unicode White_Space); Python's isspace also strips U+001C-U+001F.
 WHITESPACE = "".join(
@@ -94,7 +97,7 @@ def trim(text: str, start: int, end: int) -> tuple[int, int]:
 def bio_spans(
     text: str,
     offsets: Sequence[tuple[int, int]],
-    probabilities: np.ndarray,
+    probabilities: NDArray[np.float32],
     labels: Sequence[str],
 ) -> list[dict[str, Any]]:
     """Labelled spans from per-token label probabilities (``[tokens, labels]``)."""
@@ -133,7 +136,7 @@ def bio_spans(
 
 
 def token_rows(
-    offsets: Sequence[tuple[int, int]], probabilities: np.ndarray
+    offsets: Sequence[tuple[int, int]], probabilities: NDArray[np.float32]
 ) -> list[dict[str, Any]]:
     return [
         {"start": start, "end": end, "probabilities": row.tolist()}
@@ -179,12 +182,18 @@ class TokenHead(TaskHead):
         }
 
     def prepare(self, value: Any, options: HeadOptions, identity: str) -> Prepared:
-        encoded = encode(self.tokenizer, self.envelope, text_input(value))
+        encoded = encode(
+            self.tokenizer,
+            self.envelope,
+            text_input(value),
+            options.max_tokens,
+            options.overflow,
+        )
         tokens = encoded.tokens
-        usage = {"tokens": tokens, "processed_tokens": tokens, "truncated": False}
+        usage = encoded.usage()
         if options.overflow == "window":
             if tokens > options.max_tokens:
-                raise InputTooLongError(tokens, options.max_tokens)
+                raise over_budget(tokens, options.max_tokens, options.overflow)
             assert options.window is not None
             windows = plan_windows(len(encoded.content), self.envelope, *options.window)
             usage["windows"] = len(windows)
@@ -192,7 +201,7 @@ class TokenHead(TaskHead):
             state = TokenState(encoded, windows, options.return_tokens)
             return Prepared(self.items(ids, identity), usage, state)
         if tokens > options.max_tokens and options.overflow != "truncate":
-            raise InputTooLongError(tokens, options.max_tokens)
+            raise over_budget(tokens, options.max_tokens, options.overflow)
         read, cut = fit_prefix(self.tokenizer, encoded, options.max_tokens)
         usage.update(processed_tokens=read.tokens, truncated=cut)
         state = TokenState(read, None, options.return_tokens)

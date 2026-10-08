@@ -53,25 +53,6 @@ func TestGrafanaRouteServesAdapterAndRewritesDocument(t *testing.T) {
 	}
 }
 
-func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
-	t.Parallel()
-
-	mux := http.NewServeMux()
-	registerProxyRoutes(mux, &config.Config{}, nil, nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
-	_, pattern := mux.Handler(req)
-	if pattern != "" {
-		t.Fatalf("matched route = %q, want no API fallback", pattern)
-	}
-
-	recorder := httptest.NewRecorder()
-	mux.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
-	}
-}
-
 func TestServeRouterAPIProxySetupModeAnswersStandbyInsteadOfProxyError(t *testing.T) {
 	t.Parallel()
 

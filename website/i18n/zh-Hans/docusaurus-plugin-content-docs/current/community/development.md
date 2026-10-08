@@ -81,9 +81,6 @@ make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# 机队模拟器
-make vllm-sr-sim-test
 ```
 
 当变更会通过启动、路由、API、部署配置或其他在线路经表现出来时，显式选择集成或 E2E：

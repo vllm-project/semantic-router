@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -96,8 +97,14 @@ type PodTarget struct {
 	Container  string
 }
 
+// execTimeout bounds one exec. The in-pod HTTP client gives up after 120 s, so
+// a stream still open after this is stuck, and the case fails instead of hanging.
+const execTimeout = 3 * time.Minute
+
 // Exec runs argv in the target container with stdin and returns stdout.
 func (t PodTarget) Exec(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, execTimeout)
+	defer cancel()
 	request := t.Client.CoreV1().RESTClient().Post().
 		Resource("pods").Namespace(t.Namespace).Name(t.Pod).SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{

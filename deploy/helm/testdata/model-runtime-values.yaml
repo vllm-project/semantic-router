@@ -1,7 +1,10 @@
 # Rendering fixture: model paths identify maintained artifacts, not installed weights.
 configOverride:
   version: v0.3
-  listeners: []
+  listeners:
+    - name: http-8899
+      address: 0.0.0.0
+      port: 8899
   providers: {}
   routing:
     model_bindings:

@@ -10,7 +10,6 @@ export type ProductIconName =
   | 'chevron-down'
   | 'chevron-left'
   | 'chevron-right'
-  | 'claw'
   | 'close'
   | 'code'
   | 'compute'
@@ -68,13 +67,6 @@ const paths: Record<ProductIconName, ReactNode> = {
   'chevron-down': <path d="m6 9 6 6 6-6" />,
   'chevron-left': <path d="m14.5 6-6 6 6 6" />,
   'chevron-right': <path d="m9.5 6 6 6-6 6" />,
-  claw: (
-    <>
-      <path d="M7.5 18.5c-2.2-1.4-3.5-3.7-3.5-6.3 0-3.7 2.6-6.8 6.1-7.5" />
-      <path d="M16.5 18.5c2.2-1.4 3.5-3.7 3.5-6.3 0-3.7-2.6-6.8-6.1-7.5" />
-      <path d="M9.5 9.5 12 12l2.5-2.5M8.5 21l3.5-5 3.5 5" />
-    </>
-  ),
   close: <path d="m7 7 10 10M17 7 7 17" />,
   code: <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M14 4l-4 16" />,
   compute: (
