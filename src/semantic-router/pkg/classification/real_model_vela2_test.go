@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/tidwall/sjson"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
