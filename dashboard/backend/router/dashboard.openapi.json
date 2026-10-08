@@ -5037,7 +5037,7 @@
       "post": {
         "operationId": "activateSetupConfig",
         "summary": "Activate the setup config and leave setup mode",
-        "description": "Writes the candidate config and starts the Router and Envoy. Error bodies are plain text except two JSON cases: a read-only Dashboard (403, error readonly_mode) and a runtime start failure after the write (500, error setup_activation_failed). Choose the parser by Content-Type.",
+        "description": "Writes the candidate config and records a pending activation for the `vllm-sr serve` that owns the stack; the Dashboard does not start containers. Error bodies are JSON or plain text; choose the parser by Content-Type.",
         "tags": [
           "setup"
         ],
@@ -5068,7 +5068,7 @@
         },
         "responses": {
           "200": {
-            "description": "The config was activated and services are starting",
+            "description": "Config saved and activation recorded. message says whether an attached `vllm-sr serve` is starting the stack or the user must run `vllm-sr serve`; Envoy starts only in stacks that run it",
             "content": {
               "application/json": {
                 "schema": {
@@ -5093,7 +5093,7 @@
             }
           },
           "202": {
-            "description": "The config was saved to the Kubernetes ConfigMap and awaits a rollout",
+            "description": "Config saved to the Kubernetes ConfigMap; a rollout applies it",
             "content": {
               "application/json": {
                 "schema": {
@@ -5138,7 +5138,7 @@
             }
           },
           "403": {
-            "description": "JSON when the Dashboard is read-only; text when the caller lacks the permission, the origin or CSRF check failed, or the ConfigMap is controller-owned",
+            "description": "JSON when the Dashboard is read-only (error readonly_mode); text when the caller lacks the permission, the origin or CSRF check failed, the session was revoked, or the ConfigMap is controller-owned",
             "content": {
               "application/json": {
                 "schema": {
@@ -5165,8 +5165,25 @@
             }
           },
           "409": {
-            "description": "Setup is no longer active, or the config changed during the request",
+            "description": "JSON when another config change holds the lock (error deploy_in_progress or managed_recipe_active); text when setup is no longer active or the ConfigMap changed or awaits a rollout",
             "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              },
               "text/plain": {
                 "schema": {
                   "type": "string"
@@ -5175,34 +5192,58 @@
             }
           },
           "500": {
-            "description": "JSON when the runtime failed to start after the write: stage is config_validation, runtime_config_sync, or runtime_start, and configuration_restored says whether a retry is safe. Text when the config could not be read, converted, backed up, or persisted",
+            "description": "JSON error setup_activation_failed after the config was written: stage names the failed step and configuration_restored says whether a retry is safe. JSON error config_coordination_failed when the config lock is unavailable. Text when the config could not be read, converted, backed up, or persisted",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "configuration_restored": {
-                      "type": "boolean"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "configuration_restored": {
+                          "type": "boolean"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "setupMode": {
+                          "type": "boolean"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "config_validation",
+                            "runtime_config_sync",
+                            "activation_record"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "error",
+                        "stage",
+                        "configuration_restored",
+                        "setupMode",
+                        "message"
+                      ]
                     },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "setupMode": {
-                      "type": "boolean"
-                    },
-                    "stage": {
-                      "type": "string"
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "error",
+                        "message"
+                      ]
                     }
-                  },
-                  "required": [
-                    "error",
-                    "stage",
-                    "configuration_restored",
-                    "setupMode",
-                    "message"
                   ]
                 }
               },
@@ -7571,6 +7612,13 @@
                                       "description": {
                                         "type": "string"
                                       },
+                                      "enum": {
+                                        "type": "array",
+                                        "nullable": true,
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
                                       "format": {
                                         "type": "string"
                                       },
@@ -7580,6 +7628,13 @@
                                       },
                                       "nullable": {
                                         "type": "boolean"
+                                      },
+                                      "oneOf": {
+                                        "type": "array",
+                                        "nullable": true,
+                                        "items": {
+                                          "type": "object"
+                                        }
                                       },
                                       "properties": {
                                         "type": "object",
@@ -7627,6 +7682,13 @@
                                           "description": {
                                             "type": "string"
                                           },
+                                          "enum": {
+                                            "type": "array",
+                                            "nullable": true,
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
                                           "format": {
                                             "type": "string"
                                           },
@@ -7636,6 +7698,13 @@
                                           },
                                           "nullable": {
                                             "type": "boolean"
+                                          },
+                                          "oneOf": {
+                                            "type": "array",
+                                            "nullable": true,
+                                            "items": {
+                                              "type": "object"
+                                            }
                                           },
                                           "properties": {
                                             "type": "object",
@@ -7691,6 +7760,13 @@
                                             "description": {
                                               "type": "string"
                                             },
+                                            "enum": {
+                                              "type": "array",
+                                              "nullable": true,
+                                              "items": {
+                                                "type": "string"
+                                              }
+                                            },
                                             "format": {
                                               "type": "string"
                                             },
@@ -7700,6 +7776,13 @@
                                             },
                                             "nullable": {
                                               "type": "boolean"
+                                            },
+                                            "oneOf": {
+                                              "type": "array",
+                                              "nullable": true,
+                                              "items": {
+                                                "type": "object"
+                                              }
                                             },
                                             "properties": {
                                               "type": "object",

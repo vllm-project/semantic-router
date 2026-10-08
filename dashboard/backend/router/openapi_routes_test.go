@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -233,7 +235,7 @@ func TestSetupActivateReadonlyBodyMatchesOpenAPI(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	schema := apicontract.SchemaFor[setupReadonlyError]()
+	schema := apicontract.SchemaFor[setupErrorBody]()
 	if len(body) != len(schema.Properties) {
 		t.Fatalf("body keys %v, documented %v", body, schema.Properties)
 	}
@@ -244,5 +246,22 @@ func TestSetupActivateReadonlyBodyMatchesOpenAPI(t *testing.T) {
 	}
 	if body["error"] != "readonly_mode" {
 		t.Errorf("error = %v, want readonly_mode", body["error"])
+	}
+}
+
+// The handler reports failure stages as string literals, so read them from
+// its source.
+func TestSetupActivationFailureStagesMatchHandler(t *testing.T) {
+	source, err := os.ReadFile("../handlers/setup.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := regexp.MustCompile(`failSetupActivation\([^)]*"([a-z_]+)"\)`).FindAllSubmatch(source, -1)
+	reported := make([]string, 0, len(matches))
+	for _, match := range matches {
+		reported = append(reported, string(match[1]))
+	}
+	if !slices.Equal(reported, setupActivationFailureStages) {
+		t.Fatalf("handler reports stages %v, documented %v", reported, setupActivationFailureStages)
 	}
 }

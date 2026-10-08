@@ -31,6 +31,14 @@ func JSONResponse[T any](description string) Response {
 	}
 }
 
+// JSONOneOfResponse describes a JSON body that matches exactly one of schemas.
+func JSONOneOfResponse(description string, schemas ...Schema) Response {
+	return Response{
+		Description: description,
+		Content:     map[string]Media{"application/json": {Schema: &Schema{OneOf: schemas}}},
+	}
+}
+
 // EitherResponse describes a status whose body format depends on which path
 // failed; clients choose by Content-Type. Each alternative must use a
 // different media type.

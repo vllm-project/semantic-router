@@ -82,6 +82,8 @@ type Schema struct {
 	Format               string            `json:"format,omitempty"`
 	Description          string            `json:"description,omitempty"`
 	Nullable             bool              `json:"nullable,omitempty"`
+	Enum                 []string          `json:"enum,omitempty"`
+	OneOf                []Schema          `json:"oneOf,omitempty"`
 	Properties           map[string]Schema `json:"properties,omitempty"`
 	Required             []string          `json:"required,omitempty"`
 	Items                *Schema           `json:"items,omitempty"`
