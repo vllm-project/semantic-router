@@ -355,11 +355,12 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(replicaOutcome), e
 			replicaInflightGauge.WithLabelValues(p.name, w.id).Set(float64(load.inflight))
 			replicaWorkGauge.WithLabelValues(p.name, w.id).Set(float64(load.work))
 			replicaRequestsTotal.WithLabelValues(p.name, w.id, string(outcome)).Inc()
-			if outcome == replicaFailed {
+			switch outcome {
+			case replicaFailed:
 				load.failures++
 				delay := time.Duration(1<<min(load.failures-1, 5)) * 100 * time.Millisecond
 				load.backoff = time.Now().Add(delay)
-			} else if outcome == replicaOK {
+			case replicaOK:
 				load.failures = 0
 				load.backoff = time.Time{}
 			}

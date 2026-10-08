@@ -62,10 +62,7 @@ func TestReplicaCanceledExchangesReleaseAdmissionWithoutReportingSuccess(t *test
 				completed <- err
 			}()
 			deadline := time.Now().Add(time.Second)
-			for {
-				if pool.status().Replicas[0].Inflight == 1 {
-					break
-				}
+			for pool.status().Replicas[0].Inflight != 1 {
 				if time.Now().After(deadline) {
 					t.Fatal("request did not reach the worker")
 				}
