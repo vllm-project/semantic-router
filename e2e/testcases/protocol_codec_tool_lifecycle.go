@@ -31,6 +31,11 @@ func runProtocolCodecToolLifecycle(
 	if historyErr := runToolResultErrorPolicy(ctx, session, provider, model, backendFormat); historyErr != nil {
 		return historyErr
 	}
+	if backendFormat == "openai.chat.v1" {
+		if historyErr := runResponsesParallelHistory(ctx, session, provider, model); historyErr != nil {
+			return historyErr
+		}
+	}
 
 	tool := protocolLookupTool()
 	call, err := runResponsesToolCallRoundtrip(ctx, session, model, tool)
