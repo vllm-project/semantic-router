@@ -50,11 +50,11 @@ def config_response(etag='"config-1"'):
     return Mock(status_code=receipts.HTTP_OK, headers={"ETag": etag})
 
 
-def receipt_log(request_id, status="cancelled", reason="shutdown"):
+def receipt_log(request_id, status="cancelled", reason="shutdown", component="extproc"):
     """A router receipt log line. request_id is Envoy's, not the test's."""
     return json.dumps(
         {
-            "component": "extproc",
+            "component": component,
             "event": receipts.RECEIPT_LOG_EVENT,
             "request_id": request_id,
             "status": status,
@@ -836,6 +836,29 @@ class ShutdownReceiptAssertionsTest(unittest.TestCase):
             ),
         ):
             self.assertEqual(self.case._router_receipt_logs(), self.logs[:1])
+
+    def test_receipts_are_read_under_either_gateway_name(self):
+        self.case.container_runtime, self.case.router_container = (
+            "docker",
+            "test-router",
+        )
+        lines = [
+            receipt_log("envoy-0", component="extproc"),
+            receipt_log("standalone-0", component="router"),
+            receipt_log("other-0", component="dashboard"),
+        ]
+        with (
+            patch.object(receipts.shutil, "which", return_value="/usr/bin/docker"),
+            patch.object(
+                receipts.subprocess,
+                "run",
+                return_value=Mock(stdout="\n".join(lines), stderr=""),
+            ),
+        ):
+            self.assertEqual(
+                [r["request_id"] for r in self.case._router_receipt_logs()],
+                ["envoy-0", "standalone-0"],
+            )
 
 
 if __name__ == "__main__":

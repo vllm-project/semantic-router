@@ -33,13 +33,17 @@ type Head struct {
 }
 
 // Model is one served model: classify with heads, embeddings with an
-// Embedder, rerank with a Reranker, otherwise decisions.
+// Embedder, rerank with a Reranker, otherwise decisions. With Joint, a
+// decision model answers the questions about one state together, as an
+// encoder that reads them in one sequence does: a Choice question's first
+// option gets 0.7 less 0.05 for every other question asked with it.
 type Model struct {
 	ID             string
 	Heads          []Head
 	Embedding      *Embedder
 	Rerank         *Reranker
 	Labelled       *Labelled
+	Joint          bool
 	MaxInputTokens int
 	Device         string
 }
@@ -57,11 +61,12 @@ type Runtime struct {
 	surfaces   map[string]int
 	limits     api.ProcessLimits
 	timing     string
+	decisions  []api.DecisionRequest
 }
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
 // changes it.
-const APIVersion = "2.0.0"
+const APIVersion = "2.2.0"
 
 // defaultLimits are the runtime's default process limits. Like the runtime,
 // the fake reports its limits in /v1/models and refuses a larger bundle or
@@ -123,6 +128,14 @@ func (r *Runtime) Bundles() (calls, tasks int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.bundles, r.tasks
+}
+
+// Decisions returns every decisions request the fake answered, direct or in
+// a bundle, in arrival order.
+func (r *Runtime) Decisions() []api.DecisionRequest {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.decisions)
 }
 
 // Calls reports direct calls to a surface (classify, decisions, embeddings,
@@ -286,6 +299,8 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 		card.Family, card.Surfaces = "decision2", []string{"decisions"}
 		if model.Labelled != nil {
 			card.Family = "vela2"
+			scan := model.Labelled.scanTokens(model)
+			limits.MaxScanTokens = &scan
 		}
 		types := questionTypes(model)
 		card.QuestionTypes = &types
@@ -391,7 +406,36 @@ func (r *Runtime) model(id *string, surface string) (Model, int, *api.ErrorBody)
 	return model, http.StatusOK, nil
 }
 
+// decide answers a decisions request, and each of its further states as a
+// request of its own with the same model and options.
 func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *api.ErrorBody) {
+	r.mu.Lock()
+	r.decisions = append(r.decisions, body)
+	apiVersion := r.apiVersion
+	r.mu.Unlock()
+	if body.States != nil && apiVersion < "2.2" {
+		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "unknown request fields: ['states']"}
+	}
+	status, response, errBody := r.decideState(body)
+	if status != http.StatusOK || body.States == nil {
+		return status, response, errBody
+	}
+	states := make(map[string]api.DecisionStateResponse, len(*body.States))
+	for name, entry := range *body.States {
+		entryStatus, answered, entryErr := r.decideState(api.DecisionRequest{Model: body.Model, Options: body.Options, State: entry.State, Questions: entry.Questions})
+		if entryStatus != http.StatusOK {
+			return entryStatus, api.DecisionResponse{}, entryErr
+		}
+		states[name] = api.DecisionStateResponse{
+			Model: answered.Model, Answers: answered.Answers, Sets: answered.Sets, Spans: answered.Spans,
+			Thresholds: answered.Thresholds, SpanHeads: answered.SpanHeads, Usage: answered.Usage, Meta: answered.Meta,
+		}
+	}
+	response.States = &states
+	return status, response, nil
+}
+
+func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionResponse, *api.ErrorBody) {
 	model, status, errBody := r.model(body.Model, "decisions")
 	if status != http.StatusOK {
 		return status, api.DecisionResponse{}, errBody
@@ -399,17 +443,43 @@ func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *
 	revision := strings.Repeat("a", 40)
 	if model.Labelled != nil {
 		response := r.decideLabelled(model, body)
+		unscanned(model, body, &response)
 		response.Meta = &api.ResponseMeta{Revision: &revision}
 		return http.StatusOK, response, nil
 	}
+	if body.Options != nil && body.Options.MaxTokens != nil {
+		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "max_tokens is the scan budget of a model that reads parts in windows"}
+	}
 	answers := make(map[string]api.Answer, len(body.Questions))
 	for id, question := range body.Questions {
-		answers[id] = answer(question)
+		answers[id] = jointAnswer(model, question, len(body.Questions))
 		if question.Preset != nil || (question.Type != nil && !slices.Contains(SystemOneTypes, *question.Type)) {
 			answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_question")}
 		}
 	}
 	return http.StatusOK, api.DecisionResponse{Model: model.ID, Answers: answers, Usage: api.Usage{InputTokens: 10}, Meta: &api.ResponseMeta{Revision: &revision}}, nil
+}
+
+// jointAnswer is a question's answer, which on a Joint model depends on how
+// many questions the request asks about its state.
+func jointAnswer(model Model, question api.Question, asked int) api.Answer {
+	result := answer(question)
+	if !model.Joint || result.Probabilities == nil || result.Choice == nil {
+		return result
+	}
+	shift := 0.05 * float64(asked-1)
+	probabilities := *result.Probabilities
+	others := len(probabilities) - 1
+	for key := range probabilities {
+		if key == *result.Choice {
+			probabilities[key] -= shift
+		} else if others > 0 {
+			probabilities[key] += shift / float64(others)
+		}
+	}
+	confidence := probabilities[*result.Choice]
+	result.Confidence = &confidence
+	return result
 }
 
 // answer: noul 0.8, the first choice at 0.7, the middle score level.

@@ -105,8 +105,10 @@ class EncoderLayout:
         self.max_len = int(config["max_length"])
         self.overlap = int(config["window_overlap"])
 
-    def sequences(self, row: Row, tokens: Tokens) -> list[EncoderSequence]:
-        """The row as one sequence, or as windows over a labelled part that had to be cut."""
+    def sequences(
+        self, row: Row, tokens: Tokens, in_windows: bool = True
+    ) -> list[EncoderSequence]:
+        """The row as one sequence, or (with ``windows``) as windows over a labelled part that had to be cut."""
         compiled = [self._compile(q, tokens) for q in row.questions if q.type != "span"]
         span = row.span
         labels = (
@@ -119,7 +121,7 @@ class EncoderLayout:
         )
         first = self._assemble(row, compiled, labels)
         assert first.budget is not None
-        if not first.budget.protected_cut:
+        if not first.budget.protected_cut or not in_windows:
             return [first]
         role = self._window_role(row)
         if role is None:
