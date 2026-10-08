@@ -15553,6 +15553,10 @@
                             "nullable": true,
                             "type": "string"
                           },
+                          "input_coverage": {
+                            "nullable": true,
+                            "type": "string"
+                          },
                           "legend": {
                             "nullable": true,
                             "type": "object",
@@ -15675,6 +15679,10 @@
                       "additionalProperties": {
                         "type": "object",
                         "properties": {
+                          "input_coverage": {
+                            "nullable": true,
+                            "type": "string"
+                          },
                           "probabilities": {
                             "nullable": true,
                             "type": "object",
@@ -15763,6 +15771,10 @@
                                   "type": "number"
                                 },
                                 "error": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
+                                "input_coverage": {
                                   "nullable": true,
                                   "type": "string"
                                 },
@@ -15888,6 +15900,10 @@
                             "additionalProperties": {
                               "type": "object",
                               "properties": {
+                                "input_coverage": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
                                 "probabilities": {
                                   "nullable": true,
                                   "type": "object",
@@ -16666,6 +16682,10 @@
                               "nullable": true,
                               "type": "string"
                             },
+                            "require_full_input": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
                             "threshold": {
                               "nullable": true,
                               "type": "number"
@@ -16756,6 +16776,10 @@
                                   "preset": {
                                     "nullable": true,
                                     "type": "string"
+                                  },
+                                  "require_full_input": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "threshold": {
                                     "nullable": true,
