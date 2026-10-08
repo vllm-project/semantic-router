@@ -147,6 +147,9 @@ type Capability struct {
 	// for a label-distribution binding (domain, attack, ...); such a binding
 	// reads its whole input.
 	Question string
+	// Deployment names the model_runtime deployment a Preset or Question
+	// binding asks, so a request stage sends every question to it in one call.
+	Deployment string
 }
 
 // WindowCapability fixes the scan geometry selected during preparation.

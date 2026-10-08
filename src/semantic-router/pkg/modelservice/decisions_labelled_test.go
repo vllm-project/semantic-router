@@ -110,7 +110,7 @@ func TestBundleAsksOneModelTheStagesQuestionsAboutOneStateInOneTask(t *testing.T
 	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
 	signals := Request{State: "refund my billing to Tom", Questions: []Question{topicsQuestion("topics"), {ID: "urgent", Type: "noul", Instructions: "Urgent?"}}}
 	pii := Request{State: "refund my billing to Tom", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
-	other := Request{State: "a different message", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
+	other := Request{State: "a different message for person", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
 	var answers [3]Response
 	var errs [3]error
 	stage(time.Second,
@@ -123,14 +123,48 @@ func TestBundleAsksOneModelTheStagesQuestionsAboutOneStateInOneTask(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	if calls, tasks := runtime.Bundles(); calls != 1 || tasks != 2 {
-		t.Fatalf("one bundle with one task per state expected: %d bundles, %d tasks", calls, tasks)
+	if calls, tasks := runtime.Bundles(); calls != 1 || tasks != 1 {
+		t.Fatalf("one bundle with one task for every state expected: %d bundles, %d tasks", calls, tasks)
+	}
+	asked := runtime.Decisions()
+	if len(asked) != 1 || asked[0].State != "refund my billing to Tom" || len(asked[0].Questions) != 3 || asked[0].States == nil || len(*asked[0].States) != 1 {
+		t.Fatalf("the state with the most questions is the request's own, the other one of its states: %+v", asked)
+	}
+	if entry := (*asked[0].States)["1"]; entry.State != "a different message for person" || len(entry.Questions) != 1 {
+		t.Fatalf("the other state's entry: %+v", entry)
 	}
 	if len(answers[0].Answers) != 2 || answers[0].Answers["topics"].Probabilities["billing"] != 0.9 || answers[0].Answers["topics"].Selected[0] != "billing" {
 		t.Fatalf("the signals' caller gets its own answers: %+v", answers[0].Answers)
 	}
-	if len(answers[1].Answers) != 1 || answers[1].Answers["pii_classifier:pii"].Type != "span" {
+	if len(answers[1].Answers) != 1 || answers[1].Answers["pii_classifier:pii"].Type != "span" || len(answers[1].Answers["pii_classifier:pii"].Spans) != 0 {
 		t.Fatalf("the PII caller gets its own answer: %+v", answers[1].Answers)
+	}
+	if len(answers[2].Answers) != 1 || answers[2].Answers["pii_classifier:pii"].Type != "span" || len(answers[2].Answers["pii_classifier:pii"].Spans) != 1 {
+		t.Fatalf("the caller about the other state gets that state's answer: %+v", answers[2].Answers)
+	}
+}
+
+func TestBundleAsksAnOlderRuntimeOneTaskPerState(t *testing.T) {
+	runtime := runtimetest.New(vela2Fake("vela"))
+	runtime.SetAPIVersion("2.1.0")
+	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
+	first := Request{State: "refund my billing to Tom", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
+	second := Request{State: "a different message", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
+	var errs [2]error
+	stage(time.Second,
+		func(ctx context.Context) { _, errs[0] = lease.Decide(ctx, "vela", first) },
+		func(ctx context.Context) { _, errs[1] = lease.Decide(ctx, "vela", second) },
+	)
+	if errs[0] != nil || errs[1] != nil {
+		t.Fatal(errs)
+	}
+	if calls, tasks := runtime.Bundles(); calls != 1 || tasks != 2 {
+		t.Fatalf("a runtime without states gets one task per state, in one bundle: %d bundles, %d tasks", calls, tasks)
+	}
+	for _, asked := range runtime.Decisions() {
+		if asked.States != nil {
+			t.Fatalf("a runtime without states is never sent them: %+v", asked)
+		}
 	}
 }
 

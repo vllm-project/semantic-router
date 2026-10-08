@@ -108,6 +108,18 @@ v0.4.0, and keep their names.
   model's input or cap, truncated, or not scanned by the deadline. The match
   has the type `unscanned` and holds whatever `on_error` says, on requests and
   on responses; `on_unscanned: allow` on the module turns it off.
+- **One decisions call per request stage**
+  ([#4741](https://github.com/vllm-project/semantic-router/issues/4741)). Every
+  question a request stage asks a decision-model deployment goes in one call,
+  sent once every signal that asks that deployment has asked, never on a
+  timer, so the answers no longer depend on how fast each signal started.
+  Questions about other texts, such as the earlier messages a history-aware
+  jailbreak or PII rule reads, go in the same call as further states, each
+  read as a request of its own. Once the call is sent, every question in it
+  waits for it as long as the latest of them, so a decision question's
+  `timeout_ms` no longer drops an answer that shares the call. Contract 2.2.0
+  adds the decisions field `states`; an attached runtime on 2.1 gets one call
+  per text in the same bundle.
 - **Training contract `semantic-router.training/v2`.** One
   `runtime/model-runtime@v1` capability replaces `runtime/candle@v1` and
   `runtime/onnxruntime@v1`. BERT and RoBERTa (`architecture/hf-bert@v1`), the

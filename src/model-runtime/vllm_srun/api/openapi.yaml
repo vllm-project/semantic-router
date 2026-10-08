@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.1.0
+  version: 2.2.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
@@ -18,7 +18,7 @@ paths:
   /v1/decisions:
     post:
       operationId: createDecisions
-      summary: Answer typed Choice, Noul, Score, Set and Span questions about one state
+      summary: Answer typed Choice, Noul, Score, Set and Span questions about one or more states
       requestBody:
         required: true
         content:
@@ -29,7 +29,8 @@ paths:
         '200':
           description: |
             One answer per question, in request order; a failed question carries its own error. A request in which
-            no question is valid is answered 400 invalid_request, with each question's reason in the message.
+            no question, of its own or of its `states`, is valid is answered 400 invalid_request, with each
+            question's reason in the message.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -264,8 +265,30 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        states:
+          type: object
+          description: |
+            Further states, each with its own questions, answered in the same call: a client asks every question it
+            has for one model in one request. Each entry is read exactly as a request with its state, its questions
+            and this request's model and options would be, and its answers come back under the same name in the
+            response's `states`. Question IDs are unique within an entry.
+          additionalProperties:
+            $ref: '#/components/schemas/DecisionState'
         options:
           $ref: '#/components/schemas/RequestOptions'
+    DecisionState:
+      type: object
+      additionalProperties: false
+      required: [state, questions]
+      properties:
+        state:
+          description: The context this entry's questions are about, as a request's `state`.
+        questions:
+          type: object
+          description: Named questions about this state; answers keep this order.
+          minProperties: 1
+          additionalProperties:
+            $ref: '#/components/schemas/Question'
     Question:
       type: object
       additionalProperties: false
@@ -371,6 +394,52 @@ components:
     DecisionResponse:
       type: object
       required: [model, answers, usage]
+      properties:
+        model:
+          type: string
+        answers:
+          type: object
+          description: One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+          additionalProperties:
+            $ref: '#/components/schemas/Answer'
+        spans:
+          type: object
+          description: Span answers by question ID.
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/Span'
+        sets:
+          type: object
+          description: Set answers by question ID.
+          additionalProperties:
+            $ref: '#/components/schemas/SetAnswer'
+        thresholds:
+          type: object
+          description: The threshold applied to each Set or Span question.
+          additionalProperties:
+            type: number
+            format: double
+        span_heads:
+          type: object
+          description: The span head (router or broad) that answered each Span question, on models with a broad span head.
+          additionalProperties:
+            type: string
+        usage:
+          $ref: '#/components/schemas/Usage'
+        states:
+          type: object
+          description: |
+            The answers about each entry of the request's `states`, as that entry's own request would get them. The
+            response's own fields answer the request's `state`, and its `usage` counts that state alone.
+          additionalProperties:
+            $ref: '#/components/schemas/DecisionStateResponse'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    DecisionStateResponse:
+      type: object
+      required: [model, answers, usage]
+      description: The answers about one entry of a request's `states`, with the fields of a response of its own.
       properties:
         model:
           type: string
