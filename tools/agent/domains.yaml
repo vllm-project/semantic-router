@@ -295,6 +295,14 @@ domains:
       - src/model-runtime/vllm_srun/registry/tables/vela1.py
       - tools/ci/run_model_tests.py
       - tools/make/models.mk
+      # The contract resolves each package's registry entry, threshold and
+      # document window from the Router's model resolution.
+      - src/semantic-router/pkg/config/registry.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/canonical_operating_points.go
+      - src/semantic-router/pkg/config/decision_model.go
+      - src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go
+      - src/semantic-router/pkg/classification/classifier_pii_window_default.go
     checks: []
     verify: [make test-models]
     verifications: [platform.models-cpu]
