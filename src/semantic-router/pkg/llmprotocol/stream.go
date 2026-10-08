@@ -51,6 +51,16 @@ type Event struct {
 	Error               *ProtocolError
 	Failure             FailureScope
 	Opaque              []byte
+	// DynamoNVExt carries one bounded provider extension emitted by a real
+	// Dynamo stream chunk or Responses lifecycle resource. It never enters
+	// neutral response semantics.
+	DynamoNVExt *DynamoResponseNVExt
+	// DynamoResponsesLifecycle identifies a repeated Responses start-phase
+	// event carrying nvext, without restarting the neutral response.
+	DynamoResponsesLifecycle string
+	// DynamoRequestID marks Dynamo's out-of-band `event: request_id` SSE frame.
+	// Opaque retains the bounded original frame for same-format forwarding.
+	DynamoRequestID bool
 }
 
 type StreamContext struct {

@@ -233,6 +233,7 @@ func (r *OpenAIRouter) handleProcessRequest(
 	req *ext_proc.ProcessingRequest,
 	ctx *RequestContext,
 ) error {
+	captureUpstreamBackendIdentity(req, ctx)
 	if protocolConfig := req.GetProtocolConfig(); protocolConfig != nil {
 		mode := protocolConfig.GetRequestBodyMode()
 		ctx.FullDuplexRequestBody = mode == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED

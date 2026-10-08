@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from .chat_request import ChatRequest
+from .dynamo_contract import build_dynamo_response_nvext
 from .tokens import estimate_tokens
 
 
@@ -31,6 +32,7 @@ def build_chat_stream_chunk(
     delta: dict,
     finish_reason: str | None,
     usage: dict | None = None,
+    nvext: dict[str, Any] | None = None,
 ) -> str:
     payload = {
         "id": response_id,
@@ -49,6 +51,8 @@ def build_chat_stream_chunk(
     }
     if usage is not None:
         payload["usage"] = usage
+    if nvext is not None:
+        payload["nvext"] = nvext
     return "data: " + json.dumps(payload, separators=(",", ":")) + "\n\n"
 
 
@@ -303,7 +307,7 @@ def generate_chat_custom_tool_stream(
 def build_chat_response(
     req: ChatRequest, content: str, usage: dict, created_ts: int
 ) -> dict:
-    return {
+    response = {
         "id": "cmpl-mock-123",
         "object": "chat.completion",
         "created": created_ts,
@@ -319,6 +323,10 @@ def build_chat_response(
         ],
         "usage": usage,
     }
+    nvext = build_dynamo_response_nvext(req)
+    if nvext is not None:
+        response["nvext"] = nvext
+    return response
 
 
 def build_chat_logprobs(req: ChatRequest, content: str) -> dict[str, Any] | None:
@@ -373,7 +381,15 @@ def generate_chat_stream(
         )
         if not complete:
             return
-    yield build_chat_stream_chunk(req, response_id, created_ts, {}, "stop", usage)
+    yield build_chat_stream_chunk(
+        req,
+        response_id,
+        created_ts,
+        {},
+        "stop",
+        usage,
+        build_dynamo_response_nvext(req),
+    )
     yield "data: [DONE]\n\n"
 
 

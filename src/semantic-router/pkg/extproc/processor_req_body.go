@@ -212,7 +212,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		if err != nil {
 			return nil, err
 		}
-		r.dispatchShadowIfConfigured(ctx, dispatch)
+		r.dispatchShadowIfConfigured(ctx, dispatch, finalized)
 		return finalized, nil
 	}
 
@@ -249,7 +249,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	defer func() {
 		r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
 		if dispatched {
-			r.dispatchShadowIfConfigured(ctx, dispatch)
+			r.dispatchShadowIfConfigured(ctx, dispatch, response)
 		}
 	}()
 

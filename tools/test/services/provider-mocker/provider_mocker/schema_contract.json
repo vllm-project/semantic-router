@@ -47,7 +47,8 @@
         "min_p",
         "reasoning_budget_tokens",
         "repetition_penalty",
-        "top_k"
+        "top_k",
+        "nvext"
       ],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
@@ -244,7 +245,8 @@
         "remote_host",
         "remote_port",
         "usage_breakdown",
-        "x_groq"
+        "x_groq",
+        "nvext"
       ],
       "official_usage_fields": [
         "completion_tokens",
@@ -305,7 +307,8 @@
       ],
       "extension_request_fields": [
         "auto_store",
-        "client_metadata"
+        "client_metadata",
+        "nvext"
       ],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
@@ -447,7 +450,8 @@
         "frequency_penalty",
         "presence_penalty",
         "store",
-        "tool_usage"
+        "tool_usage",
+        "nvext"
       ],
       "official_usage_fields": [
         "compute_units",
