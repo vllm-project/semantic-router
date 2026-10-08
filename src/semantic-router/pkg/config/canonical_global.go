@@ -68,8 +68,9 @@ type CanonicalStoreGlobal struct {
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
 type CanonicalIntegrationGlobal struct {
-	Tools  ToolsConfig  `yaml:"tools"`
-	Looper LooperConfig `yaml:"looper"`
+	KVTransfer *KVTransferConfig `yaml:"kv_transfer,omitempty"`
+	Tools      ToolsConfig       `yaml:"tools"`
+	Looper     LooperConfig      `yaml:"looper"`
 }
 
 // CanonicalModelCatalog groups router-owned model assets and the module
@@ -315,6 +316,7 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 }
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
+	cfg.KVTransfer = integrations.KVTransfer
 	cfg.Tools = integrations.Tools
 	cfg.Looper = integrations.Looper
 	if integrations.Looper.Endpoint != "" {

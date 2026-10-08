@@ -729,6 +729,9 @@
     },
     "CanonicalIntegrationGlobal": {
       "properties": {
+        "kv_transfer": {
+          "$ref": "#/$defs/KVTransferConfig"
+        },
         "tools": {
           "$ref": "#/$defs/ToolsConfig"
         },
@@ -3333,6 +3336,105 @@
         },
         "value": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVServingIdentity": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "weight_revision": {
+          "type": "string"
+        },
+        "tokenizer": {
+          "type": "string"
+        },
+        "tokenizer_revision": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "string"
+        },
+        "tensor_parallel": {
+          "type": "integer"
+        },
+        "kv_heads": {
+          "type": "integer"
+        },
+        "head_dim": {
+          "type": "integer"
+        },
+        "head_order": {
+          "type": "string"
+        },
+        "adapter_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferBackend": {
+      "properties": {
+        "model_alias": {
+          "type": "string"
+        },
+        "backend_name": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "can_export": {
+          "type": "boolean"
+        },
+        "can_load": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backends": {
+          "items": {
+            "$ref": "#/$defs/KVTransferBackend"
+          },
+          "type": "array"
+        },
+        "pairs": {
+          "items": {
+            "$ref": "#/$defs/KVTransferPair"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferPair": {
+      "properties": {
+        "mapper_id": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "target": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_transfer_turn": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -8159,6 +8261,15 @@
         "path": [
           "stores",
           "tool_sessions"
+        ]
+      },
+      {
+        "key": "kv_transfer",
+        "layer": "integrations",
+        "display_name": "Kv Transfer",
+        "path": [
+          "integrations",
+          "kv_transfer"
         ]
       },
       {
