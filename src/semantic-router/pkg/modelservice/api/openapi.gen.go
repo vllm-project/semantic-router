@@ -376,10 +376,50 @@ type DecisionRequest struct {
 	// parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
 	// answer part and every other field as context.
 	State interface{} `json:"state"`
+
+	// States Further states, each with its own questions, answered in the same call: a client asks every question it
+	// has for one model in one request. Each entry is read exactly as a request with its state, its questions
+	// and this request's model and options would be, and its answers come back under the same name in the
+	// response's `states`. Question IDs are unique within an entry.
+	States *map[string]DecisionState `json:"states,omitempty"`
 }
 
 // DecisionResponse defines model for DecisionResponse.
 type DecisionResponse struct {
+	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+	Answers map[string]Answer `json:"answers"`
+	Meta    *ResponseMeta     `json:"meta,omitempty"`
+	Model   string            `json:"model"`
+
+	// Sets Set answers by question ID.
+	Sets *map[string]SetAnswer `json:"sets,omitempty"`
+
+	// SpanHeads The span head (router or broad) that answered each Span question, on models with a broad span head.
+	SpanHeads *map[string]string `json:"span_heads,omitempty"`
+
+	// Spans Span answers by question ID.
+	Spans *map[string][]Span `json:"spans,omitempty"`
+
+	// States The answers about each entry of the request's `states`, as that entry's own request would get them. The
+	// response's own fields answer the request's `state`, and its `usage` counts that state alone.
+	States *map[string]DecisionStateResponse `json:"states,omitempty"`
+
+	// Thresholds The threshold applied to each Set or Span question.
+	Thresholds *map[string]float64 `json:"thresholds,omitempty"`
+	Usage      Usage               `json:"usage"`
+}
+
+// DecisionState defines model for DecisionState.
+type DecisionState struct {
+	// Questions Named questions about this state; answers keep this order.
+	Questions map[string]Question `json:"questions"`
+
+	// State The context this entry's questions are about, as a request's `state`.
+	State interface{} `json:"state"`
+}
+
+// DecisionStateResponse The answers about one entry of a request's `states`, with the fields of a response of its own.
+type DecisionStateResponse struct {
 	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
 	Answers map[string]Answer `json:"answers"`
 	Meta    *ResponseMeta     `json:"meta,omitempty"`
