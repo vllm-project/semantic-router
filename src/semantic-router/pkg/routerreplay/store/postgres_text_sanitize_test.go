@@ -119,3 +119,50 @@ func TestPostgresInsertRecordSanitizesUntrustedText(t *testing.T) {
 		t.Fatalf("session policy JSON still contains a NUL escape: %q", built.sessionPolicyJSON)
 	}
 }
+
+// The UPDATE paths bind marshaled JSONB too, so a tool trace, hallucination
+// spans or an outcome carrying a NUL byte must be sanitized there as well, or a
+// row that inserted cleanly loses its later updates.
+func TestPostgresUpdateJSONSanitizesNUL(t *testing.T) {
+	nul := []byte(`\u0000`)
+
+	trace, err := postgresToolTraceJSON(ToolTrace{
+		Flow:  "agent\x00flow",
+		Steps: []ToolTraceStep{{ToolName: "search\x00tool"}},
+	})
+	if err != nil {
+		t.Fatalf("postgresToolTraceJSON: %v", err)
+	}
+	if bytes.Contains(trace, nul) {
+		t.Fatalf("tool trace JSON still contains a NUL escape: %q", trace)
+	}
+
+	spans, details, err := postgresHallucinationJSON(
+		[]string{"span\x00text"},
+		[]HallucinationSpan{{Text: "detail\x00text", Explanation: "contra\x00diction"}},
+	)
+	if err != nil {
+		t.Fatalf("postgresHallucinationJSON: %v", err)
+	}
+	if bytes.Contains(spans, nul) || bytes.Contains(details, nul) {
+		t.Fatalf("hallucination JSON still contains a NUL escape: %q / %q", spans, details)
+	}
+
+	outcome, err := postgresOutcomeJSON(Outcome{
+		Source:   "judge",
+		Reason:   "bad\x00reason",
+		Metadata: map[string]string{"k": "v\x00"},
+	})
+	if err != nil {
+		t.Fatalf("postgresOutcomeJSON: %v", err)
+	}
+	if bytes.Contains(outcome, nul) {
+		t.Fatalf("outcome JSON still contains a NUL escape: %q", outcome)
+	}
+
+	for name, b := range map[string][]byte{"trace": trace, "spans": spans, "details": details, "outcome": outcome} {
+		if !json.Valid(b) {
+			t.Fatalf("%s JSON is no longer valid after sanitizing: %q", name, b)
+		}
+	}
+}

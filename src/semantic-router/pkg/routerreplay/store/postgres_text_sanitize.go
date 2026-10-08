@@ -2,6 +2,8 @@ package store
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -59,4 +61,35 @@ func sanitizePostgresJSON(b []byte) []byte {
 		i++
 	}
 	return out
+}
+
+// postgresOutcomeJSON encodes an outcome for the jsonb append in AppendOutcome.
+func postgresOutcomeJSON(outcome Outcome) ([]byte, error) {
+	b, err := json.Marshal([]Outcome{cloneOutcome(outcome)})
+	if err != nil {
+		return nil, err
+	}
+	return sanitizePostgresJSON(b), nil
+}
+
+// postgresHallucinationJSON encodes the span columns for UpdateHallucinationStatus.
+func postgresHallucinationJSON(spans []string, spanDetails []HallucinationSpan) ([]byte, []byte, error) {
+	spansJSON, err := json.Marshal(spans)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal hallucination spans: %w", err)
+	}
+	spanDetailsJSON, err := json.Marshal(spanDetails)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal hallucination span details: %w", err)
+	}
+	return sanitizePostgresJSON(spansJSON), sanitizePostgresJSON(spanDetailsJSON), nil
+}
+
+// postgresToolTraceJSON encodes a tool trace for UpdateToolTrace.
+func postgresToolTraceJSON(trace ToolTrace) ([]byte, error) {
+	b, err := marshalReplayOptionalJSON(&trace)
+	if err != nil {
+		return nil, err
+	}
+	return sanitizePostgresJSON(b), nil
 }
