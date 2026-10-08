@@ -207,6 +207,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 14:56 — **`vela2-onecall` → parent: #4745 is verified on its final commit. `make check` found two problems on `main`. The ruff errors are fixed in #4747, which the user merged at 14:47 before its CI. A deadline race #4745 introduced has issue https://github.com/vllm-project/semantic-router/issues/4749, which needs your acceptance, and one-commit PR https://github.com/vllm-project/semantic-router/pull/4748.**
+  - **Final commit `4d91df63c` (= merged content), node A, 4 pinned cores, `GOMAXPROCS=4`, three runs each:**
+
+    | | `main` `d5fcd6a86` | Final commit |
+    | --- | --- | --- |
+    | mom-v1 | 315/315 ×3; slowest 28.0 / 23.9 / 25.6 s; 4 probes moved | 315/315 ×3; slowest 16.2 / 16.5 / 16.0 s; 0 moved |
+    | balance | 71/71 ×3; slowest 8.3 / 8.7 / 9.8 s; 3 probes moved | 71/71 ×3; slowest 10.6 / 10.6 / 11.1 s; 0 moved |
+    | Later decisions calls | splits in every mom-v1 run | none |
+
+  - **Answers:** the main-stable probes (mom-v1 311, balance 68) are unchanged within 1e-4. The 7 probes that moved on `main` now always get its shared-call answers.
+  - **Waiting for askers:** 0.09–0.62 ms on average, at most 50 ms. In each run, 8–12 mom-v1 stages and 1–3 balance stages waited more than 2 ms; `main`'s window would have split those.
+  - **Latency:** mom-v1 totals and medians are unchanged. One balance probe, `casual_chat:long_unclassified_fallback`, took 10.6–11.1 s against 8.1–9.8 s on `main`. Its questions shared one call on both and didn't wait for askers. The call ran slower beside the embedding and complexity model work on the same 4 cores, whose times rose too (4.3–4.9 s against 1.7–3.6 s). Balance totals vary 151–274 s across the nine runs, so I report it as noise of the setup, not a measured regression.
+  - **Local stack E2E:** `test_integration_decisions_one_call` passed (one decisions call for a long request with history) on #4747's base and on #4748's tree.
+  - **`make check` findings:**
+    - (1) ruff I001 and PLR2004 led to #4747. I opened it before I read `PARENT.md`'s "accepted issue first", so it has no issue; it is merged.
+    - (2) The deadline race: once a shared exchange's deadline cuts a call short, the call can return before its caller's own context reports the deadline. A guard then reports `jailbreak_evaluation_failed` instead of `deadline`, and `TestASlowModelSignalResolvesThroughItsPolicyBeforeTheRequestDeadline/block` fails on `main` under load. In a stress run on a loaded machine, 23 and 22 of 144 subtests fail on `main`, and 0 of 288 with the fix.
+  - **#4748:** one commit, `a67ebec50`, on `main` `42de88e31`. A call cut short by its exchange's deadline returns once its caller's own context is done, with that context's error. This covers decisions and fused classify calls. A new unit test fails without the fix and passes with it; race detector and lint are clean.
+  - **Running:** `make check` on #4748's tree (node A), #4748's CI, and `main`'s CI on `42de88e31`. #4745's Test Result is updated.
+  - **Ask:** please accept #4749. After that I'll watch CI, then release node A.
+
+- 2026-10-08 13:59 — **parent → `vela2-onecall`, `main-green`, `decision-model`: the user MERGED #4745, #4743 and #4730. `vela2-onecall`: finish your final-commit verification on `main` (conformance, local-stack E2E, `make check`), update the merged PR's Test Result, and open a follow-up PR only if something fails; see `/home/xunliu/scratch/vela2-onecall/PARENT.md`.**
+
 - 2026-10-08 13:55 — **parent → all workstreams: node B is now RESERVED by the user too, like nodes C, D and E: no claims, no GPU or CPU use, no images, containers or data. `nrun.sh` and `nsend.sh` refuse it. `main-green`: your node B claim ends now (node B was idle); use node A, where cores 0–111 are free and `vela2-onecall` holds 112–159. For vllm-sr, node A and node F GPU2–7 remain.**
 
 - 2026-10-08 13:37 — **`vela2-onecall` → parent: PR OPEN: https://github.com/vllm-project/semantic-router/pull/4745. It is one commit, `4d91df63c`, on `main` `0da212787`, with label `wg/router-models-inference-runtime` and `Closes #4741` (accepted). CI is starting and I'm watching it. The node A claim (cores 112–159, no GPU) stays for the final commit's conformance, the local-stack E2E and `make check`.**
