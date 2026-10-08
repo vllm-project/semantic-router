@@ -414,6 +414,15 @@ func (o InstallOptions) Clone() InstallOptions {
 	return cloned
 }
 
+const (
+	// RouterImageRepository is the Router image the chart deploys.
+	RouterImageRepository = "ghcr.io/vllm-project/semantic-router/vllm-sr"
+	// DevelopmentRouterImage is the chart's default Router image during a
+	// development cycle; release.sh pins the release tag only on the release
+	// commit.
+	DevelopmentRouterImage = RouterImageRepository + ":latest"
+)
+
 var (
 	SemanticRouterRelease = InstallOptions{
 		ReleaseName: "semantic-router",

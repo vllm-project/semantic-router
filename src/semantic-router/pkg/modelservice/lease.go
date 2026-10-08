@@ -204,8 +204,8 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 }
 
 // Decide answers the request through a deployment, inside the context's
-// bundle when there is one; the bundle may answer it together with the
-// stage's other questions to the same model and state.
+// bundle when there is one; the bundle answers it together with the stage's
+// other questions to the same model.
 func (l *Lease) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
 	m, err := l.call(deployment)
 	if err != nil {
