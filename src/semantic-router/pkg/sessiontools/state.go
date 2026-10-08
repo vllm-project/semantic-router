@@ -16,9 +16,10 @@ import (
 )
 
 // SchemaVersion is the current State schema version. A stored State whose
-// SchemaVersion differs is a miss, not a partially-trusted value — callers
-// must delete it and select fresh rather than attempt migration.
-const SchemaVersion uint16 = 1
+// SchemaVersion differs is a miss, not a partially-trusted value. The manager
+// conditionally replaces it using its observed CAS token, never deletion by
+// key. Version 2 adds Turn; older state is deliberately not migrated.
+const SchemaVersion uint16 = 2
 
 // State is the persistent envelope for one session's sticky tool-set
 // selection. Wire-neutral: safe to encode as JSON for either store backend.
@@ -35,14 +36,17 @@ type State struct {
 	// this with a store-wide monotonic counter, not a per-key one; see
 	// store_memory.go's nextRevision.)
 	Revision uint64 `json:"revision"`
+	// Turn counts successful planner updates within this continuity scope,
+	// independently of Revision. FirstSeenTurn values refer to this counter.
+	// A reset starts at 1; zero is unset, and MaxSelectionTurn exhaustion is an error.
+	Turn uint64 `json:"turn"`
 	// PolicyFingerprint, CatalogFingerprint, and CapabilityFingerprint are
 	// canonical fingerprints (see pkg/tools/fingerprint.go) of the
 	// selection policy, tool catalog, and model/wire capability set that
 	// produced this state. A mismatch against the current request's
 	// fingerprints means the stored state must be revalidated or
-	// invalidated before reuse — this package does not itself compare
-	// fingerprints against a live request; that belongs to the manager
-	// that owns the merge/invalidation decision (a later task).
+	// invalidated before reuse. Manager compares the complete fingerprints
+	// supplied by its caller; it does not derive runtime authorization.
 	PolicyFingerprint     string `json:"policy_fingerprint"`
 	CatalogFingerprint    string `json:"catalog_fingerprint"`
 	CapabilityFingerprint string `json:"capability_fingerprint"`
@@ -63,7 +67,7 @@ type ToolState struct {
 	DefinitionFingerprint string `json:"definition_fingerprint"`
 	// Pinned marks a tool observed in an assistant tool call. Monotonic
 	// until expiry/invalidation — pinning is never revoked by ordinary
-	// bounded growth (see the deterministic merge algorithm, a later task).
+	// bounded growth. A policy disabling pinning must change its fingerprint.
 	Pinned bool `json:"pinned,omitempty"`
 	// FirstSeenTurn is the turn index at which this tool first entered the
 	// session's sticky set, used to break ties deterministically during
@@ -73,15 +77,20 @@ type ToolState struct {
 
 // Validate reports whether s is a well-formed State that may be trusted and
 // reused. maxTools and maxStateBytes should come from
-// config.ToolSessionStoreConfig's Effective* helpers — this package does
-// not read router config directly, keeping the state model independent of
-// the config package.
+// the effective sticky policy and global store byte bound respectively.
 //
-// A malformed value here is always a miss (delete and select fresh), never
-// a partially-trusted value — see PL-0042's Operating Rules.
+// Malformed state is never partially trusted. Replacing a stale snapshot
+// still requires its observed revision, even when validation fails.
 func (s State) Validate(maxTools int, maxStateBytes int) error {
 	if s.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("sessiontools: unsupported schema_version %d (want %d)", s.SchemaVersion, SchemaVersion)
+	}
+	if s.Turn == 0 || s.Turn > MaxSelectionTurn {
+		return fmt.Errorf("sessiontools: turn must be in 1..%d", MaxSelectionTurn)
+	}
+	if !validFingerprint(s.PolicyFingerprint) || !validFingerprint(s.CatalogFingerprint) ||
+		!validFingerprint(s.CapabilityFingerprint) || len(s.StrategyID) > 128 {
+		return fmt.Errorf("sessiontools: missing or malformed fingerprint/strategy metadata")
 	}
 	if err := s.validateTimestamps(); err != nil {
 		return err
@@ -112,14 +121,15 @@ func (s State) validateTools(maxTools int) error {
 	seen := make(map[string]struct{}, len(s.Tools))
 	for i := range s.Tools {
 		tool := &s.Tools[i]
-		if tool.Name == "" {
-			return fmt.Errorf("sessiontools: tool at index %d has an empty name", i)
+		identity, err := normalizeIdentity(ToolIdentity{tool.Name, tool.DefinitionFingerprint})
+		if err != nil || identity.Name != tool.Name {
+			return fmt.Errorf("sessiontools: tool at index %d has a malformed identity", i)
 		}
-		if tool.DefinitionFingerprint == "" {
-			return fmt.Errorf("sessiontools: tool %q has an empty definition_fingerprint", tool.Name)
+		if tool.FirstSeenTurn < 1 {
+			return fmt.Errorf("sessiontools: tool at index %d has an unset or negative first_seen_turn", i)
 		}
-		if tool.FirstSeenTurn < 0 {
-			return fmt.Errorf("sessiontools: tool %q has a negative first_seen_turn", tool.Name)
+		if uint64(tool.FirstSeenTurn) > s.Turn {
+			return fmt.Errorf("sessiontools: first_seen_turn exceeds state turn")
 		}
 		if _, duplicate := seen[tool.Name]; duplicate {
 			return fmt.Errorf("sessiontools: duplicate tool name %q", tool.Name)
@@ -133,14 +143,22 @@ func (s State) validateEncodedSize(maxStateBytes int) error {
 	if maxStateBytes <= 0 {
 		return nil
 	}
-	encoded, err := json.Marshal(s)
+	size, err := s.encodedSize()
 	if err != nil {
-		return fmt.Errorf("sessiontools: failed to encode state for size validation: %w", err)
+		return err
 	}
-	if len(encoded) > maxStateBytes {
-		return fmt.Errorf("sessiontools: encoded state is %d bytes, exceeds the bound of %d", len(encoded), maxStateBytes)
+	if size > maxStateBytes {
+		return fmt.Errorf("%w: %d bytes exceeds %d", ErrStateTooLarge, size, maxStateBytes)
 	}
 	return nil
+}
+
+func (s State) encodedSize() (int, error) {
+	encoded, err := json.Marshal(s)
+	if err != nil {
+		return 0, fmt.Errorf("sessiontools: failed to encode state: %w", err)
+	}
+	return len(encoded), nil
 }
 
 // Clone returns a deep copy of s. Every store and manager boundary in this

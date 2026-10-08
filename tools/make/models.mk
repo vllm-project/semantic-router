@@ -99,7 +99,17 @@ test-models: download-models-image-calibration ## Run the published-model contra
 		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
 		--output "$(MODEL_TEST_REPORT_DIR)"
 
-.PHONY: test-models
+# After an intended change of the Router's Vela 2.0 questions, their fusion or
+# a pinned revision: serve each pinned size on this CPU and rewrite the
+# answers the contract compares with (needs model-runtime-install).
+record-vela2-answers: ## Re-record the Vela 2.0 answers of the published-model contract
+	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
+		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py --record-vela2 \
+		--models-dir "$(MODEL_TEST_MODELS_DIR)" \
+		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
+		--output "$(MODEL_TEST_REPORT_DIR)"
+
+.PHONY: test-models record-vela2-answers
 
 download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "📦 Downloading mmBERT LoRA adapters from Hugging Face..."
