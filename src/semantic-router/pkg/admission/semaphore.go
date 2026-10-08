@@ -66,6 +66,7 @@ func (s *Semaphore) Acquire(ctx context.Context) (Ticket, error) {
 		defer timer.Stop()
 		timeout = timer.C
 	}
+	defer waiting(ctx)()
 
 	overflowTicket, err := s.enterQueue(ctx, timeout)
 	if err != nil || overflowTicket != nil {
