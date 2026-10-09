@@ -148,9 +148,9 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath)},
+		{"/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly)},
 		{"/api/router/config/schema", handlers.ConfigSchemaHandler(cfg.RouterAPIURL, store)},
-		{"/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath)},
+		{"/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly)},
 		{"/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath)},
 		{"/api/router/config/deployments", handlers.ConfigDeploymentsHandler()},
 		{"/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler()},
@@ -159,7 +159,7 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 		registerRouteFunc(mux, auth.ProtectedRoute(route.path, auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, http.MethodGet), route.handler)
 	}
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/update", auth.PermConfigWrite, "config.update", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost, http.MethodPut), handlers.UpdateConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/router/config/deploy/preview", auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.DeployPreviewHandler(cfg.AbsConfigPath))
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/router/config/deploy/preview", auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.DeployPreviewHandler(cfg.AbsConfigPath, runtimeConfigReadonly))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/deploy", auth.PermConfigDeploy, "config.deploy", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.DeployHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/rollback", auth.PermConfigDeploy, "config.rollback", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.RollbackHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/schema, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
