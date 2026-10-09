@@ -1114,6 +1114,27 @@ class ToolsDynamicRetrievalConfig(BaseModel):
         return self
 
 
+class ToolsTrustedFactsConfig(BaseModel):
+    """Trusted tool capability facts owned by the tools plugin (issue #3476).
+
+    Mirrors the Go-side `config.TrustedFactsConfig` so CLI validation checks
+    the subtree instead of ignoring it. The Go side is authoritative for its
+    cross-field rules, such as a freshness bound for runtime-fresh sources.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    enforcement: Optional[Literal["disabled", "advisory", "authoritative"]] = None
+    trust_sources: Optional[
+        List[Literal["operator-policy", "gateway-attested", "runtime-fresh"]]
+    ] = None
+    freshness_seconds: Optional[int] = Field(default=None, ge=0, le=86400)
+    stage_roles: Optional[
+        List[Literal["candidate", "verifier", "advisor", "final"]]
+    ] = None
+
+
 class ToolsPluginConfig(BaseModel):
     """Configuration for tools plugin."""
 
@@ -1125,6 +1146,7 @@ class ToolsPluginConfig(BaseModel):
     strip_tool_history: Optional[bool] = None
     strategy: Optional[str] = None
     dynamic_retrieval: Optional[ToolsDynamicRetrievalConfig] = None
+    trusted_facts: Optional[ToolsTrustedFactsConfig] = None
 
     @model_validator(mode="after")
     def validate_mode_contract(self):
