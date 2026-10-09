@@ -68,8 +68,13 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if responseAPIResp, err := r.handleResponseAPIRequestHeaders(method, path, ctx); err != nil || responseAPIResp != nil {
 		return responseAPIResp, err
 	}
-	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
+	validationResp, requiresBody := r.classifyRequestHeaders(method, path)
+	if validationResp != nil {
 		return validationResp, nil
+	}
+	// Envoy sends no body stage after end_of_stream headers, so reject here.
+	if requiresBody && v.RequestHeaders.GetEndOfStream() {
+		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
 	mutation := buildIdentityEncodingRequestMutation()
 	if isAzureOpenAIPath(path) {
