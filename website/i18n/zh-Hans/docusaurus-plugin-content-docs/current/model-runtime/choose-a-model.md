@@ -72,7 +72,7 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
   速度约为 `exact` 的 1.6 倍。
 - **输入：** 普通路由判断可以按模型输入上限截断。Prompt guard、safety、PII 和 hallucination 要求完整读取输入；
   支持窗口扫描的任务可在扫描预算内覆盖更长的输入。覆盖不完整时返回错误或未知结果。
-  具体限制和路由策略见[长输入](./reference.md#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
+  具体限制和路由策略见[长输入](/docs/model-runtime/reference#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
 - **阈值：** 模块默认阈值按 0.3B 的分数校准（见下文）。
 
 维护者选择了这个默认值，尽管它没有达到当初设定的两个目标
