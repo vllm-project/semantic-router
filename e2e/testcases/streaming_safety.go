@@ -50,7 +50,7 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 	defer stop()
 
-	resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(prompt, "MoM", false), streamedBodyWrites)
+	resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(prompt, "vllm-sr/auto", false), streamedBodyWrites)
 	if err != nil {
 		return fmt.Errorf("%s: request failed: %w", testName, err)
 	}

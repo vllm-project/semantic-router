@@ -78,7 +78,7 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 
 	passed := 0
 	for _, tc := range cases {
-		resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(tc.query, "MoM", false), streamedBodyWrites)
+		resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(tc.query, "vllm-sr/auto", false), streamedBodyWrites)
 		if err != nil {
 			fmt.Printf("[Streaming] FAIL %s: %v\n", tc.name, err)
 			continue
@@ -138,7 +138,7 @@ func testStreamingCacheRoundtrip(ctx context.Context, client *kubernetes.Clients
 	similarQ := "Can you explain how TCP differs from UDP?"
 
 	// Prime the cache with the original question (should be a miss).
-	resp1, err := sendNonStreamingRequest(ctx, originalQ, "MoM", localPort)
+	resp1, err := sendNonStreamingRequest(ctx, originalQ, "vllm-sr/auto", localPort)
 	if err != nil {
 		return fmt.Errorf("original request failed: %w", err)
 	}
@@ -162,10 +162,10 @@ func testStreamingCacheRoundtrip(ctx context.Context, client *kubernetes.Clients
 		}
 		time.Sleep(wait)
 
-		resp2, err := sendNonStreamingRequest(ctx, similarQ, "MoM", localPort)
-		if err != nil {
+		resp2, requestErr := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
+		if requestErr != nil {
 			if attempt == 4 {
-				return fmt.Errorf("similar request failed: %w", err)
+				return fmt.Errorf("similar request failed: %w", requestErr)
 			}
 			continue
 		}
@@ -223,7 +223,7 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	userMsg := "Given all that context, please implement a function to sort a linked list."
 
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "system", "content": longContext},
 			{"role": "user", "content": userMsg},
@@ -307,7 +307,7 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 
 	// 1) Send a non-streaming request to prime the cache (more reliable than
 	//    SSE since the mock backend may not support streaming responses).
-	resp1, err := sendNonStreamingRequest(ctx, question, "MoM", localPort)
+	resp1, err := sendNonStreamingRequest(ctx, question, "vllm-sr/auto", localPort)
 	if err != nil {
 		return fmt.Errorf("first request failed: %w", err)
 	}
@@ -330,10 +330,10 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 		}
 		time.Sleep(wait)
 
-		resp2, err := sendNonStreamingRequest(ctx, similarQ, "MoM", localPort)
-		if err != nil {
+		resp2, requestErr := sendNonStreamingRequest(ctx, similarQ, "vllm-sr/auto", localPort)
+		if requestErr != nil {
 			if attempt == 4 {
-				return fmt.Errorf("similar request failed: %w", err)
+				return fmt.Errorf("similar request failed: %w", requestErr)
 			}
 			continue
 		}
@@ -354,7 +354,7 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 	//    similar question. If the backend supports SSE, validate the stream;
 	//    otherwise just check the cache-hit header.
 	var cacheHit3 string
-	resp3, err := sendStreamingRequest(ctx, "What is the velocity of light in vacuum?", "MoM", localPort)
+	resp3, err := sendStreamingRequest(ctx, "What is the velocity of light in vacuum?", "vllm-sr/auto", localPort)
 	if err != nil {
 		if opts.Verbose {
 			fmt.Printf("[Streaming] Streaming similar request failed (mock may not support SSE): %v\n", err)

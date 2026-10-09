@@ -7,6 +7,11 @@ status: Implemented
 
 > **Status:** Implemented in [#4628](https://github.com/vllm-project/semantic-router/pull/4628) - **Created:** 2026-10-06 -
 > **Tracking issue:** [#4623](https://github.com/vllm-project/semantic-router/issues/4623)
+>
+> **Lifecycle update:** Engine and Router modes share one persistent frontend
+> and model pool. Router is the default even when a model is supplied. Use
+> `vllm-sr serve ARTIFACT --engine` for Engine mode; see
+> [the current Quickstart](../model-runtime/quickstart.md).
 
 ## Summary
 
@@ -41,10 +46,10 @@ and the Looper executor carries over.
    and KServe integrations (the ext_proc Service on port 50051 and the five-header rule).
 4. Everything runs in containers: `--target docker` (the default) or `--target kubernetes` (`k8s`, released in
    v0.4.0, stays one release as a hidden alias that warns). There is no bare-metal target. `--platform
-   cpu|amd|nvidia` applies to both targets: on docker it selects the image and the GPU passthrough, and on
+   cpu|rocm|cuda` applies to both targets: on docker it selects the image and the GPU passthrough, and on
    kubernetes the same image plus the GPU resource request (`amd.com/gpu` or `nvidia.com/gpu`) in the generated
-   Helm values. Engine mode (`vllm-sr serve MODEL`) runs the model runtime in a container from the same image,
-   on the docker target, because only the image guarantees a byte-identical ROCm or CUDA stack.
+   Helm values. Engine mode (`vllm-sr serve MODEL --engine`) runs the model runtime in a container from the same image,
+   on the docker target, using the release-pinned ROCm or CUDA dependencies. Numerical parity must still be validated for the selected hardware and profile.
 5. `vllm-sr` is the only package on PyPI. The Router binary and the model runtime (`vllm-srun`) ship only inside
    one image family: `vllm-sr` (CPU, amd64 and arm64), `vllm-sr-rocm` and `vllm-sr-cuda` (amd64), which serve
    docker and kubernetes, both modes and engine mode. The former `extproc` and `extproc-rocm` images are alias
@@ -59,7 +64,7 @@ and the Looper executor carries over.
 
 ## Background
 
-Today a request travels:
+Before standalone mode, a request traveled:
 
 ```text
 client -> Envoy -> ext_proc (gRPC; bodies buffered whole) -> Router (Go) -> model runtime over a Unix socket
@@ -86,14 +91,16 @@ This shape has costs:
 
 ## Modes
 
-Only one dimension is called a **mode**: where client traffic enters. Everything else is an orthogonal
-deployment parameter.
+Gateway transport (`--gateway`) and serving capability (`--engine`) are separate choices.
+Router mode is the default; supplying `MODEL` changes its judgment model without
+disabling routing. Engine mode disables recipe routing while retaining the frontend
+and native model APIs.
 
 | Command | What runs | Client traffic enters at | Use it for |
 | --- | --- | --- | --- |
 | `vllm-sr serve` (= `--gateway standalone`, default) | the Router container, with its managed runtime processes inside | the Router's OpenAI-compatible port | one machine, development, edge, most self-hosting |
 | `vllm-sr serve --gateway extproc` | an Envoy container started by `vllm-sr`, in front of the Router container (ext_proc) | Envoy | Envoy features such as rate limiting, mTLS, advanced route matching |
-| `vllm-sr serve MODEL ...` | only the runtime, in a container from the same image (engine mode) | the runtime's HTTP API | calling a model from your own code |
+| `vllm-sr serve MODEL --engine` | the persistent frontend and model workers (Engine mode) | the frontend’s System One API | calling a model from your own code |
 
 Both gateway modes share one routing core: standalone mode uses the HTTP adapter, and extproc mode (called Envoy
 mode below) uses the ext_proc adapter. On Kubernetes, `--target kubernetes` installs the Helm chart in either
@@ -102,7 +109,7 @@ mode, and an Envoy-based gateway you run (Envoy Gateway, AI Gateway, Istio, KSer
 Orthogonal parameters:
 
 - `--target docker|kubernetes`: `docker` by default.
-- `--platform cpu|amd|nvidia`: the image on both targets; GPU passthrough on docker, the GPU resource request on
+- `--platform cpu|rocm|cuda`: the image on both targets; GPU passthrough on docker, the GPU resource request on
   kubernetes.
 - `--container-runtime docker|podman` (formerly `--runtime`, kept for one release as a hidden alias that warns).
 - Every `serve` flag belongs to one group, and a group names where it applies: docker, kubernetes, engine mode
@@ -536,6 +543,10 @@ A configuration that needs a follow-up capability fails at startup in standalone
   mode) and `vllm-sr serve MODEL` (engine mode) works on CPU.
 
 ### Results
+
+The measurements below record the implementation and hardware used at the time.
+They are not benchmarks of the current default model, replica pool or every
+supported profile.
 
 Recorded on the final tree before merge, on one node (AMD EPYC 9575F, Docker 29.8.1, Envoy 1.35.3), against fake
 backends:

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1810" height="1410" viewBox="0 0 1810 1410" role="img"><title>Serving Engine: replica pools and modular workers</title><desc>Deployment-level dispatch, worker ownership and pluggable inference internals.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+<rect width="100%" height="100%" fill="#fff"/>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="50" y="48.0" font-size="30" text-anchor="start" class="serif">(c) Scale deployments; compose inference inside each worker</text>
+<text x="50" y="82.0" font-size="21" text-anchor="start" class="">Current implementation · replica selection is separate from choosing a model</text>
+<rect x="65" y="135" width="970" height="1030" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="89" y="175.0" font-size="29" text-anchor="start" class="">Deployment and replica layer</text>
+<g data-box="135.0 1000 830 100">
+<rect x="135.0" y="1000" width="830" height="100" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="550.0" y="1044.1200000000001" font-size="24" text-anchor="middle" class="">Deployment binding + current generation</text>
+<text x="550.0" y="1072.2" font-size="24" text-anchor="middle" class="">model identity, capabilities, placement and readiness</text>
+</g>
+<g data-box="140.0 795 390 128">
+<rect x="140.0" y="795" width="390" height="128" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="335.0" y="840.74" font-size="22" text-anchor="middle" class="">Deployment A pool</text>
+<text x="335.0" y="866.48" font-size="22" text-anchor="middle" class="">same model + revision + profile</text>
+<text x="335.0" y="892.22" font-size="22" text-anchor="middle" class="">bounded admission</text>
+</g>
+<g data-box="575.0 795 390 128">
+<rect x="575.0" y="795" width="390" height="128" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="770.0" y="840.74" font-size="22" text-anchor="middle" class="">Deployment B pool</text>
+<text x="770.0" y="866.48" font-size="22" text-anchor="middle" class="">separate model identity</text>
+<text x="770.0" y="892.22" font-size="22" text-anchor="middle" class="">bounded admission</text>
+</g>
+<path d="M550,1000 L550,965 L335,965 L335,923" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M550,965 L770,965 L770,923" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="550" cy="965" r="3.5" fill="#111"/>
+<g data-box="105.0 560 410 138">
+<rect x="105.0" y="560" width="410" height="138" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="310.0" y="609.0799999999999" font-size="24" text-anchor="middle" class="">Managed worker replicas</text>
+<text x="310.0" y="637.16" font-size="24" text-anchor="middle" class="">GPU 0     GPU 1     …</text>
+<text x="310.0" y="665.2399999999999" font-size="24" text-anchor="middle" class="">local process supervision</text>
+</g>
+<g data-box="580.0 560 410 138">
+<rect x="580.0" y="560" width="410" height="138" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="785.0" y="609.9100000000001" font-size="23" text-anchor="middle" class="">Attached runtime replicas</text>
+<text x="785.0" y="636.82" font-size="23" text-anchor="middle" class="">remote endpoint 1     …</text>
+<text x="785.0" y="663.73" font-size="23" text-anchor="middle" class="">operated independently</text>
+</g>
+<path d="M335,795 L335,698" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M770,795 L770,698" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="550" y="747.0" font-size="22" text-anchor="middle" class="">Replica selection</text>
+<g data-box="135.0 322 830 140">
+<rect x="135.0" y="322" width="830" height="140" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="550.0" y="372.08000000000004" font-size="24" text-anchor="middle" class="">Dispatch policy</text>
+<text x="550.0" y="400.16" font-size="24" text-anchor="middle" class="">Least outstanding request bytes</text>
+<text x="550.0" y="428.24" font-size="24" text-anchor="middle" class="">tie: least recently assigned ready worker</text>
+</g>
+<text x="550" y="244.0" font-size="23" text-anchor="middle" class="">Pool policy · applies independently to each deployment</text>
+<text x="550" y="506.0" font-size="21" text-anchor="middle" class="">32 HTTP requests in flight per worker; no pool waiting queue.</text>
+<text x="550" y="1137.0" font-size="21" text-anchor="middle" class="">Generation leases preserve in-flight work during replacement.</text>
+<rect x="1115" y="135" width="630" height="1030" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="1139" y="175.0" font-size="29" text-anchor="start" class="">Inside one vllm-srun worker</text>
+<g data-box="1170.0 235 520 75">
+<rect x="1170.0" y="235" width="520" height="75" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="280.32" font-size="23" text-anchor="middle" class="">Typed answers / embeddings / ranks</text>
+</g>
+<g data-box="1170.0 377 520 82">
+<rect x="1170.0" y="377" width="520" height="82" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="412.61" font-size="22" text-anchor="middle" class="">Family-specific answer construction</text>
+<text x="1430.0" y="438.35" font-size="22" text-anchor="middle" class="">probabilities, spans, vectors or scores</text>
+</g>
+<g data-box="1170.0 523 520 82">
+<rect x="1170.0" y="523" width="520" height="82" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="558.61" font-size="22" text-anchor="middle" class="">Execution engine + accelerator</text>
+<text x="1430.0" y="584.35" font-size="22" text-anchor="middle" class="">network execution on CPU / CUDA / ROCm</text>
+</g>
+<g data-box="1170.0 675 520 82">
+<rect x="1170.0" y="675" width="520" height="82" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="710.365" font-size="23" text-anchor="middle" class="">Profile + work planning</text>
+<text x="1430.0" y="737.275" font-size="23" text-anchor="middle" class="">exact / batching / shared context</text>
+</g>
+<g data-box="1170.0 825 520 84">
+<rect x="1170.0" y="825" width="520" height="84" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="861.365" font-size="23" text-anchor="middle" class="">Model-family adapter</text>
+<text x="1430.0" y="888.275" font-size="23" text-anchor="middle" class="">validate input, prepare work items</text>
+</g>
+<g data-box="1170.0 1000 520 100">
+<rect x="1170.0" y="1000" width="520" height="100" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1430.0" y="1044.365" font-size="23" text-anchor="middle" class="">Worker API / runtime bundle</text>
+<text x="1430.0" y="1071.275" font-size="23" text-anchor="middle" class="">model card, input contract, deadlines</text>
+</g>
+<path d="M1430,1000 L1430,909" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,825 L1430,757" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,675 L1430,605" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,523 L1430,459" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,377 L1430,310" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M515,628 L545,628 L545,535 L1072,535 L1072,192 L1115,192" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6"/>
+<text x="980" y="214.0" font-size="20" text-anchor="end" class="">Expanded view</text>
+<g data-box="185.0 1225 780 76">
+<rect x="185.0" y="1225" width="780" height="76" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="575.0" y="1271.5" font-size="25" text-anchor="middle" class="">Native frontend or model-backed routing tasks</text>
+</g>
+<path d="M550,1225 L550,1165" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1430" y="1239.0" font-size="23" text-anchor="middle" class="">Pluggable runtime interfaces</text>
+<text x="1430" y="1265.91" font-size="23" text-anchor="middle" class="">Family · engine · accelerator · profile</text>
+<text x="905" y="1347.0" font-size="22" text-anchor="middle" class="">DP replicates the model. Placing each replica on its own GPU is supported; TP / PP are follow-up work.</text>
+<text x="905" y="1380.0" font-size="20" text-anchor="middle" class="">HTTP in-flight counters are not GPU-forward concurrency. Some active forwards continue after caller cancellation.</text>
+</svg>

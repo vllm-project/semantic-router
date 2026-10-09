@@ -429,3 +429,57 @@ def test_router_startup_status_reads_with_the_readiness_credential():
         "http://localhost:9090/startup-status",
         "5.000",
     ]
+
+
+def test_engine_summary_uses_published_native_name_port_and_key_placeholder(capsys):
+    config = {
+        "global": {
+            "router": {"enabled": False},
+            "model_catalog": {
+                "deployments": {
+                    "primary": {
+                        "provider": "model_runtime",
+                        "artifact": "private/model",
+                        "public_name": "judgment",
+                    }
+                }
+            },
+        }
+    }
+    runtime_lifecycle.log_runtime_summary(
+        [
+            {"name": "chat-only", "port": 8899, "models": ["vllm-sr/auto"]},
+            {
+                "name": "native",
+                "port": 8900,
+                "tls": {"cert_file": "server.crt"},
+                "systemone": {"models": ["judgment"]},
+                "api_keys": ["secret-do-not-print"],
+            },
+        ],
+        resolve_runtime_stack(stack_name="native-test", port_offset=200),
+        dashboard_disabled=True,
+        enable_observability=False,
+        config=config,
+    )
+    output = capsys.readouterr().out
+    assert "https://localhost:9100/v1/systemone" in output
+    assert '"model": "judgment"' in output
+    assert '"type": "noul"' in output
+    assert "Authorization: Bearer $VLLM_SR_API_KEY" in output
+    assert "private/model" not in output and "secret-do-not-print" not in output
+    assert "/v1/chat/completions" not in output and "vllm-sr/auto" not in output
+
+
+@pytest.mark.parametrize(
+    "listeners", [[], [{"port": 8899}], [{"port": 8899, "systemone": {"models": []}}]]
+)
+def test_engine_summary_without_native_grants_does_not_invent_an_example(
+    listeners, capsys
+):
+    runtime_lifecycle._print_curl_example(
+        listeners, resolve_runtime_stack(), {"global": {"router": {"enabled": False}}}
+    )
+    output = capsys.readouterr().out
+    assert "Configure listeners[].systemone.models" in output
+    assert "curl" not in output and '"model"' not in output

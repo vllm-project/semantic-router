@@ -33,22 +33,6 @@ func boolToStatus(healthy bool) string {
 	return "unknown"
 }
 
-func checkHTTPHealth(url string) (bool, string) {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return false, ""
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return true, "HTTP health check OK"
-	}
-	return false, ""
-}
-
 func checkRouterManagementHealth(url string, credentialProvider ...routerauth.CredentialProvider) bool {
 	resp, err := routerManagementGET(url, 2*time.Second, credentialProvider...)
 	if err != nil {
