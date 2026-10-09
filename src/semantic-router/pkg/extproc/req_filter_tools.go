@@ -18,10 +18,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-// handleToolSelectionForRequest handles tool selection for the request.
-func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Request, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
+// handleToolSelectionForRequest handles tool selection for the request. An
+// ordinary selection error is logged and the request continues. A sticky
+// decision instead fails the request with the returned response: continuing
+// would forward the tools the request arrived with, which sticky selection
+// has not authorized, and a stream error could do the same through an Envoy
+// configured with failure_mode_allow.
+func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Request, response *ext_proc.ProcessingResponse, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	fast := extractSemanticRequestSignals(request)
 	if err := r.handleToolSelection(request, fast.UserContent, fast.NonUserMessages, &response, ctx); err != nil {
+		if stickyToolSelectionDecision(ctx) {
+			logRoutingFailure(ctx, "sticky_tool_selection_failed", routingFailureToolSelection.code, err)
+			return r.routingFailureResponse(ctx, routingFailureToolSelection)
+		}
 		logging.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request
 	}
@@ -30,6 +39,7 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Reques
 			logging.Errorf("Error clearing invalid tool_choice without tools: %v", err)
 		}
 	}
+	return nil
 }
 
 func (r *OpenAIRouter) applySelectedTools(
@@ -120,18 +130,10 @@ func (r *OpenAIRouter) runSemanticToolSelection(
 	toolsCfg *config.ToolsPluginConfig,
 ) error {
 	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(request, classificationText, historySummary, ctx, toolsCfg)
-
-	emitToolObservability(response, ctx, strategyID, confidence, latency)
-	metrics.RecordToolsRetrieval(strategyID, latency.Seconds())
-
-	if toolErr != nil {
-		return r.handleToolSelectionError(request, response, ctx, toolErr, r.Config.Tools.FallbackToEmpty)
-	}
-
-	if err := r.applySelectedTools(request, selectedTools, strategyID, confidence, latency, classificationText, nil); err != nil {
-		return err
-	}
-	return commitToolSelection(request, ctx)
+	return r.finalizeToolSelection(request, response, ctx, toolSelectionResult{
+		tools: selectedTools, strategyID: strategyID, confidence: confidence, latency: latency,
+		classificationText: classificationText, err: toolErr, errorFallbackToEmpty: r.Config.Tools.FallbackToEmpty,
+	}, nil)
 }
 
 func (r *OpenAIRouter) handleToolSelectionError(
@@ -170,6 +172,7 @@ func (r *OpenAIRouter) handleToolSelection(
 	// before relevance/ranking so deny and narrow close the bypass for
 	// tool_selection flows too: neither outcome can widen the tool set.
 	if r.applyTrustedFactsGate(request, ctx, toolsCfg, trustedFactsRequestStage) {
+		r.recordStickyToolBypass(ctx, tsPlugin, stickyToolReasonTrustedFactsRestrict)
 		return nil
 	}
 
@@ -233,12 +236,14 @@ func (r *OpenAIRouter) handleToolSelectionDecisionPlugin(
 		return false, err
 	}
 	if !shouldContinue {
+		r.recordStickyToolBypass(ctx, tsPlugin, stickyToolReasonToolChoiceNotAuto)
 		return true, nil
 	}
 
 	classificationText, historySummary, ok := buildToolClassificationText(userContent, nonUserMessages)
 	if !ok {
 		logging.Infof("No content available for tool classification")
+		r.recordStickyToolBypass(ctx, tsPlugin, stickyToolReasonEmptyQuery)
 		return true, nil
 	}
 
@@ -249,7 +254,7 @@ func (r *OpenAIRouter) handleToolSelectionDecisionPlugin(
 
 	switch mode {
 	case config.ToolSelectionModeFilter:
-		return true, r.runToolSelectionPluginFilter(request, classificationText, response, ctx, tsPlugin)
+		return true, r.runToolSelectionPluginFilter(request, classificationText, response, ctx, tsPlugin, toolsCfg)
 	case config.ToolSelectionModeAdd:
 		return true, r.runToolSelectionPluginAdd(request, classificationText, historySummary, response, ctx, tsPlugin, toolsCfg)
 	default:

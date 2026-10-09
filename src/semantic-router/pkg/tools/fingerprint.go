@@ -94,22 +94,28 @@ func marshalFingerprint(v interface{}) string {
 }
 
 type toolDefinitionFingerprintInput struct {
+	Kind        string          `json:"kind,omitempty"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Strict      *bool           `json:"strict"`
 	CacheType   string          `json:"cache_type,omitempty"`
 	CacheTTL    string          `json:"cache_ttl,omitempty"`
 	InputSchema json.RawMessage `json:"input_schema"`
+	// CustomFormat is the custom tool's input grammar; nil for function tools.
+	CustomFormat *llmprotocol.CustomToolFormat `json:"custom_format,omitempty"`
 }
 
 // ToolDefinitionFingerprint returns a canonical, deterministic fingerprint
-// of tool's definition: normalized (trimmed) name and description,
-// strictness, cache directive, and canonical input schema. Two calls for
-// semantically identical tools — even if InputSchema's raw bytes differ in
-// key order or whitespace — produce the same fingerprint; any actual
-// definition change produces a different one. Strict and the cache
-// directive's presence-vs-absence are preserved distinctly from their
-// zero values (nil Strict is not the same configuration as Strict: false).
+// of tool's definition: kind, normalized (trimmed) name and description,
+// strictness, cache directive, canonical input schema, and a custom tool's
+// input format. Two calls for semantically identical tools — even if
+// InputSchema's raw bytes differ in key order or whitespace — produce the
+// same fingerprint; any actual definition change produces a different one,
+// including a custom tool replacing a same-named function tool. Strict and
+// the cache directive's presence-vs-absence are preserved distinctly from
+// their zero values (nil Strict is not the same configuration as Strict:
+// false). Function tools have an empty kind and no custom format, so their
+// fingerprints do not depend on those fields.
 func ToolDefinitionFingerprint(tool llmprotocol.Tool) string {
 	schema, err := canonicalizeJSON(tool.InputSchema)
 	if err != nil {
@@ -121,10 +127,12 @@ func ToolDefinitionFingerprint(tool llmprotocol.Tool) string {
 		schema = json.RawMessage(`"invalid_input_schema"`)
 	}
 	input := toolDefinitionFingerprintInput{
-		Name:        strings.TrimSpace(tool.Name),
-		Description: strings.TrimSpace(tool.Description),
-		Strict:      tool.Strict,
-		InputSchema: schema,
+		Kind:         string(tool.Kind),
+		Name:         strings.TrimSpace(tool.Name),
+		Description:  strings.TrimSpace(tool.Description),
+		Strict:       tool.Strict,
+		InputSchema:  schema,
+		CustomFormat: tool.CustomFormat,
 	}
 	if tool.Cache != nil {
 		input.CacheType = tool.Cache.Type
@@ -262,4 +270,60 @@ func ToolCapabilityFingerprint(modelCapabilities []string, wireFormat string) st
 		ModelCapabilities: sortedStrings(modelCapabilities),
 		WireFormat:        wireFormat,
 	})
+}
+
+type toolsPluginPolicyFingerprintView struct {
+	Enabled          bool                         `json:"enabled"`
+	Mode             string                       `json:"mode"`
+	AllowTools       []string                     `json:"allow_tools,omitempty"`
+	BlockTools       []string                     `json:"block_tools,omitempty"`
+	StripToolHistory bool                         `json:"strip_tool_history"`
+	TrustedFacts     *trustedFactsFingerprintView `json:"trusted_facts,omitempty"`
+}
+
+type trustedFactsFingerprintView struct {
+	Enforcement      string   `json:"enforcement"`
+	TrustSources     []string `json:"trust_sources,omitempty"`
+	FreshnessSeconds int      `json:"freshness_seconds"`
+	StageRoles       []string `json:"stage_roles,omitempty"`
+}
+
+type effectiveToolPolicyFingerprintInput struct {
+	Selection       string                            `json:"selection"`
+	FallbackToEmpty bool                              `json:"fallback_to_empty"`
+	ToolsPlugin     *toolsPluginPolicyFingerprintView `json:"tools_plugin,omitempty"`
+}
+
+// EffectiveToolPolicyFingerprint fingerprints the resolved policy a sticky
+// decision applies: selection must already carry its inherited defaults
+// (mode, top_k, thresholds, and merged advanced filtering), fallbackToEmpty
+// is the effective fallback, and toolsPolicy contributes the tools plugin's
+// mode, allow/block lists, history stripping, and trusted-facts declaration.
+// Any change that can alter which tools are eligible or how they are ranked
+// changes the fingerprint; set-valued lists are sorted first.
+func EffectiveToolPolicyFingerprint(selection *config.ToolSelectionPluginConfig, fallbackToEmpty bool, toolsPolicy *config.ToolsPluginConfig) string {
+	input := effectiveToolPolicyFingerprintInput{
+		Selection:       ToolPolicyFingerprint(selection),
+		FallbackToEmpty: fallbackToEmpty,
+	}
+	if toolsPolicy != nil {
+		view := &toolsPluginPolicyFingerprintView{
+			Enabled:          toolsPolicy.Enabled,
+			Mode:             toolsPolicy.EffectiveMode(),
+			AllowTools:       sortedStrings(toolsPolicy.AllowTools),
+			BlockTools:       sortedStrings(toolsPolicy.BlockTools),
+			StripToolHistory: toolsPolicy.StripToolHistory,
+		}
+		if toolsPolicy.TrustedFactsEnabled() {
+			trusted := toolsPolicy.TrustedFacts
+			view.TrustedFacts = &trustedFactsFingerprintView{
+				Enforcement:      trusted.EffectiveEnforcement(),
+				TrustSources:     sortedStrings(trusted.TrustSources),
+				FreshnessSeconds: trusted.FreshnessSeconds,
+				StageRoles:       sortedStrings(trusted.StageRoles),
+			}
+		}
+		input.ToolsPlugin = view
+	}
+	return marshalFingerprint(input)
 }

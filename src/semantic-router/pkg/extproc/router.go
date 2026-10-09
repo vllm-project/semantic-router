@@ -131,6 +131,10 @@ type OpenAIRouter struct {
 	// backend connections. Closed with the rest of the generation resources.
 	WorkflowStateService *looper.WorkflowStateService
 
+	// stickyTools is the generation's sticky tool-set runtime, or nil when no
+	// decision enables sticky selection.
+	stickyTools *stickyToolRuntime
+
 	resources *resourceScope
 }
 
