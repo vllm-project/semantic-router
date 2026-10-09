@@ -151,12 +151,6 @@ class Context:
         activity = CallActivity(
             lambda value: self.store.update_call_activity(call_id, value)
         )
-        session_id = None
-        if role == "subject" and selected.get("session_mode") == SESSION_AWARE:
-            session_id = (
-                "sr-bench-"
-                + digest([self.run_id, self.case["id"], selected["id"]])[:32]
-            )
         call_data = {
             "model": selected["model"],
             "activity": activity.snapshot(),

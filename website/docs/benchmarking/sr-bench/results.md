@@ -48,8 +48,7 @@ targets. Judge and simulator calls never carry the header. Subject call receipts
 retain the value as `session_id`. The Router session policy itself must be
 enabled in its configuration. Preview and replay reports remain `stateless`. To
 compare both modes on the same tasks, include a target of each mode against the
-same Router. Legacy manifests using `router_session_scope: case` are normalized
-to `session_aware` on each MoM subject target.
+same Router.
 
 Subject call receipts include `phase` and `phase_source`. For MoM targets,
 sr-bench requests the Router debug response headers to read its session policy

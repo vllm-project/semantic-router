@@ -308,7 +308,6 @@ def test_session_aware_target_sends_case_stable_session_ids(
         "user_turn",
         "tool_loop",
     ]
-    assert "router_session_scope" not in run["manifest"]
     assert run["manifest"]["targets"][0]["session_mode"] == "session_aware"
     assert {call["session_id"] for call in calls} == set(session_ids)
     assert (
@@ -409,66 +408,6 @@ def test_run_compares_session_modes_without_leaking_to_auxiliary_calls(
         for item in report["benchmarks"]
     }
     assert benchmark_modes == modes
-
-
-@pytest.mark.parametrize(
-    ("updates", "target_kind", "error"),
-    [
-        (
-            {"router_session_scope": 7},
-            "mom",
-            "router_session_scope must be none or case",
-        ),
-        (
-            {"router_session_scope": "task"},
-            "mom",
-            "router_session_scope must be none or case",
-        ),
-        (
-            {"router_session_scope": "case", "mode": "preview"},
-            "mom",
-            "router_session_scope case is only available for live runs",
-        ),
-        (
-            {"router_session_scope": "case"},
-            "single",
-            "router_session_scope case requires MoM subject targets",
-        ),
-    ],
-)
-def test_router_session_scope_rejects_unsupported_inputs(
-    target, updates, target_kind, error
-):
-    document = manifest(target, **updates)
-    document["targets"][0]["kind"] = target_kind
-
-    with pytest.raises(ValueError, match=error):
-        plan(document)
-
-
-def test_legacy_router_session_scope_normalizes_to_target_mode(target):
-    document = manifest(target, router_session_scope="case")
-    document["targets"][0].update(
-        kind="mom", config_hash="fixed", max_inference_calls=1
-    )
-
-    frozen = plan(document)
-
-    assert "router_session_scope" not in frozen
-    assert frozen["targets"][0]["session_mode"] == SESSION_AWARE
-
-
-def test_legacy_router_session_scope_rejects_conflicting_target_mode(target):
-    document = manifest(target, router_session_scope="case")
-    document["targets"][0].update(
-        kind="mom",
-        config_hash="fixed",
-        max_inference_calls=1,
-        session_mode=STATELESS,
-    )
-
-    with pytest.raises(ValueError, match="conflicts with target session_mode"):
-        plan(document)
 
 
 @pytest.mark.parametrize("session_mode", [7, None, [], {}, "per_request"])
