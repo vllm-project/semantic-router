@@ -10,7 +10,10 @@ This is an experimental native algorithm for `choice`, `score`, and `noul` reque
 
 Always using the largest decision model spends its full cost on easy requests.
 A cascade lets early answers stop after an explicit evidence check and sends
-harder requests to another declared model.
+harder requests to another declared model. This guide starts with **Decision 2.0
+Kai 0.6B → Vega 27B**. Kai answers the original request; the cascade checks that
+answer before deciding whether to call Vega. It does not make a separate
+mandatory Kai classification call or rerun the recipe after the first answer.
 
 ## When to Use
 
@@ -30,13 +33,12 @@ providers:
     - name: kai
       api_format: systemone
       deployment: local-kai
-    - name: nox
+    - name: vega
       api_format: systemone
-      provider_model_id: vllm-sr/Decision-2.0-Nox-4B
+      provider_model_id: vllm-sr/Decision-2.0-Vega-27B
       backend_refs:
         - provider: systemone-compatible
           base_url: http://localhost:8900/v1
-          api_key_env: DECISION_BACKEND_TOKEN
 
 global:
   model_catalog:
@@ -44,10 +46,10 @@ global:
       local-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
-        device: cpu
+        device: auto
 ```
 
-`provider_model_id` is the model name sent to the remote endpoint. Credentials stay on the provider binding; they never belong in a learned policy file. Replicas of the same remote model go in its `backend_refs`; different models are separate aliases and stage actions.
+`provider_model_id` is the model name sent to the remote endpoint. If a backend requires authentication, set `api_key_env` on its binding. Credentials stay on that binding; they never belong in a learned policy file. Replicas of the same remote model go in its `backend_refs`; different models are separate aliases and stage actions.
 
 ## Publish an auto entrypoint
 
@@ -56,6 +58,7 @@ An API-scoped entrypoint makes the recipe available as `vllm-sr/auto`. The liste
 ```yaml
 listeners:
   - name: inference
+    address: 127.0.0.1
     port: 8801
     systemone:
       models: [vllm-sr/auto]
@@ -70,30 +73,47 @@ Add client authentication to the listener before exposing it beyond a trusted de
 
 ## Define the cascade
 
-The following fragment accepts `choice` requests. Its probability threshold is illustrative; evaluate it on your own workload before use.
+The following fragment accepts `choice`, `score` and `noul` requests. Kai exits
+early only when every answer passes its type-specific gate. The `0.9` values
+below are illustrative, not recommended or experimentally selected thresholds.
+Choose and freeze them using independent calibration data before evaluating the
+held-out workload.
 
 ```yaml
 recipes:
   - name: native-cascade
     routing:
-      budget: {deadline: 3s, max_calls: 3}
+      budget: {deadline: 10s, max_calls: 2}
       decisions:
-        - name: classify
+        - name: answer
           rules: {}
-          modelRefs: [{model: kai}, {model: nox}]
+          modelRefs: [{model: kai}, {model: vega}]
           algorithm:
             type: cascade
             quality:
               type: uncalibrated
               acceptance:
                 rules:
-                  - question_type: choice
-                    field: top_probability
-                    predicate: {gte: 0.9}
+                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
             stages:
-              - {name: fast, kind: native, model: kai}
-              - {name: strong, kind: native, model: nox, timeout: 1s}
+              - name: fast
+                kind: native
+                model: kai
+                accept:
+                  rules:
+                    - {question_type: choice, field: top_probability, predicate: {gte: 0.9}}
+                    - {question_type: score, field: top_probability, predicate: {gte: 0.9}}
+                    - {question_type: noul, field: top_probability, predicate: {gte: 0.9}}
+              - {name: strong, kind: native, model: vega}
 ```
+
+The common `gte: 0` rules require a valid distribution for every answer; they
+do not claim an accuracy floor. Vega can return a complete valid answer after
+Kai fails its stricter early-exit gate. This sample has no model-backed routing
+signals, so its two-call budget covers Kai and, when needed, Vega. If a transport
+retry consumes a call, fewer calls remain for later stages.
 
 `modelRefs` is the complete candidate roster. Each stage names one member and can set its own timeout. Stage names cannot use `abstain`, which is reserved for the judge’s no-selection result. A stage cannot add a model that the decision did not declare. The shared deadline and call limit cover this Router's physical inference exchanges, including model-backed signals and transport retries; advancing a stage does not reset either limit. Internal work behind an opaque external provider is not visible to this call ledger.
 
@@ -101,8 +121,14 @@ The Router validates every required answer before accepting a response. Missing 
 
 ## Try the route
 
-After starting the Router with this configuration, send a request to its native
-endpoint. The question names and criteria reach each attempted model unchanged.
+Combine the model, listener, entrypoint and recipe snippets in a configuration
+file with `version: v0.3`, connect the Vega Engine endpoint, and start the Router:
+
+```bash
+vllm-sr serve --config config.yaml
+```
+
+Then send a request to its native endpoint. The question names and criteria reach each attempted model unchanged.
 Use your listener's API key if authentication is enabled.
 
 ```bash
@@ -201,7 +227,7 @@ stages:
         - {question_type: choice, field: top_probability, predicate: {gte: 0.9}}
   - name: strong
     kind: native
-    model: nox
+    model: vega
     accept:
       rules:
         - {question_type: choice, field: top_probability, predicate: {gte: 0.9}}

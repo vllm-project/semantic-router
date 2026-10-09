@@ -1,2 +1,0 @@
-# Optional publication figures; use Python 3.11 or newer.
-matplotlib==3.11.2

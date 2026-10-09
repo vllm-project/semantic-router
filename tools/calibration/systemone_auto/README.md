@@ -1,4 +1,112 @@
-# System One auto research pilot
+# System One auto evaluation
+
+## First delivery: Kai → Vega
+
+The first delivery evaluates one authored cascade: **Decision 2.0 Kai 0.6B
+answers the original System One request; Vega 27B answers the same request only
+when Kai does not pass the configured early-exit gate.** It does not call Kai
+again to classify the task, and it does not call an LLM.
+
+Use the [cascade guide](../../../website/docs/tutorials/algorithm/native/cascade.md)
+for the native provider bindings, explicit entrypoint, and two-call request
+budget. Its thresholds are illustrative: choose per-type gates using independent
+calibration data, freeze the configuration, and then evaluate the held-out
+requests. Every required answer must pass the gate for its question type; the
+common rule requires valid native probability evidence. Do not tune thresholds
+on the public suite after inspecting its labels or errors.
+
+The initial quality–cost target remains an experiment, not a claimed result.
+Compare direct Kai, direct Vega and the cascade on the same requests. Report
+unresolved/error coverage, escalation and physical calls alongside quality,
+runtime compute and measured frontend latency. Compute milliseconds are not
+GPU-active time or a dollar price.
+
+### Run the pinned JevBench public suite
+
+The publicly runnable reference is [JevBench commit
+`b6b8fff7e345b98c060ad26c13308860ddc67004`](https://github.com/fstandhartinger/jevbench/tree/b6b8fff7e345b98c060ad26c13308860ddc67004).
+Its `easy`, `original` and `hard` files contain **231 items from 195 source
+groups: 139 Choice, 74 Noul and 18 Score**. This is a public-suite evaluation;
+it is **not** the full official v1.6.1 Intelligence, Capability or Composite
+leaderboard score.
+
+For a comparison through one local Router, explicitly publish the three native
+aliases in the sample listener:
+
+```yaml
+systemone:
+  models: [vllm-sr/auto, kai, vega]
+```
+
+`kai` and `vega` resolve directly to the two provider bindings; only
+`vllm-sr/auto` runs the cascade. The sample listener binds to loopback. Use its
+configured authentication when connecting elsewhere.
+
+Start the configured Router and both model runtimes, then check out the exact
+benchmark source. Its native adapter uses Python's standard library:
+
+```bash
+git clone https://github.com/fstandhartinger/jevbench.git
+git -C jevbench checkout --detach b6b8fff7e345b98c060ad26c13308860ddc67004
+cd jevbench
+
+python3 -m jevbench.cli run \
+  --tasks datasets/public/easy.jsonl,datasets/public/original.jsonl,datasets/public/hard.jsonl \
+  --adapter typesafe \
+  --endpoint http://127.0.0.1:8801 \
+  --model vllm-sr/auto \
+  --key-env '' \
+  --results ../jevbench-auto-run/results.jsonl \
+  --raw-dir ../jevbench-auto-run/raw \
+  --ledger ../jevbench-auto-run/ledger.jsonl \
+  --manifest ../jevbench-auto-run/manifest.json \
+  --run-label kai-to-vega-public-suite \
+  --cost-basis self_hosted_compute_not_priced \
+  --cap-usd 15
+
+python3 -m jevbench.cli summarize \
+  --tasks datasets/public/easy.jsonl,datasets/public/original.jsonl,datasets/public/hard.jsonl \
+  --results ../jevbench-auto-run/results.jsonl \
+  --public-export ../jevbench-auto-run/summary.json
+```
+
+For the direct controls, repeat `run` with `--model kai` or `--model vega`, a
+matching run label, and a fresh output directory for each. Run `summarize` on
+each matching results file. Keep the same request files and serving settings. For a protected listener,
+replace `--key-env ''` with `--key-env JEVBENCH_API_KEY` and supply that variable
+outside the command. The endpoint is a base URL; the adapter appends
+`/v1/systemone`.
+
+The upstream `--cap-usd` controls its reservation ledger. With no model tariff,
+`cost_usd` remains unknown; neither the reservation nor an unknown cost is a
+measured GPU cost. The runner can stop on access/rate-limit failures or repeated
+infrastructure failures. Confirm the planned 231 requests are accounted for
+before presenting a complete-suite result; label an early stop incomplete and
+keep unresolved requests in the intended denominator.
+
+The unchanged [native adapter](https://github.com/fstandhartinger/jevbench/blob/b6b8fff7e345b98c060ad26c13308860ddc67004/jevbench/adapters/typesafe.py)
+and [upstream scorer](https://github.com/fstandhartinger/jevbench/blob/b6b8fff7e345b98c060ad26c13308860ddc67004/jevbench/scoring.py)
+consume Choice/Score probability maps and map Noul to `{yes: p, no: 1-p}`.
+Exact-label Score accuracy uses the modal level, which differs from rounding
+the API's expected Score. Preserve those scoring semantics and report the
+expected-value metric separately.
+
+This stock CLI path does not request `options.return_meta` or
+`require_full_input`, and its `--request-options` flag is not consumed by the
+TypeSafe adapter. Controlled collection must declare those additions when
+collecting immutable runtime identity and rejecting hidden input truncation,
+then pass its raw answers through the unchanged upstream scorer. Do not present
+the stock command as bit-identical to a controlled acquisition with extra
+options. Keep the frozen request mapping, model identities, configuration and
+measurement method with each experiment's receipts.
+
+## Separate exploratory pilot and follow-up tools
+
+The commands below describe the earlier Banking77/BoolQ/DynaSent pilot and
+optional learned-policy or LLM experiments. They do **not** reproduce the
+231-item JevBench evaluation and are not requirements or completed results for
+the first Kai → Vega delivery. Internal Kai signals selecting Nox/Vega paths
+(B) and Qwen3.8-Flash-Next experiments (C) follow the first PR and Blog.
 
 Compare an authored confidence cascade with a learned escalation policy on the
 same independently labelled requests. Every request starts with Decision 2.0
@@ -161,7 +269,7 @@ failure accounting, grouped partitions and held-out-label isolation. The shared
 `tests/fixtures/native-features.json` fixture keeps Python training features and
 Go serving features consistent.
 
-## Measure an actual terminal judge
+## Follow-up: measure an actual terminal judge
 
 A direct Qwen answer is not evidence for a judge that reviews native answers.
 Keep those experiments in separate collections. Generate label-free JSONL inputs

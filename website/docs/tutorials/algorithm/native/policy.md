@@ -22,21 +22,12 @@ adaptation improves your actual quality and cost tradeoff.
 
 ### Keep one execution contract
 
-Start with the [cascade configuration](./cascade.md). Replace its algorithm type and add an immutable policy artifact:
+Start with the [cascade configuration](./cascade.md). Keep its `quality`, `stages`, model aliases and budget unchanged. Change `algorithm.type` and add the following `policy` block to that same algorithm:
 
 ```yaml
 algorithm:
   type: policy
-  quality:
-    type: uncalibrated
-    acceptance:
-      rules:
-        - question_type: choice
-          field: top_probability
-          predicate: {gte: 0.9}
-  stages:
-    - {name: fast, kind: native, model: kai}
-    - {name: strong, kind: native, model: nox}
+  # Keep the cascade's quality and stages here.
   policy:
     source: ./policies/predicted-gain.json
     sha256: "0000000000000000000000000000000000000000000000000000000000000000"
@@ -47,7 +38,7 @@ The all-zero digest is a placeholder. Replace the path and digest with the exact
 
 The policy can only select enabled actions already declared in `stages`. It cannot add an endpoint, provide credentials, change the model roster, enlarge the call budget or weaken the common quality rule. Each stage runs at most once per request.
 
-`cost_weight` penalizes an action's measured mean execution cost in milliseconds when comparing predicted quality gains. The artifact's `cost_metric` distinguishes runtime compute time from client elapsed time. Zero favors predicted gain alone. Choose the operating point using calibration data, then report its quality and realized cost on held-out requests. This parameter is not a currency price or a latency service-level guarantee.
+`cost_weight` penalizes an action's measured mean execution cost in milliseconds when comparing predicted quality gains. The artifact's `training.cost_metric` distinguishes runtime compute time from client elapsed time. Zero favors predicted gain alone. Choose the operating point using calibration data, then report its quality and realized cost on held-out requests. This parameter is not a currency price or a latency service-level guarantee.
 
 An optional judge belongs at the end of the stages list. It is an authored fallback, rather than a learned action: when no native answer passes and the policy has no further native action, the executor can invoke this judge once within the remaining budget.
 
