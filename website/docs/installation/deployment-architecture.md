@@ -12,13 +12,16 @@ contract those pieces follow. Installation guides show how to run each
 stack; [Deployment Support](support-matrix) states which stacks the project
 maintains and what evidence backs each claim; this page defines the
 responsibilities, ownership, and versioning rules that keep the stacks
-from drifting into incompatible variants.
+from drifting into incompatible variants. How the serving path itself
+composes — frontend, decision engine, and model runtime — is covered in
+[Component Architecture](../overview/component-architecture).
 
 ## Components and responsibilities
 
 | Component | Owns | Does not own |
 | --- | --- | --- |
 | Router | Routing decisions, the canonical configuration document, configuration validation and activation, its inference and management listeners | Model serving, backend lifecycle, gateway traffic policy |
+| Model runtime | Serving the Router's own decision, classifier, embedding, and reranking models, as managed or attached deployments | Chat/generation backends — those remain external providers reached through canonical backend references |
 | CLI (`vllm-sr`) | The local Docker stack, local configuration files, host-side preflight | Cluster resources; it is not a Kubernetes installer |
 | Dashboard | Editing and submitting canonical configuration through the Router/CLI management surfaces | The configuration schema — it renders the generated contract and never maintains a copy |
 | Helm chart (Router) | The Router workload, Service, ConfigMap-seeded configuration, the `IntelligentPool`/`IntelligentRoute` CRDs, optional Dashboard and observability resources | Gateways, storage classes, and model servers, which stay external |
