@@ -89,30 +89,43 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	outcome := llmprotocol.EvaluateTrustedFacts(facts)
 	r.recordTrustedFactsOutcome(ctx, toolsCfg, facts, outcome)
 	switch outcome {
-	case llmprotocol.TrustedDeny:
-		// Responses hosted image_generation lives outside Request.Tools, so
-		// deny clears it too; its forced tool_choice then falls to the
-		// no-tools cleanup below.
+	case llmprotocol.TrustedDeny, llmprotocol.TrustedNarrow:
+		restrictToolsForTrustedOutcome(request, ctx, toolsCfg, outcome)
+		return true
+	default:
+		return false
+	}
+}
+
+// restrictToolsForTrustedOutcome enforces deny or narrow on top of the
+// decision's configured tools policy, never in place of it. The gate returns
+// before ordinary mode handling, so mode none strips here exactly what it
+// strips when the gate allows: missing or stale availability evidence cannot
+// keep tools the operator disabled. Deny then drops every remaining tool,
+// including the Responses hosted image_generation tool that lives outside
+// Request.Tools; its forced tool_choice falls to the no-tools cleanup. Narrow
+// keeps only explicitly policy-filtered tools with no retrieval expansion.
+func restrictToolsForTrustedOutcome(request *llmprotocol.Request, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, outcome llmprotocol.TrustedOutcome) {
+	modeNone := toolsCfg.EffectiveMode() == config.ToolsPluginModeNone
+	if modeNone {
+		stripToolsForModeNone(request, ctx, toolsCfg)
+	}
+	switch {
+	case outcome == llmprotocol.TrustedDeny:
 		if len(request.Tools) > 0 || request.ImageGeneration != nil {
 			request.Tools = nil
 			request.ImageGeneration = nil
 			request.Generation++
 		}
-		clearSemanticToolChoiceWhenNoTools(request)
-		_ = commitToolSelection(request, ctx)
-		return true
-	case llmprotocol.TrustedNarrow:
+	case !modeNone:
 		filtered := filterToolsByDecisionPolicy(request.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
 		if len(filtered) != len(request.Tools) {
 			request.Generation++
 		}
 		request.Tools = filtered
-		clearSemanticToolChoiceWhenNoTools(request)
-		_ = commitToolSelection(request, ctx)
-		return true
-	default:
-		return false
 	}
+	clearSemanticToolChoiceWhenNoTools(request)
+	_ = commitToolSelection(request, ctx)
 }
 
 // trustedFactsToolsAvailable reports bounded runtime availability evidence:

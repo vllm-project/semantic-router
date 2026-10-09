@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 // runTrustedFactsLooper executes a tool-bearing confidence Looper decision,
@@ -21,6 +22,19 @@ import (
 // returns how many upstream model calls carried tools. Confidence forwards the
 // original tools to its models, unlike ratings or ReMoM which strip them.
 func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.TrustedOutcome) (calls, callsWithTools int) {
+	t.Helper()
+	toolsCfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+		Enabled:      true,
+		Enforcement:  config.TrustedEnforcementAuthoritative,
+		TrustSources: []string{config.TrustedSourceOperatorPolicy},
+		StageRoles:   stageRoles,
+	})
+	return runTrustedFactsLooperWith(t, toolsCfg, loadedTrustedFactsToolsDB(t), want)
+}
+
+// runTrustedFactsLooperWith runs the Looper fixture with an explicit tools
+// policy and tools database, so availability controls can be compared.
+func runTrustedFactsLooperWith(t *testing.T, toolsCfg *config.ToolsPluginConfig, db *tools.ToolsDatabase, want llmprotocol.TrustedOutcome) (calls, callsWithTools int) {
 	t.Helper()
 	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,12 +59,6 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.T
 	}))
 	defer server.Close()
 
-	toolsCfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
-		Enabled:      true,
-		Enforcement:  config.TrustedEnforcementAuthoritative,
-		TrustSources: []string{config.TrustedSourceOperatorPolicy},
-		StageRoles:   stageRoles,
-	})
 	decision := &config.Decision{
 		Name:      "trusted-looper",
 		ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
@@ -60,7 +68,7 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.T
 	router := &OpenAIRouter{
 		Config:         &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}},
 		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
-		ToolsDatabase:  loadedTrustedFactsToolsDB(t),
+		ToolsDatabase:  db,
 	}
 	replayConfig := config.DefaultRouterReplayPluginConfig()
 	request := trustedFactsTestRequest()
@@ -98,5 +106,27 @@ func TestHandleLooperExecutionTrustedFactsAllowsAuthorizedFinalStage(t *testing.
 	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageFinal}, llmprotocol.TrustedAllow)
 	if calls == 0 || withTools != calls {
 		t.Fatalf("authorized final stage must keep tools, %d/%d calls carried tools", withTools, calls)
+	}
+}
+
+// Looper binds tools at the final stage. When availability evidence is missing
+// or stale, narrow must still apply mode none before any Looper model sees the
+// request.
+func TestHandleLooperExecutionTrustedFactsNarrowKeepsModeNone(t *testing.T) {
+	for _, control := range trustedModeNoneAvailabilityControls() {
+		if control.want != llmprotocol.TrustedNarrow {
+			continue
+		}
+		t.Run(control.name, func(t *testing.T) {
+			toolsCfg := trustedModeNoneConfig(false)
+			toolsCfg.TrustedFacts.StageRoles = []string{config.TrustedStageFinal}
+			calls, withTools := runTrustedFactsLooperWith(t, toolsCfg, control.apply(t), llmprotocol.TrustedNarrow)
+			if calls == 0 {
+				t.Fatal("Looper made no upstream calls")
+			}
+			if withTools != 0 {
+				t.Fatalf("mode none must hold when availability narrows, %d/%d calls carried tools", withTools, calls)
+			}
+		})
 	}
 }
