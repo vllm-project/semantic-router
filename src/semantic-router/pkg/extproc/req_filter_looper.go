@@ -82,7 +82,7 @@ func (r *OpenAIRouter) looperConstructionFailed(
 	err error,
 ) *ext_proc.ProcessingResponse {
 	r.logLooperConstructionFailure(decision, reqCtx, err)
-	return r.createErrorResponse(500, "Looper construction failed: "+err.Error())
+	return r.createErrorResponse(500, "Looper construction failed.")
 }
 
 func (r *OpenAIRouter) logLooperConstructionFailure(decision *config.Decision, reqCtx *RequestContext, err error) {
