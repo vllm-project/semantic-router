@@ -37,7 +37,7 @@ providers:
           protocol: http
 ```
 
-In the Dashboard, open **Build → Models → Add Model**, select the Provider, and
+In the Dashboard, open **Build → Routing → Models → Add Model**, select the Provider, and
 choose **Advanced settings → Reasoning family**. The **Built-in Reasoning
 Families** table on the Models page shows the available IDs and their native
 parameters.

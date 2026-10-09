@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 999
 title: FAQ
 description: What vLLM Semantic Router is, how it differs from llm-d and AI gateways, how to measure routing value, and how to debug a bad route.
 ---
@@ -8,13 +8,46 @@ description: What vLLM Semantic Router is, how it differs from llm-d and AI gate
 
 ## Is it an AI gateway, or something else?
 
-It is a decision layer for model calls. It selects models or bounded multi-model
-workflows from request signals and policy; the gateway handles transport. Envoy
-applies the decisions through ExtProc. TLS termination, provider load balancing,
-and Pod scheduling stay outside the Router.
+It combines a frontend, an optional Decision Engine, and a model runtime. The
+frontend accepts requests; the Decision Engine selects models or bounded
+multi-model workflows from signals and policy. The default standalone gateway
+forwards requests itself. Use `--gateway extproc` to integrate with Envoy.
 
-See [System Overview](overview/semantic-router-overview) for the architecture and
+The model runtime serves the Router's own judgments, embeddings, and other model
+tasks. Chat backends run independently. TLS termination and cluster-wide Pod
+scheduling remain deployment responsibilities.
+
+See [Component Architecture](overview/component-architecture) for the architecture and
 [Mixture of Models](overview/mom-model-family) for multi-model execution.
+
+## When should I use Router or Engine mode?
+
+Use Router when you want recipes to select or combine Chat backends. Use Engine
+when your application only needs native judgments and you do not need Chat
+backends or a routing recipe:
+
+```bash
+# Router: the positional model supplies routing judgments
+vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+
+# Engine: the same frontend and runtime, without Chat routing
+vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+```
+
+`serve` defaults to Router; a positional model does not change the mode.
+`--engine` also has the short form `-e`. Mode is chosen at startup. The Dashboard
+manages model deployments and tasks in either mode.
+
+## Can Router also expose System One?
+
+Yes. Publish the native model through the listener's `systemone.models`
+grant and call `/v1/systemone`. `/v1/decisions` is an alias. Native model discovery
+uses `/v1/systemone/models`; Chat model discovery uses `/v1/models`.
+
+Current System One requests name a concrete served model. Automatic native
+routing through `vllm-sr/auto` is a roadmap item; the default Chat entrypoint
+already uses that name. See the [System One guide](model-runtime/guides/decisions)
+and [Quickstart](model-runtime/quickstart) for complete requests and access rules.
 
 ## How does it work with an agent harness?
 
@@ -44,11 +77,15 @@ Because the two systems answer different questions.
 | --- | --- | --- |
 | Decides | which logical model or **pool** — *what* | which healthy **replica** inside that pool — *which / how / where* |
 | Reads | request content, policy, semantic evidence | load, prefix-cache locality, replica health |
-| Layer | control-plane decision | scheduling and placement |
+| Layer | request-time model selection | scheduling and placement |
 
 llm-d should not decide business policy, and Semantic Router is not meant to choose a Pod. The project states the rule directly: *"Do not configure both systems to make the same decision."*
 
 The [llm-d integration guide](installation/k8s/llm-d) states this boundary in its deployment context.
+
+The Router's own Serving Engine also dispatches requests among replicas of its
+task models. Those runtime pools are separate from an external Chat backend's
+llm-d scheduling.
 
 ## How do we avoid conflicts with llm-d?
 
@@ -81,7 +118,7 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 1. **Preview before you generate.** `vllm-sr route preview` evaluates signals, projections and the decision without calling a backend, and reports the trace evidence.
 2. **Read the provenance.** Learning-enabled preview exposes `selection_provenance`, including the config and state identity and the sampling seed.
-3. **Then probe for real.** `vllm-sr route probe` sends an actual request through Envoy — but a successful HTTP status is not sufficient: check `response.body.delivery` and the final assistant output, because empty output, reasoning-only output and `finish_reason: length` all fail delivery.
+3. **Then probe for real.** `vllm-sr route probe` sends an actual request through the configured inference listener. Check `response.body.delivery` and the final assistant output as well as HTTP status: empty output, reasoning-only output and `finish_reason: length` all fail delivery.
 4. **Check the UI path separately.** Exercise the same entrypoint in the Dashboard and report API-only coverage apart from UI coverage.
 
 Delivery, route correctness and answer quality are three separate outcomes; qualify the ones you did not measure instead of inferring success.
