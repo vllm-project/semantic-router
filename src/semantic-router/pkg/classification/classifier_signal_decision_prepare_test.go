@@ -21,6 +21,10 @@ func (s *cardServices) Card(_ context.Context, deployment string) (modelservice.
 	return s.card, nil
 }
 
+func (s *cardServices) CurrentCard(string) (modelservice.ModelCard, bool) {
+	return s.card, true
+}
+
 func (s *cardServices) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
 	return modelservice.ClassifyResponse{}, nil
 }

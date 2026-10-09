@@ -136,6 +136,39 @@ func (l *Lease) Card(ctx context.Context, deployment string) (ModelCard, error) 
 	return m.group.waitCard(ctx, m.served.name)
 }
 
+// CurrentCard reads ready metadata already observed by this generation's
+// workers. It performs no discovery, waiting or network I/O. A closed lease or
+// a deployment without a compatible ready worker has no current card. Returned
+// metadata is immutable: callers must not change its nested slices or pointers.
+func (l *Lease) CurrentCard(deployment string) (ModelCard, bool) {
+	if l == nil {
+		return ModelCard{}, false
+	}
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	m, ok := l.members[deployment]
+	if !ok || l.closed {
+		return ModelCard{}, false
+	}
+	if m.pool != nil {
+		ready, _ := m.pool.readyWorkers()
+		if len(ready) == 0 {
+			return ModelCard{}, false
+		}
+		m.pool.mu.Lock()
+		card := *m.pool.baseline
+		m.pool.mu.Unlock()
+		card.ID, card.Ready, card.Status = deployment, true, "ready"
+		return card, true
+	}
+	m.group.mu.Lock()
+	defer m.group.mu.Unlock()
+	if !m.served.ready.Load() || m.served.card == nil {
+		return ModelCard{}, false
+	}
+	return *m.served.card, true
+}
+
 // WaitManaged waits until every Router-managed deployment of the lease is
 // ready. It returns at once when one cannot become ready, for the reasons Card
 // gives, and when ctx ends; a ctx without a deadline waits up to ReadyTimeout.

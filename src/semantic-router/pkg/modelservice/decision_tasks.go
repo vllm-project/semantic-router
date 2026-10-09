@@ -61,16 +61,26 @@ type TaskResult struct {
 	Implementation string
 }
 
+// PrepareTaskQuestion applies the task's input contract and checks requirements
+// independent of model availability. Compilation still checks model support.
+func PrepareTaskQuestion(definition TaskDefinition, question Question) (Question, error) {
+	question.RequireFullInput = question.RequireFullInput || definition.FullInput
+	if question.RequireFullInput && question.Truncate {
+		return question, fmt.Errorf("%w: task %s cannot require complete input and truncate it", ErrRejected, definition.ID)
+	}
+	if question.ID == "" {
+		return question, fmt.Errorf("%w: task %s requires a question ID", ErrRejected, definition.ID)
+	}
+	return question, nil
+}
+
 // CompileTask selects an implemented output adapter from the actual card.
 // Family and training ancestry intentionally do not participate in admission.
 func CompileTask(definition TaskDefinition, question Question, card ModelCard) (TaskPlan, error) {
-	question.RequireFullInput = question.RequireFullInput || definition.FullInput
+	question, err := PrepareTaskQuestion(definition, question)
 	plan := TaskPlan{Definition: definition, Question: question, Implementation: "native"}
-	if question.RequireFullInput && question.Truncate {
-		return plan, fmt.Errorf("%w: task %s cannot require complete input and truncate it", ErrRejected, definition.ID)
-	}
-	if question.ID == "" {
-		return plan, fmt.Errorf("%w: task %s requires a question ID", ErrRejected, definition.ID)
+	if err != nil {
+		return plan, err
 	}
 	if question.Preset != "" {
 		if !card.HasPreset(question.Preset) {

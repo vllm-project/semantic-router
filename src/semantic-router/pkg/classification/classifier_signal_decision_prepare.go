@@ -34,10 +34,18 @@ func (c *Classifier) prepareDecisionSignals() error {
 		name, deployment := c.decisionRuleDeployment(rule)
 		card, checked := cards[name]
 		if !checked {
-			var err error
-			card, err = c.models.runtime.DeploymentCard(context.Background(), name, deployment)
-			if err != nil {
-				return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
+			if deployment.Managed() {
+				var err error
+				card, err = c.models.runtime.DeploymentCard(context.Background(), name, deployment)
+				if err != nil {
+					return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
+				}
+			} else if observed, ready := c.models.runtime.CurrentDeploymentCard(name); ready {
+				card = observed
+			} else {
+				// Its watcher owns discovery. Requests remain unknown until a
+				// ready card can compile this same question.
+				continue
 			}
 			cards[name] = card
 		}
@@ -59,9 +67,12 @@ func (c *Classifier) decisionRuleDeployment(rule config.DecisionSignalRule) (str
 	return name, deployment
 }
 
-// decisionTaskCard reads this generation's prepared metadata. Request-time
-// execution never waits for model discovery or another generation.
+// decisionTaskCard reads prepared managed metadata or this generation's current
+// attached observation. Request-time execution never discovers a model.
 func (c *Classifier) decisionTaskCard(deployment string) (modelservice.ModelCard, bool) {
+	if c.models != nil && c.models.runtime != nil && !c.Config.ModelDeployments[deployment].Managed() {
+		return c.models.runtime.CurrentDeploymentCard(deployment)
+	}
 	card, ok := c.decisionCards[deployment]
 	return card, ok
 }

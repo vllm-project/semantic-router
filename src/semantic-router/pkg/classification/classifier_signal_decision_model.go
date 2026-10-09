@@ -91,6 +91,8 @@ func (c *Classifier) evaluateDecisionDeployment(
 	var err error
 	if card, ok := c.decisionTaskCard(deployment); ok {
 		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
+	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+		err = modelservice.ErrUnavailable
 	} else {
 		response, err = c.decider().Decide(callCtx, deployment, request)
 	}

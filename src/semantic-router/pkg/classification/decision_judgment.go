@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -16,6 +17,7 @@ type decisionJudgment struct {
 	deployment string
 	decider    modelservice.Decider
 	card       modelservice.ModelCard
+	attached   *serving.Runtime
 	plan       modelservice.TaskPlan
 	scan       int
 }
@@ -29,27 +31,44 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 		return nil, nil
 	}
 	name, deployment, ok, err := models.cfg.DecisionModelDeployment()
+	generic := false
 	if spec, explicit := models.plan.Lookup(models.recipe, consumer); explicit {
 		if !spec.Deployment.IsModelRuntime() || spec.Binding.Head != "" || spec.Binding.OperatingPoint != nil {
 			return nil, nil
 		}
 		name, deployment, ok, err = spec.Binding.Deployment, spec.Deployment, true, nil
+		generic = spec.Binding.Contract == config.DecisionTaskContract
 	} else if selected, resource, found, resolveErr := models.cfg.ImplicitTaskDeployment(consumer); found {
 		name, deployment, ok, err = selected, resource, found, resolveErr
 	}
 	if !ok || err != nil {
 		return nil, err
 	}
-	card, err := models.runtime.DeploymentCard(context.Background(), name, deployment)
-	if err != nil {
-		return nil, err
+	j := &decisionJudgment{deployment: name, decider: decider, scan: deployment.ScanBudget()}
+	card, ready := modelservice.ModelCard{}, false
+	// Explicit generic tasks have a model-independent adapter. Implicit and
+	// native bindings still require metadata to select their precise adapter;
+	// readiness must not silently choose between PII verdicts and token spans.
+	if generic && !deployment.Managed() {
+		j.attached = models.runtime
+		card, ready = models.runtime.CurrentDeploymentCard(name)
+	} else {
+		card, err = models.runtime.DeploymentCard(context.Background(), name, deployment)
+		if err != nil {
+			return nil, err
+		}
+		ready = true
 	}
-	if !card.Serves("decisions") {
+	j.card = card
+	if ready && !card.Serves("decisions") {
+		if generic {
+			return nil, fmt.Errorf("%w: deployment %q does not serve decisions required by %s", modelservice.ErrRejected, name, consumer)
+		}
 		return nil, nil
 	}
 	// A precise specialist may support only Span. Keep its existing adapter
 	// unless the author explicitly selected the generic verdict contract.
-	if !card.Answers("noul") && (taskID == "pii_presence" || taskID == "hallucination") {
+	if ready && !card.Answers("noul") && (taskID == "pii_presence" || taskID == "hallucination") {
 		spec, explicit := models.plan.Lookup(models.recipe, consumer)
 		if (!explicit || spec.Binding.Contract != config.DecisionTaskContract) && (card.Answers("span") || card.HasPreset("pii") || card.HasPreset("halu")) {
 			return nil, nil
@@ -68,16 +87,15 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 		}
 	}
 	q.ID = questionID
-	plan, err := modelservice.CompileTask(definition, q, card)
+	j.plan, err = j.preparePlan(definition, q)
 	if err != nil {
 		return nil, err
 	}
-	return &decisionJudgment{deployment: name, decider: decider, card: card, plan: plan, scan: deployment.ScanBudget()}, nil
+	return j, nil
 }
 
 func (j *decisionJudgment) ask(ctx context.Context, input modelservice.Request) (modelservice.Answer, error) {
-	input.MaxTokens = j.scan
-	response, _, err := modelservice.ExecuteTaskPlans(ctx, j.decider, j.deployment, input, []modelservice.TaskPlan{j.plan})
+	response, err := j.askPlans(ctx, input, []modelservice.TaskPlan{j.plan})
 	if err != nil {
 		return modelservice.Answer{}, err
 	}
@@ -86,6 +104,43 @@ func (j *decisionJudgment) ask(ctx context.Context, input modelservice.Request) 
 		return answer, decisionAnswerError(answer.Error)
 	}
 	return answer, nil
+}
+
+// preparePlan preserves model-independent input checks while an attached
+// service is offline. Its template is compiled against a ready card before
+// execution; it is never sent as an uncompiled native question.
+func (j *decisionJudgment) preparePlan(definition modelservice.TaskDefinition, question modelservice.Question) (modelservice.TaskPlan, error) {
+	card := j.card
+	if j.attached != nil {
+		var ready bool
+		card, ready = j.attached.CurrentDeploymentCard(j.deployment)
+		if !ready {
+			q, err := modelservice.PrepareTaskQuestion(definition, question)
+			return modelservice.TaskPlan{Definition: definition, Question: q}, err
+		}
+	}
+	return modelservice.CompileTask(definition, question, card)
+}
+
+func (j *decisionJudgment) askPlans(ctx context.Context, input modelservice.Request, plans []modelservice.TaskPlan) (modelservice.Response, error) {
+	if j.attached != nil {
+		card, ready := j.attached.CurrentDeploymentCard(j.deployment)
+		if !ready {
+			return modelservice.Response{}, modelservice.ErrUnavailable
+		}
+		compiled := make([]modelservice.TaskPlan, len(plans))
+		for i, plan := range plans {
+			var err error
+			compiled[i], err = modelservice.CompileTask(plan.Definition, plan.Question, card)
+			if err != nil {
+				return modelservice.Response{}, err
+			}
+		}
+		plans = compiled
+	}
+	input.MaxTokens = j.scan
+	response, _, err := modelservice.ExecuteTaskPlans(ctx, j.decider, j.deployment, input, plans)
+	return response, err
 }
 
 func explicitSpanBinding(models *classifierModelRuntime, consumer string) bool {

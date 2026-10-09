@@ -30,6 +30,13 @@ func (d *recordingDecider) Card(ctx context.Context, _ string) (modelservice.Mod
 	return modelservice.ModelCard{Surfaces: []string{"decisions"}, QuestionTypes: []string{"choice"}}, nil
 }
 
+func (d *recordingDecider) CurrentCard(string) (modelservice.ModelCard, bool) {
+	if d.card != nil {
+		return *d.card, true
+	}
+	return modelservice.ModelCard{Surfaces: []string{"decisions"}, QuestionTypes: []string{"choice"}}, true
+}
+
 func (d *recordingDecider) Decide(_ context.Context, deployment string, request modelservice.Request) (modelservice.Response, error) {
 	d.deployments = append(d.deployments, deployment)
 	d.requests = append(d.requests, request)

@@ -46,7 +46,7 @@ func prepareDecisionComplexity(models *classifierModelRuntime, rules []config.Co
 		}
 		question = judgment.plan.Question
 		question.ID += ":" + rule.Name
-		judgment.plan, err = modelservice.CompileTask(judgment.plan.Definition, question, judgment.card)
+		judgment.plan, err = judgment.preparePlan(judgment.plan.Definition, question)
 		if err != nil {
 			return nil, err
 		}

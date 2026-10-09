@@ -34,7 +34,7 @@ type privacyJudgmentResult struct {
 }
 
 func (b *decisionPIIBackend) judge(ctx context.Context, text string) privacyJudgmentResult {
-	response, _, err := modelservice.ExecuteTaskPlans(ctx, b.judgment.decider, b.judgment.deployment,
+	response, err := b.judgment.askPlans(ctx,
 		modelservice.Request{State: text, MaxTokens: b.judgment.scan}, []modelservice.TaskPlan{b.judgment.plan, b.categories})
 	if err != nil {
 		return privacyJudgmentResult{err: err}
@@ -78,7 +78,7 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 	definition, _ := modelservice.BuiltinTask("pii_categories")
 	question := definition.Question
 	question.ID = "pii_classifier:categories"
-	plan, err := modelservice.CompileTask(definition, question, judgment.card)
+	plan, err := judgment.preparePlan(definition, question)
 	if err != nil {
 		return nil, err
 	}
