@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 translation:
-  source_commit: "b45450dfed60bc09e45f595278fe1ab8e0e3ee97"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/community/development.md"
   outdated: false
 ---
@@ -42,7 +42,7 @@ CLI 会推导出相同 tag 的官方控制面板镜像；`--image-pull-policy ne
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy -f
+vllm-sr logs envoy -f  # --gateway extproc only
 vllm-sr dashboard
 vllm-sr stop
 ```
@@ -130,7 +130,7 @@ curl -sS http://localhost:8899/v1/chat/completions \
 ## 调试
 
 - 先用 `vllm-sr logs <service>` 看组件日志，再依赖容器名。
-- 原生库诊断设 `RUST_LOG=debug`。
+- 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/troubleshooting.md)。
 - Router 诊断设 `SR_LOG_LEVEL=debug`。
 - 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
 - 启动和网络失败见[常见错误](/zh-Hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-Hans/docs/troubleshooting/container-connectivity)。

@@ -66,9 +66,10 @@ spec:
       timeout_sec: 30
 ```
 
-The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
-for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
-behavior when an existing Gateway invokes ExtProc in a streamed mode.
+The Operator's standalone mode serves HTTP directly and has no Envoy sidecar.
+The `spec.config.streamed_body` setting applies when an existing Gateway
+invokes ExtProc in a streamed mode. Raw Envoy deployments must choose their
+body-processing mode as described below.
 
 ## Agent Router / Envoy Gateway
 

@@ -96,13 +96,13 @@ for a category-specific policy.
 
 ## Select Vela Shield
 
-The built-in Safety module uses
-[Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety)
-by default.
+Without an explicit specialist binding, Safety uses the selected decision
+deployment, Vela 2.0 0.3B by default.
+[Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety) and
 [Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield)
-is a separately trained alternative with the same `safe`/`unsafe` labels, so
-existing rules and thresholds apply without other changes. Validate thresholds
-again after switching models.
+are specialist classifiers with the same `safe`/`unsafe` labels. Existing rules
+can keep their labels, but thresholds must be evaluated again after switching
+models.
 
 To use Shield for every safety rule, set the module's model:
 

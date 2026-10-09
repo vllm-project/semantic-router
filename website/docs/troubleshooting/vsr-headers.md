@@ -256,7 +256,7 @@ x-vsr-replay-id: replay_01J...
 ## Compatibility and interpretation
 
 - Use `x-vsr-schema-version` before parsing optional headers; the current value
-  is `2`. Routed inference responses always carry it. Responses answered by the
+  is `2`. Routed inference responses not served from the response cache carry it. Responses answered by the
   Router's own handlers, such as `GET /v1/models`, never carry this header, so
   its absence there is expected rather than a contract violation.
 - `x-vsr-matched-projections` is the projection header. The singular form is

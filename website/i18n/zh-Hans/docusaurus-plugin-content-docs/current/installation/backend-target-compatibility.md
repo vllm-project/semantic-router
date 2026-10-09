@@ -2,7 +2,7 @@
 title: 后端目标兼容性
 description: 查看哪些后端目标形式能在 Docker、Helm、Operator、控制面板和配方工作流中保留。
 translation:
-  source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/backend-target-compatibility.md"
   outdated: false
 ---
@@ -47,7 +47,7 @@ Semantic Router 使用 `providers.models[].backend_refs[]` 作为逻辑模型名
 
 <!-- END BACKEND TARGET COMPATIBILITY MATRIX -->
 
-Docker / CLI 路径为逻辑模型生成一条路由。当模型有多个带权重的 ref 时，请求标头、Host 重写和 TLS SNI 来自第一个 ref。仅当每个 ref 使用相同路径时才应用路径前缀；否则本地生成器会省略路径重写。请保持这些路由级属性在模型的 ref 之间兼容。使用实时推理遥测进行端点或副本选择，是 [#2332](https://github.com/vllm-project/semantic-router/issues/2332) 跟踪的单独数据平面契约。
+默认 standalone 前端直接使用后端池；`--gateway extproc` 则为每个逻辑模型生成一条 Envoy 路由。在 Envoy 路径中，请求标头、Host 重写和 TLS SNI 来自第一个 ref；只有所有 ref 的路径相同时才应用路径前缀。为保持部署方式之间的可移植性，请为同一逻辑模型使用兼容的传输元数据。这里的 Chat 后端池与[模型运行时副本池](../overview/component-architecture#scale-a-deployment-through-replicas)不同；基于 Chat 后端实时推理遥测的选择由 [#2332](https://github.com/vllm-project/semantic-router/issues/2332) 跟踪。
 
 ## 可移植的目标形式
 
@@ -95,7 +95,7 @@ providers:
 
 | 生成方 | 行为和边界 |
 | --- | --- |
-| Docker / 本地 CLI | 将 ref 翻译为 Envoy cluster 和路由。它保留主机、端口、HTTP 或 HTTPS、权重、共享路径前缀、由环境解析的授权，以及共享的额外标头。被引用的模型服务器必须已经可到达。 |
+| Docker / 本地 CLI | standalone 前端直接使用后端池；`--gateway extproc` 将 ref 翻译为 Envoy cluster 和路由。配置保留主机、端口、HTTP 或 HTTPS、权重、路径和请求标头；上文说明 Envoy 的共享元数据限制。后端模型服务器必须已经可达。 |
 | Helm | `configOverride` 渲染一份完整的 canonical 映射，而不合并示例 provider 默认值。可达性和模型兼容性仍是运行时检查。 |
 | Operator | `spec.vllmEndpoints[]` 是 Kubernetes 发现适配器，而不是完整 provider schema 的副本。它发出下文所述的受支持 canonical 子集。 |
 | 控制面板 | 读写受支持的 canonical 后端清单，包括 provider 身份、URL、认证元数据、API 版本、chat 路径、额外标头和环境键引用。 |
