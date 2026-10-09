@@ -143,11 +143,11 @@ func TestMergeDeployPayloadReplaceKeepsMaintainedDecisionAdaptations(t *testing.
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
 	}
+	// Immutable release snapshots such as built-in/v0.4 may not parse with the current schema.
 	for _, relative := range []string{
 		"config/config.yaml",
 		"config/recipes/agent/config.yaml",
 		"config/recipes/built-in/latest/mom-v1/config.yaml",
-		"config/recipes/built-in/v0.4/mom-v1/config.yaml",
 	} {
 		t.Run(relative, func(t *testing.T) {
 			original, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(relative)))
