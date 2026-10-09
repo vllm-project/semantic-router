@@ -94,3 +94,25 @@ func TestHostPlacementPreservesAttachedDeployments(t *testing.T) {
 		t.Fatalf("external runtime was relocated onto the host: %+v", plans)
 	}
 }
+
+func TestHostPlacementPreservesAuthoredReplicas(t *testing.T) {
+	manager := &Manager{host: &hostRuntime{}, cores: 4}
+	replicas := []config.ModelReplica{{Device: "cpu"}, {Endpoint: "http://external:8000"}}
+	plans := manager.processPlans(map[string]config.ModelDeployment{
+		"pool": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Replicas: replicas},
+	})
+	managed, attached := 0, 0
+	for _, plan := range plans {
+		if plan.endpoint != "" {
+			attached++
+		} else {
+			managed++
+			if plan.models[0].Device != "mps" {
+				t.Fatal("managed replica did not select MPS")
+			}
+		}
+	}
+	if managed != 1 || attached != 1 || replicas[0].Device != "cpu" {
+		t.Fatal("host placement changed replica ownership or authored configuration")
+	}
+}
