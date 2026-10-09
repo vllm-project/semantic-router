@@ -1,0 +1,113 @@
+{
+  "data_sha256": "b099ef540ab140c87ad50596cd3bd5d321941d623aeac4244b2bdcc84324d5be",
+  "logo_sha256": "e77dce4b858781b8b6c52e9f3c74bdf24375f87577cefa7a505b149c925d04f2",
+  "generator_sha256": "2c8c51a4e7545ef9e4b77375fe38108108e8b5768eb776232c169a907977986c",
+  "logo_treatment": "Original alpha geometry rendered in white by SVG filter; source PNG unchanged; no KR Labs mark",
+  "cover_raster": {
+    "format": "JPEG",
+    "quality": 98,
+    "chroma_subsampling": "4:4:4",
+    "progressive": true
+  },
+  "matplotlib_text_checks": {
+    "quality": {
+      "text_objects": 22,
+      "outside_canvas": [],
+      "text_overlaps": []
+    },
+    "latency": {
+      "text_objects": 37,
+      "outside_canvas": [],
+      "text_overlaps": []
+    },
+    "paths": {
+      "text_objects": 15,
+      "outside_canvas": [],
+      "text_overlaps": []
+    }
+  },
+  "files": {
+    "cascade.pdf": {
+      "sha256": "b3860286c2e29b7476eb8771175d2b068a42e5197350066b2070c96398b6d6fc",
+      "bytes": 37286
+    },
+    "cascade.png": {
+      "sha256": "53b8f0913a62b96fba32d6e48f34688ae23399368088f9a8efc9c6b0587504cf",
+      "bytes": 119990,
+      "pixels": [
+        1800,
+        920
+      ]
+    },
+    "cascade.svg": {
+      "sha256": "3510b1bc1a9e4f0eec0db4ba545c953e160f101f242ded1c5e8390c4fa53bcd9",
+      "bytes": 4631
+    },
+    "hero.jpg": {
+      "sha256": "630e9fc65783921c820c0f27278a7ea45f252fb7a0c2187e444bb5f413f356db",
+      "bytes": 348798,
+      "pixels": [
+        1920,
+        1080
+      ]
+    },
+    "hero.pdf": {
+      "sha256": "00deb33f1835102ee666c227c1b0b32c4c07eb4ef8066cfb4deee6f3e4d34713",
+      "bytes": 72460
+    },
+    "hero.svg": {
+      "sha256": "96a38ce99073c88f0cf81c1cd2e41bad673cbf52d02b1f4a0e548fb26e772cbe",
+      "bytes": 77315
+    },
+    "latency.pdf": {
+      "sha256": "010e41c2d0e63843f5ba5be7074e6b14a7ebf9453cb17f200fc0a7f953055e47",
+      "bytes": 31227
+    },
+    "latency.png": {
+      "sha256": "bd300005071b69c4b9b198d3c298fd7d95c0e34ca9543c928e5e55bc00577bb8",
+      "bytes": 303844,
+      "pixels": [
+        3672,
+        2244
+      ]
+    },
+    "latency.svg": {
+      "sha256": "1337094669abb4a524ddd8ce864352cc57368009c6c239bf1c3299b6d584bae4",
+      "bytes": 16448
+    },
+    "paths.pdf": {
+      "sha256": "005305b9a1bf73bf63fb9868c7a43343085a15fe5f15486ea7a3b99b170940a3",
+      "bytes": 27732
+    },
+    "paths.png": {
+      "sha256": "ce1f5f9f5d836c84892ca5d3333891b649b18d1f8e5275b358a2aa3d4f319839",
+      "bytes": 223363,
+      "pixels": [
+        3672,
+        2244
+      ]
+    },
+    "paths.svg": {
+      "sha256": "0069b0541efb0036b7b06e47c81800ff9ec109f44761e9328b83f64272cc8086",
+      "bytes": 5778
+    },
+    "quality.pdf": {
+      "sha256": "598286e9d7003449f7f222fe6a769b1c8fb37d45c65dc925ac3e2b632f28a5a4",
+      "bytes": 31437
+    },
+    "quality.png": {
+      "sha256": "6158ce65591094482db61d6c723e08855079190f2a2441c74db44dcbfc26c017",
+      "bytes": 291641,
+      "pixels": [
+        3672,
+        2244
+      ]
+    },
+    "quality.svg": {
+      "sha256": "4204af50cba6971609e8f33a43d4371c1d6c4ca46a0c7d2f9a696b2ae2d3d2cf",
+      "bytes": 8803
+    }
+  },
+  "requires_visual_review": true,
+  "no_model_or_network_calls": true
+}

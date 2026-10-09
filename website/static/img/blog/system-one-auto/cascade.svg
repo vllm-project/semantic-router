@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="920" viewBox="0 0 1800 920">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="context-stroke"/></marker></defs>
+<rect width="1800" height="920" fill="white"/>
+<rect x="325" y="145" width="1420" height="675" rx="24" fill="#f7f9fb" stroke="#dde4eb" stroke-width="2"/>
+
+<text x="55" y="85" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="46" font-weight="700" text-anchor="start" >One request. An explicit second opinion.</text>
+<text x="55" y="130" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="start" >Kai answers the original bundle. Upgrade only when the gate does not pass.</text>
+<text x="365" y="198" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="600" text-anchor="start" >vllm-sr/auto   ·   SELECTED DECISION / CASCADE</text>
+<rect x="45" y="385" width="230" height="150" rx="16" fill="#ffffff" stroke="#172430" stroke-width="2.5"/>
+<rect x="370" y="385" width="265" height="150" rx="16" fill="#fff0e6" stroke="#D55E00" stroke-width="2.5"/>
+<rect x="1010" y="640" width="280" height="155" rx="16" fill="#e8f3fa" stroke="#0072B2" stroke-width="2.5"/>
+<rect x="1455" y="375" width="255" height="180" rx="16" fill="#ffffff" stroke="#172430" stroke-width="2.5"/>
+<text x="160" y="435" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="31" font-weight="700" text-anchor="middle" >Application</text>
+<text x="160" y="480" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="22" font-weight="400" text-anchor="middle" >State + questions</text>
+<text x="502" y="435" fill="#D55E00" font-family="DejaVu Sans,sans-serif" font-size="35" font-weight="700" text-anchor="middle" >Kai 0.6B</text>
+<text x="502" y="481" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="middle" >Answers once</text>
+<text x="1150" y="693" fill="#0072B2" font-family="DejaVu Sans,sans-serif" font-size="35" font-weight="700" text-anchor="middle" >Vega 27B</text>
+<text x="1150" y="740" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="middle" >Original request</text>
+<text x="1582" y="425" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="27" font-weight="700" text-anchor="middle" >One complete</text>
+<text x="1582" y="463" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="27" font-weight="700" text-anchor="middle" >native response</text>
+<text x="1582" y="511" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="18" font-weight="400" text-anchor="middle" >Answers + probabilities</text>
+<path d="M800 370 L910 460 L800 550 L690 460Z" fill="#fff9ef" stroke="#8e7353" stroke-width="2.5"/>
+<text x="800" y="450" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="600" text-anchor="middle" >All answers</text>
+<text x="800" y="486" fill="#172430" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="600" text-anchor="middle" >pass?</text>
+<path d="M275 460 H365" fill="none" stroke="#172430" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M635 460 H685" fill="none" stroke="#172430" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M800 370 V285 H1582 V370" fill="none" stroke="#D55E00" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M800 550 V718 H1005" fill="none" stroke="#0072B2" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1290 718 H1582 V560" fill="none" stroke="#0072B2" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1170" y="262" fill="#D55E00" font-family="DejaVu Sans,sans-serif" font-size="26" font-weight="600" text-anchor="middle" >PASS · keep Kai’s answer</text>
+<text x="820" y="613" fill="#0072B2" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="600" text-anchor="start" >OTHERWISE</text>
+<text x="502" y="590" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="400" text-anchor="middle" >No extra classifier call</text>
+<text x="55" y="867" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="start" >Choice · Score · Noul</text>
+<text x="1745" y="867" fill="#5f6b76" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="end" >At most two native model calls in this example</text>
+</svg>

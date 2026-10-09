@@ -338,7 +338,7 @@ export default function SystemOneResults({ run }: { run: SystemOneRun }) {
               <dd>{run.response.routing.stage}</dd>
             </div>
             <div>
-              <dt>Model calls</dt>
+              <dt>Algorithm calls</dt>
               <dd>{run.response.routing.model_calls}</dd>
             </div>
             <div>
@@ -356,8 +356,8 @@ export default function SystemOneResults({ run }: { run: SystemOneRun }) {
           </dl>
           <p className={styles.caption}>
             {run.response.routing.recipe} · {run.response.routing.decision}. Acceptance describes
-            the configured gate; it is not measured accuracy. Calls include signal inference and
-            transport retries.
+            the configured gate; it is not measured accuracy. Algorithm calls include transport
+            retries. Signal inference is counted separately.
           </p>
         </section>
       )}
