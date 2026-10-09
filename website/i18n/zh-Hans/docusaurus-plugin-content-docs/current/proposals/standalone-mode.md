@@ -45,7 +45,8 @@ looper 执行器的分析继续适用。
    amd64 和 arm64）、`vllm-sr-rocm` 和 `vllm-sr-cuda`（amd64），覆盖 docker 和 kubernetes、两种模式以及 engine 模式。
    原来的 `extproc` 和 `extproc-rocm` 镜像在一个版本内作为同一 digest 的别名 tag。上游 Envoy 只用于 docker 上的
    `extproc`。
-6. Router 与模型 runtime 之间仍是 Unix 域套接字上的 HTTP/JSON；测出开销之后再考虑二进制快路径。
+6. Router 与模型 runtime 之间仍是 Unix 域套接字上的 HTTP/JSON；测出开销之后再考虑二进制快路径。在 CPU 上测得
+   传输约占一次 runtime 调用的 2%，所以不做快路径（见[结果](#结果)）。
 7. 首发必须支持 timeout、retry、fallback。
 8. looper 请求图完全在 Router 内部闭环，不再绕回 Envoy。
 9. 配置体系模块化、版本化，支持热更新和回滚，借鉴 Envoy 配置设计的核心思想。
@@ -515,8 +516,11 @@ looper 不再是“绕回 Envoy”的特殊流程，而是在 Router 内部执�
     `BenchmarkNativeGatewayClients` 在进程内从 1、8、32 和 64 个客户端经 standalone 路径发送同样的请求，不需要
     Envoy 或 Docker 就能看出请求路径上的退化。
 - **Router 到 runtime 的占比：** 一个 CPU 上的 jailbreak 信号（307M 的 Vela Guard）下，standalone 请求耗时
-  13.9 ms，其中 12.4 ms（89%）在 runtime 调用里。runtime 还不报告自己的计算时间，所以这次调用里传输占多少
-  尚未测出；先测出它，再考虑任何快路径。
+  13.9 ms，其中 12.4 ms（89%）在 runtime 调用里。runtime 现在为每个请求报告自己的耗时，Router 记录每次调用的
+  传输时间（[#4667](https://github.com/vllm-project/semantic-router/issues/4667)）。在 CPU 上，推理占一次调用的
+  95–99%；传输在 Vela 2.0 0.3B 默认信号上占 0.6%，在 Vela 1.0 信号上占 1.9–2.2%，单独的 Guard 上占 2.1%，runtime
+  自身的 HTTP 和 JSON 处理占 0.4–1.6%。快路径最多只能让一个请求快约 0.8 ms，所以 Router 继续使用 HTTP/JSON
+  （[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/runtime-transport-cpu.md)）。
 
 ## 风险与对策
 

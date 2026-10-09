@@ -81,7 +81,7 @@ func triggerReplayRecordBeforeRestart(
 	providerObservationID := fmt.Sprintf("prepared-dispatch-%d", time.Now().UnixNano())
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "auto",
+		Model: "vllm-sr/auto",
 		User:  "e2e-replay-user",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "What is 2+2? Reply with just the number."},

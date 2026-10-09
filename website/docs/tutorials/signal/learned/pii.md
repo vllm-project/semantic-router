@@ -45,6 +45,9 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
+`threshold` is optional: a rule without one takes every span the PII model
+reports, and a Vela 2.0 model reports only spans above its size's calibrated
+threshold.
 
 ## Complete local scans
 
@@ -145,7 +148,11 @@ list. A declared `truncated_at` keeps the spans before the cut and marks the
 rest of the content as unscored. What a rejected or partial response does to a
 PII rule is `on_error`: `allow` (default) treats the unread content as not
 matching, `block` matches it as `classification_error`, so unverified text
-cannot pass as clean.
+cannot pass as clean. Content the model did not read at all (an input over the
+model's input or [scan cap](../../../model-runtime/reference.md#long-inputs),
+a truncated one, or one not scanned by the signals' deadline) matches as
+`unscanned` whatever `on_error` says, so a long request routes as private;
+set `classifier.pii.on_unscanned: allow` to leave it to `on_error`.
 
 The PII mapping cannot declare `classification_error` as an entity label.
 Aliases with `B-`, `I-`, or `E-` prefixes, including stacked prefixes, are also

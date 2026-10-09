@@ -132,7 +132,7 @@ func sendInferenceRequest(ctx context.Context, localPort, content string, verbos
 	start := time.Now()
 
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{
 				"role":    "user",

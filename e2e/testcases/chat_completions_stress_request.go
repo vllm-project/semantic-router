@@ -104,7 +104,7 @@ func sendSingleRequest(ctx context.Context, requestID int, localPort string, ver
 
 	// Prepare request body with random content
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{
 				"role":    "user",

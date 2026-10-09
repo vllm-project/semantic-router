@@ -27,6 +27,10 @@ func (r *OpenAIRouter) lookupPersonalizedExactCache(
 	if !canUsePersonalizedExactCache(ctx) {
 		return nil, false
 	}
+	if !r.cacheBackendEnabled() {
+		applyRequestCacheControls(ctx)
+		return nil, false
+	}
 	if !preparePersonalizedCacheIdentity(ctx, selectedModel) {
 		return nil, false
 	}

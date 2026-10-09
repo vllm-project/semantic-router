@@ -169,7 +169,7 @@ func requestRemoteEmbeddingDecision(
 	prompt string,
 ) (string, error) {
 	payload, err := json.Marshal(map[string]interface{}{
-		"model": "auto",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},

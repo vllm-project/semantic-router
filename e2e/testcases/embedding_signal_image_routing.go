@@ -221,7 +221,7 @@ func testSingleEmbeddingSignalImage(ctx context.Context, testCase EmbeddingSigna
 	}
 
 	requestBody := map[string]interface{}{
-		"model": "auto",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]interface{}{
 			{
 				"role":    "user",

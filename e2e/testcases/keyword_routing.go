@@ -140,7 +140,7 @@ func testSingleKeywordRouting(ctx context.Context, testCase KeywordRoutingCase, 
 		ExpectedKeywords: testCase.MatchedKeywords,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result

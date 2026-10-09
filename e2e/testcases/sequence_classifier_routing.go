@@ -51,7 +51,7 @@ func testSequenceClassifierRouting(
 
 	decisions := make(map[string]string, len(cases))
 	for _, testCase := range cases {
-		response, err := sendLocalChatCompletion(ctx, localPort, "auto", testCase.prompt, 30*time.Second)
+		response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.prompt, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("%s: %w", testCase.name, err)
 		}

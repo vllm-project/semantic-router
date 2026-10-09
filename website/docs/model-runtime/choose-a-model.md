@@ -29,7 +29,7 @@ Face revision, so the same name always loads the same files.
 | Ask your own questions in plain language | A decision model (next section) | | 0.6B to 27B |
 
 With no model configured, the built-in signals the table gives Vela 2.0 0.3B
-run on one deployment of it, in one call per request
+share one deployment, which batches compatible questions within each routing stage
 ([below](#vela-20)). Hazard, embeddings, reranking and Omni run their own
 models. The Vela 1.0 specialists remain built in, and naming them restores
 them. Each is a 307M encoder that runs well on a CPU: on 16 cores the median
@@ -37,6 +37,11 @@ Vela Domain request takes about 12 ms
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
 Most read up to 32,768 tokens; the 0.3B reads 8,192. Each model card and
 `GET /v1/models` list the limits.
+
+These input limits do not guarantee latency. Complete long-input embeddings
+and scans can exceed the signal deadline on a CPU with few cores. Measure your
+input lengths and concurrency, then choose dedicated CPU capacity or a GPU
+and tune worker threads for that workload.
 
 ## Decision models
 
@@ -72,8 +77,10 @@ are the most accurate.
 The domain, prompt guard, safety, fact check, user feedback, modality, PII and
 hallucination signals default to `vllm-sr/Vela-2.0-0.3B`
 ([collection](https://huggingface.co/collections/vllm-sr/vela-20)). All of them
-share one deployment, `@Vela-2.0-0.3B`, and a request asks every one of its
-questions in one call.
+share one deployment, `primary`, which batches compatible questions from the
+same routing stage. One API call can carry several questions; window scans
+and batch limits may still require multiple model forward passes. Later
+routing stages can make additional calls.
 
 - **Questions:** each signal asks the question the model was trained on for it,
   with the labels of its Vela 1.0 model, so rules and policies read the answer
@@ -82,8 +89,11 @@ questions in one call.
 - **CPU profile:** on a CPU the deployment runs `max_speed`, a packed copy of
   the model's weights. It gives the same answers to within about 0.00001 and
   is about 1.6 times faster than `exact`.
-- **Input:** the model reads up to 8,192 tokens of a request and truncates the
-  rest. The Vela 1.0 Guard and PII specialists scan up to 32K in windows.
+- **Input:** ordinary routing judgments may truncate to the model's input
+  limit. Prompt guard, safety, PII and hallucination require complete input;
+  supported window scans can extend coverage up to the scan budget. Incomplete
+  coverage produces an error or unknown result. See [Long inputs](./reference.md#long-inputs)
+  for limits and routing policies. Vela 1.0 Guard and PII scan up to 32K in windows.
 - **Thresholds:** the module defaults are calibrated to the 0.3B's scores
   (below).
 
@@ -96,16 +106,16 @@ CPU. Measured through the Router on the
 
 - **Ahead:** prompt guard (held-out AUC +0.026; on the E2E attack fixtures it
   blocks all six attacks, Vela 1.0 Guard five) and safety (+0.052 held-out, and
-  ahead on every set). One model and one call serve every signal.
+  ahead on every set). The signals share one model.
 - **Level:** PII and hallucination on held-out and fresh files.
 - **Behind, most:** modality (held-out AUC −0.180; the 0.3B misses most
   requests that ask for a new image) and user feedback (accuracy −0.038
   held-out, −0.178 fresh).
 - **Behind:** domain (accuracy −0.037 held-out, −0.088 fresh) and fact check
   (held-out AUC −0.101).
-- **CPU time:** every request carries the questions, their options and the 17
-  PII labels (at least 560 tokens) through one 307M-parameter forward, where
-  each Vela 1.0 model reads only the request. On 12 CPU cores, for the five
+- **CPU time:** in this measurement, each request carries the questions, their
+  options and the 17 PII labels (at least 560 tokens) through the 307M-parameter
+  model, where each Vela 1.0 model reads only the request. On 12 CPU cores, for the five
   request signals of the
   [latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md),
   the median request takes about 4.9 times as long:
@@ -183,13 +193,93 @@ built-in recipes' rules are calibrated to the 0.3B, so a signal moved back
 takes its Vela 1.0 rule thresholds with it. In `mom-v1` those are prompt guard
 0.5, safety 0.5 and PII 0.7; the record lists every recipe's.
 
+Specialist overrides remain explicit task bindings; selecting a default
+decision model does not remove them.
+
+## Choose a size {#choose-a-size}
+
+The default decision binding names a deployment that answers the Router's
+judgment tasks and [`decision` questions](tutorials/signal/learned/decision.md)
+without an override. Declare the resource once, then select its exact key.
+Omission selects the built-in `primary` deployment, Vela 2.0 0.3B on CPU:
+
+```bash
+vllm-sr serve --platform rocm
+```
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm
+    system:
+      decision_model:
+        deployment: primary
+```
+
+`serve` writes the line into the active configuration as a new version, which
+`vllm-sr config versions` lists and `vllm-sr config rollback` undoes; later
+starts keep it, and `vllm-sr status` shows it. The Helm chart's
+`decisionModel` value and the operator's `spec.config.decision_model` set the
+same binding. Deployment keys are exact and case-sensitive. Model identity,
+device and profile belong to the deployment, not the binding.
+
+Measured through the Router on the router signal suite, against the Vela 1.0
+specialists, and for the latency record's five request signals
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)):
+
+| Decision model | Hardware | Held-out accuracy against Vela 1.0 | p50 on a GPU | p50 on 12 CPU cores |
+| --- | --- | --- | ---: | ---: |
+| `Vela-2.0-0.3B` (default) | CPU or GPU | Ahead on prompt guard and safety, behind on domain, modality and feedback | 6.6 ms | 79 ms |
+| `Vela-2.0-0.8B` | CPU or GPU | Ahead on domain, prompt guard, safety, modality and hallucination; behind on PII | 40.1 ms | about 3 s |
+| `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 55.2 ms | GPU only |
+| `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 76.5 ms | GPU only |
+| `Vela-1.0` | CPU or GPU | The specialists themselves | n/a | 16 ms |
+
+- **GPU:** one AMD Instinct MI325X, sequential requests. At concurrency 16 a
+  GPU serves about 154 (0.3B), 25 (0.8B), 18 (4B) and 13 (9B) requests per
+  second.
+- **The 4B and 9B need a GPU.** `vllm-sr serve` refuses them with
+  `--platform cpu` or on a host without the platform's GPU, and the Router
+  refuses them where the model runtime finds no GPU. On a GPU they run whatever
+  a module's `use_cpu` says.
+- **The 0.8B on a CPU** is a decoder: a request takes seconds, as the table
+  shows. Serve it on a GPU, or keep the 0.3B on a CPU.
+- **Every size** is behind Vela 1.0 on user feedback's fresh file (CrossWOZ)
+  and on PII in distribution. Per-signal numbers with intervals are in the
+  record.
+- **Decision 1.0 and Decision 2.0** may be the default judgment deployment.
+  Available tasks follow the model's native capabilities; an unsupported task
+  is unavailable regardless of the model family.
+- **Specialists** remain explicit task overrides and can run alongside the
+  default decision deployment.
+
+Each size has its own module thresholds, which a module that sets none takes
+when you switch:
+
+| Decision model | Prompt guard | Domain | PII | Fact check | User feedback |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `Vela-2.0-0.3B` | 0.75 | 0.28 | 0.01 | 0.93 | 0.37 |
+| `Vela-2.0-0.8B` | 0.71 | 0.38 | 0.07 | 0.994 | 0.34 |
+| `Vela-2.0-4B` | 0.63 | 0.45 | 0.05 | 0.9984 | 0.33 |
+| `Vela-2.0-9B` | 0.42 | 0.46 | 0.14 | 0.998 | 0.35 |
+| `Vela-1.0` | 0.5 | 0.5 | 0.9 | 0.95 | 0.7 |
+
+Rule thresholds a configuration sets, such as the built-in recipes', stay;
+the record maps each to every size (for example `mom-v1`'s `prompt_attack`
+0.75 is 0.71 on the 0.8B, 0.63 on the 4B and 0.42 on the 9B). A
+`system.<module>` line or a binding keeps that one signal on its own model.
+
 ## Hardware
 
 | Hardware | Status | Use |
 | --- | --- | --- |
 | CPU | Validated | Every router image runs models on CPU out of the box. |
-| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform amd` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
-| NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform nvidia` ships PyTorch for CUDA. |
+| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform rocm` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
+| NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform cuda` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
 | Apple silicon | CPU only in this release | On macOS the docker target runs the CPU image, because Docker's Linux VM gets no GPU. Host GPU support is tracked in [#4636](https://github.com/vllm-project/semantic-router/issues/4636). |
 
@@ -216,7 +306,7 @@ GPU, plus room for the requests: a 307M task model needs about 1.3 GB on a
 CPU, and Decision 2.0 Lux-9B about 18 GB on a GPU. The runtime refuses to load
 a model that does not fit its device and says why. To keep large models apart,
 give them their own process (see
-[Run it with the router](./deploy.md#group-models-into-processes)).
+[Run it with the router](./deploy.md#place-and-scale-replicas)).
 
 ## Your own models
 

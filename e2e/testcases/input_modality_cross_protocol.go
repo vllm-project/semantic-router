@@ -62,7 +62,7 @@ func testInputModalityCrossProtocol(
 			name: "responses image request selects the vision decision",
 			path: "/v1/responses",
 			payload: map[string]interface{}{
-				"model": "MoM",
+				"model": "vllm-sr/auto",
 				"store": false,
 				"input": []map[string]interface{}{{
 					"role": "user",
@@ -81,7 +81,7 @@ func testInputModalityCrossProtocol(
 			name: "responses text request stays on the text decision",
 			path: "/v1/responses",
 			payload: map[string]interface{}{
-				"model": "MoM",
+				"model": "vllm-sr/auto",
 				"store": false,
 				"input": "describe the mona lisa",
 			},
@@ -94,7 +94,7 @@ func testInputModalityCrossProtocol(
 			name: "anthropic image request selects the vision decision",
 			path: "/v1/messages",
 			payload: map[string]interface{}{
-				"model":      "MoM",
+				"model":      "vllm-sr/auto",
 				"max_tokens": 64,
 				"messages": []map[string]interface{}{{
 					"role": "user",
@@ -115,7 +115,7 @@ func testInputModalityCrossProtocol(
 			name: "anthropic text request stays on the text decision",
 			path: "/v1/messages",
 			payload: map[string]interface{}{
-				"model":      "MoM",
+				"model":      "vllm-sr/auto",
 				"max_tokens": 64,
 				"messages": []map[string]interface{}{{
 					"role": "user", "content": "describe the mona lisa",

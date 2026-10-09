@@ -96,7 +96,7 @@ type rlResponse struct {
 
 func sendRateLimitRequest(ctx context.Context, baseURL, userID, groups, prompt string, maxTokens int) (*rlResponse, error) {
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},

@@ -33,7 +33,31 @@ your question.
 
 ## Configuration
 
-Name the model as a `model_runtime` deployment, then ask it questions:
+A question that names no `deployment` asks the Router's decision model,
+`global.model_catalog.system.decision_model` (Vela 2.0 0.3B unless you
+[choose a size](model-runtime/choose-a-model.md#choose-a-size)). It joins the
+call that answers the built-in signals, so one model answers every question
+the Router asks of a request in one call:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: needs_tools
+        question:
+          type: noul
+          instructions: Does answering this request need a tool call?
+        predicate:
+          gte: 0.7
+```
+
+The binding uses `{deployment: primary}` and can select Vela or Decision
+1.0/2.0. The model must support every requested question type. The
+[`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
+uses the same default binding, so the resource can also choose a backend.
+
+To ask another model, such as a Decision 2.0 model, name it as a
+`model_runtime` deployment and give each question its `deployment`:
 
 ```yaml
 global:
@@ -102,6 +126,63 @@ routing:
 
 A condition may add its own `predicate`; for a `choice`, `set` or `span`
 condition with a `label`, it reads that label's value.
+
+A [projection score](tutorials/projection/scores.md) reads the same values
+with `value_source: raw`: `name: <question>` reads `decision:<name>`, and
+`name: <question>:<key>` reads one option or label of a `choice`, `set` or
+`span` question. The question is asked whenever a used projection reads it:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: difficulty
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer well?
+          levels: [none, a little, multi-step, expert]
+        predicate:
+          gte: 2
+      - name: needs
+        question:
+          type: set
+          instructions: What does a good answer need?
+          labels:
+            - key: deliberation
+              description: a derivation, proof or careful step-by-step check
+            - key: tools
+              description: calling external tools or functions
+  projections:
+    scores:
+      - name: effort
+        method: weighted_sum
+        inputs:
+          - type: decision
+            name: difficulty
+            weight: 0.3
+            value_source: raw
+          - type: decision
+            name: needs:deliberation
+            weight: 0.4
+            value_source: raw
+    mappings:
+      - name: effort_band
+        source: effort
+        method: threshold_bands
+        outputs:
+          - name: effort_high
+            gte: 0.9
+  decisions:
+    - name: deliberate
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: effort_high
+      modelRefs:
+        - model: large-reasoner
+```
 
 ### Set and span questions
 
@@ -177,7 +258,10 @@ rule's name if the model answers only `choice`, `noul` and `score` (Decision
 
 While the model is loading, overloaded or slower than `timeout_ms`, the signal
 is unknown. `rules.on_unknown` on the decision, or `on_error: match | no_match`
-on a condition, decides what an unknown answer means. Matched decision signals
+on a condition, decides what an unknown answer means. Every question a request
+asks one deployment, the built-in signals' included, goes in one call; once it
+is sent, each question waits for it as long as the latest of them, since the
+request waits for that call anyway. Matched decision signals
 are listed in the `x-vsr-matched-decision-model` response header.
 
 To choose a model, size and hardware, or to run the model on your own GPU

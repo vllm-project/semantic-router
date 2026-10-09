@@ -52,6 +52,4 @@ paper/
 perf/
 src/training/model_classifier/verified_single_judge_*/
 dashboard/frontend/node_modules/
-dashboard/wizmap/node_modules/
 dashboard/frontend/dist/
-dashboard/wizmap/dist/

@@ -172,8 +172,8 @@ func (r *OpenAIRouter) respondRoutingRejected(
 	// Retain exactly the client-visible error in Replay, including streams
 	// rejected before the provider has started an SSE response.
 	resp = r.encodeImmediateResponseForClient(resp, ctx)
-	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
-		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, nil)
+	if r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
 	r.updateRouterReplayStatus(ctx, status, false)

@@ -127,15 +127,18 @@ document. To intentionally apply a revised `configOverride`, change
 the same revision on later upgrades preserves subsequent live edits. A saved
 ConfigMap edit takes effect after the Router deployment rolls out.
 
-`vllm-sr serve --target k8s --config config.yaml` passes the selected document
+`vllm-sr serve --target kubernetes --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command
 rejects an empty or setup-only document and does not inject local-Docker service
 addresses or knowledge-base paths. Run `vllm-sr config validate` first so schema and
 reference errors fail before deployment.
 
-Choose Kubernetes GPU images, resources, and device plugins through Helm or the
-Operator. The local `--platform amd` and `--platform nvidia` shortcuts do not
-configure Kubernetes scheduling.
+On Kubernetes, `--platform rocm` and `--platform cuda` select the ROCm or CUDA
+Router image, unless an image is set explicitly, and request `amd.com/gpu`
+or `nvidia.com/gpu` resources from canonical device ordinals. Replicas sharing
+one device need one GPU; distinct ordinals require that allocation size. The
+pod schedules onto a node whose device plugin offers those GPUs. Node selectors, tolerations, other resources and the device
+plugin itself come from Helm values or the Operator.
 
 The chart runs the Dashboard as its own Deployment and Service, and that
 Deployment is disabled by default. The Router Service carries the gRPC and HTTP

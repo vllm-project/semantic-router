@@ -42,7 +42,7 @@ func testAgentGatewayTrafficRouting(ctx context.Context, client *kubernetes.Clie
 	time.Sleep(2 * time.Second)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	payload := `{"model":"auto","messages":[{"role":"user","content":"What is the derivative of f(x) = x^3?"}],"max_tokens":64,"temperature":0}`
+	payload := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"What is the derivative of f(x) = x^3?"}],"max_tokens":64,"temperature":0}`
 
 	if opts.Verbose {
 		fmt.Printf("[Test] Sending POST to %s\n", url)

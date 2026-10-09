@@ -3,7 +3,7 @@ title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
 description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名或 NLI 解释器的配置。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
   source_file: "docs/model-runtime/migrate.md"
   outdated: false
 ---
@@ -112,6 +112,10 @@ Changes to review
 vllm-sr config validate --config legacy.migrated.yaml
 vllm-sr serve --config legacy.migrated.yaml
 ```
+
+对于已有的本地 Docker 栈，CLI 可能提示已保留保存的活动配置。先检查并将需要保留的
+Dashboard 修改合并到 `legacy.migrated.yaml`，再加上 `--replace-active-config` 重新运行，
+明确应用这份文件。如果已有活动的 Recipe 包，请先通过 Recipe 工作流更换或停用它。
 
 首次启动时，运行时会下载尚未拥有的模型。[与路由器一起运行](model-runtime/deploy.md#check-what-is-running)
 介绍如何查看每个 deployment 何时就绪。

@@ -42,7 +42,7 @@ func runChatCompletionsRequest(
 
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Hello, how are you?"},
 		},

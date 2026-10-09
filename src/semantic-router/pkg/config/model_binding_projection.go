@@ -58,10 +58,15 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 				scoped.PromptGuard.JailbreakMappingPath = mapping
 			}
 		case "complexity":
-			if remote == nil {
+			if remote == nil && !spec.Deployment.IsModelRuntime() {
 				return nil, fmt.Errorf("complexity binding requires a remote score or distribution adapter")
 			}
 			scoped.ComplexityModel.Backend = remote
+		case "preference":
+			if spec.Deployment.IsModelRuntime() {
+				disabled := false
+				scoped.PreferenceModel.UseContrastive = &disabled
+			}
 		case "fact_check_classifier":
 			scoped.HallucinationMitigation.FactCheckModel.ModelID = artifact
 			scoped.HallucinationMitigation.FactCheckModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens

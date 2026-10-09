@@ -136,7 +136,7 @@ domains' smallest unit or static checks. Common direct targets include:
 | Go router | `make test-semantic-router` |
 | Model runtime | `make model-runtime-test` |
 | Python CLI | `make vllm-sr-test` |
-| Published models (domain, PII, jailbreak and the other classifiers) | `make test-models` |
+| Published models (the Vela 1.0 classifiers and the Vela 2.0 decision models) | `make test-models` |
 | Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
 Integration and E2E are explicit because a path classifier cannot infer all

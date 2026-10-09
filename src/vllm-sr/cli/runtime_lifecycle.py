@@ -38,6 +38,9 @@ log = get_logger(__name__)
 
 ServiceStarter = Callable[[], tuple[int, str, str]]
 
+# curl -f exits with this code when the server answered with an HTTP error.
+CURL_HTTP_ERROR = 22
+
 
 def log_startup_banner(
     config_file, listeners, stack_layout: RuntimeStackLayout
@@ -196,7 +199,8 @@ def maybe_finish_setup_mode(
         log.error("Setup mode started without dashboard enabled")
         raise SystemExit(1)
 
-    log.info("Setup mode detected: skipping Router and Envoy health checks")
+    services = "Router and Envoy" if envoy else "Router"
+    log.info(f"Setup mode detected: skipping {services} health checks")
     log.info("Waiting for Dashboard to become healthy...")
     dashboard_container = _runtime_service_container_name(stack_layout, "dashboard")
     _wait_for_setup_dashboard(dashboard_container, startup_timeout)
@@ -269,6 +273,9 @@ def wait_for_router_health(
             management_port, readiness_token_env, timeout
         ),
         show_router_logs=True,
+        startup_status=lambda timeout: _router_management_command(
+            "/startup-status", management_port, readiness_token_env, timeout
+        ),
     )
 
 
@@ -279,12 +286,14 @@ def _wait_for_readiness(
     command: Callable[[float], list[str]],
     *,
     show_router_logs: bool = False,
+    startup_status: Callable[[float], list[str]] | None = None,
 ) -> None:
     deadline = _StartupDeadline(startup_timeout)
     log.info(f"Waiting for {service} to become ready...")
     log.info(f"Startup readiness timeout: {startup_timeout}s")
     last_log_time = time.time()
     check_count = 0
+    startup_message = None
     if show_router_logs:
         log.info("Showing Router logs during startup:")
         log.info("-" * 60)
@@ -323,6 +332,11 @@ def _wait_for_readiness(
                 elapsed = int(time.monotonic() - deadline.started)
                 log.info(f"{service} is ready (after {elapsed}s, {check_count} checks)")
                 return
+            if return_code == CURL_HTTP_ERROR and startup_status is not None:
+                startup_message = _report_startup_status(
+                    container_name, startup_status, deadline, startup_message
+                )
+                remaining = deadline.remaining()
             if check_count % 10 == 0:
                 elapsed = int(time.monotonic() - deadline.started)
                 log.info(
@@ -345,14 +359,30 @@ def _wait_for_readiness(
 def _router_readiness_command(
     management_port: int, readiness_token_env: str | None, timeout: float = 5.0
 ) -> list[str]:
-    endpoint = f"http://localhost:{management_port}/ready"
+    return _router_management_command(
+        "/ready", management_port, readiness_token_env, timeout, fail=True
+    )
+
+
+def _router_management_command(
+    path: str,
+    management_port: int,
+    readiness_token_env: str | None,
+    timeout: float = 5.0,
+    *,
+    fail: bool = False,
+) -> list[str]:
+    """Read a management endpoint in the Router container; with fail, an HTTP
+    error status exits non-zero (CURL_HTTP_ERROR) instead of printing the body."""
+    endpoint = f"http://localhost:{management_port}{path}"
     max_time = f"{max(0.001, timeout):.3f}"
+    flags = ["-f", "-s"] if fail else ["-s"]
     if readiness_token_env is None:
-        return ["curl", "-f", "-s", "--max-time", max_time, endpoint]
+        return ["curl", *flags, "--max-time", max_time, endpoint]
     script = (
         'set -eu; token="$(printenv "$1")"; test -n "$token"; '
         "printf 'Authorization: Bearer %s\\n' \"$token\" | "
-        'curl -f -s --max-time "$3" -H @- "$2"'
+        f'curl {" ".join(flags)} --max-time "$3" -H @- "$2"'
     )
     return [
         "sh",
@@ -363,6 +393,36 @@ def _router_readiness_command(
         endpoint,
         max_time,
     ]
+
+
+def _report_startup_status(
+    container_name: str,
+    command: Callable[[float], list[str]],
+    deadline: _StartupDeadline,
+    last_message: str | None,
+) -> str | None:
+    """Print the Router's startup message when it changes, such as the model
+    deployments it still waits for, and end the wait when startup failed."""
+    timeout = deadline.io_timeout()
+    return_code, stdout, _stderr = container_exec(
+        container_name, command(timeout), timeout=timeout
+    )
+    try:
+        state = json.loads(stdout) if return_code == 0 else None
+    except ValueError:
+        state = None
+    if not isinstance(state, dict):
+        return last_message
+    message = state.get("message")
+    if not isinstance(message, str) or not message:
+        return last_message
+    if state.get("phase") == "error":
+        log.error(f"Router startup failed: {message}")
+        container_logs(container_name, follow=False, tail=120, timeout=5)
+        raise SystemExit(1)
+    if message != last_message:
+        progress(f"  {message}")
+    return message
 
 
 def wait_and_verify_runtime(
@@ -547,6 +607,9 @@ def _example_model(config: dict | None) -> str:
 def _print_curl_example(
     listeners, stack_layout: RuntimeStackLayout, config: dict | None = None
 ) -> None:
+    if ((config or {}).get("global") or {}).get("router", {}).get("enabled") is False:
+        _print_native_curl_example(listeners, stack_layout)
+        return
     if not listeners:
         return
     first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
@@ -564,3 +627,44 @@ def _print_curl_example(
     echo('        {"role": "user", "content": "What is the derivative of x^2?"}')
     echo("      ]")
     echo("    }'")
+
+
+def _print_native_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
+    """Use a listener's published native identity, never an ungranted artifact."""
+    published = next(
+        (
+            (listener, listener["systemone"]["models"][0])
+            for listener in listeners
+            if (listener.get("systemone") or {}).get("models")
+        ),
+        None,
+    )
+    echo()
+    heading("Try System One")
+    if published is None:
+        echo("  No native model is published on a configured listener.")
+        echo("  Configure listeners[].systemone.models before calling /v1/systemone.")
+        return
+    listener, model = published
+    port = listener.get("port", DEFAULT_LISTENER_PORT) + stack_layout.port_offset
+    scheme = "https" if listener.get("tls") else "http"
+    if listener.get("api_keys"):
+        echo("  Set VLLM_SR_API_KEY to a key permitted by this listener.")
+    payload = json.dumps(
+        {
+            "model": model,
+            "state": "Explain why a Python function returns None.",
+            "questions": {
+                "needs_reasoning": {
+                    "type": "noul",
+                    "instructions": "Does this request require reasoning?",
+                }
+            },
+        },
+        indent=2,
+    ).replace("'", "'\"'\"'")
+    echo(f"  curl -v {scheme}://localhost:{port}/v1/systemone \\")
+    echo('    -H "Content-Type: application/json" \\')
+    if listener.get("api_keys"):
+        echo('    -H "Authorization: Bearer $VLLM_SR_API_KEY" \\')
+    echo("    -d '" + payload.replace("\n", "\n    ") + "'")

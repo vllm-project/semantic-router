@@ -57,6 +57,13 @@ repos:
         pass_filenames: false
         files: ^(config/catalog/|config/recipes/built-in/|src/vllm-sr/cli/model_bundle\.py$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
 
+      - id: decision-runtime-catalog-generated
+        name: decision runtime catalog generated projection
+        entry: make decision-runtime-catalog-check
+        language: system
+        pass_filenames: false
+        files: ^(src/model-runtime/vllm_srun/(registry/tables/\w+|systemone|families/decision1/(family|questions)|families/decision2/family|families/vela2/request)\.py$|src/model-runtime/vllm_srun/registry/releases\.generated\.json$|dashboard/frontend/scripts/generate-decision-runtime-catalog\.py$|dashboard/frontend/src/pages/decisionRuntimeCatalog\.generated\.json$|src/semantic-router/pkg/modelservice/decision_catalog\.generated\.json$|tools/make/dashboard\.mk$|\.pre-commit-config\.yaml$)
+
       - id: cli-reference-generated
         name: CLI command reference
         entry: make docs-cli-check
@@ -111,7 +118,7 @@ repos:
         language: system
         require_serial: true
         files: \.md$
-        exclude: ^(node_modules/|website/node_modules/|dashboard/frontend/node_modules/|dashboard/wizmap/node_modules/|bench/|e2e/config/models/|models/|vsr/|website/docs/api/crd-reference\.md$|CLAUDE\.md$)
+        exclude: ^(node_modules/|website/node_modules/|dashboard/frontend/node_modules/|bench/|e2e/config/models/|models/|vsr/|website/docs/api/crd-reference\.md$|CLAUDE\.md$)
 
   # Yaml specific hooks
   - repo: local

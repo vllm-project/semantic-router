@@ -1,6 +1,8 @@
 # Router API
 
-The router data plane accepts model requests through an Envoy listener. In the
+The router data plane accepts model requests on the configured listeners. The
+Router serves them itself in standalone mode, the default; with
+`--gateway extproc`, Envoy serves them and calls the Router over ext_proc. In the
 standard local stack, the listener is `http://localhost:8899`; a recipe can
 choose a different address or port under `listeners`.
 
@@ -23,6 +25,13 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | The model is in the request body |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
+| `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Questions answered by explicitly published decision models on a standalone listener |
+| `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
+
+Engine mode serves the native System One paths with recipe routing disabled.
+Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
+allowlist does not grant native access. Both APIs use the listener's API keys.
+See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
 `/v1/vector_stores`, and Router Replay paths are not available on a public
@@ -31,13 +40,16 @@ inference listener. Router-owned file and vector-store operations use
 listener. Other `/openai/*` operations, such as embeddings and stored-response
 reads, return `404`.
 
+Every `POST` path above requires a JSON request body. A request with an empty
+body returns `400` from the Router and is never forwarded to a backend.
+
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
 field-level portability boundaries.
 
 ## Send a routed request
 
-Use an auto-model or recipe entrypoint when you want the router to select a
+Use `vllm-sr/auto` or an explicitly declared recipe entrypoint when you want the router to select a
 backend. Use a concrete model name when you want to bypass semantic model
 selection and target that model directly.
 
@@ -45,7 +57,7 @@ selection and target that model directly.
 curl -sS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {
         "role": "user",
@@ -119,7 +131,7 @@ extensions are rejected when the target protocol cannot represent them.
 curl -sS http://localhost:8899/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "input": "Summarize the trade-offs of retrieval-augmented generation."
   }'
 ```
@@ -136,7 +148,7 @@ curl -sS http://localhost:8899/v1/messages \
   -H 'Content-Type: application/json' \
   -H 'anthropic-version: 2023-06-01' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "max_tokens": 256,
     "messages": [
       {
@@ -152,15 +164,15 @@ curl -sS http://localhost:8899/v1/messages \
 Clients built for Azure OpenAI can call the Router as if it were an Azure
 resource. The deployment Chat path takes the model name from the URL; the
 Responses and v1 Chat paths take it from the request body. In either form,
-`auto` selects a route and a concrete model name targets that model directly.
+A recipe entrypoint selects a route and a concrete model name targets that model directly.
 The Router checks the client's `api-key` header against the listener's
 `api_keys` when they are set, and removes the header before provider dispatch.
 
 ```bash
-curl -sS 'http://localhost:8899/openai/deployments/auto/chat/completions?api-version=2024-10-21' \
+curl -sS 'http://localhost:8899/openai/v1/chat/completions' \
   -H 'Content-Type: application/json' \
   -H 'api-key: YOUR-LISTENER-KEY' \
-  -d '{"messages":[{"role":"user","content":"Explain semantic routing in one paragraph."}]}'
+  -d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Explain semantic routing in one paragraph."}]}'
 ```
 
 For GitHub Copilot CLI, set `COPILOT_PROVIDER_TYPE=azure`, point
@@ -169,7 +181,7 @@ For GitHub Copilot CLI, set `COPILOT_PROVIDER_TYPE=azure`, point
 `COPILOT_PROVIDER_WIRE_API=responses`, the CLI uses `/openai/v1/responses`, or
 `/openai/responses` when `COPILOT_PROVIDER_AZURE_API_VERSION` is set. The
 supported Chat paths are `/openai/v1/chat/completions` and the deployment
-route shown above. The Router accepts Copilot's `reasoning.summary` on Responses
+route. The Router accepts Copilot's `reasoning.summary` on Responses
 turns. It forwards the setting to a Responses backend. With a Chat Completions
 or Messages backend, the turn still runs, but the summary request is dropped
 and reported in `x-vsr-protocol-warnings`.
@@ -193,7 +205,7 @@ decision, or request content:
 | Code | Status | `error.type` | Meaning |
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
-| `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. An auto alias or entrypoint falls back to `providers.defaults.model`; a Looper alias such as `vllm-sr/flow` evaluates only its algorithm's decisions and has no fallback. |
+| `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
 | `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
@@ -287,8 +299,11 @@ hold explanations describe what protection would have done; the selected model
 and route history still describe actual dispatch. Protection's `candidate_models`
 lists eligible models independently of their scores; an unrecorded score appears
 as `—`, while a recorded zero remains zero. Missing identity or evidence
-is displayed explicitly. A recipe's `data_policy.replay: false` prevents its
-requests from appearing in Replay, including rejected requests.
+is displayed explicitly. Replay capture uses `global.services.router_replay`
+defaults and the selected decision's `router_replay` plugin overrides. Rejected
+requests without a selected decision use the global defaults.
+`capture_personal_data: false` retains routing evidence but suppresses content
+when personal data is detected or PII evidence is unavailable.
 
 ### Configured-rate cost estimates
 

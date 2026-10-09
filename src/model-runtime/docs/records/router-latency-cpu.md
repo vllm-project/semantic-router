@@ -5,6 +5,13 @@ to the built-in model runtime. This record measures end-to-end router latency
 per request with both, on the same CPU cores, inputs and signal set, and
 states the design change that the measurement forced.
 
+This is a historical record for the commits listed below. Its process grouping,
+`VLLM_SRUN_CPU_PROCESSES` setting and thread-share calculations describe those
+builds. Current managed deployments and replicas use independent workers with
+`VLLM_SRUN_CPU_THREADS`; see the
+[current lifecycle design](../design.md#134-lifecycle-managed-workers-and-attached-endpoints).
+The original measurements and reproduction settings remain unchanged here.
+
 - **Date:** 2026-10-05.
 - **Machine:** AMD EPYC 9575F, CPU only. Other workstreams' jobs ran on other
   cores; the 1-minute load stayed between 41 and 86 (the program voids timings

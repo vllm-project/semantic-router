@@ -7,6 +7,11 @@ status: Implemented
 
 > **Status:** Implemented in [#4628](https://github.com/vllm-project/semantic-router/pull/4628) - **Created:** 2026-10-06 -
 > **Tracking issue:** [#4623](https://github.com/vllm-project/semantic-router/issues/4623)
+>
+> **Lifecycle update:** The original Engine CLI examples below describe the
+> earlier implementation. Current Engine and Router modes share one frontend
+> and model pool. Use `vllm-sr serve ARTIFACT --engine`; see
+> [the current Quickstart](../model-runtime/quickstart.md).
 
 ## Summary
 
@@ -50,7 +55,8 @@ and the Looper executor carries over.
    docker and kubernetes, both modes and engine mode. The former `extproc` and `extproc-rocm` images are alias
    tags of the same digests for one release. Upstream Envoy is used only for docker `extproc`.
 6. The Router keeps talking to the model runtime over HTTP/JSON on a Unix domain socket. A binary fast path is
-   considered only after the overhead is measured.
+   considered only after the overhead is measured. Measured on CPU, the transport is about 2% of a runtime call,
+   so there is none (see [Results](#results)).
 7. Timeout, retry and fallback are part of the first release.
 8. Looper request graphs run entirely inside the Router and never loop back through Envoy.
 9. The configuration system is modular and versioned, supports hot reload and rollback, and borrows the core
@@ -588,8 +594,12 @@ backends:
     standalone path from 1, 8, 32 and 64 clients in process, so a request-path regression shows up without Envoy
     or Docker.
 - **Router-to-runtime share:** with one CPU jailbreak signal (the 307M Vela Guard), a standalone request takes
-  13.9 ms, 12.4 ms (89%) of it in the runtime call. The runtime does not report its own compute time yet, so the
-  transport's part of that call is unmeasured; measuring it comes before any fast path.
+  13.9 ms, 12.4 ms (89%) of it in the runtime call. The runtime now reports its own time for every request, and
+  the Router records each call's transport ([#4667](https://github.com/vllm-project/semantic-router/issues/4667)).
+  On CPU, inference is 95–99% of a call. The transport is 0.6% for the Vela 2.0 0.3B defaults, 1.9–2.2% for the
+  Vela 1.0 signals and 2.1% for the Guard alone, and the runtime's own HTTP and JSON handling takes 0.4–1.6%.
+  A fast path could save a request at most about 0.8 ms, so the Router keeps HTTP/JSON
+  ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/runtime-transport-cpu.md)).
 
 ## Risks and mitigations
 

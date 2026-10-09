@@ -11,19 +11,27 @@ classifiers behind signals such as domain, PII and jailbreak, the embedding
 models behind the semantic cache, memory and RAG, the reranker, the
 hallucination detector, and decision models that answer routing questions.
 
+The runtime is not where your chat models run. The models that answer your
+users stay behind your providers (vLLM, Ollama, a hosted API); the runtime
+serves the small models the router consults about each request. It runs as
+`vllm-srun` processes inside the router container, or in a container of its
+own with `vllm-sr serve <artifact> --engine`. The same frontend
+and model pool stay available when routing is enabled in Router mode.
+
 You usually do not have to do anything for this to work. When a feature needs
 a model, the router downloads it, checks every file, starts the runtime and
 sends it the request text. It starts serving once the models its routes need
-have loaded. If a runtime is slow or crashes later, requests keep flowing: the
-feature reports "unknown" and your routes fall back the way you configured.
+have loaded. If a runtime is slow or crashes later, the signal deadline bounds
+how long a request waits. Unfinished signals follow their configured error or
+unscanned policy.
 
 ## Three ways to use it
 
 | You want to | Do this | Read |
 | --- | --- | --- |
-| Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you. | [Run it with the router](./deploy.md) |
-| Put the models on a GPU or share them between routers | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
-| Call the models from your own code | Run `vllm-sr serve <model>` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
+| Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you; `vllm-sr serve --platform rocm` or `--platform cuda` puts its models on the GPU. | [Run it with the router](./deploy.md) |
+| Share the models between routers, or run them on another machine | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
+| Call the models from your own code | Run `vllm-sr serve ARTIFACT --engine` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
 
 ## What it can serve
 
@@ -48,12 +56,14 @@ feature reports "unknown" and your routes fall back the way you configured.
 - **Same answers as the released models.** The default `exact` profile gives
   the answers the model publishers measured. Faster settings are opt-in and say
   that they may change results. See [Profiles](./profiles.md).
-- **Requests never wait on a broken model.** A model that is too slow, still
-  restarting or crashed makes its feature "unknown" for that request. The
-  router restarts a crashed runtime and keeps routing meanwhile.
-- **Few calls per request.** The model work a request's signals send to one
-  runtime process goes as a single bundled call, and CPU models in separate
-  processes answer in parallel, so adding signals does not add round trips.
+- **Bounded waits.** Slow or unavailable models resolve through the signals'
+  deadline and error policies. A model forward already running may continue
+  after the caller times out and delay queued work. The router restarts a
+  crashed runtime.
+- **Batched calls.** Compatible model work from the same routing stage can
+  travel together in one API call. That call may require several model forward
+  passes, and later stages can make additional calls. Independent workers can
+  answer in parallel when hardware capacity allows.
 - **Pluggable.** New model families, engines and hardware back ends are
   ordinary Python packages. See [Add your own model family](./plugins.md).
 
@@ -62,7 +72,7 @@ feature reports "unknown" and your routes fall back the way you configured.
 CPU and AMD GPUs (MI300X, MI325X) are validated. NVIDIA GPUs work but are not
 yet validated; Intel GPUs (`xpu`) and Apple GPUs (`mps`) are available and not
 yet validated. Every router image runs models on the CPU. The AMD and NVIDIA
-images (`vllm-sr serve --platform amd` or `--platform nvidia`) also run them on
+images (`vllm-sr serve --platform rocm` or `--platform cuda`) also run them on
 the GPU.
 
 ## Coming from an older release?

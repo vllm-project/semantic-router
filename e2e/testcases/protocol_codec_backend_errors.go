@@ -37,7 +37,7 @@ func testProtocolCodecAnthropicBackendToolLifecycle(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecToolLifecycle(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecToolLifecycle(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func testProtocolCodecChatBackendErrorMatrix(
@@ -61,7 +61,7 @@ func testProtocolCodecAnthropicBackendErrorMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecErrorMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecErrorMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func runProtocolCodecErrorMatrix(

@@ -227,7 +227,7 @@ func DebugEnabled() bool { return zap.L().Core().Enabled(zapcore.DebugLevel) }
 //	log := logging.WithComponent("extproc")
 //	log.Infof("request received")   // {"component":"extproc","level":"info",...}
 func WithComponent(name string) *zap.SugaredLogger {
-	return zap.L().With(zap.String(componentKey, name)).Sugar()
+	return zap.L().With(zap.String(componentKey, componentName(name))).Sugar()
 }
 
 // ComponentEvent is like LogEvent but includes the "component" field.
@@ -260,7 +260,7 @@ func logComponentEventAt(level zapcore.Level, component, event string, fields ma
 		logEventAt(level, event, fields)
 		return
 	}
-	logEventAt(level, event, fields, zap.String(componentKey, component))
+	logEventAt(level, event, fields, zap.String(componentKey, componentName(component)))
 }
 
 // ComponentEventFunc is like ComponentEvent for an event on the request path:
@@ -278,7 +278,7 @@ func logComponentEventFuncAt(level zapcore.Level, component, event string, field
 	built := fields()
 	var extra []zap.Field
 	if _, ok := built[componentKey]; !ok {
-		extra = []zap.Field{zap.String(componentKey, component)}
+		extra = []zap.Field{zap.String(componentKey, componentName(component))}
 	}
 	entry.Write(eventFields(event, built, extra)...)
 }

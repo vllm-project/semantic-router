@@ -101,8 +101,12 @@ thresholds apply to its spans.
 
 ## When the scan cannot finish
 
-If the model is not ready or a scan fails, the signal is unknown. The PII
-module's `on_error` decides what that means: `allow` (default) treats the
+If the model is not ready or a scan fails, the signal is unknown. Content the
+model did not read (over its input or
+[scan cap](model-runtime/reference.md#long-inputs), truncated, or not scanned
+by the signals' deadline) matches as `unscanned` unless the module sets
+`on_unscanned: allow`. The PII module's `on_error` decides what an unknown
+signal means: `allow` (default) treats the
 unread text as clean, and `block` matches it as `classification_error`, so
 text that could not be checked cannot pass as clean.
 
@@ -117,8 +121,12 @@ global:
 
 ## Check it
 
+These worker-level examples run inside an environment containing `vllm-srun`
+(such as the Router image). Classify, embeddings, rerank and bundle are worker
+APIs; the instance frontend publishes System One and decision requests.
+
 ```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu --port 8100
 curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
   -d '{"input": ["Hi, I am Tom Baker, write to tom.baker@example.com."]}'
 ```

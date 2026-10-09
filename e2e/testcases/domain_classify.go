@@ -50,9 +50,9 @@ func domainFixtureForProfile(profile string) (domainClassificationFixture, error
 	case "envoy-ai-gateway":
 		return domainClassificationFixture{model: "e2e-domain", requiredRecipe: "e2e-domain"}, nil
 	case "ml-model-selection", "production-stack":
-		// These profiles own top-level routing and retain their original MoM
+		// These profiles own top-level routing and use their default recipe
 		// request contract. They do not declare the AI Gateway feature recipe.
-		return domainClassificationFixture{model: "MoM"}, nil
+		return domainClassificationFixture{model: "vllm-sr/auto"}, nil
 	default:
 		return domainClassificationFixture{}, fmt.Errorf("domain-classify has no fixture contract for profile %q", profile)
 	}
@@ -202,7 +202,7 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 	}
 
 	// The AI Gateway classifier fixture requires its isolated upstream path.
-	// Other profiles retain their own MoM routing and category assertions.
+	// Other profiles retain their own default routing and category assertions.
 	if fixture.requiredRecipe != "" && (resp.Header.Get("x-vsr-selected-recipe") != fixture.requiredRecipe ||
 		resp.Header.Get("x-vsr-response-path") != "upstream") {
 		result.Error = "classification response did not use the isolated Domain upstream path"

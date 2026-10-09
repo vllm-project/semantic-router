@@ -2,7 +2,7 @@
 title: Gateway 模式
 description: 选择客户端流量从哪里进入 Router：standalone 直接服务，或放在基于 Envoy 的网关之后；适用于 docker 和 kubernetes 两种目标。
 translation:
-  source_commit: "29f7c5a08ccb2426e2bda88de0b1ffd3d3d133a3"
+  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
   source_file: "docs/installation/gateway-modes.md"
   outdated: false
 ---
@@ -27,6 +27,8 @@ vllm-sr serve --gateway extproc                    # Envoy 在前，docker
 vllm-sr serve --target kubernetes --config config.yaml
 ```
 
+除非你需要上面列出的 Envoy 功能，否则先用 `standalone`。在 docker 目标上，切换模式就是用当前生效的配置重启：运行 `vllm-sr serve --gateway extproc`，再运行普通的 `vllm-sr serve` 即可切回。standalone 模式下没有 Envoy 容器，所以 `vllm-sr logs envoy` 和 `x-envoy-*` 响应头只属于 `extproc`。
+
 两种模式运行同一个路由核心，因此同一个请求在两种模式下得到相同的决策、相同的上游请求和相同的响应变换。
 [设计文档](../proposals/standalone-mode#与-envoy-模式的差异)列出了少数有意为之的差异，例如只有 Envoy 才会添加的
 `x-envoy-*` header。
@@ -42,6 +44,7 @@ vllm-sr serve --target kubernetes --config config.yaml
   请求体上限 500 MiB，最多 50,000 个连接，与 Envoy 模板的限制一致。
 - **API key：** 设置 `api_keys` 后，客户端需以 `Authorization: Bearer <key>` 或 `api-key: <key>` 发送其中之一；
   其他请求得到 OpenAI 风格的 401。key 在请求到达 provider 之前被移除。
+- **模型白名单：** 设置 `models` 后，该 listener 只接受这些请求模型（见[模型白名单](#model-allow-list)）。
 - **TLS：** `tls` 让该 listener 以 TLS 1.2 及以上提供服务，通过 ALPN 协商 HTTP/2 或 HTTP/1.1。相对路径相对于配置
   文件所在目录。证书文件变化时 Router 会重新加载密钥对，因此续期后的证书（轮换的 Kubernetes Secret、cert-manager）
   无需重启即可用于新连接；加载失败时继续使用之前的密钥对。`--gateway extproc` 不提供该能力。
@@ -66,7 +69,36 @@ vllm-sr serve --target kubernetes --config config.yaml
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 和模型白名单可原地重新加载。
+
+### 模型白名单 {#model-allow-list}
+
+listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener 仍可使用所有模型：
+
+```yaml
+listeners:
+  - name: dashboard-internal   # 第一个 listener：Dashboard Playground 使用它
+    address: 127.0.0.1
+    port: 8898
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    api_keys: ["${WORKSHOP_KEY}"]
+    models: [vllm-sr/auto]
+```
+
+- 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
+  listener 接受所有模型。
+- 检查在 API key 检查之后、任何 signal、缓存或 decision 之前进行，使用的是 Router 为路由解析出的同一个模型。其他模型
+  （包括原本会直通的 provider 模型）得到 `403`，错误码 `model_not_allowed`，并以客户端协议返回。没有模型的请求得到
+  `400 model_required`。
+- 该 listener 上的 `GET /v1/models` 只列出目录中存在的允许名称。
+- decision 在进程内发起的模型调用（Looper 和 request-graph hop）不是客户端请求，不受限制，因此 `vllm-sr/auto`
+  仍可到达其 decision 指定的所有 provider 模型。
+- 即使开启了 `global.router.skip_processing.enabled`，该 listener 也会忽略 `x-vsr-skip-processing`，因为跳过的请求
+  会绕过检查。
+- `--gateway extproc` 会以 unsupported 拒绝带 `models` 的 listener：CLI 生成的 Envoy listener 目前还不执行它。
 
 ### 身份 header {#identity-headers}
 
@@ -106,19 +138,20 @@ standalone 模式中支持；在那之前它们同样需要 Envoy。
 
 ## 目标与平台
 
-`--platform cpu|amd|nvidia` 适用于两种目标，用于选择镜像：CPU 用 `vllm-sr`，AMD 用 `vllm-sr-rocm`，NVIDIA 用
-`vllm-sr-cuda`。
+`--platform auto` 自动检测部署目标的执行后端。显式选择 `cpu`、`rocm` 或
+`cuda` 时，分别使用 `vllm-sr`、`vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像。
 
-- **docker：** `amd` 透传 ROCm 设备，`nvidia` 透传 NVIDIA GPU（`--gpus all`）。
-- **kubernetes：** 生成的 Helm values 会设置 `gateway.mode`、对应平台的镜像仓库，以及一块 GPU 的资源请求
-  （`amd.com/gpu: 1` 或 `nvidia.com/gpu: 1`）。`--target k8s` 是 `--target kubernetes` 的旧名，仅在本版本中继续可用。
+- **docker：** `rocm` 透传 ROCm 设备，`cuda` 透传 NVIDIA GPU；使用 `--device-ids` 为默认模型部署选择宿主机 GPU。
+- **kubernetes：** 生成的 Helm values 会设置 `gateway.mode`、镜像仓库，以及模型放置所需的 GPU 资源
+  （`amd.com/gpu` 或 `nvidia.com/gpu`）。集群需要相应的设备插件。在 YAML 中使用 `rocm:0` 等分配序号；
+  宿主机 `--device-ids` 仅用于 Docker。`--target k8s` 是 `--target kubernetes` 的旧名，仅在本版本中继续可用。
 
 不使用 CLI 时，Helm chart 读取同一个值 `gateway.mode`（默认 `standalone`）；Operator 默认以 standalone 模式运行 Router，只有当 `spec.gateway` 指定一个 Gateway 时才选择 extproc。迁移由基于 Envoy 的网关调用的现有发行版，请参阅[升级与回滚](upgrade-rollback)。
 
 ### macOS
 
 在 macOS 上 docker 目标只使用 CPU：内置模型在 arm64 镜像中以 CPU 运行，因为 Apple 的虚拟化不向 Docker 的 Linux
-虚拟机提供 Metal 或 GPU 计算。在那里使用 `--platform amd` 或 `--platform nvidia` 会以明确的错误信息失败。通过宿主机使用
+虚拟机提供 Metal 或 GPU 计算。在那里使用 `--platform rocm` 或 `--platform cuda` 会以明确的错误信息失败。通过宿主机使用
 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。
 
 - **在 CPU 上运行轻松：** 307M 的 Vela 任务模型（领域、PII、越狱与安全防护、embedding、重排）、Vela Omni Nano，以及
@@ -128,18 +161,22 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 
 ## `vllm-sr serve` 的选项
 
-`vllm-sr serve --help` 按组列出选项。每个组适用于 `serve` 三种运行方式中的若干种：docker 目标上的
-Router、kubernetes 目标上的 Router，以及 engine 模式（`vllm-sr serve MODEL`，在容器里运行模型运行时）。
-在组不适用的地方使用其中的选项会报错，并说明它适用于哪里。
+`vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
+两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
+不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
+profile 和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
 
-| 组 | 适用于 | 选项 |
-| --- | --- | --- |
-| 通用选项 | docker、kubernetes、engine 模式 | `--platform`、`--image`、`--log-level` |
-| Router 选项 | docker、kubernetes | `--config`、`--target`、`--gateway`、`--minimal`、`--readonly`、`--algorithm` |
-| 容器选项 | docker、engine 模式 | `--image-pull-policy`、`--container-runtime` |
-| Docker 目标 | docker | `--router-image`、`--envoy-image`（仅 `--gateway extproc`）、`--dashboard-image`、`--startup-timeout`、`--replace-active-config`、`--recipe-env` |
-| Kubernetes 目标 | kubernetes | `--namespace`、`--context`、`--profile`、`--chart-dir` |
-| Engine 模式 | engine 模式 | `--models`、`--revision`、`--device`、`--host`、`--port`、`--runtime-profile` |
+| 范围 | 选项 |
+| --- | --- |
+| 模型与运行 | `MODEL`、`--engine`、`--revision`、`--runtime-profile`、`--data-parallel-size` / `-dp` |
+| 平台 | `--platform auto/cpu/cuda/rocm`，auto 检查实际 Docker 主机或目标 Kubernetes 集群 |
+| Docker 设备 | `--device-ids` 使用主机编号，按已有可见掩码映射；一个编号允许同卡多副本，N 个编号对应 N 个副本 |
+| 配置 | `--config`、`--target`、`--gateway`、`--minimal`、`--readonly`、`--algorithm` |
+| Docker 部署 | `--image-pull-policy`、`--container-runtime`、`--router-image`、`--envoy-image`、`--dashboard-image`、`--startup-timeout`、`--replace-active-config`、`--recipe-env` |
+| Kubernetes 部署 | `--namespace`、`--context`、`--profile`、`--chart-dir` |
 
-`--container-runtime`（`docker` 或 `podman`）取代了 `--runtime`；在 `serve`、`status`、`logs`、`stop` 和
-`dashboard` 上，`--runtime` 仅在本版本中继续可用。
+Kubernetes 使用 pod 分配后的设备序号，通过 canonical replicas 请求 GPU 资源，
+不接受物理主机 `--device-ids`。模型 `--runtime-profile` 与部署 `--profile` 独立。
+`--revision` 可填分支、tag 或 commit，启动前只解析一次并记录不可变 SHA；内置模型
+省略时使用发布 pin。监听地址、端口和公开模型授权始终通过 config 控制。
+完整参数以 [CLI 参考](/docs/api/cli) 为准。

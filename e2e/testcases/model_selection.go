@@ -133,9 +133,9 @@ func testSingleModelSelection(ctx context.Context, testCase ModelSelectionCase, 
 		AllowNoDecision: testCase.AllowNoDecision,
 	}
 
-	// Create chat completion request with MoM (Mixture of Models) to trigger decision engine
+	// Create chat completion request through the default recipe to trigger decision selection
 	requestBody := map[string]interface{}{
-		"model": "MoM", // Use MoM to trigger auto model selection
+		"model": "vllm-sr/auto", // Use the default recipe for model selection
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

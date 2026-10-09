@@ -1,10 +1,7 @@
-"""The option groups of `vllm-sr serve`.
+"""Target-specific option groups for one persistent instance frontend.
 
-`serve` runs in one of three modes: the Router on the docker target, the
-Router on the kubernetes target, or engine mode (`vllm-sr serve MODEL`, the
-model runtime in a container). Every option belongs to one group, and a group
-names the modes it applies to. `--help` prints the groups, and an option set
-in a mode its group does not apply to is an error that names where it applies.
+Router and Engine are capabilities of the same instance. Only deployment
+options are restricted by Docker versus Kubernetes target.
 """
 
 from __future__ import annotations
@@ -17,10 +14,9 @@ from click.core import ParameterSource
 from cli.deployment_backend import TARGET_DOCKER, TARGET_KUBERNETES
 from cli.gateway_mode import runs_envoy
 
-# Router mode's modes are its targets.
+# Option applicability is determined only by the deployment target.
 MODE_DOCKER = TARGET_DOCKER
 MODE_KUBERNETES = TARGET_KUBERNETES
-MODE_ENGINE = "engine"
 
 
 @dataclass(frozen=True)
@@ -34,21 +30,37 @@ class OptionGroup:
 
 SERVE_OPTION_GROUPS = (
     OptionGroup(
-        "Common options (docker, kubernetes and engine mode)",
-        frozenset({MODE_DOCKER, MODE_KUBERNETES, MODE_ENGINE}),
-        "every mode",
-        ("platform", "image", "log_level"),
-    ),
-    OptionGroup(
-        "Router options (docker and kubernetes targets)",
+        "Instance and model options",
         frozenset({MODE_DOCKER, MODE_KUBERNETES}),
-        "router mode; engine mode serves only models",
-        ("config", "target", "gateway", "minimal", "readonly", "algorithm"),
+        "every mode",
+        (
+            "platform",
+            "image",
+            "log_level",
+            "engine",
+            "model",
+            "revision",
+            "data_parallel_size",
+            "runtime_profile",
+        ),
     ),
     OptionGroup(
-        "Container options (docker target and engine mode)",
-        frozenset({MODE_DOCKER, MODE_ENGINE}),
-        "the docker target and engine mode",
+        "Instance configuration (docker and kubernetes targets)",
+        frozenset({MODE_DOCKER, MODE_KUBERNETES}),
+        "docker and kubernetes targets",
+        (
+            "config",
+            "target",
+            "gateway",
+            "minimal",
+            "readonly",
+            "algorithm",
+        ),
+    ),
+    OptionGroup(
+        "Container options (docker target)",
+        frozenset({MODE_DOCKER}),
+        "the docker target",
         ("image_pull_policy", "container_runtime", "runtime"),
     ),
     OptionGroup(
@@ -62,6 +74,7 @@ SERVE_OPTION_GROUPS = (
             "startup_timeout",
             "replace_active_config",
             "recipe_env_names",
+            "device_ids",
         ),
     ),
     OptionGroup(
@@ -70,24 +83,9 @@ SERVE_OPTION_GROUPS = (
         "the kubernetes target (--target kubernetes)",
         ("namespace", "context", "profile", "chart_dir"),
     ),
-    OptionGroup(
-        "Engine mode (vllm-sr serve MODEL)",
-        frozenset({MODE_ENGINE}),
-        "engine mode; pass a MODEL or --models",
-        ("models_file", "revision", "device", "host", "port", "runtime_profile"),
-    ),
 )
 
 OPTION_GROUP = {name: group for group in SERVE_OPTION_GROUPS for name in group.options}
-
-# A clearer message than the group's for an option a user may carry over
-# from another mode.
-_MOVED_OPTIONS = {
-    (MODE_ENGINE, "profile"): (
-        "--profile is the kubernetes deployment profile; engine mode takes "
-        "--runtime-profile"
-    ),
-}
 
 
 class GroupedServeCommand(click.Command):
@@ -130,9 +128,8 @@ def reject_misplaced_options(ctx: click.Context, mode: str) -> None:
         for name in group.options:
             if not explicit(ctx, name):
                 continue
-            message = _MOVED_OPTIONS.get((mode, name))
             raise click.UsageError(
-                message or f"{_flag(ctx, name)} applies to {group.applies_to}",
+                f"{_flag(ctx, name)} applies to {group.applies_to}",
                 ctx=ctx,
             )
 

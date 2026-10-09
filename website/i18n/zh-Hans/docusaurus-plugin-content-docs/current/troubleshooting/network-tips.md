@@ -52,7 +52,7 @@ VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
   vllm-sr serve --config config.yaml --image-pull-policy never
 ```
 
-对于 AMD 或 NVIDIA 构建，选择对应的 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像，并传入 `--platform amd` 或 `--platform nvidia`。如果自定义了构建 tag 或仓库，请使用实际值；完整本地流程见[开发指南](../community/development)。
+对于 AMD 或 NVIDIA 构建，选择对应的 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像，并传入 `--platform rocm` 或 `--platform cuda`。如果自定义了构建 tag 或仓库，请使用实际值；完整本地流程见[开发指南](../community/development)。
 
 从源码构建项目时，通过组织已批准的代理或镜像配置包管理器和容器运行时。避免把区域端点、凭据或本地代理地址提交到仓库。
 
