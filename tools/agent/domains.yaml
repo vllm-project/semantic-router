@@ -868,6 +868,17 @@ profiles:
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  routing-errors:
+    display_name: Routing Error Contracts
+    owner: e2e
+    coverage_role: gateway-router-error-codes-without-provider-fallback
+    selection: pr
+    paths:
+      - e2e/profiles/routing-errors/**
+      - e2e/testcases/routing_error_codes*.go
+      - src/semantic-router/pkg/extproc/routing_failure*.go
+      - src/semantic-router/pkg/extproc/processor_req_body.go
+      - src/semantic-router/pkg/extproc/req_filter_classification_runtime.go
   long-context-routing:
     display_name: Long Context Routing
     owner: e2e

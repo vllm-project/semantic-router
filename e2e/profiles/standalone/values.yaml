@@ -12,8 +12,8 @@ configOverride:
       port: 8899
       timeout: 300s
   providers:
-    defaults:
-      model: primary-model
+    # Positive requests use explicit decisions below. Keep the global fallback
+    # unset so the isolated, decisionless error fixture can exercise no_route.
     models:
       - name: primary-model
         backend_refs:

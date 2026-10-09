@@ -19,11 +19,18 @@ func init() {
 		Tags:        []string{"routing", "errors", "gateway"},
 		Fn:          testRoutingErrorCodes,
 	})
+	pkgtestcases.Register("unknown-model-error-codes", pkgtestcases.TestCase{
+		Description: "Unknown provider and entrypoint names receive the Router's own model_not_found error even when a default backend exists",
+		Tags:        []string{"routing", "errors", "gateway"},
+		Fn: func(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+			return runRoutingErrorProbes(ctx, client, opts, unknownModelErrorProbes)
+		},
+	})
 }
 
 // routingErrorProbe is a request no profile running this case can route: no
-// provider model has the first name, and the declared no-route recipe has no
-// decision that can select a backend.
+// provider model has the first name. The no-route case additionally requires
+// a fixture with neither a matching decision nor a default provider model.
 type routingErrorProbe struct {
 	name    string
 	model   string
@@ -31,14 +38,20 @@ type routingErrorProbe struct {
 	message string
 }
 
-var routingErrorProbes = []routingErrorProbe{
+var unknownModelErrorProbes = []routingErrorProbe{
 	{name: "unknown model", model: "e2e-no-such-model", code: "model_not_found", message: "the requested model is not available"},
-	{name: "declared recipe without a route", model: "e2e-no-route", code: "no_route", message: "no route matched the request"},
 	{name: "undeclared legacy alias", model: "MoM", code: "model_not_found", message: "the requested model is not available"},
 	{name: "undeclared algorithm alias", model: "vllm-sr/flow", code: "model_not_found", message: "the requested model is not available"},
 }
 
+var routingErrorProbes = append(append([]routingErrorProbe(nil), unknownModelErrorProbes...),
+	routingErrorProbe{name: "declared recipe without a route", model: "e2e-no-route", code: "no_route", message: "no route matched the request"})
+
 func testRoutingErrorCodes(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	return runRoutingErrorProbes(ctx, client, opts, routingErrorProbes)
+}
+
+func runRoutingErrorProbes(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, probes []routingErrorProbe) error {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return err
@@ -46,13 +59,13 @@ func testRoutingErrorCodes(ctx context.Context, client *kubernetes.Clientset, op
 	defer session.Close()
 	httpClient := session.HTTPClient(60 * time.Second)
 	var failures []error
-	for _, probe := range routingErrorProbes {
+	for _, probe := range probes {
 		if err := checkRoutingErrorProbe(ctx, httpClient, session.URL("/v1/chat/completions"), probe); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", probe.name, err))
 		}
 	}
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"probes": len(routingErrorProbes), "failed": len(failures)})
+		opts.SetDetails(map[string]interface{}{"probes": len(probes), "failed": len(failures)})
 	}
 	return errors.Join(failures...)
 }
