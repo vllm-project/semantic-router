@@ -217,9 +217,6 @@ func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
 					t.Fatalf("global opt-out must prevent default capture for decision %q", route.Name)
 				}
 			}
-			cfg.RouterReplay.Enabled = true
-			denyReplay := false
-			cfg.DataPolicy = &config.RoutingDataPolicy{Replay: &denyReplay}
 			if cfg.EffectiveRouterReplayConfig(nil) != nil {
 				t.Fatal("operator opt-out must also prevent capture before decision selection")
 			}

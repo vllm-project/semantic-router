@@ -422,6 +422,41 @@ routing:
 	}
 }
 
+func TestGrok47CatalogMaterializesItsReasoningContract(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: grok
+      catalog: xai/grok-4.7
+      backend_refs:
+        - name: primary
+          provider: xai
+routing:
+  decisions:
+    - name: grok_default
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: grok
+          use_reasoning: true
+          reasoning_effort: xhigh
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	family := cfg.GetModelReasoningFamily("grok")
+	if family == nil || strings.Join(family.Levels, ",") != "low,medium,high,xhigh" || family.Default != "high" {
+		t.Fatalf("Grok 4.7 reasoning contract = %+v", family)
+	}
+	if got := cfg.ResolveExternalModelID("grok", "grok_primary"); got != "grok-4.7" {
+		t.Fatalf("Grok 4.7 provider model ID = %q", got)
+	}
+}
+
 func TestRouterOwnedListenerRejectsBackendlessPhysicalModel(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
 version: v0.3

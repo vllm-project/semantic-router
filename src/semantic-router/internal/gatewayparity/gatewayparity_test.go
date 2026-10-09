@@ -96,8 +96,8 @@ func TestNativeGatewayServesTheParityCorpus(t *testing.T) {
 // routingFailureCodes are the corpus cases the Router cannot route, with the
 // reason code both modes must return for them.
 var routingFailureCodes = map[string]string{
-	"unknown-model":       "model_not_found",
-	"flow-alias-no-route": "no_route",
+	"unknown-model":          "model_not_found",
+	"unpublished-flow-model": "model_not_found",
 }
 
 func assertRoutingFailureCode(t *testing.T, response *parity.Message, code string) {

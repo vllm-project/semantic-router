@@ -237,7 +237,7 @@ def test_graph_heads_and_the_explainer_binding_leave_task_bindings():
             },
             recipes=[
                 {
-                    "name": "amd",
+                    "name": "rocm",
                     "routing": {
                         "model_bindings": {"domain_classifier": dict(graph_binding)}
                     },

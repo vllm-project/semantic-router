@@ -22,17 +22,16 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource             `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy          `yaml:"strategy,omitempty"`
-	AutoModelName             string                   `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string                `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                     `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                     `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody    `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig     `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig     `yaml:"model_selection"`
-	Learning                  RouterLearningConfig     `yaml:"learning,omitempty"`
-	Fallback                  *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	Enabled           *bool                    `yaml:"enabled,omitempty"`
+	ConfigSource      ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy          RoutingStrategy          `yaml:"strategy,omitempty"`
+	ListBackendModels bool                     `yaml:"list_backend_models"`
+	ClearRouteCache   bool                     `yaml:"clear_route_cache"`
+	StreamedBody      CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing    SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
+	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -68,8 +67,9 @@ type CanonicalStoreGlobal struct {
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
 type CanonicalIntegrationGlobal struct {
-	Tools  ToolsConfig  `yaml:"tools"`
-	Looper LooperConfig `yaml:"looper"`
+	KVTransfer *KVTransferConfig `yaml:"kv_transfer,omitempty"`
+	Tools      ToolsConfig       `yaml:"tools"`
+	Looper     LooperConfig      `yaml:"looper"`
 }
 
 // CanonicalModelCatalog groups router-owned model assets and the module
@@ -108,17 +108,16 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
-	// DecisionModel is the Vela model that answers the built-in signals and
-	// the decision questions that name no deployment (decision_model.go).
-	DecisionModel         string `yaml:"decision_model,omitempty"`
-	Safety                string `yaml:"safety,omitempty"`
-	Hazard                string `yaml:"hazard,omitempty"`
-	PromptGuard           string `yaml:"prompt_guard,omitempty"`
-	DomainClassifier      string `yaml:"domain_classifier,omitempty"`
-	PIIClassifier         string `yaml:"pii_classifier,omitempty"`
-	FactCheckClassifier   string `yaml:"fact_check_classifier,omitempty"`
-	HallucinationDetector string `yaml:"hallucination_detector,omitempty"`
-	FeedbackDetector      string `yaml:"feedback_detector,omitempty"`
+	// DecisionModel selects the shared default judgment deployment.
+	DecisionModel         DecisionModelBinding `yaml:"decision_model,omitempty"`
+	Safety                string               `yaml:"safety,omitempty"`
+	Hazard                string               `yaml:"hazard,omitempty"`
+	PromptGuard           string               `yaml:"prompt_guard,omitempty"`
+	DomainClassifier      string               `yaml:"domain_classifier,omitempty"`
+	PIIClassifier         string               `yaml:"pii_classifier,omitempty"`
+	FactCheckClassifier   string               `yaml:"fact_check_classifier,omitempty"`
+	HallucinationDetector string               `yaml:"hallucination_detector,omitempty"`
+	FeedbackDetector      string               `yaml:"feedback_detector,omitempty"`
 }
 
 // CanonicalPromptGuardModule keeps prompt-guard settings visible as a module
@@ -276,14 +275,12 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 }
 
 func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal) {
+	cfg.RoutingDefaults = RoutingDefaults{Strategy: router.Strategy, Fallback: router.Fallback.Clone()}
 	cfg.ConfigSource = router.ConfigSource
 	cfg.Strategy = router.Strategy
-	cfg.AutoModelName = router.AutoModelName
-	cfg.AutoModelNames = nil
-	if router.AutoModelNames != nil {
-		cfg.AutoModelNames = append([]string{}, (*router.AutoModelNames)...)
-	}
-	cfg.IncludeConfigModelsInList = router.IncludeConfigModelsInList
+
+	cfg.ListBackendModels = router.ListBackendModels
+	cfg.RouterEnabled = router.Enabled
 	cfg.ClearRouteCache = router.ClearRouteCache
 	cfg.StreamedBodyMode = router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes
@@ -291,9 +288,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
-	if router.Fallback != nil && cfg.Fallback == nil {
-		cfg.Fallback = router.Fallback.Clone()
-	}
+	cfg.Fallback = router.Fallback.Clone()
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
@@ -315,6 +310,7 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 }
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
+	cfg.KVTransfer = integrations.KVTransfer
 	cfg.Tools = integrations.Tools
 	cfg.Looper = integrations.Looper
 	if integrations.Looper.Endpoint != "" {
@@ -327,7 +323,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
-	cfg.DecisionModel = modelCatalog.System.DecisionModel
+	cfg.DecisionModel = modelCatalog.System.DecisionModel.Deployment
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)

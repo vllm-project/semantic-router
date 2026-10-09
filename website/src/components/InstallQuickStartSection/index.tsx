@@ -175,6 +175,12 @@ export default function InstallQuickStartSection(): JSX.Element {
           </button>
         </div>
 
+        <p className={styles.channelNote}>
+          <strong><Translate id="homepage.install.channel">Development channel</Translate></strong>
+          <span aria-hidden="true"> · </span>
+          <Translate id="homepage.install.channelDescription">Matches the latest docs, including the built-in model runtime.</Translate>
+        </p>
+
         <div className={styles.actions}>
           {activeAudience === 'agent'
             ? (

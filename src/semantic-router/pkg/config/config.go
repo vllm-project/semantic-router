@@ -74,6 +74,7 @@ const (
 
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
+	KVTransfer   *KVTransferConfig `yaml:"-"`
 	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`
 	MoMRegistry  map[string]string `yaml:"mom_registry,omitempty"`
 	// SkipExternalAssetValidation is set only for untrusted read-only
@@ -87,6 +88,7 @@ type RouterConfig struct {
 	RoutingFragmentOnly bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
+	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
@@ -203,11 +205,22 @@ type Listener struct {
 	// APIKeys are client bearer credentials the listener enforces, in
 	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// Models, when set, are the only request models a standalone listener
+	// accepts, by exact `model` value; others get 403 model_not_allowed and
+	// /v1/models lists only these. Empty accepts every model.
+	Models []string `yaml:"models,omitempty"`
+	// SystemOne explicitly publishes native decision inference independently
+	// from the Chat/Responses model allow-list. Omission keeps it private.
+	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
 	// Identity, when set, decides whether a standalone Router keeps the client
 	// identity headers that requests on this listener carry.
 	Identity *ListenerIdentity `yaml:"identity,omitempty"`
+}
+
+type ListenerSystemOne struct {
+	Models []string `yaml:"models"`
 }
 
 // ListenerIdentity names the identity sources a standalone listener trusts.
@@ -241,14 +254,19 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
-	ClearRouteCache           bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode          bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes      int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec    int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
+	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
+	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
+	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+}
+
+// RoutingEnabled controls the recipe pipeline independently of the frontend
+// and its model deployments. Omission preserves the default Router mode.
+func (c *RouterConfig) RoutingEnabled() bool {
+	return c != nil && (c.RouterEnabled == nil || *c.RouterEnabled)
 }
 
 // SkipProcessingConfig gates the x-vsr-skip-processing request header.
@@ -284,7 +302,6 @@ type InlineModels struct {
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
 	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
-	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals               `yaml:",inline"`
 	Projections           Projections              `yaml:"projections,omitempty"`

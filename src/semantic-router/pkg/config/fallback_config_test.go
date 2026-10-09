@@ -39,13 +39,13 @@ routing:
 			errSubstr: "unsupported fallback policy version 2",
 		},
 		{
-			name: "max_attempts zero when enabled",
+			name: "max_attempts negative when enabled",
 			yamlSnippet: `version: v0.3
 routing:
   fallback:
     version: 1
     enabled: true
-    max_attempts: 0
+    max_attempts: -1
 `,
 			errSubstr: "max_attempts must be >= 1 when enabled",
 		},
@@ -118,13 +118,14 @@ recipes:
 
 func TestFallbackRecipeInheritanceAndOverrides(t *testing.T) {
 	input := []byte(`version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: false
-    max_attempts: 2
-    total_timeout: 20s
-    per_attempt_timeout: 5s
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: false
+      max_attempts: 2
+      total_timeout: 20s
+      per_attempt_timeout: 5s
 recipes:
   - name: active-fallback
     routing:
@@ -142,7 +143,7 @@ recipes:
 		t.Fatal(err)
 	}
 
-	// Global / top-level fallback
+	// Shared global fallback
 	if cfg.Fallback == nil {
 		t.Fatal("expected top-level fallback to be parsed")
 	}
@@ -218,17 +219,18 @@ func TestFallbackRoutingFragment(t *testing.T) {
 
 func TestFallbackRecipePartialOverridePreservesGlobalEnabled(t *testing.T) {
 	input := []byte(`version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    total_timeout: 30s
-    per_attempt_timeout: 10s
-    circuit_breaker:
-      consecutive_failures: 3
-      cooldown_period: 30s
-      half_open_probes: 1
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      total_timeout: 30s
+      per_attempt_timeout: 10s
+      circuit_breaker:
+        consecutive_failures: 3
+        cooldown_period: 30s
+        half_open_probes: 1
 recipes:
   - name: partial-tuning
     routing:
@@ -311,13 +313,14 @@ func TestFallbackRecipeEnableOnlyOverrideInheritsGlobalLimits(t *testing.T) {
 	// 1. Enable-only recipe with global limits defined
 	yamlConfigWithGlobal := `
 version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: false
-    max_attempts: 3
-    total_timeout: 10s
-    per_attempt_timeout: 4s
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: false
+      max_attempts: 3
+      total_timeout: 10s
+      per_attempt_timeout: 4s
 recipes:
   - name: enable-only-with-global
     routing:
@@ -385,11 +388,12 @@ recipes:
 	// 3. Explicitly invalid recipe values must still be rejected during validation
 	yamlConfigInvalid := `
 version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
 recipes:
   - name: explicitly-invalid-recipe
     routing:
@@ -410,18 +414,19 @@ func TestFallbackRecipeProactiveOverridePermutationsAndValidation(t *testing.T) 
 	// - recipe-unconfigured: omits fallback completely (inherits clean clone of global)
 	multiRecipeYAML := `
 version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    total_timeout: 30s
-    per_attempt_timeout: 10s
-    retryable_status_codes: [502, 503, 504]
-    circuit_breaker:
-      consecutive_failures: 3
-      cooldown_period: 20s
-      half_open_probes: 2
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      total_timeout: 30s
+      per_attempt_timeout: 10s
+      retryable_status_codes: [502, 503, 504]
+      circuit_breaker:
+        consecutive_failures: 3
+        cooldown_period: 20s
+        half_open_probes: 2
 recipes:
   - name: recipe-timeouts
     routing:
@@ -529,13 +534,14 @@ recipes:
 			name: "recipe per_attempt_timeout exceeds inherited total_timeout",
 			yaml: `
 version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    total_timeout: 20s
-    per_attempt_timeout: 5s
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      total_timeout: 20s
+      per_attempt_timeout: 5s
 recipes:
   - name: conflicting-timeouts
     routing:
@@ -548,13 +554,14 @@ recipes:
 			name: "recipe total_timeout smaller than inherited per_attempt_timeout",
 			yaml: `
 version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    total_timeout: 30s
-    per_attempt_timeout: 10s
+global:
+  router:
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      total_timeout: 30s
+      per_attempt_timeout: 10s
 recipes:
   - name: clamped-total
     routing:

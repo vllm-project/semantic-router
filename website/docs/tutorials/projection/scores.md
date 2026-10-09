@@ -57,6 +57,11 @@ Supported input types include:
 - `kb`
 - `conversation`
 - `event`
+- `metadata`
+- `classifier`
+- `input_modality`
+- `decision`
+- `safety`
 - `kb_metric`
 - `projection`
 
