@@ -10,10 +10,10 @@ the source logo file is never modified and no logo is redrawn.
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import html
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -21,6 +21,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from diagram_assets import banner, cascade, ecosystem
 from matplotlib.patches import FancyBboxPatch
 from PIL import Image
 
@@ -331,181 +332,38 @@ def paths(data, out, reports):
     save_chart(fig, out, "paths", reports)
 
 
-def svg_text(x, y, text, *, size=28, color=INK, weight=400, anchor="start", extra=""):
-    return f'<text x="{x}" y="{y}" fill="{color}" font-family="DejaVu Sans,sans-serif" font-size="{size}" font-weight="{weight}" text-anchor="{anchor}" {extra}>{html.escape(text)}</text>'
-
-
-def banner(logo: Path) -> str:
-    encoded = base64.b64encode(logo.read_bytes()).decode()
-    parts = [
-        """<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1920" height="1080" viewBox="0 0 1920 1080">
-<defs>
- <linearGradient id="night" x2="0.75" y2="1"><stop stop-color="#111727"/><stop offset=".55" stop-color="#29263b"/><stop offset="1" stop-color="#54404b"/></linearGradient>
- <radialGradient id="horizon"><stop stop-color="#e9a25f" stop-opacity=".68"/><stop offset=".42" stop-color="#b76748" stop-opacity=".28"/><stop offset="1" stop-color="#151827" stop-opacity="0"/></radialGradient>
- <radialGradient id="planet" cx=".18" cy=".5" r=".9"><stop stop-color="#f8cf9a"/><stop offset=".08" stop-color="#d89564"/><stop offset=".4" stop-color="#75515d"/><stop offset=".8" stop-color="#30263a"/></radialGradient>
- <linearGradient id="title" x2="1" y2="1"><stop stop-color="#f5d7ae"/><stop offset="1" stop-color="#f29a53"/></linearGradient>
- <filter id="white-logo"><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/></filter>
-</defs>
-<rect width="1920" height="1080" fill="url(#night)"/>
-<ellipse cx="710" cy="1200" rx="1550" ry="860" fill="url(#horizon)"/>
-<circle cx="2150" cy="90" r="590" fill="url(#planet)" opacity=".62"/>
-<circle cx="2150" cy="90" r="590" fill="none" stroke="#e9ad79" stroke-opacity=".34" stroke-width="2"/>
-<path d="M-120 950 C500 820 1380 950 2020 770" fill="none" stroke="#f7c99e" stroke-opacity=".12" stroke-width="2"/>
-<path d="M-120 990 C550 820 1440 990 2020 810" fill="none" stroke="#f7c99e" stroke-opacity=".08" stroke-width="1"/>
-"""
-    ]
-    for x, y, radius, opacity in (
-        (160, 150, 2, 0.25),
-        (398, 95, 1.5, 0.3),
-        (1220, 110, 2, 0.4),
-        (1510, 250, 3, 0.7),
-        (1660, 650, 1.5, 0.3),
-        (232, 626, 2, 0.3),
-        (630, 188, 1, 0.4),
-        (1100, 766, 1.5, 0.25),
-        (810, 79, 2, 0.3),
-        (145, 860, 1.5, 0.25),
-    ):
-        parts.append(
-            f'<circle cx="{x}" cy="{y}" r="{radius}" fill="white" opacity="{opacity}"/>'
-        )
-    parts += [
-        svg_text(
-            960,
-            285,
-            "SYSTEM ONE",
-            size=34,
-            color="#cfccd9",
-            weight=500,
-            anchor="middle",
-            extra='letter-spacing="9"',
-        ),
-        svg_text(
-            960, 465, "Auto", size=182, color="url(#title)", weight=700, anchor="middle"
-        ),
-        svg_text(
-            960,
-            584,
-            "Small first. Strong when it counts.",
-            size=49,
-            color="#ffffff",
-            weight=500,
-            anchor="middle",
-        ),
-        svg_text(
-            960,
-            666,
-            "DECISION 2.0  ·  KAI → VEGA",
-            size=25,
-            color="#e8c5a3",
-            anchor="middle",
-            extra='letter-spacing="3"',
-        ),
-        f'<image x="745" y="745" width="430" height="177" xlink:href="data:image/png;base64,{encoded}" filter="url(#white-logo)"/>',
-        "</svg>",
-    ]
-    return "\n".join(parts)
-
-
-def cascade() -> str:
-    parts = [
-        """<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="920" viewBox="0 0 1800 920">
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="context-stroke"/></marker></defs>
-<rect width="1800" height="920" fill="white"/>
-<rect x="325" y="145" width="1420" height="675" rx="24" fill="#f7f9fb" stroke="#dde4eb" stroke-width="2"/>
-""",
-        svg_text(
-            55, 85, "One request. An explicit second opinion.", size=46, weight=700
-        ),
-        svg_text(
-            55,
-            130,
-            "Kai answers the original bundle. Upgrade only when the gate does not pass.",
-            size=24,
-            color=MUTED,
-        ),
-        svg_text(
-            365,
-            198,
-            "vllm-sr/auto   ·   SELECTED DECISION / CASCADE",
-            size=23,
-            color=MUTED,
-            weight=600,
-        ),
-    ]
-    boxes = [
-        (45, 385, 230, 150, "#ffffff", INK),
-        (370, 385, 265, 150, "#fff0e6", AUTO),
-        (1010, 640, 280, 155, "#e8f3fa", VEGA),
-        (1455, 375, 255, 180, "#ffffff", INK),
-    ]
-    for x, y, w, h, fill, stroke in boxes:
-        parts.append(
-            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="16" fill="{fill}" stroke="{stroke}" stroke-width="2.5"/>'
-        )
-    parts += [
-        svg_text(160, 435, "Application", size=31, weight=700, anchor="middle"),
-        svg_text(160, 480, "State + questions", size=22, anchor="middle", color=MUTED),
-        svg_text(
-            502, 435, "Kai 0.6B", size=35, weight=700, anchor="middle", color=AUTO
-        ),
-        svg_text(502, 481, "Answers once", size=24, anchor="middle"),
-        svg_text(
-            1150, 693, "Vega 27B", size=35, weight=700, anchor="middle", color=VEGA
-        ),
-        svg_text(1150, 740, "Original request", size=24, anchor="middle"),
-        svg_text(1582, 425, "One complete", size=27, weight=700, anchor="middle"),
-        svg_text(1582, 463, "native response", size=27, weight=700, anchor="middle"),
-        svg_text(
-            1582, 511, "Answers + probabilities", size=18, anchor="middle", color=MUTED
-        ),
-        '<path d="M800 370 L910 460 L800 550 L690 460Z" fill="#fff9ef" stroke="#8e7353" stroke-width="2.5"/>',
-        svg_text(800, 450, "All answers", size=25, weight=600, anchor="middle"),
-        svg_text(800, 486, "pass?", size=25, weight=600, anchor="middle"),
-    ]
-    paths = [
-        ("M275 460 H365", INK),
-        ("M635 460 H685", INK),
-        ("M800 370 V285 H1582 V370", AUTO),
-        ("M800 550 V718 H1005", VEGA),
-        ("M1290 718 H1582 V560", VEGA),
-    ]
-    for d, color in paths:
-        parts.append(
-            f'<path d="{d}" fill="none" stroke="{color}" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>'
-        )
-    parts += [
-        svg_text(
-            1170,
-            262,
-            "PASS · keep Kai\u2019s answer",
-            size=26,
-            weight=600,
-            anchor="middle",
-            color=AUTO,
-        ),
-        svg_text(820, 613, "OTHERWISE", size=23, weight=600, color=VEGA),
-        svg_text(
-            502, 590, "No extra classifier call", size=21, color=MUTED, anchor="middle"
-        ),
-        svg_text(55, 867, "Choice · Score · Noul", size=24, color=MUTED),
-        svg_text(
-            1745,
-            867,
-            "At most two native model calls in this example",
-            size=24,
-            color=MUTED,
-            anchor="end",
-        ),
-        "</svg>",
-    ]
-    return "\n".join(parts)
-
-
 def render_svg(svg: Path, chromium: Path, width: int, height: int):
+    layout_script = """
+document.fonts.ready.then(() => {
+  const texts = [...document.querySelectorAll('svg text')].map(node => {
+    const r = node.getBoundingClientRect();
+    return {text: node.textContent, x: r.x, y: r.y, right: r.right,
+      bottom: r.bottom, box: node.getAttribute('data-box')};
+  });
+  const bounds = document.querySelector('svg').getBoundingClientRect();
+  const outside = [], overlaps = [], containers = [];
+  for (const [i, a] of texts.entries()) {
+    if (a.x < 0 || a.y < 0 || a.right > bounds.width || a.bottom > bounds.height)
+      outside.push(a.text);
+    if (a.box) {
+      const [x,y,w,h] = a.box.split(' ').map(Number);
+      if (a.x < x || a.y < y || a.right > x+w || a.bottom > y+h)
+        containers.push(a.text);
+    }
+    for (const b of texts.slice(i+1)) {
+      if (Math.min(a.right,b.right)-Math.max(a.x,b.x)>2 &&
+          Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>2)
+        overlaps.push([a.text,b.text]);
+    }
+  }
+  document.documentElement.dataset.layout = JSON.stringify({
+    text_objects: texts.length, outside_canvas: outside,
+    text_overlaps: overlaps, outside_declared_container: containers});
+});
+"""
     wrapper = svg.with_suffix(".render.html")
     wrapper.write_text(
-        f"<html><head><style>@page{{size:{width}px {height}px;margin:0}}html,body{{margin:0;width:{width}px;height:{height}px;overflow:hidden}}svg{{display:block}}</style></head><body>{svg.read_text()}</body></html>"
+        f"<html><head><style>@page{{size:{width}px {height}px;margin:0}}html,body{{margin:0;width:{width}px;height:{height}px;overflow:hidden}}svg{{display:block}}</style></head><body>{svg.read_text()}<script>{layout_script}</script></body></html>"
     )
     common = [
         str(chromium),
@@ -537,7 +395,20 @@ def render_svg(svg: Path, chromium: Path, width: int, height: int):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
+    measured = subprocess.run(
+        [*common, "--dump-dom", wrapper.resolve().as_uri()],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    match = re.search(r'data-layout="([^"]+)"', measured.stdout)
+    if not match:
+        raise ValueError(f"missing browser geometry report for {svg.name}")
+    report = json.loads(html.unescape(match[1]))
+    if any(report[key] for key in report if key != "text_objects"):
+        raise ValueError(f"diagram text layout failed for {svg.name}: {report}")
     wrapper.unlink()
+    return report
 
 
 def main():
@@ -552,15 +423,17 @@ def main():
     data = json.loads(args.data.read_text())
     args.output.mkdir(parents=True, exist_ok=True)
     reports = {}
+    diagram_reports = {}
     for draw in (quality, latency, paths):
         draw(data, args.output, reports)
     for name, source, size in (
         ("hero", banner(args.logo), (1920, 1080)),
-        ("cascade", cascade(), (1800, 920)),
+        ("cascade", cascade(), (1800, 1010)),
+        ("ecosystem", ecosystem(), (1800, 1160)),
     ):
         svg = args.output / f"{name}.svg"
         svg.write_text(source)
-        render_svg(svg, args.chromium, *size)
+        diagram_reports[name] = render_svg(svg, args.chromium, *size)
         if name == "hero":
             with Image.open(svg.with_suffix(".png")) as raster:
                 raster.convert("RGB").save(
@@ -588,6 +461,9 @@ def main():
         "data_sha256": DATA_SHA,
         "logo_sha256": hashlib.sha256(args.logo.read_bytes()).hexdigest(),
         "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "diagram_source_sha256": hashlib.sha256(
+            Path(__file__).with_name("diagram_assets.py").read_bytes()
+        ).hexdigest(),
         "logo_treatment": "Original alpha geometry rendered in white by SVG filter; source PNG unchanged; no KR Labs mark",
         "cover_raster": {
             "format": "JPEG",
@@ -596,6 +472,7 @@ def main():
             "progressive": True,
         },
         "matplotlib_text_checks": reports,
+        "diagram_text_checks": diagram_reports,
         "files": files,
         "requires_visual_review": True,
         "no_model_or_network_calls": True,

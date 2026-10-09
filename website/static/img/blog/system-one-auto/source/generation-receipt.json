@@ -1,7 +1,8 @@
 {
   "data_sha256": "b099ef540ab140c87ad50596cd3bd5d321941d623aeac4244b2bdcc84324d5be",
   "logo_sha256": "e77dce4b858781b8b6c52e9f3c74bdf24375f87577cefa7a505b149c925d04f2",
-  "generator_sha256": "2c8c51a4e7545ef9e4b77375fe38108108e8b5768eb776232c169a907977986c",
+  "generator_sha256": "483070b32527e84524420eec21cd4de7980d79259e1dc46db1ad4918d4c0d6d8",
+  "diagram_source_sha256": "2754b818b23149e12cc5e388aca1fc1f4c2c796b73857bd3eedcfffc7ed498f7",
   "logo_treatment": "Original alpha geometry rendered in white by SVG filter; source PNG unchanged; no KR Labs mark",
   "cover_raster": {
     "format": "JPEG",
@@ -26,38 +27,74 @@
       "text_overlaps": []
     }
   },
+  "diagram_text_checks": {
+    "hero": {
+      "text_objects": 15,
+      "outside_canvas": [],
+      "text_overlaps": [],
+      "outside_declared_container": []
+    },
+    "cascade": {
+      "text_objects": 30,
+      "outside_canvas": [],
+      "text_overlaps": [],
+      "outside_declared_container": []
+    },
+    "ecosystem": {
+      "text_objects": 29,
+      "outside_canvas": [],
+      "text_overlaps": [],
+      "outside_declared_container": []
+    }
+  },
   "files": {
     "cascade.pdf": {
-      "sha256": "b3860286c2e29b7476eb8771175d2b068a42e5197350066b2070c96398b6d6fc",
-      "bytes": 37286
+      "sha256": "2f50ec95872587302860a7fc2412901bd886567d059d49ad5c0a4f443499f2b2",
+      "bytes": 46117
     },
     "cascade.png": {
-      "sha256": "53b8f0913a62b96fba32d6e48f34688ae23399368088f9a8efc9c6b0587504cf",
-      "bytes": 119990,
+      "sha256": "1bbbaaef5d5d5f81a02b56b595f426bfc8d8265b2636825e6f3cc5c658303400",
+      "bytes": 147136,
       "pixels": [
         1800,
-        920
+        1010
       ]
     },
     "cascade.svg": {
-      "sha256": "3510b1bc1a9e4f0eec0db4ba545c953e160f101f242ded1c5e8390c4fa53bcd9",
-      "bytes": 4631
+      "sha256": "635bc6f2edbfc0348e59b4858b1d774c1f91cf5aaf582bcaf6d208c8faa4183c",
+      "bytes": 7166
+    },
+    "ecosystem.pdf": {
+      "sha256": "3a008b15f01c87dac691b1c6661f80d40479f7a0e3e713c1bea89b09d5b5382a",
+      "bytes": 49107
+    },
+    "ecosystem.png": {
+      "sha256": "770bc20d0c4d36282b2f095586a0c855db0a57ee209da24f16555574c0a525fd",
+      "bytes": 142595,
+      "pixels": [
+        1800,
+        1160
+      ]
+    },
+    "ecosystem.svg": {
+      "sha256": "273b25c057887d7f20fea9fd9c955593caedc314e601445ce37ae90899b991a0",
+      "bytes": 8604
     },
     "hero.jpg": {
-      "sha256": "630e9fc65783921c820c0f27278a7ea45f252fb7a0c2187e444bb5f413f356db",
-      "bytes": 348798,
+      "sha256": "55a494682ffd9ae1c1970f87b4c2422f62620e8c5e5e06234d61b6a8b20362f9",
+      "bytes": 417343,
       "pixels": [
         1920,
         1080
       ]
     },
     "hero.pdf": {
-      "sha256": "00deb33f1835102ee666c227c1b0b32c4c07eb4ef8066cfb4deee6f3e4d34713",
-      "bytes": 72460
+      "sha256": "880931689178cb3f850055e35d7d035f395e357e746e143eb13efd88fb89b733",
+      "bytes": 66768
     },
     "hero.svg": {
-      "sha256": "96a38ce99073c88f0cf81c1cd2e41bad673cbf52d02b1f4a0e548fb26e772cbe",
-      "bytes": 77315
+      "sha256": "8c112fe77a10940027ef75f64594ea87da15f8d454fd901896c05c96469e3e1a",
+      "bytes": 78426
     },
     "latency.pdf": {
       "sha256": "010e41c2d0e63843f5ba5be7074e6b14a7ebf9453cb17f200fc0a7f953055e47",
