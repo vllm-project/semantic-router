@@ -70,7 +70,9 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
   PII 和 hallucination 使用模型的片段头，片段保留精确的字符偏移。
 - **CPU profile：** 在 CPU 上该部署运行 `max_speed`，使用模型权重的打包副本：答案误差约在 0.00001 以内，
   速度约为 `exact` 的 1.6 倍。
-- **输入：** 模型读取请求的前 8,192 个 token，超出部分截断；Vela 1.0 的 Guard 和 PII 专用模型按窗口扫描最多 32K。
+- **输入：** 普通路由判断可以按模型输入上限截断。Prompt guard、safety、PII 和 hallucination 要求完整读取输入；
+  支持窗口扫描的任务可在扫描预算内覆盖更长的输入。覆盖不完整时返回错误或未知结果。
+  具体限制和路由策略见[长输入](./reference.md#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
 - **阈值：** 模块默认阈值按 0.3B 的分数校准（见下文）。
 
 维护者选择了这个默认值，尽管它没有达到当初设定的两个目标

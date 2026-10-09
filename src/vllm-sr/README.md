@@ -29,11 +29,14 @@ run the local container stack.
 ## Start a local stack
 
 ```bash
-# Start Router, Envoy, Dashboard, and observability.
+# Start the standalone Router, Dashboard, and observability.
 vllm-sr serve
 
 # Use Podman.
-vllm-sr serve --runtime podman
+vllm-sr serve --container-runtime podman
+
+# Put Envoy in front of the Router when you need an ext_proc gateway.
+vllm-sr serve --gateway extproc
 
 # Check the stack and open the Dashboard.
 vllm-sr status
@@ -45,10 +48,12 @@ OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
 For local `serve`, `listeners[].address` controls the host port publication.
-Use `127.0.0.1` or `::1` for host-only access. Envoy listens on the container
-bridge interface so both the published port and Dashboard can reach it; this
-keeps the host loopback restriction, including after Dashboard config saves.
-Standalone `config envoy` generation retains the configured listener address.
+Use `127.0.0.1` or `::1` for host-only access. The standalone Router serves
+these listeners directly. With `--gateway extproc`, Envoy listens on the
+container bridge interface so both the published port and Dashboard can reach
+it; the host publication keeps the configured loopback restriction, including
+after Dashboard config saves. `config envoy` generation retains the configured
+listener address.
 
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
 backends referenced by `providers.models`; those endpoints must already be
@@ -58,13 +63,13 @@ Useful lifecycle commands:
 
 ```bash
 vllm-sr logs router
-vllm-sr logs envoy
 vllm-sr logs dashboard
 vllm-sr stop
 ```
 
-Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
-`--readonly` to keep Dashboard available without config editing.
+Use `vllm-sr logs envoy` for an instance started with `--gateway extproc`.
+Add `--minimal` to run without Dashboard or observability. Add `--readonly` to
+keep Dashboard available without config editing.
 
 Local startup waits up to 1800 seconds for readiness after containers start.
 Use `--startup-timeout SECONDS` with a positive integer when model loading or
@@ -305,8 +310,8 @@ vllm-sr stop
   normally port `8080`.
 - `request chat` uses the routed inference listener from `config.yaml`, normally
   port `8899`.
-- A healthy Router and Envoy do not prove that an external model backend can
-  generate. Use Dashboard **Verify** or `chat` to test the backend path.
+- A healthy Router does not prove that an external model backend can generate.
+  Use Dashboard **Verify** or `vllm-sr request chat` to test the backend path.
 - If a lifecycle command reports that the stack is busy, let the active
   `serve` or `stop` finish and retry.
 - Set `NO_COLOR=1` for plain CLI output. JSON modes keep stdout free of status

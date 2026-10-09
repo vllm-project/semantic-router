@@ -82,8 +82,11 @@ questions in one call.
 - **CPU profile:** on a CPU the deployment runs `max_speed`, a packed copy of
   the model's weights. It gives the same answers to within about 0.00001 and
   is about 1.6 times faster than `exact`.
-- **Input:** the model reads up to 8,192 tokens of a request and truncates the
-  rest. The Vela 1.0 Guard and PII specialists scan up to 32K in windows.
+- **Input:** ordinary routing judgments may truncate to the model's input
+  limit. Prompt guard, safety, PII and hallucination require complete input;
+  supported window scans can extend coverage up to the scan budget. Incomplete
+  coverage produces an error or unknown result. See [Long inputs](./reference.md#long-inputs)
+  for limits and routing policies. Vela 1.0 Guard and PII scan up to 32K in windows.
 - **Thresholds:** the module defaults are calibrated to the 0.3B's scores
   (below).
 
