@@ -364,10 +364,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         else DEFAULT_COMPARE
     )
     original = [r["label_name"] for r in rows]
+    human_labels = load_human(args.human, args.split) if args.human else None
     human = (
-        estimate_error_rates(load_human(args.human, args.split), original, records)
-        if args.human
-        else None
+        estimate_error_rates(human_labels, original, records) if human_labels else None
     )
     lines = build_report_lines(
         args.split,
@@ -376,6 +375,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         preds=load_predictions(args.eval_report, args.preds, rows),
         pairs=pairs,
         human=human,
+        human_labels=human_labels,
         rejudged=records_for_split(
             read_checkpoint(args.rejudge_checkpoint), args.split
         ),

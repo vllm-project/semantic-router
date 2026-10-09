@@ -6,6 +6,7 @@ import sys
 
 import judge_labels
 import pytest
+from audit_lib.dataset import text_sha256
 
 LABELS = ["AR", "AR", "DIFFUSION", "BOTH", "BOTH", "AR"]
 
@@ -215,3 +216,74 @@ def test_export_judged_keeps_the_original_label_as_a_second_column(
 def test_export_judged_before_any_judging_is_refused(workspace, capsys):
     code, out = run(workspace, capsys, "export-judged")
     assert code == 1 and "no judgments yet" in out
+
+
+def test_report_human_adds_a_corrected_mcnemar_line(workspace, capsys, monkeypatch):
+    judged_workspace(workspace, capsys, monkeypatch)
+    # Human corrects row 3 back to BOTH (the judge said A); everything else stands.
+    sheet = workspace / "sheet.tsv"
+    run(workspace, capsys, "sheet", "--out", str(sheet), "--n-agree", "5")
+    filled = sheet.read_text(encoding="utf-8")
+    for row_id, label in [(0, "A"), (1, "A"), (2, "D"), (3, "B"), (4, "B"), (5, "A")]:
+        filled = filled.replace(
+            f"{row_id}\tprompt number {row_id}\t",
+            f"{row_id}\tprompt number {row_id}\t{label}",
+        )
+    sheet.write_text(filled, encoding="utf-8")
+
+    hashes = [text_sha256(f"prompt number {i}") for i in range(len(LABELS))]
+    clean = [
+        "AR",
+        "AR",
+        "DIFFUSION",
+        "AR",
+        "BOTH",
+        "AR",
+    ]  # wrong on row 3 under both policies
+    candidate = [
+        "AR",
+        "AR",
+        "DIFFUSION",
+        "BOTH",
+        "BOTH",
+        "AR",
+    ]  # right on row 3 once corrected
+    preds_path = workspace / "preds.json"
+    preds_path.write_text(
+        json.dumps({"preds": candidate, "input_hashes": hashes}), encoding="utf-8"
+    )
+    eval_report = workspace / "eval_report.json"
+    eval_report.write_text(
+        json.dumps(
+            {
+                "per_example_records": [
+                    {
+                        "row_index": i,
+                        "input_hash_sha256": hashes[i],
+                        "clean_baseline_pred": clean[i],
+                    }
+                    for i in range(len(LABELS))
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    code, out = run(
+        workspace,
+        capsys,
+        "report",
+        "--eval-report",
+        str(eval_report),
+        "--preds",
+        f"candidate={preds_path}",
+        "--human",
+        str(sheet),
+    )
+    assert code == 0
+    assert "clean_baseline vs candidate | corrected" in out
+    # under "strict" (the judge's own label), row 3 favours clean_baseline (right where candidate is wrong);
+    # once the human correction is applied to row 3, candidate instead picks up that row.
+    strict_line = next(line for line in out.splitlines() if "| strict" in line)
+    corrected_line = next(line for line in out.splitlines() if "| corrected" in line)
+    assert "only clean_baseline right 1" in strict_line
+    assert "only candidate right 1" in corrected_line

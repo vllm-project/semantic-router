@@ -319,6 +319,21 @@ def test_judged_rows_export_only_covers_judged_ids(tmp_path):
     assert len(out) == len(JUDGED_RECORDS) != len(rows)
 
 
+def test_corrected_reference_prefers_the_human_label(tmp_path):
+    # row 2's judge label is AR; the human says BOTH, which should win.
+    human = {2: "BOTH"}
+    corrected = report.corrected_reference(JUDGED_RECORDS, human)
+    assert corrected[2] == "BOTH"
+    # rows the human didn't label fall back to the judge's strict label.
+    assert corrected[0] == JUDGED_RECORDS[0]["label"]
+    assert corrected[5] == JUDGED_RECORDS[5]["label"]
+
+
+def test_corrected_reference_only_covers_judged_rows():
+    corrected = report.corrected_reference(JUDGED_RECORDS, {2: "BOTH", 99: "AR"})
+    assert set(corrected) == set(JUDGED_RECORDS)
+
+
 # ------------------------------------------------------------------------ report
 def test_report_lines_cover_agreement_models_review_and_disagreements():
     rows = make_rows(ORIGINAL)
