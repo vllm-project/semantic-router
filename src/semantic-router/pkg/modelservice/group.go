@@ -61,7 +61,12 @@ type servedModel struct {
 	state       string
 	reason      string
 	card        *ModelCard
-	cache       *resultCache
+	// cardStale marks a card fetched before the model's current
+	// availability epoch. A stale card stays visible in status, but it
+	// cannot certify readiness: discovery must produce a fresh card
+	// before the model may become ready again.
+	cardStale bool
+	cache     *resultCache
 }
 
 func newGroup(plan *processPlan, client *Client, managed bool) *group {
@@ -184,8 +189,14 @@ func (g *group) refresh(ctx context.Context) {
 		}
 		if card, ok := cards[served.name]; ok {
 			served.card = &card
+			served.cardStale = false
 		}
-		ready := state == "ready" && served.card != nil
+		if state != "ready" {
+			// Any card the model still holds predates this outage; it
+			// must not certify the recovery on its own.
+			served.cardStale = true
+		}
+		ready := state == "ready" && served.card != nil && !served.cardStale
 		if ready != served.ready.Load() || state != served.state || reason != served.reason {
 			changed = true
 			if ready && !served.ready.Load() {
@@ -254,12 +265,15 @@ func (g *group) recyclesLocked() bool {
 	return true
 }
 
-// needsCards reports whether a model is ready without a card yet.
+// needsCards reports whether discovery must run for a model whose health
+// is ready: it has no card yet, its card predates an outage and is stale,
+// or it is not marked ready yet. The stale case is what retries failed
+// discovery after a recovery until a fresh card lands.
 func (g *group) needsCards(health processHealth) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for _, served := range g.models {
-		if state, _ := health.stateOf(served.name, len(g.models)); state == "ready" && (served.card == nil || !served.ready.Load()) {
+		if state, _ := health.stateOf(served.name, len(g.models)); state == "ready" && (served.card == nil || served.cardStale || !served.ready.Load()) {
 			return true
 		}
 	}
@@ -275,6 +289,9 @@ func (g *group) processExited(err error, ran time.Duration) {
 	for _, served := range g.models {
 		served.ready.Store(false)
 		served.state = "restarting"
+		// The restarted process begins a new availability epoch; cards
+		// from the exited process no longer certify readiness.
+		served.cardStale = true
 		for _, deployment := range served.deployments {
 			g.recordReady(deployment, false)
 		}
