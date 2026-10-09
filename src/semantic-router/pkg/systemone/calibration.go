@@ -185,7 +185,7 @@ func validateCalibrationCell(cell CalibrationCell, stages map[string]config.Casc
 	visited := map[string]bool{}
 	for _, step := range cell.History {
 		stage, exists := stages[step.Stage]
-		if !exists || !stage.IsEnabled() || stage.Kind != "native" || stage.Model != step.Model || visited[step.Stage] || !step.Identity.valid() {
+		if !exists || !stage.IsEnabled() || stage.Kind != "native" || stage.Model != step.Model || visited[step.Stage] || !step.Identity.Valid() {
 			return fmt.Errorf("calibration contains an undeclared, repeated or unverified native stage %q", step.Stage)
 		}
 		visited[step.Stage] = true

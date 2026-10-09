@@ -23,7 +23,7 @@ Click a diagram to open its full-size SVG.
 | Component | Responsibility |
 | --- | --- |
 | **Frontend** | Accept requests, enforce listener access, and adapt API protocols. |
-| **Decision Engine** | Resolve a routing entrypoint to its recipe, evaluate signals and policy, and select or coordinate Chat backends. |
+| **Decision Engine** | Resolve a routing entrypoint to its recipe, evaluate signals and decisions, and coordinate Chat or native decision-model backends. |
 | **Serving Engine / model runtime** | Serve decision, classifier, embedding, and reranking models through managed or attached workers. |
 | **Chat backends** | Generate responses using your vLLM, Ollama, or provider services. |
 
@@ -55,7 +55,7 @@ demand, not loading every model on its first request.
 
 [![Protocol adapters, recipe-scoped decision stages, task bindings, and the current native bypass](/img/architecture/system-one/02-frontend-and-decision-engine.svg)](/img/architecture/system-one/02-frontend-and-decision-engine.svg)
 
-For a routed Chat request, the main policy path is:
+For a routed request, the main decision path is:
 
 1. Resolve the public model name to an entrypoint and recipe.
 2. Evaluate the required **signals** and derive **projections**.
@@ -69,9 +69,11 @@ bindings independently of the Chat backend they help select. See the
 [Routing Pipeline](signal-driven-decisions) for policy authoring.
 
 Chat Completions, Responses, and Messages use protocol codecs. System One has
-its own typed request handler. In the current implementation, System One calls
-a concrete published deployment directly; it does not enter recipe routing.
-Concrete Chat backend IDs also bypass recipe signals, decisions, and plugins.
+its own typed request handler. A concrete native model ID bypasses recipe
+routing; an explicitly published native entrypoint enters its System One
+recipe. Concrete Chat backend IDs also bypass recipe signals, decisions, and
+plugins. Native recipes support a narrower set of signals and algorithms than
+Chat recipes; see the [cascade guide](../tutorials/algorithm/native/cascade.md).
 
 ### Keep public and worker APIs distinct
 
@@ -128,7 +130,7 @@ flowchart LR
     Request["System One request"] --> Frontend["Frontend codec + listener grant"]
     Frontend -->|"concrete model"| Backends
     Frontend -->|"native entrypoint"| Recipe["Recipe: signals → decision"]
-    Recipe --> Algorithm["Cascade or learned policy"]
+    Recipe --> Algorithm["Bounded cascade"]
     Algorithm --> Backends
     subgraph Backends["Declared model backends"]
         Local["Local model runtime"]
@@ -143,18 +145,18 @@ flowchart LR
 ```
 
 An explicit `api: systemone` entrypoint selects an isolated native recipe.
-Its signals and decisions choose an experimental `cascade` or learned
-`policy` algorithm. These algorithms keep a Choice / Score / Noul question
-bundle together and call declared decision-model backends within a shared
-deadline and attempt budget. A backend can be a local deployment, a separate
+Its signals and decisions choose an experimental `cascade` algorithm. Each
+cascade keeps a Choice / Score / Noul question bundle together and calls
+declared decision-model backends within its own deadline and call budget.
+Signal evaluation precedes that budget and retains its own timeouts and request
+cancellation. A backend can be a local deployment, a separate
 vLLM-SR Engine service, or a compatible external System One API.
 
 The recipe chooses between models; each deployment separately chooses among
 its replicas. A cascade first tries its fast stage, then advances only when
 its acceptance conditions require another answer. An optional LLM judge can
 select an intact earlier candidate or abstain; it cannot manufacture native
-probabilities. See [System One cascade](../tutorials/algorithm/native/cascade.md)
-and [learned policy](../tutorials/algorithm/native/policy.md).
+probabilities. See [System One cascade](../tutorials/algorithm/native/cascade.md).
 
 Native discovery distinguishes concrete models (`routing: false`) from
 published native recipes (`routing: true`). Both require an explicit listener

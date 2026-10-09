@@ -10,12 +10,11 @@ import (
 	"strconv"
 )
 
-// NativeRequest retains the wire document. Routing and policy inspect typed
+// NativeRequest retains the wire document. Routing and acceptance inspect typed
 // views without reconstructing, truncating or reordering the model's questions.
 type NativeRequest struct {
 	Body       json.RawMessage
 	Questions  []Question
-	StateBytes int
 	SignalText string
 	ReturnMeta bool
 	// InferenceBody requests internal provenance when an algorithm needs it.
@@ -115,7 +114,6 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 	if err := json.Compact(&compact, trimmed); err != nil {
 		return errors.New("invalid state")
 	}
-	r.StateBytes += compact.Len()
 	if name == "" {
 		if json.Unmarshal(trimmed, &r.SignalText) != nil {
 			r.SignalText = compact.String()

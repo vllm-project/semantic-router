@@ -1,20 +1,12 @@
 package config
 
-// RoutingBudget bounds the recipe deadline and this Router's physical inference
-// exchanges, including model-backed signals and transport retries. It is never
-// reset when an algorithm advances. Work inside an opaque external provider is
-// not visible to this Router's call ledger.
-type RoutingBudget struct {
+// AlgorithmBudget bounds only the selected algorithm's inference exchanges,
+// including transport retries, and its execution deadline. Signal evaluation
+// precedes this budget and retains its own timeouts and context cancellation.
+// Calls inside an opaque external provider are not visible to the local ledger.
+type AlgorithmBudget struct {
 	Deadline string `yaml:"deadline" jsonschema:"required"`
 	MaxCalls int    `yaml:"max_calls" jsonschema:"required,minimum=1"`
-}
-
-func (b *RoutingBudget) Clone() *RoutingBudget {
-	if b == nil {
-		return nil
-	}
-	copy := *b
-	return &copy
 }
 
 // NativeQualityConfig states the acceptance rule for a complete native
@@ -47,8 +39,7 @@ type NativeAcceptanceRule struct {
 
 // CascadeStage is one operator-authored model action. Model names a provider
 // alias in ModelRefs; replicas of that model belong in its backend_refs. Cascade
-// runs actions in authored order; a learned policy chooses among these same
-// actions without inventing model roles or topology.
+// runs these actions in authored order.
 type CascadeStage struct {
 	Name         string                  `yaml:"name" jsonschema:"required"`
 	Kind         string                  `yaml:"kind" jsonschema:"required,enum=native,enum=judge"`
@@ -68,18 +59,6 @@ type NativeGenerationConfig struct {
 	MaxOutputTokens int `yaml:"max_output_tokens" jsonschema:"required,minimum=1"`
 }
 
-// PolicyAlgorithmConfig references immutable, non-executable fitted data.
-// It cannot declare endpoints, expand ModelRefs, or override the recipe budget
-// and the algorithm's quality rule.
-type PolicyAlgorithmConfig struct {
-	Source string `yaml:"source" jsonschema:"required"`
-	SHA256 string `yaml:"sha256" jsonschema:"required,pattern=^[a-fA-F0-9]{64}$"`
-	// CostWeight trades predicted quality gain against the artifact's measured
-	// mean execution cost in milliseconds; cost_metric identifies server compute
-	// or client elapsed time. Zero optimizes predicted quality gain alone.
-	CostWeight float64 `yaml:"cost_weight,omitempty" jsonschema:"minimum=0"`
-}
-
 // CalibrationArtifact is an immutable evaluation resource. The execution
 // owner checks its bytes and applicability to the model, task, loss and
 // conditional arrival population before reporting calibrated acceptance.
@@ -90,5 +69,5 @@ type CalibrationArtifact struct {
 }
 
 func (a *AlgorithmConfig) IsNative() bool {
-	return a != nil && (a.Type == DecisionAlgorithmCascade || a.Type == DecisionAlgorithmPolicy)
+	return a != nil && a.Type == DecisionAlgorithmCascade
 }

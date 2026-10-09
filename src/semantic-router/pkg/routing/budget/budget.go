@@ -1,5 +1,6 @@
-// Package budget bounds model calls across a request's routing and inference
-// phases. The context carries one ledger through selectors, signals and retries.
+// Package budget bounds physical model calls within an execution context.
+// The caller chooses where execution begins; nested transports and retries share
+// the installed ledger. System One installs it after selecting a decision.
 package budget
 
 import (
@@ -20,7 +21,7 @@ type Ledger struct {
 	used  atomic.Int64
 }
 
-// WithLimit installs a request-wide call limit. A nested caller retains the
+// WithLimit installs an execution call limit. A nested caller retains the
 // original ledger; creating a child context must never replenish its budget.
 // A non-positive limit permits no calls. Requests without a ledger are unbounded.
 func WithLimit(ctx context.Context, limit int) (context.Context, *Ledger) {
@@ -52,7 +53,7 @@ func Consume(ctx context.Context) error {
 	}
 }
 
-// Used reports the number of exchanges reserved by all phases so far.
+// Used reports the number of exchanges reserved in this execution so far.
 func (l *Ledger) Used() int { return int(l.used.Load()) }
 
 // Remaining reports the number of additional exchanges the request can afford.

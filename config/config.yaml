@@ -158,9 +158,9 @@ providers:
     - name: native-kai
       api_format: systemone
       deployment: decision-kai
-    - name: native-nox
+    - name: native-vega
       api_format: systemone
-      provider_model_id: vllm-sr/Decision-2.0-Nox-4B
+      provider_model_id: vllm-sr/Decision-2.0-Vega-27B
       backend_refs:
         - provider: systemone-compatible
           base_url: https://native.example.com/v1
@@ -1871,9 +1871,6 @@ entrypoints:
   - api: systemone
     model_names: ["vllm-sr/auto"]
     recipe: native-handwritten
-  - api: systemone
-    model_names: ["vllm-sr/learned"]
-    recipe: native-learned
 
 recipes:
   - name: privacy-first
@@ -1926,59 +1923,43 @@ recipes:
           half_open_probes: 1
 
   - name: native-handwritten
-    description: Complete typed requests use explicit native stages and one request budget.
+    description: Complete typed requests use explicit native stages and an algorithm execution budget.
     routing:
-      budget: {deadline: 3s, max_calls: 4}
       decisions:
         - name: typed-cascade
           rules: {}
-          modelRefs: [{model: native-kai}, {model: native-nox}, {model: remote-openai-reference}]
+          modelRefs: [{model: native-kai}, {model: native-vega}, {model: remote-openai-reference}]
           algorithm:
             type: cascade
+            budget: {deadline: 3s, max_calls: 4}
             quality:
               type: uncalibrated
               acceptance:
                 rules:
-                  - {question_type: choice, field: confidence, predicate: {gte: 0.9}}
-                  - {question_type: score, field: confidence, predicate: {gte: 0.9}}
-                  - {question_type: noul, field: probability_margin, predicate: {gte: 0.4}}
+                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
             stages:
-              - {name: fast, kind: native, model: native-kai}
-              - name: strong
+              # Measured pilot gate for the pinned Kai/Vega pair; re-evaluate
+              # when the model identity or question distribution changes.
+              - name: fast
                 kind: native
-                model: native-nox
-                timeout: 1s
+                model: native-kai
                 accept:
                   rules:
-                    - {state: document, question: task, field: confidence, predicate: {gte: 0.9}}
+                    - {question_type: choice, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: score, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: noul, field: top_probability, predicate: {gte: 0.6059704079536342}}
+              - name: strong
+                kind: native
+                model: native-vega
+                timeout: 1s
               - name: review
                 kind: judge
                 enabled: false
                 model: remote-openai-reference
                 generation: {max_output_tokens: 256}
                 instructions: Select a complete prior response only when it answers every question.
-  - name: native-learned
-    description: Learned stage selection keeps the same candidate, role and budget boundaries.
-    routing:
-      budget: {deadline: 3s, max_calls: 4}
-      decisions:
-        - name: learned-gain
-          rules: {}
-          modelRefs: [{model: native-kai}, {model: native-nox}]
-          algorithm:
-            type: policy
-            quality:
-              type: calibrated
-              calibration: native-reference
-              loss: bundle_error
-              max_risk: 0.01
-            stages:
-              - {name: fast, kind: native, model: native-kai}
-              - {name: strong, kind: native, model: native-nox}
-            policy:
-              source: ./policies/native-reference.json
-              sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-              cost_weight: 0.001
 
 global:
   router:

@@ -62,7 +62,6 @@ entrypoints:
 recipes:
   - name: native
     routing:
-      budget: {deadline: 2s, max_calls: 2}
       signals:
         keywords:
           - {name: greeting, operator: OR, keywords: [hello]}
@@ -72,6 +71,7 @@ recipes:
           modelRefs: [{model: fast}, {model: strong}]
           algorithm:
             type: cascade
+            budget: {deadline: 2s, max_calls: 2}
             quality:
               type: uncalibrated
               acceptance:

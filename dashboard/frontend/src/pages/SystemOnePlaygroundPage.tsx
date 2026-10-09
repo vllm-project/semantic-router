@@ -429,9 +429,10 @@ export default function SystemOnePlaygroundPage() {
         )}
         {selected?.kind === 'route' && (
           <p className={styles.caption}>
-            Runs the <strong>{selected.recipe}</strong> recipe across its configured model pool. The
-            result shows the selected stage and model; an active route does not certify backend
-            health or accuracy.
+            Runs the <strong>{selected.recipe}</strong> recipe across its configured model pool.
+            After signal evaluation, the selected algorithm has up to{' '}
+            {selected.execution_timeout_ms / 1000} seconds to run. The result shows the selected
+            stage and model.
           </p>
         )}
         {!runtime.refreshing && runtime.routes && runtime.routes.routes.length === 0 && (

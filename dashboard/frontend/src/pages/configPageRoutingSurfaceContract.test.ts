@@ -38,6 +38,7 @@ describe('generated Dashboard routing contract', () => {
     expect(ROUTER_CONFIG_EXTENSION.plugins.map((entry) => entry.type)).toEqual(PLUGIN_TYPES)
     expect(DECISION_SIGNAL_TYPES).toContain('projection')
     expect(DECISION_SIGNAL_TYPES).not.toContain('hallucination')
+    expect(ALGORITHM_TYPES).not.toContain('policy')
   })
 
   it('resolves every generated field schema used by management forms', () => {
@@ -66,12 +67,16 @@ describe('generated Dashboard routing contract', () => {
 
   it('separates native acceptance from Chat quality scoring', () => {
     const native = getAlgorithmFieldSchema('cascade')
-    expect(native.map((field) => field.key)).toEqual(['quality', 'stages'])
+    expect(native.map((field) => field.key).sort()).toEqual(['budget', 'quality', 'stages'])
+    const budget = native.find((field) => field.key === 'budget')
+    expect(budget?.required).toBe(true)
+    expect(budget?.fields?.map((field) => field.key)).toEqual(['deadline', 'max_calls'])
     expect(
       native.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
     ).toContain('acceptance')
     const chat = getAlgorithmFieldSchema('multi_factor')
     expect(chat.map((field) => field.key)).not.toContain('stages')
+    expect(chat.map((field) => field.key)).not.toContain('budget')
     expect(
       chat.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
     ).toEqual(['index', 'on_missing', 'min_coverage', 'min_score'])

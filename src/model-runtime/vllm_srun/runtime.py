@@ -565,6 +565,7 @@ class ServedModel:
         assert self.model is not None and self.placement is not None
         profile = self.profiles.get(profile_name)
         return {
+            "model_id": self.model.info.id,
             "revision": self.model.info.revision,
             "model_sha256": self.model.info.model_sha256,
             "profile": profile_name,

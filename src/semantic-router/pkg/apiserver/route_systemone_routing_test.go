@@ -50,20 +50,26 @@ entrypoints:
 recipes:
   - name: native
     routing:
-      budget: {deadline: 2s, max_calls: 1}
       signals:
         keywords: [{name: greeting, operator: OR, keywords: [hello]}]
       decisions:
         - name: classify
           rules: {type: keyword, name: greeting}
           modelRefs: [{model: fast}]
-          algorithm:
+          algorithm: &simple
             type: cascade
+            budget: {deadline: 2s, max_calls: 1}
             quality:
               type: uncalibrated
               acceptance:
                 rules: [{question_type: choice, field: top_probability, predicate: {gte: 0}}]
             stages: [{name: fast, kind: native, model: fast}]
+        - name: complex
+          rules: {}
+          modelRefs: [{model: fast}]
+          algorithm:
+            <<: *simple
+            budget: {deadline: 4s, max_calls: 2}
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +117,17 @@ recipes:
 		}
 		if tc.status == http.StatusOK && (!strings.Contains(w.Body.String(), "native-auto") || !strings.Contains(w.Body.String(), "native")) {
 			t.Fatal("operator diagnostic lost active route identity")
+		}
+		if tc.status == http.StatusOK && tc.method == http.MethodGet {
+			var routes SystemOneRoutes
+			if json.Unmarshal(w.Body.Bytes(), &routes) != nil || len(routes.Routes) != 2 {
+				t.Fatal("operator diagnostic lost route discovery")
+			}
+			for _, route := range routes.Routes {
+				if route.ExecutionTimeoutMS != 4000 {
+					t.Fatalf("discovery did not report the maximum algorithm deadline: %+v", route)
+				}
+			}
 		}
 	}
 	if router.calls != 1 {

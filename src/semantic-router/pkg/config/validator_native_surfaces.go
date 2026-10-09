@@ -14,7 +14,7 @@ func validateNativeProfileSurfaces(profile RoutingProfile) error {
 		return fmt.Errorf("native execution does not support candidate_requirements; declare stages for the supported task")
 	}
 	if profile.Fallback != nil && profile.Fallback.Enabled {
-		return fmt.Errorf("native execution uses declared stages and routing.budget; Chat routing.fallback must be disabled")
+		return fmt.Errorf("native execution uses declared stages and algorithm.budget; Chat routing.fallback must be disabled")
 	}
 	for _, score := range profile.Projections.Scores {
 		for _, input := range score.Inputs {

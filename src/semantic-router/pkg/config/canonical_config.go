@@ -76,7 +76,6 @@ type CanonicalEvaluationRecord struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	Budget                *RoutingBudget           `yaml:"budget,omitempty"`
 	CandidateRequirements *CandidateRequirements   `yaml:"candidate_requirements,omitempty"`
 	ModelBindings         map[string]ModelBinding  `yaml:"model_bindings,omitempty"`
 	ModelCards            []RoutingModel           `yaml:"modelCards,omitempty"`
@@ -202,7 +201,6 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 }
 
 func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
-	cfg.RoutingBudget = canonical.Routing.Budget.Clone()
 	cfg.ModelBindings = cloneModelMap(canonical.Routing.ModelBindings)
 	cfg.CandidateRequirements = canonical.Routing.CandidateRequirements.Clone()
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)

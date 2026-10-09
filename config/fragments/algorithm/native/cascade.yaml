@@ -1,22 +1,30 @@
-# Combine this policy with explicit System One provider aliases and an
-# api: systemone entrypoint. Thresholds are illustrative, not calibrated risk.
+# Combine this cascade with explicit System One provider aliases and an
+# api: systemone entrypoint. The fast gate is the measured Kai/Vega pilot
+# operating point; evaluate it on your workload before adopting it.
 recipes:
   - name: native-cascade
     routing:
-      budget: {deadline: 3s, max_calls: 3}
       decisions:
-        - name: quality-first
+        - name: kai-to-vega
           rules: {}
-          modelRefs: [{model: kai}, {model: nox}]
+          modelRefs: [{model: kai}, {model: vega}]
           algorithm:
             type: cascade
+            budget: {deadline: 3s, max_calls: 2}
             quality:
               type: uncalibrated
               acceptance:
                 rules:
-                  - {question_type: choice, field: confidence, predicate: {gte: 0.9}}
-                  - {question_type: score, field: confidence, predicate: {gte: 0.9}}
-                  - {question_type: noul, field: probability_margin, predicate: {gte: 0.4}}
+                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
             stages:
-              - {name: fast, kind: native, model: kai}
-              - {name: strong, kind: native, model: nox}
+              - name: fast
+                kind: native
+                model: kai
+                accept:
+                  rules:
+                    - {question_type: choice, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: score, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: noul, field: top_probability, predicate: {gte: 0.6059704079536342}}
+              - {name: upgrade, kind: native, model: vega}

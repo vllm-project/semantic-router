@@ -26,6 +26,7 @@ describe('decision algorithm manager mapping', () => {
 })
 
 describe('native algorithm editor', () => {
+  const budget = { deadline: '30s', max_calls: 2 }
   const quality = {
     type: 'uncalibrated',
     acceptance: {
@@ -33,30 +34,47 @@ describe('native algorithm editor', () => {
     },
   }
   const stages = [{ name: 'fast', model: 'decision-kai', kind: 'native' }]
-  it.each(['cascade', 'policy'] as const)(
-    'round-trips %s fields at their canonical level',
-    (type) => {
-      const algorithm = {
-        type,
-        quality,
-        stages,
-        ...(type === 'policy'
-          ? { policy: { source: './policy.json', sha256: 'a'.repeat(64), cost_weight: 0.01 } }
-          : {}),
-      }
-      expect(mergeAlgorithmFields(algorithm, type, algorithmFields(algorithm))).toEqual(algorithm)
-    },
-  )
+  it('round-trips cascade budget, quality, and stages at the algorithm level', () => {
+    const algorithm = { type: 'cascade', budget, quality, stages }
+    const fields = algorithmFields(algorithm)
+    expect(fields).toEqual({ budget, quality, stages })
+    expect(mergeAlgorithmFields(algorithm, 'cascade', fields)).toEqual(algorithm)
+    expect(
+      mergeAlgorithmFields(algorithm, 'cascade', {
+        ...fields,
+        budget: { deadline: '45s', max_calls: 3 },
+      }),
+    ).toEqual({ ...algorithm, budget: { deadline: '45s', max_calls: 3 } })
+  })
+  it('preserves calibrated acceptance when editing the execution budget', () => {
+    const algorithm = {
+      type: 'cascade',
+      budget,
+      stages,
+      quality: {
+        type: 'calibrated',
+        calibration: 'validated-kai',
+        loss: 'bundle_error',
+        max_risk: 0.05,
+      },
+    }
+    expect(
+      mergeAlgorithmFields(algorithm, 'cascade', {
+        ...algorithmFields(algorithm),
+        budget: { deadline: '60s', max_calls: 4 },
+      }),
+    ).toEqual({ ...algorithm, budget: { deadline: '60s', max_calls: 4 } })
+  })
   it('removes incompatible shared fields when switching execution types', () => {
     expect(
       mergeAlgorithmFields(
         { type: 'static', minimum_candidates: 2, on_error: 'fallback' },
         'cascade',
-        { quality, stages },
+        { budget, quality, stages },
       ),
-    ).toEqual({ type: 'cascade', quality, stages })
-    expect(mergeAlgorithmFields({ type: 'cascade', quality, stages }, 'static', {})).toEqual({
-      type: 'static',
-    })
+    ).toEqual({ type: 'cascade', budget, quality, stages })
+    expect(
+      mergeAlgorithmFields({ type: 'cascade', budget, quality, stages }, 'static', {}),
+    ).toEqual({ type: 'static' })
   })
 })

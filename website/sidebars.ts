@@ -179,7 +179,6 @@ const sidebars: SidebarsConfig = {
               label: 'System One',
               items: [
                 'tutorials/algorithm/native/cascade',
-                'tutorials/algorithm/native/policy',
               ],
             },
           ],

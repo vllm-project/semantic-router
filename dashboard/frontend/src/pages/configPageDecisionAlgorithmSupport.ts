@@ -47,6 +47,7 @@ export function mergeAlgorithmFields(
   const previous = asRecord(existing)
   const next: AlgorithmRecord = { ...previous, type }
   for (const algorithmTypeName of ALGORITHM_TYPES) delete next[algorithmTypeName]
+  delete next.budget
   delete next.quality
   delete next.stages
   if (isNativeAlgorithm(type)) {

@@ -48,7 +48,6 @@ type QualityEvaluator func(*NativeRequest, Candidate) (bool, error)
 // attempted stages and model responses never live on this shared object.
 type Executor struct {
 	algorithm *config.AlgorithmConfig
-	policy    *LearnedPolicy
 	quality   QualityEvaluator
 }
 
@@ -57,13 +56,6 @@ func NewExecutor(algorithm *config.AlgorithmConfig, quality QualityEvaluator) (*
 		return nil, errors.New("invalid native execution plan")
 	}
 	e := &Executor{algorithm: algorithm, quality: quality}
-	if algorithm.Type == config.DecisionAlgorithmPolicy {
-		var err error
-		e.policy, err = LoadPolicy(algorithm.Policy, algorithm.Stages)
-		if err != nil {
-			return nil, err
-		}
-	}
 	if algorithm.Quality.Type == "calibrated" && quality == nil {
 		return nil, errors.New("calibrated native execution requires applicable evaluation evidence")
 	}
@@ -85,30 +77,17 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		}
 		metrics.RecordSystemOneRequest(e.algorithm.Type, outcome, time.Since(started).Seconds())
 	}()
-	stages := e.algorithm.Stages
-	attempted := make(map[string]bool, len(stages))
 	var candidates []Candidate
 	var history []StageEvidence
-	var accepted *Candidate
-	for index := 0; index >= 0 && index < len(stages); {
+	for _, stage := range e.algorithm.Stages {
 		if err := ctx.Err(); err != nil {
 			return Candidate{}, err
 		}
-		stage := stages[index]
 		if !stage.IsEnabled() {
-			index++
 			continue
 		}
-		if attempted[stage.Name] {
-			return Candidate{}, errors.New("native stage loop rejected")
-		}
-		attempted[stage.Name] = true
 		stageStarted := time.Now()
 		candidate, err := e.invokeStage(ctx, request, stage, candidates, invoke)
-		if err == nil && e.policy != nil && stage.Kind == "native" && !e.policy.matches(stage, candidate) {
-			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "identity_mismatch", time.Since(stageStarted).Seconds())
-			return Candidate{}, errors.New("native policy response identity does not match its fitted action")
-		}
 		evidence := StageEvidence{Stage: stage.Name, Model: stage.Model, Response: candidate.Invocation, Outcome: "response"}
 		if err != nil {
 			evidence.Outcome = "error"
@@ -120,18 +99,6 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 			if ctx.Err() != nil {
 				return Candidate{}, ctx.Err()
 			}
-			// Failed calls use the versioned missing-observation features.
-			// Only an action present in the fitted policy may be selected;
-			// the operator's optional judge remains a terminal fallback.
-			if e.policy != nil {
-				features := request.Features(request.Observe(nil))
-				index = e.policy.Next(stage.Name, features, stages, attempted, e.algorithm.Policy.CostWeight)
-				if index < 0 {
-					index = terminalJudge(stages, attempted, accepted, candidates)
-				}
-				continue
-			}
-			index++
 			continue
 		}
 		candidate.Observations = request.Observe(candidate.Body)
@@ -139,6 +106,10 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 			candidates = append(candidates, candidate)
 		}
 		passes, qualityErr := e.accept(request, stage, candidate)
+		if contextErr := ctx.Err(); contextErr != nil {
+			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
+			return Candidate{}, contextErr
+		}
 		outcome := "rejected"
 		if qualityErr != nil {
 			outcome = "evaluation_error"
@@ -152,39 +123,10 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 			return Candidate{}, qualityErr
 		}
 		if passes {
-			copy := candidate
-			accepted = &copy
-			if e.policy == nil {
-				return candidate, nil
-			}
+			return candidate, nil
 		}
-		if e.policy != nil {
-			index = e.policy.Next(stage.Name, request.Features(candidate.Observations), stages, attempted, e.algorithm.Policy.CostWeight)
-			if index < 0 {
-				index = terminalJudge(stages, attempted, accepted, candidates)
-			}
-		} else {
-			index++
-		}
-	}
-	if accepted != nil {
-		return *accepted, nil
 	}
 	return Candidate{}, ErrUnresolved
-}
-
-// A policy's judge is an operator-authored terminal fallback, not a fitted
-// native action. It runs only when previous valid answers remain unresolved.
-func terminalJudge(stages []config.CascadeStage, attempted map[string]bool, accepted *Candidate, candidates []Candidate) int {
-	if accepted != nil || len(candidates) == 0 {
-		return -1
-	}
-	for i, stage := range stages {
-		if stage.Kind == "judge" && stage.IsEnabled() && !attempted[stage.Name] {
-			return i
-		}
-	}
-	return -1
 }
 
 func (e *Executor) accept(request *NativeRequest, stage config.CascadeStage, candidate Candidate) (bool, error) {
@@ -200,7 +142,7 @@ func (e *Executor) accept(request *NativeRequest, stage config.CascadeStage, can
 	return acceptNative(candidate.Observations, e.algorithm.Quality.Acceptance, true), nil
 }
 
-func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stage config.CascadeStage, candidates []Candidate, invoke Invoke) (Candidate, error) {
+func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stage config.CascadeStage, candidates []Candidate, invoke Invoke) (candidate Candidate, invokeErr error) {
 	if stage.Model == "" {
 		return Candidate{}, errors.New("native stage has no candidate")
 	}
@@ -213,6 +155,14 @@ func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stag
 		ctx, cancel = context.WithTimeout(ctx, duration)
 		defer cancel()
 	}
+	// Buffered responses can finish decoding after cancellation. Check before
+	// the stage context is released so neither native nor judge results outlive
+	// their deadline; an expired stage may still advance within the parent budget.
+	defer func() {
+		if contextErr := ctx.Err(); contextErr != nil {
+			candidate, invokeErr = Candidate{}, contextErr
+		}
+	}()
 	model := stage.Model
 	if stage.Kind == "judge" {
 		return invokeJudge(ctx, request, stage, candidates, invoke)
@@ -221,7 +171,7 @@ func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stag
 		return Candidate{}, errors.New("unsupported native stage role")
 	}
 	input := request.Body
-	if e.policy != nil || e.algorithm.Quality.Type == "calibrated" {
+	if e.algorithm.Quality.Type == "calibrated" {
 		input = request.InferenceBody
 	}
 	status, body, err := invoke(ctx, model, input)

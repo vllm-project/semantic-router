@@ -123,7 +123,8 @@ def fit_heads(
                 ),
             }
     return {
-        "schema_version": "systemone-policy/v1",
+        "schema_version": "systemone-replay-model/v1",
+        "purpose": "offline_replay_only",
         "feature_names": FEATURE_NAMES,
         "heads": heads,
         "stop_value": 0.0,

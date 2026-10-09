@@ -17,19 +17,18 @@ export interface SystemOneRoute {
   recipe: string
   algorithms: string[]
   question_types: string[]
-  timeout_ms: number
+  execution_timeout_ms: number
 }
 export interface SystemOneRoutes {
   available: boolean
   routes: SystemOneRoute[]
 }
-export interface SystemOneTarget extends SystemOneDeployment {
+export type SystemOneTarget = SystemOneDeployment & {
   key: string
-  kind: 'route' | 'deployment'
-  timeout_ms: number
-  recipe?: string
-  algorithms?: string[]
-}
+} & (
+    | { kind: 'route'; recipe: string; algorithms: string[]; execution_timeout_ms: number }
+    | { kind: 'deployment'; timeout_ms: number }
+  )
 
 export function isSystemOneRoutes(value: unknown): value is SystemOneRoutes {
   if (!value || typeof value !== 'object') return false
@@ -47,8 +46,8 @@ export function isSystemOneRoutes(value: unknown): value is SystemOneRoutes {
         route.algorithms.every((algorithm) => typeof algorithm === 'string') &&
         Array.isArray(route.question_types) &&
         route.question_types.every((type) => typeof type === 'string') &&
-        Number.isFinite(route.timeout_ms) &&
-        route.timeout_ms >= 0,
+        Number.isFinite(route.execution_timeout_ms) &&
+        route.execution_timeout_ms >= 0,
     )
   )
 }
@@ -89,7 +88,7 @@ export function systemOneTargetOptions(targets: SystemOneTarget[]) {
           value: target.key,
           label: target.model,
           group: 'Automatic routes',
-          description: `${target.recipe} · ${target.algorithms?.join(' / ')} · ${target.question_types.join(', ')}`,
+          description: `${target.recipe} · ${target.algorithms.join(' / ')} · ${target.question_types.join(', ')}`,
         }
       : {
           ...systemOneDeploymentOption(target),
@@ -105,8 +104,11 @@ export function systemOneTargetRequest(target: SystemOneTarget, request: unknown
     : { path: '/api/decision-model/test', body: { deployment: target.id, request } }
 }
 
-export function systemOneTargetTimeout(target: SystemOneTarget): number {
-  // Leave transport grace after the Router's own recipe deadline. Browsers
-  // cap setTimeout at a signed 32-bit delay; never overflow to an instant abort.
+export function systemOneTargetClientTimeout(target: SystemOneTarget): number | undefined {
+  // A route's execution budget starts after signal evaluation. Only the server
+  // can enforce that boundary; the user can cancel waiting at any time.
+  if (target.kind === 'route') return undefined
+  // Direct inference has a fixed server timeout. Leave transport grace and
+  // avoid overflowing the browser's signed 32-bit timer delay.
   return Math.min(2147483647, Math.max(1000, target.timeout_ms) + 10000)
 }

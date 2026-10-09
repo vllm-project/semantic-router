@@ -2,7 +2,6 @@ package systemone
 
 import (
 	"encoding/json"
-	"math"
 	"strings"
 	"testing"
 
@@ -23,9 +22,8 @@ func TestNativeObservationKeepsAllStatesAndConfidentFalse(t *testing.T) {
 		t.Fatal("request or bundle lost")
 	}
 	o := r.Observe(json.RawMessage(mixedResponse))
-	f := r.Features(o)
-	if f[10] != 0 || math.Abs(f[1]-0.9) > 1e-9 || math.Abs(f[4]-0.8) > 1e-9 {
-		t.Fatalf("features=%v", f)
+	if !complete(o) {
+		t.Fatal("complete multi-state response marked invalid")
 	}
 	threshold := 0.75
 	acceptance := &config.NativeAcceptance{Rules: []config.NativeAcceptanceRule{
@@ -45,7 +43,7 @@ func TestNativeQualityCannotDropMissingOrIncompleteAnswers(t *testing.T) {
 		strings.Replace(mixedResponse, `"type":"score"`, `"type":"score","error":"unavailable"`, 1),
 	} {
 		o := r.Observe(json.RawMessage(body))
-		if len(o) != 3 || r.Features(o)[10] != 1 {
+		if len(o) != 3 || complete(o) {
 			t.Fatalf("missing failure in %s", body)
 		}
 	}
@@ -75,7 +73,9 @@ func TestNativeGateRequiresCoverageAndKnownStatistics(t *testing.T) {
 		t.Fatal("absent Noul confidence was imputed as zero")
 	}
 	bad := strings.Replace(mixedResponse, `"0":0.9,"1":0.1`, `"10":0.9,"11":0.1`, 1)
-	if r.Features(r.Observe(json.RawMessage(bad)))[10] != 1 {
+	partial.Rules[0].Question = "difficulty"
+	partial.Rules[0].Field = "top_probability"
+	if acceptNative(r.Observe(json.RawMessage(bad)), partial, false) {
 		t.Fatal("invalid score level probabilities accepted")
 	}
 }

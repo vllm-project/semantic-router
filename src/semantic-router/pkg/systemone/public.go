@@ -13,6 +13,7 @@ import (
 	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
 // Invoke is a retained inference call supplied by the serving owner.
@@ -117,7 +118,10 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, 502, "invalid_runtime_response")
 			return
 		}
-		result["model"], _ = json.Marshal(model)
+		if aliasErr := api.AliasResponseModel(result, model); aliasErr != nil {
+			publicSystemOneError(w, 502, "invalid_runtime_response")
+			return
+		}
 		_ = json.NewEncoder(w).Encode(result)
 	}
 }

@@ -2,7 +2,7 @@
 
 The CLI forwards these objects without interpreting their execution payloads.
 Validate their structure from generated Go definitions rather than maintaining
-another copy of question, stage, policy and calibration field inventories.
+another copy of question, stage, budget and calibration field inventories.
 """
 
 from functools import cache, partial
@@ -40,12 +40,8 @@ NativeQuality = Annotated[
 NativeStage = Annotated[
     dict[str, Any], AfterValidator(partial(_validate_definition, "CascadeStage"))
 ]
-NativePolicy = Annotated[
-    dict[str, Any],
-    AfterValidator(partial(_validate_definition, "PolicyAlgorithmConfig")),
-]
-RoutingBudget = Annotated[
-    dict[str, Any], AfterValidator(partial(_validate_definition, "RoutingBudget"))
+AlgorithmBudget = Annotated[
+    dict[str, Any], AfterValidator(partial(_validate_definition, "AlgorithmBudget"))
 ]
 CalibrationArtifact = Annotated[
     dict[str, Any], AfterValidator(partial(_validate_definition, "CalibrationArtifact"))

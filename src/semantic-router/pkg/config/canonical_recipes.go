@@ -39,7 +39,6 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 			Name:        RecipeName(recipe.Name),
 			Description: recipe.Description,
 			Profile: RoutingProfile{
-				Budget:                recipe.Routing.Budget.Clone(),
 				ModelBindings:         cloneModelMap(recipe.Routing.ModelBindings),
 				CandidateRequirements: recipe.Routing.CandidateRequirements.Clone(),
 				Signals:               normalizeSignals(recipe.Routing.Signals, decisions),
@@ -54,7 +53,6 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 	if explicitDefault := findRecipe(recipes, DefaultRecipeName); explicitDefault != nil {
 		// Recipes-only layout: bridge the explicit default recipe into the
 		// flat routing fields so existing single-profile read sites keep working.
-		cfg.RoutingBudget = explicitDefault.Profile.Budget.Clone()
 		cfg.Signals = explicitDefault.Profile.Signals
 		cfg.Projections = explicitDefault.Profile.Projections
 		cfg.Decisions = explicitDefault.Profile.Decisions
@@ -69,7 +67,6 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 		recipes = append([]RoutingRecipe{{
 			Name: DefaultRecipeName,
 			Profile: RoutingProfile{
-				Budget:                cfg.RoutingBudget.Clone(),
 				ModelBindings:         cloneModelMap(cfg.ModelBindings),
 				CandidateRequirements: cfg.CandidateRequirements.Clone(),
 				Signals:               cfg.Signals,
@@ -270,7 +267,6 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			Name:        string(recipe.Name),
 			Description: recipe.Description,
 			Routing: CanonicalRouting{
-				Budget:                recipe.Profile.Budget.Clone(),
 				ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
 				CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
 				Signals:               canonicalSignalsFromSignals(recipe.Profile.Signals),
@@ -316,7 +312,7 @@ func findRecipe(recipes []RoutingRecipe, name RecipeName) *RoutingRecipe {
 // content (signals, projections, or decisions). modelCards do not count: they
 // are the shared model catalog, not part of any one profile.
 func canonicalRoutingHasProfile(routing CanonicalRouting) bool {
-	if routing.Budget != nil || routing.CandidateRequirements != nil || routing.Fallback != nil {
+	if routing.CandidateRequirements != nil || routing.Fallback != nil {
 		return true
 	}
 	if len(routing.ModelBindings) > 0 {

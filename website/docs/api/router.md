@@ -50,6 +50,7 @@ curl -sS http://localhost:8899/v1/systemone \
     "questions": {
       "task": {
         "type": "choice",
+        "instructions": "Which team should handle this request?",
         "criteria": {
           "account": "Account access or authentication",
           "billing": "Payments, invoices or refunds"
@@ -64,7 +65,7 @@ multiple named states. The selected native response retains its answers,
 probabilities, usage and other fields. `model` stays the public entrypoint;
 the additional `routing` object identifies the execution. Set
 `options.return_meta: true` to include the selected model's runtime metadata.
-Learned and calibrated algorithms collect this provenance internally even when
+Calibrated cascades collect this provenance internally even when
 you leave response metadata disabled.
 
 ```json
@@ -73,14 +74,15 @@ you leave response metadata disabled.
   "decision": "classify",
   "algorithm": "cascade",
   "stage": "strong",
-  "selected_model": "nox",
+  "selected_model": "vega",
   "quality": "uncalibrated",
   "model_calls": 2
 }
 ```
 
-`model_calls` counts physical inference attempts across the recipe, including
-model-backed signals and retries. It is not a count of GPU forwards. `usage`
+`model_calls` counts physical inference attempts within the selected algorithm,
+including its transport retries. Signal calls are outside this counter and have
+their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
 belongs to the returned native candidate and is not total cascade billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
@@ -88,7 +90,7 @@ and concrete models with `routing: false`.
 
 Malformed or unsupported auto questions return `400`. If no complete answer
 passes the declared acceptance rule within the call budget, the request
-returns `503` with `systemone_unresolved`; expiration of the recipe deadline
+returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
 returns `504` with `systemone_deadline_exceeded`. Failed
 candidates never become empty successful answers. Direct model requests keep
 their existing native API contract and do not run the cascade.

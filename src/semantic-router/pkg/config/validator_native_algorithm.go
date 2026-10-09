@@ -8,15 +8,15 @@ import (
 	"time"
 )
 
-func (b *RoutingBudget) Validate() error {
+func (b *AlgorithmBudget) Validate() error {
 	if b == nil {
 		return nil
 	}
 	if _, err := positiveNativeDuration(b.Deadline); err != nil {
-		return fmt.Errorf("routing.budget.deadline: %w", err)
+		return fmt.Errorf("algorithm.budget.deadline: %w", err)
 	}
 	if b.MaxCalls <= 0 {
-		return fmt.Errorf("routing.budget.max_calls must be positive")
+		return fmt.Errorf("algorithm.budget.max_calls must be positive")
 	}
 	return nil
 }
@@ -42,10 +42,19 @@ func validateNativeArtifact(source, digest string) error {
 
 func validateNativeAlgorithmConfig(name string, refs []ModelRef, algorithm *AlgorithmConfig) error {
 	if !algorithm.IsNative() {
-		if algorithm.Quality != nil || len(algorithm.Stages) > 0 {
-			return fmt.Errorf("decision %q: algorithm.quality and stages require cascade or policy", name)
+		if algorithm.Budget != nil || algorithm.Quality != nil || len(algorithm.Stages) > 0 {
+			return fmt.Errorf("decision %q: algorithm.budget, quality and stages require cascade", name)
 		}
 		return nil
+	}
+	if algorithm.Budget == nil {
+		return fmt.Errorf("decision %q: cascade requires an explicit algorithm.budget", name)
+	}
+	if algorithm.MinimumCandidates != 0 {
+		return fmt.Errorf("decision %q: cascade uses authored stages; minimum_candidates is unsupported", name)
+	}
+	if err := algorithm.Budget.Validate(); err != nil {
+		return fmt.Errorf("decision %q: %w", name, err)
 	}
 	if len(refs) == 0 || len(algorithm.Stages) == 0 {
 		return fmt.Errorf("decision %q: native algorithms require modelRefs and stages", name)
@@ -59,23 +68,7 @@ func validateNativeAlgorithmConfig(name string, refs []ModelRef, algorithm *Algo
 	if err := validateNativeStages(name, refs, algorithm.Stages); err != nil {
 		return err
 	}
-	if algorithm.Type == DecisionAlgorithmPolicy {
-		for index, stage := range algorithm.Stages {
-			if stage.Kind == "judge" && index != len(algorithm.Stages)-1 {
-				return fmt.Errorf("decision %q: policy permits one terminal judge after all native stages", name)
-			}
-		}
-		if algorithm.Policy == nil {
-			return fmt.Errorf("decision %q: policy requires algorithm.policy", name)
-		}
-		if err := validateNativeArtifact(algorithm.Policy.Source, algorithm.Policy.SHA256); err != nil {
-			return fmt.Errorf("decision %q algorithm.policy: %w", name, err)
-		}
-		weight := algorithm.Policy.CostWeight
-		if math.IsNaN(weight) || math.IsInf(weight, 0) || weight < 0 {
-			return fmt.Errorf("decision %q algorithm.policy.cost_weight must be finite and nonnegative", name)
-		}
-	}
+
 	return nil
 }
 

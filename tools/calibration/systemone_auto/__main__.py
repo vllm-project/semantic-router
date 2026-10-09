@@ -5,10 +5,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .artifacts import canonical, file_digest, read_json, write_json
+from .artifacts import canonical, write_json
 from .collection import collect
 from .dataset import prepare
-from .export import bind_policy
 from .judge import collect_judge, score_judge
 from .replay import replay
 from .sources import download
@@ -53,7 +52,7 @@ def main() -> None:
         help="smoke subset; incomplete collections cannot be replayed",
     )
     compare = commands.add_parser(
-        "replay", help="train and compare paired policies on held-out source groups"
+        "replay", help="compare authored and learned strategies in offline replay"
     )
     compare.add_argument("--dataset", type=Path, required=True)
     compare.add_argument("--collection-dir", type=Path, required=True)
@@ -69,13 +68,6 @@ def main() -> None:
     compare.add_argument(
         "--base", required=True, help="target name for the first native stage"
     )
-    export = commands.add_parser(
-        "export-policy",
-        help="bind every fitted action to deployment stage/provider aliases",
-    )
-    export.add_argument("--policy", type=Path, required=True)
-    export.add_argument("--bindings", type=Path, required=True)
-    export.add_argument("--output", type=Path, required=True)
     judge = commands.add_parser(
         "collect-judge",
         help="collect separate prior-answer-conditioned judge observations",
@@ -144,13 +136,6 @@ def main() -> None:
         summary = {
             "trace_sha256": result["trace_sha256"],
             "outcomes": result["outcomes"],
-        }
-    elif args.command == "export-policy":
-        result = bind_policy(read_json(args.policy), read_json(args.bindings))
-        write_json(args.output, result)
-        summary = {
-            "policy_sha256": file_digest(args.output),
-            "actions": list(result["actions"]),
         }
     else:
         result = replay(

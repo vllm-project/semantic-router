@@ -15617,6 +15617,10 @@
                           "nullable": true,
                           "type": "string"
                         },
+                        "model_id": {
+                          "nullable": true,
+                          "type": "string"
+                        },
                         "model_sha256": {
                           "nullable": true,
                           "type": "string"
@@ -15835,6 +15839,10 @@
                                 "type": "string"
                               },
                               "head": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "model_id": {
                                 "nullable": true,
                                 "type": "string"
                               },
@@ -18704,6 +18712,9 @@
                               "type": "string"
                             }
                           },
+                          "execution_timeout_ms": {
+                            "type": "integer"
+                          },
                           "model": {
                             "type": "string"
                           },
@@ -18716,9 +18727,6 @@
                           },
                           "recipe": {
                             "type": "string"
-                          },
-                          "timeout_ms": {
-                            "type": "integer"
                           }
                         },
                         "required": [
@@ -18726,7 +18734,7 @@
                           "recipe",
                           "algorithms",
                           "question_types",
-                          "timeout_ms"
+                          "execution_timeout_ms"
                         ]
                       }
                     }
@@ -18891,8 +18899,8 @@
         "x-vllm-sr-visibility": "advanced"
       },
       "post": {
-        "summary": "Run a native recipe using operator classify.invoke permission, its configured deadline and shared call budget; independent of public listener grants",
-        "description": "Run a native recipe using operator classify.invoke permission, its configured deadline and shared call budget; independent of public listener grants",
+        "summary": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
+        "description": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
         "operationId": "post_api_v1_diagnostics_routes_systemone",
         "tags": [
           "diagnostics"

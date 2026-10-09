@@ -55,6 +55,17 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
 
 function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
   switch (algoType) {
+    case 'cascade':
+      return [
+        {
+          key: 'budget',
+          label: 'Execution Budget',
+          type: 'object',
+          required: true,
+          description:
+            'Limit backend calls and execution time after a decision selects this cascade. Signal evaluation is separate.',
+        },
+      ]
     case 'confidence':
       return [
         {

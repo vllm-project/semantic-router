@@ -4,7 +4,7 @@ import {
   systemOneTargetOptions,
   systemOneTargetRequest,
   systemOneTargets,
-  systemOneTargetTimeout,
+  systemOneTargetClientTimeout,
 } from './systemOneTargets'
 
 const routes = {
@@ -15,7 +15,7 @@ const routes = {
       recipe: 'typed',
       algorithms: ['cascade'],
       question_types: ['choice', 'score', 'noul'],
-      timeout_ms: 120000,
+      execution_timeout_ms: 120000,
     },
   ],
 }
@@ -44,21 +44,30 @@ describe('System One target contract', () => {
       body: { deployment: 'vllm-sr/auto', request: {} },
     })
   })
-  it('uses the recipe budget with transport grace, without timer overflow', () => {
+  it('lets the server time routed execution after signals and bounds direct requests', () => {
     const targets = systemOneTargets([deployment], routes)
-    expect(systemOneTargetTimeout(targets[0])).toBe(130000)
-    expect(systemOneTargetTimeout(targets[1])).toBe(40000)
-    expect(systemOneTargetTimeout({ ...targets[0], timeout_ms: 1e15 })).toBe(2147483647)
+    const route = targets.find((target) => target.kind === 'route')!
+    const direct = targets.find((target) => target.kind === 'deployment')!
+    expect(systemOneTargetClientTimeout(route)).toBeUndefined()
+    expect(systemOneTargetClientTimeout({ ...route, execution_timeout_ms: 1 })).toBeUndefined()
+    expect(systemOneTargetClientTimeout(direct)).toBe(40000)
+    expect(systemOneTargetClientTimeout({ ...direct, timeout_ms: 1e15 })).toBe(2147483647)
   })
   it('keeps direct models when route discovery is unavailable and rejects malformed deadlines', () => {
     expect(systemOneTargets([deployment], null)).toHaveLength(1)
     expect(systemOneTargets([deployment], { ...routes, available: false })).toHaveLength(1)
     expect(isSystemOneRoutes(routes)).toBe(true)
     expect(
-      isSystemOneRoutes({ ...routes, routes: [{ ...routes.routes[0], timeout_ms: '120000' }] }),
+      isSystemOneRoutes({
+        ...routes,
+        routes: [{ ...routes.routes[0], execution_timeout_ms: '120000' }],
+      }),
     ).toBe(false)
     expect(
-      isSystemOneRoutes({ ...routes, routes: [{ ...routes.routes[0], timeout_ms: Infinity }] }),
+      isSystemOneRoutes({
+        ...routes,
+        routes: [{ ...routes.routes[0], execution_timeout_ms: Infinity }],
+      }),
     ).toBe(false)
   })
 })

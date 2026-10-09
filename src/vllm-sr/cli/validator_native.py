@@ -15,7 +15,7 @@ from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_decision_model import public_model_name
 
-NATIVE_ALGORITHMS = {"cascade", "policy"}
+NATIVE_ALGORITHMS = {"cascade"}
 _UNAVAILABLE_NATIVE_CONTEXT = {
     "authz",
     "metadata",
@@ -106,35 +106,12 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
         has_native = any(_is_native(decision) for decision in profile.decisions)
         if name in native_recipes or has_native:
             errors.extend(_native_profile_errors(config, profile, field))
-        if (name in native_recipes or has_native) and profile.budget is None:
-            errors.append(
-                ValidationError(
-                    "native System One routing requires routing.budget", field=field
-                )
-            )
-        if profile.budget is not None:
-            if not has_native and name not in native_recipes:
-                errors.append(
-                    ValidationError(
-                        "routing.budget is supported only for native System One recipes",
-                        field=field,
-                    )
-                )
-            try:
-                if parse_duration(profile.budget["deadline"]) <= 0:
-                    raise ValueError("deadline must be positive")
-            except ValueError as error:
-                errors.append(
-                    ValidationError(str(error), field=field + ".budget.deadline")
-                )
         for decision in profile.decisions:
             path = field + f".decisions.{decision.name}"
             if not _is_native(decision):
                 if name in native_recipes:
                     errors.append(
-                        ValidationError(
-                            "System One requires cascade or policy", field=path
-                        )
+                        ValidationError("System One requires cascade", field=path)
                     )
                 if any(ref.model in native for ref in decision.modelRefs):
                     errors.append(
@@ -190,7 +167,7 @@ def _native_profile_errors(config, profile, field):
     if enabled:
         errors.append(
             ValidationError(
-                "native execution uses stages and routing.budget; Chat routing.fallback must be disabled",
+                "native execution uses stages and algorithm.budget; Chat routing.fallback must be disabled",
                 field=field + ".fallback",
             )
         )
@@ -275,6 +252,13 @@ def _native_decision_errors(decision, models, calibrations, path):
     errors = []
     algorithm = decision.algorithm
     refs = [ref.model for ref in decision.modelRefs]
+    try:
+        if parse_duration(algorithm.budget["deadline"]) <= 0:
+            raise ValueError("deadline must be positive")
+    except ValueError as error:
+        errors.append(
+            ValidationError(str(error), field=path + ".algorithm.budget.deadline")
+        )
     if any(
         ref.weight not in (None, 0)
         or ref.use_reasoning is not None
@@ -303,17 +287,6 @@ def _native_decision_errors(decision, models, calibrations, path):
     names = set()
     for index, stage in enumerate(algorithm.stages or []):
         field = path + f".algorithm.stages.{index}"
-        if (
-            algorithm.type == "policy"
-            and stage["kind"] == "judge"
-            and index != len(algorithm.stages) - 1
-        ):
-            errors.append(
-                ValidationError(
-                    "policy permits one terminal judge after all native stages",
-                    field=field,
-                )
-            )
         if (
             not stage["name"].strip()
             or stage["name"] == "abstain"

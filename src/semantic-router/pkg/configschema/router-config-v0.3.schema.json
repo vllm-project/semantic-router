@@ -80,7 +80,71 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AlgorithmBudget": {
+      "properties": {
+        "deadline": {
+          "type": "string"
+        },
+        "max_calls": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deadline",
+        "max_calls"
+      ]
+    },
     "AlgorithmConfig": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cascade"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minimum_candidates"
+              ]
+            },
+            "required": [
+              "budget",
+              "quality",
+              "stages"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "budget"
+                  ]
+                },
+                {
+                  "required": [
+                    "quality"
+                  ]
+                },
+                {
+                  "required": [
+                    "stages"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "type": {
           "type": "string",
@@ -96,7 +160,6 @@
             "latency_aware",
             "mlp",
             "multi_factor",
-            "policy",
             "prompt",
             "ratings",
             "remom",
@@ -115,8 +178,8 @@
           },
           "type": "array"
         },
-        "policy": {
-          "$ref": "#/$defs/PolicyAlgorithmConfig"
+        "budget": {
+          "$ref": "#/$defs/AlgorithmBudget"
         },
         "minimum_candidates": {
           "type": "integer"
@@ -1108,9 +1171,6 @@
     },
     "CanonicalRecipeRouting": {
       "properties": {
-        "budget": {
-          "$ref": "#/$defs/RoutingBudget"
-        },
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
@@ -1189,9 +1249,6 @@
     },
     "CanonicalRouting": {
       "properties": {
-        "budget": {
-          "$ref": "#/$defs/RoutingBudget"
-        },
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
@@ -5126,27 +5183,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PolicyAlgorithmConfig": {
-      "properties": {
-        "source": {
-          "type": "string"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[a-fA-F0-9]{64}$"
-        },
-        "cost_weight": {
-          "type": "number",
-          "minimum": 0
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "source",
-        "sha256"
-      ]
-    },
     "PreferenceModelConfig": {
       "properties": {
         "use_contrastive": {
@@ -6706,23 +6742,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "RoutingBudget": {
-      "properties": {
-        "deadline": {
-          "type": "string"
-        },
-        "max_calls": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "deadline",
-        "max_calls"
-      ]
-    },
     "RoutingModel": {
       "properties": {
         "name": {
@@ -8088,16 +8107,6 @@
         "description": "Escalate complete typed responses through declared stages.",
         "tier": "experimental",
         "execution": "native"
-      },
-      {
-        "type": "policy",
-        "display_name": "Native Policy",
-        "description": "Select declared native stages using immutable learned parameters.",
-        "tier": "experimental",
-        "execution": "native",
-        "config_field": "policy",
-        "payload_shape": "nested",
-        "schema_ref": "#/$defs/PolicyAlgorithmConfig"
       },
       {
         "type": "automix",

@@ -46,13 +46,13 @@ entrypoints:
 recipes:
   - name: native-decisions
     routing:
-      budget: {deadline: 3s, max_calls: 4}
       decisions:
         - name: classify
           rules: {}
           modelRefs: [{model: kai}, {model: strong}, {model: reviewer}]
           algorithm:
             type: cascade
+            budget: {deadline: 3s, max_calls: 4}
             quality:
               type: uncalibrated
               acceptance:
@@ -103,7 +103,7 @@ func TestCanonicalNativeRoutingRoundTrip(t *testing.T) {
 	}
 	before := findRecipe(cfg.Recipes, "native-decisions").Profile
 	after := findRecipe(roundTrip.Recipes, "native-decisions").Profile
-	if !reflect.DeepEqual(before.Budget, after.Budget) || !reflect.DeepEqual(before.Decisions, after.Decisions) {
+	if !reflect.DeepEqual(before.Decisions, after.Decisions) {
 		t.Fatal("native policy changed across canonical export/parse")
 	}
 }
@@ -113,7 +113,7 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 		{"unknown API", "api: systemone", "api: mystery", ".api must"},
 		{"both transports", "deployment: local-kai", "deployment: local-kai\n      backend_refs: [{provider: systemone-compatible, endpoint: localhost:9000}]", "cannot be combined"},
 		{"unknown deployment", "deployment: local-kai", "deployment: missing", "must reference a model_runtime"},
-		{"missing budget", "budget: {deadline: 3s, max_calls: 4}", "budget: null", "routing.budget"},
+		{"missing budget", "budget: {deadline: 3s, max_calls: 4}", "budget: null", "algorithm.budget"},
 		{"zero budget", "max_calls: 4", "max_calls: 0", "max_calls must be positive"},
 		{"infinite deadline", "deadline: 3s", "deadline: 0s", "positive duration"},
 		{"unknown stage model", "model: strong, timeout", "model: absent, timeout", "undeclared modelRef"},

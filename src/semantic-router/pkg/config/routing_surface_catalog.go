@@ -8,7 +8,6 @@ import (
 
 const (
 	DecisionAlgorithmCascade      = "cascade"
-	DecisionAlgorithmPolicy       = "policy"
 	DecisionAlgorithmAutoMix      = "automix"
 	DecisionAlgorithmConfidence   = "confidence"
 	DecisionAlgorithmFusion       = "fusion"
@@ -152,7 +151,6 @@ type DecisionAlgorithmType struct {
 
 var builtinDecisionAlgorithms = []DecisionAlgorithmType{
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmCascade, DisplayName: "Native Cascade", Description: "Escalate complete typed responses through declared stages.", Tier: "experimental", Execution: AlgorithmExecutionNative}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmPolicy, DisplayName: "Native Policy", Description: "Select declared native stages using immutable learned parameters.", Tier: "experimental", Execution: AlgorithmExecutionNative, ConfigField: "policy", PayloadShape: AlgorithmPayloadNested}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Policy != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmAutoMix, DisplayName: "AutoMix", Description: "Optimize a cost-quality escalation policy.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "automix"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.AutoMix != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmConfidence, DisplayName: "Confidence", Description: "Escalate across candidate models until confidence is sufficient.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "confidence"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Confidence != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmFusion, DisplayName: "Fusion", Description: "Run a parallel panel and synthesize a judged final response.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "fusion"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Fusion != nil }},

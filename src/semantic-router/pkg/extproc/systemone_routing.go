@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -26,15 +25,7 @@ func prepareNativeExecutors(cfg *config.RouterConfig) (map[string]*systemone.Exe
 			if err != nil {
 				return nil, fmt.Errorf("native recipe %q decision %q calibration: %w", recipe.Name, decision.Name, err)
 			}
-			algorithm := *decision.Algorithm
-			if algorithm.Policy != nil {
-				policy := *algorithm.Policy
-				if !filepath.IsAbs(policy.Source) {
-					policy.Source = filepath.Join(cfg.ConfigBaseDir, policy.Source)
-				}
-				algorithm.Policy = &policy
-			}
-			executor, err := systemone.NewExecutor(&algorithm, quality)
+			executor, err := systemone.NewExecutor(decision.Algorithm, quality)
 			if err != nil {
 				return nil, fmt.Errorf("native recipe %q decision %q: %w", recipe.Name, decision.Name, err)
 			}
@@ -53,16 +44,9 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 		return http.StatusNotFound, nil, errors.New("native entrypoint not found")
 	}
 	recipe, ok := r.Config.RecipeByName(entrypoint.Recipe)
-	if !ok || recipe.Profile.Budget == nil {
+	if !ok {
 		return http.StatusServiceUnavailable, nil, errors.New("native recipe unavailable")
 	}
-	duration, err := time.ParseDuration(recipe.Profile.Budget.Deadline)
-	if err != nil || duration <= 0 {
-		return http.StatusServiceUnavailable, nil, errors.New("native recipe deadline invalid")
-	}
-	ctx, cancel := context.WithTimeout(ctx, duration)
-	defer cancel()
-	ctx, ledger := budget.WithLimit(ctx, recipe.Profile.Budget.MaxCalls)
 	request, err := systemone.ParseNativeRequest(body)
 	if err != nil {
 		return http.StatusBadRequest, nil, err
@@ -89,6 +73,17 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	if executor == nil {
 		return http.StatusServiceUnavailable, nil, errors.New("native execution plan unavailable")
 	}
+	limits := decision.Decision.Algorithm.Budget
+	if limits == nil || limits.MaxCalls <= 0 {
+		return http.StatusServiceUnavailable, nil, errors.New("native algorithm budget unavailable")
+	}
+	duration, err := time.ParseDuration(limits.Deadline)
+	if err != nil || duration <= 0 {
+		return http.StatusServiceUnavailable, nil, errors.New("native algorithm deadline invalid")
+	}
+	ctx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	ctx, ledger := budget.WithLimit(ctx, limits.MaxCalls)
 	result, err := executor.Execute(ctx, request, invoke)
 	if err != nil {
 		if ctx.Err() != nil {

@@ -8,10 +8,11 @@ when Kai does not pass the configured early-exit gate.** It does not call Kai
 again to classify the task, and it does not call an LLM.
 
 Use the [cascade guide](../../../website/docs/tutorials/algorithm/native/cascade.md)
-for the native provider bindings, explicit entrypoint, and two-call request
-budget. Its thresholds are illustrative: choose per-type gates using independent
-calibration data, freeze the configuration, and then evaluate the held-out
-requests. Every required answer must pass the gate for its question type; the
+for the native provider bindings, explicit entrypoint, and two-call algorithm
+budget. Its first example uses a frozen pilot operating point, not a universal
+default. For your own workload, choose gates using independent calibration
+data, freeze the configuration, and then evaluate held-out requests. Every
+required answer must pass the gate for its question type; the
 common rule requires valid native probability evidence. Do not tune thresholds
 on the public suite after inspecting its labels or errors.
 
@@ -20,6 +21,24 @@ Compare direct Kai, direct Vega and the cascade on the same requests. Report
 unresolved/error coverage, escalation and physical calls alongside quality,
 runtime compute and measured frontend latency. Compute milliseconds are not
 GPU-active time or a dollar price.
+
+### Pin the measured model pair
+
+The first cascade example uses these Decision 2.0 checkpoints:
+
+| Alias | Model | Immutable revision |
+| --- | --- | --- |
+| `kai` | `vllm-sr/Decision-2.0-Kai-0.6B` | `cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764` |
+| `vega` | `vllm-sr/Decision-2.0-Vega-27B` | `7aec49ae11a18741706da549ab626b9052795fe7` |
+
+Its frozen early-exit threshold is `0.6059704079536342` for every Choice, Score
+and Noul answer. The entire bundle must pass. This value was selected on a
+separate 192-source calibration set before evaluating the public suite; it is
+not a probability of correctness or a fixed fast-path quota. The common
+acceptance floor requires complete answers with valid native distributions.
+Pin revisions on each runtime deployment and retain its actual identity,
+numerical profile and image digest in the run receipt. A different serving
+profile or dataset calls for fresh validation.
 
 ### Run the pinned JevBench public suite
 
@@ -103,7 +122,8 @@ measurement method with each experiment's receipts.
 ## Separate exploratory pilot and follow-up tools
 
 The commands below describe the earlier Banking77/BoolQ/DynaSent pilot and
-optional learned-policy or LLM experiments. They do **not** reproduce the
+offline learned-policy analysis or optional LLM experiments. They do **not**
+reproduce the
 231-item JevBench evaluation and are not requirements or completed results for
 the first Kai → Vega delivery. Internal Kai signals selecting Nox/Vega paths
 (B) and Qwen3.8-Flash-Next experiments (C) follow the first PR and Blog.
@@ -182,7 +202,7 @@ online cascade latency measurement. Sequential model deployments also introduce
 time-of-run effects. Use a separately controlled serving experiment to validate
 end-to-end latency and provisioned-resource cost.
 
-## Compare the two policies
+## Compare strategies offline
 
 ```bash
 .venv-agent/bin/python -m systemone_auto replay \
@@ -199,7 +219,7 @@ compute elapsed time, not GPU-active time or billable GPU usage. Missing timing
 does not become zero: compute-based replay refuses that matrix. You can run
 `--cost-metric client_elapsed_ms` as a separate comparison that retains failures
 and their observed client cost. The metric and its source are recorded in the
-policy artifact. Neither metric establishes routed end-to-end latency.
+offline fitted model. Neither metric establishes routed end-to-end latency.
 The cascade selects one fixed escalation model and a confidence threshold.
 The learned method fits lightweight ridge heads to predict whether each
 alternative would correct or damage the entire bundle, then subtracts a cost
@@ -220,13 +240,14 @@ call leaves the whole request unresolved. Unresolved requests stay in the error
 denominator. Direct-model quality baselines preserve valid point answers even
 when confidence evidence is absent; they do not claim cascade deliverability.
 
-Outputs include the data-only `policy.json`, quality-calibration estimates,
+Outputs include the research-only `fitted-model.json`, quality-calibration estimates,
 held-out per-request actions and `replay.json`. The latter contains realized
 cost, escalation rates, whole-bundle accuracy, typed losses and a paired group
 bootstrap interval. Held-out cost may differ from the calibration budget and
 is reported as observed, never retrospectively constrained using test labels.
-The exported policy includes only native-to-native actions. It is not an LLM
-judge policy or a complete online performance result.
+The fitted model contains native-to-native estimates for offline analysis only.
+The Router does not accept this file as a deployable algorithm. It is neither
+an LLM judge nor an online performance result.
 
 The report also includes direct-model and always-escalate controls selected
 within the same calibration cost ceiling. A random control preserves the
@@ -238,23 +259,6 @@ execution costs. The label-aware native oracle is only a diagnostic upper bound.
 Rescue/harm tables use training and calibration examples for research exploration;
 held-out errors must not become a tuning set.
 
-Before deploying a learned artifact, bind its measured actions to the YAML
-stage and provider aliases. For example, a binding entry is
-`"kai": {"stage": "fast", "model": "decision-fast"}`. Supply every measured
-action in the binding JSON; removing candidates requires a separately declared
-experiment and validation.
-
-```bash
-.venv-agent/bin/python -m systemone_auto export-policy \
-  --policy .agent-harness/systemone-auto/results/policy.json \
-  --bindings .agent-harness/systemone-auto/bindings.json \
-  --output .agent-harness/systemone-auto/deployment-policy.json
-```
-
-The command reports the artifact SHA256 for `algorithm.policy.sha256`. Each
-action binds its provider alias to the observed model revision, content digest
-and runtime metadata. Renaming stages preserves coefficients and all measured
-candidates; it does not authorize repointing an alias to a different model.
 The pilot quality-calibration file is exploratory evidence, not a certified
 acceptance artifact for `evaluation.calibrations`.
 
@@ -265,9 +269,10 @@ make test-calibration
 ```
 
 Hermetic loopback tests cover authenticated collection, resume identity,
-failure accounting, grouped partitions and held-out-label isolation. The shared
-`tests/fixtures/native-features.json` fixture keeps Python training features and
-Go serving features consistent.
+failure accounting, grouped partitions and held-out-label isolation. The
+`tests/fixtures/native-features.json` fixture locks the offline observation
+feature contract. These research features are not a serving API or deployable
+model format.
 
 ## Follow-up: measure an actual terminal judge
 
@@ -309,6 +314,6 @@ measure a fully resident cascade separately before claiming end-to-end latency.
 
 A smaller native pool is also a separate experiment. Declare its pool, base,
 dataset digest, two-call cap and all five cost ceilings in a frozen protocol,
-then pass `replay --protocol protocol.json`. Its artifact binds that protocol and
-contains only the declared actions. Do not trim a full-pool artifact after
+then pass `replay --protocol protocol.json`. Its fitted model binds that protocol and
+contains only the declared actions. Do not trim a full-pool fitted model after
 looking at held-out results.

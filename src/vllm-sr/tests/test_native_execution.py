@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import pytest
 import yaml
+from cli.config_schema.validation import validate_config_structure
 from cli.models import UserConfig
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
@@ -44,13 +45,13 @@ entrypoints:
 recipes:
   - name: native
     routing:
-      budget: {deadline: 3s, max_calls: 3}
       decisions:
         - name: classify
           rules: {}
           modelRefs: [{model: kai}, {model: strong}]
           algorithm:
             type: cascade
+            budget: {deadline: 3s, max_calls: 3}
             quality:
               type: uncalibrated
               acceptance:
@@ -64,6 +65,7 @@ recipes:
 
 
 def test_native_round_trip_and_listener_scope(native_document, tmp_path):
+    assert validate_config_structure(native_document) == []
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(native_document))
     config = parse_user_config(str(path), log_summary=False)
@@ -78,15 +80,9 @@ def test_native_round_trip_and_listener_scope(native_document, tmp_path):
     ]
 
 
-def test_native_policy_and_calibration_survive_projection(native_document):
+def test_native_cascade_and_calibration_survive_projection(native_document):
     document = deepcopy(native_document)
     algorithm = document["recipes"][0]["routing"]["decisions"][0]["algorithm"]
-    algorithm["type"] = "policy"
-    algorithm["policy"] = {
-        "source": "./policy.json",
-        "sha256": "a" * 64,
-        "cost_weight": 0.001,
-    }
     algorithm["quality"] = {
         "type": "calibrated",
         "calibration": "suite",
@@ -117,7 +113,7 @@ def test_native_stage_uses_generated_closed_contract(native_document, field, val
 
 
 @pytest.mark.parametrize(
-    "mutation", ["wrong_deployment", "wrong_stage", "chat_default", "missing_budget"]
+    "mutation", ["wrong_deployment", "wrong_stage", "chat_default"]
 )
 def test_native_invalid_resource_references_are_rejected(native_document, mutation):
     if mutation == "wrong_deployment":
@@ -128,44 +124,56 @@ def test_native_invalid_resource_references_are_rejected(native_document, mutati
         ]["model"] = "missing"
     elif mutation == "chat_default":
         native_document["providers"]["defaults"] = {"model": "kai"}
-    else:
-        del native_document["recipes"][0]["routing"]["budget"]
     config = UserConfig.model_validate(native_document)
     assert validate_native_execution(config)
 
 
-def test_native_policy_judge_is_terminal(native_document):
-    document = deepcopy(native_document)
-    document["providers"]["models"].append(
-        {
-            "name": "reviewer",
-            "api_format": "openai",
-            "backend_refs": [
-                {
-                    "provider": "openai-compatible",
-                    "base_url": "http://localhost:8901/v1",
-                }
-            ],
-        }
-    )
-    decision = document["recipes"][0]["routing"]["decisions"][0]
-    decision["modelRefs"].append({"model": "reviewer"})
-    algorithm = decision["algorithm"]
-    algorithm["type"] = "policy"
-    algorithm["policy"] = {"source": "./policy.json", "sha256": "a" * 64}
-    judge = {
-        "name": "judge",
-        "model": "reviewer",
-        "kind": "judge",
-        "generation": {"max_output_tokens": 128},
-    }
-    algorithm["stages"].append(judge)
-    assert validate_native_execution(UserConfig.model_validate(document)) == []
-    algorithm["stages"].insert(1, algorithm["stages"].pop())
-    assert any(
-        "terminal judge" in str(error)
-        for error in validate_native_execution(UserConfig.model_validate(document))
-    )
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "policy_type",
+        "policy_payload",
+        "missing_budget",
+        "recipe_budget",
+        "default_budget",
+        "chat_budget",
+        "minimum_candidates",
+    ],
+)
+def test_removed_policy_and_misplaced_budget_are_rejected(native_document, mutation):
+    routing = native_document["recipes"][0]["routing"]
+    algorithm = routing["decisions"][0]["algorithm"]
+    if mutation == "policy_type":
+        algorithm["type"] = "policy"
+    elif mutation == "policy_payload":
+        algorithm["policy"] = {"source": "policy.json", "sha256": "a" * 64}
+    elif mutation == "missing_budget":
+        del algorithm["budget"]
+    elif mutation == "recipe_budget":
+        routing["budget"] = algorithm.pop("budget")
+    elif mutation == "default_budget":
+        native_document["routing"] = {"budget": {"deadline": "3s", "max_calls": 2}}
+    elif mutation == "minimum_candidates":
+        algorithm["minimum_candidates"] = 2
+    else:
+        algorithm.clear()
+        algorithm.update(type="static", budget={"deadline": "3s", "max_calls": 1})
+    with pytest.raises(ValidationError):
+        UserConfig.model_validate(native_document)
+    assert validate_config_structure(native_document)
+
+
+def test_multiple_decisions_keep_independent_algorithm_limits(native_document):
+    decisions = native_document["recipes"][0]["routing"]["decisions"]
+    other = deepcopy(decisions[0])
+    other["name"] = "alternate"
+    other["algorithm"]["budget"] = {"deadline": "9s", "max_calls": 1}
+    decisions.append(other)
+    config = UserConfig.model_validate(native_document)
+    assert validate_native_execution(config) == []
+    actual = config.recipes[0].routing.decisions
+    assert actual[0].algorithm.budget == {"deadline": "3s", "max_calls": 3}
+    assert actual[1].algorithm.budget == {"deadline": "9s", "max_calls": 1}
 
 
 @pytest.mark.parametrize("signal", ["authz", "metadata", "conversation", "reask", "kb"])

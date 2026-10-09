@@ -9,7 +9,7 @@ import {
   isSystemOneRoutes,
   systemOneTargets,
   systemOneTargetRequest,
-  systemOneTargetTimeout,
+  systemOneTargetClientTimeout,
   type SystemOneDeployment,
   type SystemOneRoutes,
 } from './systemOneTargets'
@@ -203,10 +203,14 @@ export function useSystemOnePlayground() {
       active.current = controller
       const started = performance.now()
       let timedOut = false
-      const timer = window.setTimeout(() => {
-        timedOut = true
-        controller.abort()
-      }, systemOneTargetTimeout(selected))
+      const timeout = systemOneTargetClientTimeout(selected)
+      const timer =
+        timeout === undefined
+          ? undefined
+          : window.setTimeout(() => {
+              timedOut = true
+              controller.abort()
+            }, timeout)
       const ticker = window.setInterval(() => setElapsed(performance.now() - started), 100)
       setRunning(true)
       setElapsed(0)

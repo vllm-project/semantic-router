@@ -151,13 +151,16 @@ traffic before using them for production routing.
 
 ### Native System One Algorithms
 
-A recipe published with `api: systemone` uses native execution. It preserves
-complete typed responses and gives all stages one shared request budget.
+A recipe published with `api: systemone` uses native execution. Its matched
+decision runs a `cascade`, preserving complete typed responses. Each cascade
+has its own `algorithm.budget` for its stages and transport retries. Signals
+run first with their own timeouts and request cancellation.
 
 | Type | Status | Goal | Guide |
 | --- | --- | --- | --- |
 | `cascade` | experimental | Try declared native models in authored order until acceptance passes | [Cascade](./native/cascade.md) |
-| `policy` | experimental | Choose additional native work using fitted gain estimates | [Learned policy](./native/policy.md) |
 
-Both algorithms use the same candidate roster, stage actions and quality
-contract. They do not run Chat plugins or silently fall back to a Chat model.
+A one-stage cascade can target one model; a longer cascade can try a small model
+before a stronger one. Several decisions can choose different cascades within
+one recipe. Native execution uses an explicit candidate roster and quality
+contract; it does not run Chat plugins or silently fall back to a Chat model.

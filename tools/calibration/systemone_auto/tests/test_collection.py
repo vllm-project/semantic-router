@@ -161,8 +161,8 @@ def test_held_out_labels_do_not_fit_heads_or_select_operating_points(
     write_json(output / "collection.json", manifest)
     second = replay(data_path, output, tmp_path / "second", "kai")
     assert (
-        read_json(tmp_path / "first/policy.json")["heads"]
-        == read_json(tmp_path / "second/policy.json")["heads"]
+        read_json(tmp_path / "first/fitted-model.json")["heads"]
+        == read_json(tmp_path / "second/fitted-model.json")["heads"]
     )
     assert [point["settings"] for point in report["curves"]] == [
         point["settings"] for point in second["curves"]
@@ -198,7 +198,9 @@ def test_restricted_pool_is_a_separate_bound_experiment(collection_fixture, tmp_
     )
     assert report["native_pool"] == ["kai", "eos"]
     assert report["protocol_sha256"]
-    policy = read_json(tmp_path / "restricted/policy.json")
+    policy = read_json(tmp_path / "restricted/fitted-model.json")
+    assert policy["schema_version"] == "systemone-replay-model/v1"
+    assert policy["purpose"] == "offline_replay_only"
     assert set(policy["actions"]) == {"kai", "eos"}
     assert policy["training"]["protocol_sha256"] == report["protocol_sha256"]
     protocol["native_pool"] = ["kai", "missing"]

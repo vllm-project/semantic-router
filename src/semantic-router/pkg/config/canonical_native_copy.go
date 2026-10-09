@@ -7,7 +7,7 @@ func cloneNativeAlgorithm(source *AlgorithmConfig) *AlgorithmConfig {
 		return source
 	}
 	result := *source
-	result.Policy = cloneNativeValue(source.Policy)
+	result.Budget = cloneNativeValue(source.Budget)
 	result.Quality = cloneNativeValue(source.Quality)
 	if result.Quality != nil {
 		result.Quality.Acceptance = cloneNativeAcceptance(source.Quality.Acceptance)

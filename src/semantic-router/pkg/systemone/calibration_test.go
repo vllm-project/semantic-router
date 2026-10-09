@@ -25,7 +25,6 @@ func calibrationFixture(t *testing.T) (*NativeRequest, *config.RoutingRecipe, Na
 	plan.Quality = &config.NativeQualityConfig{Type: "calibrated", Calibration: "held-out", Loss: "bundle_error", MaxRisk: &risk}
 	plan.Stages[0].Accept = nil
 	recipe := &config.RoutingRecipe{Name: "native", Profile: config.RoutingProfile{
-		Budget:    &config.RoutingBudget{Deadline: "3s", MaxCalls: 3},
 		Decisions: []config.Decision{{Name: "classify", Algorithm: plan}},
 	}}
 	identity := InferenceIdentity{ModelID: "fast-actual", Revision: "revision-a", ModelSHA256: strings.Repeat("a", 64), Engine: "candle", Profile: "exact", Numerics: "exact", Accelerator: "cpu"}
@@ -150,7 +149,7 @@ func TestCalibrationRejectsIncompatibleOrAdaptiveEvidence(t *testing.T) {
 			_, recipe, artifact, _ := calibrationFixture(t)
 			switch change {
 			case "policy":
-				recipe.Profile.Budget.MaxCalls++
+				recipe.Profile.Decisions[0].Algorithm.Budget.MaxCalls++
 			case "training":
 				artifact.Certification.IndependentFromTraining = false
 			case "freeze":

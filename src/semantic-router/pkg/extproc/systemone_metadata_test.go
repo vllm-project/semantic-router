@@ -2,18 +2,14 @@ package extproc
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
@@ -22,20 +18,7 @@ func TestSystemOneAutoMetadataVisibilityCoversEveryState(t *testing.T) {
 		ModelID: "kai-native", Revision: "revision-1", ModelSHA256: strings.Repeat("a", 64),
 		Engine: "native", Profile: "exact", Numerics: "exact", Accelerator: "cpu",
 	}
-	policy, err := json.Marshal(map[string]any{
-		"schema_version": "systemone-policy/v1", "feature_names": systemone.FeatureNames,
-		"actions": map[string]systemone.PolicyActionBinding{"fast": {Model: "kai", Identity: identity}},
-		"heads":   map[string]any{"fast": map[string]any{}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "policy.json")
-	if writeErr := os.WriteFile(path, policy, 0o600); writeErr != nil {
-		t.Fatal(writeErr)
-	}
-	digest := sha256.Sum256(policy)
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
 listeners:
   - name: native
     port: 8801
@@ -51,20 +34,19 @@ entrypoints:
 recipes:
   - name: native
     routing:
-      budget: {deadline: 2s, max_calls: 1}
       decisions:
         - name: answer
           rules: {}
           modelRefs: [{model: kai}]
           algorithm:
-            type: policy
-            policy: {source: %q, sha256: %s}
+            type: cascade
+            budget: {deadline: 2s, max_calls: 1}
             quality:
               type: uncalibrated
               acceptance:
                 rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
             stages: [{name: fast, kind: native, model: kai}]
-`, path, hex.EncodeToString(digest[:]))))
+`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,11 +54,19 @@ recipes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	executors, err := prepareNativeExecutors(cfg)
+	recipe, _ := cfg.RecipeByName("native")
+	algorithm := recipe.Profile.Decisions[0].Algorithm
+	algorithm.Quality = &config.NativeQualityConfig{Type: "calibrated"}
+	// The evaluator fixture isolates metadata visibility; artifact admission and
+	// statistical acceptance are covered by the systemone calibration tests.
+	executor, err := systemone.NewExecutor(algorithm, func(_ *systemone.NativeRequest, candidate systemone.Candidate) (bool, error) {
+		observed, valid := api.ResponseInferenceIdentity(candidate.Body)
+		return valid && observed == identity, nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := &OpenAIRouter{Config: cfg, RecipeClassifiers: classifiers, nativeExecutors: executors}
+	router := &OpenAIRouter{Config: cfg, RecipeClassifiers: classifiers, nativeExecutors: map[string]*systemone.Executor{config.RoutingDecisionKey("native", "answer"): executor}}
 	question := `{"meta":{"type":"noul","instructions":"Is this relevant?"}}`
 	answer := json.RawMessage(`{"meta":{"type":"noul","noul":0.99,"extension":{"meta":"answer data"}}}`)
 	response, err := json.Marshal(map[string]any{
@@ -91,7 +81,7 @@ recipes:
 			body := json.RawMessage(`{"model":"vllm-sr/auto","state":"first","questions":` + question + `,"states":{"meta":{"state":"second","questions":` + question + `}}` + options + `}`)
 			status, result, err := router.RouteSystemOne(t.Context(), "vllm-sr/auto", body, func(_ context.Context, model string, task json.RawMessage) (int, []byte, error) {
 				if model != "kai" || !strings.Contains(string(task), `"return_meta":true`) {
-					t.Fatal("policy did not request internal provenance")
+					t.Fatal("calibrated cascade did not request internal provenance")
 				}
 				return http.StatusOK, response, nil
 			})

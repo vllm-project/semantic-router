@@ -2,14 +2,9 @@ package systemone
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -29,27 +24,9 @@ func gate(threshold float64) *config.NativeAcceptance {
 func cascadePlan() *config.AlgorithmConfig {
 	return &config.AlgorithmConfig{
 		Type:    config.DecisionAlgorithmCascade,
+		Budget:  &config.AlgorithmBudget{Deadline: "3s", MaxCalls: 3},
 		Quality: &config.NativeQualityConfig{Type: "uncalibrated", Acceptance: gate(0)},
 		Stages:  []config.CascadeStage{{Name: "fast", Kind: "native", Model: "kai", Accept: gate(0.9)}, {Name: "strong", Kind: "native", Model: "nox"}},
-	}
-}
-
-func policyIdentity(model string) InferenceIdentity {
-	return InferenceIdentity{ModelID: model, Revision: strings.Repeat("a", 40), ModelSHA256: strings.Repeat("b", 64), Engine: "native", Profile: "exact", Numerics: "exact", Accelerator: "cpu"}
-}
-
-func policyResponse(body string) []byte {
-	var response map[string]any
-	_ = json.Unmarshal([]byte(body), &response)
-	response["meta"] = policyIdentity(response["model"].(string))
-	encoded, _ := json.Marshal(response)
-	return encoded
-}
-
-func policyBindings(fast string) map[string]PolicyActionBinding {
-	return map[string]PolicyActionBinding{
-		"fast":   {Model: "kai", Identity: policyIdentity(fast)},
-		"strong": {Model: "nox", Identity: policyIdentity("strong-actual")},
 	}
 }
 
@@ -129,85 +106,6 @@ func TestJudgeSelectsAnIntactBundleWithoutInventingConfidence(t *testing.T) {
 	}
 }
 
-func TestPolicyUnresolvedAnswerCanReachExplicitJudge(t *testing.T) {
-	plan := cascadePlan()
-	plan.Type = config.DecisionAlgorithmPolicy
-	plan.Stages = append(plan.Stages, config.CascadeStage{Name: "review", Kind: "judge", Model: "reviewer", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}})
-	weights := make([]float64, len(FeatureNames))
-	weights[0] = -1 // No positive native upgrade is predicted.
-	policy := LearnedPolicy{SchemaVersion: "systemone-policy/v1", FeatureNames: FeatureNames, Actions: policyBindings("fast-actual"), Heads: map[string]map[string]policyAction{"fast": {"strong": {Weights: weights, CostMS: 1}}}}
-	data, _ := json.Marshal(policy)
-	sum := sha256.Sum256(data)
-	path := filepath.Join(t.TempDir(), "policy.json")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	plan.Policy = &config.PolicyAlgorithmConfig{Source: path, SHA256: hex.EncodeToString(sum[:])}
-	executor, err := NewExecutor(plan, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
-	var calls []string
-	result, err := executor.Execute(context.Background(), request, func(_ context.Context, model string, _ json.RawMessage) (int, []byte, error) {
-		calls = append(calls, model)
-		if model == "kai" {
-			return 200, policyResponse(uncertainResponse), nil
-		}
-		return 200, []byte(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"selected\":\"fast\"}"}}]}`), nil
-	})
-	if err != nil || !reflect.DeepEqual(calls, []string{"kai", "reviewer"}) || result.Stage != "review" || result.Model != "kai" {
-		t.Fatalf("calls=%v result=%v error=%v", calls, result, err)
-	}
-}
-
-func TestLearnedPolicyUsesDeclaredActionsAndFrozenBytes(t *testing.T) {
-	plan := cascadePlan()
-	plan.Type = config.DecisionAlgorithmPolicy
-	plan.Stages[0].Accept = nil
-	weights := make([]float64, len(FeatureNames))
-	weights[0] = 1
-	policy := LearnedPolicy{SchemaVersion: "systemone-policy/v1", FeatureNames: FeatureNames, Actions: policyBindings("strong-actual"), Heads: map[string]map[string]policyAction{"fast": {"strong": {Weights: weights, CostMS: 1}}}}
-	data, _ := json.Marshal(policy)
-	sum := sha256.Sum256(data)
-	path := filepath.Join(t.TempDir(), "policy.json")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	plan.Policy = &config.PolicyAlgorithmConfig{Source: path, SHA256: hex.EncodeToString(sum[:])}
-	executor, err := NewExecutor(plan, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if writeErr := os.WriteFile(path, []byte(`{"mutated":true}`), 0o600); writeErr != nil {
-		t.Fatal(writeErr)
-	}
-	request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
-	var calls []string
-	result, err := executor.Execute(context.Background(), request, func(_ context.Context, model string, body json.RawMessage) (int, []byte, error) {
-		if !strings.Contains(string(body), `"return_meta":true`) {
-			t.Fatal("learned policy failed to request runtime provenance")
-		}
-		calls = append(calls, model)
-		return 200, policyResponse(certainResponse), nil
-	})
-	if err != nil || !reflect.DeepEqual(calls, []string{"kai", "nox"}) || result.Stage != "strong" {
-		t.Fatalf("calls=%v result=%v error=%v", calls, result, err)
-	}
-	calls = nil
-	_, err = executor.Execute(context.Background(), request, func(_ context.Context, model string, _ json.RawMessage) (int, []byte, error) {
-		calls = append(calls, model)
-		// A remote operator repointed the same provider alias to another model.
-		return 200, policyResponse(uncertainResponse), nil
-	})
-	if err == nil || !reflect.DeepEqual(calls, []string{"kai"}) {
-		t.Fatalf("policy used evidence from a changed model: calls=%v error=%v", calls, err)
-	}
-	if _, err := NewExecutor(plan, nil); err == nil {
-		t.Fatal("modified policy bytes accepted")
-	}
-}
-
 func TestCanceledCascadeDoesNotLaunchAnotherStage(t *testing.T) {
 	executor, _ := NewExecutor(cascadePlan(), nil)
 	request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
@@ -220,5 +118,91 @@ func TestCanceledCascadeDoesNotLaunchAnotherStage(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) || calls != 1 {
 		t.Fatalf("calls=%d error=%v", calls, err)
+	}
+}
+
+const judgeFastResponse = `{"choices":[{"finish_reason":"stop","message":{"content":"{\"selected\":\"fast\"}"}}]}`
+
+func TestCascadeRejectsSuccessfulResponseAfterCancellation(t *testing.T) {
+	for _, kind := range []string{"native", "judge", "quality"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			plan := cascadePlan()
+			var quality QualityEvaluator
+			wantCalls := 1
+			switch kind {
+			case "judge":
+				plan.Stages[1].Accept = gate(1)
+				plan.Stages = append(plan.Stages, config.CascadeStage{Name: "review", Kind: "judge", Model: "reviewer", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}})
+				wantCalls = 3
+			case "quality":
+				plan.Quality.Type = "calibrated"
+				quality = func(*NativeRequest, Candidate) (bool, error) {
+					cancel()
+					return true, nil
+				}
+			}
+			executor, err := NewExecutor(plan, quality)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
+			calls := 0
+			result, err := executor.Execute(ctx, request, func(_ context.Context, model string, _ json.RawMessage) (int, []byte, error) {
+				calls++
+				if kind == "native" || model == "reviewer" {
+					cancel()
+				}
+				if model == "reviewer" {
+					return 200, []byte(judgeFastResponse), nil
+				}
+				if kind == "judge" && model == "kai" {
+					return 200, []byte(uncertainResponse), nil
+				}
+				return 200, []byte(certainResponse), nil
+			})
+			if !errors.Is(err, context.Canceled) || result.Body != nil || calls != wantCalls {
+				t.Fatalf("accepted canceled execution: stage=%q calls=%d error=%v", result.Stage, calls, err)
+			}
+		})
+	}
+}
+
+func TestCascadeStageTimeoutRejectsLateResponseAndAllowsUpgrade(t *testing.T) {
+	for _, kind := range []string{"native", "judge"} {
+		t.Run(kind, func(t *testing.T) {
+			plan := cascadePlan()
+			lateModel, wantModel := "kai", "nox"
+			wantCalls := 2
+			if kind == "native" {
+				plan.Stages[0].Timeout = "1ms"
+			} else {
+				plan.Stages[0].Accept, plan.Stages[1].Accept = gate(1), gate(1)
+				plan.Stages = append(plan.Stages,
+					config.CascadeStage{Name: "review", Kind: "judge", Model: "reviewer", Timeout: "1ms", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}},
+					config.CascadeStage{Name: "final", Kind: "native", Model: "vega"})
+				lateModel, wantModel, wantCalls = "reviewer", "vega", 4
+			}
+			executor, err := NewExecutor(plan, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
+			calls := 0
+			result, err := executor.Execute(t.Context(), request, func(ctx context.Context, model string, _ json.RawMessage) (int, []byte, error) {
+				calls++
+				if model == lateModel {
+					<-ctx.Done()
+				}
+				if model == "reviewer" {
+					return 200, []byte(judgeFastResponse), nil
+				}
+				return 200, []byte(certainResponse), nil
+			})
+			if err != nil || result.Model != wantModel || calls != wantCalls {
+				t.Fatalf("late stage was accepted: model=%q calls=%d error=%v", result.Model, calls, err)
+			}
+		})
 	}
 }

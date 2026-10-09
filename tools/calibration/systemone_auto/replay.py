@@ -331,7 +331,7 @@ def replay(
     policy = fit_heads(parts["train"], matrix, native, provenance)
     if set(manifest["runtime_identities"]) != set(all_native):
         raise ValueError(
-            "policy artifacts require observed runtime identity for every native action"
+            "offline fitted models require observed runtime identity for every native action"
         )
     policy["actions"] = {
         name: {"model": name, "identity": manifest["runtime_identities"][name]}
@@ -501,14 +501,14 @@ def replay(
             "Budget matched on calibration only; held-out realized cost is reported, not constrained after seeing labels",
             "PAVA posterior is estimated bundle correctness, not a certified acceptance guarantee",
             "Qwen direct typed-point baseline is not a deployable judge action and has no confidence metrics",
-            "Every exported head is unconditional on earlier history; this experiment uses at most two calls",
+            "Every fitted head is unconditional on earlier history; this offline experiment uses at most two calls",
             "Native common acceptance requires complete answer evidence, matching top_probability >= 0; valid point-only answers remain valid only in direct baselines",
             "A learned upgrade may retain its previously accepted first answer; an authored cascade cannot fall back to a first answer rejected by its extra acceptance gate",
             "Calibrated unresolved/rejected HTTP503 is not simulated here and must never be dropped from a later online study",
             "No performance gain is presumed; zero/negative improvements must be reported",
         ],
     }
-    write_json(output / "policy.json", policy)
+    write_json(output / "fitted-model.json", policy)
     write_json(
         output / "quality-calibration.json",
         {

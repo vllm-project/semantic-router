@@ -115,7 +115,7 @@ type AlgorithmConfig struct {
 	Type              string                       `yaml:"type"`
 	Quality           *NativeQualityConfig         `yaml:"quality,omitempty"`
 	Stages            []CascadeStage               `yaml:"stages,omitempty"`
-	Policy            *PolicyAlgorithmConfig       `yaml:"policy,omitempty"`
+	Budget            *AlgorithmBudget             `yaml:"budget,omitempty"`
 	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
 	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
 	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`

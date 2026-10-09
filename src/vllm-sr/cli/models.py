@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from .models_decision import DecisionSignalRule
-from .models_native import CalibrationArtifact, RoutingBudget
+from .models_native import CalibrationArtifact
 from .models_predicates import NumericPredicate
 from .models_safety import SafetyRule
 
@@ -1940,7 +1940,7 @@ class Decision(BaseModel):
         # can discard fields outside its typed view.
         if (
             isinstance(algorithm, dict)
-            and algorithm.get("type") in {"cascade", "policy"}
+            and algorithm.get("type") == "cascade"
             and (data.get("candidateIterations") or data.get("emits"))
         ):
             raise ValueError(
@@ -2628,7 +2628,6 @@ class Routing(BaseModel):
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    budget: Optional[RoutingBudget] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
@@ -2673,7 +2672,6 @@ class RecipeRouting(BaseModel):
 
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    budget: Optional[RoutingBudget] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)

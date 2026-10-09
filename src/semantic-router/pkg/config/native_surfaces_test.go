@@ -71,7 +71,7 @@ func TestNativeConfigurationRejectsIgnoredChatControls(t *testing.T) {
 }
 
 func TestNativeRequestFactsFailDuringConfigurationParsing(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "      budget:", "      signals:\n        metadata:\n          - {name: tenant, key: tenant, predicate: {equals: private}}\n      budget:", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "      decisions:", "      signals:\n        metadata:\n          - {name: tenant, key: tenant, predicate: {equals: private}}\n      decisions:", 1)
 	raw = strings.Replace(raw, "rules: {}", "rules: {type: metadata, name: tenant}", 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil || !strings.Contains(err.Error(), "native System One") {
 		t.Fatalf("native metadata rule silently accepted: %v", err)

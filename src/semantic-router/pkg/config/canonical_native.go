@@ -6,14 +6,6 @@ import (
 )
 
 func validateCanonicalNativeResources(canonical *CanonicalConfig) error {
-	if err := canonical.Routing.Budget.Validate(); err != nil {
-		return err
-	}
-	for _, recipe := range canonical.Recipes {
-		if err := recipe.Routing.Budget.Validate(); err != nil {
-			return fmt.Errorf("recipes[%s]: %w", recipe.Name, err)
-		}
-	}
 	if canonical.Evaluation != nil {
 		seen := map[string]bool{}
 		for _, artifact := range canonical.Evaluation.Calibrations {
@@ -103,18 +95,10 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 	if native && chat {
 		return fmt.Errorf("a native recipe cannot also be a Chat entrypoint; use isolated recipes")
 	}
-	if native && recipe.Profile.Budget == nil {
-		return fmt.Errorf("systemone routing requires an explicit routing.budget")
-	}
-	if recipe.Profile.Budget != nil && !native {
-		if !hasNativeAlgorithm {
-			return fmt.Errorf("routing.budget is currently supported only for native System One recipes")
-		}
-	}
 	for _, decision := range recipe.Profile.Decisions {
 		algorithm := decision.Algorithm
 		if native && !algorithm.IsNative() {
-			return fmt.Errorf("decision %q: System One requires cascade or policy", decision.Name)
+			return fmt.Errorf("decision %q: System One requires cascade", decision.Name)
 		}
 		if !algorithm.IsNative() {
 			if err := validateNativeChatBoundary(cfg, decision); err != nil {
@@ -122,8 +106,8 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 			}
 			continue
 		}
-		if chat || recipe.Profile.Budget == nil {
-			return fmt.Errorf("decision %q: native algorithms require a native recipe with routing.budget", decision.Name)
+		if chat {
+			return fmt.Errorf("decision %q: native algorithms require an isolated native recipe", decision.Name)
 		}
 		if err := validateNativeDecisionSurfaces(decision); err != nil {
 			return err

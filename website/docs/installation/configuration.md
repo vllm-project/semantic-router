@@ -185,7 +185,6 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
 | `cascade` — native algorithm | `cascade` tries declared decision models in order and returns a complete System One response when its acceptance rules pass. | [`config/fragments/algorithm/native/cascade.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/cascade.yaml) | [Guide](../tutorials/algorithm/native/cascade) |
-| `policy` — native algorithm | `policy` uses fitted, data-only parameters to choose the next declared System One model after observing a native answer. | [`config/fragments/algorithm/native/policy.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/policy.yaml) | [Guide](../tutorials/algorithm/native/policy) |
 
 ### Plugins and bundles
 

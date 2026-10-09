@@ -20,11 +20,11 @@ const systemOneRoutingDiagnosticPath = apiDiagnosticsPath + "/routes/systemone"
 // SystemOneRoute describes an active routing plan, not backend health or
 // empirically established accuracy. Reading it performs no model probes.
 type SystemOneRoute struct {
-	Model         string   `json:"model"`
-	Recipe        string   `json:"recipe"`
-	Algorithms    []string `json:"algorithms"`
-	QuestionTypes []string `json:"question_types"`
-	TimeoutMS     int64    `json:"timeout_ms"`
+	Model              string   `json:"model"`
+	Recipe             string   `json:"recipe"`
+	Algorithms         []string `json:"algorithms"`
+	QuestionTypes      []string `json:"question_types"`
+	ExecutionTimeoutMS int64    `json:"execution_timeout_ms"`
 }
 
 type SystemOneRoutes struct {
@@ -47,7 +47,7 @@ func (SystemOneRouteDiagnosticRequest) JSONWire() any {
 func apiSystemOneRoutingRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(EndpointMetadata{Path: systemOneRoutingDiagnosticPath, Method: http.MethodGet, Description: "List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleSystemOneRoutes, jsonResponse[SystemOneRoutes](http.StatusOK, "Active native routing plans")),
-		managedRoute(EndpointMetadata{Path: systemOneRoutingDiagnosticPath, Method: http.MethodPost, Description: "Run a native recipe using operator classify.invoke permission, its configured deadline and shared call budget; independent of public listener grants"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneRouteDiagnostic, strictJSONBodyFor[SystemOneRouteDiagnosticRequest](), jsonResponse[map[string]any](http.StatusOK, "Selected native response and routing outcome"), errorResponses(400, 404, 413, 502, 503, 504)),
+		managedRoute(EndpointMetadata{Path: systemOneRoutingDiagnosticPath, Method: http.MethodPost, Description: "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneRouteDiagnostic, strictJSONBodyFor[SystemOneRouteDiagnosticRequest](), jsonResponse[map[string]any](http.StatusOK, "Selected native response and routing outcome"), errorResponses(400, 404, 413, 502, 503, 504)),
 	}
 }
 
@@ -68,18 +68,23 @@ func (s *ClassificationAPIServer) handleSystemOneRoutes(w http.ResponseWriter, _
 		}
 		for _, entrypoint := range cfg.EffectiveEntrypoints(config.SystemOneAPI) {
 			recipe, exists := cfg.RecipeByName(entrypoint.Recipe)
-			if !exists || !reachable[entrypoint.Recipe] || recipe.Profile.Budget == nil {
+			if !exists || !reachable[entrypoint.Recipe] {
 				continue
 			}
 			algorithms := []string{}
+			var executionTimeout time.Duration
 			for _, decision := range recipe.Profile.Decisions {
-				if decision.Algorithm.IsNative() && !slices.Contains(algorithms, decision.Algorithm.Type) {
+				if !decision.Algorithm.IsNative() || decision.Algorithm.Budget == nil {
+					continue
+				}
+				if !slices.Contains(algorithms, decision.Algorithm.Type) {
 					algorithms = append(algorithms, decision.Algorithm.Type)
 				}
+				duration, _ := time.ParseDuration(decision.Algorithm.Budget.Deadline)
+				executionTimeout = max(executionTimeout, duration)
 			}
-			duration, _ := time.ParseDuration(recipe.Profile.Budget.Deadline)
 			for _, model := range entrypoint.ModelNames {
-				response.Routes = append(response.Routes, SystemOneRoute{Model: model, Recipe: string(recipe.Name), Algorithms: algorithms, QuestionTypes: []string{"choice", "score", "noul"}, TimeoutMS: duration.Milliseconds()})
+				response.Routes = append(response.Routes, SystemOneRoute{Model: model, Recipe: string(recipe.Name), Algorithms: algorithms, QuestionTypes: []string{"choice", "score", "noul"}, ExecutionTimeoutMS: executionTimeout.Milliseconds()})
 			}
 		}
 	}

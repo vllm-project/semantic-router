@@ -12,7 +12,7 @@ import (
 
 func TestDecisionRoutesUsesManagementIdentityAndPreservesNativeBody(t *testing.T) {
 	const input = `{"model":"vllm-sr/auto","request":{"state":"text","questions":{"task":{"type":"choice","criteria":{"z":"Z","a":"A"}}}}}`
-	const routes = `{"available":true,"routes":[{"model":"vllm-sr/auto","recipe":"native","algorithms":["cascade"],"question_types":["choice","score","noul"],"timeout_ms":120000}]}`
+	const routes = `{"available":true,"routes":[{"model":"vllm-sr/auto","recipe":"native","algorithms":["cascade"],"question_types":["choice","score","noul"],"execution_timeout_ms":120000}]}`
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != decisionModelRoutesPath || r.URL.RawQuery != "" || r.Header.Get("Authorization") != "Bearer management" || r.Header.Get("Cookie") != "" || r.Header.Get("Api-Key") != "" {
 			t.Errorf("unexpected management request: %s %v", r.URL, r.Header)

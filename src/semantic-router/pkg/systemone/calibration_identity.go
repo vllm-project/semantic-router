@@ -128,11 +128,7 @@ func CalibrationPolicySHA256(recipe *config.RoutingRecipe, decision *config.Deci
 				quality.Calibration = "" // The artifact cannot hash itself.
 				algorithm.Quality = &quality
 			}
-			if algorithm.Policy != nil {
-				policy := *algorithm.Policy
-				policy.Source = ""
-				algorithm.Policy = &policy
-			}
+
 		}
 		profile.Decisions[i] = copy
 	}

@@ -74,6 +74,42 @@ def test_decisions_response_matches_the_contract(client):
     assert meta["profile"] == "exact" and meta["numerics"] == "exact"
 
 
+def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(qwen3_package):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(qwen3_package), name="public-alias", device="cpu"
+                ),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        request = {
+            "model": "public-alias",
+            "state": STATE,
+            "questions": QUESTIONS,
+            "states": {"second": {"state": STATE, "questions": QUESTIONS}},
+            "options": {"return_meta": True},
+        }
+        status, body = asyncio.run(runtime.call("decisions", request))
+        assert status == 200
+        check("DecisionResponse", body)
+        loaded_id = runtime.lookup("public-alias").model.info.id
+        assert loaded_id != "public-alias"
+        for envelope in (body, body["states"]["second"]):
+            assert envelope["model"] == "public-alias"
+            assert envelope["meta"]["model_id"] == loaded_id
+        request["options"] = {"return_meta": False}
+        status, hidden = asyncio.run(runtime.call("decisions", request))
+        assert status == 200 and "meta" not in hidden
+        assert "meta" not in hidden["states"]["second"]
+        assert hidden["answers"] == body["answers"]
+    finally:
+        runtime.stop()
+
+
 def test_systemone_alias_answers_identically(client):
     first = post(client, {"state": STATE, "questions": QUESTIONS}).json()
     second = post(
