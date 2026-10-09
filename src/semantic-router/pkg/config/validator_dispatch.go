@@ -30,8 +30,6 @@ var (
 		validateComplexityModelBackendContracts,
 		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
-		validateReMoMContracts,
-		validateFusionContracts,
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
@@ -49,7 +47,6 @@ var (
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
-		warnLooperAliasCollisions,
 		logConfigWarnings,
 	}
 

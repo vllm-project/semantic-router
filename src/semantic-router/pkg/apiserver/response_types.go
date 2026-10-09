@@ -5,8 +5,9 @@ package apiserver
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 
 type healthResponse struct {
-	Status  string `json:"status"`
-	Service string `json:"service"`
+	ServingMode string `json:"serving_mode"`
+	Status      string `json:"status"`
+	Service     string `json:"service"`
 }
 
 type readinessResponse struct {

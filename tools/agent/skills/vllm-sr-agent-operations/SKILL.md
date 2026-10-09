@@ -75,7 +75,7 @@ Decide each row and tell the user what you chose.
 | Decision | Default | Otherwise |
 | --- | --- | --- |
 | Channel | stable, when it has this skill's commands (step 3); else dev | The user names a version or channel. |
-| Platform | `cpu` (no flag) | `/dev/kfd` and a `/dev/dri/render*` node exist: `--platform amd` (AMD Instinct MI300X and MI325X are validated). `nvidia-smi -L` lists a GPU and `docker info` lists an `nvidia` runtime (the NVIDIA Container Toolkit): `--platform nvidia` (works, not yet validated). macOS: always `cpu`. |
+| Platform | `auto`: inspect the execution target | `/dev/kfd` and a `/dev/dri/render*` node exist: `--platform rocm` (AMD Instinct MI300X and MI325X are validated). `nvidia-smi -L` lists a GPU and `docker info` lists an `nvidia` runtime (the NVIDIA Container Toolkit): `--platform cuda` (works, not yet validated). macOS: always `cpu`. |
 | Gateway | standalone (no flag): the Router serves the API itself | `--gateway extproc` puts Envoy in front. Use it only when the user needs Envoy's rate limiting, mTLS, JWT or OIDC, advanced route matching, or an Envoy-based gateway they already run. |
 | Target | Docker on this machine | The user asks for a Kubernetes cluster: write the configuration (step 4), then follow [Deployment](https://vllm-sr.ai/install/agent/vllm-sr/references/deployment-loop.md#kubernetes) instead of steps 5 and 6. |
 | Model | the endpoint the user gave | None given: look for one on this host (below) and confirm it with the user. None at all: ask. For a local trial, offer [Ollama](https://vllm-sr.ai/docs/installation/ollama). |
@@ -106,7 +106,7 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
   bash -s -- --channel stable --mode cli --runtime skip --no-launch
 export PATH="$HOME/.local/bin:$PATH"
 vllm-sr --version
-vllm-sr serve --help | grep -q -- '--gateway' && echo "current" || echo "predates this skill"
+vllm-sr serve --help | grep -q -- '--data-parallel-size' && echo "current" || echo "predates this skill"
 ```
 
 `--mode cli --runtime skip --no-launch` installs only the CLI, into
@@ -116,8 +116,8 @@ repeat the `export`. Without those three options the installer also starts a
 setup-mode stack and returns, for a user who would rather connect models in
 the Dashboard; then hand over its URL instead of steps 4–6.
 
-If it printed `predates this skill`, the stable release is older than standalone
-mode and the model runtime (`0.4.0` is). Install the development channel, which
+If it printed `predates this skill`, the stable release predates this serve contract
+(including `--engine` and replica placement). Install the development channel, which
 these docs follow, over it:
 
 ```bash
@@ -214,14 +214,14 @@ apply an edited `config.yaml` to a running stack, use
 
 ```bash
 vllm-sr serve --config config.yaml                     # cpu
-vllm-sr serve --config config.yaml --platform amd      # amd; nvidia likewise
+vllm-sr serve --config config.yaml --platform rocm      # ROCm; CUDA uses --platform cuda
 ```
 
 Add `--gateway extproc` only if you chose it, and `--minimal` to run without
 the Dashboard and the observability stack. `serve` returns once the Router is
 ready and prints `✓ vLLM Semantic Router is running (standalone gateway)` with
 its endpoints. The first start pulls about 5 GB of images, or about 22 GB with
-`--platform amd`: minutes on a fast link, longer on a slow one. It waits up to
+`--platform rocm`: minutes on a fast link, longer on a slow one. It waits up to
 30 minutes (`--startup-timeout SECONDS` changes that). If your shell can't wait
 that long, run it in the background and poll for the exit line:
 
@@ -276,25 +276,34 @@ Every check must pass. Header names are case-insensitive, so use `grep -i`.
    answer cut off at the token cap (`finish_reason: length`), so keep a prompt
    that asks for a short answer and a cap with room to spare. Without a cap it
    waits for the whole answer, and a slow backend hits its 120 s timeout.
-6. **GPU path** (`--platform amd` or `nvidia` only). Serve one Router model on
-   the GPU in engine mode, beside the stack:
+6. **GPU path** (`--platform rocm` or `cuda`). After checking available
+   capacity, use an isolated Engine stack and a fresh config directory so the
+   Router stack and its public grants are unchanged:
 
    ```bash
-   nohup vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --platform amd --device rocm:0 \
-     --port 8100 > engine.log 2>&1 & echo $! > engine.pid
-   for i in $(seq 60); do curl -sf http://127.0.0.1:8100/health && break; sleep 5; done
-   curl -s http://127.0.0.1:8100/v1/decisions -H 'content-type: application/json' -d '{
-     "state": "Write a Python function that merges two sorted lists.",
-     "questions": {"kind": {"type": "choice", "instructions": "What kind of work is this?",
-       "criteria": {"code": "Writing or fixing code", "chat": "Anything else"}}},
-     "options": {"return_meta": true}}'
-   kill -INT "$(cat engine.pid)"
+   (
+     probe_dir=$(mktemp -d)
+     cd "$probe_dir" || exit 1
+     export VLLM_SR_STACK_NAME=vllm-sr-gpu-probe VLLM_SR_PORT_OFFSET=200
+     export VLLM_SR_STATE_ROOT_DIR="$probe_dir"
+     vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B -e --platform rocm \
+       --device-ids 0 --minimal
+     vllm-sr instance models
+     curl -fsS http://127.0.0.1:9099/v1/systemone -H 'content-type: application/json' -d '{
+       "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+       "state": "Write a Python function that merges two sorted lists.",
+       "questions": {"task": {"type": "choice", "instructions": "What kind of work is this?",
+         "criteria": {"code": "Writing or fixing code", "chat": "Anything else"}}},
+       "options": {"return_meta": true}}'
+     vllm-sr stop
+   )
    ```
 
-   Pass: `/health` answers `"status":"ready"` (the first start downloads
-   1.5 GB), and the answer's `meta` has `"device":"rocm:0"`. Use
-   `--platform nvidia --device cuda:0` on NVIDIA. After the `kill`, `docker ps`
-   no longer lists `vllm-sr-engine-8100`; if it does, remove that container.
+   Pass: the inventory reports a ready replica on the chosen GPU and the
+   native request succeeds with the expected task result. Use `--platform cuda`
+   on NVIDIA; choose an available host ID instead of assuming GPU 0 is free.
+   The initial model download and GPU compilation can take several minutes.
+   Preserve the source directory, model cache, images and volumes after stopping.
 
 ## 7. Hand off
 

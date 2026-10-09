@@ -70,7 +70,12 @@ func collectManagedStackStatus(runtimePath string, stack StackState, routerAPIUR
 	status.Endpoints = []string{"http://localhost:8899"}
 
 	stopped := stack.stoppedService()
-	router := resolveManagedRouterStatus(routerAPIURL, stopped)
+	probe := probeServingHealth(routerAPIURL, credentialProvider...)
+	status.ServingMode = probe.mode
+	if probe.mode == servingModeEngine {
+		return collectModelEngineStatus(routerAPIURL, "docker", "container", probe)
+	}
+	router := resolveManagedRouterStatus(probe, stopped)
 	envoy := resolveManagedEnvoyStatus(envoyURL, stopped)
 
 	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, router.Healthy, credentialProvider...)
@@ -100,13 +105,18 @@ func collectDirectStatus(runtimePath, routerAPIURL, envoyURL string, credentialP
 		return SystemStatus{}, false
 	}
 
-	routerHealthy, routerMsg := checkHTTPHealth(routerAPIURL + "/health")
-	if !routerHealthy {
+	probe := probeServingHealth(routerAPIURL, credentialProvider...)
+	if probe.mode == servingModeEngine {
+		return collectModelEngineStatus(routerAPIURL, "local (direct)", "process", probe), true
+	}
+	if !probe.healthy {
 		return SystemStatus{}, false
 	}
+	routerHealthy, routerMsg := probe.healthy, probe.message
 
 	status := baseSystemStatus()
 	status.DeploymentType = "local (direct)"
+	status.ServingMode = probe.mode
 	status.Overall = "healthy"
 	status.Endpoints = []string{routerAPIURL}
 	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
@@ -186,11 +196,9 @@ func setDegradedWhenUnhealthy(status *SystemStatus, checks ...bool) {
 	}
 }
 
-func resolveManagedRouterStatus(routerAPIURL string, stopped stoppedService) ServiceStatus {
-	if routerAPIURL != "" {
-		if healthy, msg := checkHTTPHealth(routerAPIURL + "/health"); healthy {
-			return buildServiceStatus("Router", "running", true, msg, "container")
-		}
+func resolveManagedRouterStatus(probe servingHealthProbe, stopped stoppedService) ServiceStatus {
+	if probe.healthy {
+		return buildServiceStatus("Router", "running", true, probe.message, "container")
 	}
 	return buildServiceStatus("Router", stopped.status, false, stopped.message, "container")
 }

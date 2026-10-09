@@ -92,27 +92,16 @@ func (c *Classifier) evaluateJailbreakSignalPieces(ctx context.Context, results 
 	var pieces []piece
 	for _, content := range classifierContents {
 		chunks := c.jailbreakModelInputs(content)
-		jailbreakCache[content] = make([]cachedJailbreakResult, len(chunks))
 		for _, chunk := range chunks {
 			pieces = append(pieces, piece{content, chunk})
 		}
 	}
-	classified := make([]cachedJailbreakResult, len(pieces))
+	classified := make([][]cachedJailbreakResult, len(pieces))
 	modelservice.Fan(ctx, len(pieces), func(i int) {
-		entry := &classified[i]
-		if backend := jailbreakDecisionBackend(c.jailbreakInference); backend != nil {
-			decision, err := backend.Decide(ctx, pieces[i].chunk)
-			entry.decision = &decision
-			entry.err = signalDeadline(ctx, err)
-			return
-		}
-		entry.result, entry.err = c.jailbreakInference.Classify(ctx, pieces[i].chunk)
-		entry.err = signalDeadline(ctx, entry.err)
+		classified[i] = c.classifyJailbreakWindows(ctx, pieces[i].chunk)
 	})
-	next := make(map[string]int, len(classifierContents))
 	for i, p := range pieces {
-		jailbreakCache[p.content][next[p.content]] = classified[i]
-		next[p.content]++
+		jailbreakCache[p.content] = append(jailbreakCache[p.content], classified[i]...)
 	}
 
 	// Step 3: Evaluate all rules concurrently.

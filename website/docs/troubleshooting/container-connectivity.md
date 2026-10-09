@@ -58,6 +58,12 @@ running directly on the host, use the container runtime's supported host
 gateway name or a host IP that the container can reach. On Kubernetes, use a
 Service DNS name rather than a pod IP.
 
+`vllm-sr serve` maps `host.docker.internal` to the runtime's `host-gateway`.
+Docker derives that address from its default bridge network, so on a daemon
+configured without one (`"bridge": "none"`) the CLI skips the mapping and logs
+a warning. Set `VLLM_SR_HOST_GATEWAY_IP=<host address>` to map the name to an
+explicit address on any runtime.
+
 ## Make the backend listen beyond loopback
 
 The model server must bind to an interface reachable by its clients. For

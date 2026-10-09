@@ -20,25 +20,28 @@ type modelRuntimeInventoryResponse struct {
 // (unix, or an http(s) scheme and host), never a socket path or credentials.
 // The card fields stay empty until the runtime has reported the model ready.
 type modelRuntimeDeployment struct {
-	Name       string                 `json:"name"`
-	Managed    bool                   `json:"managed"`
-	Process    string                 `json:"process"`
-	ServedName string                 `json:"served_name"`
-	Endpoint   string                 `json:"endpoint,omitempty"`
-	Ready      bool                   `json:"ready"`
-	State      string                 `json:"state"`
-	Reason     string                 `json:"reason,omitempty"`
-	Restarts   int                    `json:"restarts"`
-	Family     string                 `json:"family,omitempty"`
-	Repo       string                 `json:"repo,omitempty"`
-	Revision   string                 `json:"revision,omitempty"`
-	Surfaces   []string               `json:"surfaces,omitempty"`
-	Heads      []modelRuntimeHead     `json:"heads,omitempty"`
-	Embedding  *modelRuntimeEmbedding `json:"embedding,omitempty"`
-	Rerank     *modelRuntimeRerank    `json:"rerank,omitempty"`
-	Device     string                 `json:"device,omitempty"`
-	Profile    string                 `json:"profile,omitempty"`
-	Engine     string                 `json:"engine,omitempty"`
+	DesiredReplicas int                          `json:"desired_replicas"`
+	ReadyReplicas   int                          `json:"ready_replicas"`
+	Replicas        []modelservice.ReplicaStatus `json:"replicas,omitempty"`
+	Name            string                       `json:"name"`
+	Managed         bool                         `json:"managed"`
+	Process         string                       `json:"process"`
+	ServedName      string                       `json:"served_name"`
+	Endpoint        string                       `json:"endpoint,omitempty"`
+	Ready           bool                         `json:"ready"`
+	State           string                       `json:"state"`
+	Reason          string                       `json:"reason,omitempty"`
+	Restarts        int                          `json:"restarts"`
+	Family          string                       `json:"family,omitempty"`
+	Repo            string                       `json:"repo,omitempty"`
+	Revision        string                       `json:"revision,omitempty"`
+	Surfaces        []string                     `json:"surfaces,omitempty"`
+	Heads           []modelRuntimeHead           `json:"heads,omitempty"`
+	Embedding       *modelRuntimeEmbedding       `json:"embedding,omitempty"`
+	Rerank          *modelRuntimeRerank          `json:"rerank,omitempty"`
+	Device          string                       `json:"device,omitempty"`
+	Profile         string                       `json:"profile,omitempty"`
+	Engine          string                       `json:"engine,omitempty"`
 }
 
 type modelRuntimeHead struct {
@@ -71,6 +74,7 @@ func modelRuntimeInventory(statuses []modelservice.DeploymentStatus) modelRuntim
 	deployments := make([]modelRuntimeDeployment, 0, len(statuses))
 	for _, status := range statuses {
 		deployment := modelRuntimeDeployment{
+			DesiredReplicas: status.DesiredReplicas, ReadyReplicas: status.ReadyReplicas, Replicas: status.Replicas,
 			Name: status.Name, Managed: status.Managed, Process: status.Process, ServedName: status.Model,
 			Endpoint: inventoryEndpoint(status.Endpoint), Ready: status.Ready, State: status.State,
 			Reason: status.Reason, Restarts: status.Restarts,

@@ -412,6 +412,8 @@ func initializeRuntimeDependencies(
 
 	// Vector store ingestion embeds through the managed model runtime.
 	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
+	// Explicit global stores serve management APIs as well as routing and
+	// keep their own scoped embedding lease across capability changes.
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
 		return embeddingState, err
 	}

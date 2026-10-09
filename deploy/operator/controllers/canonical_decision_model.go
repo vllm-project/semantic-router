@@ -8,22 +8,25 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// applyOperatorDecisionModel writes the decision model and lets the modules
-// follow it. The ConfigMap names no system line, so every module runs the
-// decision model's model; and a module the resource leaves at its defaults,
-// or a prompt guard that names no model or threshold, takes the thresholds
-// calibrated for that model. The operator writes every module field, so the
-// Router would otherwise read the default thresholds as set.
+// applyOperatorDecisionModel writes a deployment reference; the Router owns
+// capability validation and task interpretation independently of model families.
 func applyOperatorDecisionModel(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
-	decision, err := routerconfig.LookupDecisionModel(spec.DecisionModel)
-	if err != nil {
-		return fmt.Errorf("config.%w", err)
-	}
 	catalog := &canonical.Global.ModelCatalog
-	catalog.System = routerconfig.CanonicalSystemModels{}
-	if decision.Name != routerconfig.DefaultDecisionModel {
-		catalog.System.DecisionModel = decision.Name
+	selected := catalog.System.DecisionModel
+	if spec.DecisionModel != nil {
+		selected.Deployment = spec.DecisionModel.Deployment
 	}
+	if selected.Deployment == "" || strings.TrimSpace(selected.Deployment) != selected.Deployment {
+		return fmt.Errorf("config.decision_model.deployment must name a declared deployment")
+	}
+	deployment, ok := catalog.Deployments[selected.Deployment]
+	if !ok || deployment.Provider != routerconfig.ModelRuntimeProvider {
+		return fmt.Errorf("config.decision_model.deployment %q must name a declared model_runtime deployment", selected.Deployment)
+	}
+	catalog.System = routerconfig.CanonicalSystemModels{DecisionModel: selected}
+	cfg := &routerconfig.RouterConfig{}
+	cfg.DecisionModel, cfg.ModelDeployments = selected.Deployment, catalog.Deployments
+	decision := cfg.DecisionModelSpec()
 	modules := &catalog.Modules
 	if spec.PromptGuard == nil || strings.TrimSpace(spec.PromptGuard.Threshold) == "" {
 		model := modules.PromptGuard.ModelID

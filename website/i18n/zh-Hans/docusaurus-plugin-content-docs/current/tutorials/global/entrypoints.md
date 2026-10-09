@@ -25,7 +25,7 @@ translation:
 - 在不暴露后端模型 ID 的情况下，将客户端迁移到不同策略版本；或
 - 在一个 Router 部署中运行若干隔离策略。
 
-当每条被路由的请求都应使用默认策略时，使用已配置的 auto 别名。仅当调用方有意绕过信号、决策、算法和路由局部插件时，才使用具体的提供商模型名。
+当每条被路由的请求都应使用默认策略时，使用 `vllm-sr/auto` 或显式声明的默认入口。仅当调用方有意绕过信号、决策、算法和路由局部插件时，才使用具体的提供商模型名。
 
 ## 配置
 
@@ -64,11 +64,23 @@ curl http://localhost:8899/v1/chat/completions \
 | 请求的模型 | Router 行为 |
 | --- | --- |
 | `entrypoints[].model_names` 中的值 | 只评估映射的配方。 |
-| `vllm-sr/auto`、`auto` 或其他已配置的 auto 别名 | 评估来自顶层 `routing` 的 `default` 配方。 |
-| 已配置的 ReMoM、Fusion 或 Flow 虚拟 slug | 在 `default` 配方中运行该 looper。 |
+| 未显式声明 `default` 入口时的 `vllm-sr/auto` | 评估来自顶层 `routing` 的 `default` 配方。 |
+| 显式声明的 ReMoM、Fusion 或 Flow 入口 | 评估映射的配方，由匹配的决策选择 looper 算法。 |
 | 具体的提供商模型或 LoRA 名称 | 直接发送到该后端，不经过配方路由。 |
 
 入口会由 `/v1/models` 列出，并带有路由元数据。成功路由的响应会暴露 `x-vsr-selected-recipe`；路由回放和 Insights 也可以按配方过滤记录。
+
+要改名默认入口，声明 `recipe: default` 并设置 `model_names`。这会替换内置的
+`vllm-sr/auto`；如果旧客户端仍需使用它，请显式保留该名称。
+裸 `auto` 和 looper 名称都没有隐式行为。
+
+例如，同时发布带命名空间的默认名称和旧客户端使用的 `auto`：
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, auto]
+    recipe: default
+```
 
 ## 命名与校验规则 {#naming-and-validation-rules}
 
@@ -76,7 +88,7 @@ curl http://localhost:8899/v1/chat/completions \
 
 - `model_names` 为空，或 `recipe` 未指向已配置的配方；
 - 同一虚拟名被多个入口占用；或
-- 虚拟名与提供商模型、LoRA、auto 别名或 looper slug 冲突。
+- 虚拟名与提供商模型、LoRA 或其他有效入口（包括内置默认名）冲突。
 
 选择描述稳定客户端契约的名称，而不是当前后端。不要把租户数据或密钥放进名称：入口会出现在模型发现、响应元数据、指标和运维记录中。
 

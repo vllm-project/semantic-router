@@ -35,7 +35,7 @@ def test_amd_compiler_cache_reuses_only_the_same_stack_and_image(tmp_path, monke
     state.mkdir(mode=0o700)
 
     first = router_compiler_cache(
-        "docker", "router:latest", str(state), "stack-a", "amd"
+        "docker", "router:latest", str(state), "stack-a", "rocm"
     )
     assert first is not None
     assert first.image_id == IMAGE_A
@@ -47,19 +47,19 @@ def test_amd_compiler_cache_reuses_only_the_same_stack_and_image(tmp_path, monke
     cache_path.joinpath("warmup").write_text("cached")
 
     again = router_compiler_cache(
-        "docker", "router:latest", str(state), "stack-a", "amd"
+        "docker", "router:latest", str(state), "stack-a", "rocm"
     )
     assert again == first
     assert cache_path.joinpath("warmup").read_text() == "cached"
 
     other_stack = router_compiler_cache(
-        "docker", "router:latest", str(state), "stack-b", "amd"
+        "docker", "router:latest", str(state), "stack-b", "rocm"
     )
     assert other_stack is not None and other_stack.mount != first.mount
 
     inspected_image = IMAGE_B
     other_image = router_compiler_cache(
-        "docker", "router:latest", str(state), "stack-a", "amd"
+        "docker", "router:latest", str(state), "stack-a", "rocm"
     )
     assert other_image is not None and other_image.mount != first.mount
     assert other_image.image_id == IMAGE_B
@@ -81,7 +81,8 @@ def test_amd_compiler_cache_skips_uninspectable_image_and_other_platforms(
     )
     assert calls == []
     assert (
-        router_compiler_cache("docker", "router:latest", str(state), "a", "amd") is None
+        router_compiler_cache("docker", "router:latest", str(state), "a", "rocm")
+        is None
     )
     assert len(calls) == 1
     assert not state.exists()
@@ -98,7 +99,7 @@ def test_amd_compiler_cache_rejects_symlinked_private_cache(tmp_path, monkeypatc
     (state / "compiler-cache").symlink_to(tmp_path)
 
     with pytest.raises(ValueError, match="symbolic link"):
-        router_compiler_cache("docker", "router:latest", str(state), "a", "amd")
+        router_compiler_cache("docker", "router:latest", str(state), "a", "rocm")
 
 
 def test_router_command_pins_amd_image_and_mounts_its_compiler_cache(
@@ -125,7 +126,7 @@ def test_router_command_pins_amd_image_and_mounts_its_compiler_cache(
         router_image="router:latest",
         nofile_limit=4096,
         runtime_network_name="test-network",
-        normalized_platform="amd",
+        normalized_platform="rocm",
         common_env={},
         runtime_paths=paths,
         stack_layout=resolve_runtime_stack(stack_name="cache-test"),
@@ -141,8 +142,8 @@ def test_router_command_pins_amd_image_and_mounts_its_compiler_cache(
 def test_router_runtime_env_isolates_amd_router(monkeypatch):
     monkeypatch.setenv(AMD_ROUTER_VISIBLE_DEVICES_ENV, "7")
 
-    common = {"VLLM_SR_PLATFORM": "amd"}
-    result = router_runtime_env(common, "amd")
+    common = {"VLLM_SR_PLATFORM": "rocm"}
+    result = router_runtime_env(common, "rocm")
 
     assert result["ROCR_VISIBLE_DEVICES"] == "7"
     assert "ROCR_VISIBLE_DEVICES" not in common
@@ -151,7 +152,7 @@ def test_router_runtime_env_isolates_amd_router(monkeypatch):
 def test_router_runtime_env_ignores_isolation_for_other_platforms(monkeypatch):
     monkeypatch.setenv(AMD_ROUTER_VISIBLE_DEVICES_ENV, "7")
 
-    result = router_runtime_env({"VLLM_SR_PLATFORM": "nvidia"}, "nvidia")
+    result = router_runtime_env({"VLLM_SR_PLATFORM": "cuda"}, "cuda")
 
     assert "ROCR_VISIBLE_DEVICES" not in result
 
@@ -159,6 +160,6 @@ def test_router_runtime_env_ignores_isolation_for_other_platforms(monkeypatch):
 def test_router_runtime_env_ignores_blank_isolation(monkeypatch):
     monkeypatch.setenv(AMD_ROUTER_VISIBLE_DEVICES_ENV, "  ")
 
-    result = router_runtime_env({"VLLM_SR_PLATFORM": "amd"}, "amd")
+    result = router_runtime_env({"VLLM_SR_PLATFORM": "rocm"}, "rocm")
 
     assert "ROCR_VISIBLE_DEVICES" not in result
