@@ -204,7 +204,7 @@ what each model costs.
 
 The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
 places all ten task models on an AMD GPU and preserves the published operating
-policies. `--platform amd` selects the AMD image and device access; it does not
+policies. `--platform rocm` selects the AMD image and device access; it does not
 make every authored model use a GPU or override an explicit CPU deployment.
 See [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd).
 
@@ -229,7 +229,7 @@ start it with the AMD image. Connect an existing vLLM backend served as
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
 Route Preview returns actual signal values, decisions and per-signal latency.

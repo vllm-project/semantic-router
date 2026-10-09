@@ -55,7 +55,6 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	return CanonicalRouting{
 		ModelBindings:         cloneModelMap(cfg.ModelBindings),
 		CandidateRequirements: cfg.CandidateRequirements.Clone(),
-		DataPolicy:            cfg.DataPolicy.Clone(),
 		ModelCards:            routingModelsFromRouterConfig(cfg),
 		Signals:               canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
 		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
@@ -298,12 +297,11 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 	global := &CanonicalGlobal{
 		Router: CanonicalRouterGlobal{
-			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
-			Strategy:                  cfg.Strategy,
-			AutoModelName:             cfg.AutoModelName,
-			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
-			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
-			ClearRouteCache:           cfg.ClearRouteCache,
+			Enabled:           cfg.RouterEnabled,
+			ConfigSource:      normalizedConfigSource(cfg.ConfigSource),
+			Strategy:          cfg.RoutingDefaults.Strategy,
+			ListBackendModels: cfg.ListBackendModels,
+			ClearRouteCache:   cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
 				Enabled:    cfg.StreamedBodyMode,
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
@@ -312,7 +310,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
-			Fallback:       cfg.Fallback.Clone(),
+			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -339,14 +337,6 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	}
 
 	return global
-}
-
-func canonicalAutoModelNames(names []string) *[]string {
-	if names == nil {
-		return nil
-	}
-	cloned := append([]string{}, names...)
-	return &cloned
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
@@ -674,9 +664,7 @@ func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemMod
 		FeedbackDetector:      cfg.FeedbackDetector.ModelID,
 	}
 	spec := cfg.DecisionModelSpec()
-	if spec.Name != DefaultDecisionModel {
-		system.DecisionModel = spec.Name
-	}
+	system.DecisionModel = DecisionModelBinding{Deployment: spec.Name}
 	for _, line := range systemLines {
 		if value := line.value(&system); *value == *line.value(&spec.System) {
 			*value = ""

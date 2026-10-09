@@ -766,6 +766,14 @@
                 "overflow": "reject"
               },
               "profile": "exact"
+            },
+            "primary": {
+              "artifact": "vllm-sr/Vela-2.0-0.3B",
+              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {},
+              "profile": "max_speed"
             }
           }
         },
@@ -1072,9 +1080,6 @@
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
-        },
         "model_bindings": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelBinding"
@@ -1110,6 +1115,9 @@
     },
     "CanonicalRouterGlobal": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "config_source": {
           "type": "string",
           "enum": [
@@ -1120,16 +1128,7 @@
         "strategy": {
           "type": "string"
         },
-        "auto_model_name": {
-          "type": "string"
-        },
-        "auto_model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "include_config_models_in_list": {
+        "list_backend_models": {
           "type": "boolean"
         },
         "clear_route_cache": {
@@ -1158,9 +1157,6 @@
       "properties": {
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
-        },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
         },
         "model_bindings": {
           "additionalProperties": {
@@ -1422,7 +1418,7 @@
     "CanonicalSystemModels": {
       "properties": {
         "decision_model": {
-          "type": "string"
+          "$ref": "#/$defs/DecisionModelBinding"
         },
         "safety": {
           "type": "string"
@@ -2064,6 +2060,19 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "DecisionModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deployment"
+      ]
     },
     "DecisionPlugin": {
       "allOf": [
@@ -2870,12 +2879,6 @@
     },
     "FlowRuntimeConfig": {
       "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "state": {
           "$ref": "#/$defs/WorkflowStateRuntimeConfig"
         }
@@ -2986,18 +2989,6 @@
         },
         "max_completion_tokens": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "FusionRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3598,6 +3589,15 @@
           },
           "type": "array"
         },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "systemone": {
+          "$ref": "#/$defs/ListenerSystemOne"
+        },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
         },
@@ -3614,6 +3614,18 @@
           "type": "boolean"
         },
         "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerSystemOne": {
+      "properties": {
+        "models": {
           "items": {
             "type": "string"
           },
@@ -3687,12 +3699,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "remom": {
-          "$ref": "#/$defs/ReMoMRuntimeConfig"
-        },
-        "fusion": {
-          "$ref": "#/$defs/FusionRuntimeConfig"
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
@@ -4476,10 +4482,16 @@
         "endpoint": {
           "type": "string"
         },
-        "process": {
-          "type": "string"
+        "replicas": {
+          "items": {
+            "$ref": "#/$defs/ModelReplica"
+          },
+          "type": "array"
         },
         "served_name": {
+          "type": "string"
+        },
+        "public_name": {
           "type": "string"
         }
       },
@@ -4555,6 +4567,21 @@
           "type": "string"
         },
         "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelReplica": {
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "served_name": {
           "type": "string"
         }
       },
@@ -5645,18 +5672,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ReMoMRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ReaskRule": {
       "properties": {
         "name": {
@@ -6323,6 +6338,27 @@
     },
     "RouterReplayConfig": {
       "properties": {
+        "capture_request_body": {
+          "type": "boolean"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_personal_data": {
+          "type": "boolean"
+        },
+        "max_records": {
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_steps": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6377,6 +6413,9 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
+        "capture_personal_data": {
+          "type": "boolean"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6484,15 +6523,6 @@
         },
         "key_prefix": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "RoutingDataPolicy": {
-      "properties": {
-        "replay": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,

@@ -45,6 +45,24 @@ describe('collectResponseHeaders', () => {
     expect(collected['x-vsr-looper-total-tokens']).toBe('117')
   })
 
+  it('collects the System One answers, recipe, confidence and routing latency', () => {
+    const collected = collectResponseHeaders(
+      responseWithHeaders({
+        'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
+        'x-vsr-selected-recipe': 'default',
+        'x-vsr-selected-confidence': '0.91',
+        'x-vsr-routing-latency-ms': '61',
+      }),
+    )
+
+    expect(collected).toEqual({
+      'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
+      'x-vsr-selected-recipe': 'default',
+      'x-vsr-selected-confidence': '0.91',
+      'x-vsr-routing-latency-ms': '61',
+    })
+  })
+
   it('ignores headers outside the allowlist', () => {
     const response = responseWithHeaders({ 'x-not-tracked': 'value' })
 

@@ -22,6 +22,10 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
+	// Replay uses available PII rules even if a decision does not route on PII.
+	if c.Config.ReplayNeedsPIIEvidence() {
+		collectSignalKeys(usedSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
+	}
 	c.expandTransitiveSignalDependencies(usedSignals)
 
 	return usedSignals
@@ -182,6 +186,12 @@ func (c *Classifier) expandScoreInputs(
 			continue
 		}
 		usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
+		if strings.EqualFold(input.Type, config.SignalTypeDecision) {
+			// "<question>:<option>" reads one option's probability; the
+			// question itself must still be asked.
+			question, _, _ := strings.Cut(input.Name, ":")
+			usedSignals[strings.ToLower(config.SignalTypeDecision+":"+question)] = true
+		}
 	}
 }
 

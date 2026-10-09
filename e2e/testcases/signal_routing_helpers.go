@@ -54,9 +54,6 @@ type signalRoutingConfig struct {
 	ResultsTitle string
 	// LogLabel names the signal in progress/summary log lines (e.g. "Event").
 	LogLabel string
-	// Model is the request model, which selects the routing recipe. Empty
-	// sends "MoM" to the default recipe.
-	Model string
 }
 
 func runSignalRoutingTest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, cfg signalRoutingConfig) error {
@@ -136,11 +133,7 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 		ShouldMatch:           testCase.ShouldMatch,
 	}
 
-	model := cfg.Model
-	if model == "" {
-		model = "MoM"
-	}
-	response, err := sendLocalChatCompletion(ctx, localPort, model, testCase.Query, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result

@@ -66,14 +66,14 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 		},
 		{
 			config.SignalTypeReask, "Reask",
-			func(context.Context) {
-				c.evaluateBoundedReaskSignal(results, mu, input.CurrentUserText, input.PriorUserMessages)
+			func(ctx context.Context) {
+				c.evaluateReaskSignalContext(ctx, results, mu, input.CurrentUserText, input.PriorUserMessages)
 			},
 		},
 		{
 			config.SignalTypePreference, "Preference",
-			func(context.Context) {
-				c.evaluatePreferenceSignal(results, mu, textForSignal(config.SignalTypePreference))
+			func(ctx context.Context) {
+				c.evaluatePreferenceSignal(ctx, results, mu, textForSignal(config.SignalTypePreference))
 			},
 		},
 		{
@@ -133,28 +133,6 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 			},
 		},
 	}
-}
-
-func (c *Classifier) evaluateBoundedReaskSignal(
-	results *SignalResults,
-	mu *sync.Mutex,
-	currentUserText string,
-	priorUserMessages []string,
-) {
-	c.evaluateReaskSignal(
-		results,
-		mu,
-		textForRoutingSignal(config.SignalTypeReask, currentUserText),
-		boundedReaskMessages(priorUserMessages),
-	)
-}
-
-func boundedReaskMessages(messages []string) []string {
-	bounded := make([]string, len(messages))
-	for index, message := range messages {
-		bounded[index] = textForRoutingSignal(config.SignalTypeReask, message)
-	}
-	return bounded
 }
 
 // modelBackedSignalTypes call model deployments; their goroutines join the

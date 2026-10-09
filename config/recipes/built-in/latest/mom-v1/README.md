@@ -148,7 +148,8 @@ in the current request; quoted personal records also qualify.
 
 Every Vault path disables client tools, strips tool history, and disables Router
 memory, response caching, and learning adaptation. It also
-suppresses new Responses object writes. These restrictions apply regardless of
+suppresses new Responses object writes. Replay capture is configured separately
+and is enabled by default as described below. These restrictions apply regardless of
 the Guard, Safety, Hazard, and PII verdicts; unavailable triage fails closed.
 
 Assign every Vault backend to infrastructure that meets your privacy
@@ -171,8 +172,10 @@ in `global.services.router_replay.postgres`.
 
 - To disable default capture, set `global.services.router_replay.enabled: false`.
   Individual decisions can still opt in.
-- To forbid capture for a recipe, set its `routing.data_policy.replay: false`.
-  This also blocks decision-level opt-ins.
+- To disable capture for a decision, set its `router_replay` plugin to
+  `configuration: {enabled: false}`. There is no recipe-level Replay override.
+- Set `capture_personal_data: false` globally or in the decision plugin to omit
+  content when PII is detected or its status is unknown.
 
 Vault's other data-handling restrictions still apply. Replay settings do not
 change provider retention or delete previously captured conversations. See the

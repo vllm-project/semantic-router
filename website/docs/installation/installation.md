@@ -42,8 +42,8 @@ install the development channel: pass `--channel dev` to the curl installer.
 | --- | --- |
 | Every host | Linux, macOS or WSL2; Docker (Linux can use Podman instead); Python 3.10 or newer; about 5 GB of free disk for the images, plus 1–1.5 GB for each built-in model your routes use |
 | CPU | Nothing else. The `vllm-sr` image runs every built-in model on the CPU; plan about 1.3 GB of memory for each 307M task model your routes use |
-| AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform amd`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
-| NVIDIA | The NVIDIA Container Toolkit and `--platform nvidia` (works, not yet validated) |
+| AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform rocm`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
+| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda` (works, not yet validated) |
 
 On macOS the Docker target runs on the CPU only; see
 [Gateway Modes](gateway-modes#macos).
@@ -95,8 +95,8 @@ The curl installer starts the stack for you. After a pip or uv install, start
 it yourself:
 
 ```bash
-vllm-sr serve                  # CPU
-vllm-sr serve --platform amd   # AMD GPUs
+vllm-sr serve                  # Auto-detect the execution target
+vllm-sr serve --platform rocm   # AMD GPUs
 ```
 
 The first start pulls the images, which takes a few minutes. With no

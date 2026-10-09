@@ -219,11 +219,13 @@ func validateParsedHotReloadCompatibilityInMode(
 	currentCfg *config.RouterConfig,
 	nextCfg *config.RouterConfig,
 ) error {
-	if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
-		return err
-	}
-	if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
-		return err
+	if nextCfg.RoutingEnabled() {
+		if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
+			return err
+		}
+		if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
+			return err
+		}
 	}
 	if currentCfg != nil && nextCfg != nil &&
 		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {

@@ -41,8 +41,8 @@ Ollama、vLLM 服务或托管 API，你在控制面板中接入它们。
 | --- | --- |
 | 所有主机 | Linux、macOS 或 WSL2；Docker（Linux 也可以用 Podman）；Python 3.10 或更高版本；约 5 GB 可用磁盘放镜像，路由用到的每个内置模型另需 1–1.5 GB |
 | CPU | 无需其他。`vllm-sr` 镜像在 CPU 上运行所有内置模型；路由用到的每个 307M 任务模型约需 1.3 GB 内存 |
-| AMD Instinct MI300X 或 MI325X | 主机上的 ROCm 驱动、Docker 能访问 `/dev/kfd` 和 `/dev/dri`，以及 `--platform amd`。它使用的 `vllm-sr-rocm` 镜像下载约 6.5 GB，占用约 20 GB 磁盘 |
-| NVIDIA | NVIDIA Container Toolkit 和 `--platform nvidia`（可用，尚未验证） |
+| AMD Instinct MI300X 或 MI325X | 主机上的 ROCm 驱动、Docker 能访问 `/dev/kfd` 和 `/dev/dri`，以及 `--platform rocm`。它使用的 `vllm-sr-rocm` 镜像下载约 6.5 GB，占用约 20 GB 磁盘 |
+| NVIDIA | NVIDIA Container Toolkit 和 `--platform cuda`（可用，尚未验证） |
 
 在 macOS 上，docker 目标只使用 CPU；见[网关模式](gateway-modes#macos)。
 
@@ -92,8 +92,8 @@ vllm-sr --version
 curl 安装脚本会替你启动栈。使用 pip 或 uv 安装后，自己启动：
 
 ```bash
-vllm-sr serve                  # CPU
-vllm-sr serve --platform amd   # AMD GPU
+vllm-sr serve                  # Auto-detect the execution target
+vllm-sr serve --platform rocm   # AMD GPU
 ```
 
 首次启动会拉取镜像，需要几分钟。当前目录没有 `config.yaml` 时，栈以设置模式启动：控制面板运行，

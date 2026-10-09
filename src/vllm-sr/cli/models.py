@@ -72,6 +72,22 @@ class ListenerIdentity(BaseModel):
     )
 
 
+class ListenerSystemOne(BaseModel):
+    """Explicit public models for native System One inference."""
+
+    model_config = ConfigDict(extra="forbid")
+    models: List[str] = Field(min_length=1)
+
+    @field_validator("models")
+    @classmethod
+    def exact_model_names(cls, names):
+        if any(not name or name != name.strip() for name in names):
+            raise ValueError("systemone.models requires exact non-empty public names")
+        if len(set(names)) != len(names):
+            raise ValueError("systemone.models must not contain duplicate names")
+        return names
+
+
 class Listener(BaseModel):
     """Network listener configuration."""
 
@@ -85,6 +101,18 @@ class Listener(BaseModel):
         "If set, requests must send one of these values as "
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
         "'api-key: <key>'; other requests are rejected with HTTP 401.",
+    )
+    models: Optional[List[str]] = Field(
+        default=None,
+        description="The only request models this listener accepts, by exact "
+        "'model' value; other models are rejected with HTTP 403 "
+        "model_not_allowed and /v1/models lists only these. Empty accepts "
+        "every model. Standalone mode enforces it; --gateway extproc rejects it.",
+    )
+    systemone: Optional[ListenerSystemOne] = Field(
+        default=None,
+        description="Publish native System One inference for these exact public "
+        "model IDs. Omitted keeps the API private; Chat model access is unchanged.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,
@@ -467,7 +495,9 @@ class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
     name: str
-    threshold: float
+    # Omitted, the rule takes every span the PII model reports; a Vela 2.0
+    # model reports only spans above its size's calibrated threshold.
+    threshold: Optional[float] = None
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
     description: Optional[str] = None
@@ -636,10 +666,12 @@ class ClassifierSignal(BaseModel):
     def _validate_local(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError("local classifiers require at least two labels")
-        if self.model or self.instructions or self.disable_rationale:
+        if self.model or self.disable_rationale:
             raise ValueError(
-                "local classifiers do not accept model, instructions or disable_rationale"
+                "local classifiers do not accept model or disable_rationale"
             )
+        if self.model_path and self.instructions:
+            raise ValueError("specialist local classifiers do not accept instructions")
 
     def _validate_llm(self):
         if not self.instructions:
@@ -1241,26 +1273,22 @@ class HallucinationPluginConfig(BaseModel):
 
 
 class RouterReplayPluginConfig(BaseModel):
-    """Configuration for router_replay plugin.
+    """Decision overrides for global.services.router_replay capture defaults.
 
-    The router_replay plugin captures routing decisions and payload snippets
-    for later debugging and replay. Records are stored in memory and accessible
-    via the /api/v1/observability/replays API endpoint.
+    Omitted fields inherit the shared service policy. Explicit false and zero
+    remain present so a decision can disable capture or remove a trace limit.
     """
 
-    enabled: bool = True
-    max_records: int = Field(
-        default=10000,
-        gt=0,
-        description="Maximum records in memory (must be > 0, default: 10000)",
-    )
-    capture_request_body: bool = True  # Capture request payloads
-    capture_response_body: bool = True  # Capture response payloads
-    max_body_bytes: int = Field(
-        default=4096,
-        gt=0,
-        description="Max bytes to capture per body (must be > 0, default: 4096)",
-    )
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    capture_request_body: Optional[StrictBool] = None
+    capture_response_body: Optional[StrictBool] = None
+    capture_personal_data: Optional[StrictBool] = None
+    max_records: Optional[int] = Field(default=None, ge=0)
+    max_body_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
 
 
 # Headers that carry a credential on the primary path. A shadow copy never
@@ -2565,8 +2593,6 @@ def _validate_unbound_classifier_selectors(profile):
     for rule in profile.signals.classifiers or []:
         if f"classifier.{rule.name}" in profile.model_bindings:
             continue
-        if rule.type == CLASSIFIER_TYPE_LOCAL and not rule.model_path:
-            raise ValueError("local classifiers require model_path or a model binding")
         if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
             raise ValueError(
                 f"{rule.type} classifiers require model or a model binding"
@@ -2583,14 +2609,6 @@ class CandidateRequirements(BaseModel):
     context: Optional[Literal["known_limits"]] = None
 
 
-class RoutingDataPolicy(BaseModel):
-    """Standing recipe restrictions; false replay cannot be enabled by a decision."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    replay: Optional[StrictBool] = None
-
-
 class Routing(BaseModel):
     """Canonical routing block."""
 
@@ -2599,7 +2617,6 @@ class Routing(BaseModel):
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
@@ -2643,7 +2660,6 @@ class RecipeRouting(BaseModel):
 
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
@@ -2711,12 +2727,22 @@ class UserConfig(BaseModel):
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
+    @property
+    def routing_enabled(self) -> bool:
+        router = (self.global_ or {}).get("router") or {}
+        enabled = router.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("global.router.enabled must be a boolean")
+        return enabled
+
     @model_validator(mode="after")
     def validate_classifier_selectors(self):
         # Global serving defaults are available only at document scope. Do not
         # reject a valid inherited selector while parsing a child profile.
         from cli.model_runtime_defaults import iter_effective_routing_profiles
 
+        if not self.routing_enabled:
+            return self
         for _, profile in iter_effective_routing_profiles(self):
             _validate_unbound_classifier_selectors(profile)
         return self

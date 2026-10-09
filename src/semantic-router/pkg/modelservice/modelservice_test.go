@@ -174,83 +174,6 @@ func TestClientDecideOverUnixSocket(t *testing.T) {
 	}
 }
 
-func TestPlanProcessesGroupsByDeviceAndProcessKey(t *testing.T) {
-	deployments := map[string]config.ModelDeployment{
-		"domain":  {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu"},
-		"pii":     {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "cpu"},
-		"domain2": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu"},
-		"kai":     {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Device: "rocm:0"},
-		"guard":   {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Guard", Device: "cpu", Process: "safety"},
-		"remote":  {Provider: config.ModelRuntimeProvider, Endpoint: "http://shared:8100", ServedName: "vela-domain"},
-		"remote2": {Provider: config.ModelRuntimeProvider, Endpoint: "http://shared:8100"},
-	}
-	plans := planProcesses(deployments, []string{"vllm-srun"}, "", 0, "")
-	byName := map[string]*processPlan{}
-	for _, plan := range plans {
-		byName[plan.name] = plan
-	}
-	if len(plans) != 4 || byName["cpu"] == nil || byName["rocm:0"] == nil || byName["safety"] == nil || byName["attached"] == nil {
-		t.Fatalf("plans = %+v", plans)
-	}
-	cpu := byName["cpu"]
-	if len(cpu.models) != 2 || cpu.members["domain2"] != "domain" || cpu.members["pii"] != "pii" {
-		t.Fatalf("identical models share one entry in a process: %+v %+v", cpu.models, cpu.members)
-	}
-	if attached := byName["attached"]; attached.members["remote"] != "vela-domain" || attached.members["remote2"] != "remote2" {
-		t.Fatalf("attached members select by served name: %+v", attached.members)
-	}
-	again := planProcesses(deployments, []string{"vllm-srun"}, "", 0, "")
-	if again[0].key != plans[0].key {
-		t.Fatal("the same composition must keep its key so generations share the process")
-	}
-	changed := planProcesses(deployments, []string{"vllm-srun"}, "/cache", 0, "")
-	for _, plan := range changed {
-		if plan.name == "cpu" && plan.key == cpu.key {
-			t.Fatal("a changed composition must start a new process")
-		}
-	}
-}
-
-func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
-	deployments := map[string]config.ModelDeployment{
-		"kai":    {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Device: "rocm:0"},
-		"safety": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Safety", Device: "cpu", Process: "safety"},
-		"guard2": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Guard", Device: "cpu"},
-	}
-	for _, name := range []string{"Domain", "FactCheck", "Feedback", "Guard", "PII"} {
-		deployments[strings.ToLower(name)] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-" + name, Device: "cpu"}
-	}
-	plans := planProcesses(deployments, []string{"vllm-srun"}, "", 16, "")
-	byName := map[string]*processPlan{}
-	for _, plan := range plans {
-		byName[plan.name] = plan
-	}
-	if len(plans) != 7 || byName["rocm:0"].threads != 0 {
-		t.Fatalf("five spread models, the safety process and rocm:0: %d plans", len(plans))
-	}
-	for _, name := range []string{"cpu-0", "cpu-1", "cpu-2", "cpu-3", "cpu-4", "safety"} {
-		if got := byName[name]; got == nil || got.threads != 3 {
-			t.Fatalf("%s: six CPU processes share 16 cores at 3 threads, got %+v", name, got)
-		}
-	}
-	if guard := byName["cpu-3"]; guard.members["guard2"] != "guard" || len(guard.models) != 1 {
-		t.Fatalf("deployments of one model share its process and entry: %+v", guard.members)
-	}
-
-	t.Setenv(CPUProcessesEnv, "2")
-	capped := planProcesses(deployments, []string{"vllm-srun"}, "", 16, "")
-	names := map[string]int{}
-	for _, plan := range capped {
-		names[plan.name] = plan.threads
-	}
-	if len(capped) != 4 || names["cpu-0"] != 6 || names["cpu-1"] != 6 || names["safety"] != 6 {
-		t.Fatalf("the env caps spread processes: %v", names)
-	}
-	if single := planProcesses(deployments, nil, "", 2, ""); len(single) != 3 {
-		t.Fatalf("two cores keep one spread CPU process: %d plans", len(single))
-	}
-}
-
 func TestManagedCommandAndModelsFile(t *testing.T) {
 	got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "/cache", 0), " ")
 	if want := "vllm-srun serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 67108864 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
@@ -334,7 +257,7 @@ func TestLeaseFailsOpenUntilTheAttachedModelIsReady(t *testing.T) {
 	}
 }
 
-func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
+func TestManagerKeepsIndependentProcessesAndSupervisesThem(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -342,7 +265,7 @@ func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
 	t.Setenv(fakeRuntimeEnv, "1")
 	t.Setenv(RuntimeCommandEnv, binary)
 	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
-	t.Setenv(CPUProcessesEnv, "1")
+	t.Setenv(CPUThreadsEnv, "1")
 	manager := NewManager()
 	defer func() { _ = manager.Shutdown(context.Background()) }()
 	deployments := map[string]config.ModelDeployment{
@@ -359,20 +282,21 @@ func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
 	waitReady(t, generation, "kai")
 	waitReady(t, generation, "eos")
 	statuses := generation.Statuses()
-	if len(statuses) != 2 || statuses[0].Endpoint != statuses[1].Endpoint || !statuses[0].Managed || statuses[0].Process != "cpu" {
-		t.Fatalf("two models on one device share one managed process: %+v", statuses)
+	if len(statuses) != 2 || statuses[0].Endpoint == statuses[1].Endpoint || !statuses[0].Managed || statuses[0].Process == statuses[1].Process {
+		t.Fatalf("each logical model owns an independent managed process: %+v", statuses)
 	}
 	info, err := os.Stat(filepath.Dir(strings.TrimPrefix(statuses[0].Endpoint, "unix://")))
 	if err != nil || info.Mode().Perm() != 0o700 {
 		t.Fatalf("socket directory must be private: %v %v", info, err)
 	}
-	if len(manager.groups) != 1 {
-		t.Fatalf("leases of the same composition share the process: %d processes", len(manager.groups))
+	if len(manager.groups) != 2 {
+		t.Fatalf("leases reuse each independently owned process: %d processes", len(manager.groups))
 	}
 	if _, err := generation.Decide(context.Background(), "eos", sampleRequest("text")); err != nil {
 		t.Fatal(err)
 	}
-	// A new composition starts a new process; the old one serves until its last lease closes.
+	// Removing a different logical deployment retains kai's original process.
+	initialKai := generation.members["kai"].group
 	changed := map[string]config.ModelDeployment{"kai": deployments["kai"]}
 	if err := manager.Reconcile(runtimeConfig(changed)); err != nil {
 		t.Fatal(err)
@@ -382,6 +306,9 @@ func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
 	}
 	if _, err := generation.Decide(context.Background(), "eos", sampleRequest("text")); err != nil {
 		t.Fatalf("the previous generation must keep serving: %v", err)
+	}
+	if manager.Published().members["kai"].group != initialKai {
+		t.Fatal("consumer set change restarted unchanged deployment")
 	}
 	_ = generation.Close()
 	if len(manager.groups) != 1 {
