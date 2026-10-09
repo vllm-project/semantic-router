@@ -103,14 +103,16 @@ func entitySet(segments []textSegment, toolNames []string) (map[string]struct{},
 	return out, capped
 }
 
-// proseTermCount counts distinct non-stopword terms in the unmasked runs of
-// the live segments, so a bare paste of code or quoted text never counts as a
-// self-contained new request.
+// proseTermCount counts distinct non-stopword terms outside code, double
+// quotes, and paired single quotes in the live segments, so a bare paste of
+// code or quoted text never counts as a self-contained new request. It masks
+// the same quote spans that make a change marker ambiguous.
 func proseTermCount(segments []textSegment) int {
 	var prose []textSegment
 	for _, segment := range segments {
 		text := string(segment)
-		for _, run := range unmaskedRuns(len(text), maskedRanges(text)) {
+		masked := unionRanges(maskedRanges(text), singleQuoteSpans(text))
+		for _, run := range unmaskedRuns(len(text), masked) {
 			prose = append(prose, textSegment(text[run.Start:run.End]))
 		}
 	}

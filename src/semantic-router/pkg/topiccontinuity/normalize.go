@@ -139,6 +139,26 @@ func maskOpener(text string, offset int) (open, closer string, width int) {
 	return "", "", 0
 }
 
+// unionRanges merges two ordered, internally non-overlapping range lists into
+// one ordered list of disjoint ranges, joining ranges that overlap or touch.
+func unionRanges(a, b []byteRange) []byteRange {
+	out := make([]byteRange, 0, len(a)+len(b))
+	for len(a) > 0 || len(b) > 0 {
+		var next byteRange
+		if len(b) == 0 || (len(a) > 0 && a[0].Start <= b[0].Start) {
+			next, a = a[0], a[1:]
+		} else {
+			next, b = b[0], b[1:]
+		}
+		if last := len(out) - 1; last >= 0 && next.Start <= out[last].End {
+			out[last].End = max(out[last].End, next.End)
+			continue
+		}
+		out = append(out, next)
+	}
+	return out
+}
+
 func unmaskedRuns(length int, masked []byteRange) []byteRange {
 	var runs []byteRange
 	cursor := 0

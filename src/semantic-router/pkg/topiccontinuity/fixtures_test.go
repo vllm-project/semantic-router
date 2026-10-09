@@ -223,6 +223,71 @@ func goldenCases() []goldenCase {
 			messages: conversation(refactor, user("not `x` unrelated to the capital of Peru and Chile")),
 			class:    ClassUnknown, reason: ReasonAmbiguousMarker,
 		},
+		// A bare paste of quoted text is not a self-contained request, whatever
+		// the quote style.
+		{
+			name:     "single-quoted text only",
+			messages: conversation(auth, user(quoteOnlyRequest("'", "'"))),
+			class:    ClassUnknown, reason: ReasonInconclusive, coverage: CoverageFull,
+		},
+		{
+			name:     "curly single-quoted text only",
+			messages: conversation(auth, user(quoteOnlyRequest("‘", "’"))),
+			class:    ClassUnknown, reason: ReasonInconclusive, coverage: CoverageFull,
+		},
+		{
+			name:     "double-quoted text only",
+			messages: conversation(auth, user(quoteOnlyRequest(`"`, `"`))),
+			class:    ClassUnknown, reason: ReasonInconclusive, coverage: CoverageFull,
+		},
+		{
+			name: "prose around a single-quoted fragment",
+			messages: conversation(auth,
+				user("Book a morning flight from Lima to Santiago next Tuesday using 'flexible fare' rules")),
+			class: ClassChange, reason: ReasonDisjoint, coverage: CoverageFull,
+		},
+		{
+			name:     "single-quoted request behind one prose word",
+			messages: conversation(auth, user("Translate "+quoteOnlyRequest("'", "'"))),
+			class:    ClassUnknown, reason: ReasonInconclusive,
+		},
+	}
+}
+
+func quoteOnlyRequest(open, closing string) string {
+	return open + "Renew passport by completing government application online" + closing
+}
+
+// The prose gate excludes every quote style the change-marker scan treats as
+// quoted, so quote-only turns have no prose terms.
+func TestProseTermsExcludeEveryQuoteStyle(t *testing.T) {
+	for _, quotes := range [][2]string{{"'", "'"}, {"‘", "’"}, {`"`, `"`}, {"“", "”"}, {"`", "`"}} {
+		live := quoteOnlyRequest(quotes[0], quotes[1])
+		if got := proseTermCount([]textSegment{textSegment(live)}); got != 0 {
+			t.Errorf("%s: %d prose terms, want 0", live, got)
+		}
+	}
+	if got := proseTermCount([]textSegment{"Renew passport by completing government application online"}); got != 6 {
+		t.Errorf("unquoted control: %d prose terms, want 6", got)
+	}
+}
+
+func TestUnionRanges(t *testing.T) {
+	cases := []struct {
+		a, b, want []byteRange
+	}{
+		{nil, nil, []byteRange{}},
+		{[]byteRange{{0, 3}}, nil, []byteRange{{0, 3}}},
+		{[]byteRange{{0, 3}, {10, 12}}, []byteRange{{5, 8}}, []byteRange{{0, 3}, {5, 8}, {10, 12}}},
+		{[]byteRange{{0, 10}}, []byteRange{{2, 4}, {6, 8}}, []byteRange{{0, 10}}},
+		{[]byteRange{{0, 5}}, []byteRange{{3, 9}}, []byteRange{{0, 9}}},
+		{[]byteRange{{0, 5}}, []byteRange{{5, 7}}, []byteRange{{0, 7}}},
+		{[]byteRange{{4, 6}}, []byteRange{{0, 2}, {5, 9}}, []byteRange{{0, 2}, {4, 9}}},
+	}
+	for _, tc := range cases {
+		if got := unionRanges(tc.a, tc.b); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("union(%v, %v) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
 	}
 }
 

@@ -101,8 +101,10 @@ Each rule produces one result:
   topic:".
 - **Disjoint change** (`change_disjoint`, confidence `0.3`–`0.6`): the live
   turn shares no meaningful words or entities with any evaluated turn and is a
-  self-contained prose request. This is absence of observed overlap, which is
-  weaker evidence; treat it as lexical separation strength.
+  self-contained prose request: at least five meaningful words outside code,
+  backticks, and quoted text, so a bare paste of quoted text never counts.
+  This is absence of observed overlap, which is weaker evidence; treat it as
+  lexical separation strength.
 
 A consumer that wants only explicit evidence can require a confidence above
 `0.6` or filter on the reason.
