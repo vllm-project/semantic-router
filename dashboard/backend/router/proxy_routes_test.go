@@ -573,3 +573,34 @@ func TestRedactCredentialParamsRemovesTheTokenFromTheLoggedReferer(t *testing.T)
 		t.Fatalf("the token survived redaction: %q", logged)
 	}
 }
+
+func TestServeRouterAPIProxyHidesClassifierInventoryWhenConfigIsNotWritable(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected upstream request %s", r.URL.Path)
+	}))
+	defer upstream.Close()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("setup:\n  mode: false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolver := setupmode.New(configPath, false)
+	routerAPIProxy, err := proxy.NewReverseProxy(upstream.URL, "/api/router", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, cfg := range map[string]*config.Config{
+		"readonly":     {RouterAPIURL: upstream.URL, ReadonlyMode: true, RuntimeConfigWritable: true},
+		"not-writable": {RouterAPIURL: upstream.URL, RuntimeConfigWritable: false},
+	} {
+		request := httptest.NewRequest(http.MethodGet, classifierInventoryGatewayPath, nil)
+		recorder := httptest.NewRecorder()
+		serveRouterAPIProxy(recorder, request, cfg, nil, routerAPIProxy, nil, resolver, nil)
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("%s: status = %d, want %d", name, recorder.Code, http.StatusForbidden)
+		}
+	}
+}
