@@ -21,8 +21,9 @@ and model pool stay available when routing is enabled in Router mode.
 You usually do not have to do anything for this to work. When a feature needs
 a model, the router downloads it, checks every file, starts the runtime and
 sends it the request text. It starts serving once the models its routes need
-have loaded. If a runtime is slow or crashes later, requests keep flowing: the
-feature reports "unknown" and your routes fall back the way you configured.
+have loaded. If a runtime is slow or crashes later, the signal deadline bounds
+how long a request waits. Unfinished signals follow their configured error or
+unscanned policy.
 
 ## Three ways to use it
 
@@ -55,12 +56,14 @@ feature reports "unknown" and your routes fall back the way you configured.
 - **Same answers as the released models.** The default `exact` profile gives
   the answers the model publishers measured. Faster settings are opt-in and say
   that they may change results. See [Profiles](./profiles.md).
-- **Requests never wait on a broken model.** A model that is too slow, still
-  restarting or crashed makes its feature "unknown" for that request. The
-  router restarts a crashed runtime and keeps routing meanwhile.
-- **Few calls per request.** The model work a request's signals send to one
-  runtime process goes as a single bundled call, and CPU models in separate
-  processes answer in parallel, so adding signals does not add round trips.
+- **Bounded waits.** Slow or unavailable models resolve through the signals'
+  deadline and error policies. A model forward already running may continue
+  after the caller times out and delay queued work. The router restarts a
+  crashed runtime.
+- **Batched calls.** Compatible model work from the same routing stage can
+  travel together in one API call. That call may require several model forward
+  passes, and later stages can make additional calls. Independent workers can
+  answer in parallel when hardware capacity allows.
 - **Pluggable.** New model families, engines and hardware back ends are
   ordinary Python packages. See [Add your own model family](./plugins.md).
 

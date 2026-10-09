@@ -31,11 +31,14 @@ translation:
 | 把文本、图片和音频放进同一向量空间 | `vllm-sr/Vela-1.0-Omni-Nano` 或 `-Mini` | | 164M / 1.36B；Mini 更准确，并接受更长的文本 |
 | 用自然语言提出你自己的问题 | 决策模型（见下一节） | | 0.6B 到 27B |
 
-未配置模型时，表中默认为 Vela 2.0 0.3B 的内置信号共用它的一个部署，每个请求只调用一次（[见下文](#vela-20)）。
+未配置模型时，表中默认为 Vela 2.0 0.3B 的内置信号共用一个部署，在同一路由阶段批量处理兼容的问题（[见下文](#vela-20)）。
 Hazard、embedding、重排序和 Omni 使用各自的模型。Vela 1.0 专用模型仍然内置，写明它们即可恢复。
 它们都是 307M 的编码器，在 CPU 上运行良好：在 16 个核上，Vela Domain 请求的中位耗时约 12 ms
 （[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)）。
 它们大多最多读取 32,768 个 token，0.3B 读取 8,192 个；上限列在每个模型卡片和 `GET /v1/models` 中。
+
+输入上限不代表延迟保证。完整的长输入 embedding 和扫描在少核 CPU 上可能超过信号截止时间。
+请按实际输入长度和并发量测量，再选择足够的专用 CPU 资源或 GPU，并为该流量调整 worker 线程数。
 
 ## 决策模型 {#decision-models}
 
@@ -64,7 +67,8 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 
 domain、prompt guard、safety、fact check、user feedback、modality、PII 和 hallucination 信号默认使用
 `vllm-sr/Vela-2.0-0.3B`（[合集](https://huggingface.co/collections/vllm-sr/vela-20)）。它们共用一个部署
-`primary`，一个请求的所有问题在一次调用中提出。
+`primary`，在同一路由阶段批量处理兼容的问题。一次 API 调用可以携带多个问题；
+窗口扫描和批次限制仍可能需要多次模型前向计算，后续路由阶段也可以发起额外调用。
 
 - **问题：** 每个信号提出模型针对它训练过的问题，并沿用对应 Vela 1.0 模型的标签，因此规则和策略照旧读取答案。
   PII 和 hallucination 使用模型的片段头，片段保留精确的字符偏移。
@@ -82,12 +86,12 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 （[A/B 记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)）：
 
 - **领先：** prompt guard（留出集 AUC +0.026；在 E2E 攻击样例上它拦下全部六个攻击，Vela 1.0 Guard 拦下五个）和
-  safety（留出集 +0.052，在每个数据集上都领先）。一个模型、一次调用回答所有信号。
+  safety（留出集 +0.052，在每个数据集上都领先）。这些信号共用一个模型。
 - **持平：** PII 和 hallucination 在留出集和新留出集上持平。
 - **落后最多：** modality（留出集 AUC −0.180；0.3B 漏掉了大多数要求生成新图片的请求）和 user feedback
   （准确率留出集 −0.038、新留出集 −0.178）。
 - **落后：** domain（准确率留出集 −0.037、新留出集 −0.088）和 fact check（留出集 AUC −0.101）。
-- **CPU 时间：** 每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送进一次 3.07 亿参数的前向计算，
+- **CPU 时间：** 在这项测量中，每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送入 3.07 亿参数的模型，
   而每个 Vela 1.0 模型只读取请求本身。在 12 个 CPU 核上，针对
   [延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号，
   请求的中位耗时约为原来的 4.9 倍：

@@ -29,7 +29,7 @@ Face revision, so the same name always loads the same files.
 | Ask your own questions in plain language | A decision model (next section) | | 0.6B to 27B |
 
 With no model configured, the built-in signals the table gives Vela 2.0 0.3B
-run on one deployment of it, in one call per request
+share one deployment, which batches compatible questions within each routing stage
 ([below](#vela-20)). Hazard, embeddings, reranking and Omni run their own
 models. The Vela 1.0 specialists remain built in, and naming them restores
 them. Each is a 307M encoder that runs well on a CPU: on 16 cores the median
@@ -37,6 +37,11 @@ Vela Domain request takes about 12 ms
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
 Most read up to 32,768 tokens; the 0.3B reads 8,192. Each model card and
 `GET /v1/models` list the limits.
+
+These input limits do not guarantee latency. Complete long-input embeddings
+and scans can exceed the signal deadline on a CPU with few cores. Measure your
+input lengths and concurrency, then choose dedicated CPU capacity or a GPU
+and tune worker threads for that workload.
 
 ## Decision models
 
@@ -72,8 +77,10 @@ are the most accurate.
 The domain, prompt guard, safety, fact check, user feedback, modality, PII and
 hallucination signals default to `vllm-sr/Vela-2.0-0.3B`
 ([collection](https://huggingface.co/collections/vllm-sr/vela-20)). All of them
-share one deployment, `primary`, and a request asks every one of its
-questions in one call.
+share one deployment, `primary`, which batches compatible questions from the
+same routing stage. One API call can carry several questions; window scans
+and batch limits may still require multiple model forward passes. Later
+routing stages can make additional calls.
 
 - **Questions:** each signal asks the question the model was trained on for it,
   with the labels of its Vela 1.0 model, so rules and policies read the answer
@@ -99,16 +106,16 @@ CPU. Measured through the Router on the
 
 - **Ahead:** prompt guard (held-out AUC +0.026; on the E2E attack fixtures it
   blocks all six attacks, Vela 1.0 Guard five) and safety (+0.052 held-out, and
-  ahead on every set). One model and one call serve every signal.
+  ahead on every set). The signals share one model.
 - **Level:** PII and hallucination on held-out and fresh files.
 - **Behind, most:** modality (held-out AUC −0.180; the 0.3B misses most
   requests that ask for a new image) and user feedback (accuracy −0.038
   held-out, −0.178 fresh).
 - **Behind:** domain (accuracy −0.037 held-out, −0.088 fresh) and fact check
   (held-out AUC −0.101).
-- **CPU time:** every request carries the questions, their options and the 17
-  PII labels (at least 560 tokens) through one 307M-parameter forward, where
-  each Vela 1.0 model reads only the request. On 12 CPU cores, for the five
+- **CPU time:** in this measurement, each request carries the questions, their
+  options and the 17 PII labels (at least 560 tokens) through the 307M-parameter
+  model, where each Vela 1.0 model reads only the request. On 12 CPU cores, for the five
   request signals of the
   [latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md),
   the median request takes about 4.9 times as long:

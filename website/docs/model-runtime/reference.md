@@ -225,6 +225,17 @@ a safety scan that misses the signals' deadline
 (`global.model_catalog.signal_timeout_ms`), was not read: a jailbreak or PII
 rule matches it as `unscanned` unless its module sets `on_unscanned: allow`.
 
+Token budgets describe input coverage, not response time. Complete long-input
+embeddings and scans can exceed the signal deadline on a CPU with few cores.
+Measure latency at your input lengths and concurrency; choose sufficient CPU
+capacity or GPU placement and tune [worker threads](./deploy.md#cpu-threads)
+for that traffic. Increasing a deadline does not make inference faster.
+
+A deadline bounds the caller's wait. It does not immediately interrupt a model
+forward already running, which can continue to occupy the worker and delay
+queued requests. One API call may contain several questions or scan windows
+and require multiple forward passes.
+
 ### Classify
 
 ```json title="POST /v1/classify"
