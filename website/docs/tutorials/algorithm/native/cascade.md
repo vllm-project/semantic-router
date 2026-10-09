@@ -152,7 +152,7 @@ curl -sS http://localhost:8801/v1/systemone \
 The response's `routing` field reports the selected model, stage and physical
 model-call count. A `503` with `systemone_unresolved` means no complete answer
 passed the configured rule; it does not mean that an omitted answer was false.
-See the [Router API](../../../api/router.md#route-a-system-one-request) for the
+See the [Router API (English)](https://vllm-sr.ai/docs/api/router#route-a-system-one-request) for the
 response fields and error contract.
 
 In Dashboard, open **System One → Decision Playground**, then choose
