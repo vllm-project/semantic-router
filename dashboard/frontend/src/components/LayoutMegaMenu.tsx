@@ -121,6 +121,7 @@ const LayoutMegaMenu = ({
       id={id}
       aria-labelledby={triggerId}
       className={styles.menu}
+      data-category={selectedCategory.key}
       data-density={geometry.density}
       data-item-count={geometry.itemCount}
       data-section-count={geometry.sectionCount}
@@ -196,7 +197,7 @@ const LayoutMegaMenu = ({
                       rel={target === '_blank' ? 'noreferrer' : undefined}
                       className={className}
                       onFocus={() => onItemIntent(item)}
-                      onPointerEnter={() => onItemIntent(item)}
+                      onPointerDown={() => onItemIntent(item)}
                       onClick={onNavigate}
                     >
                       <span className={styles.itemLabel}>

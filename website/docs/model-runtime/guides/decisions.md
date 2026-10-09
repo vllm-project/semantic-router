@@ -109,6 +109,10 @@ routing:
 
 The model's probability for each candidate becomes its selection score. If the
 model is not ready or answers late, the first model in `modelRefs` answers.
+Without a `deployment`, the Router's
+[decision model](model-runtime/choose-a-model.md#choose-a-size) chooses: the
+Vela 2.0 model that answered the request's signals also picks its model, with
+no second copy loaded.
 
 ## Route on labels and spans
 
@@ -181,11 +185,13 @@ questions to it.
 
 ## Which decision model
 
-Decision 2.0 is the default family; Kai-0.6B runs on a CPU and the larger
-sizes are more accurate on a GPU. Decision 1.0 models answer the same
-questions. Vela 2.0 also answers `set` and `span` questions and has ready-made
-questions for PII and unsupported claims; it is a private preview and needs a
-Hugging Face token with access. See
+The Router defaults to Vela 2.0 0.3B. For custom questions, Decision 2.0
+Kai-0.6B also runs on a CPU; its larger sizes target more demanding questions
+on a GPU. Decision 1.0 models answer the same
+questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
+questions for PII and unsupported claims, and its 0.3B answers the router's
+[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, in one
+call. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 
 ## Check it

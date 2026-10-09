@@ -11,17 +11,19 @@ and supervises it for you, or attaches to one you run yourself.
 ## What Problem Does It Solve?
 
 Every feature that needs a model gets it the same way: one place downloads,
-verifies, loads and serves models on CPU or GPU, and one call per request
-carries all of a request's model work. A model that is slow or not ready makes
+verifies, loads and serves models on CPU or GPU, and calls with compatible model inputs can share a native batch. Independent
+logical deployments have separate managed workers. A model that is slow or not ready makes
 its feature unknown instead of holding up the request.
 
 ## When to Use
 
 You use it whenever a configured feature needs a model; there is nothing to
 turn on. Configure it yourself to put a model on a GPU, to pin a different
-model, to give a large model its own process, or to share one runtime between
-routers. Run it on its own with `vllm-sr serve <model>` to call the models from
-your own code.
+model, to place or scale its replicas, or to attach a shared external worker.
+Use `vllm-sr serve ARTIFACT --engine` to expose native System One
+requests through the same persistent frontend. Enable saved recipe routing
+by starting without `--engine`; the frontend and Dashboard remain available
+in both startup modes.
 
 ## Configuration
 

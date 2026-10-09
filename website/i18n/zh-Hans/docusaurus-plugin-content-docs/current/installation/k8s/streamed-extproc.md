@@ -168,7 +168,7 @@ routing:
 curl -N -i http://localhost:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "stream": true,
     "messages": [
       {"role": "user", "content": "Write and explain a Python debounce decorator."}
@@ -231,7 +231,7 @@ routing:
    kubectl logs deploy/semantic-router -n vllm-semantic-router-system | grep -i streamed
    ```
 
-3. 发送带 `"model": "auto"` 的大型或分片请求，并验证其正常路由。
+3. 发送带 `"model": "vllm-sr/auto"` 的大型或分片请求，并验证其正常路由。
 
 4. 发送匹配 looper 决策且带 `"stream": true` 的流式 Chat Completions 请求，并验证 SSE 输出以及 `x-vsr-looper-*` 头。
 

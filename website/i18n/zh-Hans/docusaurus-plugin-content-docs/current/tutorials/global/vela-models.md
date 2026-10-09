@@ -74,9 +74,9 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
-内置 Domain、Guard、Safety、PII、FactCheck、Feedback 和语义 Embedding 默认使用 Vela。参考配置还选择了 Vela Modality、Hazard 和 Reranker。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
+未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 Vela 2.0 0.3B 上运行，每个请求只调用一次（见[选择模型](model-runtime/choose-a-model.md#vela-20)）。语义 Embedding、Hazard 和 Reranker 使用 Vela 1.0；在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可恢复它。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
 
-默认阈值为 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
+运行 Vela 1.0 任务模型且未设置阈值的模块使用 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
 
 输入预算由部署选择。模块的 `max_sequence_length: 0` 保留保守的 512-token 策略；Embedding 默认采用 22 层、768 维和 `full_context: false`。显式模型绑定可设置最多 **32,768 tokens**（含特殊 token）及 `overflow: reject`，超限输入会被拒绝，不会静默缩短。
 
@@ -113,7 +113,7 @@ PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按
 
 模型运行时用 PyTorch 运行 Vela 模型。CPU 执行（包括 32K 输入）已验证，经 ROCm 的 AMD Instinct MI300X 和 MI325X GPU 也已验证。CUDA 可用但尚未验证，NVIDIA 性能需要在目标硬件上测量。[Profiles](model-runtime/profiles.md) 在精确与速度之间取舍，[选择模型](model-runtime/choose-a-model.md)列出每个模型的开销。
 
-[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform amd` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
+[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform rocm` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
 
 早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](model-runtime/migrate.md)。
 
@@ -127,7 +127,7 @@ PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
 Route Preview 返回实际信号值、决策和逐信号时延。输入应保持在配方的 8K 分类器预算内：

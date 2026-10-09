@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,22 +11,7 @@ import (
 	"testing"
 )
 
-func setRunningManagedStatusContainers(t *testing.T) {
-	t.Helper()
-	docker := writeFakeStatusDockerCLI(t)
-	t.Setenv("PATH", filepath.Dir(docker)+string(os.PathListSeparator)+os.Getenv("PATH"))
-	for _, service := range []struct{ name, variable string }{
-		{"ROUTER", routerContainerNameEnv}, {"ENVOY", envoyContainerNameEnv}, {"DASHBOARD", dashboardContainerNameEnv},
-	} {
-		name := "status-test-" + service.name
-		t.Setenv(service.variable, name)
-		t.Setenv("TEST_"+service.name+"_CONTAINER", name)
-		t.Setenv("TEST_"+service.name+"_STATUS", "running")
-	}
-}
-
 func TestStatusCollectorsRequireRoutingReadiness(t *testing.T) {
-	setRunningManagedStatusContainers(t)
 	for _, mode := range []string{"direct", "managed"} {
 		t.Run(mode, func(t *testing.T) {
 			for _, test := range []struct {
@@ -90,7 +76,7 @@ func TestStatusCollectorsRequireRoutingReadiness(t *testing.T) {
 					provider := statusCredentialProvider{token: token}
 					var status SystemStatus
 					if mode == "managed" {
-						status = collectManagedDockerStatus(runtimePath, server.URL+test.suffix, server.URL, provider)
+						status = collectManagedStackStatus(runtimePath, StackState{}, server.URL+test.suffix, server.URL, provider)
 					} else {
 						var observed bool
 						status, observed = collectDirectStatus(runtimePath, server.URL+test.suffix, server.URL, provider)
@@ -129,31 +115,37 @@ func TestStatusCollectorsRequireRoutingReadiness(t *testing.T) {
 	}
 }
 
-func TestManagedStatusWithoutManagementURLPreservesObservations(t *testing.T) {
-	setRunningManagedStatusContainers(t)
-	envoy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
-	defer envoy.Close()
+// The Router's startup file outlives the process that wrote it: of a Router
+// that does not answer, it still tells only why startup failed.
+func TestManagedStatusTrustsTheStartupFileOfAStoppedRouterOnlyForAFailure(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stoppedRouter := "http://" + listener.Addr().String()
+	if closeErr := listener.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
 	for _, test := range []struct {
-		name, state string
-		ready       bool
+		name, state, message string
+		runtime              bool
 	}{
-		{"legacy_container_only", "", true},
-		{"local_waiting", `{"phase":"waiting_for_config","ready":false}`, false},
-		{"local_serving", `{"phase":"ready","ready":true}`, true},
+		{"was_ready", `{"phase":"ready","ready":true}`, "Not running", false},
+		{"was_downloading", `{"phase":"downloading_models","ready":false}`, "Not running", false},
+		{"failed", `{"phase":"error","ready":false,"message":"Router startup failed: models missing"}`, "Router startup failed: models missing", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "runtime.json")
-			if test.state != "" {
-				if err := os.WriteFile(path, []byte(test.state), 0o600); err != nil {
-					t.Fatal(err)
-				}
+			if err := os.WriteFile(path, []byte(test.state), 0o600); err != nil {
+				t.Fatal(err)
 			}
-			status := collectManagedDockerStatus(path, "", envoy.URL)
-			if got := status.Services[0]; got.Healthy != test.ready {
-				t.Errorf("routing=%+v, want ready=%v", got, test.ready)
+			status := collectManagedStackStatus(path, StackState{}, stoppedRouter, stoppedRouter)
+			router := status.Services[1]
+			if router.Name != "Router" || router.Healthy || router.Status != "not running" || router.Message != test.message {
+				t.Errorf("router = %+v, want not running with message %q", router, test.message)
 			}
-			if got := status.Services[1]; !got.Healthy || got.Status != "running" {
-				t.Errorf("process liveness lost: %+v", got)
+			if (status.RouterRuntime != nil) != test.runtime {
+				t.Errorf("router runtime = %+v, want present=%v", status.RouterRuntime, test.runtime)
 			}
 		})
 	}

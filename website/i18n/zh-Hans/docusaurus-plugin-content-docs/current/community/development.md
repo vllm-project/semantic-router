@@ -50,9 +50,9 @@ vllm-sr stop
 ROCm 相关工作：
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
-  vllm-sr serve --image-pull-policy never --platform amd
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
 
 如果自定义了 `DOCKER_TAG`、`DOCKER_REGISTRY` 或 Make 的镜像变量，请通过 `VLLM_SR_IMAGE` 将实际构建的镜像传给 `serve`，必要时同时设置 `VLLM_SR_DASHBOARD_IMAGE`。
@@ -81,9 +81,6 @@ make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# 机队模拟器
-make vllm-sr-sim-test
 ```
 
 当变更会通过启动、路由、API、部署配置或其他在线路经表现出来时，显式选择集成或 E2E：

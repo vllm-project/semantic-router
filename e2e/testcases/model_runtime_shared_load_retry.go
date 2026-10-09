@@ -13,12 +13,12 @@ import (
 )
 
 func init() {
-	pkgtestcases.Register("model-runtime-shared-load-retry", pkgtestcases.TestCase{
-		Description: "A model that failed to load beside healthy models in its process is reloaded by the runtime with back-off while the others serve; the Router does not restart the process, and the model recovers with no configuration reload",
+	pkgtestcases.Register("model-runtime-load-retry-isolation", pkgtestcases.TestCase{
+		Description: "A managed model recovers after a temporary weight-read failure; independent workers continue serving without restarts and no configuration reload is needed",
 		Tags:        []string{"model-runtime", "supervision", "fail-open"},
 		// It locks a fixture file and kills a runtime process.
 		MutatesClusterState: true,
-		Fn:                  testModelRuntimeSharedLoadRetry,
+		Fn:                  testModelRuntimeLoadRetryIsolation,
 	})
 }
 
@@ -40,7 +40,7 @@ const unlockFixtureWeights = `import pathlib, sys
 (pathlib.Path(sys.argv[1]) / sys.argv[2]).chmod(0o644)
 `
 
-func testModelRuntimeSharedLoadRetry(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	session, err := openModelRuntimeSession(ctx, client, opts)
 	if err != nil {
 		return err
@@ -78,8 +78,8 @@ func testModelRuntimeSharedLoadRetry(ctx context.Context, client *kubernetes.Cli
 		return err
 	}
 
-	// The restarted process serves its other models while the runtime retries
-	// the modality model, which reports loading; requests succeed meanwhile.
+	// Only the affected logical worker restarts. Other workers keep serving
+	// while that worker retries loading its temporarily unreadable weights.
 	var siblings []string
 	for _, name := range mrDeviceGroup {
 		if name != mrModalityDeployment {
@@ -99,7 +99,10 @@ func testModelRuntimeSharedLoadRetry(ctx context.Context, client *kubernetes.Cli
 		}
 		for _, name := range siblings {
 			if !metrics.DeploymentReady(name) {
-				return fmt.Errorf("%s is not ready yet", name)
+				return modelruntime.Stop(fmt.Errorf("unrelated worker %s became unavailable", name))
+			}
+			if metrics.DeploymentRestarts(name) != before.DeploymentRestarts(name) {
+				return modelruntime.Stop(fmt.Errorf("unrelated worker %s restarted", name))
 			}
 		}
 		if metrics.DeploymentReady(mrModalityDeployment) {
@@ -113,7 +116,7 @@ func testModelRuntimeSharedLoadRetry(ctx context.Context, client *kubernetes.Cli
 		if cardErr != nil {
 			return cardErr
 		}
-		if card.Status != "loading" || !strings.Contains(card.Reason, "retrying") {
+		if (card.Status != "loading" && card.Status != "failed") || card.Reason == "" {
 			return fmt.Errorf("%s reports %s (%s), waiting for a retry", mrModalityDeployment, card.Status, card.Reason)
 		}
 		retrying = card
@@ -134,8 +137,13 @@ func testModelRuntimeSharedLoadRetry(ctx context.Context, client *kubernetes.Cli
 	if err != nil {
 		return err
 	}
-	if restarts := after.DeploymentRestarts(mrModalityDeployment) - before.DeploymentRestarts(mrModalityDeployment); restarts != 1 {
-		return fmt.Errorf("the Router restarted %s's process %v times, want only the kill: a process that serves other models is not recycled", mrModalityDeployment, restarts)
+	if restarts := after.DeploymentRestarts(mrModalityDeployment) - before.DeploymentRestarts(mrModalityDeployment); restarts < 1 {
+		return fmt.Errorf("the Router restarted %s's process %v times, want at least the deliberately killed worker to restart", mrModalityDeployment, restarts)
+	}
+	for _, name := range siblings {
+		if after.DeploymentRestarts(name) != before.DeploymentRestarts(name) || !after.DeploymentReady(name) {
+			return fmt.Errorf("unrelated worker %s did not remain ready without restart", name)
+		}
 	}
 	response, err := session.chat(ctx, freshPrompt("Suggest a name for a friendly golden retriever."))
 	if err != nil {

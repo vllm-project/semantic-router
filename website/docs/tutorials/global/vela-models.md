@@ -28,7 +28,7 @@ FactCheck requests verification and does not verify the truth of an answer.
 
 The public collection also includes **Halu** for answer evidence-support
 detection and **Omni Nano / Omni Mini** for text, image and audio embeddings.
-Halu is the Router's default hallucination detector, and Omni serves its
+Halu is the Router's specialist hallucination detector, and Omni serves its
 multimodal embeddings; see [Check answers against context](../../model-runtime/guides/hallucination.md)
 and [Images and audio](../../model-runtime/guides/multimodal.md).
 See the [Vela 1.0 release announcement](/blog/vela-models) for the full family.
@@ -131,13 +131,16 @@ establish full multilingual or image coverage, latency, or memory performance.
 
 ## Defaults and input budgets
 
-Built-in Domain, Guard, Safety, PII, FactCheck, Feedback and semantic Embedding
-now use Vela. The reference configuration also selects Vela Modality, Hazard and
-Reranker. Only models required by a recipe are loaded. The base encoder is a
-training parent and is not loaded as an additional routing signal.
+With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
+Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, in one call
+per request ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
+Semantic Embedding, Hazard and the Reranker use Vela 1.0, and naming a Vela 1.0
+task model in `global.model_catalog.system` restores it. Only models required by
+a recipe are loaded. The base encoder is a training parent and is not loaded as
+an additional routing signal.
 
-Default operating thresholds are **0.5** for Guard, **0.95** for FactCheck and
-**0.7** for Feedback. `NO_FEEDBACK` emits no feedback match. Safety is independent
+A module running a Vela 1.0 task model without a threshold of its own uses
+**0.5** for Guard, **0.95** for FactCheck and **0.7** for Feedback. `NO_FEEDBACK` emits no feedback match. Safety is independent
 of Guard, so an unsafe content request need not be classified as a prompt attack.
 Hazard uses per-label thresholds from its artifact-bound operating point; a
 single threshold does not represent its published decision policy.
@@ -201,7 +204,7 @@ what each model costs.
 
 The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
 places all ten task models on an AMD GPU and preserves the published operating
-policies. `--platform amd` selects the AMD image and device access; it does not
+policies. `--platform rocm` selects the AMD image and device access; it does not
 make every authored model use a GPU or override an explicit CPU deployment.
 See [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd).
 
@@ -226,7 +229,7 @@ start it with the AMD image. Connect an existing vLLM backend served as
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
 Route Preview returns actual signal values, decisions and per-signal latency.

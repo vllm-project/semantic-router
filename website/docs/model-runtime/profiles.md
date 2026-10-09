@@ -35,10 +35,11 @@ global:
         profile: shared_context
 ```
 
-For a runtime you start yourself, pass `--profile`:
+For a runtime you start yourself, pass `--runtime-profile` (`--profile` to
+`vllm-srun serve`):
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
+vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --engine --platform rocm --device-ids 0 --runtime-profile shared_context
 ```
 
 A runtime started with an approximate profile still answers requests that ask
