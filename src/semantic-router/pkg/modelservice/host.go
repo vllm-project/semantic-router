@@ -48,6 +48,14 @@ func (m *Manager) processPlans(deployments map[string]config.ModelDeployment) []
 		if deployment.Managed() {
 			deployment.Device = "mps"
 		}
+		if len(deployment.Replicas) > 0 {
+			deployment.Replicas = append([]config.ModelReplica(nil), deployment.Replicas...)
+			for i := range deployment.Replicas {
+				if deployment.Replicas[i].Endpoint == "" {
+					deployment.Replicas[i].Device = "mps"
+				}
+			}
+		}
 		placed[name] = deployment
 	}
 	return planProcesses(placed, m.command, "", m.cores, "mps")

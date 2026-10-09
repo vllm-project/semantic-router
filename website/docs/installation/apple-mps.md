@@ -42,8 +42,10 @@ vllm-sr stop
 Loading continues in the background in engine mode. Check `/health` before
 calling the model. Engine mode supports MODEL names, pinned `MODEL@REVISION`,
 and `--models` files; it uses MPS and accepts loopback TCP rather than `--uds`.
-Local host model directories are supported in engine mode. Router-mode models
-must name Hub artifacts; paths inside images are not host model paths.
+Local host model directories are supported in engine mode. Relative paths such
+as `./my-model`, including entries in `--models` files, are resolved against the
+directory where you run the CLI, not the model-list file's directory.
+Router-mode models must name Hub artifacts; paths inside images are not host model paths.
 Use separate `VLLM_SR_STACK_NAME` values for independent Router or engine stacks.
 
 ## Installation and cache

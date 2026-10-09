@@ -83,6 +83,7 @@ def test_stop_cleans_host_even_when_docker_fails(monkeypatch):
         raise RuntimeError("Docker unavailable")
 
     monkeypatch.setattr("cli.container_backend.stop_vllm_sr", fail)
+    monkeypatch.setattr("cli.container_backend.stop_managed_controller", lambda: None)
     monkeypatch.setattr(apple_runtime, "stop_bridge", lambda: stopped.append(True))
     with pytest.raises(RuntimeError, match="Docker unavailable"):
         ContainerBackend().teardown()

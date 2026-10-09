@@ -39,7 +39,9 @@ vllm-sr stop
 
 引擎模式在后台加载模型，调用前应检查 `/health`。支持 MODEL 名称、固定
 `MODEL@REVISION` 和 `--models` 文件；使用 MPS 和回环 TCP，不支持 `--uds`。
-引擎模式允许宿主机上的本地模型目录。Router 模式必须使用 Hub 模型标识，
+引擎模式允许宿主机上的本地模型目录。`./my-model` 等相对路径（包括
+`--models` 文件中的条目）相对于运行 CLI 时的工作目录解析，而不是模型列表
+文件所在的目录。Router 模式必须使用 Hub 模型标识，
 镜像内的路径不能作为宿主机模型路径。独立的 Router 或引擎服务栈应使用
 不同的 `VLLM_SR_STACK_NAME`。
 

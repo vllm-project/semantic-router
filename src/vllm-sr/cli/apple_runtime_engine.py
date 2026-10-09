@@ -13,12 +13,7 @@ import yaml
 
 from cli import apple_runtime
 from cli.apple_runtime_environment import validate_apple_host, validate_local_docker
-from cli.commands.runtime_engine import (
-    ROUTER_OPTIONS,
-    RUNTIME_LOG_LEVELS,
-    _explicit,
-    _flag,
-)
+from cli.commands.serve_options import explicit
 from cli.commands.runtime_support import apply_container_runtime_override
 from cli.container_images import get_container_image
 from cli.container_runtime import get_container_runtime
@@ -27,6 +22,44 @@ from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import echo
 from cli.validator_decision_model import MODEL_RUNTIME_PROFILE
+
+
+ROUTER_OPTIONS = (
+    "config",
+    "replace_active_config",
+    "envoy_image",
+    "dashboard_image",
+    "readonly",
+    "minimal",
+    "algorithm",
+    "gateway",
+    "namespace",
+    "context",
+    "chart_dir",
+    "recipe_env_names",
+    "startup_timeout",
+    "data_parallel_size",
+    "device_ids",
+    "profile",
+)
+RUNTIME_LOG_LEVELS = {
+    "debug": "debug",
+    "info": "info",
+    "warn": "warning",
+    "warning": "warning",
+    "error": "error",
+    "dpanic": "error",
+    "panic": "error",
+    "fatal": "error",
+}
+
+
+def _explicit(ctx: click.Context, name: str) -> bool:
+    return name in ctx.params and explicit(ctx, name)
+
+
+def _flag(name: str) -> str:
+    return "--" + name.replace("_", "-").removesuffix("-names")
 
 
 def run_apple_engine(
@@ -51,6 +84,7 @@ def run_apple_engine(
         "platform",
         "target",
         "runtime",
+        "container_runtime",
         "image",
         "router_image",
         "image_pull_policy",
