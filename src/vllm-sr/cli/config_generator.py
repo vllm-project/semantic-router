@@ -7,8 +7,9 @@ from jinja2 import Environment, FileSystemLoader
 
 from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.consts import DEFAULT_LISTENER_PORT
+from cli.durations import envoy_duration
 from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
-from cli.models import UserConfig
+from cli.models import Model, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -27,6 +28,70 @@ def _model_cluster_id(model_name: str) -> str:
         chr(byte) if chr(byte).isascii() and chr(byte).isalnum() else f"_{byte:02x}"
         for byte in model_name.encode("utf-8")
     )
+
+
+_RELIABILITY_DURATIONS = (
+    "base_ejection_time",
+    "health_check_interval",
+    "health_check_timeout",
+    "connect_timeout",
+    "total_timeout",
+    "idle_timeout",
+    "per_try_timeout",
+    "retry_back_off_base",
+    "retry_back_off_max",
+    "retry_after_max",
+)
+
+
+def _envoy_reliability(model: Model) -> dict:
+    """Project a model's reliability block onto the template's inputs.
+
+    Durations take the seconds form Envoy requires. A field only the native
+    gateway can honor fails the render instead of being dropped silently.
+    """
+
+    if model.reliability is None:
+        return {}
+    reliability = model.reliability.model_dump()
+    if reliability.get("first_byte_timeout"):
+        raise ValueError(
+            f"providers.models[{model.name!r}].reliability.first_byte_timeout is "
+            "honored only in standalone mode; Envoy has no first-byte timeout. "
+            "Serve with --gateway standalone, or remove it (per_try_timeout bounds "
+            "each try) to serve with --gateway extproc."
+        )
+    for field in _RELIABILITY_DURATIONS:
+        if reliability.get(field):
+            reliability[field] = envoy_duration(reliability[field])
+    return reliability
+
+
+def _check_decision_reliability(user_config: UserConfig) -> None:
+    """Reject a decision reliability field Envoy cannot apply to one request,
+    instead of letting Envoy drop it silently.
+
+    The Router sends the other fields to Envoy's router as per-request
+    headers, which the template's ext_proc filter always allows.
+    """
+
+    scopes = [("routing", user_config.routing.decisions)] + [
+        (f"recipes[{recipe.name!r}].routing", recipe.routing.decisions)
+        for recipe in user_config.recipes
+    ]
+    for scope, decisions in scopes:
+        for decision in decisions:
+            if decision.reliability is None:
+                continue
+            native_only = decision.reliability.native_only_fields()
+            if native_only:
+                fields = ", ".join(f"reliability.{field}" for field in native_only)
+                raise ValueError(
+                    f"{scope}.decisions[{decision.name!r}]: {fields} is honored only "
+                    "in standalone mode; Envoy cannot apply it to a single request. "
+                    "Serve with --gateway standalone, or remove it to serve with "
+                    "--gateway extproc."
+                )
 
 
 def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
@@ -75,6 +140,19 @@ def generate_envoy_config_from_user_config(
     listeners = []
     if user_config.listeners:
         for listener in user_config.listeners:
+            if getattr(listener, "tls", None) is not None:
+                raise ValueError(
+                    f"listener '{listener.name}': tls is served in standalone "
+                    "mode, and --gateway extproc does not terminate TLS; serve "
+                    "with --gateway standalone or remove tls from the listener"
+                )
+            if getattr(listener, "models", None):
+                raise ValueError(
+                    f"listener '{listener.name}': models is enforced in "
+                    "standalone mode, and the --gateway extproc Envoy listener "
+                    "does not enforce it; serve with --gateway standalone or "
+                    "remove models from the listener"
+                )
             listeners.append(
                 {
                     "name": listener.name,
@@ -149,11 +227,7 @@ def generate_envoy_config_from_user_config(
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
                 "auto_host_rewrite": auto_host_rewrite,
-                "reliability": (
-                    model.reliability.model_dump()
-                    if model.reliability is not None
-                    else {}
-                ),
+                "reliability": _envoy_reliability(model),
             }
         )
 
@@ -178,6 +252,7 @@ def generate_envoy_config_from_user_config(
         "models": models,
         "use_original_dst": False,  # Use static clusters for now
     }
+    _check_decision_reliability(user_config)
 
     if log_summary:
         log.info("  Listeners:")

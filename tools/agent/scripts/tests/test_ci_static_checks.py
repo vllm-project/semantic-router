@@ -58,6 +58,7 @@ class CIStaticChecksTests(unittest.TestCase):
         skips = set(env["SKIP"].split(","))
         self.assertIn("shellcheck", skips)
         self.assertIn("supply-chain-security-scan", skips)
+        self.assertIn("decision-runtime-catalog-generated", skips)
         self.assertNotIn("architecture-check", skips)
 
     def test_local_security_hook_remains_enabled(self) -> None:

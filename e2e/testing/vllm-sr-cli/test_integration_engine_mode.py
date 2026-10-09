@@ -1,80 +1,197 @@
 #!/usr/bin/env python3
-"""Engine mode: `vllm-sr serve MODEL ...` runs the model runtime and serves it.
+"""Native inference remains available across CLI startup mode changes.
 
-These tests start the real CLI in the current Python environment, which must
-have the model runtime installed (`make model-runtime-install`). They serve
-tiny random-weight packages written by `vllm-srun fixture`, so no model
-is downloaded, and send the requests the Quickstart page tells readers to send,
-read from the page itself.
+The tiny Decision fixture runs offline in the built Router image. The test
+checks public auth/discovery and native inference after starting both Engine
+and Router modes with the supported serve flags. It owns an isolated stack.
 """
 
+import copy
 import math
+import os
 import shutil
+import socket
 import subprocess
 import tempfile
-import time
 import unittest
+import uuid
 from pathlib import Path
 
-from runtime_http import HTTP_OK, ServeProcess, call, page_requests
+import yaml
+from cli.runtime_stack import MAX_PORT_OFFSET
+from runtime_http import call, page_requests, write_fixture
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
 )
-HTTP_BAD_REQUEST = 400
-HTTP_UNSUPPORTED = 422
+API_KEY = "engine-e2e-key"
+MANAGEMENT_KEY = "engine-e2e-management-key"
+PUBLIC_MODEL = "test/decision"
 
 
+def available_offset():
+    # Probe every port the minimal stack publishes before selecting an offset.
+    for offset in range(10000, MAX_PORT_OFFSET + 1, 137):
+        sockets = []
+        try:
+            for port in (6379, 8080, 8899, 9190):
+                probe = socket.socket()
+                sockets.append(probe)
+                probe.bind(("127.0.0.1", port + offset))
+            return offset
+        except OSError:
+            pass
+        finally:
+            for probe in sockets:
+                probe.close()
+    raise RuntimeError("No isolated test port range is free")
+
+
+@unittest.skipUnless(
+    os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+    "Set RUN_INTEGRATION_TESTS=true to start an isolated real frontend stack.",
+)
 class TestEngineMode(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.root = Path(tempfile.mkdtemp(prefix="vllm-sr-engine-"))
-        cls.addClassCleanup(shutil.rmtree, cls.root, ignore_errors=True)
-        cls.decision = cls._fixture("decision", "decision2", "qwen3")
-        cls.classifier = cls._fixture("classifier", "task_heads", "sequence")
-        cls.requests = page_requests(QUICKSTART)
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="vllm-sr-engine-"))
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.stack = "engine-e2e-" + uuid.uuid4().hex[:10]
+        self.offset = available_offset()
+        self.env = {
+            **os.environ,
+            "VLLM_SR_STACK_NAME": self.stack,
+            "VLLM_SR_PORT_OFFSET": str(self.offset),
+            "HF_HUB_OFFLINE": "1",
+            "ENGINE_E2E_MANAGEMENT_KEY": MANAGEMENT_KEY,
+        }
+        self.container = f"{self.stack}-vllm-sr-router-container"
+        self.base = f"http://127.0.0.1:{8899 + self.offset}"
+        self.config = self.root / "config.yaml"
+        write_fixture(self.root / "models" / "decision", "decision2", "qwen3")
+        self.config.write_text(
+            yaml.safe_dump(
+                {
+                    "version": "v0.3",
+                    "listeners": [
+                        {
+                            "name": "main",
+                            "address": "0.0.0.0",
+                            "port": 8899,
+                            "api_keys": [API_KEY],
+                            "models": ["vllm-sr/auto"],
+                            "systemone": {"models": [PUBLIC_MODEL]},
+                        }
+                    ],
+                    "providers": {
+                        "models": [
+                            {
+                                "name": "answer",
+                                "backend_refs": [
+                                    {
+                                        "name": "answer",
+                                        "endpoint": "127.0.0.1:18000",
+                                        "provider": "vllm",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                    "routing": {
+                        "decisions": [
+                            {
+                                "name": "saved",
+                                "priority": 1,
+                                "rules": {"operator": "AND", "conditions": []},
+                                "modelRefs": [{"model": "answer"}],
+                            }
+                        ]
+                    },
+                    "global": {
+                        "router": {"enabled": False},
+                        "model_catalog": {
+                            "system": {"decision_model": {"deployment": "primary"}},
+                            "deployments": {
+                                "primary": {
+                                    "provider": "model_runtime",
+                                    "artifact": "/app/models/decision",
+                                    "public_name": PUBLIC_MODEL,
+                                    "device": "cpu",
+                                }
+                            },
+                        },
+                        "services": {
+                            "management_api": {
+                                "bind_address": "0.0.0.0",
+                                "port": 8080,
+                                "auth": {
+                                    "mode": "bearer",
+                                    "tokens": [
+                                        {
+                                            "env": "ENGINE_E2E_MANAGEMENT_KEY",
+                                            "role": "admin",
+                                        }
+                                    ],
+                                },
+                            },
+                            "observability": {"tracing": {"enabled": False}},
+                        },
+                    },
+                }
+            )
+        )
+        self.addCleanup(self.stop)
+        self.serve(engine=True)
 
-    @classmethod
-    def _fixture(cls, name: str, family: str, variant: str) -> str:
-        output = cls.root / name
-        subprocess.run(
-            [
-                "vllm-srun",
-                "fixture",
-                str(output),
-                "--family",
-                family,
-                "--variant",
-                variant,
-            ],
-            check=True,
+    def serve(self, *, engine):
+        self.cli(
+            "serve",
+            "--config",
+            str(self.config),
+            *(["--engine"] if engine else []),
+            "--gateway",
+            "standalone",
+            "--minimal",
+            "--image-pull-policy",
+            "ifnotpresent",
+            "--startup-timeout",
+            "300",
+        )
+
+    def cli(self, *arguments):
+        result = subprocess.run(
+            ["vllm-sr", *arguments],
+            cwd=self.root,
+            env=self.env,
             capture_output=True,
             text=True,
+            timeout=360,
+            check=False,
         )
-        return str(output)
+        with (self.root / "cli.log").open("a") as log:
+            log.write(result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout
 
-    def _serve(self, *models: str) -> ServeProcess:
-        engine = ServeProcess(
-            ["vllm-sr", "serve", *models, "--device", "cpu"],
-            self.root / f"serve-{len(models)}-{time.monotonic_ns()}.log",
+    def stop(self):
+        subprocess.run(
+            ["vllm-sr", "stop"],
+            cwd=self.root,
+            env=self.env,
+            capture_output=True,
+            timeout=90,
+            check=False,
         )
-        self.addCleanup(engine.stop)
-        engine.wait_ready()
-        return engine
 
-    def test_quickstart_decision_model(self):
-        engine = self._serve(self.decision)
-
-        status, models = call(engine.base, "/v1/models")
-        self.assertEqual(status, HTTP_OK)
-        (card,) = models["data"]
-        self.assertEqual(card["family"], "decision2")
-        self.assertIn("decisions", card["surfaces"])
-        self.assertTrue(card["ready"])
-
-        body = self.requests["/v1/decisions"]
-        status, response = call(engine.base, "/v1/decisions", body)
-        self.assertEqual(status, HTTP_OK, response)
+    def native(self):
+        body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
+        body["model"] = PUBLIC_MODEL
+        status, response = call(
+            self.base,
+            "/v1/systemone",
+            body,
+            headers={"Authorization": "Bearer " + API_KEY},
+        )
+        self.assertEqual(status, 200, response)
         kind, reasoning = response["answers"]["kind"], response["answers"]["reasoning"]
         self.assertIn(kind["choice"], body["questions"]["kind"]["criteria"])
         self.assertTrue(
@@ -82,80 +199,42 @@ class TestEngineMode(unittest.TestCase):
         )
         self.assertGreaterEqual(reasoning["noul"], 0.0)
         self.assertLessEqual(reasoning["noul"], 1.0)
+        return body, response
 
-        status, alias = call(engine.base, "/v1/systemone", body)
-        self.assertEqual(status, HTTP_OK)
+    def test_native_inference_survives_startup_mode_changes(self):
+        status, _ = call(self.base, "/v1/systemone/models")
+        self.assertEqual(status, 401)
+        status, models = call(
+            self.base,
+            "/v1/systemone/models",
+            headers={"Authorization": "Bearer " + API_KEY},
+        )
+        self.assertEqual(status, 200, models)
+        self.assertEqual([model["id"] for model in models["data"]], [PUBLIC_MODEL])
+        body, response = self.native()
+        status, alias = call(
+            self.base,
+            "/v1/decisions",
+            body,
+            headers={"Authorization": "Bearer " + API_KEY},
+        )
+        self.assertEqual(status, 200, alias)
         self.assertEqual(alias["answers"], response["answers"])
-
-        status, refused = call(engine.base, "/v1/classify", {"input": ["x"]})
-        self.assertEqual(status, HTTP_UNSUPPORTED, refused)
-        self.assertEqual(refused["error"]["code"], "unsupported_surface")
-
-        status, metrics = call(engine.base, "/metrics")
-        self.assertEqual(status, HTTP_OK)
-        self.assertIn('vllm_srun_requests_total{endpoint="/v1/decisions"', metrics)
-        self.assertEqual(engine.stop(), 0)
-
-    def test_quickstart_classifier(self):
-        engine = self._serve(self.classifier)
-
-        status, response = call(
-            engine.base, "/v1/classify", self.requests["/v1/classify"]
-        )
-
-        self.assertEqual(status, HTTP_OK, response)
-        self.assertEqual(response["kind"], "sequence")
-        (result,) = response["results"]
-        self.assertIn(result["label"], response["labels"])
-        self.assertTrue(math.isclose(sum(result["probabilities"]), 1.0, abs_tol=1e-6))
-        self.assertGreater(result["input"]["tokens"], 0)
-
-    def test_one_process_serves_several_models_and_bundles(self):
-        engine = self._serve(self.decision, self.classifier)
-
-        status, models = call(engine.base, "/v1/models")
-        self.assertEqual(status, HTTP_OK)
-        ids = {card["family"]: card["id"] for card in models["data"]}
-        self.assertEqual(set(ids), {"decision2", "task_heads"})
-        status, health = call(engine.base, "/health")
-        self.assertEqual(status, HTTP_OK)
-        self.assertEqual(set(health["models"]), set(ids.values()))
-
-        decisions = {**self.requests["/v1/decisions"], "model": ids["decision2"]}
-        classify = {**self.requests["/v1/classify"], "model": ids["task_heads"]}
-        status, bundle = call(
-            engine.base,
-            "/v1/bundle",
-            {
-                "tasks": [
-                    {"id": "kind", "decisions": decisions},
-                    {"id": "domain", "classify": classify},
-                ]
-            },
-        )
-        self.assertEqual(status, HTTP_OK, bundle)
-        self.assertEqual(
-            [result["id"] for result in bundle["results"]], ["kind", "domain"]
-        )
-        self.assertEqual(
-            [result["status"] for result in bundle["results"]], [HTTP_OK, HTTP_OK]
-        )
-        alone = {
-            "kind": call(engine.base, "/v1/decisions", decisions)[1],
-            "domain": call(engine.base, "/v1/classify", classify)[1],
-        }
-        self.assertEqual(
-            bundle["results"][0]["decisions"]["answers"], alone["kind"]["answers"]
-        )
-        self.assertEqual(
-            bundle["results"][1]["classify"]["results"], alone["domain"]["results"]
-        )
-
-        status, missing = call(
-            engine.base, "/v1/classify", self.requests["/v1/classify"]
-        )
-        self.assertEqual(status, HTTP_BAD_REQUEST, missing)
-        self.assertEqual(missing["error"]["code"], "invalid_request")
+        for mode in ("router", "engine"):
+            self.serve(engine=mode == "engine")
+            management_base = f"http://127.0.0.1:{8080 + self.offset}"
+            status, _ = call(management_base, "/api/v1/instance")
+            self.assertEqual(status, 401)
+            status, state = call(
+                management_base,
+                "/api/v1/instance",
+                headers={"Authorization": "Bearer " + MANAGEMENT_KEY},
+            )
+            self.assertEqual(status, 200, state)
+            self.assertEqual(state["observed_mode"], mode, state)
+            status, _ = call(self.base, "/v1/systemone/models")
+            self.assertEqual(status, 401)
+            self.native()
 
 
 if __name__ == "__main__":

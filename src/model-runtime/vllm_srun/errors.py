@@ -12,6 +12,9 @@ from __future__ import annotations
 INVALID_QUESTION = "invalid_question"
 INVALID_INPUT = "invalid_input"
 MAX_LENGTH_EXCEEDED = "max_length_exceeded"
+# An input a model reads whole (windows) has more tokens than its scan budget;
+# none of it was scanned.
+SCAN_BUDGET_EXCEEDED = "scan_budget_exceeded"
 INVALID_MODEL_OUTPUT = "invalid_model_output"
 DEADLINE_EXCEEDED = "deadline_exceeded"
 UNAVAILABLE = "unavailable"
@@ -20,6 +23,7 @@ QUESTION_ERROR_CODES = (
     INVALID_QUESTION,
     INVALID_INPUT,
     MAX_LENGTH_EXCEEDED,
+    SCAN_BUDGET_EXCEEDED,
     INVALID_MODEL_OUTPUT,
     DEADLINE_EXCEEDED,
     UNAVAILABLE,
@@ -63,6 +67,17 @@ class QuestionError(ValueError):
             raise ValueError(f"unknown question error code {code!r}")
         super().__init__(message or code)
         self.code = code
+
+
+def question_error(
+    kind: str | None, error: QuestionError, code: str | None = None
+) -> dict:
+    """A failed question's answer: its type, error code and, if known, why."""
+    answer: dict = {"type": kind, "error": code or error.code}
+    reason = str(error)
+    if reason and reason != error.code:
+        answer["message"] = reason
+    return answer
 
 
 class PackageError(ValueError):

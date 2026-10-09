@@ -232,6 +232,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
+		rejectRemovedEntrypointFields,
 		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
@@ -672,6 +673,7 @@ func applyParsedConfigDefaults(cfg *RouterConfig) {
 		cfg.VectorStore.ApplyDefaults()
 	}
 	applyBatchConcurrencyMigration(cfg)
+	dropReliabilityHeaderMutations(cfg)
 }
 
 func logParsedDecisions(cfg *RouterConfig) {
@@ -871,4 +873,24 @@ func nestedStringMap(raw interface{}) map[string]interface{} {
 	default:
 		return map[string]interface{}{}
 	}
+}
+
+func rejectRemovedEntrypointFields(raw map[string]interface{}) error {
+	global := nestedStringMap(raw["global"])
+	router := nestedStringMap(global["router"])
+	for _, name := range []string{"auto_model_name", "auto_model_names"} {
+		if _, exists := router[name]; exists {
+			return fmt.Errorf("global.router.%s was removed; configure entrypoints with recipe: default and model_names", name)
+		}
+	}
+	if _, exists := router["include_config_models_in_list"]; exists {
+		return fmt.Errorf("global.router.include_config_models_in_list was renamed to global.router.list_backend_models")
+	}
+	looper := nestedStringMap(nestedStringMap(global["integrations"])["looper"])
+	for _, algorithm := range []string{"remom", "fusion", "flow"} {
+		if _, exists := nestedStringMap(looper[algorithm])["model_names"]; exists {
+			return fmt.Errorf("global.integrations.looper.%s.model_names was removed; expose the algorithm through an explicit entrypoint and recipe", algorithm)
+		}
+	}
+	return nil
 }

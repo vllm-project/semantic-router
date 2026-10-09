@@ -46,7 +46,7 @@ func TestAutomaticOutputSurvivesRuntimeSelectionAndLearning(t *testing.T) {
 				d.Algorithm.MultiFactor = &config.MultiFactorSelectionConfig{Weights: &config.MultiFactorWeightsConfig{Quality: 1}}
 				r.Config.ModelConfig[d.ModelRefs[0].Model] = addTestQuality(r.Config.ModelConfig[d.ModelRefs[0].Model], 0.9)
 			}
-			_, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", text, ctx)
+			_, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "vllm-sr/auto", text, ctx)
 			require.NoError(t, err)
 			require.Equal(t, d.ModelRefs[0].Model, model)
 			require.Equal(t, d.ModelRefs, r.eligibleLearningModelRefs(d.ModelRefs, ctx))
@@ -67,7 +67,7 @@ func TestAutomaticOutputCapabilityFilterStillRejectsInvalidCandidates(t *testing
 			calls := 0
 			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 			d := ctx.VSRSelectedDecision
-			require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+			require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 			refs, err := r.decisionEligibleModelRefs(d, ctx)
 			require.NoError(t, err)
 			switch scenario {

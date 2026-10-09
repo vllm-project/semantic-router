@@ -1,0 +1,183 @@
+---
+title: Unified Config Contract v0.3
+description: Records the implemented configuration contract shared by the router, CLI, dashboard, Helm, operator, and DSL.
+created: 2026-03-17
+status: Implemented
+---
+
+> **Status:** Implemented · **Created:** 2026-03-17
+
+## Problem
+
+The router, CLI, dashboard, Helm chart, operator, and DSL previously interpreted
+overlapping configuration shapes. A file accepted by one surface could require
+translation or undocumented defaults in another. Model identity was also mixed with
+deployment endpoints and credentials.
+
+## Implemented contract
+
+The public configuration has eight top-level sections:
+
+```yaml
+version:
+listeners:
+providers:
+evaluation:
+routing:
+entrypoints:
+recipes:
+global:
+```
+
+| Section | Responsibility |
+| --- | --- |
+| `version` | Selects the configuration contract. |
+| `listeners` | Defines request-facing and management listeners. |
+| `providers` | Binds logical model names to provider identifiers and endpoints. |
+| `evaluation` | Optionally defines operator-owned benchmarks, index DAGs, and model-linked records. |
+| `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
+| `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
+| `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
+| `global` | Holds router-wide services, stores, integrations, model modules, and sparse runtime overrides. |
+
+Unknown or retired shapes should fail with a clear validation error rather than be
+silently translated at runtime.
+
+## Provider and model boundary
+
+`providers.defaults` owns the default provider behavior and default model.
+`providers.models[].backend_refs[]` owns physical backend bindings.
+`providers.models[].api_format` owns only the upstream wire format and never
+selects a Provider. A physical model in a Router-owned listener configuration
+must declare an explicit backend Provider; metadata-only external-gateway
+configuration and built-in virtual models may remain backendless.
+The local CLI serve path owns Envoy transport and rejects backendless physical
+models; external-gateway metadata-only configurations are deployed through the
+gateway integration rather than converted into a standalone Envoy data plane.
+`providers.models[].pricing` owns optional deployment cost metadata used by
+cost-aware selection and accounting. Pricing does not belong to routing model cards.
+
+`evaluation` owns optional operator benchmark definitions, index DAGs, and
+measurement records. Each `evaluation.records[].model` references one canonical
+Model Card identity, so reusable scoring semantics and model evidence have one
+top-level owner without being embedded in routing metadata.
+
+`routing.modelCards` describes routing-facing model identity. Optional
+`routing.modelCards[].loras` declare LoRA adapters that decisions may select with
+`lora_name`. Signals and decisions reference logical model names, not endpoints or
+credentials.
+
+## Routing and DSL boundary
+
+Routing owns:
+
+- model cards;
+- named signals and projections;
+- decisions, candidate `modelRefs`, algorithms, and plugins;
+- route-local output and adaptation policy.
+
+Algorithms may declare `minimum_candidates` as a portable Recipe contract.
+Model-free assets can carry the declaration with empty `modelRefs`; a concrete
+Entrypoint binding must satisfy it, and request-time eligibility filters must
+preserve it before selection or multi-model execution begins.
+
+A plugin's configuration surface stays generic even when the plugin only
+targets one provider wire format. `prompt_cache`, for example, is disabled by
+default and declares `on_unsupported: skip|reject` rather than assuming every
+route resolves to an Anthropic-shaped backend; a route with no eligible target
+either leaves the request unchanged or fails with a typed error, per that
+setting.
+
+Structured request controls remain facts at the signal boundary. For example,
+conversation signals expose whether the protocol requires or forbids tool
+execution, projections reconcile those facts with text-derived observations,
+and decisions consume the resulting policy-facing output.
+
+Top-level `entrypoints` select the default routing profile or a named item from
+top-level `recipes`; they are not nested inside `routing`.
+
+The DSL is an authoring view of routing semantics. It does not own provider
+credentials, listeners, evaluation definitions or records, stores, or global
+runtime services. Import and export preserve the same canonical routing
+document rather than inventing another steady-state schema.
+
+Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
+that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
+resolves a terminal `Unknown` with root-level
+`rules.on_unknown: no_match|match|fail_request`; omission preserves the existing
+per-family compatibility behavior.
+
+## Entrypoints and multi-recipe routing
+
+`entrypoints[]` map request model names to either top-level routing or one named
+recipe. `recipes[]` contain isolated routing profiles that reuse the same provider
+inventory and global runtime.
+
+This keeps the public API stable while allowing several routing policies to coexist in
+one process. An entrypoint resolves the recipe before signals and decisions run.
+
+## Defaults and configuration source
+
+Built-in defaults live in the router. `global.router.config_source` selects file-backed
+configuration or Kubernetes CRD reconciliation. External templates must not apply
+hidden defaults after validation.
+
+Built-in category/domain inference keeps its runtime policy in
+`global.model_catalog.modules.classifier.domain`. The local model uses the
+canonical `variant` field; a remote classifier uses the shared `backend` block
+(`protocol`, `contract`, `model`, and `deadline_ms`) and resolves `model` by
+exact external-catalog name. The category consumer currently accepts
+`http_classify` plus `label_distribution.v1`, preserving the full label-score
+distribution. Prompt guard remains on its existing configuration surface until
+its separately scoped migration.
+
+Complexity is the second consumer and keeps its runtime policy in
+`global.model_catalog.modules.complexity`, so a backend survives the per-recipe
+replacement of `routing.signals`. It accepts `http_classify` with either
+`score.v1`, a continuous score the signal converts into a verdict through
+per-rule boundaries, or `label_distribution.v1`, where the winning label is the
+verdict. A consumer that reads more than one contract cannot default the field:
+omitting it would leave the runtime guessing which response shape to expect,
+and guessing wrong surfaces per request rather than at config load. Consumers
+reading exactly one contract keep it as the default, so category is unchanged.
+Connector byte ceilings belong to the connector configuration. External LLM
+classifier entries and the MCP classifier module use `max_response_bytes`.
+The dashboard, Helm chart, and operator may help users author or transport config, but
+the resulting document still uses the same contract.
+
+## Repository sources
+
+`config/config.yaml` is the exhaustive canonical reference config. Reusable examples
+live under:
+
+- `config/fragments/signal/`;
+- `config/fragments/decision/`;
+- `config/fragments/algorithm/`; and
+- `config/fragments/plugin/`.
+
+Runtime deployment examples remain separate from routing fragments. Contract tests
+and `make check` keep the reference config, schema, examples, and public docs
+aligned.
+
+## Migration
+
+Use `vllm-sr config migrate --config old-config.yaml` to convert supported legacy
+layouts. Review the result, resolve credentials through the deployment's secret
+mechanism, and validate it before serving.
+
+`vllm-sr init` was removed. Canonical YAML is the steady-state configuration source;
+interactive or graphical authoring tools must export that same document.
+
+## Scope and non-goals
+
+The contract unifies configuration ownership. It does not require every authoring
+surface to expose every advanced field in one form, nor does it make the DSL a
+deployment-language replacement.
+
+## References
+
+- [Current configuration guide](../installation/configuration)
+- [Configuration workflows](../installation/configuration-workflows)
+- [Signals, decisions, and model selection](../overview/signal-driven-decisions)
+- [Virtual Models](../tutorials/global/entrypoints-and-recipes)
+- [Related issue #1505](https://github.com/vllm-project/semantic-router/issues/1505)

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from functools import partial
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -25,6 +25,7 @@ from ...plugins.base import (
     ForwardBatch,
     ForwardOutput,
     ModelSpec,
+    ModuleT,
     TreeBatch,
     TreeOutput,
 )
@@ -57,6 +58,8 @@ def graph_receipt(graphs: dict[str | None, EncoderGraphs]) -> dict[str, Any]:
 
 
 class NativeEngineModel(EngineModel):
+    spec: ModelSpec
+
     def __init__(
         self,
         backbone: nn.Module,
@@ -99,7 +102,9 @@ class NativeEngineModel(EngineModel):
             }
         )
         self.kernels = accelerator.kernels(device_info)
-        self.kernels.allow_approximate = not options.exact_kernels_only
+        self.kernels.allow_approximate = (
+            not options.exact_kernels_only and spec.dtype.approximate_kernels
+        )
         self.kernels.use_variants(spec.kernel_variants)
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
@@ -118,7 +123,7 @@ class NativeEngineModel(EngineModel):
             *self.reduced.values(),
             *self.towers.values(),
         ):
-            module.kernels = self.kernels
+            cast(models.Backbone, module).kernels = self.kernels
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
@@ -128,17 +133,17 @@ class NativeEngineModel(EngineModel):
             self._install_fast()
         if self.device.type == "cuda" and spec.encoder and options.graphs:
             self.encoder_graphs = {
-                name: EncoderGraphs(module, self.device)
+                name: EncoderGraphs(cast(models.EncoderBackbone, module), self.device)
                 for name, module in self.stacks().items()
             }
             self.reduced_graphs = {
-                name: EncoderGraphs(view, self.device)
+                name: EncoderGraphs(cast(models.EncoderBackbone, view), self.device)
                 for name, view in self.reduced.items()
             }
 
     def stacks(self) -> dict[str | None, nn.Module]:
         """Every layer stack by branch name; ``None`` is the backbone's own."""
-        return {None: self.backbone, **self.branches}
+        return {None: self.backbone} | self.branches
 
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
@@ -153,6 +158,7 @@ class NativeEngineModel(EngineModel):
         if options.fused_kernels or options.graphs:
             self.masks = fast.Masks()
         if options.graphs:
+            assert self.masks is not None
             self.graphs = fast.Graphs(backbone, self.masks)
 
     def receipt(self) -> dict[str, Any]:
@@ -212,7 +218,7 @@ class NativeEngineModel(EngineModel):
         tree = Tree(
             len(prefix), lengths, padded(max(lengths)), self.device, padded_exact
         )
-        hidden = self.backbone.forward_tree(packed, tree)
+        hidden = cast(models.TreeBackbone, self.backbone).forward_tree(packed, tree)
         return tree.rows(hidden[0, len(prefix) :])
 
     def _forward_tree(self, batch: ForwardBatch) -> ForwardOutput:
@@ -256,12 +262,15 @@ class NativeEngineModel(EngineModel):
                     hidden = rows.new_zeros((len(batch.blocks), width, rows.shape[-1]))
                 span = min(width, rows.shape[1])
                 hidden[members, :span] = rows[:, :span]
+        assert hidden is not None
         return TreeOutput(hidden=hidden)
 
     def _tree_rows(self, batch: TreeBatch) -> torch.Tensor:
         """``layout: rows``: left-padded prefix rows and right-padded blocks (``models/forest.py``)."""
 
-        def padded_rows(sequences: list[list[int]], left: bool):
+        def padded_rows(
+            sequences: list[list[int]], left: bool
+        ) -> tuple[torch.Tensor, torch.Tensor]:
             width = max(len(sequence) for sequence in sequences)
             ids = torch.zeros((len(sequences), width), dtype=torch.long)
             mask = torch.zeros((len(sequences), width), dtype=torch.long)
@@ -284,7 +293,7 @@ class NativeEngineModel(EngineModel):
             tuple(batch.owners),
         )
         owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
-        _, blocks = self.backbone.forward_forest(
+        _, blocks = cast(models.ForestBackbone, self.backbone).forward_forest(
             prefix_ids, prefix_mask, block_ids, block_mask, owner, shape
         )
         return blocks
@@ -322,14 +331,13 @@ class NativeEngineModel(EngineModel):
         """
         if batch.tower is not None:
             return self._encode_tower(batch)
-        backbone = (
-            self.backbone if batch.branch is None else self.branches[batch.branch]
-        )
-        if not hasattr(backbone, "encode"):
+        stack = self.backbone if batch.branch is None else self.branches[batch.branch]
+        if not hasattr(stack, "encode"):
             return self._encode_decoder(batch)
         reduced = batch.reduced and batch.branch in self.reduced
         if reduced:
-            backbone = self.reduced[batch.branch]
+            stack = self.reduced[batch.branch]
+        backbone = cast(models.EncoderBackbone, stack)
         graphs = (self.reduced_graphs if reduced else self.encoder_graphs).get(
             batch.branch
         )
@@ -379,7 +387,7 @@ class NativeEngineModel(EngineModel):
         Causal attention never reads a later position, so padding changes no
         real token; packed requests come back packed.
         """
-        last = len(self.backbone.layers)
+        last = len(cast(nn.ModuleList, self.backbone.layers))
         if set(batch.layers) - {last}:
             raise ValueError(f"a decoder backbone serves its last layer ({last}) only")
         if batch.lengths is not None:
@@ -388,6 +396,7 @@ class NativeEngineModel(EngineModel):
             input_ids = torch.zeros(mask.shape, dtype=torch.long)
             input_ids[mask] = batch.input_ids.cpu()
         else:
+            assert batch.attention_mask is not None
             input_ids, mask = batch.input_ids, batch.attention_mask.bool()
         with torch.inference_mode(), self.autocast():
             hidden = self.backbone(
@@ -423,7 +432,7 @@ class NativeEngineModel(EngineModel):
         heads = config.get("linear_num_value_heads")
         if self.device.type == "cpu" or not heads:
             return None
-        width = heads * max(
+        width: int = heads * max(
             config["linear_key_head_dim"], config["linear_value_head_dim"]
         )
         return GATED_DELTA_ELEMENTS // width
@@ -444,7 +453,7 @@ class NativeEngineModel(EngineModel):
             + sum(p.numel() * p.element_size() for p in self._parameters())
         )
 
-    def place(self, module: nn.Module) -> nn.Module:
+    def place(self, module: ModuleT) -> ModuleT:
         """A head on this device, its linear layers laid out like the backbone's."""
         module = module.to(self.device)
         if self.linear.variant is not None:
@@ -452,7 +461,7 @@ class NativeEngineModel(EngineModel):
         return module
 
     def close(self) -> None:
-        self.backbone = None  # type: ignore[assignment]
+        self.backbone = None  # type: ignore[assignment]  # close() releases the backbone; a closed model runs nothing
         self.branches = {}
         self.towers = {}
         self.reduced = {}
@@ -615,7 +624,7 @@ def build_on_meta(spec: BackboneSpec) -> nn.Module:
     if hasattr(module, "rotary_emb"):
         module.rotary_emb = type(module.rotary_emb)(spec.config)
     if hasattr(module, "computed_buffers"):
-        module.computed_buffers()
+        cast(models.ComputedBuffers, module).computed_buffers()
     return module
 
 

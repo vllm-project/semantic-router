@@ -395,13 +395,13 @@
     "message": "面向模型与算力的开放、可编程{decisionLayer}。"
   },
   "homepage.hero.primaryCta": {
-    "message": "接入你的 harness"
+    "message": "体验 Playground"
   },
   "homepage.hero.manifesto": {
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
   },
   "homepage.hero.secondaryCta": {
-    "message": "阅读使用文档"
+    "message": "开始使用"
   },
   "homepage.hero.modelBand.aria": {
     "message": "用于可编程推理的模型"
@@ -450,42 +450,6 @@
   },
   "homepage.capabilities.axis.preference": {
     "message": "偏好"
-  },
-  "homepage.capabilities.table.dimension": {
-    "message": "维度"
-  },
-  "homepage.capabilities.table.reality": {
-    "message": "当下的碎片化"
-  },
-  "homepage.capabilities.table.value": {
-    "message": "使用 vLLM SR"
-  },
-  "homepage.capabilities.table.aria": {
-    "message": "碎片化推理与 vLLM Semantic Router 的对比"
-  },
-  "homepage.capabilities.models.reality": {
-    "message": "不同模型擅长不同任务。"
-  },
-  "homepage.capabilities.models.value": {
-    "message": "让模型优势互补。"
-  },
-  "homepage.capabilities.compute.reality": {
-    "message": "GPU 的速度和容量各不相同。"
-  },
-  "homepage.capabilities.compute.value": {
-    "message": "从已配置的后端中选择。"
-  },
-  "homepage.capabilities.location.reality": {
-    "message": "边缘、私有环境与云端。"
-  },
-  "homepage.capabilities.location.value": {
-    "message": "在允许的区域内路由。"
-  },
-  "homepage.capabilities.preference.reality": {
-    "message": "任务不同，优先级也不同。"
-  },
-  "homepage.capabilities.preference.value": {
-    "message": "设定质量、延迟与成本的优先级。"
   },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
@@ -1366,7 +1330,7 @@
     "message": "认领已接受的工作"
   },
   "contributing.process.step1.desc": {
-    "message": "新报告会从 needs-acceptance 进入 accepted，再进入 ready-for-dev；请在实施前发表评论认领 ready-for-dev 工作。"
+    "message": "新报告会从 needs-acceptance 进入 accepted，再进入 ready-for-dev；请在实施前评论 /assign 认领 ready-for-dev 工作。"
   },
   "contributing.process.step1.docs": {
     "message": "社区文档"
@@ -2311,19 +2275,19 @@
     "message": "来源"
   },
   "homepage.finalCta.label": {
-    "message": "开始构建"
+    "message": "由你掌控"
   },
   "homepage.finalCta.title": {
-    "message": "构建超越单一模型的智能。"
+    "message": "让每次请求，都发挥价值。"
   },
   "homepage.finalCta.description": {
-    "message": "接入 Harness，选择模型，设定规则。"
+    "message": "在 Playground 中体验智能路由，再把它接入你自己的技术栈。"
   },
   "homepage.finalCta.playground": {
     "message": "体验 Playground"
   },
   "homepage.finalCta.docs": {
-    "message": "探索使用场景"
+    "message": "自行部署"
   },
   "community.contributors.pageTitle": {
     "message": "贡献者排行榜"
@@ -2684,93 +2648,6 @@
   "homepage.integration.viewDocs": {
     "message": "设定路由策略"
   },
-  "homepage.momProof.architectureAlt": {
-    "message": "vLLM Semantic Router 在异构的闭源与开源模型池之间路由"
-  },
-  "homepage.momProof.architectureCopy": {
-    "message": "模型在限定范围内协作，Harness 继续掌控 Agent 循环。"
-  },
-  "homepage.momProof.architectureLabel": {
-    "message": "路由器侧协作"
-  },
-  "homepage.momProof.architectureTitle": {
-    "message": "一次调用，多模型协作。"
-  },
-  "homepage.momProof.description": {
-    "message": "一个 API，汇聚开放与闭源模型。"
-  },
-  "homepage.momProof.gpqa.alt": {
-    "message": "GPQA-Diamond 深色记分卡，VSR Closed 为 96.0"
-  },
-  "homepage.momProof.gpqa.result": {
-    "message": "96.0，对比 Fugu Ultra 95.5"
-  },
-  "homepage.momProof.gpqa.title": {
-    "message": "GPQA-Diamond"
-  },
-  "homepage.momProof.hle.alt": {
-    "message": "Humanity's Last Exam 深色记分卡，VSR Closed 为 50.0"
-  },
-  "homepage.momProof.hle.result": {
-    "message": "50.0，与 Fugu Ultra 持平"
-  },
-  "homepage.momProof.hle.title": {
-    "message": "Humanity's Last Exam"
-  },
-  "homepage.momProof.label": {
-    "message": "Mixture-of-Models"
-  },
-  "homepage.momProof.livecodebench.alt": {
-    "message": "LiveCodeBench 深色记分卡，VSR Closed 为 92.6"
-  },
-  "homepage.momProof.livecodebench.result": {
-    "message": "92.6，对比 Fugu Ultra 92.0"
-  },
-  "homepage.momProof.livecodebench.title": {
-    "message": "LiveCodeBench"
-  },
-  "homepage.momProof.title": {
-    "message": "让模型携手，变得更强。"
-  },
-  "homepage.sovereignty.cta": {
-    "message": "探索路由策略"
-  },
-  "homepage.sovereignty.description": {
-    "message": "先落实驻留、位置与授权限制，再选择模型。"
-  },
-  "homepage.sovereignty.label": {
-    "message": "数据主权"
-  },
-  "homepage.sovereignty.note": {
-    "message": "没有合规的路由时，请求将被拒绝。"
-  },
-  "homepage.sovereignty.stage.constraints": {
-    "message": "硬约束"
-  },
-  "homepage.sovereignty.stage.constraints.detail": {
-    "message": "驻留 · 本地性 · 授权"
-  },
-  "homepage.sovereignty.stage.eligible": {
-    "message": "合格池"
-  },
-  "homepage.sovereignty.stage.eligible.detail": {
-    "message": "仅限已批准路径"
-  },
-  "homepage.sovereignty.stage.rank": {
-    "message": "排序"
-  },
-  "homepage.sovereignty.stage.rank.detail": {
-    "message": "质量 · 延迟 · 成本"
-  },
-  "homepage.sovereignty.stage.request": {
-    "message": "请求"
-  },
-  "homepage.sovereignty.stage.request.detail": {
-    "message": "身份 + 上下文"
-  },
-  "homepage.sovereignty.title": {
-    "message": "你的数据，你的边界。"
-  },
   "homepage.useCases.integration.extproc": {
     "message": "Envoy ExtProc"
   },
@@ -3029,12 +2906,6 @@
   "homepage.hero.decisionLayer": {
     "message": "决策层"
   },
-  "homepage.alternatives.heading": {
-    "message": "融入你的技术栈。"
-  },
-  "homepage.alternatives.description": {
-    "message": "Harness 负责 Agent 循环与工具执行，Router 负责选择模型与后端。"
-  },
   "homepage.ecosystem.title": {
     "message": "生态与合作"
   },
@@ -3050,25 +2921,352 @@
   "homepage.ecosystem.decisionLayer": {
     "message": "决策层"
   },
+  "homepage.ecosystem.explore": {
+    "message": "探索生态"
+  },
+  "community.ecosystem.title": {
+    "message": "生态与合作"
+  },
+  "community.ecosystem.description": {
+    "message": "面向模型与算力的开放、可编程{decisionLayer}。"
+  },
+  "community.ecosystem.decisionLayer": {
+    "message": "决策层"
+  },
   "homepage.hero.beyond": {
     "message": "超越单一模型。"
   },
-  "homepage.alternatives.decides.semanticRouter": {
-    "message": "每次请求的模型与策略"
+  "homepage.runtimeModes.label": {
+    "message": "应用场景"
   },
-  "homepage.alternatives.decides.llmd": {
-    "message": "已选池内的健康副本"
+  "homepage.runtimeModes.title": {
+    "message": "统一前端，按需组合。"
   },
-  "homepage.alternatives.reads.semanticRouter": {
-    "message": "请求语义与策略"
+  "homepage.runtimeModes.description": {
+    "message": "通过决策引擎路由聊天请求，或直接调用模型智能。两条路径共享前端和可扩展的服务引擎。"
   },
-  "homepage.alternatives.owns.semanticRouter": {
-    "message": "模型选择与协作"
+  "homepage.runtimeModes.router.label": {
+    "message": "Router 模式"
   },
-  "homepage.alternatives.owns.aiGateway": {
-    "message": "提供商接入与流量控制"
+  "homepage.runtimeModes.router.description": {
+    "message": "将 Chat、Messages 和 Responses 请求路由到模型后端，同时保留原生决策能力。"
   },
-  "homepage.alternatives.runs.llmd": {
-    "message": "池内调度器，例如 llm-d"
+  "homepage.runtimeModes.router.endpoint": {
+    "message": "调用 {chatEndpoint} 或 {messagesEndpoint}。"
+  },
+  "homepage.runtimeModes.router.cta": {
+    "message": "运行 Router"
+  },
+  "homepage.runtimeModes.router.gatewayCta": {
+    "message": "比较网关模式"
+  },
+  "homepage.runtimeModes.engine.label": {
+    "message": "Engine 模式"
+  },
+  "homepage.runtimeModes.engine.description": {
+    "message": "启动相同的前端和模型工作进程，并关闭路由。后续逻辑由你的应用掌控。"
+  },
+  "homepage.runtimeModes.engine.cta": {
+    "message": "运行 Engine"
+  },
+  "homepage.runtimeModes.engine.modelsCta": {
+    "message": "了解模型运行时"
+  },
+  "homepage.runtimeModes.router.kicker": {
+    "message": "加入路由策略"
+  },
+  "homepage.runtimeModes.engine.kicker": {
+    "message": "直接使用模型智能"
+  },
+  "homepage.finalCta.playgroundDetail": {
+    "message": "看看请求如何找到合适的模型。"
+  },
+  "homepage.finalCta.docsDetail": {
+    "message": "从安装到发出第一个请求。"
+  },
+  "homepage.sovereigntyAI.label": {
+    "message": "Sovereignty AI"
+  },
+  "homepage.sovereigntyAI.title": {
+    "message": "你的知识，你的掌控。"
+  },
+  "homepage.sovereigntyAI.description": {
+    "message": "让私有领域知识留在本地，用你的 GPU 运行开放模型。对路由策略允许的请求，使用外部前沿模型。"
+  },
+  "homepage.sovereigntyAI.privacy": {
+    "message": "隐私感知路由"
+  },
+  "homepage.sovereigntyAI.localCompute": {
+    "message": "本地 GPU，开放模型。"
+  },
+  "homepage.sovereigntyAI.frontier": {
+    "message": "在你的策略下使用前沿模型。"
+  },
+  "homepage.sovereigntyAI.cta": {
+    "message": "探索路由策略"
+  },
+  "homepage.sovereigntyAI.visualTitle": {
+    "message": "隐私感知路由"
+  },
+  "homepage.sovereigntyAI.policyControl": {
+    "message": "策略掌控路由"
+  },
+  "homepage.sovereigntyAI.incomingRequest": {
+    "message": "传入请求"
+  },
+  "homepage.sovereigntyAI.publicRequest": {
+    "message": "公开资料研究"
+  },
+  "homepage.sovereigntyAI.privateRequest": {
+    "message": "内部领域知识"
+  },
+  "homepage.sovereigntyAI.externalEligible": {
+    "message": "允许外部处理"
+  },
+  "homepage.sovereigntyAI.keepOnPrem": {
+    "message": "保留在本地"
+  },
+  "homepage.sovereigntyAI.gate": {
+    "message": "策略控制"
+  },
+  "homepage.sovereigntyAI.onPremGPU": {
+    "message": "本地 GPU"
+  },
+  "homepage.sovereigntyAI.openModels": {
+    "message": "开放模型"
+  },
+  "homepage.sovereigntyAI.knowledgeOnPrem": {
+    "message": "领域知识留在本地"
+  },
+  "homepage.sovereigntyAI.localAvailable": {
+    "message": "本地模型可用"
+  },
+  "homepage.sovereigntyAI.localSelected": {
+    "message": "私有知识由本地模型处理"
+  },
+  "homepage.sovereigntyAI.externalProvider": {
+    "message": "外部提供商"
+  },
+  "homepage.sovereigntyAI.closedModels": {
+    "message": "前沿闭源模型"
+  },
+  "homepage.sovereigntyAI.externalCondition": {
+    "message": "仅接收策略允许的请求"
+  },
+  "homepage.sovereigntyAI.frontierSelected": {
+    "message": "通过策略检查，选择此路径"
+  },
+  "homepage.sovereigntyAI.privateExcluded": {
+    "message": "私有上下文禁止此路径"
+  },
+  "homepage.sovereigntyAI.eligibilityFirst": {
+    "message": "先检查路由约束"
+  },
+  "homepage.sovereigntyAI.selectionSecond": {
+    "message": "再选择模型"
+  },
+  "homepage.sovereigntyAI.objectives": {
+    "message": "质量 · 延迟 · 成本"
+  },
+  "homepage.sovereigntyAI.diagramDescription": {
+    "message": "动画展示一种配置好的隐私策略：内部领域知识路由到本地 GPU 上的开放模型；公开请求符合策略时，可以使用外部前沿闭源模型。隐私、处理位置和访问约束先于模型选择。"
+  },
+  "homepage.architecture.models.closed": {
+    "message": "闭源模型"
+  },
+  "homepage.architecture.models.open": {
+    "message": "开源模型"
+  },
+  "homepage.architecture.models.copy": {
+    "message": "各有所长，组成统一模型池。"
+  },
+  "homepage.architecture.compute.gpu": {
+    "message": "GPU 节点"
+  },
+  "homepage.architecture.compute.runtime": {
+    "message": "本地运行时"
+  },
+  "homepage.architecture.compute.api": {
+    "message": "模型 API"
+  },
+  "homepage.architecture.compute.copy": {
+    "message": "路由到你配置的后端。"
+  },
+  "homepage.architecture.location.cloud": {
+    "message": "云端"
+  },
+  "homepage.architecture.location.private": {
+    "message": "私有环境"
+  },
+  "homepage.architecture.location.edge": {
+    "message": "边缘"
+  },
+  "homepage.architecture.location.copy": {
+    "message": "由你配置推理运行的位置。"
+  },
+  "homepage.architecture.preference.quality": {
+    "message": "质量"
+  },
+  "homepage.architecture.preference.latency": {
+    "message": "延迟"
+  },
+  "homepage.architecture.preference.cost": {
+    "message": "成本"
+  },
+  "homepage.architecture.preference.copy": {
+    "message": "为每项任务设置优先级。"
+  },
+  "homepage.architecture.center.label": {
+    "message": "可编程决策层"
+  },
+  "homepage.architecture.center.context": {
+    "message": "上下文"
+  },
+  "homepage.architecture.center.policy": {
+    "message": "策略"
+  },
+  "homepage.architecture.center.selection": {
+    "message": "按请求选择"
+  },
+  "homepage.architecture.center.model": {
+    "message": "模型"
+  },
+  "homepage.architecture.center.backend": {
+    "message": "后端"
+  },
+  "homepage.runtimeModes.devChannel": {
+    "message": "开发通道"
+  },
+  "homepage.architecture.center.promise": {
+    "message": "为每个请求带来合适的智能。"
+  },
+  "homepage.sovereigntyAI.externalApproved": {
+    "message": "允许外部处理"
+  },
+  "homepage.sovereigntyAI.gate.privacy": {
+    "message": "隐私"
+  },
+  "homepage.sovereigntyAI.gate.locality": {
+    "message": "部署位置"
+  },
+  "homepage.sovereigntyAI.gate.access": {
+    "message": "访问控制"
+  },
+  "homepage.runtimeModes.engine.endpoint": {
+    "message": "通过 {endpoint} 调用明确指定的已发布模型。"
+  },
+  "homepage.runtimeModes.startupNote": {
+    "message": "在 CLI 启动时选择组件组合。"
+  },
+  "homepage.runtimeModes.diagram.explore": {
+    "message": "探索请求路径"
+  },
+  "homepage.runtimeModes.diagram.chat": {
+    "message": "聊天路由"
+  },
+  "homepage.runtimeModes.diagram.native": {
+    "message": "原生决策"
+  },
+  "homepage.runtimeModes.diagram.direct": {
+    "message": "原生直达路径 · 绕过路由"
+  },
+  "homepage.runtimeModes.diagram.shared": {
+    "message": "共享入口"
+  },
+  "homepage.runtimeModes.diagram.frontend": {
+    "message": "前端"
+  },
+  "homepage.runtimeModes.diagram.frontendDescription": {
+    "message": "监听器、身份验证与 API 契约。"
+  },
+  "homepage.runtimeModes.diagram.chatApi": {
+    "message": "Chat 与 Responses"
+  },
+  "homepage.runtimeModes.diagram.nativeApi": {
+    "message": "System One · 原生决策"
+  },
+  "homepage.runtimeModes.diagram.alias": {
+    "message": "别名：/v1/decisions"
+  },
+  "homepage.runtimeModes.diagram.optional": {
+    "message": "可选的路由层"
+  },
+  "homepage.runtimeModes.diagram.decision": {
+    "message": "决策引擎"
+  },
+  "homepage.runtimeModes.diagram.recipe": {
+    "message": "每个入口解析到独立的配方。"
+  },
+  "homepage.runtimeModes.diagram.signals": {
+    "message": "信号"
+  },
+  "homepage.runtimeModes.diagram.projections": {
+    "message": "投影"
+  },
+  "homepage.runtimeModes.diagram.decisions": {
+    "message": "决策"
+  },
+  "homepage.runtimeModes.diagram.algorithms": {
+    "message": "算法"
+  },
+  "homepage.runtimeModes.diagram.plugins": {
+    "message": "配方插件 · 请求与响应钩子"
+  },
+  "homepage.runtimeModes.diagram.taskLink": {
+    "message": "模型任务"
+  },
+  "homepage.runtimeModes.diagram.execution": {
+    "message": "模型执行"
+  },
+  "homepage.runtimeModes.diagram.serving": {
+    "message": "服务引擎"
+  },
+  "homepage.runtimeModes.diagram.servingDescription": {
+    "message": "先选择模型部署，再分配就绪副本。"
+  },
+  "homepage.runtimeModes.diagram.deployment": {
+    "message": "模型部署"
+  },
+  "homepage.runtimeModes.diagram.replicaOne": {
+    "message": "副本 1"
+  },
+  "homepage.runtimeModes.diagram.replicaTwo": {
+    "message": "副本 2"
+  },
+  "homepage.runtimeModes.diagram.more": {
+    "message": "+ 更多副本"
+  },
+  "homepage.runtimeModes.diagram.scale": {
+    "message": "每个模型独立扩展"
+  },
+  "homepage.runtimeModes.diagram.specialists": {
+    "message": "专用工作进程：分类 · 嵌入 · 重排"
+  },
+  "homepage.runtimeModes.diagram.logical": {
+    "message": "按能力组合，不代表固定的进程边界。"
+  },
+  "homepage.runtimeModes.diagram.backends": {
+    "message": "聊天模型后端"
+  },
+  "homepage.runtimeModes.diagram.generation": {
+    "message": "本地、私有或云端生成"
+  },
+  "homepage.runtimeModes.diagram.ownership": {
+    "message": "托管或外部接入的工作进程"
+  },
+  "homepage.runtimeModes.diagram.workerApis": {
+    "message": "工作进程 API 与公共前端 API 相互独立。"
+  },
+  "homepage.runtimeModes.diagram.chatCaption": {
+    "message": "聊天请求按照配方策略抵达生成后端。信号或插件需要模型能力时，决策引擎会调用模型工作进程。"
+  },
+  "homepage.runtimeModes.diagram.nativeCaption": {
+    "message": "原生决策从前端直达指定模型及就绪副本，绕过路由流水线。Router 和 Engine 模式均可使用。"
+  },
+  "homepage.install.channel": {
+    "message": "开发通道"
+  },
+  "homepage.install.channelDescription": {
+    "message": "与最新文档一致，包含内置模型运行时。"
   }
 }

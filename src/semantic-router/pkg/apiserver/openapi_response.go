@@ -5,6 +5,8 @@ package apiserver
 import (
 	"net/http"
 	"strconv"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // apiRouteOption keeps request and response contracts next to their handler.
@@ -94,7 +96,19 @@ func jsonResponseOrError[T any](status int, description string) apiRouteOption {
 }
 
 func etagResponseHeaders(status int) apiRouteOption {
-	return responseHeaders(status, map[string]OpenAPIHeader{"ETag": {Description: "Current document version; use as If-Match for a conditional mutation or If-None-Match for a schema read.", Schema: OpenAPISchema{Type: "string"}}})
+	return responseHeaders(status, map[string]OpenAPIHeader{"ETag": etagResponseHeader})
+}
+
+var etagResponseHeader = OpenAPIHeader{Description: "Current document version; use as If-Match for a conditional mutation or If-None-Match for a schema read.", Schema: OpenAPISchema{Type: "string"}}
+
+// activeConfigResponseHeaders documents a read of the persisted document that
+// also names the configuration snapshot that serves.
+func activeConfigResponseHeaders(status int) apiRouteOption {
+	return responseHeaders(status, map[string]OpenAPIHeader{
+		"ETag":                   etagResponseHeader,
+		headers.VSRConfigVersion: {Description: "Version of the configuration snapshot that serves; it can trail the persisted document while an update activates or after one is rejected.", Schema: OpenAPISchema{Type: "string"}},
+		headers.VSRConfigHash:    {Description: "SHA-256 of the document the serving configuration snapshot was compiled from.", Schema: OpenAPISchema{Type: "string"}},
+	})
 }
 
 func configMutationResponses() apiRouteOption {

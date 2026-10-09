@@ -27,6 +27,7 @@ def prepare_replacement(tmp_path, monkeypatch):
     changed = yaml.safe_load(old)
     changed["listeners"][0]["port"] = 8899
     candidate = yaml.safe_dump(changed).encode()
+    source.write_bytes(candidate)
     monkeypatch.setattr(
         runtime_serve_config, "build_effective_config_bytes", lambda *args: candidate
     )

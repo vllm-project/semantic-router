@@ -15,8 +15,8 @@ import torch
 
 from ..text.windows import (
     Envelope,
-    InputTooLongError,
     encode,
+    over_budget,
     plan_windows,
     reduce_max,
     truncate,
@@ -78,12 +78,18 @@ class SequenceHead(TaskHead):
         }
 
     def prepare(self, value: Any, options: HeadOptions, identity: str) -> Prepared:
-        encoded = encode(self.tokenizer, self.envelope, text_input(value))
+        encoded = encode(
+            self.tokenizer,
+            self.envelope,
+            text_input(value),
+            options.max_tokens,
+            options.overflow,
+        )
         tokens = encoded.tokens
-        usage = {"tokens": tokens, "processed_tokens": tokens, "truncated": False}
+        usage = encoded.usage()
         if options.overflow == "window":
             if tokens > options.max_tokens:
-                raise InputTooLongError(tokens, options.max_tokens)
+                raise over_budget(tokens, options.max_tokens, options.overflow)
             assert options.window is not None
             size, overlap = options.window
             windows = plan_windows(len(encoded.content), self.envelope, size, overlap)
@@ -93,7 +99,7 @@ class SequenceHead(TaskHead):
         if tokens <= options.max_tokens:
             return Prepared(self.items([encoded.framed()], identity), usage)
         if options.overflow != "truncate":
-            raise InputTooLongError(tokens, options.max_tokens)
+            raise over_budget(tokens, options.max_tokens, options.overflow)
         ids = truncate(encoded, options.max_tokens)
         usage.update(processed_tokens=len(ids), truncated=True)
         return Prepared(self.items([ids], identity), usage)

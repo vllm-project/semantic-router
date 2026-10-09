@@ -21,8 +21,8 @@ config:
     modelCards:
       - name: general-expert
     signals:
-      # use_contrastive defaults to true, so no global.model_catalog.modules
-      # .classifier.preference override is needed to pick this path - only
+      # Authored examples select contrastive scoring when use_contrastive is
+      # omitted, so no classifier.preference mode override is needed - only
       # margin_threshold is set below, to also exercise that gate. Embeddings
       # use the canonical default (Vela-1.0-Encoder-307M), same as reask and
       # complexity.
