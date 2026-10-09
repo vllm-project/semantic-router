@@ -365,7 +365,6 @@ routing:
       param_size: 3b
 global:
   router:
-    auto_model_name: auto
     clear_route_cache: false
     streamed_body:
       enabled: true
@@ -400,9 +399,6 @@ global:
 	}
 	if cfg.DefaultReasoningEffort != "low" {
 		t.Fatalf("expected default reasoning effort to be preserved, got %q", cfg.DefaultReasoningEffort)
-	}
-	if cfg.AutoModelName != "auto" {
-		t.Fatalf("expected auto model name override, got %q", cfg.AutoModelName)
 	}
 	if cfg.ClearRouteCache {
 		t.Fatal("expected clear_route_cache override to be false")
@@ -567,8 +563,8 @@ global:
 	if cfg.PromptGuard.ModelID != DefaultSystemModels().PromptGuard {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
-	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
-		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
+	if cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
+		t.Fatal("expected sparse classifier override to preserve default preference judgment mode")
 	}
 }
 

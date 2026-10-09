@@ -106,8 +106,12 @@ its [PII question](model-runtime/guides/pii.md#on-vela-20).
 
 ## Check it
 
+These worker-level examples run inside an environment containing `vllm-srun`
+(such as the Router image). Classify, embeddings, rerank and bundle are worker
+APIs; the instance frontend publishes System One and decision requests.
+
 ```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Halu --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Halu --device cpu --port 8100
 curl -s localhost:8100/v1/classify -H 'content-type: application/json' -d '{
   "input": [{"context": "The Eiffel Tower is 330 metres tall and stands in Paris.",
              "question": "How tall is the Eiffel Tower?",

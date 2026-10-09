@@ -406,6 +406,9 @@ func checkVela2Item(t *testing.T, endpoint string, classifier *Classifier, cfg *
 // none of its decisions may sit within the margin of its boundary.
 func checkVela2Record(t *testing.T, questions map[string]json.RawMessage, answer map[string]interface{}, record bool) vela2StateAnswer {
 	t.Helper()
+	if err := checkVela2InputCoverage(questions, answer); err != nil {
+		t.Fatal(err)
+	}
 	if record {
 		if near := boundaries(answer, vela2Margin); len(near) > 0 {
 			t.Fatalf("decisions within %g of their boundary would not hold across CPUs: %s", vela2Margin, strings.Join(near, "; "))

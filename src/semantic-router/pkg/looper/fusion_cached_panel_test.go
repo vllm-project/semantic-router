@@ -35,7 +35,7 @@ func cachedTestPanel() []*ModelResponse {
 // It mirrors the random-weight placebo arm in the fusioneval driver, isolating
 // "does the score help" from "does any weighting help".
 func placeboDetector(seed uint64) HallucinationDetectFunc {
-	return func(_ context.Context, contextText, _, answer string) ([]string, float32, error) {
+	return func(_ context.Context, contextText, _, answer string) (GroundingEvidence, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
@@ -44,7 +44,7 @@ func placeboDetector(seed uint64) HallucinationDetectFunc {
 		_, _ = h.Write([]byte{0})
 		_, _ = h.Write([]byte(answer))
 		r := rand.New(rand.NewSource(int64(h.Sum64()))) //nolint:gosec // deterministic test seed, overflow harmless
-		return []string{"placebo"}, float32(r.Float64()), nil
+		return spanEvidence([]string{"placebo"}, float32(r.Float64())), nil
 	}
 }
 
@@ -197,7 +197,7 @@ func TestFusionExecute_CachedPanel_ArmIsolation_BvsC(t *testing.T) {
 	bodyB, judgeB := runCachedPanelArm(t, p, nil, nil)
 
 	// Arm C: weight (grounding on, panel mode, policy defaults to weight).
-	supported := func(_ context.Context, _, _, _ string) ([]string, float32, error) { return nil, 0, nil }
+	supported := func(_ context.Context, _, _, _ string) (GroundingEvidence, error) { return GroundingEvidence{}, nil }
 	bodyC, judgeC := runCachedPanelArm(t, p, &config.FusionGroundingConfig{
 		Enabled:   true,
 		Reference: config.FusionGroundingReferencePanel,
@@ -252,13 +252,13 @@ func TestFusionExecute_CachedPanel_PlaceboMechanism(t *testing.T) {
 // properties: reproducible for a fixed seed, and non-constant across inputs.
 func TestPlaceboDetector_DeterministicAndSpread(t *testing.T) {
 	detect := placeboDetector(42)
-	_, s1, err := detect(context.Background(), "context one", "q", "answer one")
+	s1, err := detect(context.Background(), "context one", "q", "answer one")
 	require.NoError(t, err)
-	_, s2, err := detect(context.Background(), "context one", "q", "answer one")
+	s2, err := detect(context.Background(), "context one", "q", "answer one")
 	require.NoError(t, err)
-	assert.Equal(t, s1, s2, "same inputs must yield identical scores")
+	assert.Equal(t, s1.Probability, s2.Probability, "same inputs must yield identical scores")
 
-	_, s3, err := detect(context.Background(), "context one", "q", "a different answer")
+	s3, err := detect(context.Background(), "context one", "q", "a different answer")
 	require.NoError(t, err)
-	assert.NotEqual(t, s1, s3, "different inputs must yield different scores")
+	assert.NotEqual(t, s1.Probability, s3.Probability, "different inputs must yield different scores")
 }

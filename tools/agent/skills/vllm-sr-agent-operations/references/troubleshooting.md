@@ -26,7 +26,7 @@ Find the symptom, apply its fix, and rerun the step of the
 | `serve` times out | Image pulls, model downloads or GPU kernel compilation took longer than the budget. Read `vllm-sr logs router`, then rerun with `--startup-timeout 3600`. The containers stay up for inspection after a timeout. |
 | `Platform 'amd' selected but missing AMD GPU devices` | `/dev/kfd` or `/dev/dri` isn't visible, so the models fall back to the CPU. Check `ls -l /dev/kfd /dev/dri` and that the ROCm driver is loaded on the host. |
 | NVIDIA: `could not select device driver "" with capabilities: [[gpu]]` | Docker has no NVIDIA runtime. The NVIDIA Container Toolkit is missing; ask the user to install it. |
-| `--platform amd/nvidia needs a Linux host` | macOS runs the Docker target on the CPU only. Serve without `--platform`. |
+| `--platform rocm/cuda needs a Linux host` | macOS runs the Docker target on the CPU only. Serve without `--platform`. |
 
 ## Requests
 

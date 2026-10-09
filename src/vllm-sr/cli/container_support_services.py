@@ -25,6 +25,21 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
+GRAFANA_LIVE_ALLOWED_ORIGINS_ENV = "GF_LIVE_ALLOWED_ORIGINS"
+_GRAFANA_LIVE_ALLOWED_ORIGINS_PLACEHOLDER = "__GF_LIVE_ALLOWED_ORIGINS__"
+
+
+def _grafana_live_allowed_origins() -> str:
+    raw_value = os.getenv(GRAFANA_LIVE_ALLOWED_ORIGINS_ENV, "")
+    if "\r" in raw_value or "\n" in raw_value:
+        raise ValueError(
+            f"{GRAFANA_LIVE_ALLOWED_ORIGINS_ENV} must be a comma-separated "
+            "list on one line"
+        )
+    return ", ".join(
+        origin.strip() for origin in raw_value.split(",") if origin.strip()
+    )
+
 
 def _observability_host_bind_address() -> str:
     """Keep auxiliary dashboards and telemetry private unless explicitly exposed."""
@@ -151,6 +166,7 @@ def container_start_grafana(
     stack_layout: RuntimeStackLayout | None = None,
 ):
     """Start Grafana container for visualization."""
+    live_allowed_origins = _grafana_live_allowed_origins()
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.grafana_container_name
@@ -161,8 +177,16 @@ def container_start_grafana(
     os.makedirs(grafana_dir, exist_ok=True)
 
     template_dir = os.path.join(os.path.dirname(__file__), "templates")
+    grafana_config = os.path.join(grafana_dir, "grafana.serve.ini")
+    _render_template_copy(
+        os.path.join(template_dir, "grafana.serve.ini"),
+        grafana_config,
+        stack_layout,
+        replacements=(
+            (_GRAFANA_LIVE_ALLOWED_ORIGINS_PLACEHOLDER, live_allowed_origins),
+        ),
+    )
     for filename in [
-        "grafana.serve.ini",
         "grafana-datasource.serve.yaml",
         "grafana-datasource-jaeger.serve.yaml",
         "grafana-dashboard.serve.yaml",
@@ -189,7 +213,7 @@ def container_start_grafana(
         "-e",
         f"PROMETHEUS_URL={stack_layout.prometheus_container_name}:9090",
         "-v",
-        f"{os.path.abspath(os.path.join(grafana_dir, 'grafana.serve.ini'))}:/etc/grafana/grafana.ini:ro",
+        f"{os.path.abspath(grafana_config)}:/etc/grafana/grafana.ini:ro",
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'grafana-datasource.serve.yaml'))}:/etc/grafana/provisioning/datasources/datasource.yaml:ro",
         "-v",
