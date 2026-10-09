@@ -1,15 +1,20 @@
 """Deterministic config proposal artifact for issue #3217."""
 
 import json
+import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 import yaml
+from cli import config_proposal
 from cli.config_proposal import ProposalUnsupportedError, propose, supported_intents
 from cli.main import main
 from click.testing import CliRunner
 
 SECRET = "sk-live-secret-value"
+HEADER_SECRET = "opaque-header-credential-5482"
+OPAQUE = "opaque-router-credential-9917"
 LISTENER_PORT = 8899
 ACCESS_KEY = "AKIASECRETVALUE"
 CLIENT_SECRET = "CLIENTSECRETVALUE"
@@ -381,84 +386,22 @@ recipes:
 """
 
 
-def test_recipe_privacy_replaces_only_one_routing_block(tmp_path):
+def test_recipe_privacy_is_withheld_without_writing(tmp_path):
     config_path = _write_config(tmp_path, RECIPE_CONFIG)
 
-    document = propose(
-        config_path,
-        "recipe.privacy",
-        recipe="privacy-lane",
-        repo_root=REPO_ROOT,
-    )
-
-    rendered = json.dumps(document)
-    assert document["applied"] is False
-    assert document["intent"]["recipe"] == "privacy-lane"
-    assert document["provenance"]["diff_source"] == "textual-unified-until-3477"
-    assert document["provenance"]["sources"][0]["kind"] == "recipe"
-    assert (
-        document["provenance"]["sources"][0]["path"]
-        == "config/recipes/privacy/config.yaml"
-    )
-    assert SECRET not in rendered
-    assert URL_SECRET not in rendered
-    assert str(tmp_path) not in rendered
-    assert [check["name"] for check in document["validation"]["checks"]] == [
-        "schema",
-        "canonical_parse",
-        "policy",
-    ]
-
-    candidate = yaml.safe_load(document["candidate_yaml"])
-    privacy = next(
-        item for item in candidate["recipes"] if item["name"] == "privacy-lane"
-    )
-    kept = next(item for item in candidate["recipes"] if item["name"] == "keep-recipe")
-    assert privacy["description"] == "Target recipe"
-    assert any(
-        card["name"] == "local/private-qwen"
-        for card in privacy["routing"]["modelCards"]
-    )
-    assert any(
-        decision["name"] == "local_privacy_policy"
-        for decision in privacy["routing"]["decisions"]
-    )
-    assert "modelCards" in document["diff"]
-    assert kept["description"] == "Leave this recipe alone"
-    assert kept["routing"]["decisions"][0]["name"] == "stay"
-    assert candidate["routing"]["decisions"][0]["name"] == "keep-default"
-    assert candidate["listeners"][0]["port"] == LISTENER_PORT
-    assert candidate["providers"]["models"][1]["name"] == "cheap-model"
-    assert config_path.read_text(encoding="utf-8") == RECIPE_CONFIG
-
-
-def test_missing_recipe_is_unsupported(tmp_path):
-    config_path = _write_config(tmp_path, RECIPE_CONFIG)
-
-    with pytest.raises(ProposalUnsupportedError, match="do not invent recipes"):
+    with pytest.raises(ProposalUnsupportedError, match="is withheld"):
         propose(
             config_path,
             "recipe.privacy",
-            recipe="does-not-exist",
+            recipe="privacy-lane",
             repo_root=REPO_ROOT,
         )
 
     assert config_path.read_text(encoding="utf-8") == RECIPE_CONFIG
+    assert "recipe.privacy" not in supported_intents()
 
 
-def test_recipe_intent_does_not_accept_a_decision_target(tmp_path):
-    config_path = _write_config(tmp_path, RECIPE_CONFIG)
-
-    with pytest.raises(ProposalUnsupportedError, match="unsupported: intent"):
-        propose(
-            config_path,
-            "recipe.privacy",
-            "privacy-lane",
-            repo_root=REPO_ROOT,
-        )
-
-
-def test_cli_prints_invalid_recipe_proposal_without_writing(tmp_path):
+def test_cli_withholds_recipe_privacy_without_writing(tmp_path):
     config_path = _write_config(tmp_path, RECIPE_CONFIG)
 
     result = CliRunner().invoke(
@@ -475,13 +418,139 @@ def test_cli_prints_invalid_recipe_proposal_without_writing(tmp_path):
         ],
     )
 
-    document = json.loads(result.output)
-    assert document["applied"] is False
-    assert "local_privacy_policy" in document["candidate_yaml"]
-    assert SECRET not in result.output
-    assert URL_SECRET not in result.output
+    assert result.exit_code != 0
+    assert "is withheld" in result.output
+    assert "candidate_yaml" not in result.output
     assert config_path.read_text(encoding="utf-8") == RECIPE_CONFIG
-    if document["validation"]["status"] != "valid":
-        assert result.exit_code != 0
-    else:
-        assert result.exit_code == 0
+
+
+def test_relative_base_url_fails_the_provider_projection_check(tmp_path):
+    text = BASE_CONFIG.replace(
+        "endpoint: 127.0.0.1:8000\n          protocol: http",
+        "base_url: api.example.com/v1",
+    )
+    config_path = _write_config(tmp_path, text)
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    assert document["validation"]["status"] == "invalid"
+    policy = next(
+        check for check in document["validation"]["checks"] if check["name"] == "policy"
+    )
+    assert policy["ok"] is False
+    assert any("absolute http(s) URL" in item for item in policy["diagnostics"])
+    assert config_path.read_text(encoding="utf-8") == text
+
+
+def test_opaque_credential_copied_into_description_is_masked(tmp_path):
+    text = BASE_CONFIG.replace(f"api_key: {SECRET}", f"api_key: {OPAQUE}")
+    text = text.replace(
+        "description: Catch-all route",
+        f"description: Notes include {OPAQUE}",
+    )
+    config_path = _write_config(tmp_path, text)
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    rendered = json.dumps(document)
+    assert document["provenance"]["candidate_redacted"] is True
+    assert document["validation"]["status"] == "valid"
+    assert OPAQUE not in rendered
+    assert OPAQUE not in document["candidate_yaml"]
+    assert OPAQUE not in document["diff"]
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    description = candidate["routing"]["decisions"][0]["description"]
+    assert OPAQUE not in description
+    assert "***" in description
+    assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
+
+
+def test_credential_header_values_are_redacted(tmp_path):
+    text = BASE_CONFIG.replace(
+        f"api_key: {SECRET}",
+        (
+            f"api_key: {SECRET}\n"
+            "          extra_headers:\n"
+            f"            Authorization: Basic {HEADER_SECRET}"
+        ),
+    )
+    config_path = _write_config(tmp_path, text)
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    rendered = json.dumps(document)
+    assert HEADER_SECRET not in rendered
+    backend = yaml.safe_load(document["candidate_yaml"])["providers"]["models"][0][
+        "backend_refs"
+    ][0]
+    assert backend["extra_headers"]["Authorization"] == "***"
+
+
+def _stage_installed_assets(destination: Path) -> None:
+    source_root = REPO_ROOT / "config"
+    relative_paths = ("fragments/algorithm/selection/latency-aware.yaml",)
+    for relative in relative_paths:
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_root / relative, target)
+
+
+def test_installed_package_resolves_intents_without_checkout(tmp_path, monkeypatch):
+    assets = tmp_path / "site-packages" / "cli" / "proposal_assets"
+    _stage_installed_assets(assets)
+    fragment = assets / "fragments" / "algorithm" / "selection" / "latency-aware.yaml"
+    fragment.write_text(
+        fragment.read_text(encoding="utf-8").replace(
+            "tpot_percentile: 90", "tpot_percentile: 91"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        config_proposal,
+        "__file__",
+        str(tmp_path / "site-packages" / "cli" / "config_proposal.py"),
+    )
+    monkeypatch.setattr(config_proposal, "files", lambda _package: assets)
+
+    @contextmanager
+    def _as_file(resource):
+        yield Path(resource)
+
+    monkeypatch.setattr(config_proposal, "as_file", _as_file)
+
+    latency = propose(
+        _write_config(tmp_path),
+        "selection.latency-aware",
+        "default-route",
+    )
+    algorithm = yaml.safe_load(latency["candidate_yaml"])["routing"]["decisions"][0][
+        "algorithm"
+    ]
+    assert algorithm["type"] == "latency_aware"
+    assert algorithm["latency_aware"]["tpot_percentile"] == 91
+    assert (
+        latency["provenance"]["sources"][0]["path"]
+        == "config/fragments/algorithm/selection/latency-aware.yaml"
+    )
+
+    with pytest.raises(ProposalUnsupportedError, match="is withheld"):
+        propose(
+            _write_config(tmp_path, RECIPE_CONFIG),
+            "recipe.privacy",
+            recipe="privacy-lane",
+        )

@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 
 import pytest
+from cli.catalog_provider_projection import provider_projection_errors
 from cli.commands.validate import (
     _aggregate_projection_summary_lines,
     _aggregate_signal_summary_lines,
     _projection_summary_lines,
-    _provider_projection_errors,
     _signal_summary_lines,
 )
 from cli.config_contract import PROJECTION_FAMILY_SPECS, SIGNAL_FAMILY_SPECS
@@ -85,7 +85,7 @@ routing: {}
     user_config = parse_user_config(str(config_path), log_summary=False)
     authored_config = user_config.model_dump()
 
-    assert _provider_projection_errors(user_config) == []
+    assert provider_projection_errors(user_config) == []
     assert user_config.model_dump() == authored_config
 
 

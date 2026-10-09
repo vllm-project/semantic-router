@@ -178,6 +178,11 @@ def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
     assert "COPY src/vllm-sr/cli/ /app/cli/" in vllm_sr
     assert "COPY config/recipes/built-in/ /app/cli/model_assets/" in vllm_sr
     assert (
+        "COPY config/fragments/algorithm/selection/latency-aware.yaml "
+        "/app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml"
+    ) in vllm_sr
+    assert "config/recipes/privacy/" not in vllm_sr
+    assert (
         "COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json "
         "/app/cli/config_schema/router-config-v0.3.schema.json"
     ) in vllm_sr

@@ -841,8 +841,6 @@ Examples:
 ```bash
 vllm-sr config propose --config config.yaml \
     --intent selection.latency-aware --decision default-route
-vllm-sr config propose --config config.yaml \
-    --intent recipe.privacy --recipe privacy-lane
 ```
 
 | Parameter | Description |

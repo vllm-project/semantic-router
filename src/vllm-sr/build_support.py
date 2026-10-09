@@ -14,6 +14,7 @@ PACKAGE_SCHEMA = PROJECT_ROOT / "cli" / "config_schema" / SCHEMA_FILENAME
 REPOSITORY_SCHEMA = (
     PROJECT_ROOT.parent / "semantic-router" / "pkg" / "configschema" / SCHEMA_FILENAME
 )
+PROPOSAL_ASSET_PATHS = ("fragments/algorithm/selection/latency-aware.yaml",)
 
 
 def schema_source() -> Path:
@@ -24,6 +25,27 @@ def schema_source() -> Path:
     raise FileNotFoundError("canonical Router config schema is unavailable")
 
 
+def proposal_asset_source(relative: str) -> Path:
+    """Return one proposal asset from the repo, or from a staged sdist copy."""
+
+    repository = PROJECT_ROOT.parents[1] / "config" / relative
+    packaged = PROJECT_ROOT / "cli" / "proposal_assets" / relative
+    if repository.is_file():
+        return repository
+    if packaged.is_file():
+        return packaged
+    raise FileNotFoundError(f"proposal asset {relative} is unavailable")
+
+
+def stage_proposal_assets(destination_root: Path) -> None:
+    """Copy the latency-aware fragment into a CLI package tree."""
+
+    for relative in PROPOSAL_ASSET_PATHS:
+        destination = destination_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        copy2(proposal_asset_source(relative), destination)
+
+
 class BuildPy(build_py):
     """Copy the single source artifact into build output, never the worktree."""
 
@@ -32,13 +54,21 @@ class BuildPy(build_py):
         destination = Path(self.build_lib) / "cli" / "config_schema" / SCHEMA_FILENAME
         destination.parent.mkdir(parents=True, exist_ok=True)
         copy2(schema_source(), destination)
+        stage_proposal_assets(Path(self.build_lib) / "cli" / "proposal_assets")
 
     def get_outputs(self, include_bytecode: bool = True) -> list[str]:
         outputs = super().get_outputs(include_bytecode=include_bytecode)
         schema_output = str(
             Path(self.build_lib) / "cli" / "config_schema" / SCHEMA_FILENAME
         )
-        return outputs if schema_output in outputs else [*outputs, schema_output]
+        if schema_output not in outputs:
+            outputs = [*outputs, schema_output]
+        asset_root = Path(self.build_lib) / "cli" / "proposal_assets"
+        for relative in PROPOSAL_ASSET_PATHS:
+            asset_output = str(asset_root / relative)
+            if asset_output not in outputs:
+                outputs = [*outputs, asset_output]
+        return outputs
 
 
 class SDist(sdist):
@@ -49,3 +79,4 @@ class SDist(sdist):
         destination = Path(base_dir) / "cli" / "config_schema" / SCHEMA_FILENAME
         destination.parent.mkdir(parents=True, exist_ok=True)
         copy2(schema_source(), destination)
+        stage_proposal_assets(Path(base_dir) / "cli" / "proposal_assets")

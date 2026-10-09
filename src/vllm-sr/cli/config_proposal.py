@@ -13,12 +13,16 @@ import hashlib
 import json
 import re
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from cli.bootstrap import SETUP_MODE_KEY, validate_setup_metadata
+from cli.catalog_provider_projection import provider_projection_errors
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.model_catalog_validation import (
@@ -26,7 +30,6 @@ from cli.model_catalog_validation import (
     redact_embedded_secret_literals,
 )
 from cli.parser import ConfigParseError, parse_user_config
-from cli.recipe_directory import RecipeDirectoryError, resolve_active_recipe_directory
 from cli.terminal import echo
 from cli.url_display import redact_url
 from cli.validator import validate_user_config
@@ -37,30 +40,35 @@ GENERATOR = "vllm-sr-config-proposal"
 # Textual until the canonical side-effect-free config diff API replaces it.
 DIFF_SOURCE = "textual-unified-until-3477"
 
-# Closed catalog. Each intent points at one maintained fragment or recipe
-# package. Adding an intent does not invent Router fields.
+# Closed catalog. Each intent points at one maintained fragment. Adding an
+# intent does not invent Router fields.
 _INTENTS: dict[str, dict[str, str]] = {
     "selection.latency-aware": {
         "kind": "fragment",
-        "fragment": "config/fragments/algorithm/selection/latency-aware.yaml",
+        "fragment": "fragments/algorithm/selection/latency-aware.yaml",
+        "source": "config/fragments/algorithm/selection/latency-aware.yaml",
         "summary": (
             "Attach the maintained latency-aware selection algorithm to one "
             "existing decision."
         ),
     },
-    "recipe.privacy": {
-        "kind": "recipe",
-        "package": "config/recipes/privacy",
-        "summary": (
-            "Replace one existing recipe routing profile with the maintained "
-            "privacy recipe."
-        ),
-    },
+}
+
+# The privacy package keeps model cards and provider models on the document
+# surfaces that own them. recipes[].routing cannot take that block directly.
+_WITHHELD_INTENTS = {
+    "recipe.privacy": (
+        "unsupported: intent 'recipe.privacy' is withheld until a mapper "
+        "places the privacy package's model cards and provider models on "
+        "the document surfaces that own them. recipes[].routing cannot "
+        "take that routing block directly."
+    ),
 }
 
 # Same credential key names as cli.recipe_package. Callers lowercase first.
 _CREDENTIAL_KEY_PATTERN = re.compile(
-    r"(?:api_?key|access_?key|client_?secret|password|secret|token|private_?key)$"
+    r"(?:api_?key|access_?key|access_?token|authorization|proxy_?authorization|"
+    r"cookie|client_?secret|password|secret|token|private_?key|x_?api_?key)$"
 )
 _CREDENTIAL_COLLECTION_KEYS = frozenset({"api_keys"})
 _URL_IN_TEXT = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"']+", re.IGNORECASE)
@@ -112,6 +120,10 @@ def propose(
             f"{CANONICAL_VERSION}"
         )
 
+    withheld = _WITHHELD_INTENTS.get(intent)
+    if withheld is not None:
+        raise ProposalUnsupportedError(withheld)
+
     spec = _INTENTS.get(intent)
     if spec is None:
         supported = ", ".join(supported_intents())
@@ -121,57 +133,39 @@ def propose(
         )
 
     candidate = copy.deepcopy(loaded)
-    if spec["kind"] == "fragment":
-        if recipe is not None or not decision:
-            raise ProposalUnsupportedError(
-                f"unsupported: intent {intent!r} changes one existing "
-                "routing decision"
+    with _intent_assets(root) as assets:
+        if spec["kind"] == "fragment":
+            if recipe is not None or not decision:
+                raise ProposalUnsupportedError(
+                    f"unsupported: intent {intent!r} changes one existing "
+                    "routing decision"
+                )
+            fragment_rel = spec["fragment"]
+            fragment_path = _maintained_fragment(assets, fragment_rel)
+            source_raw = fragment_path.read_bytes()
+            fragment = _load_yaml(source_raw, label=spec["source"])
+            _attach_algorithm(
+                candidate, decision, _fragment_algorithm(fragment, spec["source"])
             )
-        fragment_rel = spec["fragment"]
-        fragment_path = _maintained_fragment(root, fragment_rel)
-        source_raw = fragment_path.read_bytes()
-        fragment = _load_yaml(source_raw, label=fragment_rel)
-        _attach_algorithm(
-            candidate, decision, _fragment_algorithm(fragment, fragment_rel)
-        )
-        source_record = {
-            "kind": "fragment",
-            "path": fragment_rel,
-            "sha256": _sha256(source_raw),
-        }
-        intent_record = {
-            "id": intent,
-            "summary": spec["summary"],
-            "decision": decision,
-        }
-    elif spec["kind"] == "recipe":
-        if decision is not None or not recipe:
+            source_record = {
+                "kind": "fragment",
+                "path": spec["source"],
+                "sha256": _sha256(source_raw),
+            }
+            intent_record = {
+                "id": intent,
+                "summary": spec["summary"],
+                "decision": decision,
+            }
+        else:
             raise ProposalUnsupportedError(
-                f"unsupported: intent {intent!r} changes one existing "
-                "recipe routing block"
+                f"unsupported: intent {intent!r} has no maintained applier"
             )
-        profile, source_raw, source_path = _recipe_routing_profile(
-            root, spec["package"]
-        )
-        _replace_recipe_routing(candidate, recipe, profile)
-        source_record = {
-            "kind": "recipe",
-            "path": source_path,
-            "sha256": _sha256(source_raw),
-        }
-        intent_record = {
-            "id": intent,
-            "summary": spec["summary"],
-            "recipe": recipe,
-        }
-    else:
-        raise ProposalUnsupportedError(
-            f"unsupported: intent {intent!r} has no maintained applier"
-        )
 
     secrets = _secret_literals(loaded) | _secret_literals(candidate)
-    before_yaml = _dump_yaml(_redact(loaded))
-    after_yaml = _dump_yaml(_redact(candidate))
+    before_yaml = _mask_known_literals(_dump_yaml(_redact(loaded)), secrets)
+    after_yaml = _mask_known_literals(_dump_yaml(_redact(candidate)), secrets)
+    diff = _mask_known_literals(_unified_diff(before_yaml, after_yaml), secrets)
     validation = _validation_receipt(candidate, secrets)
 
     return {
@@ -190,7 +184,7 @@ def propose(
             "candidate_redacted": True,
         },
         "candidate_yaml": after_yaml,
-        "diff": _unified_diff(before_yaml, after_yaml),
+        "diff": diff,
         "validation": validation,
     }
 
@@ -208,15 +202,54 @@ def propose_config_command(
     return document["validation"]["status"] == "valid"
 
 
-def _repo_root(repo_root: Path | None) -> Path:
+def _repo_root(repo_root: Path | None) -> Path | None:
+    """Return a source checkout when this module lives in one."""
+
     if repo_root is not None:
         return repo_root
-    return Path(__file__).resolve().parents[3]
+    module_directory = Path(__file__).resolve().parent
+    for repository_root in module_directory.parents:
+        source_package = repository_root / "src" / "vllm-sr" / "cli"
+        try:
+            if source_package.resolve() == module_directory:
+                return repository_root
+        except OSError:
+            continue
+    return None
 
 
-def _public_path(path: Path, repo_root: Path) -> str:
+@contextmanager
+def _intent_assets(repo_root: Path | None) -> Iterator[Path]:
+    """Yield the directory that contains the latency-aware fragment.
+
+    A source checkout reads ``config/`` in the repository. An installed CLI
+    reads the same tree staged into ``cli.proposal_assets``.
+    """
+
+    if repo_root is not None:
+        yield repo_root / "config"
+        return
+    packaged = files("cli.proposal_assets")
+    marker = packaged.joinpath(
+        "fragments", "algorithm", "selection", "latency-aware.yaml"
+    )
+    try:
+        packaged_ready = marker.is_file()
+    except OSError:
+        packaged_ready = False
+    if not packaged_ready:
+        raise ProposalUnsupportedError(
+            "unsupported: proposal assets are not installed with the CLI"
+        )
+    with as_file(packaged) as path:
+        yield Path(path)
+
+
+def _public_path(path: Path, repo_root: Path | None) -> str:
     """Return a repo-relative path, or only the file name outside the repo."""
 
+    if repo_root is None:
+        return path.name
     try:
         return path.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
@@ -240,9 +273,9 @@ def _load_yaml(raw: bytes, *, label: str) -> Any:
         ) from exc
 
 
-def _maintained_fragment(repo_root: Path, relative: str) -> Path:
-    fragments_root = (repo_root / "config" / "fragments").resolve()
-    path = (repo_root / relative).resolve()
+def _maintained_fragment(assets_root: Path, relative: str) -> Path:
+    fragments_root = (assets_root / "fragments").resolve()
+    path = (assets_root / relative).resolve()
     if not path.is_relative_to(fragments_root) or not path.is_file():
         raise ProposalUnsupportedError(
             f"unsupported: fragment {relative!r} is not a maintained config fragment"
@@ -287,61 +320,12 @@ def _attach_algorithm(
     matches[0]["algorithm"] = copy.deepcopy(algorithm)
 
 
-def _recipe_routing_profile(
-    repo_root: Path, package_rel: str
-) -> tuple[dict[str, Any], bytes, str]:
-    recipes_root = (repo_root / "config" / "recipes").resolve()
-    package_dir = (repo_root / package_rel).resolve()
-    config_file = package_dir / "config.yaml"
-    if (
-        not package_dir.is_relative_to(recipes_root)
-        or package_dir == recipes_root
-        or not config_file.is_file()
-    ):
-        raise ProposalUnsupportedError(
-            f"unsupported: {package_rel} is not a maintained recipe package"
-        )
-    try:
-        directory = resolve_active_recipe_directory(config_file)
-    except RecipeDirectoryError as exc:
-        raise ProposalUnsupportedError(
-            f"unsupported: {package_rel} is not a maintained recipe package"
-        ) from exc
-    if directory is None:
-        raise ProposalUnsupportedError(
-            f"unsupported: {package_rel} is not a maintained recipe package"
-        )
-    raw = directory.config.read_bytes()
-    source_path = f"{package_rel}/config.yaml"
-    document = _load_yaml(raw, label=source_path)
-    routing = document.get("routing") if isinstance(document, dict) else None
-    if not isinstance(routing, dict) or not routing:
-        raise ProposalUnsupportedError(
-            "unsupported: maintained recipe package has no routing profile"
-        )
-    return copy.deepcopy(routing), raw, source_path
+def _mask_known_literals(text: str, secrets: set[str]) -> str:
+    """Replace credential values copied out of secret fields."""
 
-
-def _replace_recipe_routing(
-    candidate: dict[str, Any], recipe_name: str, routing: dict[str, Any]
-) -> None:
-    recipes = candidate.get("recipes")
-    if not isinstance(recipes, list):
-        raise ProposalUnsupportedError(
-            "unsupported: canonical config has no recipes list, "
-            "and proposals do not invent recipes"
-        )
-    matches = [
-        item
-        for item in recipes
-        if isinstance(item, dict) and item.get("name") == recipe_name
-    ]
-    if len(matches) != 1:
-        raise ProposalUnsupportedError(
-            f"unsupported: recipe {recipe_name!r} is not in the canonical "
-            "config, and proposals do not invent recipes"
-        )
-    matches[0]["routing"] = copy.deepcopy(routing)
+    for secret in sorted((item for item in secrets if item), key=len, reverse=True):
+        text = text.replace(secret, "***")
+    return text
 
 
 def _dump_yaml(data: Any) -> str:
@@ -480,7 +464,9 @@ def _validation_receipt(candidate: dict[str, Any], secrets: set[str]) -> dict[st
             checks.append(_skipped_check("policy", "canonical parsing failed", secrets))
             return {"status": "invalid", "checks": checks}
         checks.append({"name": "canonical_parse", "ok": True, "diagnostics": []})
-        policy_errors = validate_user_config(parsed, log_summary=False)
+        policy_errors = list(validate_user_config(parsed, log_summary=False))
+        if not policy_errors:
+            policy_errors.extend(provider_projection_errors(parsed))
         checks.append(
             {
                 "name": "policy",

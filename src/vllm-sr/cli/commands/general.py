@@ -201,8 +201,6 @@ def config_propose(
     Examples:
         vllm-sr config propose --config config.yaml \\
             --intent selection.latency-aware --decision default-route
-        vllm-sr config propose --config config.yaml \\
-            --intent recipe.privacy --recipe privacy-lane
     """
 
     if not propose_config_command(config_path, intent, decision, recipe):
