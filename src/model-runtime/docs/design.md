@@ -333,7 +333,10 @@ Decision 2.0 GPU policy), and dynamic int8 on CPU where that measures faster
 than FP32. `max_speed` requests run the copy. A family consents to a copy
 (`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records show at
 least 99% label agreement with `exact` (embeddings: cosine of at least
-0.999); faster alone is not enough. Golden readiness always runs `exact`;
+0.999); faster alone is not enough. Approximate kernels follow the same rule
+per question type (`DtypePolicy.approximate_kernels`): Decision 2.0 consents
+to CUDA's approximate fused kernels, and Vela 2.0 does not, because they
+change 7% of its span answers. Golden readiness always runs `exact`;
 each family records the accuracy (label agreement, max |Δp| or embedding
 cosine against `exact`) and the latency of its reduced path. `vllm-sr config
 migrate` maps the legacy `precision: fp16` to `max_speed`.
@@ -883,7 +886,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; fused kernels only after a bit-exactness record |
+| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or

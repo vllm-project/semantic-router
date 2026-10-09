@@ -437,7 +437,7 @@ See [Container connectivity](./container-connectivity) for end-to-end checks.
 
 ## A classifier or embedding model cannot load
 
-Every model runs in the [model runtime](model-runtime/overview.md). When a
+Every model runs in the [model runtime](../model-runtime/overview.md). When a
 model cannot load, its feature reports unknown results and the runtime records
 why. Check the router's `vsr_model_runtime_ready{deployment="..."}` metric and
 the router log, or ask a runtime you run yourself:
@@ -449,7 +449,7 @@ curl -s localhost:8100/v1/models
 Each model's `status` and `reason` say what failed: a damaged download, a
 missing `revision`, a private repository without a token, a device that does
 not exist, or a model too large for its device.
-[Troubleshooting and FAQ](model-runtime/troubleshooting.md) lists each
+[Troubleshooting and FAQ](../model-runtime/troubleshooting.md) lists each
 reason and the fix.
 
 ## Container image has no matching platform

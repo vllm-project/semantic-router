@@ -131,7 +131,7 @@ public deployments. `vllm-sr serve` writes the value into the generated
 ## When to move to Kubernetes
 
 Docker does not provide multi-node scheduling, rolling deployment control, or
-cluster-level recovery. Move to a Kubernetes path when you need replicas,
+cluster-level recovery. Move to a Kubernetes path when you need multi-node Router replicas,
 declarative rollout, gateway integration, or platform-managed model discovery.
 The same canonical configuration can be deployed with the CLI and Helm or
 managed through the Semantic Router Operator.

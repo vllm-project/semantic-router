@@ -102,7 +102,9 @@ class NativeEngineModel(EngineModel):
             }
         )
         self.kernels = accelerator.kernels(device_info)
-        self.kernels.allow_approximate = not options.exact_kernels_only
+        self.kernels.allow_approximate = (
+            not options.exact_kernels_only and spec.dtype.approximate_kernels
+        )
         self.kernels.use_variants(spec.kernel_variants)
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
