@@ -229,11 +229,12 @@ range. A CPU runtime's command line also shows its planned `--threads`.
 Repeat for a runtime started later, and compare latency on the same inputs
 with the same cache settings and concurrency.
 
-This bounds the CPU range, but does not repair a missed generation plan:
-`deployment_outside_generation_plan` means a late worker was planned by
-itself and may get the full thread budget again. Capture the deployment name
-from that event when reporting it; planning all used deployments up front
-is separate work tracked by #4756.
+Implicit embedding models used by routing or global services are included in
+the initial generation plan, so they share the CPU thread budget with other
+models. If `deployment_outside_generation_plan` still appears, a deployment
+was missed and its late worker may get the full budget again. Capture its
+name when reporting the event; the inherited CPU range still bounds where
+that worker can run.
 
 ## Attach to a runtime you run
 

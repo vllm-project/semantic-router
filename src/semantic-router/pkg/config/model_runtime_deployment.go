@@ -117,6 +117,9 @@ func modelRuntimeTaskDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeploym
 	for name, deployment := range implicitTaskDeploymentsInUse(cfg, plan) {
 		used[name] = deployment
 	}
+	for name, deployment := range implicitEmbeddingDeploymentsInUse(cfg, plan) {
+		used[name] = deployment
+	}
 	return used
 }
 
