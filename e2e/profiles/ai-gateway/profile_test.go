@@ -213,7 +213,7 @@ func TestGuardProfileMatchesCanonicalPublishedOperatingPoint(t *testing.T) {
 	guard := profileMap(t, profileMap(t, catalog, "modules"), "prompt_guard")
 	want, ok := guard["threshold"]
 	if !ok {
-		want = decisionModelGuardThreshold(t, profileMap(t, catalog, "system")["decision_model"])
+		want = decisionModelGuardThreshold(t, catalog)
 	}
 	profile := profileMap(t, profileMap(t, profileConfig(t), "routing"), "signals")
 	signal := profileNamed(t, profile["jailbreak"], "jailbreak_standard")
@@ -224,10 +224,13 @@ func TestGuardProfileMatchesCanonicalPublishedOperatingPoint(t *testing.T) {
 
 // decisionModelGuardThreshold is the prompt guard threshold published for a
 // Vela 2.0 decision model, which a guard that sets no threshold runs at.
-func decisionModelGuardThreshold(t *testing.T, model any) any {
+func decisionModelGuardThreshold(t *testing.T, catalog map[string]any) any {
 	t.Helper()
-	name, _ := model.(string)
-	size, ok := strings.CutPrefix(name, "Vela-2.0-")
+	binding := profileMap(t, profileMap(t, catalog, "system"), "decision_model")
+	deployment, _ := binding["deployment"].(string)
+	model := profileMap(t, profileMap(t, catalog, "deployments"), deployment)
+	name, _ := model["artifact"].(string)
+	size, ok := strings.CutPrefix(name, "vllm-sr/Vela-2.0-")
 	if !ok {
 		t.Fatalf("canonical decision_model %v is not a Vela 2.0 size", model)
 	}

@@ -123,6 +123,12 @@ vllm-sr config validate --config legacy.migrated.yaml
 vllm-sr serve --config legacy.migrated.yaml
 ```
 
+For an existing local Docker stack, the CLI may report that it preserved the
+saved active configuration. Review and merge any Dashboard edits you need into
+`legacy.migrated.yaml`, then rerun with `--replace-active-config` to apply that
+file. If a Recipe package is active, change or deactivate it through the Recipe
+workflow first.
+
 On the first start the runtime downloads the models it does not have yet.
 [Run it with the router](./deploy.md#check-what-is-running) shows how to see
 when every deployment is ready.

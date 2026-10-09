@@ -7,6 +7,11 @@ status: Implemented
 
 > **Status:** Implemented in [#4628](https://github.com/vllm-project/semantic-router/pull/4628) - **Created:** 2026-10-06 -
 > **Tracking issue:** [#4623](https://github.com/vllm-project/semantic-router/issues/4623)
+>
+> **Lifecycle update:** The original Engine CLI examples below describe the
+> earlier implementation. Current Engine and Router modes share one frontend
+> and model pool. Use `vllm-sr serve ARTIFACT --engine`; see
+> [the current Quickstart](../model-runtime/quickstart.md).
 
 ## Summary
 

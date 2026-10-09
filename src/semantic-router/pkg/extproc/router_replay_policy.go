@@ -1,54 +1,58 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+)
 
-// replayConfigForRequest resolves the standing policy independently of a
-// matched decision. Shared runtime services retain their existing settings.
-func (r *OpenAIRouter) replayConfigForRequest(ctx *RequestContext) *config.RouterConfig {
-	if r == nil || r.Config == nil {
-		return nil
-	}
-	if ctx != nil {
-		if recipe := ctx.Routing.SelectedRecipe(); recipe != nil {
-			return r.Config.ConfigForRecipe(recipe)
-		}
-		if ctx.Routing.IsPassthrough() {
-			// A concrete backend request does not select the default recipe.
-			unscoped := *r.Config
-			unscoped.DataPolicy = nil
-			return &unscoped
-		}
-	}
-	return r.Config
-}
-
-func (r *OpenAIRouter) replayAllowedForRequest(ctx *RequestContext) bool {
-	if r == nil {
+// personalDataReplayAllowed concerns only the exact prompt, not the whole
+// body, tool arguments, history or a response generated later.
+func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
+	if ctx == nil {
 		return false
 	}
-	if ctx != nil {
-		if recipe := ctx.Routing.SelectedRecipe(); recipe != nil {
-			return recipe.Profile.DataPolicy.ReplayAllowed()
-		}
-		if ctx.Routing.IsPassthrough() {
+	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
+		return true
+	}
+	prompt, _ := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	if prompt == "" {
+		return false
+	}
+	for _, evidence := range ctx.PIIEvidence {
+		if evidence.CoversClean("request", prompt) {
 			return true
 		}
 	}
-	return r.Config == nil || r.Config.DataPolicy.ReplayAllowed()
+	return false
 }
 
-func (r *OpenAIRouter) effectiveReplayConfigForRequest(ctx *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
-	if !r.replayAllowedForRequest(ctx) {
-		return nil
+// No existing response-stage task scans personal data. A request-stage clean
+// result never grants access to generated text; do not add inference for Replay.
+func replayResponseContentAllowed(ctx *RequestContext) bool {
+	return ctx != nil && ctx.RouterReplayPluginConfig.CapturesPersonalData()
+}
+
+func applyReplayPrivacyEvidence(ctx *RequestContext, record *routerreplay.RoutingRecord, promptAllowed bool) {
+	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
+		return
 	}
-	return r.replayConfigForRequest(ctx).EffectiveRouterReplayConfig(decision)
+	// Raw bodies contain arbitrary metadata and structured fields outside the
+	// text task input. Tools and response excerpts have no matching evidence.
+	record.RequestBody, record.RequestBodyTruncated = "", false
+	record.ResponseBody, record.ResponseBodyTruncated = "", false
+	record.ToolDefinitions, record.ToolDefinitionsTruncated = "", false
+	record.ToolTrace = nil
+	if !promptAllowed {
+		record.Prompt, record.PromptTruncated = "", false
+	}
+}
+
+func (r *OpenAIRouter) effectiveReplayConfigForRequest(_ *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
+	return r.Config.EffectiveRouterReplayConfig(decision)
 }
 
 // Startup has recipe-qualified decision references but no request context.
 // Resolve each profile before considering a shared or isolated store.
 func replayConfigForDecisionRef(cfg *config.RouterConfig, ref config.RoutingDecisionRef) *config.RouterReplayPluginConfig {
-	if recipe, ok := cfg.RecipeByName(ref.Recipe); ok {
-		cfg = cfg.ConfigForRecipe(recipe)
-	}
 	return cfg.EffectiveRouterReplayConfig(ref.Decision)
 }

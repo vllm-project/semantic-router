@@ -146,6 +146,13 @@ def generate_envoy_config_from_user_config(
                     "mode, and --gateway extproc does not terminate TLS; serve "
                     "with --gateway standalone or remove tls from the listener"
                 )
+            if getattr(listener, "models", None):
+                raise ValueError(
+                    f"listener '{listener.name}': models is enforced in "
+                    "standalone mode, and the --gateway extproc Envoy listener "
+                    "does not enforce it; serve with --gateway standalone or "
+                    "remove models from the listener"
+                )
             listeners.append(
                 {
                     "name": listener.name,

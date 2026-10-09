@@ -7,7 +7,7 @@ one final answer. The recipe-owned `analysis_mode` chooses whether the judge
 uses a separate structured analysis call, combines analysis and synthesis in
 one call, or synthesizes directly. The compatibility default is `separate`.
 
-The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
+Expose `fusion` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=fusion` activates the algorithm. Use a dedicated recipe when this entrypoint should run only fusion policies.
 
 ## Key Advantages
 
@@ -166,61 +166,48 @@ algorithm:
     judge_prompt_version: fusion-v1
 ```
 
-Automatic routing aliases:
+Default routing uses `vllm-sr/auto` when no entrypoint explicitly targets
+`default`. To replace that public name, declare all desired aliases:
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - model_names: [router/default, MoM]
+    recipe: default
 ```
 
-`vllm-sr/auto` evaluates all decisions. If the matched decision uses `algorithm.type=fusion`, the request enters Fusion; otherwise it follows the matched non-Fusion route.
+Only these explicit aliases resolve to `default`; `MoM` has no special meaning.
+The matched decision selects Fusion when its algorithm is `fusion`.
 
-Direct Fusion slug registration:
+For a dedicated Fusion surface, map its public names to an isolated recipe:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      fusion:
-        model_names:
-          - vllm-sr/fusion
+entrypoints:
+  - model_names: [vllm-sr/fusion, openrouter/fusion]
+    recipe: fusion
+recipes:
+  - name: fusion
+    routing:
+      decisions:
+        - name: panel
+          priority: 1
+          rules: {operator: AND, conditions: []}
+          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+          algorithm:
+            type: fusion
+            fusion:
+              model: qwen3-32b
+              analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
-`global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
-
-Give every alias a name that no model uses. An alias that is also a model's name captures that model's requests: they evaluate only Fusion decisions, and one that matches none fails with [`no_route`](../../../api/router.md#routing-errors). The Router and `vllm-sr config validate` warn about such an alias.
-
-The judge model, analysis panel, analysis mode, sampling settings, concurrency,
-token and time budgets, quorum, templates, prompt version, trace visibility,
-error policy, and grounding policy belong under
-`routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only
-Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a
-normal single-model route. The public HTTP path executes the selected recipe
-policy and does not expose Fusion execution overrides through
-`plugins[].id = fusion`.
-
-To expose an OpenRouter-compatible alias, opt in explicitly:
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-          - openrouter/fusion
-```
+Public entrypoint names must not collide with backend models. Recipe signals,
+judge, panel, concurrency, budgets, templates and error policy remain inside
+that recipe. Shared orchestration limits such as `max_response_bytes_mb`
+belong under `global.integrations.looper`; it does not declare public names.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion decision matching |
 | `model` | string | first analysis model | Recipe-owned judge/calling model used for analysis and final synthesis |
 | `analysis_models` | list[string] | `modelRefs` | Recipe-owned panel models for parallel analysis |
 | `analysis_mode` | string | `separate` | Recipe-owned judge execution: `separate`, `one_call`, or `none` |

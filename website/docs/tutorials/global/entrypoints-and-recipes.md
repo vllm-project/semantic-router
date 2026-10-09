@@ -34,10 +34,13 @@ When the request `model` matches an `entrypoints[].model_names` value, the
 Router evaluates only the mapped recipe. The virtual model name is then
 replaced by the backend selected from that recipe.
 
-The top-level `routing` block remains the `default` recipe. Requests for
-`vllm-sr/auto`, `auto`, or another configured auto alias use that default
-policy. If the selected recipe has no matching decision, the Router uses
-`providers.defaults.model`.
+The top-level `routing` block is the `default` recipe. It is published as
+`vllm-sr/auto` unless you declare an entrypoint for `recipe: default`.
+An explicit default entrypoint replaces that built-in name; include
+`vllm-sr/auto` in its `model_names` if clients should keep using it. Names such
+as `auto` or `vllm-sr/flow` work only when explicitly declared. The selected
+recipe's decisions choose its algorithms. If no decision matches, the Router
+uses `providers.defaults.model`.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for
@@ -90,6 +93,19 @@ recipes:
           modelRefs:
             - model: accurate-model
 ```
+
+Shared strategy and fallback defaults live in `global.router`. Top-level
+`routing` is the default recipe, not a parent of named recipes. Each
+`recipes[].routing` resolves missing strategy and fallback fields directly from
+the global defaults, then a decision may override its own effective fallback.
+A sparse override such as `fallback: {enabled: false}` changes only that field;
+it does not discard shared timeout or retry settings. Direct and passthrough
+requests use the global fallback policy. The runtime default strategy is
+`priority`.
+
+Replay follows a separate service contract: shared capture defaults live in
+`global.services.router_replay`, with explicit overrides in each decision's
+`router_replay` plugin. Recipes do not add another Replay inheritance layer.
 
 Clients can discover entrypoint names through `/v1/models`. Routed responses
 include `x-vsr-selected-recipe`, so operators can confirm which policy handled
@@ -159,7 +175,7 @@ By default, the Router skips a candidate whose declared context window is
 smaller than the estimated input, or whose declared capabilities lack a
 required input such as images. It does not check output limits, so a request
 for 16,384 output tokens can still reach `local-coder`. With
-[`candidate_requirements`](../../installation/configuration#recipe-wide-candidate-and-replay-policies)
+[`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements)
 on the recipe, the Router also checks output limits and tool, reasoning, and
 structured-output declarations before scoring. A request that fits only some
 candidates goes to one of them, and one that fits none is rejected before
