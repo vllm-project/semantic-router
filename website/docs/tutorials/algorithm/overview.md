@@ -3,7 +3,8 @@
 ## Overview
 
 An algorithm runs after a decision matches. It either selects one model from
-the decision's `modelRefs` or coordinates several of them through the Looper.
+the decision's `modelRefs`, coordinates Chat models through the Looper, or
+executes a native System One cascade.
 It does not decide whether the route is eligible; signals and decisions do
 that first.
 
@@ -147,3 +148,16 @@ traffic before using them for production routing.
   checked against each target Model's known context window before dispatch.
   Missing context metadata remains eligible for compatibility.
 - Validate a complete config with `vllm-sr config validate --config config.yaml`.
+
+### Native System One Algorithms
+
+A recipe published with `api: systemone` uses native execution. It preserves
+complete typed responses and gives all stages one shared request budget.
+
+| Type | Status | Goal | Guide |
+| --- | --- | --- | --- |
+| `cascade` | experimental | Try declared native models in authored order until acceptance passes | [Cascade](./native/cascade.md) |
+| `policy` | experimental | Choose additional native work using fitted gain estimates | [Learned policy](./native/policy.md) |
+
+Both algorithms use the same candidate roster, stage actions and quality
+contract. They do not run Chat plugins or silently fall back to a Chat model.

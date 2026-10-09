@@ -86,6 +86,7 @@
           "type": "string",
           "enum": [
             "automix",
+            "cascade",
             "confidence",
             "decision",
             "fusion",
@@ -95,6 +96,7 @@
             "latency_aware",
             "mlp",
             "multi_factor",
+            "policy",
             "prompt",
             "ratings",
             "remom",
@@ -103,6 +105,18 @@
             "svm",
             "workflows"
           ]
+        },
+        "quality": {
+          "$ref": "#/$defs/NativeQualityConfig"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/CascadeStage"
+          },
+          "type": "array"
+        },
+        "policy": {
+          "$ref": "#/$defs/PolicyAlgorithmConfig"
         },
         "minimum_candidates": {
           "type": "integer"
@@ -356,6 +370,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CalibrationArtifact": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "source",
+        "sha256"
+      ]
+    },
     "CandidateIterationConfig": {
       "properties": {
         "variable": {
@@ -520,6 +555,13 @@
     },
     "CanonicalEntrypoint": {
       "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "chat",
+            "systemone"
+          ]
+        },
         "model_names": {
           "items": {
             "type": "string"
@@ -535,6 +577,12 @@
     },
     "CanonicalEvaluation": {
       "properties": {
+        "calibrations": {
+          "items": {
+            "$ref": "#/$defs/CalibrationArtifact"
+          },
+          "type": "array"
+        },
         "benchmarks": {
           "items": {
             "$ref": "#/$defs/BenchmarkDefinition"
@@ -949,6 +997,9 @@
         "catalog": {
           "type": "string"
         },
+        "deployment": {
+          "type": "string"
+        },
         "reasoning": {
           "$ref": "#/$defs/CanonicalReasoning"
         },
@@ -1057,6 +1108,9 @@
     },
     "CanonicalRecipeRouting": {
       "properties": {
+        "budget": {
+          "$ref": "#/$defs/RoutingBudget"
+        },
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
@@ -1135,6 +1189,9 @@
     },
     "CanonicalRouting": {
       "properties": {
+        "budget": {
+          "$ref": "#/$defs/RoutingBudget"
+        },
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
@@ -1421,6 +1478,45 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "CascadeStage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "native",
+            "judge"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "accept": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "generation": {
+          "$ref": "#/$defs/NativeGenerationConfig"
+        },
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "model"
+      ]
     },
     "Category": {
       "properties": {
@@ -4699,6 +4795,93 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "NativeAcceptance": {
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/NativeAcceptanceRule"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "rules"
+      ]
+    },
+    "NativeAcceptanceRule": {
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "question_type": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string",
+          "enum": [
+            "confidence",
+            "top_probability",
+            "probability_margin"
+          ]
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "field",
+        "predicate"
+      ]
+    },
+    "NativeGenerationConfig": {
+      "properties": {
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "max_output_tokens"
+      ]
+    },
+    "NativeQualityConfig": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "uncalibrated",
+            "calibrated"
+          ]
+        },
+        "acceptance": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "loss": {
+          "type": "string"
+        },
+        "max_risk": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
     "Normalization": {
       "properties": {
         "type": {
@@ -4942,6 +5125,27 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "PolicyAlgorithmConfig": {
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "cost_weight": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "source",
+        "sha256"
+      ]
     },
     "PreferenceModelConfig": {
       "properties": {
@@ -6502,6 +6706,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RoutingBudget": {
+      "properties": {
+        "deadline": {
+          "type": "string"
+        },
+        "max_calls": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deadline",
+        "max_calls"
+      ]
+    },
     "RoutingModel": {
       "properties": {
         "name": {
@@ -7861,6 +8082,23 @@
       }
     ],
     "algorithms": [
+      {
+        "type": "cascade",
+        "display_name": "Native Cascade",
+        "description": "Escalate complete typed responses through declared stages.",
+        "tier": "experimental",
+        "execution": "native"
+      },
+      {
+        "type": "policy",
+        "display_name": "Native Policy",
+        "description": "Select declared native stages using immutable learned parameters.",
+        "tier": "experimental",
+        "execution": "native",
+        "config_field": "policy",
+        "payload_shape": "nested",
+        "schema_ref": "#/$defs/PolicyAlgorithmConfig"
+      },
       {
         "type": "automix",
         "display_name": "AutoMix",

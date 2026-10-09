@@ -44,6 +44,10 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	}
 	cfg := DefaultGlobalConfig()
 	cfg.RoutingFragmentOnly = true
+	cfg.RoutingBudget = doc.Routing.Budget.Clone()
+	if err := cfg.RoutingBudget.Validate(); err != nil {
+		return nil, err
+	}
 	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
 	cfg.Strategy = doc.Routing.Strategy
 	if doc.Routing.Fallback != nil {

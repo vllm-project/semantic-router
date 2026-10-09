@@ -208,9 +208,13 @@ export function algorithmFieldsFromRouterSchema(algorithmType: string): FieldSch
   const payloadKeys = ROUTER_CONFIG_EXTENSION.algorithms.flatMap((entry) =>
     'config_field' in entry && typeof entry.config_field === 'string' ? [entry.config_field] : [],
   )
+  // Native execution owns its shared stages and acceptance gate. Chat selectors
+  // can have their own payload field named quality (for example multi_factor).
+  const native = surface.execution === 'native'
+  const nativeFields = new Set(['quality', 'stages'])
   const common = routerConfigFieldsForRef('#/$defs/AlgorithmConfig', {
     omit: ['type', ...payloadKeys],
-  })
+  }).filter((field) => native === nativeFields.has(field.key))
   if (!('schema_ref' in surface) || typeof surface.schema_ref !== 'string') return common
   const payloadFields = routerConfigFieldsForRef(surface.schema_ref)
   if (

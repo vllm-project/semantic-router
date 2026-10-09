@@ -1,22 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   systemOneError,
   type SystemOneRequest,
   type SystemOneResponse,
 } from './systemOnePlayground'
 
-export interface SystemOneDeployment {
-  id: string
-  model: string
-  ready: boolean
-  question_types: string[]
-  surfaces: string[]
-  unavailable_reason?: string
-  repo?: string
-  family?: string
-  max_input_tokens?: number
-  max_scan_tokens?: number
-}
+import {
+  isSystemOneRoutes,
+  systemOneTargets,
+  systemOneTargetRequest,
+  systemOneTargetTimeout,
+  type SystemOneDeployment,
+  type SystemOneRoutes,
+} from './systemOneTargets'
+export type { SystemOneDeployment } from './systemOneTargets'
+
 interface Capabilities {
   serving_mode: 'router' | 'engine'
   timeout_ms: number
@@ -28,6 +26,8 @@ export interface SystemOneRun {
   elapsed: number
   completedAt: Date
   deployment: string
+  targetKind?: 'route' | 'deployment'
+  targetKey?: string
 }
 
 async function readJSON(response: Response): Promise<unknown> {
@@ -48,6 +48,8 @@ function isCapabilities(value: unknown): value is Capabilities {
   const body = value as Capabilities
   return (
     ['router', 'engine'].includes(body.serving_mode) &&
+    Number.isFinite(body.timeout_ms) &&
+    body.timeout_ms >= 0 &&
     Array.isArray(body.deployments) &&
     body.deployments.every(
       (item) =>
@@ -71,7 +73,13 @@ function isDecisionResponse(value: unknown): value is SystemOneResponse {
     !Array.isArray(body.answers) &&
     !!body.usage &&
     typeof body.usage.input_tokens === 'number' &&
-    typeof body.usage.output_tokens === 'number'
+    typeof body.usage.output_tokens === 'number' &&
+    (!body.routing ||
+      (['recipe', 'decision', 'algorithm', 'stage', 'selected_model', 'quality'].every(
+        (key) => typeof (body.routing as unknown as Record<string, unknown>)[key] === 'string',
+      ) &&
+        Number.isSafeInteger(body.routing.model_calls) &&
+        body.routing.model_calls >= 0))
   )
 }
 
@@ -80,6 +88,9 @@ export function useSystemOnePlayground() {
   const [loading, setLoading] = useState(true)
   const [capabilityError, setCapabilityError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState('')
+  const [routes, setRoutes] = useState<SystemOneRoutes | null>(null)
+  const [routesLoading, setRoutesLoading] = useState(true)
+  const [routeError, setRouteError] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
   const [running, setRunning] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -105,15 +116,6 @@ export function useSystemOnePlayground() {
         if (!isCapabilities(body)) throw new Error('Model discovery returned an invalid response.')
         if (!mounted) return
         setCapabilities(body)
-        setSelectedId((previous) =>
-          body.deployments.some((item) => item.id === previous)
-            ? previous
-            : ((
-                body.deployments.find(
-                  (item) => item.ready && item.surfaces.includes('decisions'),
-                ) ?? body.deployments[0]
-              )?.id ?? ''),
-        )
       } catch (cause) {
         if (!mounted) return
         setCapabilities(null)
@@ -136,6 +138,55 @@ export function useSystemOnePlayground() {
     }
   }, [revision])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    let mounted = true
+    const timer = window.setTimeout(() => controller.abort(), 10000)
+    setRoutesLoading(true)
+    setRouteError(null)
+    void (async () => {
+      try {
+        const response = await fetch('/api/decision-model/routes', { signal: controller.signal })
+        const body = await readJSON(response)
+        if (!response.ok)
+          throw new Error(systemOneError(body, `Route discovery failed (HTTP ${response.status}).`))
+        if (!isSystemOneRoutes(body))
+          throw new Error('Route discovery returned an invalid response.')
+        if (mounted) setRoutes(body)
+      } catch (cause) {
+        if (!mounted) return
+        setRoutes(null)
+        setRouteError(
+          controller.signal.aborted
+            ? 'Route discovery timed out. Direct models remain available.'
+            : cause instanceof Error
+              ? cause.message
+              : 'Route discovery failed.',
+        )
+      } finally {
+        window.clearTimeout(timer)
+        if (mounted) setRoutesLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [revision])
+
+  const targets = useMemo(
+    () => systemOneTargets(capabilities?.deployments ?? [], routes, capabilities?.timeout_ms),
+    [capabilities, routes],
+  )
+  const selected =
+    targets.find((item) => item.key === selectedId) ??
+    targets.find((item) => item.ready && item.surfaces.includes('decisions')) ??
+    targets[0]
+  useEffect(() => {
+    if (selected) setSelectedId(selected.key)
+  }, [selected])
+
   useEffect(
     () => () => {
       active.current?.abort()
@@ -146,7 +197,8 @@ export function useSystemOnePlayground() {
 
   const run = useCallback(
     async (request: SystemOneRequest) => {
-      if (active.current) return
+      if (active.current || !selected) return
+      const submission = systemOneTargetRequest(selected, request)
       const controller = new AbortController()
       active.current = controller
       const started = performance.now()
@@ -154,7 +206,7 @@ export function useSystemOnePlayground() {
       const timer = window.setTimeout(() => {
         timedOut = true
         controller.abort()
-      }, 40000)
+      }, systemOneTargetTimeout(selected))
       const ticker = window.setInterval(() => setElapsed(performance.now() - started), 100)
       setRunning(true)
       setElapsed(0)
@@ -162,10 +214,10 @@ export function useSystemOnePlayground() {
       setNotice(null)
       setResult(null)
       try {
-        const response = await fetch('/api/decision-model/test', {
+        const response = await fetch(submission.path, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deployment: selectedId, request }),
+          body: JSON.stringify(submission.body),
           signal: controller.signal,
         })
         const body = await readJSON(response)
@@ -179,7 +231,9 @@ export function useSystemOnePlayground() {
           response: body,
           elapsed: performance.now() - started,
           completedAt: new Date(),
-          deployment: selectedId,
+          deployment: selected.id,
+          targetKind: selected.kind,
+          targetKey: selected.key,
         })
       } catch (cause) {
         if (active.current !== controller) return
@@ -201,16 +255,20 @@ export function useSystemOnePlayground() {
         }
       }
     },
-    [selectedId],
+    [selected],
   )
 
   return {
     capabilities,
-    loading,
+    loading: loading && routesLoading,
+    refreshing: loading || routesLoading,
     capabilityError,
-    selectedId,
+    routeError,
+    routes,
+    targets,
+    selectedId: selected?.key ?? selectedId,
     setSelectedId,
-    selected: capabilities?.deployments.find((item) => item.id === selectedId),
+    selected,
     refresh: () => setRevision((value) => value + 1),
     running,
     elapsed,

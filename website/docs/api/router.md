@@ -25,13 +25,89 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | The model is in the request body |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
-| `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Questions answered by explicitly published decision models on a standalone listener |
+| `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
 | `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
 
 Engine mode serves the native System One paths with recipe routing disabled.
 Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
 allowlist does not grant native access. Both APIs use the listener's API keys.
 See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+
+### Route a System One request
+
+In Router mode, publish an `entrypoints` item with `api: systemone` and grant
+its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
+does not automatically publish a native entrypoint. Follow the
+[System One cascade guide](../tutorials/algorithm/native/cascade.md) to connect
+local deployments or remote Engine and compatible System One services.
+
+```bash
+curl -sS http://localhost:8899/v1/systemone \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "state": "Please explain how to reset my password.",
+    "questions": {
+      "task": {
+        "type": "choice",
+        "criteria": {
+          "account": "Account access or authentication",
+          "billing": "Payments, invoices or refunds"
+        }
+      }
+    }
+  }'
+```
+
+Auto currently accepts explicit `choice`, `score` and `noul` questions, including
+multiple named states. The selected native response retains its answers,
+probabilities, usage and other fields. `model` stays the public entrypoint;
+the additional `routing` object identifies the execution. Set
+`options.return_meta: true` to include the selected model's runtime metadata.
+Learned and calibrated algorithms collect this provenance internally even when
+you leave response metadata disabled.
+
+```json
+{
+  "recipe": "native-cascade",
+  "decision": "classify",
+  "algorithm": "cascade",
+  "stage": "strong",
+  "selected_model": "nox",
+  "quality": "uncalibrated",
+  "model_calls": 2
+}
+```
+
+`model_calls` counts physical inference attempts across the recipe, including
+model-backed signals and retries. It is not a count of GPU forwards. `usage`
+belongs to the returned native candidate and is not total cascade billing.
+The `quality` field names the configured acceptance method; it is not an
+accuracy score. Native discovery marks recipe entrypoints with `routing: true`
+and concrete models with `routing: false`.
+
+Malformed or unsupported auto questions return `400`. If no complete answer
+passes the declared acceptance rule within the call budget, the request
+returns `503` with `systemone_unresolved`; expiration of the recipe deadline
+returns `504` with `systemone_deadline_exceeded`. Failed
+candidates never become empty successful answers. Direct model requests keep
+their existing native API contract and do not run the cascade.
+
+A remote Engine backend must expose a concrete model. Native backend calls
+carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
+(`systemone_nested_routing`) if that request targets another recipe or remote
+forwarding alias. This prevents recursive cascades. The header grants no access:
+the receiving listener still checks its API key and model allowlist. An external
+compatible provider's internal execution remains outside the Router's call
+ledger.
+
+Auto execution exports `sr_systemone_stage_total` and
+`sr_systemone_stage_duration_seconds` by configured algorithm, stage and model,
+plus `sr_systemone_auto_requests_total` and
+`sr_systemone_auto_duration_seconds`. These distinguish accepted, rejected,
+invalid and failed attempts; they measure serving behavior, not label-based
+evaluation quality. The auto duration covers the algorithm; preceding recipe
+signals are outside that metric.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
 `/v1/vector_stores`, and Router Replay paths are not available on a public

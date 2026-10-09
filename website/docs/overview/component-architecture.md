@@ -121,22 +121,45 @@ adding replicas, especially when several workers share one GPU. See
 [Frontend and runtime deployments](../model-runtime/deploy.md) and
 [Profiles](../model-runtime/profiles.md).
 
-## Roadmap: route System One across decision models
+## Route System One across decision models
 
-[![Proposed System One auto recipe selecting one local, independent, or external decision-model backend](/img/architecture/system-one/04-system-one-auto-roadmap.svg)](/img/architecture/system-one/04-system-one-auto-roadmap.svg)
+```mermaid
+flowchart LR
+    Request["System One request"] --> Frontend["Frontend codec + listener grant"]
+    Frontend -->|"concrete model"| Backends
+    Frontend -->|"native entrypoint"| Recipe["Recipe: signals → decision"]
+    Recipe --> Algorithm["Cascade or learned policy"]
+    Algorithm --> Backends
+    subgraph Backends["Declared model backends"]
+        Local["Local model runtime"]
+        Engine["Remote Engine frontend"]
+        External["Compatible Decision API"]
+    end
+    Local --> Replicas["Ready replicas"]
+    Engine --> RemoteReplicas["Ready replicas"]
+    Backends --> Evidence["Complete typed answer + evidence"]
+    Evidence -->|"another declared action"| Algorithm
+    Evidence -->|"accept"| Result["Native response"]
+```
 
-This final diagram is a **planned extension**, not the current request path.
-The goal is for System One's `vllm-sr/auto` entrypoint to select a recipe and
-reuse signals, decisions, and algorithms to choose a compatible decision-model
-backend. Candidates could include a local deployment, a separate vLLM-SR
-Engine service, or an external decision provider. The selected deployment
-would then choose its own replica; this is not a broadcast to every model.
+An explicit `api: systemone` entrypoint selects an isolated native recipe.
+Its signals and decisions choose an experimental `cascade` or learned
+`policy` algorithm. These algorithms keep a Choice / Score / Noul question
+bundle together and call declared decision-model backends within a shared
+deadline and attempt budget. A backend can be a local deployment, a separate
+vLLM-SR Engine service, or a compatible external System One API.
 
-Today, native discovery advertises concrete models with `routing: false`, and
-a request targeting a System One routing entrypoint returns
-`systemone_routing_not_supported`. Use a published concrete model ID with the
-current API. The Chat default `vllm-sr/auto` does not implicitly enable native
-auto routing.
+The recipe chooses between models; each deployment separately chooses among
+its replicas. A cascade first tries its fast stage, then advances only when
+its acceptance conditions require another answer. An optional LLM judge can
+select an intact earlier candidate or abstain; it cannot manufacture native
+probabilities. See [System One cascade](../tutorials/algorithm/native/cascade.md)
+and [learned policy](../tutorials/algorithm/native/policy.md).
+
+Native discovery distinguishes concrete models (`routing: false`) from
+published native recipes (`routing: true`). Both require an explicit listener
+grant. The Chat default `vllm-sr/auto` does not implicitly enable native auto,
+and Engine mode continues to serve concrete models without recipe execution.
 
 ## Next
 

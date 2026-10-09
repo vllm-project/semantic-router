@@ -56,6 +56,7 @@ const (
 
 // API format constants for model backends.
 const (
+	APIFormatSystemOne = "systemone"
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"
@@ -301,6 +302,7 @@ type InlineModels struct {
 
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
+	RoutingBudget         *RoutingBudget          `yaml:"routing_budget,omitempty"`
 	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals               `yaml:",inline"`

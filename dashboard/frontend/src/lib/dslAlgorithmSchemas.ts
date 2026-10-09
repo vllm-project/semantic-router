@@ -39,9 +39,16 @@ const FUSION_INCLUDE_ANALYSIS_FIELD: FieldSchema = {
   description: 'Return structured judge analysis in the Fusion trace',
 }
 
+export function isNativeAlgorithm(type: string): boolean {
+  return (
+    ROUTER_CONFIG_EXTENSION.algorithms.find((surface) => surface.type === type)?.execution ===
+    'native'
+  )
+}
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
   return mergeRouterFieldSchemas(algorithmFieldsFromRouterSchema(algoType), [
-    ...COMMON_ALGORITHM_FIELDS,
+    ...(isNativeAlgorithm(algoType) ? [] : COMMON_ALGORITHM_FIELDS),
     ...getAlgorithmSpecificFieldSchema(algoType),
   ])
 }

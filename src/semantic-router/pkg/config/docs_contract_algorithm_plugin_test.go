@@ -9,6 +9,8 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
+	"cascade":       "native",
+	"policy":        "native",
 	"automix":       "selection",
 	"confidence":    "looper",
 	"fusion":        "looper",

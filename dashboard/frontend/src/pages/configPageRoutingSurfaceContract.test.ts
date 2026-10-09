@@ -64,6 +64,19 @@ describe('generated Dashboard routing contract', () => {
     }
   })
 
+  it('separates native acceptance from Chat quality scoring', () => {
+    const native = getAlgorithmFieldSchema('cascade')
+    expect(native.map((field) => field.key)).toEqual(['quality', 'stages'])
+    expect(
+      native.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
+    ).toContain('acceptance')
+    const chat = getAlgorithmFieldSchema('multi_factor')
+    expect(chat.map((field) => field.key)).not.toContain('stages')
+    expect(
+      chat.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
+    ).toEqual(['index', 'on_missing', 'min_coverage', 'min_score'])
+  })
+
   it('keeps transient Dashboard setup state out of the Router contract', () => {
     expect(ROUTER_CONFIG_SCHEMA.properties).not.toHaveProperty('setup')
   })

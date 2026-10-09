@@ -16,6 +16,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -266,6 +267,12 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
+	// The normal connector path accounts for its own calls. Only this
+	// mutually exclusive injected-client path needs a reservation here.
+	if budgetErr := budget.Consume(attemptCtx); budgetErr != nil {
+		_ = req.Body.Close()
+		return nil, budgetErr
+	}
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, err

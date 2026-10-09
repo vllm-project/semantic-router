@@ -54,9 +54,10 @@ type CanonicalSetup struct {
 // keeps benchmark and index definitions beside model-linked measurement
 // records so user configuration matches the built-in catalog data model.
 type CanonicalEvaluation struct {
-	Benchmarks []modelcatalog.BenchmarkDefinition `yaml:"benchmarks,omitempty"`
-	Indices    []modelcatalog.IndexDefinition     `yaml:"indices,omitempty"`
-	Records    []CanonicalEvaluationRecord        `yaml:"records,omitempty"`
+	Calibrations []CalibrationArtifact              `yaml:"calibrations,omitempty"`
+	Benchmarks   []modelcatalog.BenchmarkDefinition `yaml:"benchmarks,omitempty"`
+	Indices      []modelcatalog.IndexDefinition     `yaml:"indices,omitempty"`
+	Records      []CanonicalEvaluationRecord        `yaml:"records,omitempty"`
 }
 
 // CanonicalEvaluationRecord is a compact operator-authored measurement. Model
@@ -75,6 +76,7 @@ type CanonicalEvaluationRecord struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
+	Budget                *RoutingBudget           `yaml:"budget,omitempty"`
 	CandidateRequirements *CandidateRequirements   `yaml:"candidate_requirements,omitempty"`
 	ModelBindings         map[string]ModelBinding  `yaml:"model_bindings,omitempty"`
 	ModelCards            []RoutingModel           `yaml:"modelCards,omitempty"`
@@ -188,6 +190,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
+	if err := validateNativeRoutingConfig(&cfg); err != nil {
+		return nil, err
+	}
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
@@ -197,6 +202,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 }
 
 func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
+	cfg.RoutingBudget = canonical.Routing.Budget.Clone()
 	cfg.ModelBindings = cloneModelMap(canonical.Routing.ModelBindings)
 	cfg.CandidateRequirements = canonical.Routing.CandidateRequirements.Clone()
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
@@ -214,6 +220,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		return err
 	}
 	if err := canonical.Routing.CandidateRequirements.Validate(); err != nil {
+		return err
+	}
+	if err := validateCanonicalNativeResources(canonical); err != nil {
 		return err
 	}
 	if err := validateCanonicalFallback(canonical); err != nil {
@@ -576,7 +585,7 @@ func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
 }
 
 func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
-	if model.Catalog != "" || model.Reasoning != nil || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
+	if model.Deployment != "" || model.Catalog != "" || model.Reasoning != nil || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
 	return model.Pricing != (ModelPricing{}) || !model.Reliability.IsZero()
@@ -645,6 +654,9 @@ func collectRuleNames(node RuleCombination, signalType string, out map[string]bo
 
 func ensureModelRefDefaults(decisions []Decision) {
 	for i := range decisions {
+		if decisions[i].Algorithm.IsNative() {
+			continue
+		}
 		for j := range decisions[i].ModelRefs {
 			if decisions[i].ModelRefs[j].UseReasoning == nil {
 				defaultReasoning := false
@@ -660,6 +672,9 @@ func copyDecisions(input []Decision) []Decision {
 	}
 	output := make([]Decision, len(input))
 	copy(output, input)
+	for index := range output {
+		output[index].Algorithm = cloneNativeAlgorithm(input[index].Algorithm)
+	}
 	return output
 }
 

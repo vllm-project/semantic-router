@@ -537,6 +537,8 @@ func buildExtension(root *jsonschema.Schema, pluginRefs map[string]string) (sche
 		"type",
 		"minimum_candidates",
 		"on_error",
+		"quality",
+		"stages",
 	); err != nil {
 		return schemaExtension{}, err
 	}

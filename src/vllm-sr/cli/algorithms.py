@@ -16,6 +16,7 @@ from cli.config_schema import surface_types
 
 from .config_contract import QuorumFailurePolicy
 from .models_decision import DecisionSelectionConfig
+from .models_native import NativePolicy, NativeQuality, NativeStage
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
@@ -579,6 +580,11 @@ class AlgorithmConfig(BaseModel):
             data.update(self.extensions)
         return data
 
+    # Native payloads are structural projections of the generated Go schema.
+    quality: NativeQuality | None = None
+    stages: list[NativeStage] | None = None
+    policy: NativePolicy | None = None
+
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None
     ratings: RatingsAlgorithmConfig | None = None
@@ -596,6 +602,27 @@ class AlgorithmConfig(BaseModel):
     decision: DecisionSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
+
+    @model_validator(mode="after")
+    def native_execution_fields(self):
+        if self.type in {"cascade", "policy"}:
+            if "on_error" not in self.model_fields_set:
+                self.on_error = None
+            elif self.on_error:
+                raise ValueError("native algorithms do not support on_error")
+            if not self.quality or not self.stages:
+                raise ValueError("native algorithms require quality and stages")
+            if (self.type == "policy") != (self.policy is not None):
+                raise ValueError("algorithm.policy is required only for type: policy")
+        elif (
+            self.quality is not None
+            or self.stages is not None
+            or self.policy is not None
+        ):
+            raise ValueError(
+                "native quality, stages and policy require cascade or policy"
+            )
+        return self
 
     @model_validator(mode="after")
     def normalize_prompt_fallback(self):

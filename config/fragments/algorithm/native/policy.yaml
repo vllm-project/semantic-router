@@ -1,0 +1,26 @@
+# Use the same candidate roster and stage actions as a handwritten cascade.
+# Replace this illustrative source and digest with your evaluated artifact.
+recipes:
+  - name: native-learned
+    routing:
+      budget: {deadline: 3s, max_calls: 3}
+      decisions:
+        - name: predicted-gain
+          rules: {}
+          modelRefs: [{model: kai}, {model: nox}]
+          algorithm:
+            type: policy
+            quality:
+              type: uncalibrated
+              acceptance:
+                rules:
+                  - {question_type: choice, field: confidence, predicate: {gte: 0.9}}
+                  - {question_type: score, field: confidence, predicate: {gte: 0.9}}
+                  - {question_type: noul, field: probability_margin, predicate: {gte: 0.4}}
+            stages:
+              - {name: fast, kind: native, model: kai}
+              - {name: strong, kind: native, model: nox}
+            policy:
+              source: ./policies/predicted-gain.json
+              sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+              cost_weight: 0.001

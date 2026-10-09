@@ -53,6 +53,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
+		Budget:                cfg.RoutingBudget.Clone(),
 		ModelBindings:         cloneModelMap(cfg.ModelBindings),
 		CandidateRequirements: cfg.CandidateRequirements.Clone(),
 		ModelCards:            routingModelsFromRouterConfig(cfg),
@@ -471,6 +472,7 @@ func canonicalProviderModelFromRuntime(
 		return *authored
 	}
 	providerModel := CanonicalProviderModel{
+		Deployment:       params.Deployment,
 		Name:             name,
 		Catalog:          params.Catalog,
 		APIFormat:        params.APIFormat,

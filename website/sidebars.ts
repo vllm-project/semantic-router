@@ -174,6 +174,14 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/workflows',
               ],
             },
+            {
+              type: 'category',
+              label: 'System One',
+              items: [
+                'tutorials/algorithm/native/cascade',
+                'tutorials/algorithm/native/policy',
+              ],
+            },
           ],
         },
         {

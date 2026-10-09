@@ -24,3 +24,39 @@ describe('decision algorithm manager mapping', () => {
     expect(mergeAlgorithmFields(algorithm, 'prompt', algorithmFields(algorithm))).toEqual(algorithm)
   })
 })
+
+describe('native algorithm editor', () => {
+  const quality = {
+    type: 'uncalibrated',
+    acceptance: {
+      rules: [{ question_type: 'choice', field: 'top_probability', predicate: { gte: 0.9 } }],
+    },
+  }
+  const stages = [{ name: 'fast', model: 'decision-kai', kind: 'native' }]
+  it.each(['cascade', 'policy'] as const)(
+    'round-trips %s fields at their canonical level',
+    (type) => {
+      const algorithm = {
+        type,
+        quality,
+        stages,
+        ...(type === 'policy'
+          ? { policy: { source: './policy.json', sha256: 'a'.repeat(64), cost_weight: 0.01 } }
+          : {}),
+      }
+      expect(mergeAlgorithmFields(algorithm, type, algorithmFields(algorithm))).toEqual(algorithm)
+    },
+  )
+  it('removes incompatible shared fields when switching execution types', () => {
+    expect(
+      mergeAlgorithmFields(
+        { type: 'static', minimum_candidates: 2, on_error: 'fallback' },
+        'cascade',
+        { quality, stages },
+      ),
+    ).toEqual({ type: 'cascade', quality, stages })
+    expect(mergeAlgorithmFields({ type: 'cascade', quality, stages }, 'static', {})).toEqual({
+      type: 'static',
+    })
+  })
+})

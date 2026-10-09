@@ -17,7 +17,7 @@ import {
 } from './systemOnePlayground'
 import { useSystemOnePlayground } from './useSystemOnePlayground'
 import { useDecisionTasks } from './useDecisionTasks'
-import { systemOneDeploymentOption } from './systemOneDeploymentPresentation'
+import { systemOneTargetOptions } from './systemOneTargets'
 import styles from './SystemOnePlaygroundPage.module.css'
 
 function QuestionEditor({
@@ -269,7 +269,7 @@ export default function SystemOnePlaygroundPage() {
     ? drafts.filter((draft) => !supported.includes(draft.question.type))
     : []
   const unavailable = !selected
-    ? 'No deployed runtime is available.'
+    ? 'Choose an active auto route or a deployed model.'
     : !selected.ready
       ? selected.unavailable_reason || 'This runtime is not ready.'
       : !selected.surfaces.includes('decisions')
@@ -277,16 +277,10 @@ export default function SystemOnePlaygroundPage() {
         : unsupported.length
           ? `This runtime does not support ${[...new Set(unsupported.map((draft) => draft.question.type))].join(', ')} questions.`
           : null
-  const canRun =
-    permitted &&
-    !runtime.loading &&
-    !runtime.capabilityError &&
-    !unavailable &&
-    !built.error &&
-    !runtime.running
+  const canRun = permitted && !runtime.loading && !unavailable && !built.error && !runtime.running
   const resultIsPrevious =
     runtime.result &&
-    (runtime.result.deployment !== runtime.selectedId ||
+    ((runtime.result.targetKey ?? runtime.result.deployment) !== runtime.selectedId ||
       JSON.stringify(runtime.result.request) !== JSON.stringify(built.request))
 
   function loadExample(id: string) {
@@ -397,23 +391,27 @@ export default function SystemOnePlaygroundPage() {
             label="Runtime target"
             value={runtime.selectedId}
             onChange={runtime.setSelectedId}
-            placeholder={runtime.loading ? 'Discovering models…' : 'No runtime available'}
-            disabled={runtime.loading || runtime.running}
-            options={(runtime.capabilities?.deployments ?? []).map(systemOneDeploymentOption)}
+            placeholder={runtime.loading ? 'Discovering targets…' : 'No target available'}
+            disabled={runtime.running}
+            options={systemOneTargetOptions(runtime.targets)}
           />
           {selected && (
             <span className={selected.ready ? styles.successPill : styles.warningPill}>
               <i />
-              {selected.ready ? 'Ready' : 'Unavailable'}
+              {selected.kind === 'route'
+                ? 'Route active'
+                : selected.ready
+                  ? 'Ready'
+                  : 'Unavailable'}
             </span>
           )}
           <div className={styles.runtimeActions}>
             <button
               type="button"
-              disabled={runtime.loading || runtime.running}
+              disabled={runtime.refreshing || runtime.running}
               onClick={runtime.refresh}
             >
-              {runtime.loading ? 'Refreshing…' : 'Refresh'}
+              {runtime.refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
             <Link to="/decision-model">Decision Models ↗</Link>
             <Link to="/decision-model/monitoring">Decision Monitoring ↗</Link>
@@ -423,6 +421,24 @@ export default function SystemOnePlaygroundPage() {
           <div role="alert" className={styles.error}>
             {runtime.capabilityError}
           </div>
+        )}
+        {runtime.routeError && (
+          <div role="status" className={styles.notice}>
+            {runtime.routeError}
+          </div>
+        )}
+        {selected?.kind === 'route' && (
+          <p className={styles.caption}>
+            Runs the <strong>{selected.recipe}</strong> recipe across its configured model pool. The
+            result shows the selected stage and model; an active route does not certify backend
+            health or accuracy.
+          </p>
+        )}
+        {!runtime.refreshing && runtime.routes && runtime.routes.routes.length === 0 && (
+          <p className={styles.caption}>
+            Publish a System One route in the active configuration to test auto alongside direct
+            models.
+          </p>
         )}
         <div className={styles.workspace}>
           <div className={styles.composer}>

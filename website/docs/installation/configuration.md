@@ -180,6 +180,13 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `remom` — looper algorithm | `remom` runs several candidate models across bounded rounds and synthesizes their responses into one answer. | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [Guide](../tutorials/algorithm/looper/remom) |
 | `workflows` — looper algorithm | `workflows` runs a bounded, multi-step Router Flow behind one OpenAI-compatible model name. | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [Guide](../tutorials/algorithm/looper/workflows) |
 
+### Native System One algorithms
+
+| Family and type | Use it to | Reusable fragment | Guide |
+| --- | --- | --- | --- |
+| `cascade` — native algorithm | `cascade` tries declared decision models in order and returns a complete System One response when its acceptance rules pass. | [`config/fragments/algorithm/native/cascade.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/cascade.yaml) | [Guide](../tutorials/algorithm/native/cascade) |
+| `policy` — native algorithm | `policy` uses fitted, data-only parameters to choose the next declared System One model after observing a native answer. | [`config/fragments/algorithm/native/policy.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/policy.yaml) | [Guide](../tutorials/algorithm/native/policy) |
+
 ### Plugins and bundles
 
 | Family and type | Use it to | Reusable fragment | Guide |

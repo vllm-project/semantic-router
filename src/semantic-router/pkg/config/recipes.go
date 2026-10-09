@@ -39,6 +39,7 @@ func (s RoutingStrategy) Validate() error {
 // a recipe. Shared provider bindings, model assets, and runtime services stay
 // on RouterConfig.
 type RoutingProfile struct {
+	Budget                *RoutingBudget
 	CandidateRequirements *CandidateRequirements
 	ModelBindings         map[string]ModelBinding
 	Signals               Signals
@@ -157,6 +158,7 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	return &RoutingRecipe{
 		Name: DefaultRecipeName,
 		Profile: RoutingProfile{
+			Budget:                c.RoutingBudget.Clone(),
 			ModelBindings:         cloneModelMap(c.ModelBindings),
 			CandidateRequirements: c.CandidateRequirements.Clone(),
 			Signals:               c.Signals,
@@ -215,6 +217,17 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 		}
 	}
 
+	for _, listener := range c.Listeners {
+		if listener.SystemOne == nil {
+			continue
+		}
+		for _, model := range listener.SystemOne.Models {
+			if entrypoint, ok := c.ResolveEntrypoint(SystemOneAPI, model); ok {
+				reachable[entrypoint.Recipe] = struct{}{}
+			}
+		}
+	}
+
 	if len(c.Recipes) == 0 {
 		if _, ok := reachable[DefaultRecipeName]; !ok {
 			return nil
@@ -255,6 +268,7 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
+		RoutingBudget:         recipe.Profile.Budget.Clone(),
 		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
 		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
 		Signals:               recipe.Profile.Signals,
