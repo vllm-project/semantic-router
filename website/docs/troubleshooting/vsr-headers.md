@@ -18,6 +18,12 @@ The router splits headers across two surfaces:
   latency, cost, and replay id — the last only when Router Replay is enabled and
   the record was persisted. Protocol markers appear when translation occurs;
   protocol warnings appear only when there are warnings.
+- **Configuration version** — `x-vsr-config-version` names the version of the
+  configuration that served the request. It rides on every routed response
+  that is not served from the response cache, success or error, and on every
+  response the Router answers itself, such as a block, a validation error, a
+  cache hit or `GET /v1/models`. A request keeps the version it started on,
+  even when a hot reload activates another one while it runs.
 - **Debug surface** — intermediate classification details, matched signals,
   tool-selection metrics, and `x-vsr-retention-*` directives appear inline
   only when the request sets `x-vsr-debug: true`. When replay is enabled, the
@@ -67,7 +73,7 @@ Router Learning observability, require `x-vsr-debug`.
 
 | Header | Surface | Description | Example |
 | ------ | ------- | ----------- | ------- |
-| `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `support` |
+| `x-vsr-selected-recipe` | default | Routing isolation scope selected by the effective entrypoint. Omitted for concrete backend passthrough. | `support` |
 | `x-vsr-selected-decision` | default | Final decision selected by the decision engine. Omitted when no decision matched and the request went to the default model; `x-vsr-response-path` is still `upstream`. | `complex-request` |
 | `x-vsr-selected-confidence` | default | Model-derived score for the selected decision. Absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy. | `0.9100` |
 | `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |
@@ -76,6 +82,7 @@ Router Learning observability, require `x-vsr-debug`.
 | `x-vsr-effective-input-tokens` | default | Actual selected-backend rendered input tokens for the finalized automatic-output dispatch, including its chat template. | `512` |
 | `x-vsr-effective-max-output-tokens` | default | Resolved output token limit sent in that automatic-output dispatch, including reasoning. This is a budget, not consumed tokens. | `261632` |
 | `x-vsr-routing-latency-ms` | default | Time the router spent choosing the model, in milliseconds with sub-millisecond precision. | `0.412` |
+| `x-vsr-fallback-attempts` | default | Number of attempts cross-model fallback made, the primary included, when a fallback candidate served the response; the same in both gateway modes. Omitted when the primary answered. | `2` |
 | `x-vsr-selected-category` | debug | Domain/category classifier result when domain routing runs. | `math` |
 | `x-vsr-selected-reasoning` | debug | Reasoning mode selected for the request. | `on` |
 | `x-vsr-selected-modality` | debug | Modality result and optional method. | `AR;classifier` |
@@ -85,6 +92,7 @@ Router Learning observability, require `x-vsr-debug`.
 | `x-vsr-learning-scopes` | debug | Method-keyed identity scopes used by learning. | `protection=conversation` |
 | `x-vsr-learning-reasons` | debug | Method-keyed machine-readable reasons for actions. | `adaptation=sampled_win,protection=switch_allowed` |
 | `x-vsr-injected-system-prompt` | debug | Whether a system-prompt plugin injected text into the request. | `true` |
+| `x-vsr-decision-ranking` | debug | The matched decision the selected one beat and the comparison that settled it. Prose; parse `decision_ranking` in Router Replay instead. Omitted when only one decision matched. | `escalate-extreme over escalate-hard: equal priority 0, no comparable confidence, decision name ordering` |
 
 For UI display guidance, translate `x-vsr-learning-actions` into user-facing
 phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`.
@@ -126,6 +134,7 @@ Matched signal headers contain comma-separated rule names. They require
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
 | `x-vsr-matched-input-modality` | `input_modality` |
+| `x-vsr-matched-decision-model` | `decision` (noul and score rule names; `rule:choice` for choices; `rule:label` for each matching set or span label) |
 
 ## Projection headers
 
@@ -164,7 +173,7 @@ and inference pool; clients should not depend on them.
 | ------ | ----------- |
 | `x-vsr-kv-source-pod` | gRPC address of the pod holding the source model's KV cache. |
 | `x-vsr-kv-cache-id` | Opaque session or cache identifier for the source KV block. |
-| `x-vsr-kv-mapper-id` | Published ridge-mapper artifact for the source→target model pair. |
+| `x-vsr-kv-mapper-id` | Published mapper artifact for the source→target model pair, a ridge fit or its distilled refinement. |
 
 **Response (backend → router):**
 
@@ -215,6 +224,7 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 x-vsr-schema-version: 2
 x-vsr-response-path: upstream
+x-vsr-config-version: 7
 x-vsr-selected-recipe: default
 x-vsr-selected-decision: complex-request
 x-vsr-selected-algorithm: static
@@ -246,11 +256,15 @@ x-vsr-replay-id: replay_01J...
 ## Compatibility and interpretation
 
 - Use `x-vsr-schema-version` before parsing optional headers; the current value
-  is `2`. Routed inference responses always carry it. Responses answered by the
+  is `2`. Routed inference responses not served from the response cache carry it. Responses answered by the
   Router's own handlers, such as `GET /v1/models`, never carry this header, so
   its absence there is expected rather than a contract violation.
 - `x-vsr-matched-projections` is the projection header. The singular form is
   not part of the public contract.
+- `x-vsr-config-version` counts the activations of one Router, which keeps its
+  own configuration history. To check that replicas serve the same
+  configuration, compare the document hash that
+  `GET /api/v1/config/hash` reports as `active_runtime_hash`.
 - Recipe names scope local signal, projection, decision, cache, replay, metric, and learning/session identities. Use `x-vsr-selected-recipe` together with the local decision/signal names when correlating a response with Insights or metrics.
 - `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
 - Router Learning uses router-owned online state internally. Users enable online model-choice learning through `global.router.learning.adaptation`, enable stability protection through `global.router.learning.protection`, pass stable identity headers, and optionally set `routing.decisions[].adaptations.mode`, component modes, or `adaptations.adaptation.candidate_set`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `routing.decisions[].algorithm.session_aware` shape is not part of the public contract.

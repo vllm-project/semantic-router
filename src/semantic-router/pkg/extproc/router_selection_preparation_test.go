@@ -17,7 +17,6 @@ import (
 )
 
 func TestPreparedMLSelectionUsesExplicitEmbedding(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
 	for _, recipe := range []config.RecipeName{config.DefaultRecipeName, "ml-recipe"} {
 		t.Run(string(recipe), func(t *testing.T) {
 			const query = "select the second candidate using its embedding"
@@ -46,7 +45,7 @@ func TestPreparedMLSelectionUsesExplicitEmbedding(t *testing.T) {
 			defer server.Close()
 
 			cfg := preparedMLSelectionConfig(t, server.URL, recipe)
-			prepared, err := modelruntime.PrepareOwnedRecipeEmbeddings(context.Background(), cfg, nil)
+			prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +91,7 @@ func preparedMLSelectionConfig(t *testing.T, endpoint string, recipe config.Reci
 	if err := os.WriteFile(artifactPath, artifact, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.RouterConfig{RouterOptions: config.RouterOptions{AutoModelNames: []string{"auto"}}}
+	cfg := &config.RouterConfig{Entrypoints: []config.EntrypointMapping{{ModelNames: []string{"vllm-sr/auto"}, Recipe: config.DefaultRecipeName}}}
 	cfg.EmbeddingConfig = config.HNSWConfig{Backend: config.EmbeddingBackendOpenAICompatible, ModelType: "mmbert", TargetDimension: 2}
 	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{BaseURL: endpoint + "/v1", Model: "test-embedding"}
 	cfg.ModelSelection.ML = config.MLSelectionConfig{

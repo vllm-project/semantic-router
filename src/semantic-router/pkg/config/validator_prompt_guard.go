@@ -37,17 +37,16 @@ func validatePromptGuardBackend(cfg *RouterConfig) error {
 	return validatePromptGuardWiring(cfg)
 }
 
-// validatePromptGuardBackendConfig validates the prompt_guard backend selection:
-// variant (local) and backend (remote) are mutually exclusive, and each must
-// name a recognized value.
+// validatePromptGuardBackendConfig validates the prompt_guard backend
+// selection: the local model, or a remote backend.
 func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	if err := cfg.ValidateWindow(); err != nil {
 		return err
 	}
+	if err := cfg.ValidateOnUnscanned(); err != nil {
+		return fmt.Errorf("prompt_guard.%w", err)
+	}
 	if cfg.Backend != nil {
-		if cfg.Variant != "" {
-			return fmt.Errorf("prompt_guard.backend is mutually exclusive with variant")
-		}
 		if err := cfg.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
 			return fmt.Errorf("prompt_guard.%w", err)
 		}
@@ -55,10 +54,6 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	}
 	if err := cfg.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
 		return fmt.Errorf("prompt_guard.%w", err)
-	}
-	if !validPromptGuardVariants[cfg.Variant] {
-		return fmt.Errorf("prompt_guard.variant: unrecognized value %q, must be one of: %s, %s",
-			cfg.Variant, PromptGuardVariantCandle, PromptGuardVariantMmBERT32K)
 	}
 	return nil
 }
@@ -69,8 +64,8 @@ func (cfg PromptGuardConfig) ValidateWindow() error {
 	if cfg.Window == nil {
 		return nil
 	}
-	if cfg.Backend != nil || cfg.Variant != PromptGuardVariantMmBERT32K {
-		return fmt.Errorf("prompt_guard.window requires the local mmbert32k variant")
+	if cfg.Backend != nil {
+		return fmt.Errorf("prompt_guard.window requires the local model")
 	}
 	return cfg.validateWindowParameters(cfg.MaxSequenceLength)
 }
@@ -81,7 +76,7 @@ func (cfg PromptGuardConfig) ValidateBoundWindow(deployment ModelDeployment) err
 	if cfg.Window == nil {
 		return nil
 	}
-	if deployment.Provider != "candle" && deployment.Provider != "ort" {
+	if !deployment.IsModelRuntime() {
 		return fmt.Errorf("prompt_guard.window requires a local deployment")
 	}
 	return cfg.validateWindowParameters(deployment.Input.MaxTokens)

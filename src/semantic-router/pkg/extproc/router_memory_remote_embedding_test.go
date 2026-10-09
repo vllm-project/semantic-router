@@ -43,7 +43,7 @@ func TestMemoryWarnsThatRemoteEmbeddingIdentityIsUnverified(t *testing.T) {
 		unchangedNamespace bool
 	}{
 		{name: "remote endpoint", set: remote, warnings: 1, unchangedNamespace: true},
-		{name: "local model", set: embedding.NewSet(map[string]embedding.Provider{"bert": local}, "bert"), warnings: 0},
+		{name: "local model", set: embedding.NewSet(map[string]embedding.Provider{config.DefaultEmbeddingModel: local}, config.DefaultEmbeddingModel), warnings: 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			logs := newObservedEventLogger(t)

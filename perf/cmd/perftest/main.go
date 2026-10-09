@@ -105,7 +105,12 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 		if err = benchmark.OverlayModelBaseline(baseline, current, modelBaseline); err != nil {
 			return err
 		}
-		fmt.Printf("Model baseline source: %s\n", modelBaseline.GitCommit)
+		if baseline.ModelBaselineReset != "" {
+			fmt.Printf("⚠️  Model baseline reset at %s (%s): model benchmarks are measured but not gated; legacy-versus-runtime records: %s\n",
+				modelBaseline.GitCommit, baseline.ModelBaselineReset, strings.Join(baseline.LegacyComparisonRecords, ", "))
+		} else {
+			fmt.Printf("Model baseline source: %s\n", modelBaseline.GitCommit)
+		}
 	}
 	if failOnRegression && inventoryFile == "" {
 		return fmt.Errorf("--fail-on-regression requires an explicit --inventory")

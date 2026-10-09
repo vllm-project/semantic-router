@@ -9,10 +9,15 @@ from cli.models import ModelBinding, UserConfig
 
 def effective_model_deployments(config: UserConfig) -> dict[str, dict]:
     """Apply whole-entry overrides without changing the authoring document."""
+    return effective_model_deployments_document({"global": config.global_ or {}})
+
+
+def effective_model_deployments_document(document: dict | None) -> dict[str, dict]:
+    """Resolve resources for validation, serve and status using one canonical source."""
     defaults = schema_document()["$defs"]["CanonicalModelCatalog"]["properties"][
         "deployments"
     ]["default"]
-    catalog = (config.global_ or {}).get("model_catalog") or {}
+    catalog = ((document or {}).get("global") or {}).get("model_catalog") or {}
     if "deployments" in catalog and catalog["deployments"] is None:
         return {}
     # Go merges this map by key, replacing each provided deployment value;

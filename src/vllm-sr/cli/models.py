@@ -9,6 +9,8 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
+from .models_decision import DecisionSignalRule
+from .models_predicates import NumericPredicate
 from .models_safety import SafetyRule
 
 from pydantic import (
@@ -30,12 +32,60 @@ from .config_contract import (
 )
 from .config_schema import surface_types
 from .context_bands import normalize_token_count, validate_context_band
+from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
 SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
+LABELED_CONDITION_TYPES = frozenset({"classifier", "decision"})
+
+
+class ListenerTLS(BaseModel):
+    """A listener's server certificate for one-way TLS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cert_file: str = Field(
+        description="PEM certificate chain; a relative path is relative to "
+        "the config file's directory."
+    )
+    key_file: str = Field(description="PEM private key of the certificate.")
+
+
+class ListenerIdentity(BaseModel):
+    """The identity sources a standalone listener trusts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    trust_headers: bool = Field(
+        default=False,
+        description="Keep the client identity headers (x-authz-* and the "
+        "global.services.authz.identity names) that an authenticating proxy "
+        "in front of this listener sets. Off, the Router drops them.",
+    )
+    trusted_peers: Optional[List[str]] = Field(
+        default=None,
+        description="CIDRs whose connections may carry trusted identity "
+        "headers; the TCP peer is checked, never X-Forwarded-For.",
+    )
+
+
+class ListenerSystemOne(BaseModel):
+    """Explicit public models for native System One inference."""
+
+    model_config = ConfigDict(extra="forbid")
+    models: List[str] = Field(min_length=1)
+
+    @field_validator("models")
+    @classmethod
+    def exact_model_names(cls, names):
+        if any(not name or name != name.strip() for name in names):
+            raise ValueError("systemone.models requires exact non-empty public names")
+        if len(set(names)) != len(names):
+            raise ValueError("systemone.models must not contain duplicate names")
+        return names
 
 
 class Listener(BaseModel):
@@ -51,6 +101,28 @@ class Listener(BaseModel):
         "If set, requests must send one of these values as "
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
         "'api-key: <key>'; other requests are rejected with HTTP 401.",
+    )
+    models: Optional[List[str]] = Field(
+        default=None,
+        description="The only request models this listener accepts, by exact "
+        "'model' value; other models are rejected with HTTP 403 "
+        "model_not_allowed and /v1/models lists only these. Empty accepts "
+        "every model. Standalone mode enforces it; --gateway extproc rejects it.",
+    )
+    systemone: Optional[ListenerSystemOne] = Field(
+        default=None,
+        description="Publish native System One inference for these exact public "
+        "model IDs. Omitted keeps the API private; Chat model access is unchanged.",
+    )
+    tls: Optional[ListenerTLS] = Field(
+        default=None,
+        description="Serve this listener over TLS. Standalone mode serves it; "
+        "--gateway extproc does not.",
+    )
+    identity: Optional[ListenerIdentity] = Field(
+        default=None,
+        description="The identity sources this listener trusts in standalone "
+        "mode; by default none.",
     )
 
 
@@ -264,36 +336,6 @@ class StructureFeature(BaseModel):
     source: StructureSource
 
 
-class NumericPredicate(BaseModel):
-    """Numeric threshold predicate for structure signals."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    gt: Optional[float] = None
-    gte: Optional[float] = None
-    lt: Optional[float] = None
-    lte: Optional[float] = None
-
-    @model_validator(mode="after")
-    def validate_contract(self):
-        for value in (self.gt, self.gte, self.lt, self.lte):
-            if value is not None and not math.isfinite(value):
-                raise ValueError("numeric predicate values must be finite")
-        if all(value is None for value in (self.gt, self.gte, self.lt, self.lte)):
-            raise ValueError("numeric predicate requires at least one comparator")
-        if self.gt is not None and self.gte is not None:
-            raise ValueError("numeric predicate cannot set both gt and gte")
-        if self.lt is not None and self.lte is not None:
-            raise ValueError("numeric predicate cannot set both lt and lte")
-        lower = self.gt if self.gt is not None else self.gte
-        upper = self.lt if self.lt is not None else self.lte
-        if lower is not None and upper is not None:
-            strict = self.gt is not None or self.lt is not None
-            if lower > upper or (lower == upper and strict):
-                raise ValueError("numeric predicate defines an empty range")
-        return self
-
-
 class StructureRule(BaseModel):
     """Request-shape routing signal configuration."""
 
@@ -453,7 +495,9 @@ class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
     name: str
-    threshold: float
+    # Omitted, the rule takes every span the PII model reports; a Vela 2.0
+    # model reports only spans above its size's calibrated threshold.
+    threshold: Optional[float] = None
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
     description: Optional[str] = None
@@ -613,10 +657,12 @@ class ClassifierSignal(BaseModel):
     def _validate_local(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError("local classifiers require at least two labels")
-        if self.model or self.instructions or self.disable_rationale:
+        if self.model or self.disable_rationale:
             raise ValueError(
-                "local classifiers do not accept model, instructions or disable_rationale"
+                "local classifiers do not accept model or disable_rationale"
             )
+        if self.model_path and self.instructions:
+            raise ValueError("specialist local classifiers do not accept instructions")
 
     def _validate_llm(self):
         if not self.instructions:
@@ -666,6 +712,7 @@ class Signals(BaseModel):
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
     input_modality: Optional[List[InputModalityRule]] = []
+    decision: Optional[List[DecisionSignalRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -736,12 +783,16 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
             raise ValueError("leaf condition node cannot define child conditions")
-        if self.label is not None and self.type != "classifier":
-            raise ValueError("label is only valid for classifier conditions")
+        if self.label is not None and self.type not in LABELED_CONDITION_TYPES:
+            raise ValueError(
+                "label is only valid for classifier and decision conditions"
+            )
         if self.type == "classifier" and self.label is None:
             raise ValueError("classifier conditions require a label")
-        if self.on_error is not None and self.type != "classifier":
-            raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_error is not None and self.type not in LABELED_CONDITION_TYPES:
+            raise ValueError(
+                "on_error is only valid for classifier and decision conditions"
+            )
         if self.on_unknown is not None:
             raise ValueError("on_unknown is only valid on the root rules node")
         return self
@@ -1146,6 +1197,22 @@ class AdvancedToolFilteringConfig(BaseModel):
     hybrid_history: Optional[HybridHistoryConfig] = None
 
 
+class StickyToolSelectionConfig(BaseModel):
+    """Session-scoped sticky tool-set selection (issue #3347).
+
+    Mirrors the Go-side `config.StickyToolSelectionConfig`. Opt-in and
+    disabled by default. This layer only mirrors the schema surface so
+    Pydantic stops dropping the subtree; the Go side is authoritative for
+    bounds (max_tools 1..128, max_new_tools_per_turn 0..max_tools) and for
+    rejecting sticky.enabled under a disabled tool_selection plugin.
+    """
+
+    enabled: bool = False
+    max_tools: Optional[int] = Field(default=None, ge=1, le=128)
+    max_new_tools_per_turn: Optional[int] = Field(default=None, ge=0)
+    pin_called_tools: Optional[bool] = None
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 
@@ -1159,6 +1226,7 @@ class ToolSelectionPluginConfig(BaseModel):
     relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0)
     advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
+    sticky: Optional[StickyToolSelectionConfig] = None
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -1195,26 +1263,22 @@ class HallucinationPluginConfig(BaseModel):
 
 
 class RouterReplayPluginConfig(BaseModel):
-    """Configuration for router_replay plugin.
+    """Decision overrides for global.services.router_replay capture defaults.
 
-    The router_replay plugin captures routing decisions and payload snippets
-    for later debugging and replay. Records are stored in memory and accessible
-    via the /api/v1/observability/replays API endpoint.
+    Omitted fields inherit the shared service policy. Explicit false and zero
+    remain present so a decision can disable capture or remove a trace limit.
     """
 
-    enabled: bool = True
-    max_records: int = Field(
-        default=10000,
-        gt=0,
-        description="Maximum records in memory (must be > 0, default: 10000)",
-    )
-    capture_request_body: bool = True  # Capture request payloads
-    capture_response_body: bool = True  # Capture response payloads
-    max_body_bytes: int = Field(
-        default=4096,
-        gt=0,
-        description="Max bytes to capture per body (must be > 0, default: 4096)",
-    )
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    capture_request_body: Optional[StrictBool] = None
+    capture_response_body: Optional[StrictBool] = None
+    capture_personal_data: Optional[StrictBool] = None
+    max_records: Optional[int] = Field(default=None, ge=0)
+    max_body_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
 
 
 # Headers that carry a credential on the primary path. A shadow copy never
@@ -1713,6 +1777,135 @@ class DecisionAction(BaseModel):
         return self
 
 
+# Decision reliability fields Envoy cannot apply to one request.
+DECISION_RELIABILITY_NATIVE_ONLY = (
+    "idle_timeout",
+    "first_byte_timeout",
+    "retry_back_off_base",
+    "retry_back_off_max",
+    "retry_after_max",
+)
+
+
+class DecisionReliability(BaseModel):
+    """A decision's override of its provider model's timeouts and retries.
+
+    The fields mean what they mean in the provider reliability block. Timeouts
+    and retry_count replace the provider model's, and 0s disables a timeout;
+    retry_on and retriable_status_codes add to the provider model's, as Envoy's
+    per-request headers do. Unset fields keep the provider model's.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_timeout: Optional[str] = None
+    per_try_timeout: Optional[str] = None
+    idle_timeout: Optional[str] = None
+    first_byte_timeout: Optional[str] = None
+    retry_count: Optional[int] = Field(default=None, ge=0, le=5)
+    retry_on: Optional[str] = None
+    retriable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
+    retry_back_off_base: Optional[str] = None
+    retry_back_off_max: Optional[str] = None
+    retry_after_max: Optional[str] = None
+
+    @field_validator(
+        "total_timeout", "per_try_timeout", "idle_timeout", "first_byte_timeout"
+    )
+    @classmethod
+    def _duration_or_zero(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            parse_duration(value)
+        return value
+
+    @field_validator("retry_back_off_base", "retry_back_off_max", "retry_after_max")
+    @classmethod
+    def _positive_duration(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and parse_duration(value) <= 0:
+            raise ValueError("must be a positive duration such as 30s")
+        return value
+
+    @model_validator(mode="after")
+    def _back_off_bounds(self) -> "DecisionReliability":
+        if self.retry_back_off_max is None:
+            return self
+        base = parse_duration(self.retry_back_off_base or "25ms")
+        if parse_duration(self.retry_back_off_max) < base:
+            raise ValueError("retry_back_off_max must not be below retry_back_off_base")
+        return self
+
+    def native_only_fields(self) -> List[str]:
+        """The fields set that only standalone mode honors."""
+        return [
+            field
+            for field in DECISION_RELIABILITY_NATIVE_ONLY
+            if getattr(self, field) is not None
+        ]
+
+
+def _fallback_duration_seconds(value: str | int):
+    """A fallback duration as the Router reads it: a Go duration string such
+    as 30s, or integer nanoseconds."""
+    if isinstance(value, bool):
+        raise ValueError("must be a duration such as 30s")
+    if isinstance(value, int):
+        return value / 1_000_000_000
+    return parse_duration(value)
+
+
+class FallbackOverride(BaseModel):
+    """A decision's override of its recipe's cross-model fallback policy.
+
+    Each field it sets replaces the recipe's (routing.fallback, then
+    global.router.fallback); unset fields keep it. The candidates stay the
+    decision's ranked models. circuit_breaker is per backend, so it stays on
+    the recipe's or the global policy.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    max_attempts: Optional[int] = Field(default=None, ge=0)
+    total_timeout: Optional[str | int] = None
+    per_attempt_timeout: Optional[str | int] = None
+    retryable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
+
+    @field_validator("total_timeout", "per_attempt_timeout")
+    @classmethod
+    def _non_negative_duration(cls, value: Optional[str | int]) -> Optional[str | int]:
+        if value is not None and _fallback_duration_seconds(value) < 0:
+            raise ValueError("must not be negative")
+        return value
+
+    @model_validator(mode="after")
+    def _per_attempt_within_total(self) -> "FallbackOverride":
+        if self.total_timeout is None or self.per_attempt_timeout is None:
+            return self
+        total = _fallback_duration_seconds(self.total_timeout)
+        per_attempt = _fallback_duration_seconds(self.per_attempt_timeout)
+        if total > 0 and per_attempt > total:
+            raise ValueError("per_attempt_timeout cannot exceed total_timeout")
+        return self
+
+
+class FallbackCircuitBreaker(BaseModel):
+    """Per-backend back-off of a recipe's or the global fallback policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    consecutive_failures: Optional[int] = Field(default=None, ge=0)
+    cooldown_period: Optional[str | int] = None
+    half_open_probes: Optional[int] = Field(default=None, ge=0)
+
+
+class FallbackPolicy(FallbackOverride):
+    """A recipe's cross-model fallback policy (routing.fallback): the
+    decision fields plus the version and the per-backend circuit breaker."""
+
+    version: Optional[Literal[0, 1]] = None
+    circuit_breaker: Optional[FallbackCircuitBreaker] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1731,6 +1924,8 @@ class Decision(BaseModel):
     modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
+    reliability: Optional[DecisionReliability] = None
+    fallback: Optional[FallbackOverride] = None
     plugins: Optional[List[PluginConfig]] = []
     annotations: Optional[Dict[str, Any]] = None
 
@@ -1810,7 +2005,8 @@ class ModelPricing(BaseModel):
 
 
 class ProviderReliability(BaseModel):
-    """Generated Envoy reliability policy for one provider model."""
+    """Load balancing, timeouts, retries and endpoint health for one provider
+    model, honored the same way by every data plane."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1823,6 +2019,56 @@ class ProviderReliability(BaseModel):
     health_check_path: Optional[str] = None
     health_check_interval: str = "10s"
     health_check_timeout: str = "2s"
+    connect_timeout: Optional[str] = None
+    total_timeout: Optional[str] = None
+    idle_timeout: Optional[str] = None
+    per_try_timeout: Optional[str] = None
+    first_byte_timeout: Optional[str] = Field(
+        default=None,
+        description="Wait for the first response body byte, so a stalled stream "
+        "can still be retried. Only standalone mode honors it.",
+    )
+    retriable_status_codes: List[Annotated[int, Field(ge=100, le=599)]] = Field(
+        default_factory=list
+    )
+    retry_back_off_base: Optional[str] = None
+    retry_back_off_max: Optional[str] = None
+    retry_after_max: Optional[str] = None
+    retry_budget_percent: Optional[float] = Field(default=None, gt=0, le=100)
+    retry_budget_min_concurrency: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator(
+        "base_ejection_time",
+        "health_check_interval",
+        "health_check_timeout",
+        "connect_timeout",
+        "per_try_timeout",
+        "first_byte_timeout",
+        "retry_back_off_base",
+        "retry_back_off_max",
+        "retry_after_max",
+    )
+    @classmethod
+    def _positive_duration(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and parse_duration(value) <= 0:
+            raise ValueError("must be a positive duration such as 30s")
+        return value
+
+    @field_validator("total_timeout", "idle_timeout")
+    @classmethod
+    def _duration_or_zero(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            parse_duration(value)
+        return value
+
+    @model_validator(mode="after")
+    def _back_off_bounds(self) -> "ProviderReliability":
+        if self.retry_back_off_max is None:
+            return self
+        base = parse_duration(self.retry_back_off_base or "25ms")
+        if parse_duration(self.retry_back_off_max) < base:
+            raise ValueError("retry_back_off_max must not be below retry_back_off_base")
+        return self
 
 
 class Reasoning(BaseModel):
@@ -2325,7 +2571,8 @@ class ModelBinding(BaseModel):
 
     deployment: str
     contract: str
-    adapter: str
+    # Required except on model_runtime deployments, whose card names the head.
+    adapter: str = ""
     head: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
@@ -2336,8 +2583,6 @@ def _validate_unbound_classifier_selectors(profile):
     for rule in profile.signals.classifiers or []:
         if f"classifier.{rule.name}" in profile.model_bindings:
             continue
-        if rule.type == CLASSIFIER_TYPE_LOCAL and not rule.model_path:
-            raise ValueError("local classifiers require model_path or a model binding")
         if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
             raise ValueError(
                 f"{rule.type} classifiers require model or a model binding"
@@ -2354,14 +2599,6 @@ class CandidateRequirements(BaseModel):
     context: Optional[Literal["known_limits"]] = None
 
 
-class RoutingDataPolicy(BaseModel):
-    """Standing recipe restrictions; false replay cannot be enabled by a decision."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    replay: Optional[StrictBool] = None
-
-
 class Routing(BaseModel):
     """Canonical routing block."""
 
@@ -2370,11 +2607,11 @@ class Routing(BaseModel):
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+    fallback: Optional[FallbackPolicy] = None
 
 
 class Entrypoint(BaseModel):
@@ -2413,11 +2650,11 @@ class RecipeRouting(BaseModel):
 
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     candidate_requirements: Optional[CandidateRequirements] = None
-    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+    fallback: Optional[FallbackPolicy] = None
 
 
 class Recipe(BaseModel):
@@ -2447,19 +2684,12 @@ class EmbeddingModelsConfig(BaseModel):
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
     )
-    gemma_model_path: Optional[str] = Field(
-        None, description="Path to EmbeddingGemma model"
-    )
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
     multimodal_model_path: Optional[str] = Field(
         None,
         description="Path to multi-modal embedding model (text/image/audio)",
-    )
-    bert_model_path: Optional[str] = Field(
-        None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,
@@ -2487,12 +2717,22 @@ class UserConfig(BaseModel):
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
+    @property
+    def routing_enabled(self) -> bool:
+        router = (self.global_ or {}).get("router") or {}
+        enabled = router.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("global.router.enabled must be a boolean")
+        return enabled
+
     @model_validator(mode="after")
     def validate_classifier_selectors(self):
         # Global serving defaults are available only at document scope. Do not
         # reject a valid inherited selector while parsing a child profile.
         from cli.model_runtime_defaults import iter_effective_routing_profiles
 
+        if not self.routing_enabled:
+            return self
         for _, profile in iter_effective_routing_profiles(self):
             _validate_unbound_classifier_selectors(profile)
         return self

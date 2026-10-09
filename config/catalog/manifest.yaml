@@ -5,10 +5,10 @@ release: unreleased
 compatibility:
   cli:
     min: 0.3.0
-    max_exclusive: 0.5.0
+    max_exclusive: 0.6.0
   router:
     min: 0.3.0
-    max_exclusive: 0.5.0
+    max_exclusive: 0.6.0
   config_schema: v0.3
   required_features:
     - entrypoints
@@ -119,6 +119,11 @@ inventory:
           - stepfun/step-3.7-flash
           - stepfun/step-3.5-flash
           - stepfun/step3-vl-10b
+      - publisher: TII / Falcon
+        representative_models:
+          - tii/falcon-h1r-7b
+          - tii/falcon-h1-0.5b-instruct
+          - tii/falcon-h1-34b-instruct
       - publisher: Tencent / Hunyuan
         representative_models:
           - tencent/hy4-preview

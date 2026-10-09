@@ -142,7 +142,7 @@ func TestReaskSignalFailureAndNonApplicability(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			rc, err := NewReaskClassifierWithProvider([]config.ReaskRule{{Name: "repeat", Threshold: .8, LookbackTurns: tc.lookback}, {Name: "longer", Threshold: .8, LookbackTurns: 3}}, "synthetic", provider)
+			rc, err := NewReaskClassifierWithProvider([]config.ReaskRule{{Name: "repeat", Threshold: .8, LookbackTurns: tc.lookback}, {Name: "longer", Threshold: .8, LookbackTurns: 3}}, "synthetic", fullInputTestEmbeddingProvider{provider})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -1,4 +1,4 @@
-//go:build windows || !cgo
+//go:build windows
 
 package cache
 
@@ -25,7 +25,6 @@ type InMemoryCacheOptions struct {
 	HNSWM               int
 	HNSWEfConstruction  int
 	EmbeddingModel      string
-	PolarityGuard       PolarityGuardOptions
 }
 
 // NewInMemoryCache creates a new in-memory cache instance

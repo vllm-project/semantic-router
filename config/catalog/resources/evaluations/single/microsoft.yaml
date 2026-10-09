@@ -760,3 +760,107 @@
     verification: imported
     source: https://aclanthology.org/2026.eacl-long.78.pdf
     redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-aime-2024@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+    samples_per_prompt: 5
+  metrics:
+    pass_at_1: 0.813
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-aime-2025@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+    samples_per_prompt: 50
+  metrics:
+    pass_at_1: 0.780
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+  metrics:
+    accuracy: 0.693
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-ifeval@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 2
+    metric_variant: strict
+    sampling_temperature: 0.8
+    maximum_output_tokens: 32768
+  metrics:
+    accuracy: 0.849
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 2
+    sampling_temperature: 0.8
+    maximum_output_tokens: 32768
+    samples_per_prompt: 5
+  metrics:
+    accuracy: 0.760
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true

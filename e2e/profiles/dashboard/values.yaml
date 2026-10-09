@@ -49,12 +49,10 @@ configOverride:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
     stores:
       response_cache:
         enabled: false

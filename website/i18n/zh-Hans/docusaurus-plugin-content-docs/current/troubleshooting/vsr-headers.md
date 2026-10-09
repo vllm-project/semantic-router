@@ -67,6 +67,7 @@ Router 把头分到两个面：
 | `x-vsr-effective-input-tokens` | default | 最终自动输出分发中，所选后端实际渲染的输入 token 数，包含其 chat 模板。 | `512` |
 | `x-vsr-effective-max-output-tokens` | default | 该自动输出分发中发送的已解析输出 token 上限，包含推理。这是预算，不是已消耗的 token。 | `261632` |
 | `x-vsr-routing-latency-ms` | default | Router 选择模型所花时间，单位毫秒，带亚毫秒精度。 | `0.412` |
+| `x-vsr-fallback-attempts` | default | 由跨模型 fallback 的候选模型返回响应时，fallback 一共尝试的次数（含主模型）；两种网关模式相同。主模型直接返回时不出现。 | `2` |
 | `x-vsr-selected-category` | debug | 运行领域路由时的领域/类别分类器结果。 | `math` |
 | `x-vsr-selected-reasoning` | debug | 为请求选择的推理模式。 | `on` |
 | `x-vsr-selected-modality` | debug | 模态结果和可选方法。 | `AR;classifier` |
@@ -107,6 +108,7 @@ Router 把头分到两个面：
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
 | `x-vsr-matched-input-modality` | `input_modality` |
+| `x-vsr-matched-decision-model` | `decision`（noul 与 score 规则名；choice 为 `rule:choice`；set 或 span 每个匹配的标签为 `rule:label`） |
 
 ## 投影头
 
@@ -139,7 +141,7 @@ Router 把头分到两个面：
 | ------ | ----------- |
 | `x-vsr-kv-source-pod` | 持有源模型 KV 缓存的 Pod 的 gRPC 地址。 |
 | `x-vsr-kv-cache-id` | 源 KV 块的不透明会话或缓存标识。 |
-| `x-vsr-kv-mapper-id` | 为源→目标模型对发布的 ridge-mapper 产物。 |
+| `x-vsr-kv-mapper-id` | 为源→目标模型对发布的映射器产物，即 ridge 拟合或其蒸馏精修版本。 |
 
 **响应（后端 → Router）：**
 
@@ -212,7 +214,7 @@ x-vsr-replay-id: replay_01J...
 
 ## 兼容性与解读
 
-- 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。路由推理响应总会携带它。改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）从不携带该头，因此那里缺失属于预期，而不是合约违规。
+- 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。未由响应缓存返回的路由推理响应携带它。改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）从不携带该头，因此那里缺失属于预期，而不是合约违规。
 - `x-vsr-matched-projections` 是投影头。单数形式不属于公开合约。
 - 配方名限定本地信号、投影、决策、缓存、回放、指标以及学习/会话身份。把响应与 Insights 或指标关联时，把 `x-vsr-selected-recipe` 与本地决策/信号名一起使用。
 - `event` 是决策和 DSL 使用的公开信号类型。规范 YAML 把 event 规则存在 `routing.signals.events` 下，与其他复数信号容器一致。

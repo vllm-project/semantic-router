@@ -130,15 +130,11 @@ harness-go-bootstrap: ## Install Go lint tooling only when Go changed
 		fi; \
 	fi
 
-harness-rust-bootstrap: ## Install Rust lint tooling only when Rust changed
-	@if command -v rustup >/dev/null 2>&1; then rustup component add clippy >/dev/null 2>&1 || true; fi
-
 test-and-build-local: ## Reproduce the CI Test And Build job locally
 	@$(LOG_TARGET)
 	@set -e; \
 	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true; $(MAKE) stop-qdrant >/dev/null 2>&1 || true' EXIT; \
 	$(MAKE) check-go-mod-tidy; \
-	$(MAKE) rust-ci; \
 	python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt; \
 	$(MAKE) test-model-selection-parity; \
 	$(MAKE) helm-ci-validate HELM_NAMESPACE=test-namespace; \
@@ -147,10 +143,10 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	$(MAKE) start-qdrant; \
 	$(MAKE) start-redis; \
 	$(MAKE) start-valkey; \
-	CI=true CGO_ENABLED=1 $(NATIVE_ENV) MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
+	CI=true CGO_ENABLED=1 MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
 
 .PHONY: impact check verify ci-full harness-check harness-venv-install harness-bootstrap \
-	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap harness-rust-bootstrap \
+	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap \
 	test-and-build-local
 
 agent-skill-sync: ## Regenerate the public install skill from its repository source
