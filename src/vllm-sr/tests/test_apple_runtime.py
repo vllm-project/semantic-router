@@ -115,7 +115,10 @@ def test_stale_pid_never_signals_an_unrelated_process(monkeypatch, tmp_path):
     assert not state.exists()
 
 
-def test_host_proxy_keeps_json_contract_and_reaps_process_leases(monkeypatch, tmp_path):
+@pytest.mark.parametrize("local_model", [False, True])
+def test_host_proxy_keeps_json_contract_and_reaps_process_leases(
+    monkeypatch, tmp_path, local_model
+):
     # A real subprocess provides the runtime HTTP boundary. No torch, models,
     # native dependencies, or Docker installation are involved in this test.
     fixture = """
@@ -139,6 +142,9 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
         return process
 
     monkeypatch.setattr("cli.apple_runtime_server.subprocess.Popen", launch)
+    monkeypatch.chdir(tmp_path)
+    local_directory = tmp_path / "my-model"
+    local_directory.mkdir()
     server = BridgeServer(
         {
             "token": "private",
@@ -147,8 +153,12 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
             "directory": str(tmp_path),
             "cache": str(tmp_path),
             "python": sys.executable,
+            "engine_mode": local_model,
         }
     )
+    # Drive reap explicitly so the expiry/renewal ordering below is deterministic;
+    # the HTTP accept loop must not start a second reaper during the barrier.
+    monkeypatch.setattr(server, "service_actions", lambda: None)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
 
@@ -167,12 +177,16 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
             connection.close()
 
     key = hashlib.sha256(b"model-plan").hexdigest()
-    models = [{"model": "vllm-sr/fixture", "name": "fixture", "device": "mps"}]
+    artifact = "./my-model" if local_model else "vllm-sr/fixture"
+    models = [{"model": artifact, "name": "fixture", "device": "mps"}]
     try:
         assert call("GET", "/status", token="incorrect")[0] == 401
         assert call("POST", "/processes/" + key, {"models": models})[0] == 200
         assert call("POST", "/processes/" + key, {"models": models})[0] == 200
         assert len(children) == 1
+        inventory = json.loads((tmp_path / f"{key}.models.json").read_text())
+        expected_artifact = str(local_directory.resolve()) if local_model else artifact
+        assert inventory["models"][0]["model"] == expected_artifact
         payload = {"tasks": [{"id": "one", "decisions": {"state": "unchanged"}}]}
         deadline = time.monotonic() + 5
         while True:
@@ -182,6 +196,43 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
             time.sleep(0.02)
         assert status == 200
         assert body == payload
+        # Force the renewal/reaper race: pause after the expiry snapshot, let
+        # HTTP acknowledge a renewal, then allow the stale reaper to continue.
+        selected = threading.Event()
+        resume = threading.Event()
+        errors = []
+        original_stop = server.processes.stop
+
+        def paused_stop(key, **kwargs):
+            selected.set()
+            if not resume.wait(timeout=5):
+                raise TimeoutError("renewal regression did not resume the reaper")
+            original_stop(key, **kwargs)
+
+        def reap():
+            try:
+                server.processes.reap()
+            except BaseException as error:
+                errors.append(error)
+
+        with server.processes.lock:
+            server.processes.children[key]["expires"] = time.monotonic() - 1
+        with monkeypatch.context() as patch:
+            patch.setattr(server.processes, "stop", paused_stop)
+            reaper = threading.Thread(target=reap, daemon=True)
+            reaper.start()
+            try:
+                assert selected.wait(timeout=5)
+                assert call("POST", "/processes/" + key, {"models": models})[0] == 200
+                assert server.processes.children[key]["expires"] > time.monotonic()
+            finally:
+                resume.set()
+                reaper.join(timeout=5)
+            assert not reaper.is_alive()
+            assert not errors
+        assert children[0].poll() is None
+        assert server.processes.children[key]["process"] is children[0]
+        assert len(children) == 1
         server.processes.children[key]["expires"] = time.monotonic() - 1
         server.processes.reap()
         assert children[0].poll() is not None
@@ -191,3 +242,40 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
         server.processes.close()
         server.server_close()
         worker.join(timeout=5)
+
+
+@pytest.mark.parametrize("models_file", [False, True])
+def test_engine_resolves_relative_model_paths_before_host_handoff(
+    monkeypatch, tmp_path, models_file
+):
+    from cli import apple_runtime_engine as engine
+
+    monkeypatch.chdir(tmp_path)
+    directory = tmp_path / "my-model"
+    directory.mkdir()
+    monkeypatch.setattr(engine, "validate_apple_host", lambda *args: None)
+    monkeypatch.setattr(engine, "validate_local_docker", lambda: None)
+    monkeypatch.setattr(engine, "apply_container_runtime_override", lambda *args: None)
+    monkeypatch.setattr(engine, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(engine, "get_container_image", lambda *args, **kwargs: "image")
+    monkeypatch.setattr(
+        engine, "acquire_runtime_lifecycle_lock", lambda **kwargs: _noop()
+    )
+    monkeypatch.setattr(apple_runtime, "start_bridge", lambda *args, **kwargs: {})
+    received = []
+
+    def request(state, path, *, method, body):
+        received.append(body)
+        return {"port": 8000}
+
+    monkeypatch.setattr(apple_runtime, "request", request)
+    args = ["serve", "--platform", "apple"]
+    if models_file:
+        inventory = tmp_path / "models.yaml"
+        inventory.write_text("models:\n  - model: ./my-model\n")
+        args += ["--models", str(inventory)]
+    else:
+        args.append("./my-model")
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    assert received[0]["models"][0]["model"] == str(directory.resolve())
