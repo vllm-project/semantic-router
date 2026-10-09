@@ -28,6 +28,7 @@ from recipe_conformance_runtime import (
     management_auth_bindings,
     prepare_builtin_runtime,
     verify_composed_policy,
+    with_runtime_preview_budget,
 )
 from recipe_conformance_sources import (
     discover_recipe_sources,
@@ -734,13 +735,17 @@ def command_prepare_runtime(args: argparse.Namespace) -> int:
     recipe_path = args.recipes_root / args.recipe
     build_recipe_inventory(recipe_path)
     authored = load_yaml_mapping(recipe_path / "config.yaml")
+    manifest, _probes = load_probe_manifest(recipe_path / "probes.yaml")
     if not any(key in authored for key in ("providers", "routing", "entrypoints")):
-        composed = prepare_builtin_runtime(recipe_path, args.config, REPO_ROOT)
-        verify_composed_policy(authored, composed)
+        composed = prepare_builtin_runtime(
+            recipe_path, args.config, REPO_ROOT, manifest
+        )
+        verify_composed_policy(authored, composed, manifest)
     else:
+        prepared = with_runtime_preview_budget(authored, manifest)
         args.config.parent.mkdir(parents=True, exist_ok=True)
         with args.config.open("x", encoding="utf-8") as output:
-            output.write((recipe_path / "config.yaml").read_text(encoding="utf-8"))
+            yaml.safe_dump(prepared, output, sort_keys=False)
     return 0
 
 

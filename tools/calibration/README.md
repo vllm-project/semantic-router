@@ -14,6 +14,16 @@ The maintained recipe workflow uses
 `config/schemas/recipe-probes-v1.schema.json`. See the repository's
 `routing-calibration` skill for live verification requirements.
 
+`prepare-runtime` creates disposable conformance deployment configurations. When
+the probe manifest declares `evaluation.request_timeout_seconds`, the prepared
+configuration fills an omitted
+`global.services.api.routing_preview.request_timeout_seconds` with that budget
+(fractional seconds round down to the API's integer seconds). An explicitly
+authored Preview limit, signal deadline, or concurrency setting is preserved.
+This aligns the owned server fixture with the probe client's existing budget;
+it does not change the product's default timeout or the source recipe. Evaluating
+an already-running Router does not modify its configuration.
+
 Probe decisions and individual variants may declare `expected_signal_errors`,
 an exact mapping from runtime signal keys to error codes. For example, a probe
 that deliberately exceeds complete-input evaluation limits can require:
