@@ -27,16 +27,16 @@ conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
-- catalog: deepseek/deepseek-v4-flash
+- catalog: deepseek/deepseek-v4.1-flash
   relationship: first_party
-  id: deepseek-v4-flash
+  id: deepseek-flash
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
   lifecycle: active
   verification:
     status: claimed
-    verified_at: 2026-09-05
+    verified_at: 2026-09-24
     source: https://api-docs.deepseek.com/quick_start/pricing
 - catalog: deepseek/deepseek-v4-pro
   relationship: first_party

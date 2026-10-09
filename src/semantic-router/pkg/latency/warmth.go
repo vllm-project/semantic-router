@@ -2,7 +2,6 @@ package latency
 
 import (
 	"math"
-	"sort"
 	"strings"
 	"time"
 
@@ -34,30 +33,34 @@ const FreshnessHalfLifeSeconds = 60.0
 // MinRelativeScaleFloor is the minimum effective scale relative to ref.
 const MinRelativeScaleFloor = 0.10
 
-// ttftSnapshot copies the TTFT stats needed for one estimate under a single lock.
+// ttftSnapshot holds the TTFT stats one estimate needs, read under a single
+// lock: the window's 20th, 50th and 80th percentiles (warm, ref and cold).
 type ttftSnapshot struct {
 	averageTTFT      float64
-	recentTTFTs      []float64
+	warm, ref, cold  float64
 	observationCount int
 	lastUpdated      time.Time
 }
 
-// getTTFTSnapshot returns a copy of model TTFT stats under one RLock.
+// getTTFTSnapshot reads model TTFT stats under one lock.
 func getTTFTSnapshot(model string) (ttftSnapshot, bool) {
-	globalTTFTCache.mu.RLock()
-	defer globalTTFTCache.mu.RUnlock()
+	globalTTFTCache.mu.Lock()
+	defer globalTTFTCache.mu.Unlock()
 
 	stats, exists := globalTTFTCache.cache[model]
-	if !exists {
+	if !exists || stats.recent.len() == 0 {
 		return ttftSnapshot{}, false
 	}
 
-	recent := make([]float64, len(stats.RecentTTFTs))
-	copy(recent, stats.RecentTTFTs)
-
+	sorted := stats.recent.sorted
+	warm, _ := percentileFromSorted(sorted, 0.20)
+	ref, _ := percentileFromSorted(sorted, 0.50)
+	cold, _ := percentileFromSorted(sorted, 0.80)
 	return ttftSnapshot{
 		averageTTFT:      stats.AverageTTFT,
-		recentTTFTs:      recent,
+		warm:             warm,
+		ref:              ref,
+		cold:             cold,
 		observationCount: stats.ObservationCount,
 		lastUpdated:      stats.LastUpdated,
 	}, true
@@ -97,17 +100,13 @@ func EstimateCacheProbability(input CacheEstimationInput) float64 {
 		return CacheWarmthPrior
 	}
 
-	// Sort once; read p20, p50, p80 from the same sorted slice.
-	sort.Float64s(snap.recentTTFTs)
-
-	warm, warmOk := percentileFromSorted(snap.recentTTFTs, 0.20)
-	cold, coldOk := percentileFromSorted(snap.recentTTFTs, 0.80)
-	if !warmOk || !coldOk || cold <= warm {
+	warm, cold := snap.warm, snap.cold
+	if cold <= warm {
 		return CacheWarmthPrior
 	}
 
-	ref, refOk := percentileFromSorted(snap.recentTTFTs, 0.50)
-	if !refOk || ref <= 0 {
+	ref := snap.ref
+	if ref <= 0 {
 		ref = snap.averageTTFT
 	}
 	if ref <= 0 {
@@ -134,10 +133,12 @@ func EstimateCacheProbability(input CacheEstimationInput) float64 {
 	reliability := countReliability * spreadReliability * freshnessReliability
 	prob := clamp(reliability*raw+(1.0-reliability)*CacheWarmthPrior, 0, 1)
 
-	logging.Debugf("EstimateCacheProbability: model=%q observed=%.4fs ref=%.4fs raw=%.4f "+
-		"reliability=%.4f (count=%.2f spread=%.2f fresh=%.2f) prob=%.4f",
-		model, input.TTFTSeconds, ref, raw,
-		reliability, countReliability, spreadReliability, freshnessReliability, prob)
+	if logging.DebugEnabled() {
+		logging.Debugf("EstimateCacheProbability: model=%q observed=%.4fs ref=%.4fs raw=%.4f "+
+			"reliability=%.4f (count=%.2f spread=%.2f fresh=%.2f) prob=%.4f",
+			model, input.TTFTSeconds, ref, raw,
+			reliability, countReliability, spreadReliability, freshnessReliability, prob)
+	}
 
 	return prob
 }
@@ -152,8 +153,8 @@ func GetTTFTLastUpdated(model string) (time.Time, bool) {
 	if model == "" {
 		return time.Time{}, false
 	}
-	globalTTFTCache.mu.RLock()
-	defer globalTTFTCache.mu.RUnlock()
+	globalTTFTCache.mu.Lock()
+	defer globalTTFTCache.mu.Unlock()
 	stats, exists := globalTTFTCache.cache[model]
 	if !exists {
 		return time.Time{}, false

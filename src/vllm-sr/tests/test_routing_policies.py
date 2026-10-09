@@ -15,14 +15,12 @@ def test_recipe_policy_fields_preserve_false_and_independent_dimensions(model):
     value = model.model_validate(
         {
             "candidate_requirements": {"context": "known_limits"},
-            "data_policy": {"replay": False},
         }
     )
     dumped = value.model_dump(exclude_none=True, by_alias=True)
     assert dumped["candidate_requirements"] == {"context": "known_limits"}
-    assert dumped["data_policy"] == {"replay": False}
     assert model().candidate_requirements is None
-    assert model().data_policy is None
+    assert "data_policy" not in dumped
 
 
 @pytest.mark.parametrize(
@@ -31,7 +29,8 @@ def test_recipe_policy_fields_preserve_false_and_independent_dimensions(model):
         {"candidate_requirements": {"context": "bounded"}},
         {"candidate_requirements": {"capabilities": "inferred"}},
         {"candidate_requirements": {"unknown": True}},
-        {"data_policy": {"replay": "false"}},
+        {"data_policy": {"replay": False}},
+        {"strategy": "priority", "data_policy": {"replay": False}},
         {"data_policy": {"replay": False, "export": False}},
     ],
 )
@@ -41,9 +40,33 @@ def test_recipe_policy_fields_reject_invalid_contract(payload):
             model.model_validate(payload)
 
 
+def test_personal_data_capture_override_does_not_require_a_pii_signal():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "global": {"services": {"router_replay": {"capture_personal_data": False}}},
+            "routing": {
+                "decisions": [
+                    {
+                        "name": "everything",
+                        "priority": 1,
+                        "plugins": [
+                            {
+                                "type": "router_replay",
+                                "configuration": {"capture_personal_data": False},
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+    assert validate_recipe_contracts(config) == []
+
+
 def test_recipe_policy_schema_discovery():
     doc = schema_document()
-    for path in ("routing.candidate_requirements", "recipes.routing.data_policy"):
+    for path in ("routing.candidate_requirements", "global.services.router_replay"):
         result = schema_view(doc, view="section", path=path, expanded=True)
         assert result["x-vllm-sr-view"]["path"] == path
     requirements = doc["$defs"]["CandidateRequirements"]["properties"]
@@ -179,7 +202,7 @@ def test_request_params_default_cli_rejects_invalid_values(tmp_path, value):
     "policy",
     [
         {"candidate_requirements": {"context": "known_limits"}},
-        {"data_policy": {"replay": False}},
+        {"strategy": "confidence"},
     ],
 )
 def test_policy_only_default_conflict_matches_router(policy):

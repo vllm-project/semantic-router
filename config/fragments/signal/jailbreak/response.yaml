@@ -8,5 +8,5 @@ routing:
     jailbreak:
       - name: unsafe_completion
         direction: response
-        threshold: 0.85
+        threshold: 0.77
         description: Detect jailbreak content in the model's own output.

@@ -1,0 +1,265 @@
+{
+  "case": "auto-urgent-route",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "159"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-auto-urgent-route"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"messages\":[{\"role\":\"system\",\"content\":\"Be brief.\"},{\"role\":\"user\",\"content\":\"This is urgent, summarize the plan.\"}],\"temperature\":0.2}",
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-selected-model",
+              "value": "general-small"
+            },
+            {
+              "name": ":path",
+              "value": "/v1/chat/completions"
+            },
+            {
+              "name": "content-length",
+              "value": "169"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key"
+          ]
+        },
+        "body": {
+          "body": "{\"model\":\"general-small-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"Be brief.\"},{\"role\":\"user\",\"content\":\"This is urgent, summarize the plan.\"}],\"temperature\":0.2}"
+        },
+        "clear_route_cache": true
+      }
+    },
+    {
+      "phase": "response_headers",
+      "header": [
+        {
+          "name": ":status",
+          "value": "200"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "287"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-vsr-schema-version",
+              "value": "2"
+            },
+            {
+              "name": "x-vsr-response-path",
+              "value": "upstream"
+            },
+            {
+              "name": "x-vsr-config-version",
+              "value": "1"
+            },
+            {
+              "name": "x-vsr-selected-recipe",
+              "value": "default"
+            },
+            {
+              "name": "x-vsr-selected-decision",
+              "value": "urgent_route"
+            },
+            {
+              "name": "x-vsr-selected-algorithm",
+              "value": "static"
+            },
+            {
+              "name": "x-vsr-selected-model",
+              "value": "general-small"
+            },
+            {
+              "name": "x-vsr-routing-latency-ms",
+              "value": "<volatile>"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-vsr-effective-input-tokens",
+            "x-vsr-effective-max-output-tokens"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "end_of_stream": true,
+      "body": "{\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello from the upstream model.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18}}",
+      "effect": {}
+    }
+  ],
+  "route": "general-small",
+  "upstream": {
+    "header": [
+      {
+        "name": ":method",
+        "value": "POST"
+      },
+      {
+        "name": ":authority",
+        "value": "localhost:8899"
+      },
+      {
+        "name": ":scheme",
+        "value": "http"
+      },
+      {
+        "name": ":path",
+        "value": "/v1/chat/completions"
+      },
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-forwarded-proto",
+        "value": "http"
+      },
+      {
+        "name": "x-request-id",
+        "value": "parity-auto-urgent-route"
+      },
+      {
+        "name": "accept-encoding",
+        "value": ""
+      },
+      {
+        "name": "x-selected-model",
+        "value": "general-small"
+      },
+      {
+        "name": "content-length",
+        "value": "169"
+      }
+    ],
+    "body": "{\"model\":\"general-small-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"Be brief.\"},{\"role\":\"user\",\"content\":\"This is urgent, summarize the plan.\"}],\"temperature\":0.2}"
+  },
+  "response": {
+    "status": 200,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "2"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "upstream"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "x-vsr-selected-recipe",
+        "value": "default"
+      },
+      {
+        "name": "x-vsr-selected-decision",
+        "value": "urgent_route"
+      },
+      {
+        "name": "x-vsr-selected-algorithm",
+        "value": "static"
+      },
+      {
+        "name": "x-vsr-selected-model",
+        "value": "general-small"
+      },
+      {
+        "name": "x-vsr-routing-latency-ms",
+        "value": "<volatile>"
+      }
+    ],
+    "body": "{\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello from the upstream model.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18}}"
+  },
+  "evidence": {
+    "recipe": "default",
+    "decision": "urgent_route",
+    "confidence": 1,
+    "model": "general-small",
+    "selection_method": "static",
+    "reasoning_mode": "off",
+    "signals": {
+      "keyword": [
+        "urgent_keywords"
+      ]
+    }
+  }
+}

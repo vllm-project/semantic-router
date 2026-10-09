@@ -43,7 +43,7 @@ func newResponseCacheService(cfg *config.RouterConfig, backend cache.CacheBacken
 	if identity == "" && (cfg == nil || cfg.NeedsSemanticResponseCache()) {
 		var err error
 		identity, err = responseCacheEmbeddingIdentity(cfg, backend, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveNamespaceIdentity(provider, settings)
+			return embedding.ResolveProviderIdentity(provider, settings)
 		})
 		if err != nil {
 			return nil, err
@@ -68,7 +68,7 @@ func responseCacheEmbeddingIdentity(cfg *config.RouterConfig, backend cache.Cach
 		return "", nil
 	}
 	identity, err := initialize(settings)
-	if settings.ModelType == "bert" && errors.Is(err, embedding.ErrIdentityUnsupported) {
+	if errors.Is(err, embedding.ErrIdentityUnsupported) {
 		return "", nil
 	}
 	if err != nil {

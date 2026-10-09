@@ -9,7 +9,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -57,7 +56,10 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 	if s.modelPool == nil {
 		s.modelPool = binding.NewPool()
 	}
-	options := classification.RecipeRuntimeOptions{Runtime: native.New(s.modelPool)}
+	options, lease, err := serviceModelRuntimes(newConfig, s.modelPool)
+	if err != nil {
+		return err
+	}
 	s.configMutex.RLock()
 	currentRecipes := s.recipeClassifiers
 	currentClassifier := s.classifier
@@ -67,20 +69,23 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 			newConfig,
 			currentClassifier,
 			options,
+			lease,
 		)
 	}
 
 	rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig, options)
 	if err != nil {
+		_ = lease.Close()
 		return fmt.Errorf("rebuild classifier: %w", err)
 	}
-	return s.prepareAndPublishClassifiers(newConfig, rebuiltClassifier, nil, rebuiltClassifier, options.Runtime)
+	return s.prepareAndPublishClassifiers(newConfig, rebuiltClassifier, nil, rebuiltClassifier, options, lease)
 }
 
 func (s *ClassificationService) refreshRecipeClassifiers(
 	newConfig *config.RouterConfig,
 	current *classification.Classifier,
 	options classification.RecipeRuntimeOptions,
+	lease io.Closer,
 ) error {
 	var (
 		categoryMapping  *classification.CategoryMapping
@@ -100,18 +105,21 @@ func (s *ClassificationService) refreshRecipeClassifiers(
 		options,
 	)
 	if err != nil {
+		_ = lease.Close()
 		return fmt.Errorf("rebuild recipe classifiers: %w", err)
 	}
 	if err := rebuilt.InitializeRuntime(); err != nil {
+		_ = lease.Close()
 		return fmt.Errorf("initialize recipe classifiers: %w", err)
 	}
 	defaultClassifier := rebuilt.Default()
 	if defaultClassifier == nil {
 		_ = rebuilt.Close()
+		_ = lease.Close()
 		return fmt.Errorf("default routing recipe classifier is unavailable")
 	}
 
-	return s.prepareAndPublishClassifiers(newConfig, defaultClassifier, rebuilt, rebuilt, options.Runtime)
+	return s.prepareAndPublishClassifiers(newConfig, defaultClassifier, rebuilt, rebuilt, options, lease)
 }
 
 // Preparation leaves old requests running. Only publication/retirement waits

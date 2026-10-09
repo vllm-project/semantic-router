@@ -1,4 +1,4 @@
-//go:build !windows && cgo && !riscv64
+//go:build !windows
 
 package cache
 
@@ -87,7 +87,7 @@ func remotePolarityFixture(t *testing.T, backend string, docs []remotePolarityDo
 		cfg.Index.VectorField.MetricType = "COSINE"
 		cfg.Search.TopK = 4
 		return &RedisCache{
-			enabled: true, config: cfg, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(),
+			enabled: true, config: cfg, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(_ context.Context, _ string, query string, options *redis.FTSearchOptions) (redis.FTSearchResult, error) {
 				require.Equal(t, partitionedKNNQuery(expectedPartition(), 4, "embedding"), query)
 				var result redis.FTSearchResult
@@ -107,7 +107,7 @@ func remotePolarityFixture(t *testing.T, backend string, docs []remotePolarityDo
 	cfg.Index.VectorField.MetricType = "COSINE"
 	cfg.Search.TopK = 4
 	return &ValkeyCache{
-		enabled: true, config: cfg, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(),
+		enabled: true, config: cfg, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(),
 		searchFn: func(_ context.Context, command []string) (any, error) {
 			require.Equal(t, partitionedKNNQuery(expectedPartition(), 4, "embedding"), command[2])
 			values := map[string]interface{}{}

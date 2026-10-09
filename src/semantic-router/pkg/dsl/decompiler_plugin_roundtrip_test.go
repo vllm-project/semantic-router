@@ -10,7 +10,7 @@ import (
 
 // TestPluginFieldsHallucinationEmitsAllAuthorableFields locks in that the
 // AST emitter for the hallucination plugin surfaces every field the DSL
-// compiler can read (use_nli, hallucination_action). Without this guard
+// compiler can read (enabled, hallucination_action). Without this guard
 // the AST converter silently drops those fields while the text decompiler
 // emits them, making any runtime config -> AST -> compile round trip
 // lossy on those knobs even though the runtime schema and the text DSL
@@ -18,7 +18,6 @@ import (
 func TestPluginFieldsHallucinationEmitsAllAuthorableFields(t *testing.T) {
 	cfg := config.HallucinationPluginConfig{
 		Enabled:             true,
-		UseNLI:              true,
 		HallucinationAction: "block",
 	}
 	plugin := pluginFromConfig(t, config.DecisionPluginHallucination, cfg)
@@ -26,7 +25,6 @@ func TestPluginFieldsHallucinationEmitsAllAuthorableFields(t *testing.T) {
 	fields := pluginFieldsHallucination(plugin)
 
 	requirePluginBoolField(t, "hallucination", "enabled", fields, true)
-	requirePluginBoolField(t, "hallucination", "use_nli", fields, true)
 	requirePluginStringField(t, "hallucination", "hallucination_action", fields, "block")
 }
 

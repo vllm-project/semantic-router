@@ -4,7 +4,7 @@ package trainingcontract
 type WorkerRequest struct {
 	BaseModel     *ModelRef         `json:"base_model,omitempty"`
 	RunID         string            `json:"run_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
-	SchemaVersion string            `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion string            `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	AttemptID     string            `json:"attempt_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
 	TaskID        string            `json:"task_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
 	Executor      Component         `json:"executor"`
@@ -22,7 +22,7 @@ type ArtifactResult struct {
 	ManifestBundle *File                 `json:"manifest_bundle,omitempty"`
 }
 type WorkerResult struct {
-	SchemaVersion  string              `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion  string              `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	Status         Status              `json:"status"`
 	Diagnostic     string              `json:"diagnostic,omitempty"`
 	Artifacts      []ArtifactResult    `json:"artifacts,omitempty"`
@@ -32,6 +32,6 @@ type WorkerResult struct {
 
 // WorkerSubmission acknowledges an idempotent submission by attempt_id.
 type WorkerSubmission struct {
-	SchemaVersion string `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion string `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	WorkerHandle  string `json:"worker_handle" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
 }

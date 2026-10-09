@@ -4,34 +4,17 @@ import (
 	"context"
 	"strings"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestHallucinationDetector_LongContextReachesAnswer guards the 512-token window:
 // the context must be windowed, not the answer.
 func TestHallucinationDetector_LongContextReachesAnswer(t *testing.T) {
-	skipIfNoModel(t)
-
 	toolContext := strings.Repeat("The Eiffel Tower was constructed from 1887 to 1889. It is located in Paris, France and is 330 metres tall. ", 40)
 	userQuestion := "When was the Eiffel Tower built?"
 	assistantAnswer := "The Eiffel Tower was built in 1950 and stands at 500 meters tall."
 
-	cfg := &config.HallucinationModelConfig{
-		ModelID:   getHallucinationModelPath(),
-		Threshold: 0.5,
-		UseCPU:    true,
-	}
-	detector, err := NewHallucinationDetector(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create detector: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := detector.Close(); closeErr != nil {
-			t.Errorf("Failed to close detector: %v", closeErr)
-		}
-	})
-	if err = detector.Initialize(); err != nil {
+	detector := newTestHallucinationDetector(t)
+	if err := detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
 
@@ -49,25 +32,10 @@ func TestHallucinationDetector_LongContextReachesAnswer(t *testing.T) {
 // 512-token window: an unsupported claim at the end of a long answer must be
 // found rather than truncated away.
 func TestHallucinationDetector_LongAnswerTailIsScanned(t *testing.T) {
-	skipIfNoModel(t)
-
 	toolContext, userQuestion, assistantAnswer := longAnswerWithUnsupportedTail(t)
 
-	cfg := &config.HallucinationModelConfig{
-		ModelID:   getHallucinationModelPath(),
-		Threshold: 0.5,
-		UseCPU:    true,
-	}
-	detector, err := NewHallucinationDetector(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create detector: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := detector.Close(); closeErr != nil {
-			t.Errorf("Failed to close detector: %v", closeErr)
-		}
-	})
-	if err = detector.Initialize(); err != nil {
+	detector := newTestHallucinationDetector(t)
+	if err := detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
 
@@ -101,45 +69,18 @@ func longAnswerWithUnsupportedTail(t *testing.T) (string, string, string) {
 	return toolContext, userQuestion, answer
 }
 
-// TestHallucinationDetector_LongAnswerTailIsScannedWithNLI covers the second entry
-// point, which windows only its premise and truncated the answer the same way.
-func TestHallucinationDetector_LongAnswerTailIsScannedWithNLI(t *testing.T) {
-	skipIfNoModel(t)
-	skipIfNoNLIModel(t)
-
+// TestHallucinationDetector_LongAnswerTailIsExplained covers the second entry
+// point, which reads the whole answer the same way.
+func TestHallucinationDetector_LongAnswerTailIsExplained(t *testing.T) {
 	toolContext, userQuestion, assistantAnswer := longAnswerWithUnsupportedTail(t)
-
-	detector, err := NewHallucinationDetector(&config.HallucinationModelConfig{
-		ModelID:   getHallucinationModelPath(),
-		Threshold: 0.5,
-		UseCPU:    true,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create detector: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := detector.Close(); closeErr != nil {
-			t.Errorf("Failed to close detector: %v", closeErr)
-		}
-	})
-	if err = detector.Initialize(); err != nil {
+	detector := newTestHallucinationDetector(t)
+	if err := detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
-	detector.SetNLIConfig(&config.NLIModelConfig{
-		ModelID:   getNLIModelPath(),
-		Threshold: 0.7,
-		UseCPU:    true,
-	})
-	if err = detector.InitializeNLI(); err != nil {
-		t.Fatalf("Failed to initialize NLI: %v", err)
-	}
-
-	result, err := detector.DetectWithNLI(context.Background(), toolContext, userQuestion, assistantAnswer)
+	result, err := detector.DetectWithExplanations(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}
-	t.Logf("Long answer with NLI (%d words): detected=%v confidence=%.3f spans=%d",
-		len(strings.Fields(assistantAnswer)), result.HallucinationDetected, result.Confidence, len(result.Spans))
 	if !result.HallucinationDetected {
 		t.Errorf("Expected the unsupported claim at the end of a %d-word answer to be detected",
 			len(strings.Fields(assistantAnswer)))

@@ -6,20 +6,31 @@ import "strings"
 type ModelPurpose string
 
 const (
-	PurposeEncoder                ModelPurpose = "encoder"                 // Base encoder for task adaptation
-	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
-	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
-	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
-	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"  // Detect potential hallucinations
-	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
-	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
-	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
-	PurposeModalityDetection      ModelPurpose = "modality-detection"      // Classify prompts into text/image/both modalities
-	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
-	PurposeSafety                 ModelPurpose = "safety"                  // Detect unsafe content
-	PurposeHazard                 ModelPurpose = "hazard"                  // Identify independent content hazards
-	PurposeReranking              ModelPurpose = "reranking"               // Rank query-document pairs
-	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
+	PurposeEncoder               ModelPurpose = "encoder"                // Base encoder for task adaptation
+	PurposeDomainClassification  ModelPurpose = "domain-classification"  // Classify text into domains/categories
+	PurposePIIDetection          ModelPurpose = "pii-detection"          // Detect personally identifiable information
+	PurposeJailbreakDetection    ModelPurpose = "jailbreak-detection"    // Detect prompt injection/jailbreak attempts
+	PurposeHallucinationSentinel ModelPurpose = "hallucination-sentinel" // Detect potential hallucinations
+	PurposeHallucinationDetector ModelPurpose = "hallucination-detector" // Verify factual accuracy
+	PurposeFeedbackDetection     ModelPurpose = "feedback-detection"     // Detect user feedback type
+	PurposeModalityDetection     ModelPurpose = "modality-detection"     // Classify prompts into text/image/both modalities
+	PurposeEmbedding             ModelPurpose = "embedding"              // Generate text embeddings
+	PurposeSafety                ModelPurpose = "safety"                 // Detect unsafe content
+	PurposeHazard                ModelPurpose = "hazard"                 // Identify independent content hazards
+	PurposeReranking             ModelPurpose = "reranking"              // Rank query-document pairs
+	PurposeSemanticSimilarity    ModelPurpose = "semantic-similarity"    // Compute semantic similarity
+	PurposeRoutingSignals        ModelPurpose = "routing-signals"        // Answer several built-in routing signals in one call
+)
+
+// Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
+// of every built-in signal it answers.
+const Vela2SignalModel = "models/Vela-2.0-0.3B"
+
+// Registry paths of the larger Vela 2.0 sizes a decision model may name.
+const (
+	Vela2Model08B = "models/Vela-2.0-0.8B"
+	Vela2Model4B  = "models/Vela-2.0-4B"
+	Vela2Model9B  = "models/Vela-2.0-9B"
 )
 
 // ModelSpec defines a model's metadata and capabilities
@@ -37,10 +48,9 @@ type ModelSpec struct {
 	// Only applied when the resolved repository still matches this entry.
 	DownloadExcludePatterns []string `json:"-" yaml:"-"`
 
-	// PreparedArtifact identifies an offline, manifest-verified runtime bundle.
-	// These releases cannot be provisioned by downloading native HF weights.
-	PreparedArtifact string `json:"prepared_artifact,omitempty" yaml:"prepared_artifact,omitempty"`
-	ArtifactBundle   string `json:"artifact_bundle,omitempty" yaml:"artifact_bundle,omitempty"`
+	// RuntimeProvisioned marks a release the model runtime downloads and
+	// verifies itself; the router provisions nothing for it.
+	RuntimeProvisioned bool `json:"-" yaml:"-"`
 
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
@@ -75,10 +85,19 @@ type ModelSpec struct {
 	// Explicit recipe bindings always take precedence.
 	DefaultAdapter string `json:"default_adapter,omitempty" yaml:"default_adapter,omitempty"`
 
-	// DefaultProvider and DefaultDevice select a published artifact's supported
-	// implicit execution format. Explicit deployments remain authoritative.
-	DefaultProvider string `json:"default_provider,omitempty" yaml:"default_provider,omitempty"`
-	DefaultDevice   string `json:"default_device,omitempty" yaml:"default_device,omitempty"`
+	// SharedDeployment marks a model that answers several modules' signals:
+	// every module that names it on one device runs one implicit deployment,
+	// so the model loads once and a request's questions share one call.
+	SharedDeployment bool `json:"-" yaml:"-"`
+
+	// CPUProfile is the model_runtime profile an implicit CPU deployment of
+	// the model runs; the runtime's accuracy record for the model backs it.
+	CPUProfile string `json:"-" yaml:"-"`
+
+	// RequiresGPU marks a model whose implicit deployment runs on a GPU only:
+	// a module that names it runs it on the best GPU, and a host without one
+	// cannot serve it.
+	RequiresGPU bool `json:"-" yaml:"-"`
 
 	// Number of classification classes (for classifiers)
 	NumClasses int `json:"num_classes,omitempty" yaml:"num_classes,omitempty"`
@@ -98,6 +117,70 @@ var velaShieldArtifactPatterns = append([]string{"lc/*", "heads/*", "demo.py", "
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
+	// feedback and modality signals as questions, and PII and hallucination
+	// with its span presets. The model runtime downloads and verifies it; on
+	// CPU, max_speed runs its float32-packed copy, which keeps its answers
+	// (src/model-runtime/docs/records/vela2-parity.md).
+	{
+		LocalPath:          Vela2SignalModel,
+		RepoID:             "vllm-sr/Vela-2.0-0.3B",
+		Revision:           "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+		Aliases:            []string{"Vela-2.0-0.3B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 8K input.",
+		ParameterSize:      "309M encoder",
+		MaxContextLength:   8192,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		CPUProfile:         "max_speed",
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
+	// The larger Vela 2.0 sizes answer the same questions and span presets as
+	// the 0.3B; global.model_catalog.system.decision_model selects one. They
+	// are Qwen3.5 hybrid decoders: the 0.8B runs on a CPU at seconds per
+	// request, and the 4B and 9B run on a GPU only.
+	{
+		LocalPath:          Vela2Model08B,
+		RepoID:             "vllm-sr/Vela-2.0-0.8B",
+		Revision:           "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+		Aliases:            []string{"Vela-2.0-0.8B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call, with PII and hallucination spans. Supports up to 16K input.",
+		ParameterSize:      "756M decoder",
+		MaxContextLength:   16384,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
+	{
+		LocalPath:          Vela2Model4B,
+		RepoID:             "vllm-sr/Vela-2.0-4B",
+		Revision:           "c1e64d4f872cb38bc58502e6888340100bab9d55",
+		Aliases:            []string{"Vela-2.0-4B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call, with PII and hallucination spans, on a GPU. Supports up to 16K input.",
+		ParameterSize:      "4.2B decoder",
+		MaxContextLength:   16384,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		RequiresGPU:        true,
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
+	{
+		LocalPath:          Vela2Model9B,
+		RepoID:             "vllm-sr/Vela-2.0-9B",
+		Revision:           "bc8761637d8788619dfbaf6d8890128efe85fd40",
+		Aliases:            []string{"Vela-2.0-9B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call, with PII and hallucination spans, on a GPU. Supports up to 16K input.",
+		ParameterSize:      "7.9B decoder",
+		MaxContextLength:   16384,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		RequiresGPU:        true,
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
 	// Vela releases use immutable revisions. Legacy aliases below retain their
 	// original repositories so an explicit old configuration stays reproducible.
 	{
@@ -329,8 +412,6 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:        8192,
 		BaseModelMaxContext:     32768,
 		DefaultAdapter:          "vela_halu",
-		DefaultProvider:         "candle",
-		DefaultDevice:           "cpu",
 		Tags:                    []string{"vela", "hallucination", "multilingual", "token-classification"},
 	},
 
@@ -371,19 +452,6 @@ var DefaultModelRegistry = []ModelSpec{
 		EmbeddingDim:     768,
 		MaxContextLength: 8192,
 		Tags:             []string{"hallucination", "mmbert", "multilingual", "verification"},
-	},
-
-	// Hallucination Detection - Explainer
-	{
-		LocalPath:        "models/mom-halugate-explainer",
-		RepoID:           "tasksource/ModernBERT-base-nli",
-		Aliases:          []string{"hallucination-explainer", "halugate-explainer", "nli-explainer"},
-		Purpose:          PurposeHallucinationExplainer,
-		Description:      "ModernBERT NLI model for explaining hallucination reasoning",
-		ParameterSize:    "149M",
-		NumClasses:       3, // entailment/neutral/contradiction
-		MaxContextLength: 8192,
-		Tags:             []string{"hallucination", "nli", "explainability", "modernbert"},
 	},
 
 	// Feedback Detection
@@ -465,8 +533,8 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
 	},
 
-	// Omni runtime bundles contain four verified ONNX graphs and the exact
-	// published processors. Native source snapshots are not runtime artifacts.
+	// Vela 1.0 Omni: the model runtime serves the pinned release from its own
+	// download of the published weights and configs.
 	{
 		LocalPath:     "models/vela-1.0-omni-nano",
 		RepoID:        "vllm-sr/Vela-1.0-Omni-Nano",
@@ -475,9 +543,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Nano text, image, and raw audio embeddings in one normalized 384-dimensional space.",
 		ParameterSize: "164M", EmbeddingDim: 384, MaxContextLength: 512,
-		DefaultAdapter: "vela_omni", DefaultProvider: "ort", DefaultDevice: "cpu",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-nano",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio"},
 	},
 	{
 		LocalPath:     "models/vela-1.0-omni-mini",
@@ -487,9 +555,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Mini text, image, and raw audio embeddings in one normalized 768-dimensional space with 32K text input.",
 		ParameterSize: "1.36B", EmbeddingDim: 768, MaxContextLength: 32768,
-		DefaultAdapter: "vela_omni", DefaultProvider: "ort", DefaultDevice: "cpu",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-mini",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
 	},
 
 	// Embedding Models - Multi-Modal (Text/Image/Audio)
@@ -676,17 +744,6 @@ func findModelByPath(path string) *ModelSpec {
 		}
 	}
 	return nil
-}
-
-// GetModelsByPurpose returns all models for a specific purpose
-func GetModelsByPurpose(purpose ModelPurpose) []ModelSpec {
-	var models []ModelSpec
-	for _, model := range DefaultModelRegistry {
-		if model.Purpose == purpose {
-			models = append(models, model)
-		}
-	}
-	return models
 }
 
 // GetModelsByTag returns all models with a specific tag

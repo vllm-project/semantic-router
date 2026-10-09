@@ -13,9 +13,9 @@ import (
 )
 
 // newToolEmbedderForConfig builds the tool embedder for cfg with the given
-// provider (nil selects the local candle path). The remote endpoint's base URL
-// and model name are folded into the memo key identity so cached vectors can
-// never be served across differently configured endpoints.
+// provider. The remote endpoint's base URL and model name are folded into the
+// memo key identity so cached vectors can never be served across differently
+// configured endpoints.
 func newToolEmbedderForConfig(cfg *config.RouterConfig, provider embedding.Provider) *cachedToolEmbedder {
 	var modelType, remoteIdentity string
 	var targetDim int
@@ -38,12 +38,10 @@ const toolEmbedBatchChunkSize = 64
 const toolEmbeddingMemoSize = 2048
 
 // cachedToolEmbedder embeds tool-selection texts, reusing tool embeddings across
-// requests through a bounded memo and filling misses in batches.
-//
-// A nil provider selects the local candle path (per-text FFI calls, unchanged);
-// a non-nil provider selects the remote path, where misses are batched.
+// requests through a bounded memo and filling misses in batches through its
+// provider. Without a prepared provider every fill fails.
 type cachedToolEmbedder struct {
-	provider  embedding.Provider // nil => local candle path
+	provider  embedding.Provider
 	modelType string
 	targetDim int
 	// keyPrefix namespaces memoized texts by the identity of the model that
@@ -56,13 +54,13 @@ type cachedToolEmbedder struct {
 
 // newCachedToolEmbedder constructs an embedder. remoteIdentity distinguishes
 // remote endpoints/models that a bare Backend() string cannot (it is a constant
-// per provider type); pass "" for the local candle path.
+// per provider type); pass "" when no remote endpoint is configured.
 func newCachedToolEmbedder(provider embedding.Provider, modelType string, targetDim int, remoteIdentity string) *cachedToolEmbedder {
-	dim := strconv.Itoa(targetDim)
-	keyPrefix := "candle\x00" + modelType + "\x00" + dim + "\x00"
+	backend := ""
 	if provider != nil {
-		keyPrefix = "remote\x00" + provider.Backend() + "\x00" + remoteIdentity + "\x00" + dim + "\x00"
+		backend = provider.Backend()
 	}
+	keyPrefix := backend + "\x00" + modelType + "\x00" + remoteIdentity + "\x00" + strconv.Itoa(targetDim) + "\x00"
 	return &cachedToolEmbedder{
 		provider:  provider,
 		modelType: modelType,
@@ -143,21 +141,12 @@ func (e *cachedToolEmbedder) embedQueryAndTools(
 	return queryEmbedding, toolEmbeddings, nil
 }
 
-// fill computes one embedding per text, in order, batching through the remote
-// provider or looping the local candle binding. Both paths return exactly
-// len(texts) vectors or an error.
+// fill computes one embedding per text, in order, in batches through the
+// provider. It returns exactly len(texts) vectors or an error.
 func (e *cachedToolEmbedder) fill(ctx context.Context, texts []string) ([][]float32, error) {
 	if e.provider == nil {
-		return e.fillLocal(texts)
+		return nil, fmt.Errorf("tool embedding provider was not prepared")
 	}
-	return e.fillRemote(ctx, texts)
-}
-
-func (e *cachedToolEmbedder) fillLocal(texts []string) ([][]float32, error) {
-	return nil, fmt.Errorf("tool embedding provider was not prepared")
-}
-
-func (e *cachedToolEmbedder) fillRemote(ctx context.Context, texts []string) ([][]float32, error) {
 	out := make([][]float32, 0, len(texts))
 	for chunk := range slices.Chunk(texts, toolEmbedBatchChunkSize) {
 		embeddings, err := e.provider.EmbedBatch(ctx, chunk)

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -45,13 +45,6 @@ func ValidateBackendEmbedding(ctx context.Context, backend LegacyCacheBackend) e
 	}
 	if len(vector) == 0 || (dimension > 0 && len(vector) != dimension) {
 		return fmt.Errorf("cache embedding dimension %d differs from required %d", len(vector), dimension)
-	}
-	windows, ok := provider.(embedding.WindowProvider)
-	if !ok {
-		return fmt.Errorf("cache embedding requires tokenizer windows")
-	}
-	if _, err := windows.Windows(ctx, "semantic router cache preparation", 0); err != nil {
-		return fmt.Errorf("prepare cache tokenizer: %w", err)
 	}
 	return nil
 }
