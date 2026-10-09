@@ -307,7 +307,7 @@ func TestFullDuplex_RequestsWithoutBodyRoutingReplyAtOnce(t *testing.T) {
 		request   *ext_proc.ProcessingRequest
 		immediate bool
 	}{
-		{name: "headers end the stream", router: fullDuplexRoutingRouter(), request: fullDuplexHeadersRequest(true)},
+		{name: "headers end the stream", router: fullDuplexRoutingRouter(), immediate: true, request: fullDuplexHeadersRequest(true)},
 		{
 			name: "header-stage immediate response", router: fullDuplexRoutingRouter(), immediate: true,
 			request: headersRequest(http_ext.ProcessingMode_FULL_DUPLEX_STREAMED, "GET", "/v1/models", false),

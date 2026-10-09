@@ -131,6 +131,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
 	"protocol-codec-anthropic-backend-agent-client-replay",
+	// An empty POST fails closed at the Router before any dispatch (issue #4292)
+	"public-listener-empty-body-rejected",
 }
 
 // Combine preserves order while removing duplicate testcase names.

@@ -40,6 +40,9 @@ inference listener. Router-owned file and vector-store operations use
 listener. Other `/openai/*` operations, such as embeddings and stored-response
 reads, return `404`.
 
+Every `POST` path above requires a JSON request body. A request with an empty
+body returns `400` from the Router and is never forwarded to a backend.
+
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
 field-level portability boundaries.
