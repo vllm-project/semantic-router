@@ -24,7 +24,8 @@ not build them.
   production mmBERT-32K model.
 - **Headline result:** on the original labels the candidate scores 96.31%
   against 97.10% for a clean mmBERT baseline. That gap is not statistically
-  significant (p = 0.31). On the operative labels below, it is (p = 0.007).
+  significant (p = 0.31). On the operative, judged labels it is (p = 0.007),
+  and the human spot-check barely moves it (p = 0.011, §11.5).
 - **The catch, now resolved:** a blind re-judgement of the labels (§11)
   disagreed with 7.4% of them, almost all in the `BOTH` class. adaamko ruled
   in the #3198 thread: `BOTH` means the user explicitly asked for visuals, not
@@ -38,7 +39,11 @@ not build them.
   blind. On the rows where the judge and the original disagreed, the human
   sided with the judge 45 times and with the original 7 times. Estimated
   error: about 7.8% for the judge's labels, about 12.8% for the originals.
-  One reviewer on a sample of 100, so treat this as rough, not final.
+  Applying the human's 100 corrections on top of the judge's labels and
+  recomputing the student-vs-teacher test gives p = 0.011, still significant,
+  against p = 0.007 before the correction (§11.3). One reviewer on a sample
+  of 100, so still not final: a second labeller is being asked for in the
+  #3198 thread, and validation is still to check.
 - **Still open otherwise:** latency (#3856), controls (#3857), the accuracy
   tolerance itself (§9).
 
@@ -183,10 +188,10 @@ Two baselines are reported. The reason is in §4.
     two-sided p = 0.31. Noise.
   - On the judged, strict labels, which is the policy adaamko ruled for in
     the #3198 thread: 19 against 5, p = **0.007**. Significant (§11.3).
-  - **Human check done, result unchanged in kind.** The one-reviewer check
-    in §11.5 supports the judged labels as better than the originals. The
-    p = 0.007 has not been recomputed on the human-corrected labels, and it
-    should be before anyone treats it as settled.
+  - **Recomputed on the human-corrected labels (§11.5): 18 against 5,
+    p = 0.011.** Still significant, and close to the uncorrected p = 0.007.
+    One reviewer on 100 of 759 rows, so this still isn't the final word; a
+    second labeller is being asked for in the #3198 thread.
   - **Training seed noise is not measured.** Each model was trained once,
     before the trainer had a `--seed` option. A gap of 0.79 points is about 6
     rows, and the McNemar test only covers which test rows were sampled, not
@@ -468,13 +473,14 @@ What reviewers have to work with:
 - **Accuracy gap:** the candidate is 0.79 points below the clean baseline on
   the original labels (96.31% against 97.10%), not significant there
   (p = 0.31, §3). On the judged, strict labels, the operative ones, the same
-  comparison is significant (p = 0.007, §11.3).
+  comparison is significant (p = 0.007, §11.3), and stays significant after
+  the human correction (p = 0.011, §11.5).
 - **Agreement:** 96.44% with the clean baseline.
 - **Direction of the errors:** the candidate over-predicts `BOTH` (§3, §7). It
   is not simply weaker everywhere.
-- **Human check:** done on 100 test rows (§11.5). It supports the judged
-  labels over the originals. It has one reviewer, so the tolerance should
-  not be set from it alone until a second labeller confirms.
+- **Human check:** done on 100 test rows (§11.5), with the p-value recomputed
+  on the correction. It has one reviewer, so the tolerance should not be set
+  from it alone until a second labeller confirms.
 
 Choices for whoever sets the tolerance:
 
@@ -616,17 +622,21 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 | Original | 15 | 9 | 0.31 |
 | Judged, strict | 19 | 5 | **0.007** |
 | Judged, inclusive | 16 | 8 | 0.15 |
+| Judged, strict, human-corrected | 18 | 5 | **0.011** |
 
 - Original labels: the gap is noise.
 - Strict labels, the operative ones (§11.4): the gap is significant.
 - Inclusive labels, the rejected policy: the gap is noise again.
+- Strict labels after applying the one-reviewer human correction (§11.5): one
+  fewer row favours the clean baseline, and the gap is still significant.
 - **The verdict depends on the `BOTH` policy**, which is now decided (§11.4):
   strict. So the operative claim is that the candidate is measurably worse
   than the clean baseline, not that the two are indistinguishable. That
   claim rests on the judged labels, which one human reviewer has checked on
-  100 test rows (§11.5).
+  100 test rows and the p-value recomputed against (§11.5). A second
+  labeller is still being asked for.
 
-To reproduce the tables in §11.2 and §11.3:
+To reproduce the tables in §11.2 and §11.3, and the human-corrected row:
 
 ```bash
 cd label_audit
@@ -634,7 +644,8 @@ python judge_labels.py report --split test \
   --eval-report ../modality_candidate_eval_report.json \
   --preds scx_finetuned=predictions/scx_finetuned.json \
   --preds lfm25_lora=predictions/lfm25_lora.json \
-  --compare clean_baseline,candidate --compare clean_baseline,scx_finetuned
+  --compare clean_baseline,candidate --compare clean_baseline,scx_finetuned \
+  --human human_review.tsv
 ```
 
 ### 11.4 Decided: `BOTH` means the user explicitly asks for visuals
@@ -681,11 +692,12 @@ What this record does as a result, each one his explicit instruction:
   about the ruling's effect, not as the reason the ruling was made. The
   ruling is justified on routing grounds, in the quote above, and would have
   been made the same way if it had come out the other direction.
-- **Human check done, not yet a settled gate.** His ruling asked for the
-  spot-check before the number goes anywhere. It is done (§11.5), with one
-  reviewer. Everything in §3 and §9 that depends on the judged labels should
-  still be read as provisional until a second labeller confirms it and the
-  p-value is recomputed on the corrected labels.
+- **Human check done, p-value recomputed, not yet a settled gate.** His
+  ruling asked for the spot-check before the number goes anywhere. It is
+  done (§11.5), with one reviewer, and the p-value is recomputed on the
+  correction (0.011, against 0.007 before it). Everything in §3 and §9 that
+  depends on the judged labels should still be read as provisional until a
+  second labeller confirms it.
 
 ### 11.5 Limits of this audit (read before citing it)
 
@@ -707,8 +719,10 @@ What this record does as a result, each one his explicit instruction:
   reviewer. Run `judge_labels.py report --split test --human
   human_review.tsv` to reproduce the estimate: the judge's error is about
   7.8% and the originals' about 12.8%.
-  - Not done: a second labeller, validation rows, and recomputing the p-value
-    on the corrected labels.
+  - Done: the p-value is recomputed on the human-corrected labels (§11.3):
+    0.011, against 0.007 before the correction.
+  - Not done: a second labeller on the same 100 rows (being asked for in the
+    #3198 thread) and the validation split's spot-check.
 - **The API mode is untested.** `judge_labels.py api` should reproduce the audit
   with an independent model, but it has not been run against the real API (no
   key was available).
