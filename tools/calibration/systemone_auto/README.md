@@ -184,6 +184,10 @@ compute milliseconds or fewer large-model calls do not establish lower GPU
 provisioning cost or concurrent throughput. Keep cold/first-pass results
 separate and show mean and tail together.
 
+Count model-backed signals, retries and judge calls when measuring total
+request cost; the algorithm call count covers only execution after the
+decision is selected.
+
 ## Separate exploratory pilot and follow-up tools
 
 The commands below describe the earlier Banking77/BoolQ/DynaSent pilot and

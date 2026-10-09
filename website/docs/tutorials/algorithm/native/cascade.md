@@ -338,6 +338,10 @@ configuration before evaluation. Report complete responses, unresolved requests,
 escalation rates and measured frontend latency together. A threshold does not
 enforce a fixed fast-path fraction when the request distribution changes.
 
+Count model-backed signals, retries and judge calls when measuring total
+request cost; the algorithm call count covers only execution after the
+decision is selected.
+
 Offline replay helps choose experiments; it does not establish live latency or
 GPU cost. The [calibration tools](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/systemone_auto)
 include a pinned public JevBench command and separate research replay tools.
