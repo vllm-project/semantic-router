@@ -23,7 +23,7 @@ vLLM Semantic Router already tackles model selection for LLMs. **System One Auto
 
 Our first Kai 0.6B → Vega 27B experiment improves public-suite accuracy from **65.80% to 82.25%**, while **54.11% of requests finish with Kai**. The larger model still wins on accuracy; the cascade wins on average latency in our warm, serial test. Below, we show both sides of that tradeoff.
 
-[**Try the cascade →**](/docs/tutorials/algorithm/native/cascade) · [**Download the evidence →**](/img/blog/system-one-auto/evidence.zip)
+[**Try the cascade →**](/docs/next/tutorials/algorithm/native/cascade) · [**Download the evidence →**](/img/blog/system-one-auto/evidence.zip)
 
 <!-- truncate -->
 
@@ -74,7 +74,7 @@ This serial test used **two resident GPUs**, one per model. It measures a fronte
 
 **Quality.** The authentic [JevBench public suite at commit `b6b8fff7e345b98c060ad26c13308860ddc67004`](https://github.com/fstandhartinger/jevbench/tree/b6b8fff7e345b98c060ad26c13308860ddc67004) contains 139 Choice, 74 Noul and 18 Score items, representing 195 source groups. The unchanged [upstream scorer](https://github.com/fstandhartinger/jevbench/blob/b6b8fff7e345b98c060ad26c13308860ddc67004/jevbench/scoring.py) uses the modal label for Choice and Score and maps Noul to yes/no. This is exact-label public-suite accuracy, **not the official v1.6.1 sealed leaderboard or its composite score**. Direct Kai, Auto and direct Vega scored 152, 190 and 203 correct out of 231. The paired intervals use 5,000 source-group bootstrap samples with seed 20261010.
 
-**Uncertainty and calibration.** Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points**; its gap below Vega has interval **[2.59, 8.89]**. The gate threshold, **0.6059704079536342**, was frozen using a separate 192-source calibration set before this evaluation. For Noul it checks `max(p, 1-p)`, so a confident “no” can exit early. The [complete YAML](/docs/tutorials/algorithm/native/cascade#define-the-cascade) reproduces this operating point; it is not a universal default.
+**Uncertainty and calibration.** Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points**; its gap below Vega has interval **[2.59, 8.89]**. The gate threshold, **0.6059704079536342**, was frozen using a separate 192-source calibration set before this evaluation. For Noul it checks `max(p, 1-p)`, so a confident “no” can exit early. The [complete YAML](/docs/next/tutorials/algorithm/native/cascade#define-the-cascade) reproduces this operating point; it is not a universal default.
 
 **Requests.** The controlled collector uses the pinned upstream TypeSafe request mapping, adds `require_full_input: true` to each question and requests `options.return_meta`. The stock upstream CLI does not add those options. Three seeded, sequential passes compare direct Kai, direct Vega and Auto: 2,079 timed frontend requests plus nine separate typed warmups. There are no retries or discarded outliers. All measured requests succeeded and retained complete-input and runtime-identity evidence. Quality uses only pass 0; later passes check timing and determinism, not additional independent quality samples.
 
@@ -101,7 +101,7 @@ This path supports **Choice, Score and Noul**. Native probabilities provide evid
 
 ## One name in your application
 
-Follow the [cascade guide](/docs/tutorials/algorithm/native/cascade) to connect Kai and Vega and publish `vllm-sr/auto`. Your application sends an ordinary native request:
+Follow the [cascade guide](/docs/next/tutorials/algorithm/native/cascade) to connect Kai and Vega and publish `vllm-sr/auto`. Your application sends an ordinary native request:
 
 ```bash
 curl -sS http://localhost:8801/v1/systemone \
@@ -181,4 +181,4 @@ The generator, frozen figure data and vector figures are available with the [fig
 
 Confidence cascades already have public precedents, including [Jev-Style's native decision cascade](https://github.com/lawrence3699/jev-style/commit/5c8149c26256ff4dc1b1e8693a70935b40f90e75). System One Auto brings that serving pattern into vLLM-SR: native model bindings, recipes, bounded execution and a result you can reproduce.
 
-**Keep the questions. Make the model choice configurable.** [Build your first System One Auto route →](/docs/tutorials/algorithm/native/cascade)
+**Keep the questions. Make the model choice configurable.** [Build your first System One Auto route →](/docs/next/tutorials/algorithm/native/cascade)
