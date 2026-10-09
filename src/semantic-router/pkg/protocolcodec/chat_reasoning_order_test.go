@@ -1,6 +1,8 @@
 package protocolcodec
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -63,10 +65,134 @@ func TestChatReasoningTailInMixedDeltaGoesFirst(t *testing.T) {
 	}
 }
 
-// Outside the reasoning, a mixed delta keeps main's order, content first.
+// A short think block can fit whole in the first delta with text, reasoning
+// before the answer (vLLM's basic_parsers.py L134-L145 at 5dd4a628). After
+// vLLM's empty role delta, the stream still completes, reasoning first.
+func TestChatOpeningDeltaWithReasoningAndAnswerCompletes(t *testing.T) {
+	for _, field := range []string{"reasoning", "reasoning_content"} {
+		stream := chatStream(`{"role":"assistant","content":""}`, `{"`+field+`":"Short.","content":"Hello"}`, `{"content":" there"}`)
+		for target, want := range map[llmprotocol.WireFormat][]string{
+			llmprotocol.AnthropicMessagesV1: {`"thinking":"Short."`, `"text":"Hello"`, `"text":" there"`},
+			llmprotocol.OpenAIResponsesV1:   {`"delta":"Short."`, `"delta":"Hello"`, `"delta":" there"`},
+		} {
+			t.Run(field+"/"+string(target), func(t *testing.T) {
+				assertChatStreamOrder(t, stream, target, want...)
+			})
+		}
+	}
+}
+
+// Mistral's parser starts in content, so its first delta with text can hold
+// the answer and then the start of a think block (mistral.py L166-L195 at
+// v0.30.0). Reasoning alone in the next delta shows the answer came first.
+func TestChatOpeningDeltaWithAnswerBeforeReasoningCompletes(t *testing.T) {
+	for _, field := range []string{"reasoning", "reasoning_content"} {
+		stream := chatStream(`{"role":"assistant","content":""}`, `{"content":"Hello there","`+field+`":"Check"}`, `{"`+field+`":" again."}`)
+		for target, want := range map[llmprotocol.WireFormat][]string{
+			llmprotocol.AnthropicMessagesV1: {`"text":"Hello there"`, `"thinking":"Check"`, `"thinking":" again."`},
+			llmprotocol.OpenAIResponsesV1:   {`"delta":"Hello there"`, `"delta":"Check"`, `"delta":" again."`},
+		} {
+			t.Run(field+"/"+string(target), func(t *testing.T) {
+				assertChatStreamOrder(t, stream, target, want...)
+			})
+		}
+	}
+}
+
+// The decoder holds the answer and reasoning of a first delta that has both
+// until the next delta with output; the rest of that delta, and usage in
+// between, decodes at once. Every way the stream can go on or end releases
+// them, reasoning first unless reasoning alone comes next, and before any
+// later event or error. Each row gives main's events and error codes, in
+// another order or Push. "|" marks the end of each Push.
+func TestChatHeldOpeningDeltaIsReleasedOnEveryExit(t *testing.T) {
+	frame := func(fields string) string {
+		return `data: {"id":"chatcmpl-3","object":"chat.completion.chunk","created":1,"model":"m",` + fields + "}\n\n"
+	}
+	choice := func(delta, finish string) string {
+		return frame(`"choices":[{"index":0,"delta":` + delta + `,"finish_reason":` + finish + `}]`)
+	}
+	usage := `"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}`
+	opening := choice(`{"role":"assistant","reasoning":"Short.","content":"Hello"}`, "null")
+	reasoningNext := choice(`{"reasoning":" again."}`, `"stop"`)
+	done := "data: [DONE]\n\n"
+	for _, tc := range []struct {
+		name   string
+		frames []string
+		want   string
+		limits func(*llmprotocol.Limits)
+	}{
+		{"finish in the same delta", []string{choice(`{"role":"assistant","reasoning":"Short.","content":"Hello"}`, `"stop"`), done}, "thinking:Short. text:Hello | completed |", nil},
+		{"answer next", []string{opening, choice(`{"content":" there"}`, `"stop"`), done}, "| thinking:Short. text:Hello text: there | completed |", nil},
+		{"reasoning next", []string{opening, reasoningNext, done}, "| text:Hello thinking:Short. thinking: again. | completed |", nil},
+		{"tool call next", []string{opening, choice(`{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"f","arguments":"{}"}}]}`, `"tool_calls"`), done}, "| thinking:Short. text:Hello tool | completed |", nil},
+		{"finish only next", []string{opening, choice(`{}`, `"stop"`), done}, "| thinking:Short. text:Hello | completed |", nil},
+		{"empty delta keeps the hold", []string{opening, choice(`{"content":""}`, "null"), reasoningNext, done}, "| | text:Hello thinking:Short. thinking: again. | completed |", nil},
+		{"empty delta with usage keeps the hold", []string{opening, frame(`"choices":[{"index":0,"delta":{},"finish_reason":null}],` + usage), reasoningNext, done}, "| usage | text:Hello thinking:Short. thinking: again. | completed |", nil},
+		{"usage alone keeps the hold", []string{opening, frame(`"choices":[],` + usage), reasoningNext, done}, "| usage | text:Hello thinking:Short. thinking: again. | completed |", nil},
+		{"done without a finish", []string{opening, done}, "| thinking:Short. text:Hello error:stream_item_incomplete", nil},
+		{"error chunk", []string{opening, `data: {"error":{"message":"overloaded","type":"server_error"}}` + "\n\n"}, "| thinking:Short. text:Hello failed |", nil},
+		{"malformed frame", []string{opening, "data: {\"id\":\n\n"}, "| thinking:Short. text:Hello error:invalid_upstream_json", nil},
+		{"stream ends", []string{opening}, "| thinking:Short. text:Hello failed", nil},
+		{"annotation without answer text keeps main's order", []string{choice(`{"role":"assistant","reasoning":"R","annotations":[{"type":"url_citation","url_citation":{"url":"https://example.com","title":"t","start_index":0,"end_index":0}}]}`, "null"), choice(`{"reasoning":"R2"}`, `"stop"`), done}, "text: thinking:R | thinking:R2 | completed |", nil},
+		{"error in the rest of the held delta", []string{frame(`"choices":[{"index":0,"delta":{"role":"assistant","reasoning":"Short.","content":"Hello"},"finish_reason":null}],"usage":{"prompt_tokens":-1,"completion_tokens":1,"total_tokens":0}`), done}, "error:negative_usage", nil},
+		{"error in the held texts comes first", []string{opening, "data: {\"id\":\n\n"}, "| error:text_limit", func(limits *llmprotocol.Limits) { limits.TextBytes = 3 }},
+		{"held texts keep their event budget", []string{opening, frame(`"choices":[],` + usage), frame(`"choices":[],` + usage), frame(`"choices":[],` + usage)}, "| usage | usage | thinking:Short. text:Hello error:stream_event_limit", func(limits *llmprotocol.Limits) { limits.Events = 6 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			if tc.limits != nil {
+				tc.limits(&policy.Limits)
+			}
+			decoder := OpenAIChatCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, policy)
+			var trace []string
+			record := func(events []llmprotocol.Event, err error) bool {
+				for _, event := range events {
+					switch event.Type {
+					case llmprotocol.EventReasoningDelta:
+						trace = append(trace, "thinking:"+event.Delta)
+					case llmprotocol.EventOutputTextDelta:
+						trace = append(trace, "text:"+event.Delta)
+					case llmprotocol.EventToolCallDelta:
+						trace = append(trace, "tool")
+					case llmprotocol.EventUsageUpdated:
+						trace = append(trace, "usage")
+					case llmprotocol.EventResponseCompleted:
+						trace = append(trace, "completed")
+					case llmprotocol.EventResponseFailed:
+						trace = append(trace, "failed")
+					}
+				}
+				var protocolError *llmprotocol.ProtocolError
+				if errors.As(err, &protocolError) {
+					trace = append(trace, "error:"+protocolError.Code)
+				} else if err != nil {
+					trace = append(trace, "error:"+err.Error())
+				}
+				return err == nil
+			}
+			ok := true
+			for _, raw := range tc.frames {
+				events, _, err := decoder.Push([]byte(raw))
+				if ok = record(events, err); !ok {
+					break
+				}
+				trace = append(trace, "|")
+			}
+			if ok {
+				events, _, err := decoder.Finalize(nil)
+				record(events, err)
+			}
+			if got := strings.Join(trace, " "); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Once the answer is under way, a mixed delta keeps main's order, content first.
 func TestChatDeltaOutsideReasoningKeepsContentFirst(t *testing.T) {
 	answerStarted := chatStream(`{"role":"assistant","content":"Hello"}`, `{"content":" there","reasoning":"Check"}`, `{"reasoning":" again."}`)
-	opening := chatStream(`{"role":"assistant","content":"Hello there","reasoning":"Check"}`, `{"reasoning":" again."}`)
 	answerResumed := chatStream(`{"role":"assistant","content":"Hello"}`, `{"reasoning":"Check"}`, `{"content":" there"}`, `{"content":" friend","reasoning":" again."}`)
 	for _, tc := range []struct {
 		name   string
@@ -76,8 +202,6 @@ func TestChatDeltaOutsideReasoningKeepsContentFirst(t *testing.T) {
 	}{
 		{"mixed after the answer started", answerStarted, llmprotocol.AnthropicMessagesV1, []string{`"text":" there"`, `"thinking":"Check"`, `"thinking":" again."`}},
 		{"mixed after the answer started", answerStarted, llmprotocol.OpenAIResponsesV1, []string{`"delta":" there"`, `"delta":"Check"`, `"delta":" again."`}},
-		{"mixed opening delta", opening, llmprotocol.AnthropicMessagesV1, []string{`"text":"Hello there"`, `"thinking":"Check"`, `"thinking":" again."`}},
-		{"mixed opening delta", opening, llmprotocol.OpenAIResponsesV1, []string{`"delta":"Hello there"`, `"delta":"Check"`, `"delta":" again."`}},
 		// Messages cannot reopen the text block after the reasoning, on main or
 		// here, so this row is Responses only.
 		{"mixed after the answer resumed", answerResumed, llmprotocol.OpenAIResponsesV1, []string{`"delta":" there"`, `"delta":" friend"`, `"delta":" again."`}},

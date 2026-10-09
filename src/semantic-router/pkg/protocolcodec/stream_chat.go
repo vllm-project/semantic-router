@@ -13,7 +13,9 @@ type chatStreamDecoder struct {
 	framer               sseFramer
 	contentIndexes       map[chatContentKey]int
 	nextContentIndexes   map[int]int
-	lastWasReasoning     bool // choice 0's last text was reasoning; decodeChoice rejects other choices
+	lastWasReasoning     bool                 // choice 0's last text was reasoning; decodeChoice rejects other choices
+	heldText             *chatChunkChoiceWire // a first delta's answer and reasoning, waiting for the next delta to show their order
+	answerFirst          bool                 // the delta after heldText showed its answer came first
 	toolKinds            map[int]llmprotocol.ToolKind
 	providerReported     bool
 	nativeReasonReported bool
@@ -123,6 +125,21 @@ type chatChunkToolCallWire struct {
 }
 
 func (decoder *chatStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	events, diagnostics, err := decoder.push(chunk)
+	if err != nil {
+		// The engine encodes the valid prefix before it surfaces the error, so
+		// held texts go out with it. An error of their own came first, so it
+		// is the one to report.
+		held, heldErr := decoder.releaseHeld(nil)
+		events = append(events, held...)
+		if heldErr != nil {
+			err = heldErr
+		}
+	}
+	return events, diagnostics, err
+}
+
+func (decoder *chatStreamDecoder) push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	if err := decoder.observeProviderStreamBytes(chunk); err != nil {
 		return nil, nil, err
 	}
@@ -152,8 +169,8 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
 	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
-		event, doneErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
-		return []llmprotocol.Event{event}, nil, doneErr
+		events, doneErr := decoder.nextAfterHeld(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
+		return events, nil, doneErr
 	}
 	var chunk chatChunkWire
 	_, vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
@@ -174,13 +191,96 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return nil, diagnostics, err
 	}
 	if chunk.Error != nil {
-		event, err := decoder.next(chatStreamFailureEvent(chunk.Error))
-		return []llmprotocol.Event{event}, diagnostics, err
+		events, failureErr := decoder.nextAfterHeld(chatStreamFailureEvent(chunk.Error))
+		return events, diagnostics, failureErr
 	}
-	events, chunkDiagnostics, err := decoder.decodeChunkEvents(chunk)
+	events, chunkDiagnostics, err := decoder.decodeOrHoldChunk(chunk)
 	diagnostics = appendDiagnostics(diagnostics, chunkDiagnostics, decoder.policy.Limits.Diagnostics)
 	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 	return events, diagnostics, err
+}
+
+// A first delta with both the answer and reasoning has lost their order.
+// vLLM's think-first parsers put the reasoning first, but Mistral's parser
+// starts in content and can put the answer first. The next delta with output
+// tells them apart, so the two texts wait for it; the rest of the delta, such
+// as the response start and usage, decodes now.
+func (decoder *chatStreamDecoder) decodeOrHoldChunk(chunk chatChunkWire) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	var events []llmprotocol.Event
+	if decoder.heldText != nil && (!chatChunkIsQuiet(chunk) || decoder.heldTextNeedsBudget()) {
+		released, err := decoder.releaseHeld(&chunk)
+		if err != nil {
+			return released, nil, err
+		}
+		events = released
+	}
+	holds := decoder.opensWithoutOrder(chunk)
+	if holds {
+		choice := chunk.Choices[0]
+		decoder.heldText = &choice
+		rest := choice
+		rest.Delta.Content, rest.Delta.Reasoning, rest.Delta.AlternateReasoning = nil, nil, nil
+		chunk.Choices = []chatChunkChoiceWire{rest}
+	}
+	chunkEvents, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	if holds && err != nil {
+		// A failing chunk emits none of its events.
+		decoder.heldText = nil
+	}
+	return append(events, chunkEvents...), diagnostics, err
+}
+
+func (decoder *chatStreamDecoder) opensWithoutOrder(chunk chatChunkWire) bool {
+	if len(chunk.Choices) != 1 || decoder.lastWasReasoning {
+		return false
+	}
+	choice := chunk.Choices[0]
+	_, textStarted := decoder.contentIndexes[chatContentKey{item: choice.Index, kind: llmprotocol.ContentText}]
+	return choice.Index == 0 && choice.FinishReason == nil && !textStarted &&
+		chatDeltaHasText(choice) && chatDeltaReasoning(choice) != nil &&
+		len(choice.Delta.ToolCalls) == 0 && len(choice.Delta.Annotations) == 0 && choice.Delta.Refusal == nil
+}
+
+// The held texts need up to three events: their item and two deltas. They go
+// out before a quiet chunk could spend the last of the event budget.
+func (decoder *chatStreamDecoder) heldTextNeedsBudget() bool {
+	limit := decoder.policy.Limits.Events
+	return limit > 0 && decoder.events+4 > limit
+}
+
+// releaseHeld decodes the held texts. Reasoning alone in the next delta means
+// the think block is still open, so the answer came before it. Any other next
+// delta, or the end of the stream (next is nil), puts the reasoning first.
+func (decoder *chatStreamDecoder) releaseHeld(next *chatChunkWire) ([]llmprotocol.Event, error) {
+	held := decoder.heldText
+	if held == nil {
+		return nil, nil
+	}
+	decoder.heldText = nil
+	decoder.answerFirst = next != nil && len(next.Choices) == 1 &&
+		chatDeltaReasoning(next.Choices[0]) != nil && !chatDeltaHasText(next.Choices[0])
+	defer func() { decoder.answerFirst = false }()
+	return decoder.decodeChoiceTextEvents(*held)
+}
+
+func (decoder *chatStreamDecoder) nextAfterHeld(event llmprotocol.Event) ([]llmprotocol.Event, error) {
+	events, err := decoder.releaseHeld(nil)
+	if err != nil {
+		return events, err
+	}
+	terminal, err := decoder.next(event)
+	return append(events, terminal), err
+}
+
+// chatChunkIsQuiet reports a chunk whose choices decode to no events, such
+// as vLLM's empty delta with token IDs. It may still carry usage.
+func chatChunkIsQuiet(chunk chatChunkWire) bool {
+	for _, choice := range chunk.Choices {
+		if choice.Index != 0 || chatChoiceNeedsItem(choice) || len(choice.Delta.ToolCalls) > 0 || choice.FinishReason != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
@@ -384,7 +484,14 @@ func (decoder *chatStreamDecoder) decodeChoiceTextEvents(choice chatChunkChoiceW
 
 func chatChoiceNeedsItem(choice chatChunkChoiceWire) bool {
 	return chatDeltaHasText(choice) || len(choice.Delta.Annotations) > 0 ||
-		choice.Delta.Reasoning != nil || choice.Delta.AlternateReasoning != nil || choice.Delta.Refusal != nil
+		chatDeltaReasoning(choice) != nil || choice.Delta.Refusal != nil
+}
+
+func chatDeltaReasoning(choice chatChunkChoiceWire) *string {
+	if choice.Delta.Reasoning != nil {
+		return choice.Delta.Reasoning
+	}
+	return choice.Delta.AlternateReasoning
 }
 
 // Ollama sends "content":"" beside reasoning and tool call deltas. An empty
@@ -400,9 +507,14 @@ func (decoder *chatStreamDecoder) chatChoiceEventFactories(choice chatChunkChoic
 	content := func() ([]llmprotocol.Event, error) { return decoder.decodeContentDelta(choice) }
 	annotations := func() ([]llmprotocol.Event, error) { return decoder.decodeAnnotations(choice) }
 	refusal := func() ([]llmprotocol.Event, error) { return decoder.decodeRefusalDelta(choice) }
-	// vLLM can end the reasoning and start the answer in one delta. While the
-	// reasoning is in progress its tail goes first; otherwise the content does.
-	if decoder.lastWasReasoning {
+	// vLLM can end the reasoning and start the answer in one delta, and a short
+	// think block can fit whole in the choice's first delta with text. Its
+	// reasoning parser puts the reasoning before the answer in both. So the
+	// reasoning goes first while it is in progress or the delta starts the
+	// text, unless the delta after a held opening showed the answer came
+	// first. Once the answer is under way, the content does.
+	_, textStarted := decoder.contentIndexes[chatContentKey{item: choice.Index, kind: llmprotocol.ContentText}]
+	if !decoder.answerFirst && (decoder.lastWasReasoning || !textStarted && chatDeltaHasText(choice)) {
 		return []chatEventFactory{reasoning, content, annotations, refusal}
 	}
 	return []chatEventFactory{content, annotations, reasoning, refusal}
@@ -423,10 +535,7 @@ func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire)
 }
 
 func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
-	reasoning := choice.Delta.Reasoning
-	if reasoning == nil {
-		reasoning = choice.Delta.AlternateReasoning
-	}
+	reasoning := chatDeltaReasoning(choice)
 	if reasoning == nil {
 		return nil, nil
 	}
@@ -579,6 +688,12 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string, detail *chatSto
 
 func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	events, diagnostics, frameErr := finalizeDecoderFrames(decoder.framer.Finalize, decoder.pushFrame, decoder.policy.Limits.Diagnostics)
+	held, heldErr := decoder.releaseHeld(nil)
+	events = append(events, held...)
+	// An error in the held texts came before any frame error.
+	if heldErr != nil {
+		return events, diagnostics, heldErr
+	}
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
