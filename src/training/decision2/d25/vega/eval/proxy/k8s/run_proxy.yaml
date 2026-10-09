@@ -1,0 +1,48 @@
+# Gate one checkpoint on the proxies (one node, 7 GPUs, < 1 h for a 27B code-readout checkpoint).
+# Fill in: NAME (d25-vega-proxy-gate-<run>-<step>), NODE (kubernetes.io/hostname), TAG (code copy under
+# /data/d25/vega/src/<TAG>), CKPT, OUT, PUBLIC (local public index). Keep 1 GPU free on nodes 01-04.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: NAME
+  namespace: semantic-router
+  labels: {app.kubernetes.io/part-of: decision-2.5, d25/campaign: vega, d25/ws: proxy}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app.kubernetes.io/part-of: decision-2.5, d25/campaign: vega, d25/ws: proxy}
+    spec:
+      restartPolicy: Never
+      enableServiceLinks: false
+      nodeSelector: {kubernetes.io/hostname: NODE}
+      containers:
+      - name: main
+        image: docker.io/vllm/vllm-openai-rocm:v0.31.0
+        imagePullPolicy: IfNotPresent
+        workingDir: /data/d25/vega/src/TAG/src/training/decision2
+        command: ["bash", "-c", "python -m d25.vega.eval.proxy.run_proxy --ckpt CKPT --out OUT --gpus 7 --fetch --public PUBLIC 2>&1 | tail -80"]
+        env:
+        - {name: HF_TOKEN, valueFrom: {secretKeyRef: {name: hf-token, key: HF_TOKEN}}}
+        - {name: HF_HOME, value: /data/d25/shared/hf-home}
+        - {name: HF_HUB_DISABLE_XET, value: "1"}
+        - {name: PYTHONPATH, value: "/data/d25/vega/src/TAG/src/training/decision2:/data/d25/shared/decision-index-kit:/data/d25/vega/proxy/pylib:/data/d25/shared/pylib/fla052"}
+        - {name: PYTHONUNBUFFERED, value: "1"}
+        - {name: TOKENIZERS_PARALLELISM, value: "false"}
+        - {name: TRITON_CACHE_DIR, value: /data/d25/vega/proxy/triton-cache}
+        resources:
+          requests: {cpu: "98", memory: 840Gi, amd.com/gpu: "7"}
+          limits: {cpu: "98", memory: 840Gi, amd.com/gpu: "7"}
+        securityContext:
+          privileged: false
+          capabilities: {add: [SYS_PTRACE]}
+          seccompProfile: {type: Unconfined}
+        volumeMounts:
+        - {name: vega, mountPath: /data/d25/vega}
+        - {name: shared, mountPath: /data/d25/shared}
+        - {name: dshm, mountPath: /dev/shm}
+      volumes:
+      - {name: vega, hostPath: {path: /data/d25/vega, type: DirectoryOrCreate}}
+      - {name: shared, hostPath: {path: /data/d25/shared, type: DirectoryOrCreate}}
+      - {name: dshm, emptyDir: {medium: Memory, sizeLimit: 64Gi}}
