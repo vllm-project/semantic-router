@@ -461,6 +461,7 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
+  models?: string[]
   tls?: ListenerTLS
   identity?: ListenerIdentity
 }

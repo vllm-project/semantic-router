@@ -36,5 +36,9 @@ plugins:
 This plugin processes generated response text with the configured prompt-guard
 runtime. It adds latency and can produce false positives, so calibrate the
 threshold and choose `block` versus header-only handling according to policy.
+For streaming responses, declared response-direction jailbreak signals are
+observed after the stream ends. Their evidence is recorded as
+`not_enforced_streaming`; the plugin cannot block bytes already delivered.
+Use non-streaming responses when this plugin must enforce a block.
 See a complete example:
 [`config/fragments/plugin/response-jailbreak/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-jailbreak/strict.yaml).

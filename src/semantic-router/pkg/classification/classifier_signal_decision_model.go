@@ -29,13 +29,16 @@ func (c *Classifier) decider() modelservice.Decider {
 
 // evaluateDecisionModelSignals asks every used decision question in one call
 // per deployment, with the request text as the state. Calls to different
-// deployments run in parallel. A failed or late call leaves its signals
-// unknown; it never fails the request.
+// deployments run in parallel. A question that names no deployment asks the
+// decision model, with the request as it came, like the built-in signals
+// whose call it joins. A failed or late call leaves its signals unknown; it
+// never fails the request.
 func (c *Classifier) evaluateDecisionModelSignals(
 	ctx context.Context,
 	results *SignalResults,
 	mu *sync.Mutex,
 	text string,
+	wholeText string,
 	usedSignals map[string]bool,
 ) {
 	if ctx == nil {
@@ -43,18 +46,21 @@ func (c *Classifier) evaluateDecisionModelSignals(
 	}
 	start := time.Now()
 	byDeployment := make(map[string][]config.DecisionSignalRule)
+	stateOf := make(map[string]string)
 	var order []string
 	for _, rule := range c.Config.DecisionRules {
 		if !signalRuleUsed(usedSignals, config.SignalTypeDecision, rule.Name) {
 			continue
 		}
-		if _, seen := byDeployment[rule.Deployment]; !seen {
-			order = append(order, rule.Deployment)
+		deployment := c.Config.DecisionQuestionDeployment(rule)
+		if _, seen := byDeployment[deployment]; !seen {
+			order = append(order, deployment)
+			stateOf[deployment] = wholeText
 		}
-		byDeployment[rule.Deployment] = append(byDeployment[rule.Deployment], rule)
+		byDeployment[deployment] = append(byDeployment[deployment], rule)
 	}
 	modelservice.Fan(ctx, len(order), func(i int) {
-		c.evaluateDecisionDeployment(ctx, results, mu, text, order[i], byDeployment[order[i]])
+		c.evaluateDecisionDeployment(ctx, results, mu, stateOf[order[i]], order[i], byDeployment[order[i]])
 	})
 	mu.Lock()
 	results.Metrics.Decision.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000.0
@@ -69,18 +75,27 @@ func (c *Classifier) evaluateDecisionDeployment(
 	deployment string,
 	rules []config.DecisionSignalRule,
 ) {
-	timeout := rules[0].EffectiveTimeout()
-	request := modelservice.Request{State: text, Questions: make([]modelservice.Question, 0, len(rules))}
+	// Decision questions route, so a long text is read only as far as its
+	// first tokens; the deployment's scan budget keeps them in one call with
+	// the stage's other questions to it.
+	request := modelservice.Request{State: text, Questions: make([]modelservice.Question, 0, len(rules)), MaxTokens: c.Config.ModelDeployments[deployment].ScanBudget()}
 	for _, rule := range rules {
-		if rule.EffectiveTimeout() < timeout {
-			timeout = rule.EffectiveTimeout()
-		}
-		request.Questions = append(request.Questions, DecisionQuestion(rule.Name, rule.Question))
+		question := DecisionQuestion(rule.Name, rule.Question)
+		question.Truncate = true
+		request.Questions = append(request.Questions, question)
 	}
-	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	callCtx, cancel := decisionCallContext(ctx, rules)
 	defer cancel()
 	started := time.Now()
-	response, err := c.decider().Decide(callCtx, deployment, request)
+	var response modelservice.Response
+	var err error
+	if card, ok := c.decisionTaskCard(deployment); ok {
+		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
+	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+		err = modelservice.ErrUnavailable
+	} else {
+		response, err = c.decider().Decide(callCtx, deployment, request)
+	}
 	latency := time.Since(started).Seconds()
 	if err != nil {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
@@ -109,6 +124,28 @@ func (c *Classifier) evaluateDecisionDeployment(
 			c.recordSignalMatch(config.SignalTypeDecision, matched)
 		}
 	}
+}
+
+// decisionCallContext bounds a deployment's call by the shortest timeout its
+// rules set. Questions to the decision model that set none join the built-in
+// signals' call, so they take its deadline rather than the default timeout.
+// Once the stage sends a call, its questions wait for it as long as its
+// latest caller does: a timeout bounds the wait for the other askers, never
+// an answer of a call the stage waits for anyway (modelservice.Bundle).
+func decisionCallContext(ctx context.Context, rules []config.DecisionSignalRule) (context.Context, context.CancelFunc) {
+	var timeout time.Duration
+	for _, rule := range rules {
+		if rule.Deployment == "" && rule.TimeoutMs == 0 {
+			continue
+		}
+		if t := rule.EffectiveTimeout(); timeout == 0 || t < timeout {
+			timeout = t
+		}
+	}
+	if timeout == 0 {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 // DecisionQuestion converts a configured question to the runtime request form.

@@ -412,6 +412,8 @@ func initializeRuntimeDependencies(
 
 	// Vector store ingestion embeds through the managed model runtime.
 	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
+	// Explicit global stores serve management APIs as well as routing and
+	// keep their own scoped embedding lease across capability changes.
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
 		return embeddingState, err
 	}
@@ -419,8 +421,9 @@ func initializeRuntimeDependencies(
 }
 
 // startModelRuntimeManager starts the model_runtime deployments the config
-// uses and reconciles them on every config publication. A runtime that cannot
-// start leaves its decision signals unknown; it never blocks Router startup.
+// uses and reconciles them on every config publication. The first router
+// generation waits until its Router-managed deployments are ready; one that
+// cannot become ready fails startup with its reason.
 func startModelRuntimeManager(
 	cfg *config.RouterConfig,
 	shutdownHooks *[]func(context.Context) error,
@@ -568,12 +571,16 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 }
 
 func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {
-	writeStartupState(writer, startupstatus.State{
+	state := startupstatus.State{
 		Phase:             "ready",
 		Ready:             true,
 		Message:           "Router configuration is active and the listener is accepting requests.",
 		EmbeddingProvider: embeddingProvider,
-	}, "Failed to write ready startup status")
+	}
+	if manager := modelservice.DefaultManager(); manager != nil {
+		withModelDeployments(&state, managedDeploymentStatuses(manager.Statuses()))
+	}
+	writeStartupState(writer, state, "Failed to write ready startup status")
 }
 
 func startExtProcServer(

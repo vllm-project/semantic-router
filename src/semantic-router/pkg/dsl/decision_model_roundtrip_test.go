@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -56,6 +57,72 @@ func TestDecisionModelSignalAndAlgorithmRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(compiled.DecisionRules, cfg.DecisionRules) {
 		t.Fatalf("decision signals changed in the round trip:\n got %#v\nwant %#v\n%s", compiled.DecisionRules, cfg.DecisionRules, source)
+	}
+	if !reflect.DeepEqual(compiled.Decisions[0].Algorithm.Decision, cfg.Decisions[0].Algorithm.Decision) {
+		t.Fatalf("decision algorithm changed in the round trip: %#v", compiled.Decisions[0].Algorithm.Decision)
+	}
+}
+
+func TestProjectionOnADecisionOptionValidatesAndRoundTrips(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.DecisionRules = []config.DecisionSignalRule{{
+		Name: "needs",
+		Question: config.DecisionQuestion{Type: "set", Instructions: "What does a good answer need?", Labels: []config.DecisionChoice{
+			{Key: "deliberation"}, {Key: "tools"},
+		}},
+	}}
+	gte := 0.5
+	cfg.Projections = config.Projections{
+		Scores: []config.ProjectionScore{{Name: "effort", Method: "weighted_sum", Inputs: []config.ProjectionScoreInput{
+			{Type: "decision", Name: "needs:deliberation", Weight: 0.4, ValueSource: "raw"},
+		}}},
+		Mappings: []config.ProjectionMapping{{
+			Name: "effort_band", Source: "effort", Method: "threshold_bands",
+			Outputs: []config.ProjectionMappingOutput{{Name: "effort_high", GTE: &gte}},
+		}},
+	}
+	cfg.Decisions = []config.Decision{{
+		Name: "hard", Priority: 10, ModelRefs: []config.ModelRef{{Model: "model-a"}},
+		Rules: config.RuleCombination{Type: "projection", Name: "effort_high"},
+	}}
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, errs := Validate(source)
+	if len(errs) > 0 || len(diagnostics) > 0 {
+		t.Fatalf("a projection on a declared question's option must validate cleanly: %v %v\n%s", errs, diagnostics, source)
+	}
+	compiled, compileErrs := Compile(source)
+	if len(compileErrs) > 0 {
+		t.Fatalf("compile errors: %v\n%s", compileErrs, source)
+	}
+	if !reflect.DeepEqual(compiled.Projections.Scores, cfg.Projections.Scores) {
+		t.Fatalf("projection scores changed in the round trip: %#v", compiled.Projections.Scores)
+	}
+}
+
+func TestDecisionAlgorithmWithoutDeploymentRoundTrip(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{{
+		Name:      "frontier",
+		Priority:  10,
+		ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		Algorithm: &config.AlgorithmConfig{Type: "decision", Decision: &config.DecisionSelectionConfig{
+			Instructions: "Which model should answer?",
+			Candidates:   map[string]string{"model-a": "Fast", "model-b": "Strong"},
+		}},
+	}}
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(source, "deployment") {
+		t.Fatalf("a selector that asks the decision model names no deployment:\n%s", source)
+	}
+	compiled, errs := Compile(source)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v\n%s", errs, source)
 	}
 	if !reflect.DeepEqual(compiled.Decisions[0].Algorithm.Decision, cfg.Decisions[0].Algorithm.Decision) {
 		t.Fatalf("decision algorithm changed in the round trip: %#v", compiled.Decisions[0].Algorithm.Decision)

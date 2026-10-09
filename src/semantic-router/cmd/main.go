@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -131,8 +132,10 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		extproc.WithConfigHistoryLimit(opts.configHistoryLimit), extproc.WithGatewayMode(opts.gateway),
 		extproc.WithConfigParts(upstreamPart(opts.gateway)),
 	}
+	stopProgress := reportModelDeploymentProgress(startupWriter, modelservice.DefaultManager())
 	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry,
 		serverOpts...)
+	stopProgress()
 	if err != nil {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}
@@ -287,6 +290,9 @@ var ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterC
 }
 
 func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
+	if !cfg.RoutingEnabled() {
+		return nil
+	}
 	reporter := func(progress modeldownload.ProgressState) {
 		state := startupstatus.State{
 			Ready:            false,
@@ -327,7 +333,7 @@ func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, start
 // startup progress, and hands it to the lifecycle through activate. Its own
 // failures are classified as the stage they belong to.
 func applyKubernetesConfigUpdate(ctx context.Context, newConfig *config.RouterConfig, activate func(context.Context, *config.RouterConfig) error, startupWriter startupstatus.StatusWriter, currentConfig ...func() *config.RouterConfig) error {
-	if len(currentConfig) > 0 && currentConfig[0] != nil {
+	if newConfig.RoutingEnabled() && len(currentConfig) > 0 && currentConfig[0] != nil {
 		if err := modeldownload.ValidateReloadArtifacts(currentConfig[0](), newConfig); err != nil {
 			return configsnapshot.Reject(configsnapshot.StageValidate, configsnapshot.CodeArtifactUnavailable,
 				fmt.Errorf("model artifact reload preflight failed: %w", err))

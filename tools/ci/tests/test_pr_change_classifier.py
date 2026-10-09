@@ -30,6 +30,22 @@ MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+        for path in (
+            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/testcases/routing_error_codes.go",
+            "src/semantic-router/pkg/extproc/routing_failure.go",
+            "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
+        self.assertIn("e2e.routing-errors", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+            "verifications"
+        ][0]
+        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
+
     def test_image_calibration_inputs_select_the_platform_verification(self):
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",
@@ -398,7 +414,20 @@ class SelectionTests(unittest.TestCase):
             performance_base("0.4.0", ["v0.3.0"]),
             "12597be5ffae2319d856f230d61ca26248eb9b3b",
         )
-        self.assertEqual(performance_base("0.5.0", ["v0.4.0"]), "v0.4.0")
+        # v0.4.0 predates the model runtime; #4707 runs the current harness.
+        self.assertEqual(
+            performance_base("0.5.0", ["v0.3.0", "v0.4.0"]),
+            "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+        )
+
+    def test_later_cycles_compare_with_a_release_that_has_the_model_runtime(self):
+        tags = ["v0.3.0", "v0.4.0", "v0.5.0", "v0.5.1"]
+        self.assertEqual(performance_base("0.6.0", tags), "v0.5.1")
+        self.assertEqual(performance_base("0.5.2", tags), "v0.5.1")
+        with self.assertRaisesRegex(ValueError, "declare the 0.4.1 base"):
+            performance_base("0.4.1", tags)
+        with self.assertRaisesRegex(ValueError, "predates the model runtime"):
+            performance_base("0.6.0", ["v0.3.0", "v0.4.0"])
 
     def test_shared_artifact_loaders_select_their_runtime_consumers(self):
         for path in (

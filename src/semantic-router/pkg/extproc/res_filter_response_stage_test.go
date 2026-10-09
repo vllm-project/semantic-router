@@ -11,10 +11,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
-func responseStageBinding(name, deployment, contract string) config.ResolvedModelBinding {
+func responseStageBinding(name, head, contract string) config.ResolvedModelBinding {
 	return config.ResolvedModelBinding{
 		Recipe: config.DefaultRecipeName, Name: name,
-		Binding:    config.ModelBinding{Deployment: deployment, Contract: contract},
+		Binding:    config.ModelBinding{Deployment: "response", Head: head, Contract: contract},
 		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://fake", Input: config.ModelInputBudget{Overflow: "reject"}},
 	}
 }
@@ -24,8 +24,10 @@ func responseStageBinding(name, deployment, contract string) config.ResolvedMode
 // one /v1/bundle, and every check publishes afterwards, in order.
 func TestResponseStageSendsOneBundle(t *testing.T) {
 	runtime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{
-		"guard": servingtest.Sequence("benign", "jailbreak"),
-		"halu":  servingtest.Grounded(),
+		"response": {Heads: []runtimetest.Head{
+			{Name: "guard", Kind: "sequence", Labels: []string{"benign", "jailbreak"}},
+			{Name: "halu", Kind: "token", Labels: []string{"supported", "hallucinated"}, Inputs: []string{"grounded"}},
+		}},
 	})
 	ctx := context.Background()
 	recipe := string(config.DefaultRecipeName)

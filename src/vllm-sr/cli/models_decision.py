@@ -111,7 +111,9 @@ class DecisionSignalRule(BaseModel):
 
     name: str
     description: str | None = None
-    deployment: str
+    # Without one, the question asks the decision model
+    # (global.model_catalog.system.decision_model).
+    deployment: str | None = None
     question: DecisionQuestion
     predicate: NumericPredicate | None = None
     timeout_ms: int | None = Field(default=None, ge=0, le=MAX_DECISION_TIMEOUT_MS)
@@ -122,8 +124,11 @@ class DecisionSignalRule(BaseModel):
             raise ValueError(
                 "decision signal name must be nonempty, trimmed and without ':'"
             )
-        if not self.deployment.strip():
-            raise ValueError("deployment is required")
+        if self.deployment is not None and not self.deployment.strip():
+            raise ValueError(
+                "deployment must name a model_runtime deployment; omit it to ask "
+                "the decision model"
+            )
         if self.question.type == "score" and self.predicate is None:
             raise ValueError(
                 "a score question requires a predicate on its expected level"
@@ -137,19 +142,25 @@ class DecisionSignalRule(BaseModel):
 
 
 class DecisionSelectionConfig(BaseModel):
-    """algorithm.decision: a Choice over a decision's modelRefs."""
+    """algorithm.decision: a Choice over a decision's modelRefs.
+
+    Without a deployment, the Router's decision model chooses.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    deployment: str
+    deployment: str | None = None
     instructions: str
     candidates: dict[str, str] = Field(default_factory=dict)
     timeout_ms: int | None = Field(default=None, ge=0, le=MAX_DECISION_TIMEOUT_MS)
 
     @model_validator(mode="after")
     def validate_required_text(self):
-        if not self.deployment.strip():
-            raise ValueError("deployment is required")
+        if self.deployment is not None and not _trimmed(self.deployment):
+            raise ValueError(
+                "deployment must name a model_runtime deployment; omit it to ask "
+                "the decision model"
+            )
         if not self.instructions.strip():
             raise ValueError("instructions are required")
         return self

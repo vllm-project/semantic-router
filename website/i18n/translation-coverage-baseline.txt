@@ -72,6 +72,7 @@ zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
 zh-Hans	model-runtime/quickstart.md
 zh-Hans	model-runtime/troubleshooting.md
+zh-Hans	overview/component-architecture.md
 zh-Hans	overview/goals.md
 zh-Hans	overview/mom-model-family.md
 zh-Hans	overview/semantic-router-overview.md
@@ -117,6 +118,7 @@ zh-Hans	tutorials/algorithm/looper/remom.md
 zh-Hans	tutorials/algorithm/looper/workflows.md
 zh-Hans	tutorials/algorithm/overview.md
 zh-Hans	tutorials/algorithm/selection/automix.md
+zh-Hans	tutorials/algorithm/selection/decision.md
 zh-Hans	tutorials/algorithm/selection/hybrid.md
 zh-Hans	tutorials/algorithm/selection/kmeans.md
 zh-Hans	tutorials/algorithm/selection/knn.md
@@ -137,6 +139,7 @@ zh-Hans	tutorials/decision/single.md
 zh-Hans	tutorials/global/api-and-observability.md
 zh-Hans	tutorials/global/entrypoints-and-recipes.md
 zh-Hans	tutorials/global/entrypoints.md
+zh-Hans	tutorials/global/model-runtime.md
 zh-Hans	tutorials/global/models-entrypoints-serving.md
 zh-Hans	tutorials/global/overview.md
 zh-Hans	tutorials/global/recipes.md
@@ -180,6 +183,7 @@ zh-Hans	tutorials/signal/heuristic/metadata.md
 zh-Hans	tutorials/signal/heuristic/structure.md
 zh-Hans	tutorials/signal/learned/classifier.md
 zh-Hans	tutorials/signal/learned/complexity.md
+zh-Hans	tutorials/signal/learned/decision.md
 zh-Hans	tutorials/signal/learned/domain.md
 zh-Hans	tutorials/signal/learned/embedding.md
 zh-Hans	tutorials/signal/learned/fact-check.md
@@ -190,5 +194,6 @@ zh-Hans	tutorials/signal/learned/modality.md
 zh-Hans	tutorials/signal/learned/pii.md
 zh-Hans	tutorials/signal/learned/preference.md
 zh-Hans	tutorials/signal/learned/reask.md
+zh-Hans	tutorials/signal/learned/safety.md
 zh-Hans	tutorials/signal/learned/user-feedback.md
 zh-Hans	tutorials/signal/overview.md

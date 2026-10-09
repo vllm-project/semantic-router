@@ -9,7 +9,9 @@ import (
 // ModelCard is a served model's description from /v1/models: identity,
 // surfaces, the question types and presets a decision model answers, heads,
 // embedding and rerank exits, limits and placement. Preparation checks every
-// task binding against it.
+// task binding against it. MaxScanTokens is the scan budget of a decision
+// model that reads a long state part in windows (Vela 2.0), zero for one that
+// reads one bounded input.
 type ModelCard struct {
 	ID             string
 	Family         string
@@ -24,6 +26,7 @@ type ModelCard struct {
 	Embedding      *EmbeddingCard
 	Rerank         *RerankCard
 	MaxInputTokens int
+	MaxScanTokens  int
 	MaxInputs      int
 	Profile        string
 	Engine         string
@@ -120,6 +123,7 @@ func decodeCard(card api.ModelCard) ModelCard {
 	}
 	if card.Limits != nil {
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)
+		decoded.MaxScanTokens = deref(card.Limits.MaxScanTokens)
 		decoded.MaxInputs = deref(card.Limits.MaxInputs)
 	}
 	if card.Heads != nil {
@@ -130,6 +134,10 @@ func decodeCard(card api.ModelCard) ModelCard {
 	decoded.Embedding, decoded.Rerank = card.Embedding, card.Rerank
 	return decoded
 }
+
+// ModelCardFromAPI adapts canonical runtime observations for persistent
+// control-plane consumers, including limits, heads, presets and question types.
+func ModelCardFromAPI(card api.ModelCard) ModelCard { return decodeCard(card) }
 
 func decodeHead(head api.HeadCard) HeadCard {
 	return HeadCard{

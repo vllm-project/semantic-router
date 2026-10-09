@@ -4,7 +4,7 @@ The router management API provides configuration, routing previews, plugin
 inspection, model diagnostics, storage, and observability. It listens on port `8080`
 by default and the local stack binds it to `127.0.0.1`.
 
-For model traffic, use the configured Envoy listener described in
+For model traffic, use the configured inference listener described in
 [Router API](./router).
 
 ## Start with the live schema
@@ -89,6 +89,20 @@ permission.
 Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
+
+Startup completes once every model deployment the Router manages for its
+configuration is ready, decision models included. While the Router waits for
+them, `/ready` and `/startup-status` report `phase: loading_model_deployments`,
+`pending_models` names the deployments that are not ready, and `ready_models`
+and `total_models` count them. `/startup-status` also lists them in
+`model_deployments`, each with its `name`, `artifact`, `process`, `state`,
+`ready` and, after a failure, `reason`, and keeps the list once startup is
+complete. A model that fails to load ends startup with `phase: error`. A
+configuration reload does not turn `/ready` back to `503`: the previous
+configuration serves until the new one's models are ready. The standalone
+listeners and the ext_proc gRPC port open only once those models are ready, so
+the listener's `/ready` and the gRPC health service never report ready before
+the management `/ready` does.
 
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record
@@ -682,6 +696,11 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
+| `POST` | `/api/v1/diagnostics/models/systemone/forward` | Forward a public native inference or discovery request through one active listener grant; requires management authorization and the original listener credentials |
+| `GET` | `/api/v1/instance` | Read the serving frontend capability mode and default native deployment |
+| `GET` | `/api/v1/diagnostics/models/tasks` | List shared judgment task templates, structural model capabilities and binding provenance |
+| `GET` | `/api/v1/diagnostics/models/systemone` | List published model deployments and their native System One question capabilities |
+| `POST` | `/api/v1/diagnostics/models/systemone` | Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |
 | `POST` | `/api/v1/diagnostics/models/labels` | Inspect a prepared label distribution; windowed bindings preserve their configured scan |
 | `POST` | `/api/v1/diagnostics/models/label-scores` | Inspect independent label scores using the prepared operating point when configured |
@@ -689,3 +708,46 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `POST` | `/api/v1/diagnostics/models/embeddings` | Run the explicitly selected prepared embedding binding at its published representation |
 | `POST` | `/api/v1/diagnostics/models/rerank` | Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs) |
 <!-- END-GENERATED-ENDPOINT-INDEX -->
+
+### Testing the Decision Model
+
+`GET /api/v1/diagnostics/models/systemone` lists the published model deployments
+and the question types each model actually serves. `POST` to the same path runs
+native System One inference against the selected deployment. It does not change
+routing configuration or load another model.
+
+```json
+{
+  "deployment": "your-deployed-decision-model",
+  "request": {
+    "state": "Explain how to optimize a SQL query.",
+    "questions": {
+      "task": {
+        "type": "choice",
+        "instructions": "What kind of work is requested?",
+        "criteria": {"coding": "Programming or databases", "other": "Other work"}
+      },
+      "difficulty": {
+        "type": "score",
+        "instructions": "How difficult is the request?",
+        "criteria": ["Simple", "Moderate", "Complex"]
+      },
+      "needs_facts": {"type": "noul", "instructions": "Does this require precise facts?"}
+    },
+    "options": {"return_meta": true}
+  }
+}
+```
+
+The deployment ID comes from the capability list. The Router supplies its served
+model ID and forwards the native response, including probabilities, uncertainty,
+usage, per-question errors, Set answers and Span offsets where supported. Question
+and criteria order are preserved. The model runtime's `/v1/systemone` contract
+remains the source of truth for request fields and response semantics.
+
+The test bypasses the Router result cache and records real model-runtime request,
+latency and server-phase metrics. Requests are limited to 2 MiB, responses to
+4 MiB, and execution to 30 seconds. Discovery requires `config.read`; inference
+requires `classify.invoke`. The Dashboard's
+**Build → System One → Decision Playground** page
+uses its own authenticated gateway with `config.read` and `evaluation.run`.

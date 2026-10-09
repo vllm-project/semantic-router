@@ -195,6 +195,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
+| `decision_model` _[DecisionModelBinding](#decisionmodelbinding)_ | DecisionModel selects the declared deployment that answers default judgment tasks.<br />Omitted uses the Router's primary deployment. Artifact identity belongs in<br />model_deployments; the reference never infers a model family or alias. |  | Optional: \{\} <br /> |
 | `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
@@ -251,6 +252,18 @@ _Appears in:_
 | `total_timeout` _string_ | TotalTimeout bounds the whole fallback chain |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `per_attempt_timeout` _string_ | PerAttemptTimeout bounds each candidate's attempt |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retryable_status_codes` _integer array_ | RetryableStatusCodes are the statuses that move on to the next candidate |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+
+#### DecisionModelBinding
+
+DecisionModelBinding selects one canonical model deployment.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `deployment` _string_ | Deployment is an exact key in model_deployments. |  | MinLength: 1 <br /> |
 
 #### DecisionReliabilityConfig
 
@@ -832,8 +845,8 @@ _Appears in:_
 | `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local model supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `model_id` _string_ |  | models/Vela-2.0-0.3B | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.75 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `model_id` _string_ | ModelID binds the guard to one model; empty runs the decision model. |  | Optional: \{\} <br /> |
+| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float<br />precision issues; empty takes the threshold calibrated for the model. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |

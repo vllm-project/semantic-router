@@ -55,19 +55,19 @@ func assertChunkEaten(t *testing.T, response *ext_proc.ProcessingResponse) {
 }
 
 func makeTestRouterWithLimits(maxBytes int64, timeoutSec int) *OpenAIRouter {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	router.Config.MaxStreamedBodyBytes = maxBytes
 	router.Config.StreamedBodyTimeoutSec = timeoutSec
 	return router
 }
 
 func TestStreamedBodyAccumulatesProtocolNeutralBytesUntilEOS(t *testing.T) {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	ctx := &RequestContext{Headers: make(map[string]string)}
 	handler := newStreamedBodyHandler(router, ctx)
 	defer handler.Release()
 
-	body := []byte(`{"messages":[{"role":"user","content":"hello"}],"model":"auto","stream":true}`)
+	body := []byte(`{"messages":[{"role":"user","content":"hello"}],"model":"vllm-sr/auto","stream":true}`)
 	for _, chunk := range splitTestChunks(body, 7) {
 		response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: chunk}, ctx)
 		require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestStreamedBodyEOSDelegatesCompleteBodyToCodec(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: test.format}
-			handler := newStreamedBodyHandler(makeTestRouter("auto"), ctx)
+			handler := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), ctx)
 			defer handler.Release()
 			chunks := splitTestChunks(test.body, 11)
 			for _, chunk := range chunks[:len(chunks)-1] {
@@ -129,10 +129,10 @@ func TestStreamedBodyEOSDelegatesCompleteBodyToCodec(t *testing.T) {
 
 func TestStreamedBodyDefersCodecValidationUntilEOS(t *testing.T) {
 	ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
-	handler := newStreamedBodyHandler(makeTestRouter("auto"), ctx)
+	handler := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), ctx)
 	defer handler.Release()
 
-	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte(`{"model":"auto",`)}, ctx)
+	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte(`{"model":"vllm-sr/auto",`)}, ctx)
 	require.NoError(t, err)
 	assertChunkEaten(t, response)
 	assert.Nil(t, ctx.SemanticRequest)
@@ -147,7 +147,7 @@ func TestStreamedBodyDefersCodecValidationUntilEOS(t *testing.T) {
 
 func TestStreamedBodyNonEOSChunkUsesSharedResponse(t *testing.T) {
 	ctx := &RequestContext{}
-	handler := newStreamedBodyHandler(makeTestRouter("auto"), ctx)
+	handler := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), ctx)
 	defer handler.Release()
 
 	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte("opaque bytes")}, ctx)
