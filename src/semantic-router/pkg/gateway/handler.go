@@ -24,10 +24,18 @@ type Upstream interface {
 
 // Serving is what one request is served with, all from one configuration.
 type Serving struct {
-	Engine   routing.Engine
-	Upstream Upstream
+	// SystemOne serves native decision inference under this generation's own
+	// listener grant. It does not enter the Chat routing pipeline.
+	SystemOne http.Handler
+	// RoutingDisabled preserves native inference while declining Chat and Responses.
+	RoutingDisabled bool
+	Engine          routing.Engine
+	Upstream        Upstream
 	// APIKeys, when set, are the only client keys the listener accepts.
 	APIKeys []string
+	// Models, when set, are the only request models the listener accepts;
+	// the routing core enforces them on the model it parses.
+	Models []string
 	// IdentityHeaders are dropped from client requests in addition to the
 	// built-in x-authz-* identity headers: the names the configuration reads
 	// a client identity from, which no authenticator in front asserts.
@@ -135,10 +143,23 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	defer release()
+	if r.URL.Path == "/v1/systemone" || r.URL.Path == "/v1/decisions" || r.URL.Path == "/v1/systemone/models" {
+		if serving.SystemOne == nil {
+			http.NotFound(w, r)
+			return
+		}
+		serving.SystemOne.ServeHTTP(w, r)
+		return
+	}
 	if !newAPIKeys(serving.APIKeys).authorize(r) {
 		writeUnauthorized(w)
 		return
 	}
+	if serving.RoutingDisabled {
+		writeError(w, http.StatusNotFound, "routing_disabled", "Chat routing is disabled for this instance.")
+		return
+	}
+	ctx = routing.WithListenerModels(ctx, serving.Models)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if errors.Is(err, errBodyTooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")

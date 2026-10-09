@@ -13,7 +13,9 @@ translation:
 
 该族为学习型：使用 `global.model_catalog.modules.classifier.preference` 下的偏好分类路径。
 
-`global.model_catalog.modules.classifier.preference.use_contrastive` 默认值为 `true`。仅在你有意使用替代分类路径时才设为 `false`。
+带有显式示例的规则默认使用 embedding 相似度；只有描述的规则使用默认决策 deployment。
+显式设置 `embedding_model` 也会选择 embedding 相似度。已配置的外部 preference-role 后端
+会继续使用自己的路径，除非你显式选择其他模式。
 
 ## 主要优势 {#key-advantages}
 
@@ -52,7 +54,10 @@ routing:
         threshold: 0.7
 ```
 
-把示例当作偏好检测器的训练锚点，而不是字面关键词规则。
+示例描述你希望识别的风格，按语义比较，而不是逐字匹配关键词。这里的 `threshold`
+对应 embedding 相似度分数，不是决策模型的概率。
+
+若要显式使用这种比较，包括规则只有描述时，请设置 `use_contrastive: true`：
 
 ```yaml
 global:
@@ -60,7 +65,7 @@ global:
     modules:
       classifier:
         preference:
-          use_contrastive: false # 可选覆盖；默认值为 true
+          use_contrastive: true
           prototype_scoring:
             enabled: true
             cluster_similarity_threshold: 0.9
@@ -71,6 +76,14 @@ global:
 ```
 
 对比模式下，Router 嵌入每条偏好规则的描述与示例，在启用 `prototype_scoring` 时将它们压缩成代表性原型，再把传入请求与这些原型比较。`margin_threshold` 让你可以拒绝模糊胜者，而不是强迫弱偏好匹配。
+
+显式设置 `use_contrastive: false` 会关闭 embedding 比较：已配置外部偏好后端时使用该后端，
+否则使用默认决策 deployment。仅设置 prototype 参数不会选择对比模式。
+
+若要显式选择原生决策任务，在 `routing.model_bindings` 或 `global.model_catalog.bindings`
+下为 `preference` 配置 `contract: decision.v1`。该绑定优先于示例和 `use_contrastive`，
+规则阈值对应原生 choice 概率。cosine 阈值和 prototype margin 属于 embedding 路径；
+切换到原生判断后，请重新检查示例的匹配结果。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

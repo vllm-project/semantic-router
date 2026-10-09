@@ -4,16 +4,16 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
+	// EntrypointModels is the resolved virtual-model inventory for recursion guards.
+	EntrypointModels []string `yaml:"-"`
 	// Endpoint is deprecated and ignored: the Router makes a Looper's model
 	// calls in process. It is still accepted for one release.
-	Endpoint           string              `yaml:"endpoint,omitempty"`
-	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
-	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
-	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
-	Headers            map[string]string   `yaml:"headers,omitempty"`
-	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
-	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
-	Flow               FlowRuntimeConfig   `yaml:"flow,omitempty"`
+	Endpoint           string            `yaml:"endpoint,omitempty"`
+	GRPCMaxMsgSizeMB   int               `yaml:"grpc_max_msg_size_mb,omitempty"`
+	MaxResponseBytesMB int               `yaml:"max_response_bytes_mb,omitempty"`
+	TimeoutSeconds     int               `yaml:"timeout_seconds,omitempty"`
+	Headers            map[string]string `yaml:"headers,omitempty"`
+	Flow               FlowRuntimeConfig `yaml:"flow,omitempty"`
 }
 
 func (l *LooperConfig) GetTimeout() int {
@@ -371,14 +371,22 @@ type ResponseAPIRedisConfig struct {
 // backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
 // deployments should explicitly enable replay and configure a durable backend.
 type RouterReplayConfig struct {
-	Enabled      bool                        `json:"enabled" yaml:"enabled"`
-	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
-	TTLSeconds   int                         `json:"ttl_seconds" yaml:"ttl_seconds"`
-	AsyncWrites  bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
-	Redis        *RouterReplayRedisConfig    `json:"redis,omitempty" yaml:"redis,omitempty"`
-	Postgres     *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
-	Milvus       *RouterReplayMilvusConfig   `json:"milvus,omitempty" yaml:"milvus,omitempty"`
-	Qdrant       *RouterReplayQdrantConfig   `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
+	// Optional capture defaults are overlaid by explicit decision plugin fields.
+	CaptureRequestBody  *bool                       `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+	CaptureResponseBody *bool                       `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	CapturePersonalData *bool                       `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
+	MaxRecords          *int                        `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+	MaxBodyBytes        *int                        `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+	MaxToolTraceBytes   *int                        `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	MaxToolTraceSteps   *int                        `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
+	Enabled             bool                        `json:"enabled" yaml:"enabled"`
+	StoreBackend        string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
+	TTLSeconds          int                         `json:"ttl_seconds" yaml:"ttl_seconds"`
+	AsyncWrites         bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
+	Redis               *RouterReplayRedisConfig    `json:"redis,omitempty" yaml:"redis,omitempty"`
+	Postgres            *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
+	Milvus              *RouterReplayMilvusConfig   `json:"milvus,omitempty" yaml:"milvus,omitempty"`
+	Qdrant              *RouterReplayQdrantConfig   `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
 }
 
 type RouterReplayRedisConfig struct {

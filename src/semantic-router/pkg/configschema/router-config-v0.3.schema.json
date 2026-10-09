@@ -709,6 +709,9 @@
     },
     "CanonicalIntegrationGlobal": {
       "properties": {
+        "kv_transfer": {
+          "$ref": "#/$defs/KVTransferConfig"
+        },
         "tools": {
           "$ref": "#/$defs/ToolsConfig"
         },
@@ -743,6 +746,14 @@
                 "overflow": "reject"
               },
               "profile": "exact"
+            },
+            "primary": {
+              "artifact": "vllm-sr/Vela-2.0-0.3B",
+              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {},
+              "profile": "max_speed"
             }
           }
         },
@@ -1049,9 +1060,6 @@
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
-        },
         "model_bindings": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelBinding"
@@ -1087,6 +1095,9 @@
     },
     "CanonicalRouterGlobal": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "config_source": {
           "type": "string",
           "enum": [
@@ -1097,16 +1108,7 @@
         "strategy": {
           "type": "string"
         },
-        "auto_model_name": {
-          "type": "string"
-        },
-        "auto_model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "include_config_models_in_list": {
+        "list_backend_models": {
           "type": "boolean"
         },
         "clear_route_cache": {
@@ -1135,9 +1137,6 @@
       "properties": {
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
-        },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
         },
         "model_bindings": {
           "additionalProperties": {
@@ -1393,7 +1392,7 @@
     "CanonicalSystemModels": {
       "properties": {
         "decision_model": {
-          "type": "string"
+          "$ref": "#/$defs/DecisionModelBinding"
         },
         "safety": {
           "type": "string"
@@ -2035,6 +2034,19 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "DecisionModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deployment"
+      ]
     },
     "DecisionPlugin": {
       "allOf": [
@@ -2841,12 +2853,6 @@
     },
     "FlowRuntimeConfig": {
       "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "state": {
           "$ref": "#/$defs/WorkflowStateRuntimeConfig"
         }
@@ -2957,18 +2963,6 @@
         },
         "max_completion_tokens": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "FusionRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3312,6 +3306,105 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "KVServingIdentity": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "weight_revision": {
+          "type": "string"
+        },
+        "tokenizer": {
+          "type": "string"
+        },
+        "tokenizer_revision": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "string"
+        },
+        "tensor_parallel": {
+          "type": "integer"
+        },
+        "kv_heads": {
+          "type": "integer"
+        },
+        "head_dim": {
+          "type": "integer"
+        },
+        "head_order": {
+          "type": "string"
+        },
+        "adapter_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferBackend": {
+      "properties": {
+        "model_alias": {
+          "type": "string"
+        },
+        "backend_name": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "can_export": {
+          "type": "boolean"
+        },
+        "can_load": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backends": {
+          "items": {
+            "$ref": "#/$defs/KVTransferBackend"
+          },
+          "type": "array"
+        },
+        "pairs": {
+          "items": {
+            "$ref": "#/$defs/KVTransferPair"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferPair": {
+      "properties": {
+        "mapper_id": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "target": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_transfer_turn": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "KeywordRule": {
       "properties": {
         "name": {
@@ -3470,6 +3563,15 @@
           },
           "type": "array"
         },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "systemone": {
+          "$ref": "#/$defs/ListenerSystemOne"
+        },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
         },
@@ -3486,6 +3588,18 @@
           "type": "boolean"
         },
         "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerSystemOne": {
+      "properties": {
+        "models": {
           "items": {
             "type": "string"
           },
@@ -3559,12 +3673,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "remom": {
-          "$ref": "#/$defs/ReMoMRuntimeConfig"
-        },
-        "fusion": {
-          "$ref": "#/$defs/FusionRuntimeConfig"
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
@@ -4375,10 +4483,16 @@
         "endpoint": {
           "type": "string"
         },
-        "process": {
-          "type": "string"
+        "replicas": {
+          "items": {
+            "$ref": "#/$defs/ModelReplica"
+          },
+          "type": "array"
         },
         "served_name": {
+          "type": "string"
+        },
+        "public_name": {
           "type": "string"
         }
       },
@@ -4454,6 +4568,21 @@
           "type": "string"
         },
         "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelReplica": {
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "served_name": {
           "type": "string"
         }
       },
@@ -5544,18 +5673,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ReMoMRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ReaskRule": {
       "properties": {
         "name": {
@@ -6222,6 +6339,27 @@
     },
     "RouterReplayConfig": {
       "properties": {
+        "capture_request_body": {
+          "type": "boolean"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_personal_data": {
+          "type": "boolean"
+        },
+        "max_records": {
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_steps": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6276,6 +6414,9 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
+        "capture_personal_data": {
+          "type": "boolean"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6383,15 +6524,6 @@
         },
         "key_prefix": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "RoutingDataPolicy": {
-      "properties": {
-        "replay": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -8151,6 +8283,15 @@
         "path": [
           "stores",
           "tool_sessions"
+        ]
+      },
+      {
+        "key": "kv_transfer",
+        "layer": "integrations",
+        "display_name": "Kv Transfer",
+        "path": [
+          "integrations",
+          "kv_transfer"
         ]
       },
       {

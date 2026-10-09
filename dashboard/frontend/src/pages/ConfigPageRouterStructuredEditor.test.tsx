@@ -24,19 +24,19 @@ describe('ConfigPageRouterStructuredEditor', () => {
   })
 
   it('renders string arrays as addable typed rows', () => {
-    const schema = ROUTER_STRUCTURED_FIELDS.router_core?.auto_model_names.schema
+    const schema = ROUTER_STRUCTURED_FIELDS.prompt_compression?.skip_signals.schema
     expect(schema).toBeDefined()
     const markup = renderToStaticMarkup(
       <ConfigPageRouterStructuredEditor
         schema={schema!}
-        value={['vllm-sr/auto', 'MoM']}
+        value={['jailbreak', 'pii']}
         onChange={vi.fn()}
       />,
     )
 
-    expect(markup).toContain('vllm-sr/auto')
-    expect(markup).toContain('MoM')
-    expect(markup).toContain('Add alias')
+    expect(markup).toContain('jailbreak')
+    expect(markup).toContain('pii')
+    expect(markup).toContain('Add signal')
   })
 
   it('surfaces preserved future fields in read-only object views', () => {

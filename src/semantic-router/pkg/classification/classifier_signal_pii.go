@@ -31,6 +31,10 @@ type cachedPIIResult struct {
 }
 
 func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string) {
+	if backend := decisionPIIInference(c.piiInference); backend != nil {
+		c.evaluateDecisionPIISignal(ctx, results, mu, piiText, nonUserMessages, backend)
+		return
+	}
 	start := time.Now()
 
 	// Step 1: Collect the union of unique content pieces across all PII rules.
@@ -85,6 +89,43 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	modelservice.Fan(ctx, len(rules), func(i int) {
 		c.evaluatePIIRule(rules[i], piiText, nonUserMessages, piiCache, start, results, mu)
 	})
+
+	// Replay needs stronger evidence than a non-matching routing rule: an
+	// allow-list or on_error: allow must not certify content as PII-free.
+	verified := len(rules) > 0 && len(pieces) > 0
+	for _, result := range classified {
+		if result.err != nil {
+			verified = false
+		}
+	}
+	for _, content := range nonUserMessages {
+		if content != "" {
+			if _, scanned := contentSeen[content]; !scanned {
+				verified = false
+			}
+		}
+	}
+	for _, rule := range rules {
+		entities, failed := c.collectPIIEntityTypes(uniqueContents, rule.Name, rule.Threshold, piiCache)
+		if failed || len(entities) > 0 {
+			verified = false
+		}
+	}
+	for _, content := range uniqueContents {
+		complete, clean := true, true
+		for _, cached := range piiCache[content] {
+			if cached.err != nil {
+				complete = false
+			}
+		}
+		for _, rule := range rules {
+			entities, failed := c.collectPIIEntityTypes([]string{content}, rule.Name, rule.Threshold, piiCache)
+			complete = complete && !failed
+			clean = clean && len(entities) == 0
+		}
+		results.PIIEvidence = append(results.PIIEvidence, NewPrivacyEvidence("request", content, complete, clean))
+	}
+	results.PIIContentVerified = verified
 
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()

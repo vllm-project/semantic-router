@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1740" height="1280" viewBox="0 0 1740 1280" role="img"><title>System One auto: composable decision-model backends</title><desc>Roadmap, not an implemented route. Model choice and replica choice are different stages.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+<rect width="100%" height="100%" fill="#fff"/>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="50" y="48.0" font-size="30" text-anchor="start" class="serif">(d) System One auto: route to intelligence</text>
+<text x="50" y="82.0" font-size="21" text-anchor="start" class="">ROADMAP · proposed extension of the same frontend and recipe architecture</text>
+<rect x="75" y="155" width="460" height="294" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="99" y="195.0" font-size="29" text-anchor="start" class="">Local decision-model deployment</text>
+<g data-box="110.0 235 390 77">
+<rect x="110.0" y="235" width="390" height="77" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="305.0" y="267.865" font-size="23" text-anchor="middle" class="">Replica 0     Replica 1     …</text>
+<text x="305.0" y="294.775" font-size="23" text-anchor="middle" class="">managed GPU workers</text>
+</g>
+<g data-box="110.0 353 390 62">
+<rect x="110.0" y="353" width="390" height="62" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="305.0" y="391.82" font-size="23" text-anchor="middle" class="">Compatible-replica dispatch</text>
+</g>
+<path d="M305,353 L305,312" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="640" y="155" width="460" height="294" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="664" y="195.0" font-size="29" text-anchor="start" class="">Independent vLLM-SR service</text>
+<g data-box="675.0 235 390 77">
+<rect x="675.0" y="235" width="390" height="77" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="870.0" y="267.865" font-size="23" text-anchor="middle" class="">Serving Engine + replica pools</text>
+<text x="870.0" y="294.775" font-size="23" text-anchor="middle" class="">local or attached workers</text>
+</g>
+<g data-box="675.0 353 390 62">
+<rect x="675.0" y="353" width="390" height="62" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="870.0" y="391.82" font-size="23" text-anchor="middle" class="">System One frontend</text>
+</g>
+<path d="M870,353 L870,312" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="1205" y="155" width="460" height="294" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="1229" y="195.0" font-size="29" text-anchor="start" class="">External decision provider</text>
+<g data-box="1240.0 235 390 77">
+<rect x="1240.0" y="235" width="390" height="77" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1435.0" y="268.11" font-size="22" text-anchor="middle" class="">Provider-managed inference</text>
+<text x="1435.0" y="293.85" font-size="22" text-anchor="middle" class="">placement owned by provider</text>
+</g>
+<g data-box="1240.0 353 390 62">
+<rect x="1240.0" y="353" width="390" height="62" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="1435.0" y="391.82" font-size="23" text-anchor="middle" class="">Native provider adapter</text>
+</g>
+<path d="M1435,353 L1435,312" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="260" y="650" width="1220" height="207" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="284" y="690.0" font-size="29" text-anchor="start" class="">Decision Engine · routing recipe</text>
+<g data-box="300.0 739 330 77">
+<rect x="300.0" y="739" width="330" height="77" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="465.0" y="771.865" font-size="23" text-anchor="middle" class="">Signals + projections</text>
+<text x="465.0" y="798.775" font-size="23" text-anchor="middle" class="">request requirements</text>
+</g>
+<g data-box="705.0 739 330 77">
+<rect x="705.0" y="739" width="330" height="77" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="870.0" y="771.865" font-size="23" text-anchor="middle" class="">Decision matching</text>
+<text x="870.0" y="798.775" font-size="23" text-anchor="middle" class="">conditions + policy</text>
+</g>
+<g data-box="1110.0 739 330 77">
+<rect x="1110.0" y="739" width="330" height="77" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="1275.0" y="771.865" font-size="23" text-anchor="middle" class="">Selection algorithm</text>
+<text x="1275.0" y="798.775" font-size="23" text-anchor="middle" class="">choose decision model</text>
+</g>
+<path d="M630,777 L705,777" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1035,777 L1110,777" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1275,739 L1275,555 L305,555 L305,449" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<path d="M870,555 L870,449" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<path d="M1275,555 L1435,555 L1435,449" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<circle cx="870" cy="555" r="3.5" fill="#111"/>
+<circle cx="1275" cy="555" r="3.5" fill="#111"/>
+<text x="870" y="600.0" font-size="22" text-anchor="middle" class="">Model selection → one compatible backend</text>
+<g data-box="405.0 943 930 94">
+<rect x="405.0" y="943" width="930" height="94" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="870.0" y="984.12" font-size="24" text-anchor="middle" class="">Frontend · System One codec + access checks</text>
+<text x="870.0" y="1012.2" font-size="24" text-anchor="middle" class="">model: vllm-sr/auto  →  resolved entrypoint and recipe</text>
+</g>
+<path d="M870,943 L870,900 L465,900 L465,816" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<g data-box="535.0 1106 670 64">
+<rect x="535.0" y="1106" width="670" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="870.0" y="1146.5" font-size="25" text-anchor="middle" class="">Application: state + typed questions</text>
+</g>
+<path d="M870,1106 L870,1037" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="870" y="1210.0" font-size="21" text-anchor="middle" class="">Dashed arrows: future routed-native path. Current native calls address a concrete served model.</text>
+<text x="870" y="1243.0" font-size="21" text-anchor="middle" class="">The selected model may have several replicas. Replica dispatch stays inside its deployment.</text>
+</svg>

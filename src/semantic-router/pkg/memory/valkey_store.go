@@ -319,7 +319,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 // rerankAndFilter applies hybrid re-ranking, adaptive threshold, score filtering, and access tracking.
 func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts RetrieveOptions, threshold float32, limit int) []*RetrieveResult {
 	if opts.HybridSearch && len(candidates) > 1 {
-		candidates = v.hybridRerank(candidates, opts)
+		candidates = hybridRerankCandidates(candidates, opts)
 	}
 
 	if opts.AdaptiveThreshold && len(candidates) > 1 {
