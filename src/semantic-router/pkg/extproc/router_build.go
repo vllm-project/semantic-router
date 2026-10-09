@@ -187,7 +187,7 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 }
 
 // validateStickyToolSelectionPhaseSupport rejects any decision that enables
-// tool_selection.sticky.enabled (issue #3347 phase 1 / sub-issue #3392): no
+// tool_selection.sticky.enabled through Phase 2 (#4517): no
 // production request path consumes ResolveStickyToolIdentity or the
 // sessiontools store yet, so accepting sticky.enabled: true here would
 // construct successfully and then silently never activate sticky selection
@@ -216,7 +216,7 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
 // whenever any decision enables tool_selection.sticky.enabled (issue #3347,
 // PL-0042 section 2.4). Retained as a construction-time guard for once
-// Phase 2 lifts validateStickyToolSelectionPhaseSupport's rejection above —
+// Phase 3 (#4519) lifts validateStickyToolSelectionPhaseSupport's rejection above —
 // sticky.enabled: true cannot reach this check today, since the
 // phase-support gate now rejects it first. Unlike
 // validateResponseCacheScopeSecret just below, this is unconditional — not
