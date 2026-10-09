@@ -234,6 +234,18 @@ func withinWindow(times []time.Time, windowStart time.Time) []time.Time {
 	return kept
 }
 
+// countWithinWindow counts timestamps that are still inside the rolling
+// limiter window without allocating a filtered slice.
+func countWithinWindow(times []time.Time, windowStart time.Time) int {
+	count := 0
+	for _, t := range times {
+		if t.After(windowStart) {
+			count++
+		}
+	}
+	return count
+}
+
 // cleanup removes stale entries (call periodically)
 func (rl *rateLimiter) cleanup() {
 	rl.mu.Lock()
@@ -253,12 +265,20 @@ func (rl *rateLimiter) cleanup() {
 	rl.globalReqs = withinWindow(rl.globalReqs, windowStart)
 }
 
-// getStats returns current rate limiter statistics (for monitoring/debugging)
-// nolint:unused // Reserved for future monitoring endpoint
+// getStats returns current process-local rate limiter statistics for the
+// rolling window. Expired client keys remain eligible for periodic cleanup but
+// are excluded from the snapshot.
 func (rl *rateLimiter) getStats() (trackedClients int, globalReqCount int) {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
-	return len(rl.requests), len(rl.globalReqs)
+
+	windowStart := time.Now().Add(-rateLimitWindow)
+	for _, times := range rl.requests {
+		if countWithinWindow(times, windowStart) > 0 {
+			trackedClients++
+		}
+	}
+	return trackedClients, countWithinWindow(rl.globalReqs, windowStart)
 }
 
 // Start cleanup goroutine
@@ -295,6 +315,17 @@ type WebSearchResponse struct {
 	Results []SearchResult  `json:"results"`
 	Error   string          `json:"error,omitempty"`
 	Code    SearchErrorCode `json:"code,omitempty"`
+}
+
+// WebSearchRateLimitStatsResponse is the safe aggregate response for the
+// WebSearch rate limiter. Counts are process-local and cover the current
+// rolling window only.
+type WebSearchRateLimitStatsResponse struct {
+	TrackedClients int `json:"tracked_clients"`
+	GlobalRequests int `json:"global_requests"`
+	WindowSeconds  int `json:"window_seconds"`
+	PerClientLimit int `json:"per_client_limit"`
+	GlobalLimit    int `json:"global_limit"`
 }
 
 // ========================
@@ -644,6 +675,31 @@ func sendErrorResponse(w http.ResponseWriter, query string, code SearchErrorCode
 		Error: errorMessages[code],
 		Code:  code,
 	})
+}
+
+// WebSearchRateLimitStatsHandler returns an authenticated, aggregate-only
+// snapshot of the WebSearch rate limiter.
+func WebSearchRateLimitStatsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		trackedClients, globalRequests := globalRateLimiter.getStats()
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		if err := json.NewEncoder(w).Encode(WebSearchRateLimitStatsResponse{
+			TrackedClients: trackedClients,
+			GlobalRequests: globalRequests,
+			WindowSeconds:  int(rateLimitWindow / time.Second),
+			PerClientLimit: rateLimitMaxReqs,
+			GlobalLimit:    globalRateLimit,
+		}); err != nil {
+			log.Printf("Error encoding web search rate-limit stats: %v", err)
+		}
+	}
 }
 
 // WebSearchHandler handles web search requests
