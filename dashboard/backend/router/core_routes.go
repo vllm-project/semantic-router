@@ -109,6 +109,7 @@ func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.C
 func registerHealthAndSetupRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *setupmode.Resolver) {
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	registerRouteFunc(mux, auth.PublicRoute("/healthz", http.MethodGet), handlers.HealthCheck)
+	registerRouteFunc(mux, auth.PublicRoute("/health", http.MethodGet), handlers.HealthCheck)
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/settings", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.SettingsHandler(cfg, setupResolver))
 	registerRouteFunc(mux, auth.PublicRoute("/api/setup/state", http.MethodGet), handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/setup/import-remote", auth.PermConfigWrite, "setup.import_remote", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 64<<10, http.MethodPost), handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))

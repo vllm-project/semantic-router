@@ -391,3 +391,19 @@ func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) 
 		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, want)
 	}
 }
+
+func TestRegisterHealthAndSetupRoutesAnswersHealthAndHealthz(t *testing.T) {
+	mux := http.NewServeMux()
+	registerHealthAndSetupRoutes(mux, &config.Config{}, nil)
+
+	for _, path := range []string{"/health", "/healthz"} {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status=%d, want 200", path, recorder.Code)
+		}
+		if !strings.Contains(recorder.Body.String(), `"status":"healthy"`) {
+			t.Fatalf("%s: body=%q, want the health payload", path, recorder.Body.String())
+		}
+	}
+}
