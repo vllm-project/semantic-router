@@ -19,7 +19,7 @@ func TestClientRequestsBufferedResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "MoM", 1, 1, false)
+	client := NewClient(server.URL, "vllm-sr/auto", 1, 1, false)
 	if err := client.Chat(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestClientRequestsStreamingResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "MoM", 1, 1, true)
+	client := NewClient(server.URL, "vllm-sr/auto", 1, 1, true)
 	if err := client.Chat(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestStreamingClientRejectsBufferedResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "MoM", 1, 1, true)
+	client := NewClient(server.URL, "vllm-sr/auto", 1, 1, true)
 	err := client.Chat(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "unexpected content-type") {
 		t.Fatalf("Chat() error = %v, want unexpected content-type", err)

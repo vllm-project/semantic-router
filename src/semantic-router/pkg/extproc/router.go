@@ -47,6 +47,7 @@ type OpenAIRouter struct {
 	rerankers map[config.RecipeName]modelruntime.PairScorer
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
 	decisionDecider      modelservice.Decider
+	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
 	cacheEmbeddings      *embedding.Set

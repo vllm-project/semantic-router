@@ -40,6 +40,8 @@ func TestManagementPolicyMatchesOnlyCompleteDeclaredMethodPaths(t *testing.T) {
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record/extra"},
 		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings/"},
 		{http.MethodPost, "/api/router/api/v1/diagnostics/models/unknown"},
+		{http.MethodPost, "/api/router/api/v1/inventory/model-runtime"},
+		{http.MethodDelete, "/api/router/api/v1/inventory/model-runtime"},
 		{http.MethodGet, "/api/router/API/v1/plugins"},
 	} {
 		if _, ok := LookupManagement(test.method, test.path); ok {

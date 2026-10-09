@@ -49,14 +49,18 @@ serves as many or more requests per second (see the design doc's
   standalone mode, and a renewed certificate in those files serves new
   connections without a restart. `--gateway extproc` refuses it rather than
   serve the listener in cleartext.
-- `--gateway standalone|extproc` and `--platform cpu|amd|nvidia` work on the
+- `listeners[].models` restricts a standalone listener to the request models it
+  lists, for example a public key to `vllm-sr/auto` only; other models get
+  `403 model_not_allowed` and `/v1/models` lists only the allowed names.
+  `--gateway extproc` refuses it, since its Envoy listener does not enforce it.
+- `--gateway standalone|extproc` and `--platform auto|cpu|rocm|cuda` work on the
   kubernetes target too. The CLI writes them into the generated Helm values as
   `gateway.mode`, the image repository and a GPU request.
 - `vllm-sr serve --help` lists its options by group, and an option of another
   group is an error that says where it applies.
 - The Router binary takes `-gateway standalone`. Its default stays `extproc`, so
   a manifest that runs it without the flag behaves as before.
-- On macOS, `--platform amd|nvidia` fails with a clear message: Docker's Linux VM
+- On macOS, `--platform rocm|cuda` fails with a clear message: Docker's Linux VM
   gets no GPU there, so the docker target runs the CPU image.
 - **Timeouts, retries and fallback, per model and per decision.**
   `providers.models[].reliability` gains connect, total, idle, per-try and
@@ -144,23 +148,21 @@ needs a root `vllm-sr serve`:
   once; `vllm-sr serve` prints the command. See
   [Security Hardening](../installation/security-hardening#recipe-store-permissions).
 
-## Engine mode runs in a container
+## Engine mode uses the same instance frontend
 
-`vllm-sr serve MODEL` runs the model runtime in the foreground, in a container
-from the router image of `--platform` (`vllm-sr`, `vllm-sr-rocm` or
-`vllm-sr-cuda`), so `pip install vllm-sr` and Docker or Podman are all it needs.
+`vllm-sr serve ARTIFACT --engine` runs the frontend, Dashboard and
+managed model pool using the selected platform image. It sets
+`global.router.enabled: false`; starting again without `--engine` enables the
+saved routing configuration. Mode is selected at startup, not in Dashboard.
 
-- `--host` and `--port` say where the host publishes the runtime (default
-  `127.0.0.1:8100`).
-- Local package directories are mounted read-only, and downloads persist in
-  `~/.cache/vllm-sr/models` (`VLLM_SR_ENGINE_CACHE_DIR` moves it).
-- `--device` takes what the image runs: `cpu`, `rocm[:N]` with `--platform amd`,
-  `cuda[:N]` with `--platform nvidia`, or a plugin's accelerator in an image
-  that has the plugin.
-- `--image`, `--image-pull-policy`, `--container-runtime` and `--log-level`
-  apply to engine mode too.
-- `--profile` names the kubernetes deployment profile only; engine mode's
-  numerics profile is `--runtime-profile`. `--uds` is gone.
+- Native System One and decision requests use explicit listener model grants
+  and the listener's API keys. Chat model permissions stay separate.
+- Configure listener addresses and ports, multiple logical deployments and
+  replicas in the canonical `--config` document.
+- Positional MODEL, `--revision`, `--runtime-profile`, `-dp` and `--device-ids`
+  configure the default judgment deployment without changing listener grants.
+- Worker-level APIs such as classify, embeddings and rerank remain on
+  `vllm-srun`; they are not automatically public frontend endpoints.
 
 ## Looper calls its models from the Router
 

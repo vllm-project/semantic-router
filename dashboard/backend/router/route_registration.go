@@ -5,9 +5,6 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
-	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
-	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
@@ -41,16 +38,10 @@ func registerRouteGroup(mux routeRegistrar, contracts []auth.RouteContract, hand
 	}
 }
 
-const knowledgeBaseGatewayPrefix = "/api/router/api/v1/storage/knowledge-bases"
-
-func managementRouteContracts(includeKnowledgeBases bool) []auth.RouteContract {
+func managementRouteContracts() []auth.RouteContract {
 	byPath := make(map[string]*auth.RouteContract)
 	order := make([]string, 0)
 	for _, management := range routercontract.ManagementPolicies() {
-		knowledgeBase := strings.HasPrefix(management.Path, knowledgeBaseGatewayPrefix)
-		if knowledgeBase != includeKnowledgeBases {
-			continue
-		}
 		contract, ok := byPath[management.Path]
 		if !ok {
 			contract = &auth.RouteContract{Pattern: management.Path}
@@ -84,9 +75,4 @@ func managementRouteContracts(includeKnowledgeBases bool) []auth.RouteContract {
 		contracts = append(contracts, *byPath[path])
 	}
 	return contracts
-}
-
-func registerKnowledgeBaseRoutes(mux routeRegistrar, cfg *config.Config, credentialProvider routerauth.CredentialProvider) {
-	handler := handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, credentialProvider)
-	registerRouteGroup(mux, managementRouteContracts(true), handler)
 }

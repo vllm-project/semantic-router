@@ -15,23 +15,24 @@ import (
 )
 
 // TestServingOverALeaseBundlesEverySignalOfAStage prepares three bindings on
-// one runtime process and checks that one request stage sends one bundle.
+// one logical deployment and checks that one request stage sends one bundle.
 func TestServingOverALeaseBundlesEverySignalOfAStage(t *testing.T) {
 	fake := runtimetest.New(
-		runtimetest.Model{ID: "domain", Heads: []runtimetest.Head{{Name: "default", Kind: "sequence", Labels: []string{"math", "law", "other"}}}},
-		runtimetest.Model{ID: "pii", Heads: []runtimetest.Head{{Name: "default", Kind: "token", Labels: []string{"O", "B-PERSON", "I-PERSON", "B-EMAIL", "I-EMAIL"}}}},
-		runtimetest.Model{ID: "guard", Heads: []runtimetest.Head{{Name: "default", Kind: "sequence", Labels: []string{"benign", "jailbreak"}}}},
+		runtimetest.Model{ID: "signals", Heads: []runtimetest.Head{
+			{Name: "domain", Kind: "sequence", Labels: []string{"math", "law", "other"}},
+			{Name: "pii", Kind: "token", Labels: []string{"O", "B-PERSON", "I-PERSON", "B-EMAIL", "I-EMAIL"}},
+			{Name: "guard", Kind: "sequence", Labels: []string{"benign", "jailbreak"}},
+		}},
 	)
 	server := httptest.NewServer(fake.Handler())
 	defer server.Close()
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"signals": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL}}
 	cfg.ModelBindings = map[string]config.ModelBinding{}
 	consumers := map[string]string{"domain": "domain_classifier", "pii": "pii_classifier", "guard": "prompt_guard"}
 	contracts := map[string]string{"domain": config.RemoteClassifierContractLabelDistribution, "pii": config.RemoteClassifierContractTokenSpans, "guard": config.RemoteClassifierContractLabelDistribution}
 	for deployment, consumer := range consumers {
-		cfg.ModelDeployments[deployment] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: server.URL}
-		cfg.ModelBindings[consumer] = config.ModelBinding{Deployment: deployment, Contract: contracts[deployment]}
+		cfg.ModelBindings[consumer] = config.ModelBinding{Deployment: "signals", Head: deployment, Contract: contracts[deployment]}
 	}
 	cfg.Decisions = []config.Decision{{Name: "all", Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{
 		{Type: config.SignalTypeDomain, Name: "math"}, {Type: config.SignalTypePII, Name: "any"}, {Type: config.SignalTypeJailbreak, Name: "jb"},
@@ -42,8 +43,8 @@ func TestServingOverALeaseBundlesEverySignalOfAStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lease.Deployments()) != 3 {
-		t.Fatalf("every active consumer's deployment is leased: %v", lease.Deployments())
+	if len(lease.Deployments()) != 1 {
+		t.Fatalf("all consumers share one leased deployment: %v", lease.Deployments())
 	}
 	plan, err := config.CompileModelBindings(cfg)
 	if err != nil {

@@ -100,7 +100,7 @@ helm upgrade --install semantic-router \
 
 `vllm-sr serve --target kubernetes --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
 
-在 Kubernetes 上，`--platform amd` 和 `--platform nvidia` 会选择 ROCm 或 CUDA 版 Router 镜像（除非显式指定了镜像），并申请一个 `amd.com/gpu` 或 `nvidia.com/gpu`，因此 Router Pod 会被调度到其设备插件提供该 GPU 的节点上。节点选择器、容忍度、其他资源以及设备插件本身仍通过 Helm values 或 Operator 配置。
+在 Kubernetes 上，`--platform rocm` 和 `--platform cuda` 会选择 ROCm 或 CUDA 版 Router 镜像（除非显式指定了镜像），并申请一个 `amd.com/gpu` 或 `nvidia.com/gpu`，因此 Router Pod 会被调度到其设备插件提供该 GPU 的节点上。节点选择器、容忍度、其他资源以及设备插件本身仍通过 Helm values 或 Operator 配置。
 
 chart 将控制面板作为自己的 Deployment 和 Service 运行，并且该 Deployment 默认禁用。Router Service 仅承载 gRPC 和 HTTP API 端口，因此仅在启用控制面板后，端口 8700 才会出现在集群中。
 

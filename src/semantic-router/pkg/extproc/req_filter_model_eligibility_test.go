@@ -166,7 +166,7 @@ func TestBuildLooperRequestUsesContextEligibleDecisionModels(t *testing.T) {
 
 	request, response := router.buildLooperRequest(
 		&llmprotocol.Request{
-			Model:      "auto",
+			Model:      "vllm-sr/auto",
 			Generation: 1,
 			Messages: []llmprotocol.Message{{
 				Role: llmprotocol.RoleUser,

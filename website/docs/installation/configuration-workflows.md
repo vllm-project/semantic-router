@@ -133,10 +133,11 @@ rejects an empty or setup-only document and does not inject local-Docker service
 addresses or knowledge-base paths. Run `vllm-sr config validate` first so schema and
 reference errors fail before deployment.
 
-On Kubernetes, `--platform amd` and `--platform nvidia` select the ROCm or CUDA
-Router image, unless an image is set explicitly, and request one `amd.com/gpu`
-or `nvidia.com/gpu`, so the Router pod schedules onto a node whose device plugin
-offers that GPU. Node selectors, tolerations, other resources and the device
+On Kubernetes, `--platform rocm` and `--platform cuda` select the ROCm or CUDA
+Router image, unless an image is set explicitly, and request `amd.com/gpu`
+or `nvidia.com/gpu` resources from canonical device ordinals. Replicas sharing
+one device need one GPU; distinct ordinals require that allocation size. The
+pod schedules onto a node whose device plugin offers those GPUs. Node selectors, tolerations, other resources and the device
 plugin itself come from Helm values or the Operator.
 
 The chart runs the Dashboard as its own Deployment and Service, and that

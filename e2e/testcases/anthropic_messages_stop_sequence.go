@@ -42,7 +42,7 @@ func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.C
 	defer stop()
 
 	body := stopSequenceRequestBody{
-		Model:         "MoM",
+		Model:         "vllm-sr/auto",
 		MaxTokens:     50,
 		Temperature:   0,
 		StopSequences: []string{" "},

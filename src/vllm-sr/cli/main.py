@@ -8,6 +8,7 @@ from cli import __version__
 from cli.commands.benchmark import benchmark
 from cli.commands.completion import completion
 from cli.commands.general import config
+from cli.commands.instance import instance
 from cli.commands.optimize import optimize
 from cli.commands.recipe import recipe
 from cli.commands.request import request
@@ -40,6 +41,7 @@ REGISTERED_COMMANDS = (
     completion,
     recipe,
     storage,
+    instance,
 )
 
 

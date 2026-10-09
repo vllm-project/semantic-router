@@ -70,7 +70,7 @@ when changing sr-bench UI or workflows. `dashboard-check` runs, in order:
 | Step | What it covers |
 | --- | --- |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
-| `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
+| `dashboard-type-check` | TypeScript type checking (frontend) |
 | `dashboard-test-frontend` | Frontend unit tests |
 | `dashboard-test-backend` | Go test inventory and JSON test evidence on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
@@ -320,6 +320,60 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 
 ## Router contract access
 
+**System → Platform & Access → Integrations** opens MCP Servers. MCP keeps its
+existing read and management permissions.
+
+### Decision models
+
+**Build → System One** contains three independent pages:
+**Decision Models**, **Decision Playground**, and **Decision Monitoring**.
+Decision Models at `/decision-model` selects and deploys the router's decision
+models. Search and filter the provider catalog by family or question capability.
+Vela controls built-in router intelligence; the default remains Vela-2.0-0.3B.
+Decision 1.0 and 2.0 are separate custom runtimes for Choice, Score and Noul
+questions or decision selectors. Their deployment dialog saves a pinned
+declaration and an explicitly selected consumer binding in one canonical config
+update. It preserves the Vela default, other bindings and existing runtime tuning.
+Saving an unbound declaration does not start a model. Saved configuration,
+activation and observed readiness remain separate states. Configuration readers
+can inspect the catalog but cannot deploy. **System → Runtime → Models → Model
+Hub** contains the broader backend model catalog.
+
+The lightweight Decision catalog is generated from the canonical model-runtime
+registry and family capabilities without importing ML dependencies. Run
+`make decision-runtime-catalog-generate` after changing its source tables;
+`make decision-runtime-catalog-check` rejects stale projections in the generated
+contract and pre-commit gates. Production frontend builds consume the checked-in
+projection without requiring Python or downloading models.
+
+Decision Monitoring at `/decision-model/monitoring` charts runtime traffic,
+unsuccessful calls, latency and result-cache behavior using Prometheus samples for each deployment. Select a
+time range to inspect trends. Missing samples remain unknown; statistics require
+observability read access and aggregate matching deployments across the routers
+scraped by Prometheus.
+
+Management reads configuration on entry, explicit refresh, deployment, or an
+observed configuration change. Routine polling reads operational state only;
+metrics and chart code load on the monitoring page. Router or Engine mode is
+identified on the Dashboard homepage.
+
+**Decision Playground** is a separate System One workspace at
+`/decision-model/playground`. Compose a state and named Choice, Score, Noul, Set
+or Span questions, then inspect structured answers or the native request and
+response. Available question types come from the running model's capabilities.
+Viewing the workspace requires `config.read`; running a test requires
+`evaluation.run`. Tests run against an already configured deployment and do not
+change routing configuration or select a new model.
+
+The Dashboard's `/api/decision-model/capabilities` and
+`/api/decision-model/test` endpoints use the Router's
+`/api/v1/diagnostics/models/systemone` diagnostic API. When connected to a
+standalone Engine, they use that Engine's `/v1/models` and `/v1/systemone` APIs.
+The native System One contract remains owned by the model runtime; request
+targets come from the connected service rather than a caller-supplied URL.
+
+### Router API reference
+
 The **System → Platform & Access → Router API Docs** entry opens the running
 Router's Swagger UI through the authenticated Dashboard origin. Its companion
 proxies are `/api/router/api/v1` and `/api/router/openapi.json`; they expose the
@@ -348,7 +402,6 @@ Browser
 - [`backend/handlers/`](backend/handlers/) implements control-plane workflows.
 - [`backend/recipe/`](backend/recipe/) validates and materializes Recipe
   packages.
-- [`wizmap/`](wizmap/) builds the embedded knowledge-map view.
 
 Keep detailed user workflows in the website and keep this README focused on
 developing and operating the Dashboard itself.
