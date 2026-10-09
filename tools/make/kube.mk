@@ -5,7 +5,7 @@
 KIND_CLUSTER_NAME ?= semantic-router-cluster
 KIND_CONFIG_FILE ?= tools/dev/kind/kind-config.yaml
 KUBE_NAMESPACE ?= vllm-semantic-router-system
-DOCKER_IMAGE ?= ghcr.io/vllm-project/semantic-router/extproc:latest
+DOCKER_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 
 # Colors for output
 BLUE := \033[0;34m

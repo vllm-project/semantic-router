@@ -136,9 +136,9 @@ Export the selected model with
 It includes the trained weights, tokenizer, and task-specific label mappings.
 PII uses its own export workflow.
 
-Finally, configure [local model bindings](../installation/runtime/in-process.md)
+Finally, configure [local model bindings](../model-runtime/deploy.md)
 and send representative requests through
-[route preview](../installation/runtime/lifecycle-diagnostics.md). Check the
+[route preview](model-runtime/troubleshooting.md). Check the
 actual signal and decision as well as model confidence.
 
 The [artifact index](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)

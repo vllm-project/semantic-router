@@ -78,7 +78,6 @@ func registerProxyRoutes(
 	registerSmartAPIRouter(mux, proxies)
 	registerMetricsRoutes(mux, cfg)
 	registerPrometheusRoutes(mux, cfg)
-	registerWizMapRoutes(mux, cfg)
 }
 
 func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {
@@ -131,7 +130,7 @@ func registerRouterAPIProxy(
 	routerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, feedbackStore, setupResolver, credentialProvider)
 	})
-	contracts := managementRouteContracts(false)
+	contracts := managementRouteContracts()
 	contracts = append(contracts, auth.ProxyMutationRoute("/api/router/v1/chat/completions", auth.PermInferenceRun, "inference.chat", auth.SensitivitySecret, auth.ResourceOwnerInference, 16<<20, http.MethodPost))
 	registerRouteGroup(mux, contracts, routerHandler)
 	log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)

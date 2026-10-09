@@ -97,6 +97,16 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 	if len(b.cfg.ReaskRules) == 0 {
 		return nil, nil
 	}
+	if b.cfg.ReaskUsesDecisionTask() {
+		judgment, err := newDecisionJudgment(b.models, "reask", "reask", nil)
+		if err != nil {
+			return nil, err
+		}
+		if judgment == nil {
+			return nil, fmt.Errorf("reask decision.v1 binding requires a prepared decision model")
+		}
+		return withReaskClassifier(&ReaskClassifier{rules: append([]config.ReaskRule(nil), b.cfg.ReaskRules...), judgment: judgment}), nil
+	}
 	provider, err := b.embeddingProviderForRules()
 	if err != nil {
 		return nil, err
@@ -121,15 +131,31 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 	if b.cfg.ComplexityModel.Backend != nil {
 		return nil, nil
 	}
+	judgment, err := prepareDecisionComplexity(b.models, b.cfg.ComplexityRules)
+	if err != nil {
+		return nil, err
+	}
+	if judgment != nil && len(judgment.rules) == len(b.cfg.ComplexityRules) {
+		return withComplexityClassifier(judgment), nil
+	}
+	prototypeRules := b.cfg.ComplexityRules
+	if judgment != nil {
+		prototypeRules = nil
+		for _, rule := range b.cfg.ComplexityRules {
+			if judgment.judgments[rule.Name] == nil {
+				prototypeRules = append(prototypeRules, rule)
+			}
+		}
+	}
 	modelType := b.defaultEmbeddingModelType()
 	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
-		if err := b.initMultiModalIfNeeded("complexity image_candidates"); err != nil {
-			return nil, err
+		if initErr := b.initMultiModalIfNeeded("complexity image_candidates"); initErr != nil {
+			return nil, initErr
 		}
 	}
 	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
-		if err := b.initMultiModalIfNeeded("complexity model_type=multimodal"); err != nil {
-			return nil, err
+		if initErr := b.initMultiModalIfNeeded("complexity model_type=multimodal"); initErr != nil {
+			return nil, initErr
 		}
 	}
 	provider, err := b.embeddingProviderForRules()
@@ -144,7 +170,7 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 		}
 	}
 	complexityClassifier, err := NewComplexityClassifier(
-		b.cfg.ComplexityRules,
+		prototypeRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
 		provider, multimodal,
@@ -155,6 +181,10 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 			"error":      err.Error(),
 		})
 		return nil, err
+	}
+	if judgment != nil {
+		complexityClassifier.rules = b.cfg.ComplexityRules
+		complexityClassifier.judgments = judgment.judgments
 	}
 	return withComplexityClassifier(complexityClassifier), nil
 }

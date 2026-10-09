@@ -11,9 +11,8 @@ func ValidatePIIWindow(cfg *RouterConfig) error {
 			return fmt.Errorf("classifier.pii binding names an unknown deployment")
 		}
 		if pii.Window == nil {
-			if deployment.Input.Overflow == "window" {
-				return fmt.Errorf("classifier.pii window overflow requires window geometry")
-			}
+			// A head deployment that reads in windows without geometry fails
+			// preparation; a question deployment's window is its scan budget.
 			return nil
 		}
 		return pii.ValidateBoundWindow(deployment)
@@ -25,8 +24,8 @@ func (cfg PIIModel) ValidateWindow() error {
 	if cfg.Window == nil {
 		return nil
 	}
-	if cfg.Backend != nil || !cfg.UseMmBERT32K {
-		return fmt.Errorf("classifier.pii.window requires local mmbert32k")
+	if cfg.Backend != nil {
+		return fmt.Errorf("classifier.pii.window requires the local model")
 	}
 	return cfg.validateWindowParameters(cfg.MaxSequenceLength)
 }
@@ -35,7 +34,7 @@ func (cfg PIIModel) ValidateBoundWindow(deployment ModelDeployment) error {
 	if cfg.Window == nil {
 		return nil
 	}
-	if cfg.Backend != nil || (deployment.Provider != "candle" && deployment.Provider != "ort") {
+	if cfg.Backend != nil || !deployment.IsModelRuntime() {
 		return fmt.Errorf("classifier.pii.window requires a local deployment")
 	}
 	if deployment.Input.Overflow != "window" || deployment.Input.MaxTokens <= 0 {

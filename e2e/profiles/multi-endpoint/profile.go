@@ -20,6 +20,7 @@ var (
 	waitDeployments = []helpers.DeploymentRef{
 		{Namespace: "default", Name: "vllm-14b-dev"},
 		{Namespace: "default", Name: "vllm-14b-prod"},
+		{Namespace: "default", Name: "vllm-14b-slow"},
 	}
 )
 
@@ -69,6 +70,7 @@ func (p *Profile) GetTestCases() []string {
 		"pii-detection",
 		"jailbreak-detection",
 		"chat-completions-request",
+		"decision-reliability-timeout",
 	}
 }
 

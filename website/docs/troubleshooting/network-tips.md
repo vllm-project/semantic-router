@@ -57,7 +57,7 @@ VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
 ```
 
 For AMD or NVIDIA builds, select the corresponding `vllm-sr-rocm` or
-`vllm-sr-cuda` image and pass `--platform amd` or `--platform nvidia`. Use the
+`vllm-sr-cuda` image and pass `--platform rocm` or `--platform cuda`. Use the
 actual tag and registry if you customized the build; see the
 [Development Guide](../community/development) for the full local workflow.
 

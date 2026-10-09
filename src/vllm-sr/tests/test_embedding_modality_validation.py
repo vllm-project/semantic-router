@@ -71,7 +71,7 @@ global:
 
 
 def test_text_modality_passes_with_any_model_type():
-    for model_type in ("qwen3", "gemma", "mmbert", "multimodal"):
+    for model_type in ("qwen3", "mmbert", "multimodal"):
         config = _parse_config_from_yaml(
             _base_config_with_embeddings(query_modality="text", model_type=model_type)
         )
@@ -119,13 +119,12 @@ def test_explicit_binding_defers_media_capability_to_loaded_provider():
         "embedding": {
             "deployment": "omni",
             "contract": "embedding.v1",
-            "adapter": "vela_omni",
         }
     }
     raw["global"]["model_catalog"]["deployments"] = {
         "omni": {
-            "artifact": "models/vela-1.0-omni-nano",
-            "provider": "ort",
+            "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
+            "provider": "model_runtime",
             "device": "cpu",
         }
     }

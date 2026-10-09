@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,12 +12,18 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluatePreferenceSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
 	contentBytes, _ := json.Marshal(text)
 	conversationJSON := fmt.Sprintf(`[{"role":"user","content":%s}]`, contentBytes)
 
-	preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
+	// Native judgment consumes the selected signal text without a second
+	// truncation or JSON message wrapper, so sibling tasks can share its bundle.
+	input := conversationJSON
+	if c.preferenceClassifier.judgment != nil {
+		input = text
+	}
+	preferenceResult, err := c.preferenceClassifier.ClassifyContext(ctx, input)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

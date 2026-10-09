@@ -1,0 +1,13 @@
+[project]
+name = "escalation-risk"
+version = "0.0.0"
+description = "Environment for the escalation risk classifier under src/training/model_classifier/escalation_risk"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    "numpy>=1.26,<3",
+    "scikit-learn>=1.3,<2",
+]
+
+[tool.uv]
+package = false
