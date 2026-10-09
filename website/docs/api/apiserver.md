@@ -4,7 +4,7 @@ The router management API provides configuration, routing previews, plugin
 inspection, model diagnostics, storage, and observability. It listens on port `8080`
 by default and the local stack binds it to `127.0.0.1`.
 
-For model traffic, use the configured Envoy listener described in
+For model traffic, use the configured inference listener described in
 [Router API](./router).
 
 ## Start with the live schema
