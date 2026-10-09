@@ -30,7 +30,6 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         image: ${{ fromJSON(inputs.images) }}
     steps:
@@ -42,11 +41,6 @@ jobs:
           platforms: arm64
       - uses: docker/setup-buildx-action@v3
         with:
-          # Mini's isolated export peaks below 10 GiB; serialize build stages
-          # so Rust compilation cannot overlap it on the 16 GiB runner.
-          buildkitd-config-inline: |
-            [worker.oci]
-              max-parallelism = 1
           driver-opts: |
             image=moby/buildkit:latest
             network=host
@@ -65,7 +59,7 @@ jobs:
         id: build-args
         env:
           MATRIX_IMAGE: ${{ matrix.image }}
-          CARGO_BUILD_JOBS: '8'
+          ACCELERATOR: ${{ steps.definition.outputs.accelerator }}
           DASHBOARD_VERSION_MODE: ${{ inputs.mode == 'pr' && 'pr' || inputs.mode == 'release' && 'release' || 'publish' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '0' }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -77,6 +71,7 @@ jobs:
         with:
           context: ${{ steps.definition.outputs.context }}
           file: ${{ steps.definition.outputs.dockerfile }}
+          target: ${{ steps.definition.outputs.target }}
           platforms: ${{ steps.definition.outputs.platforms }}
           outputs: type=oci,dest=.agent-harness/image-output/image.tar
           tags: semantic-router-ci/${{ matrix.image }}:${{ github.sha }}

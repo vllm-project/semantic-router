@@ -15,13 +15,13 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
-from ci_plan import digest, make_plan  # noqa: E402
+from ci_plan import digest, display_dispatch, make_plan  # noqa: E402
 from execution_batches import e2e_batches, validate_execution_batch  # noqa: E402
-from run_native_batch import run_batch, run_command  # noqa: E402
+from run_platform_batch import run_batch, run_command  # noqa: E402
 
 
 class ExecutionBatchTests(unittest.TestCase):
-    def test_completed_native_command_cannot_leave_a_listener_for_the_next_contract(
+    def test_completed_platform_command_cannot_leave_a_listener_for_the_next_contract(
         self,
     ):
         child = (
@@ -59,14 +59,14 @@ class ExecutionBatchTests(unittest.TestCase):
                     connection.close()
                     if time.monotonic() >= deadline:
                         self.fail(
-                            "completed native contract left a live descendant listener"
+                            "completed platform contract left a live descendant listener"
                         )
                     time.sleep(0.01)
 
     def test_metadata_stages_use_the_same_contract_deadline(self):
-        batch = make_plan([], source_sha="a" * 40, requested=("native.ort-cpu",))[
-            "native_batches"
-        ][0]
+        batch = make_plan(
+            [], source_sha="a" * 40, requested=("platform.image-calibration-cpu",)
+        )["platform_batches"][0]
         budgets = []
 
         def process(_command, **kwargs):
@@ -74,46 +74,37 @@ class ExecutionBatchTests(unittest.TestCase):
             return SimpleNamespace(returncode=0)
 
         with tempfile.TemporaryDirectory() as directory, patch(
-            "run_native_batch.time.monotonic", side_effect=[0, 10, 20, 30]
+            "run_platform_batch.time.monotonic", side_effect=[0, 10, 20, 30]
         ):
             self.assertTrue(run_batch(batch, Path(directory), run=process))
         self.assertEqual(budgets, [7190, 7180, 7170])
 
-    def test_native_reuses_runtime_worker_without_merging_receipts(self):
+    def test_platform_contracts_get_independent_workers(self):
         plan = make_plan(
             [],
             source_sha="a" * 40,
             requested=(
-                "native.ort-cpu",
-                "native.image-calibration-cpu",
-                "native.candle-riscv64-qemu",
+                "platform.image-calibration-cpu",
+                "platform.models-cpu",
             ),
         )
-        self.assertEqual(len(plan["native_batches"]), 2)
-        for batch in plan["native_batches"]:
-            validate_execution_batch(batch, "native")
-        ort = next(row for row in plan["native_batches"] if row["runtime"] == "ort")
-        self.assertEqual(
-            {row["category"] for row in ort["verifications"]},
-            {"runtime", "conformance"},
-        )
-        self.assertEqual(ort["timeout_minutes"], 240)
-        qemu = next(row for row in plan["native_batches"] if row["runtime"] == "candle")
-        self.assertEqual(qemu["dispatch_job"], "native-independent")
-        self.assertFalse(qemu["native"])
+        batches = plan["platform_batches"]
+        self.assertEqual(len(batches), 2)
+        for batch in batches:
+            validate_execution_batch(batch, "platform")
+            self.assertEqual(batch["dispatch_job"], "platform")
+            self.assertEqual(batch["runtime"], "model-runtime")
+        self.assertEqual(len({batch["display_name"] for batch in batches}), 2)
 
-    def test_e2e_shards_preserve_all_profiles_once_with_bounded_cost(self):
+    def test_e2e_profiles_preserve_all_contracts_once_with_bounded_cost(self):
         plan = make_plan([], source_sha="a" * 40, full=True)
         records = [row for row in plan["verifications"] if row["executor"] == "e2e"]
-        self.assertLess(len(plan["e2e_batches"]), len(records))
+        self.assertEqual(len(plan["e2e_batches"]), len(records))
         seen = []
         for batch in plan["e2e_batches"]:
             validate_execution_batch(batch, "e2e")
             self.assertLessEqual(batch["timeout_minutes"] + 30, 360)
-            self.assertLessEqual(
-                len(batch["verifications"]),
-                2 if batch["resource_class"] == "model" else 3,
-            )
+            self.assertEqual(len(batch["verifications"]), 1)
             for record in batch["verifications"]:
                 self.assertEqual(sorted(record["images"]), batch["images"])
                 self.assertEqual(record["runtime"], batch["runtime"])
@@ -123,7 +114,22 @@ class ExecutionBatchTests(unittest.TestCase):
             {"e2e.vela-omni", "e2e.vela-halu", "e2e.multimodal-routing"} <= set(seen)
         )
 
-    def test_large_resource_class_batches_profiles_instead_of_naming_models(self):
+    def test_extra_fixture_profiles_keep_unique_matrix_labels(self):
+        plan = make_plan(
+            [],
+            source_sha="a" * 40,
+            requested=("e2e.envoy-ai-gateway", "e2e.model-runtime"),
+        )
+        lane = [
+            row for row in plan["e2e_batches"] if row["dispatch_job"] == "e2e-fixtures"
+        ]
+        labels = [row["display_name"] for row in lane]
+        self.assertEqual(len(lane), 2)
+        self.assertEqual(len(set(labels)), 2)
+        self.assertTrue(any(label.endswith(" / model-runtime") for label in labels))
+        display_dispatch(plan)
+
+    def test_large_resource_class_profiles_get_separate_workers(self):
         plan = make_plan([], source_sha="a" * 40, requested=("e2e.vela-omni",))
         record = plan["verifications"][0]
         records = []
@@ -138,22 +144,25 @@ class ExecutionBatchTests(unittest.TestCase):
             )
             records.append(candidate)
         batches = e2e_batches(records)
-        self.assertEqual([len(row["verifications"]) for row in batches], [2, 1])
+        self.assertEqual([len(row["verifications"]) for row in batches], [1, 1, 1])
         self.assertTrue(all("model-" not in row["display_name"] for row in batches))
 
     def test_tampered_duplicate_or_mixed_worker_contracts_are_rejected(self):
         plan = make_plan(
             [],
             source_sha="a" * 40,
-            requested=("native.ort-cpu", "native.image-calibration-cpu"),
+            requested=(
+                "platform.image-calibration-cpu",
+                "platform.models-cpu",
+            ),
         )
-        original = plan["native_batches"][0]
+        original = plan["platform_batches"][0]
         variants = []
         changed = copy.deepcopy(original)
-        changed["images"] = ["extproc"]
+        changed["images"] = ["vllm-sr"]
         variants.append(changed)
         changed = copy.deepcopy(original)
-        changed["verifications"][1] = changed["verifications"][0]
+        changed["verifications"] *= 2
         variants.append(changed)
         changed = copy.deepcopy(original)
         changed["verifications"][0]["target"] = "other"
@@ -163,16 +172,19 @@ class ExecutionBatchTests(unittest.TestCase):
         variants.append(changed)
         for batch in variants:
             with self.assertRaises(ValueError):
-                validate_execution_batch(batch, "native")
+                validate_execution_batch(batch, "platform")
 
-    def test_native_failure_does_not_hide_later_contract_and_reports_stay_isolated(
+    def test_platform_failure_does_not_hide_independent_contract_and_reports_stay_isolated(
         self,
     ):
-        batch = make_plan(
+        batches = make_plan(
             [],
             source_sha="a" * 40,
-            requested=("native.ort-cpu", "native.image-calibration-cpu"),
-        )["native_batches"][0]
+            requested=(
+                "platform.image-calibration-cpu",
+                "platform.models-cpu",
+            ),
+        )["platform_batches"]
         calls = []
 
         def process(command, **kwargs):
@@ -185,9 +197,21 @@ class ExecutionBatchTests(unittest.TestCase):
             return SimpleNamespace(returncode=0)
 
         with tempfile.TemporaryDirectory() as directory:
-            self.assertFalse(run_batch(batch, Path(directory), run=process))
-            results = list((Path(directory) / "results").glob("*.json"))
-            self.assertEqual([path.stem for path in results], ["native.ort-cpu"])
+            outcomes = {
+                batch["verifications"][0]["id"]: run_batch(
+                    batch, Path(directory) / batch["id"], run=process
+                )
+                for batch in batches
+            }
+            self.assertEqual(
+                outcomes,
+                {
+                    "platform.image-calibration-cpu": False,
+                    "platform.models-cpu": True,
+                },
+            )
+            results = list(Path(directory).glob("*/results/*.json"))
+            self.assertEqual([path.stem for path in results], ["platform.models-cpu"])
             make_envs = [env for command, env in calls if command[0] == "make"]
             self.assertEqual(len(make_envs), 2)
             self.assertNotEqual(

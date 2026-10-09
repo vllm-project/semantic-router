@@ -28,6 +28,7 @@ import {
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
+  switchSetupModelProvider,
   type ImportedSetupConfig,
   type ModelDraft,
   type PresetCatalogState,
@@ -41,11 +42,14 @@ import {
   type SetupStep,
   type SetupValidationState,
 } from "./setupWizardSupport";
-import {
-  getSetupProviderOption,
-  type ProviderKind,
-} from "./setupWizardProviderCatalog";
+import { type ProviderKind } from "./setupWizardProviderCatalog";
 import styles from "./SetupWizardPage.module.css";
+import { SetupDecisionModelSection } from "./SetupWizardDecisionModel";
+import {
+  configuredDecisionModel,
+  withDecisionModel,
+  type DecisionModelName,
+} from "./decisionModelSupport";
 
 const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,6 +57,8 @@ const SetupWizardPage: React.FC = () => {
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
   const [currentStep, setCurrentStep] = useState<SetupStep>(0);
+  const [decisionModelChoice, setDecisionModelChoice] =
+    useState<DecisionModelName | null>(null);
   const [models, setModels] = useState<ModelDraft[]>([createModelDraft(1)]);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
   const [routingMode, setRoutingMode] = useState<SetupRoutingMode>("scratch");
@@ -195,12 +201,19 @@ const SetupWizardPage: React.FC = () => {
       : routingMode === "remote"
         ? "From remote"
         : "From scratch";
-  const draftConfig =
+  const routeConfig =
     routingMode === "preset"
       ? (presetImportedConfig?.config ?? null)
       : routingMode === "remote"
         ? (importedRemoteConfig?.config ?? null)
         : scratchConfig;
+  // A route keeps the decision model it names until one is chosen here.
+  const draftConfig =
+    routeConfig && decisionModelChoice
+      ? withDecisionModel(routeConfig, decisionModelChoice)
+      : routeConfig;
+  const selectedDecisionModel =
+    decisionModelChoice ?? configuredDecisionModel(routeConfig);
   const generatedCounts =
     routingMode === "preset"
       ? (presetImportedConfig?.counts ?? createSetupConfigCounts())
@@ -287,16 +300,7 @@ const SetupWizardPage: React.FC = () => {
         }
 
         if (field === "providerKind") {
-          const nextProvider = value as ProviderKind;
-          const nextBaseUrl =
-            getSetupProviderOption(nextProvider).initialBaseUrl;
-          return {
-            ...model,
-            providerKind: nextProvider,
-            baseUrl: model.baseUrl.trim()
-              ? model.baseUrl
-              : nextBaseUrl,
-          };
+          return switchSetupModelProvider(model, value as ProviderKind);
         }
 
         return { ...model, [field]: value };
@@ -594,7 +598,11 @@ const SetupWizardPage: React.FC = () => {
 
     try {
       const payload = validatedConfig ?? draftConfig;
-      await activateSetupConfig(payload);
+      const response = await activateSetupConfig(payload);
+      if (response.status === "persisted") {
+        setActivationState("persisted");
+        return;
+      }
       markOnboardingPending();
       await refreshSetupState();
       navigate("/dashboard", { replace: true });
@@ -678,6 +686,12 @@ const SetupWizardPage: React.FC = () => {
               onRetryPresets={() => void loadPresets()}
             />
           )}
+          {currentStep === 1 && (
+            <SetupDecisionModelSection
+              value={selectedDecisionModel}
+              onChange={setDecisionModelChoice}
+            />
+          )}
           {currentStep === 2 && (
             <ReviewActivatePanel
               currentRouteLabel={currentRouteLabel}
@@ -727,11 +741,14 @@ const SetupWizardPage: React.FC = () => {
                     validationState !== "valid" ||
                     !validatedCounts.canActivate ||
                     activationState === "activating" ||
+                    activationState === "persisted" ||
                     (!readonlyLoading && isReadonly)
                   }
                 >
                   {activationState === "activating"
                     ? "Activating…"
+                    : activationState === "persisted"
+                      ? "Saved; rollout required"
                     : "Activate"}
                 </button>
               )}

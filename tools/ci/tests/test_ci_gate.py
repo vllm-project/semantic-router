@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import os
 import re
@@ -19,6 +18,7 @@ from ci_plan import digest, github_outputs, make_plan  # noqa: E402
 from ci_results import make_receipt  # noqa: E402
 from execution_batches import ALL_DISPATCH_JOBS  # noqa: E402
 from provider_mocker_image import IMAGE, REGISTRY  # noqa: E402
+from release_guard_waiver import GUARD_WAIVER  # noqa: E402
 from validate_workflows import load_workflows  # noqa: E402
 from workflow_policy_validation import validate_gate_transport  # noqa: E402
 
@@ -26,8 +26,13 @@ SHA = "a" * 40
 MAX_GATE_ENV_BYTES = 4096
 
 
-def completed(paths=None, *, full=False):
-    plan = make_plan(paths or ["tools/make/openvino.mk"], source_sha=SHA, full=full)
+def completed(paths=None, *, full=False, profile="pr"):
+    plan = make_plan(
+        paths or ["tools/make/build-run-test.mk"],
+        source_sha=SHA,
+        full=full,
+        profile=profile,
+    )
     builds = [
         {"id": f"image:{name}", "sha256": "b" * 64, "source_sha": SHA}
         for name in plan["images"]
@@ -61,8 +66,6 @@ def completed(paths=None, *, full=False):
         plan["plan_sha256"] = digest(
             {k: v for k, v in plan.items() if k != "plan_sha256"}
         )
-    if plan["native"]:
-        builds.append({"id": "native:cpu", "sha256": "c" * 64, "source_sha": SHA})
     receipts = []
     for record in plan["verifications"]:
         field = "checks" if record["activity"] in {"quality", "package"} else "cases"
@@ -72,14 +75,12 @@ def completed(paths=None, *, full=False):
             "runtime": record["runtime"],
             "device": record["device"],
             "platform": record["platform"],
-            **({"execution": record["execution"]} if record.get("execution") else {}),
             "artifacts": [
                 {"id": item["id"], "sha256": item["sha256"]}
                 for item in builds
                 if item["id"]
                 in {
                     *(f"image:{image}" for image in record["images"]),
-                    *(["native:cpu"] if record["native"] else []),
                 }
             ],
         }
@@ -96,6 +97,74 @@ def completed(paths=None, *, full=False):
 
 
 class GateTests(unittest.TestCase):
+    def test_release_guard_waiver_is_visible_and_strictly_scoped(self):
+        paths = ["e2e/profiles/production-stack/values.yaml"]
+        plan, receipts, builds = completed(paths, profile="release")
+        record = next(
+            row for row in plan["verifications"] if row["id"] == "e2e.production-stack"
+        )
+        self.assertEqual(record["known_issue_waiver"], GUARD_WAIVER)
+        receipt = next(row for row in receipts if row["id"] == record["id"])
+        evidence = receipt["evidence"]
+        evidence.update(
+            profile="production-stack",
+            known_issue_waiver=GUARD_WAIVER,
+            waived_failure={
+                "case": "jailbreak-detection",
+                "reason": GUARD_WAIVER["reason"],
+                "details": GUARD_WAIVER["details"],
+            },
+            framework_report={
+                "status": "FAILED",
+                "exit_code": 1,
+                "total_tests": 10,
+                "passed_tests": 9,
+                "failed_tests": 1,
+            },
+            cases=[{"id": f"other-{index}", "status": "passed"} for index in range(9)]
+            + [{"id": "jailbreak-detection", "status": "failed"}],
+            expected_cases=[
+                *(f"other-{index}" for index in range(9)),
+                "jailbreak-detection",
+            ],
+        )
+        qualified = make_receipt(
+            record,
+            evidence,
+            source_sha=SHA,
+            execution_platform="linux/amd64",
+            environ={},
+        )
+        self.assertEqual(qualified["result"], "qualified-with-waiver")
+        receipts[receipts.index(receipt)] = qualified
+        self.assertTrue(evaluate_gate(plan, receipts, builds=builds).passed)
+
+        for field, value in (
+            ("known_issue_waiver", {"issue": 9999}),
+            ("waived_failure", {"case": "jailbreak-detection"}),
+            ("framework_report", {"status": "PASSED"}),
+            ("cases", [*evidence["cases"], {"id": "new-failure", "status": "failed"}]),
+        ):
+            candidate = copy.deepcopy(receipts)
+            replacement = next(row for row in candidate if row["id"] == record["id"])
+            replacement["evidence"][field] = value
+            replacement["evidence_sha256"] = digest(replacement["evidence"])
+            with self.subTest(field=field):
+                self.assertFalse(evaluate_gate(plan, candidate, builds=builds).passed)
+
+        changed_plan = copy.deepcopy(plan)
+        changed_plan["profile"] = "pr"
+        changed_plan["plan_sha256"] = digest(
+            {key: value for key, value in changed_plan.items() if key != "plan_sha256"}
+        )
+        self.assertFalse(evaluate_gate(changed_plan, receipts, builds=builds).passed)
+
+        ordinary = make_plan(paths, source_sha=SHA, profile="pr")
+        self.assertNotIn(
+            "known_issue_waiver",
+            next(row for row in ordinary["verifications"] if row["id"] == record["id"]),
+        )
+
     def test_complete_plan_passes(self):
         for full in (False, True):
             plan, receipts, builds = completed(full=full)
@@ -195,10 +264,10 @@ class GateTests(unittest.TestCase):
             self.assertFalse(evaluate_gate(plan, receipts, builds=candidate).passed)
 
     def test_skipped_failed_cancelled_executor_is_never_success(self):
-        plan, receipts, builds = completed()
+        plan, receipts, builds = completed(["tools/make/models.mk"])
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for executor in ("native-shared", "native-build"):
+        for executor in ("platform", "performance"):
             for status in ("skipped", "failure", "cancelled"):
                 jobs[executor]["result"] = status
                 self.assertFalse(
@@ -220,8 +289,8 @@ class GateTests(unittest.TestCase):
     def test_dispatch_cannot_hide_a_selected_worker_or_move_a_contract(self):
         plan, receipts, builds = completed(full=True)
         for mutate in (
-            lambda value: value["expected_dispatch_jobs"].remove("native-shared"),
-            lambda value: value["native_batches"].pop(),
+            lambda value: value["expected_dispatch_jobs"].remove("platform"),
+            lambda value: value["platform_batches"].pop(),
             lambda value: value["e2e_batches"].pop(),
             lambda value: value["image_producers"].update({"image-router": []}),
             lambda value: value.update(full_cpu_version=1),
@@ -237,7 +306,7 @@ class GateTests(unittest.TestCase):
         plan, receipts, builds = completed(full=True)
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for identity in ("native.image-calibration-cpu", "e2e.vela-omni"):
+        for identity in ("platform.image-calibration-cpu", "e2e.vela-omni"):
             selected = [receipt for receipt in receipts if receipt["id"] != identity]
             verdict = evaluate_gate(plan, selected, builds=builds, jobs=jobs)
             self.assertFalse(verdict.passed)
@@ -326,9 +395,7 @@ class GateTransportTests(unittest.TestCase):
         validate_gate_transport(self.gate, errors)
         self.assertEqual(errors, [])
         expected = json.loads(self.step["env"]["EXECUTOR_RESULTS"])
-        incomplete = {
-            name: value for name, value in expected.items() if name != "native-build"
-        }
+        incomplete = {name: value for name, value in expected.items() if name != "core"}
         with_output = {**expected, "outputs": "${{ needs.plan.outputs.plan }}"}
         for value in (
             "${{ toJSON(needs) }}",
@@ -374,38 +441,20 @@ class GateTransportTests(unittest.TestCase):
             directory = root / ".agent-harness/ci"
             results = directory / "results"
             results.mkdir(parents=True)
-            native_bytes = json.dumps({"platform": "linux/amd64"}).encode()
-            native_digest = hashlib.sha256(native_bytes).hexdigest()
             for build in builds:
-                if build["id"] == "native:cpu":
-                    output = results / "ci-build-native-cpu"
-                    output.mkdir()
-                    (output / "manifest.json").write_bytes(native_bytes)
-                    (output / "receipt.json").write_text(
-                        json.dumps([{**build, "sha256": native_digest}])
+                name = build["id"].removeprefix("image:")
+                output = results / f"ci-build-image-{name}"
+                output.mkdir()
+                (output / "manifest.json").write_text(
+                    json.dumps(
+                        {
+                            "images": [{"platform": "linux/amd64"}],
+                            **build,
+                            "id": name,
+                        }
                     )
-                else:
-                    name = build["id"].removeprefix("image:")
-                    output = results / f"ci-build-image-{name}"
-                    output.mkdir()
-                    (output / "manifest.json").write_text(
-                        json.dumps(
-                            {
-                                "images": [{"platform": "linux/amd64"}],
-                                **build,
-                                "id": name,
-                            }
-                        )
-                    )
+                )
             for receipt in receipts:
-                for collection in (
-                    receipt["artifacts"],
-                    receipt["evidence"]["artifacts"],
-                ):
-                    for artifact in collection:
-                        if artifact["id"] == "native:cpu":
-                            artifact["sha256"] = native_digest
-                receipt["evidence_sha256"] = digest(receipt["evidence"])
                 output = results / f"ci-result-{receipt['id']}"
                 output.mkdir()
                 (output / "result.json").write_text(json.dumps(receipt))

@@ -29,10 +29,10 @@ from cli.commands.recipe_learning_metrics import (
     update_experience_counts,
     update_metrics,
 )
+from cli.consts import DEFAULT_API_PORT
 from cli.router_management_client import (
     OBSERVABILITY_REPLAYS_PATH,
     RouterManagementClient,
-    default_management_base_url,
 )
 from cli.terminal import echo
 from cli.utils import get_logger
@@ -227,7 +227,8 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
     default=None,
     help=(
         "Router management base URL (origin or /api/v1). "
-        f"Defaults to {default_management_base_url()} when --replay-file is omitted."
+        f"Defaults to http://localhost:{DEFAULT_API_PORT}, with VLLM_SR_PORT_OFFSET "
+        "added to the port, when --replay-file is omitted."
         " Uses VSR_MGMT_TOKEN for bearer auth when set."
     ),
 )

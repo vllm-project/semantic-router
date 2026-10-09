@@ -2,7 +2,7 @@
 translation:
   source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
   source_file: "docs/tutorials/plugin/memory.md"
-  outdated: false
+  outdated: true
 ---
 
 # 记忆
@@ -45,15 +45,16 @@ plugins:
     configuration:
       enabled: true
       retrieval_limit: 5
-      similarity_threshold: 0.72
       auto_store: true
 ```
 
-记忆可以持久化从请求派生的内容，并将检索到的记忆发送给所选模型。请为这些数据选择合适的用户/租户隔离、保留策略、认证和传输安全。阈值取决于嵌入模型。完整示例见：
+记忆可以持久化从请求派生的内容，并将检索到的记忆发送给所选模型。请为这些数据选择合适的用户/租户隔离、保留策略、认证和传输安全。未设置的决策阈值会继承全局值；应先按嵌入模型和检索模式校准全局阈值，再考虑添加覆盖值。完整示例见：
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml)。
 
 ## 升级嵌入模型
 
-修改嵌入权重后，重启模型运行时。对于本地 `mmbert` 模型（包括 Vela Embedding），Router 将记忆与实际加载的模型、分词器、推理设置及向量维度绑定。变更这些设置会创建独立的物理集合或索引，以及独立的 Redis 热缓存；使用相同向量表示重启则复用已有存储。配置中的逻辑名称保持不变。
+修改嵌入权重后，重启模型运行时。对于来自模型运行时的嵌入（包括 Vela Embedding），Router 将记忆与实际加载的模型、分词器、推理设置及向量维度绑定。变更这些设置会创建独立的物理集合或索引，以及独立的 Redis 热缓存；使用相同向量表示重启则复用已有存储。配置中的逻辑名称保持不变。
 
-此前没有身份标记的集合会保留，但不会自动接管：相同向量维度不代表两个模型的嵌入兼容。需要检索历史记忆时，请导出原内容并用新模型重新导入。启动或迁移不会删除旧集合。这项自动身份绑定目前覆盖本地 `mmbert`，其他嵌入提供方保留已有行为。
+此前没有身份标记的集合会保留，但不会自动接管：相同向量维度不代表两个模型的嵌入兼容。管理 API 没有记忆导入或批量导出端点，因此新模型的集合从空开始，并随新流量重新积累记忆。启动或迁移不会删除旧集合。这项自动身份绑定覆盖模型运行时提供的所有嵌入。
+
+远程嵌入端点无法证明向量由哪个模型生成，因此记忆继续使用配置的集合或索引，Router 会在启动时记录一条警告。修改 `endpoint.model` 后，或提供方更换端点背后的模型时，请让记忆改用新的集合或索引。新集合从空开始，旧集合保持不变。

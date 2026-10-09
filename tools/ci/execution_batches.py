@@ -9,16 +9,13 @@ from collections import defaultdict
 MAX_CONTRACT_MINUTES = 330
 
 IMAGE_PRODUCERS = {
-    "image-router": ("extproc",),
-    "image-local": ("vllm-sr",),
+    "image-router": ("vllm-sr",),
     "image-dashboard": ("dashboard",),
     "image-operator": ("operator", "operator-bundle"),
-    "image-fixtures": ("provider-mocker",),
+    "image-fixtures": ("provider-mocker", "model-runtime"),
     "image-distribution": (
-        "extproc-rocm",
         "vllm-sr-cuda",
         "vllm-sr-rocm",
-        "vllm-sr-sim",
     ),
 }
 EXECUTOR_JOBS = (
@@ -31,8 +28,7 @@ EXECUTOR_JOBS = (
     "operator",
     "local",
     "recipes",
-    "native-shared",
-    "native-independent",
+    "platform",
     "performance",
     "package",
     "tools",
@@ -40,7 +36,8 @@ EXECUTOR_JOBS = (
     "e2e-fixtures",
     "e2e-dashboard",
 )
-ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, "native-build", *EXECUTOR_JOBS)
+ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, *EXECUTOR_JOBS)
+LANE_IMAGES = frozenset({"vllm-sr", "provider-mocker", "dashboard"})
 
 
 def content_digest(value: object) -> str:
@@ -51,15 +48,16 @@ def content_digest(value: object) -> str:
 
 def dispatch_job(record: dict) -> str:
     executor = record["executor"]
-    if executor == "native":
-        return "native-shared" if record["native"] else "native-independent"
     if executor == "e2e":
         images = set(record["images"])
-        if images == {"extproc"}:
+        if images == {"vllm-sr"}:
             return "e2e-router"
-        if images == {"extproc", "provider-mocker"}:
+        if images in (
+            {"vllm-sr", "provider-mocker"},
+            {"vllm-sr", "provider-mocker", "model-runtime"},
+        ):
             return "e2e-fixtures"
-        if images == {"extproc", "dashboard"}:
+        if images == {"vllm-sr", "dashboard"}:
             return "e2e-dashboard"
         raise ValueError(f"undeclared E2E image dependency lane: {sorted(images)}")
     return executor
@@ -80,7 +78,6 @@ def expected_dispatch_jobs(plan: dict) -> list[str]:
             "plan",
             *(dispatch_job(record) for record in plan["verifications"]),
             *(job for job, images in image_producers(plan["images"]).items() if images),
-            *(["native-build"] if plan["native"] else []),
         }
     )
 
@@ -88,13 +85,11 @@ def expected_dispatch_jobs(plan: dict) -> list[str]:
 def _compatibility(record: dict) -> dict:
     common = {
         key: record[key]
-        for key in ("executor", "runner", "runtime", "device", "platform", "native")
+        for key in ("executor", "runner", "runtime", "device", "platform")
     }
     common.update(images=sorted(record["images"]), dispatch_job=dispatch_job(record))
-    if record["executor"] == "native":
-        common.update(
-            platform_id=record["platform_id"], execution=record.get("execution", {})
-        )
+    if record["executor"] == "platform":
+        common["platform_id"] = record["platform_id"]
     else:
         common["resource_class"] = record.get("resource_class", "standard")
     return common
@@ -105,15 +100,22 @@ def _batch(records: list[dict], shard: int) -> dict:
     executor = common["executor"]
     identity = content_digest([record["id"] for record in records])[:12]
     architecture = common["platform"].split("/")[-1]
-    runtime = {"ort": "ORT", "candle": "Candle", "openvino": "OpenVINO"}.get(
+    runtime = {"model-runtime": "Model Runtime"}.get(
         common["runtime"], common["runtime"]
     )
     label = f"{runtime} / {common['device'].upper()} / {architecture}"
     if executor == "e2e":
         resource = "Large" if common["resource_class"] == "model" else "Standard"
         label += f" / {resource} {shard}"
-    elif common.get("execution"):
-        label += " / QEMU"
+        # A fixture beyond the lane's own images forms a separate compatibility
+        # group whose shards restart at 1 in the same Actions matrix.
+        extra = [image for image in common["images"] if image not in LANE_IMAGES]
+        if extra:
+            label += " / " + " + ".join(extra)
+    if executor == "platform":
+        # Platform contracts run in separate workers; their runtime label alone
+        # would collide in the Actions matrix.
+        label += f" / {identity[:6]}"
     minutes = sum(
         record.get("timeout_minutes", 90 if executor == "e2e" else 120)
         for record in records
@@ -136,26 +138,13 @@ def execution_batches(records: list[dict], executor: str) -> list[dict]:
             groups[json.dumps(_compatibility(record), sort_keys=True)].append(record)
     result = []
     for key in sorted(groups):
-        rows = groups[key]
-        limit = (
-            2 if executor == "native" or rows[0].get("resource_class") == "model" else 3
-        )
-        selected: list[dict] = []
-        minutes = 0
-        shard = 1
-        for record in rows:
+        for shard, record in enumerate(groups[key], 1):
             budget = record.get("timeout_minutes", 90 if executor == "e2e" else 120)
             if budget <= 0 or budget > MAX_CONTRACT_MINUTES:
                 raise ValueError(f"invalid worker time budget for {record['id']}")
-            if selected and (
-                len(selected) >= limit or minutes + budget > MAX_CONTRACT_MINUTES
-            ):
-                result.append(_batch(selected, shard))
-                selected, minutes, shard = [], 0, shard + 1
-            selected.append(record)
-            minutes += budget
-        if selected:
-            result.append(_batch(selected, shard))
+            # One isolated Actions worker per contract lets compatible checks
+            # run at the same time while retaining their existing receipts.
+            result.append(_batch([record], shard))
     return result
 
 
@@ -163,8 +152,8 @@ def e2e_batches(records: list[dict]) -> list[dict]:
     return execution_batches(records, "e2e")
 
 
-def native_batches(records: list[dict]) -> list[dict]:
-    return execution_batches(records, "native")
+def platform_batches(records: list[dict]) -> list[dict]:
+    return execution_batches(records, "platform")
 
 
 def validate_execution_batch(batch: dict, executor: str) -> None:

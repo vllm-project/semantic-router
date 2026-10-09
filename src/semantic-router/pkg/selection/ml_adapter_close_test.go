@@ -38,8 +38,6 @@ func (s *countingMLSelector) Select(_ *modelselection.SelectionContext, refs []c
 
 func (s *countingMLSelector) Name() string { return "counting" }
 
-func (s *countingMLSelector) Train(_ []modelselection.TrainingRecord) error { return nil }
-
 func (s *countingMLSelector) Close() error {
 	s.closes++
 	return s.closeErr
@@ -52,8 +50,6 @@ func (nonClosingMLSelector) Select(_ *modelselection.SelectionContext, refs []co
 }
 
 func (nonClosingMLSelector) Name() string { return "non-closing" }
-
-func (nonClosingMLSelector) Train(_ []modelselection.TrainingRecord) error { return nil }
 
 func TestMLSelectorAdapter_CloseForwardsToMLSelector(t *testing.T) {
 	ml := &countingMLSelector{}

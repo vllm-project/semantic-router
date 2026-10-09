@@ -1,4 +1,5 @@
 import { DataTable } from '../components/DataTable'
+import ProductLoadingState from '../components/ProductLoadingState'
 import TableHeader from '../components/TableHeader'
 import ConfigPageConnectModelsDialog from './ConfigPageConnectModelsDialog'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -100,7 +101,23 @@ function ReasoningFamiliesBlock({ controller }: ModelsSectionViewProps) {
 }
 
 function EvaluationRecordsBlock({ props, controller }: ModelsSectionViewProps) {
-  const groups = controller.evaluations.groups
+  const { groups, ready, loading, retry } = controller.evaluations
+  if (!ready)
+    return (
+      <div className={styles.sectionTableBlock}>
+        <TableHeader title="Evaluation Evidence" variant="embedded" />
+        {loading ? (
+          <ProductLoadingState compact label="Loading model evaluations" />
+        ) : (
+          <p role="status" className={styles.inlineInfo}>
+            Model evaluations could not be loaded.{' '}
+            <button type="button" onClick={retry}>
+              Retry
+            </button>
+          </p>
+        )}
+      </div>
+    )
   return (
     <div className={styles.sectionTableBlock}>
       <TableHeader

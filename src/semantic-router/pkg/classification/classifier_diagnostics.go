@@ -1,10 +1,10 @@
 package classification
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 
 // ModelDiagnosticRuntime exposes already-prepared tasks to the management
 // service. The caller must hold the classifier generation's lifetime lease.
-func (c *Classifier) ModelDiagnosticRuntime() *native.Runtime {
+func (c *Classifier) ModelDiagnosticRuntime() *serving.Runtime {
 	if c == nil || c.models == nil {
 		return nil
 	}

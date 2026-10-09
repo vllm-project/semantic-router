@@ -5,7 +5,7 @@ from cli.config_contract import (
     iter_condition_leaves,
     iter_routing_profiles,
 )
-from cli.models import UserConfig
+from cli.models import Entrypoint, UserConfig
 from cli.validation_error import ValidationError
 
 
@@ -66,7 +66,6 @@ def _recipe_name_contract(
     errors: list[ValidationError] = []
     top_level_has_profile = bool(
         config.routing.candidate_requirements is not None
-        or config.routing.data_policy is not None
         or config.routing.model_bindings
         or config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
         or config.routing.projections.model_dump(
@@ -95,6 +94,7 @@ def _recipe_name_contract(
                 ValidationError(
                     f"Duplicate recipe name '{recipe.name}'",
                     field=f"recipes.{recipe.name}",
+                    hint="Rename one recipe so every recipe has a unique name.",
                 )
             )
         if recipe.name == "default":
@@ -139,78 +139,25 @@ def _normalized_string_list(
     ], errors
 
 
-def _reserved_auto_aliases(
-    global_config: dict,
-) -> tuple[set[str], list[ValidationError]]:
-    router, errors = _optional_mapping(global_config, "router", "global.router")
-    if "auto_model_names" in router and isinstance(
-        router.get("auto_model_names"), list
-    ):
-        names, name_errors = _normalized_string_list(
-            router.get("auto_model_names"),
-            "global.router.auto_model_names",
-        )
-        return set(names), errors + name_errors
-
-    raw_names = router.get("auto_model_names")
-    if raw_names is not None:
-        _, name_errors = _normalized_string_list(
-            raw_names,
-            "global.router.auto_model_names",
-        )
-        errors.extend(name_errors)
-    auto_model_name = router.get("auto_model_name") or "MoM"
-    if not isinstance(auto_model_name, str):
-        errors.append(
-            ValidationError(
-                "global.router.auto_model_name must be a string or null",
-                field="global.router.auto_model_name",
-            )
-        )
-        auto_model_name = "MoM"
-    return {"vllm-sr/auto", "auto", auto_model_name.strip()}, errors
-
-
-def _reserved_looper_aliases(
-    global_config: dict,
-) -> tuple[set[str], list[ValidationError]]:
-    integrations, errors = _optional_mapping(
-        global_config, "integrations", "global.integrations"
-    )
-    looper, looper_errors = _optional_mapping(
-        integrations, "looper", "global.integrations.looper"
-    )
-    errors.extend(looper_errors)
-    aliases: set[str] = set()
-    for family, default_name in (
-        ("remom", "vllm-sr/remom"),
-        ("fusion", "vllm-sr/fusion"),
-        ("flow", "vllm-sr/flow"),
-    ):
-        field = f"global.integrations.looper.{family}"
-        family_config, family_errors = _optional_mapping(looper, family, field)
-        names, name_errors = _normalized_string_list(
-            family_config.get("model_names"),
-            f"{field}.model_names",
-        )
-        errors.extend(family_errors)
-        errors.extend(name_errors)
-        aliases.update(names or [default_name])
-    return aliases, errors
+def effective_entrypoints(config: UserConfig):
+    """Source mappings plus the default Chat entrypoint when not overridden."""
+    entries = list(config.entrypoints)
+    if not any(entry.recipe == "default" for entry in entries):
+        entries.insert(0, Entrypoint(model_names=["vllm-sr/auto"], recipe="default"))
+    return entries
 
 
 def _reserved_routing_models(
     config: UserConfig,
 ) -> tuple[set[str], list[ValidationError]]:
     names = {model.name for model in config.providers.models}
+    for model in config.providers.models:
+        if model.provider_model_id:
+            names.add(model.provider_model_id)
+        names.update((model.external_model_ids or {}).values())
     for card in config.routing.model_cards:
-        names.add(card.name)
         names.update(adapter.name for adapter in (card.loras or []))
-    names = {name for name in names if isinstance(name, str) and name}
-    global_config = config.global_ or {}
-    auto_aliases, auto_errors = _reserved_auto_aliases(global_config)
-    looper_aliases, looper_errors = _reserved_looper_aliases(global_config)
-    return names | auto_aliases | looper_aliases, auto_errors + looper_errors
+    return {name for name in names if isinstance(name, str) and name}, []
 
 
 def _validate_entrypoints(
@@ -220,12 +167,13 @@ def _validate_entrypoints(
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     claimed_models: set[str] = set()
-    for index, entrypoint in enumerate(config.entrypoints):
+    for index, entrypoint in enumerate(effective_entrypoints(config)):
         if entrypoint.recipe not in recipe_names:
             errors.append(
                 ValidationError(
                     f"Entrypoint references unknown recipe '{entrypoint.recipe}'",
                     field=f"entrypoints.{index}.recipe",
+                    hint=("Change this to the name of a recipe defined under recipes."),
                 )
             )
         for model_name in entrypoint.model_names:
@@ -241,8 +189,12 @@ def _validate_entrypoints(
                 errors.append(
                     ValidationError(
                         f"Entrypoint model '{model_name}' conflicts with a "
-                        "configured model or reserved alias",
+                        "configured backend model",
                         field=f"entrypoints.{index}.model_names",
+                        hint=(
+                            "Use a distinct entrypoint model name; do not reuse "
+                            "a configured backend model or provider model ID."
+                        ),
                     )
                 )
     return errors
@@ -250,7 +202,48 @@ def _validate_entrypoints(
 
 def validate_recipe_contracts(config: UserConfig) -> list[ValidationError]:
     recipe_names, errors = _recipe_name_contract(config)
+    errors.extend(_validate_entrypoint_contract_keys(config.global_ or {}))
     reserved_models, alias_errors = _reserved_routing_models(config)
     errors.extend(alias_errors)
     errors.extend(_validate_entrypoints(config, recipe_names, reserved_models))
+    return errors
+
+
+def _validate_entrypoint_contract_keys(global_config: dict) -> list[ValidationError]:
+    router, errors = _optional_mapping(global_config, "router", "global.router")
+    for name in ("auto_model_name", "auto_model_names"):
+        if name in router:
+            errors.append(
+                ValidationError(
+                    f"global.router.{name} was removed; configure entrypoints with recipe: default and model_names",
+                    field=f"global.router.{name}",
+                )
+            )
+    if "include_config_models_in_list" in router:
+        errors.append(
+            ValidationError(
+                "Use global.router.list_backend_models",
+                field="global.router.include_config_models_in_list",
+            )
+        )
+    integrations, nested_errors = _optional_mapping(
+        global_config, "integrations", "global.integrations"
+    )
+    errors.extend(nested_errors)
+    looper, nested_errors = _optional_mapping(
+        integrations, "looper", "global.integrations.looper"
+    )
+    errors.extend(nested_errors)
+    for family in ("remom", "fusion", "flow"):
+        settings, nested_errors = _optional_mapping(
+            looper, family, f"global.integrations.looper.{family}"
+        )
+        errors.extend(nested_errors)
+        if "model_names" in settings:
+            errors.append(
+                ValidationError(
+                    "Expose the algorithm through entrypoints and recipes",
+                    field=f"global.integrations.looper.{family}.model_names",
+                )
+            )
     return errors

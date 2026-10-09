@@ -5,19 +5,23 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
+from collections.abc import Collection
 from datetime import datetime
 from fractions import Fraction
+from itertools import pairwise
 from statistics import mean
+from typing import Any
 
 from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
-from .contracts import BENCHMARK_WEIGHTS, planned_cells
+from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
 from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 COMPARABLE_STATUSES = frozenset({"completed", "failed"})
+MIN_CONTINUITY_REQUESTS = 2
 
 
 def percentile(values, q):
@@ -97,7 +101,81 @@ def output_diagnostics(results, subject_calls, total):
     }
 
 
-def metric(target_id, results, calls, total, *, planned_case_ids=None):
+def _observed_model(call: dict) -> str | None:
+    if call.get("selected_model"):
+        return call["selected_model"]
+    return call.get("model") if call.get("status") == "completed" else None
+
+
+def _changes(values: list[str]) -> int:
+    return sum(before != after for before, after in pairwise(values))
+
+
+def _task_accuracy(case_ids: list[str], correct: set[str]) -> float | None:
+    if not case_ids:
+        return None
+    return sum(case_id in correct for case_id in case_ids) / len(case_ids)
+
+
+def continuity(
+    results: list[dict[str, Any]],
+    subject_calls: list[dict[str, Any]],
+    session_mode: str = STATELESS,
+) -> dict[str, Any]:
+    """Report model and decision changes within each task as facts, not penalties."""
+    tasks: dict[str, list[dict]] = {}
+    for call in subject_calls:
+        if call.get("case_id"):
+            tasks.setdefault(call["case_id"], []).append(call)
+    correct = {
+        r.get("case_id")
+        for r in results
+        if r["status"] == "completed" and r.get("correct") is True
+    }
+    switches: dict[str, int] = {}
+    decision_changed = unknown = multi_inference = 0
+    for case_id, requests in tasks.items():
+        if len(requests) < MIN_CONTINUITY_REQUESTS:
+            continue
+        # One request with several inference calls hides its own model sequence.
+        if any((c.get("inference_call_count") or 0) > 1 for c in requests):
+            multi_inference += 1
+            continue
+        models = [m for m in map(_observed_model, requests) if m]
+        unknown += len(requests) - len(models)
+        switches[case_id] = _changes(models)
+        decision_changed += (
+            _changes([c["decision"] for c in requests if c.get("decision")]) > 0
+        )
+    switched = [case_id for case_id, count in switches.items() if count]
+    unswitched = [case_id for case_id, count in switches.items() if not count]
+    return {
+        "session_mode": session_mode,
+        "multi_request_tasks": len(switches),
+        "switched_tasks": len(switched),
+        "switched_accuracy": _task_accuracy(switched, correct),
+        "unswitched_tasks": len(unswitched),
+        "unswitched_accuracy": _task_accuracy(unswitched, correct),
+        "model_switches": sum(switches.values()),
+        "mean_switches_per_task": (
+            sum(switches.values()) / len(switches) if switches else None
+        ),
+        "max_switches_per_task": max(switches.values(), default=None),
+        "decision_changed_tasks": decision_changed,
+        "unknown_model_requests": unknown,
+        "multi_inference_tasks": multi_inference,
+    }
+
+
+def metric(
+    target_id: str,
+    results: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+    total: int,
+    *,
+    planned_case_ids: Collection[str] | None = None,
+    session_mode: str = STATELESS,
+) -> dict[str, Any]:
     completed = [r for r in results if r["status"] == "completed"]
     scored = [r for r in completed if isinstance(r.get("correct"), bool)]
     correct = sum(r["correct"] for r in scored)
@@ -168,18 +246,14 @@ def metric(target_id, results, calls, total, *, planned_case_ids=None):
         ),
         "request_count": len(subject),
         "selected_models": dict(
-            Counter(
-                c.get("selected_model") or c.get("model")
-                for c in subject
-                if c.get("selected_model")
-                or (c.get("status") == "completed" and c.get("model"))
-            )
+            Counter(model for model in map(_observed_model, subject) if model)
         ),
         "pending_selection_count": sum(
             c.get("status") in {"sent", "running"} and not c.get("selected_model")
             for c in subject
         ),
         "decisions": dict(Counter(c["decision"] for c in subject if c.get("decision"))),
+        "continuity": continuity(results, subject, session_mode),
         "queue_wait_p50_s": percentile(
             [r["queue_wait_s"] for r in results if r.get("queue_wait_s") is not None],
             0.5,
@@ -219,6 +293,11 @@ def make_report(store, run_id):
         }
         rows = [r for r in results if r["target_id"] == target["id"]]
         tcalls = [c for c in calls if c["target_id"] == target["id"]]
+        session_mode: str = (
+            target.get("session_mode", STATELESS)
+            if manifest["mode"] == "live"
+            else STATELESS
+        )
         metrics.append(
             metric(
                 target["id"],
@@ -226,6 +305,7 @@ def make_report(store, run_id):
                 tcalls,
                 len(selected_ids),
                 planned_case_ids=selected_ids,
+                session_mode=session_mode,
             )
         )
         for benchmark in sorted({c["benchmark"] for c in manifest["cases"]}):
@@ -246,6 +326,7 @@ def make_report(store, run_id):
                         [c for c in tcalls if c["case_id"] in ids],
                         len(ids),
                         planned_case_ids=ids,
+                        session_mode=session_mode,
                     ),
                 }
             )

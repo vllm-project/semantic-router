@@ -32,6 +32,7 @@ async def test_mock_tool_lifecycle_is_native_anthropic_and_deterministic(
         "id": "call_mock_lookup",
         "name": "lookup",
         "input": {"query": "weather"},
+        "caller": {"type": "direct"},
     }
 
     second = await client.post(

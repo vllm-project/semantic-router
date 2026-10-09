@@ -2,7 +2,7 @@
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
-  source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
+  source_commit: "49fd62932eb54334c4e4bbc64977733f1c7ed5fa"
   source_file: "docs/installation/support-matrix.md"
   outdated: false
 ---
@@ -39,7 +39,7 @@ translation:
 | 选项 | 分类 | 项目覆盖 |
 | --- | --- | --- |
 | [Helm chart](configuration-workflows#helm) | Maintained reference stack | **Contract。** Router、可选控制面板、ingress、自动扩缩、持久化和可观测性资源。网关和存储仍是外部的。 |
-| [本地部署](docker) | Maintained reference stack | **PR CI。** CLI 管理 Router、Envoy、控制面板和支持服务。你提供自定义模型端点，并加固本地默认值。 |
+| [本地部署](docker) | Maintained reference stack | **PR CI。** CLI 管理 Router、控制面板和支持服务，使用 `--gateway extproc` 时还管理 Envoy。你提供自定义模型端点，并加固本地默认值。 |
 | [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract。** 项目拥有 CRD、协调、Router 工作负载、Service 和路由 API。Kubernetes 调度工作负载；你的网关承载流量。 |
 
 ## 受支持的集成
@@ -47,12 +47,12 @@ translation:
 | 集成 | 分类 | 项目覆盖 |
 | --- | --- | --- |
 | [agentgateway](k8s/agentgateway) | Supported integration | **PR CI。** Router 提供 ExtProc 策略；agentgateway 拥有数据平面。将请求正文设置为 `FullDuplexStreamed`。 |
-| [Envoy AI Gateway](k8s/ai-gateway) | Supported integration | **PR CI。** Router 提供路由策略；网关拥有 provider 流量。单独验证你的 provider。 |
+| [Agent Router](k8s/ai-gateway) | Supported integration | **PR CI。** 原 Envoy AI Gateway。Router 提供路由策略；网关拥有 provider 流量。单独验证你的 provider。 |
 | [AIBrix](k8s/aibrix) | Supported integration | **PR CI。** Router 选择模型或池；AIBrix 拥有部署、自动扩缩和副本。使用 AIBrix 的硬件支持矩阵。 |
 | [NVIDIA Dynamo](k8s/dynamo) | Supported integration | **Manual。** Router 选择目标；Dynamo 拥有图、worker 和 frontend。使用指南版本；较旧的 fixture 仅用于测试。 |
 | [Istio Gateway](k8s/istio) | Supported integration | **PR CI。** Router 提供 ExtProc 策略；Istio 承载请求。附带的 GPU 工作负载仅为示例。 |
 | [llm-d](k8s/llm-d) | Supported integration | **PR CI + Contract。** Router 选择模型或池；llm-d 拥有发现和副本路由。不要添加竞争的直接 Service 路由。 |
-| [使用 Envoy AI Gateway 的流式](k8s/streamed-extproc) | Supported integration | **PR CI。** 网关流式传输；Router 使用配置的 ExtProc 正文模式。显式测试该模式。 |
+| [使用 Agent Router 的流式](k8s/streamed-extproc) | Supported integration | **PR CI。** 网关流式传输；Router 使用配置的 ExtProc 正文模式。显式测试该模式。 |
 | [Valkey 智能体记忆](valkey-memory) | Supported integration | **Contract + Manual。** Router 拥有记忆行为；Valkey 拥有持久化和 Search。你拥有安全、保留和备份。 |
 | [使用 Redis 的 Responses API 状态](../tutorials/global/api-and-observability#response-api) | Supported integration | **Manual。** Router 拥有 Responses 行为；Redis 存储状态。你拥有 Redis 安全、持久化和驱逐。 |
 | [响应缓存](../tutorials/plugin/response-cache) | Supported integration | **Contract + Manual。** Router 拥有缓存行为；你的后端拥有存储和可用性。将缓存数据视为敏感。 |

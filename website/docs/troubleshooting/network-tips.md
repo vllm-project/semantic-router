@@ -7,7 +7,7 @@ sidebar_label: Restricted Networks
 
 Semantic Router may need network access for three different reasons:
 
-1. the container runtime pulls Router, Dashboard, Envoy, and supporting images;
+1. the container runtime pulls Router, Dashboard and supporting images (plus Envoy for `--gateway extproc`);
 2. the Router downloads classifier or embedding artifacts; and
 3. routed requests call your configured model providers.
 
@@ -23,14 +23,14 @@ Start the stack and inspect its status and component logs:
 vllm-sr serve --config config.yaml
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy  # --gateway extproc only
 ```
 
 | Symptom | Likely layer |
 |---------|--------------|
 | Image pull or registry authentication error | Container registry |
 | Router starts but waits while loading a model artifact | Hugging Face or local model path |
-| Router and Envoy are ready, but completions return connection errors | Provider endpoint or firewall |
+| The serving stack is ready, but completions return connection errors | Provider endpoint or firewall |
 | Kubernetes pod remains in `ImagePullBackOff` | Cluster node registry access |
 
 ## Container images
@@ -47,6 +47,19 @@ vllm-sr serve --config config.yaml --image-pull-policy never
 `never` does not download missing images; startup fails if an image is absent.
 Use `ifnotpresent` when local images should be reused but missing ones may still
 be pulled.
+
+For images built by `make vllm-sr-dev`, explicitly select the local tag because
+an editable CLI with a stable package version defaults to release images:
+
+```bash
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --config config.yaml --image-pull-policy never
+```
+
+For AMD or NVIDIA builds, select the corresponding `vllm-sr-rocm` or
+`vllm-sr-cuda` image and pass `--platform rocm` or `--platform cuda`. Use the
+actual tag and registry if you customized the build; see the
+[Development Guide](../community/development) for the full local workflow.
 
 When you build the project from source, configure the package manager and
 container runtime through your organization's approved proxy or mirror. Avoid

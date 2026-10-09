@@ -15,6 +15,7 @@ import (
 var fixtureEnvironments = map[string]string{
 	"provider-mocker": "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE",
 	"dashboard":       "VLLM_SR_DASHBOARD_IMAGE",
+	"model-runtime":   "E2E_PREBUILT_MODEL_RUNTIME_IMAGE",
 }
 
 func sameLocalImageFixture(a, b framework.LocalImageBuild) bool {
@@ -94,8 +95,8 @@ func TestPrebuiltImagesConsumeRegisteredProfileFixturesWithoutBuild(t *testing.T
 			}
 			want := []string{
 				"docker image inspect verified:extproc",
-				"docker tag verified:extproc ghcr.io/vllm-project/semantic-router/extproc:test",
-				"kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name fixture-test",
+				"docker tag verified:extproc ghcr.io/vllm-project/semantic-router/vllm-sr:test",
+				"kind load docker-image ghcr.io/vllm-project/semantic-router/vllm-sr:test --name fixture-test",
 				"docker image inspect verified:" + id,
 				"docker tag verified:" + id + " " + image.Tag,
 				"kind load docker-image " + image.Tag + " --name fixture-test",
@@ -108,7 +109,7 @@ func TestPrebuiltImagesConsumeRegisteredProfileFixturesWithoutBuild(t *testing.T
 }
 
 func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
-	for _, profile := range []string{"vela-omni", "vela-halu"} {
+	for _, profile := range []string{"vela-omni", "vela-halu", "vela-shield"} {
 		for _, available := range []bool{true, false} {
 			scenario := "available"
 			if !available {
@@ -126,8 +127,8 @@ func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
 				err := framework.BuildPrebuiltFixturesForTest(context.Background(), registration.Capabilities.LocalImages)
 				want := []string{
 					"docker image inspect verified:extproc",
-					"docker tag verified:extproc ghcr.io/vllm-project/semantic-router/extproc:test",
-					"kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name fixture-test",
+					"docker tag verified:extproc ghcr.io/vllm-project/semantic-router/vllm-sr:test",
+					"kind load docker-image ghcr.io/vllm-project/semantic-router/vllm-sr:test --name fixture-test",
 				}
 				if available {
 					if err != nil {

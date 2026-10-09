@@ -26,30 +26,38 @@ SHA = "a" * 40
 
 
 class ComponentBatchTests(unittest.TestCase):
-    def test_ten_contracts_use_three_workers_without_changing_selection(self):
+    def test_nine_contracts_use_nine_workers_without_changing_selection(self):
         full = make_plan([], source_sha=SHA, full=True)
         batches = full["component_batches"]
-        self.assertEqual([row["id"] for row in batches], ["cli", "model", "router"])
+        self.assertEqual(len(batches), 9)
+        self.assertTrue(all(len(batch["verifications"]) == 1 for batch in batches))
         rows = [row for batch in batches for row in batch["verifications"]]
         selected = [row for row in full["verifications"] if row["executor"] == "tools"]
-        self.assertEqual(len(rows), 10)
-        self.assertEqual({row["id"] for row in rows}, {row["id"] for row in selected})
+        self.assertEqual(rows, selected)
+        self.assertEqual(
+            [batch["id"] for batch in batches], [row["id"] for row in rows]
+        )
+        self.assertEqual(
+            [batch["worker"] for batch in batches], [row["worker"] for row in rows]
+        )
         self.assertEqual(json.loads(github_outputs(full)["component_batches"]), batches)
-        partial = make_plan([], source_sha=SHA, requested=("ck-rewrite",))
+        partial = make_plan([], source_sha=SHA, requested=("model-runtime",))
         self.assertEqual(len(partial["component_batches"]), 1)
         self.assertEqual(
             [row["id"] for row in partial["component_batches"][0]["verifications"]],
-            ["ck-rewrite"],
+            ["model-runtime"],
         )
         self.assertNotIn("generated_contracts", full["quality_context"])
         self.assertNotIn("soak", full["quality_context"])
 
     def test_each_contract_keeps_its_own_events_and_source_bound_receipt(self):
         passed, plan, receipts, raw, calls = self.run_contracts(
-            ("cli-unit", "fleet-sim")
+            ("onnx-artifacts", "ck-rewrite")
         )
         self.assertTrue(passed)
-        self.assertEqual({row["id"] for row in receipts}, {"cli-unit", "fleet-sim"})
+        self.assertEqual(
+            {row["id"] for row in receipts}, {"onnx-artifacts", "ck-rewrite"}
+        )
         self.assertTrue(evaluate_gate(plan, receipts).passed)
         event_paths = {env["CI_PYTHON_TEST_EVENTS"] for _, env in calls}
         self.assertEqual(len(event_paths), 2)
@@ -59,7 +67,7 @@ class ComponentBatchTests(unittest.TestCase):
             self.assertIn(row["id"] + "/python-events.jsonl", raw)
 
     def test_real_subprocess_observers_do_not_leak_between_contracts(self):
-        plan = make_plan([], source_sha=SHA, requested=("cli-unit", "fleet-sim"))
+        plan = make_plan([], source_sha=SHA, requested=("onnx-artifacts", "ck-rewrite"))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "tools").mkdir()
@@ -85,26 +93,29 @@ class ComponentBatchTests(unittest.TestCase):
             ), contextlib.redirect_stdout(
                 io.StringIO()
             ):
-                output = root / "batch"
-                self.assertTrue(runner.run_batch(plan["component_batches"][0], output))
-            receipts = [
-                json.loads(path.read_text())
-                for path in (output / "results").glob("*.json")
-            ]
+                receipts = []
+                for batch in plan["component_batches"]:
+                    output = root / batch["id"]
+                    self.assertTrue(runner.run_batch(batch, output))
+                    receipts.extend(
+                        json.loads(path.read_text())
+                        for path in (output / "results").glob("*.json")
+                    )
             self.assertTrue(evaluate_gate(plan, receipts).passed)
             self.assertEqual(len(receipts), 2)
             self.assertTrue(all(len(row["evidence"]["cases"]) == 1 for row in receipts))
 
     def test_failed_command_does_not_hide_successful_sibling_or_write_receipt(self):
         passed, plan, receipts, raw, calls = self.run_contracts(
-            ("cli-unit", "fleet-sim"), failure="vllm-sr-test"
+            ("onnx-artifacts", "ck-rewrite"), failure="onnx-artifact-test"
         )
         self.assertFalse(passed)
-        self.assertEqual([row["id"] for row in receipts], ["fleet-sim"])
+        self.assertEqual([row["id"] for row in receipts], ["ck-rewrite"])
         self.assertFalse(evaluate_gate(plan, receipts).passed)
-        self.assertIn("cli-unit/failure.txt", raw)
+        self.assertIn("onnx-artifacts/failure.txt", raw)
         self.assertEqual(
-            [command[1] for command, _ in calls], ["vllm-sr-test", "vllm-sr-sim-test"]
+            [command[1] for command, _ in calls],
+            ["onnx-artifact-test", "ck-rewrite-test"],
         )
 
     def test_missing_skipped_or_wrong_source_evidence_cannot_qualify(self):
@@ -212,7 +223,6 @@ class ComponentBatchTests(unittest.TestCase):
 
     def run_contracts(self, identities, *, failure="", outcome="passed"):
         plan = make_plan([], source_sha=SHA, requested=identities)
-        batch = plan["component_batches"][0]
         calls = []
 
         def process(command, *, env, stdout, **_kwargs):
@@ -274,19 +284,30 @@ class ComponentBatchTests(unittest.TestCase):
         ), contextlib.redirect_stdout(
             io.StringIO()
         ):
-            output = Path(directory) / "batch"
-            passed = runner.run_batch(batch, output)
+            outputs = [
+                Path(directory) / batch["id"] for batch in plan["component_batches"]
+            ]
+            outcomes = [
+                runner.run_batch(batch, output)
+                for batch, output in zip(
+                    plan["component_batches"], outputs, strict=True
+                )
+            ]
+            passed = all(outcomes)
             receipts = [
                 json.loads(path.read_text())
+                for output in outputs
                 for path in sorted((output / "results").glob("*.json"))
             ]
             raw = {
                 str(path.relative_to(output / "raw")): path.read_text()
+                for output in outputs
                 for path in (output / "raw").rglob("*")
                 if path.is_file()
             }
-            with self.assertRaises(FileExistsError):
-                runner.run_batch(batch, output)
+            for batch, output in zip(plan["component_batches"], outputs, strict=True):
+                with self.assertRaises(FileExistsError):
+                    runner.run_batch(batch, output)
             return passed, plan, receipts, raw, calls
 
 

@@ -7,15 +7,25 @@ type VideoProps = {
   poster: string
   title: string
   landscape?: boolean
+  showcase?: boolean
   children: React.ReactNode
 }
 
-export function ArticleVideo({ src, poster, title, landscape = false, children }: VideoProps) {
+export function ArticleVideo({
+  src,
+  poster,
+  title,
+  landscape = false,
+  showcase = false,
+  children,
+}: VideoProps) {
   const videoUrl = useBaseUrl(src)
   const posterUrl = useBaseUrl(poster)
 
   return (
-    <figure className={styles.videoFigure}>
+    <figure
+      className={showcase ? `${styles.videoFigure} ${styles.showcaseVideoFigure}` : styles.videoFigure}
+    >
       <video
         className={landscape ? `${styles.video} ${styles.landscapeVideo}` : styles.video}
         controls
@@ -39,14 +49,15 @@ type FigureProps = {
   alt: string
   width: number
   height: number
+  diagram?: boolean
   children?: React.ReactNode
 }
 
-export function ArticleFigure({ src, alt, width, height, children }: FigureProps) {
+export function ArticleFigure({ src, alt, width, height, diagram = false, children }: FigureProps) {
   const imageUrl = useBaseUrl(src)
 
   return (
-    <figure className={styles.figure}>
+    <figure className={diagram ? `${styles.figure} ${styles.diagramFigure}` : styles.figure}>
       <a href={imageUrl} target="_blank" rel="noopener noreferrer" className={styles.imageLink}>
         <img
           className={styles.image}
@@ -69,6 +80,7 @@ type Metric = {
   before: string
   measure: string
   source: string
+  baseline?: string
 }
 
 export function ArticleMetrics({ items }: { items: Metric[] }) {
@@ -80,7 +92,7 @@ export function ArticleMetrics({ items }: { items: Metric[] }) {
           <dd>
             <strong>{item.value}</strong>
             <span>{item.measure}</span>
-            <small>{`from ${item.before} · previous mmBERT`}</small>
+            <small>{`from ${item.before} · ${item.baseline ?? 'previous mmBERT'}`}</small>
           </dd>
         </div>
       ))}
@@ -90,14 +102,14 @@ export function ArticleMetrics({ items }: { items: Metric[] }) {
 
 type Chart = FigureProps & { label: string }
 
-export function ArticleChartGallery({ charts }: { charts: Chart[] }) {
+export function ArticleChartGallery({ charts, label = 'Choose an Omni benchmark' }: { charts: Chart[], label?: string }) {
   const [selected, setSelected] = useState(0)
   const panelId = useId()
   const chart = charts[selected]
 
   return (
     <div className={styles.chartGallery}>
-      <div className={styles.chartChoices} role="group" aria-label="Choose an Omni benchmark">
+      <div className={styles.chartChoices} role="group" aria-label={label}>
         {charts.map((item, index) => (
           <button
             type="button"

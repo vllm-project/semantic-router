@@ -22,6 +22,17 @@ const snapshots = [
   },
 ]
 
+test('site lifecycle commands reuse committed community snapshots', () => {
+  const packageJson = JSON.parse(readFileSync(join(repoRoot, 'website/package.json'), 'utf8'))
+  const scripts = packageJson.scripts
+
+  for (const name of ['start', 'start:zh', 'build', 'build:en', 'build:zh', 'deploy']) {
+    assert.doesNotMatch(scripts[name], /npm run (?:contributors:rank|committers:activity)/)
+  }
+  assert.equal(scripts['contributors:rank'], 'node scripts/generate-contributor-rank.mjs')
+  assert.equal(scripts['committers:activity'], 'node scripts/generate-committer-activity.mjs')
+})
+
 for (const snapshot of snapshots) {
   test(`${snapshot.script}: check source offline and reject generator/input drift`, (context) => {
     const root = mkdtempSync(join(tmpdir(), 'generated-source-'))

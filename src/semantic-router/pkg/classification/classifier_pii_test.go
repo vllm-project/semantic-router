@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -24,6 +25,7 @@ type MockPIIInferenceResponse struct {
 }
 
 type MockPIIInference struct {
+	mu sync.Mutex
 	MockPIIInferenceResponse
 	responseMap map[string]MockPIIInferenceResponse
 	callCount   map[string]int
@@ -37,6 +39,8 @@ func (m *MockPIIInference) setMockResponse(text string, entities []tasks.TokenEn
 }
 
 func (m *MockPIIInference) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.callCount != nil {
 		m.callCount[text]++
 	}

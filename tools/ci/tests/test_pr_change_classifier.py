@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 import unittest
 from pathlib import Path
@@ -10,10 +9,14 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
-from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
+from ci_plan import (  # noqa: E402
+    github_outputs,
+    make_plan,
+    performance_base,
+    previous_release,
+)
 from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
-from run_model_tests import CLASSIFIER_TESTS, OWNED_OMNI_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
     load_catalog,
@@ -22,12 +25,28 @@ from verification_catalog import (  # noqa: E402
 )
 
 SHA = "a" * 40
-NATIVE = {"native.candle-cpu", "native.ort-cpu"}
-IMAGE_CALIBRATION = "native.image-calibration-cpu"
+IMAGE_CALIBRATION = "platform.image-calibration-cpu"
+MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
-    def test_image_calibration_inputs_select_the_native_verification(self):
+    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+        for path in (
+            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/testcases/routing_error_codes.go",
+            "src/semantic-router/pkg/extproc/routing_failure.go",
+            "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
+        self.assertIn("e2e.routing-errors", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+            "verifications"
+        ][0]
+        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
+
+    def test_image_calibration_inputs_select_the_platform_verification(self):
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",
             "tools/calibration/image-routing/main.go",
@@ -35,18 +54,18 @@ class SelectionTests(unittest.TestCase):
             "e2e/testcases/testdata/image-fixtures/office.jpg",
             "website/static/img/example.png",
             "dashboard/frontend/public/example.png",
-            "candle-binding/src/lib.rs",
+            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
+            "src/model-runtime/vllm_srun/registry/tables/omni.py",
             "src/semantic-router/pkg/classification/embedding.go",
             "src/semantic-router/pkg/config/registry.go",
             "src/semantic-router/pkg/modeldownload/revision_receipt_test.go",
-            "src/semantic-router/tools/model-test-assets/multimodal.go",
+            "src/semantic-router/pkg/modelruntime/serving/runtime.go",
             "tools/make/models.mk",
             "tools/make/common.mk",
             "tools/ci/image_calibration.py",
             "tools/ci/runtime_evidence.py",
             "tools/ci/workflow_evidence.py",
-            ".github/workflows/build-native.yml",
-            ".github/workflows/test-native.yml",
+            ".github/workflows/test-platform.yml",
         ):
             with self.subTest(path=path):
                 self.assertIn(IMAGE_CALIBRATION, classify([path]).selected_jobs)
@@ -61,15 +80,9 @@ class SelectionTests(unittest.TestCase):
             "config/assets/image-routing/manifest.json",
             "tools/calibration/image-routing/prepare_assets.py",
             "tools/calibration/image-routing/testdata/prototype-protocol.json",
-            "tools/models/vela_omni/export.py",
-            "onnx-binding/src/model_architectures/embedding/omni/image.rs",
-            "onnx-binding/src/core/session.rs",
-            "onnx-binding/Cargo.lock",
+            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
             "src/semantic-router/pkg/embedding/embedding.go",
             "src/semantic-router/pkg/modelruntime/embedding_owned.go",
-            "src/semantic-router/pkg/modelruntime/native/embedding.go",
-            "src/semantic-router/pkg/modelruntime/native/embedding_omni.go",
-            "src/semantic-router/pkg/modelruntime/native/ort_execution.go",
         ):
             with self.subTest(path=path):
                 self.assertTrue(expected <= set(classify([path]).selected_jobs))
@@ -88,12 +101,11 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
         self.assertEqual(plan["expected_verification_ids"], [IMAGE_CALIBRATION])
         self.assertEqual(plan["images"], [])
-        self.assertTrue(plan["native"])
         self.assertFalse(plan["publish_images"])
         record = plan["verifications"][0]
         self.assertEqual(record["source_sha"], SHA)
-        self.assertEqual(record["platform_id"], "ort-cpu")
-        self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
+        self.assertEqual(record["platform_id"], "model-runtime-cpu")
+        self.assertEqual(record["workflow"], ".github/workflows/test-platform.yml")
         self.assertEqual(record["reasons"], ["manual-selection"])
         self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())
         self.assertIn("e2e.multimodal-routing", full_cpu_ids())
@@ -109,7 +121,7 @@ class SelectionTests(unittest.TestCase):
             make_plan(["README.md"], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
 
     def test_manual_selection_is_generic_and_never_publishes(self):
-        for name in ("native.ort-cpu", "local.cli", "cli-package"):
+        for name in (MODELS, "local.cli", "cli-package"):
             with self.subTest(name=name):
                 plan = make_plan([], source_sha=SHA, requested=(name,))
                 self.assertEqual(plan["expected_verification_ids"], [name])
@@ -119,7 +131,6 @@ class SelectionTests(unittest.TestCase):
                 self.assertFalse(plan["publish_helm"])
                 record = plan["verifications"][0]
                 self.assertEqual(set(plan["images"]), set(record["images"]))
-                self.assertEqual(plan["native"], record["native"])
         workflow = yaml.load(
             (ROOT / ".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader
         )
@@ -129,7 +140,6 @@ class SelectionTests(unittest.TestCase):
         )
         for job in (
             "image-router",
-            "image-local",
             "image-fixtures",
             "image-distribution",
             "package",
@@ -145,26 +155,19 @@ class SelectionTests(unittest.TestCase):
             selected = classify([path])
             self.assertFalse(
                 any(
-                    name.startswith(("native.", "e2e.", "local."))
+                    name.startswith(("platform.", "e2e.", "local."))
                     for name in selected.selected_jobs
                 )
             )
             self.assertEqual(selected.pr_images, ())
             self.assertNotIn("paper", selected.selected_jobs)
 
-    def test_all_native_entrypoints_select_exact_runtime_consumers(self):
+    def test_platform_entrypoints_select_their_consumers(self):
         fixtures = {
-            "tools/make/openvino.mk": {"native.openvino-cpu"},
-            "openvino-binding/openvino_binding_test.go": {"native.openvino-cpu"},
-            "tools/make/models.mk": {*NATIVE, "native.openvino-cpu", "performance"},
-            "tools/ci/run_model_tests.py": NATIVE,
-            "tools/make/rust.mk": {*NATIVE, "core", "performance"},
-            "tools/make/common.mk": {*NATIVE, "core", "performance"},
-            "src/semantic-router/tools/model-test-assets/main.go": {
-                *NATIVE,
-                "native.openvino-cpu",
-                "performance",
-            },
+            "tools/make/models.mk": {IMAGE_CALIBRATION, "performance"},
+            "tools/make/common.mk": {IMAGE_CALIBRATION, "performance"},
+            "tools/make/build-run-test.mk": {"performance"},
+            "src/semantic-router/go.mod": {"core"},
         }
         for path, expected in fixtures.items():
             with self.subTest(path=path):
@@ -178,36 +181,9 @@ class SelectionTests(unittest.TestCase):
             "src/semantic-router/pkg/modeldownload/revision_receipt_test.go",
         ):
             self.assertTrue(
-                {*NATIVE, "native.openvino-cpu", "performance"}
-                <= set(classify([path]).selected_jobs),
+                {"local.cli", "performance"} <= set(classify([path]).selected_jobs),
                 path,
             )
-
-    def test_owned_openvino_selects_shared_runtime_and_exact_provider_inputs(self):
-        for path in (
-            "src/semantic-router/pkg/modelruntime/embedding_api.go",
-            "src/semantic-router/pkg/modelruntime/native/openvino_enabled.go",
-            "src/semantic-router/pkg/modelruntime/native/openvino_integration_test.go",
-            "src/semantic-router/pkg/classification/classifier_full_context_test.go",
-        ):
-            with self.subTest(path=path):
-                self.assertTrue(
-                    {*NATIVE, "native.openvino-cpu"}
-                    <= set(classify([path]).selected_jobs)
-                )
-        for path in (
-            "src/semantic-router/pkg/config/default_execution_openvino.go",
-            "src/semantic-router/pkg/config/model_deployments.go",
-            "src/semantic-router/pkg/config/model_deployments_openvino_test.go",
-        ):
-            self.assertIn("native.openvino-cpu", classify([path]).selected_jobs, path)
-        selected = set(classify(["tools/ci/openvino_evidence.py"]).selected_jobs)
-        self.assertTrue({"harness-tools", "native.openvino-cpu"} <= selected)
-        self.assertFalse(selected & {*NATIVE, "recipe-conformance", IMAGE_CALIBRATION})
-        self.assertNotIn(
-            "native.openvino-cpu",
-            classify(["tools/ci/run_model_tests.py"]).selected_jobs,
-        )
 
     def test_test_names_cannot_downgrade_integration_boundaries(self):
         cases = {
@@ -216,34 +192,11 @@ class SelectionTests(unittest.TestCase):
             "src/semantic-router/pkg/cache/redis_exact_cache_integration_test.go": {
                 "storage"
             },
-            "src/semantic-router/pkg/classification/unified_classifier_integration_test.go": NATIVE,
             "e2e/testcases/istio_routes_test.go": {"e2e.istio"},
         }
         for path, expected in cases.items():
             self.assertTrue(classify([path]).test_only)
             self.assertTrue(expected <= set(classify([path]).selected_jobs), path)
-
-    def test_openvino_shared_build_inputs_select_its_owned_runtime(self):
-        for path in (
-            "tools/ci/native_artifact.py",
-            ".github/workflows/build-native.yml",
-            ".github/actions/load-native-artifact/action.yml",
-            "tools/make/rust.mk",
-            "tools/make/common.mk",
-            "tools/make/build-run-test.mk",
-        ):
-            with self.subTest(path=path):
-                plan = make_plan([path], source_sha=SHA)
-                self.assertIn("native.openvino-cpu", plan["expected_verification_ids"])
-                self.assertTrue(plan["native"])
-                self.assertFalse(plan["full_cpu"])
-        for path in (
-            "tools/ci/run_model_tests.py",
-            "tools/make/dashboard.mk",
-            "tools/make/soak.mk",
-        ):
-            with self.subTest(unrelated_path=path):
-                self.assertNotIn("native.openvino-cpu", classify([path]).selected_jobs)
 
     def test_cli_lifecycle_and_envoy_sources_select_live_container_contracts(self):
         paths = [
@@ -292,7 +245,7 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([path], source_sha=SHA)
         self.assertIn("operator", plan["expected_verification_ids"])
         self.assertTrue(
-            {"operator", "operator-bundle", "extproc", "provider-mocker"}
+            {"operator", "operator-bundle", "vllm-sr", "provider-mocker"}
             <= set(plan["images"])
         )
         self.assertNotIn(
@@ -300,38 +253,9 @@ class SelectionTests(unittest.TestCase):
             classify(["tools/ci/tests/test_operator_request.py"]).selected_jobs,
         )
 
-    def test_required_classifier_definitions_select_live_models(self):
-        definitions = {}
-        for path in (ROOT / "src/semantic-router/pkg/classification").glob("*_test.go"):
-            for name in re.findall(r"^func (Test\w+)\(", path.read_text(), re.M):
-                definitions.setdefault(name, []).append(
-                    path.relative_to(ROOT).as_posix()
-                )
-        for name in CLASSIFIER_TESTS:
-            self.assertEqual(len(definitions.get(name, [])), 1, name)
-            self.assertTrue(
-                set(classify(definitions[name]).selected_jobs) >= NATIVE, name
-            )
-
-    def test_owned_omni_definitions_select_prepared_artifact_lane(self):
-        for package, tests in OWNED_OMNI_TESTS.items():
-            paths = ROOT / "src/semantic-router/pkg" / package
-            for name in tests:
-                definitions = [
-                    path.relative_to(ROOT).as_posix()
-                    for path in paths.glob("*_test.go")
-                    if re.search(rf"^func {re.escape(name)}\(", path.read_text(), re.M)
-                ]
-                self.assertEqual(len(definitions), 1, name)
-                self.assertIn(
-                    "native.ort-cpu",
-                    classify(definitions).selected_jobs,
-                    name,
-                )
-
     def test_owning_workflow_edits_select_executor_contracts(self):
         cases = {
-            "test-native.yml": {*NATIVE, "native.openvino-cpu"},
+            "test-platform.yml": {IMAGE_CALIBRATION, MODELS},
             "test-local.yml": {"local.cli", "local.memory"},
             "performance-test.yml": {"performance"},
             "operator-ci.yml": {"operator"},
@@ -344,9 +268,9 @@ class SelectionTests(unittest.TestCase):
     def test_component_tools_have_execution_owners_after_quality_split(self):
         cases = {
             "src/vllm-sr/cli/core.py": "cli-unit",
-            "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
             "src/training/tests/test_export.py": "training",
             "tools/ci/training-test-requirements.txt": "training",
+            "bench/redteam/test_datasets.py": "training",
             "tools/test/services/provider-mocker/tests/test_fixture_latency.py": "mock-provider",
             "bench/test_agentic_routing_experiment.py": "learning-tools",
             "bench/test_openai_fault_proxy.py": "soak-tools",
@@ -383,15 +307,15 @@ class SelectionTests(unittest.TestCase):
             )
 
     def test_published_model_profiles_plan_their_backend_image(self):
-        for profile in ("vela-omni", "vela-halu"):
+        for profile in ("vela-omni", "vela-halu", "vela-shield"):
             with self.subTest(profile=profile):
                 identifier = f"e2e.{profile}"
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))
                 self.assertEqual(plan["expected_verification_ids"], [identifier])
                 self.assertEqual(
-                    plan["verifications"][0]["images"], ["extproc", "provider-mocker"]
+                    plan["verifications"][0]["images"], ["vllm-sr", "provider-mocker"]
                 )
-                self.assertEqual(set(plan["images"]), {"extproc", "provider-mocker"})
+                self.assertEqual(set(plan["images"]), {"vllm-sr", "provider-mocker"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
@@ -441,10 +365,10 @@ class SelectionTests(unittest.TestCase):
                 )
                 self.assertEqual(record["executor"], "e2e")
                 self.assertEqual(record["boundary"], ["e2e"])
-                self.assertEqual(record["runtime"], "candle")
+                self.assertEqual(record["runtime"], "model-runtime")
                 self.assertEqual(record["device"], "cpu")
                 self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["extproc", "provider-mocker"])
+                self.assertEqual(record["images"], ["vllm-sr", "provider-mocker"])
         for path in (
             "e2e/profiles/local-classifier-backend/profile.go",
             "e2e/testcases/local_classifier_routing.go",
@@ -485,22 +409,27 @@ class SelectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             previous_release("1.0.0", ["v0.3.0"])
 
+    def test_release_performance_base_uses_a_compatible_vela_anchor(self):
+        self.assertEqual(
+            performance_base("0.4.0", ["v0.3.0"]),
+            "12597be5ffae2319d856f230d61ca26248eb9b3b",
+        )
+        # v0.4.0 predates the model runtime; #4707 runs the current harness.
+        self.assertEqual(
+            performance_base("0.5.0", ["v0.3.0", "v0.4.0"]),
+            "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+        )
+
+    def test_later_cycles_compare_with_a_release_that_has_the_model_runtime(self):
+        tags = ["v0.3.0", "v0.4.0", "v0.5.0", "v0.5.1"]
+        self.assertEqual(performance_base("0.6.0", tags), "v0.5.1")
+        self.assertEqual(performance_base("0.5.2", tags), "v0.5.1")
+        with self.assertRaisesRegex(ValueError, "declare the 0.4.1 base"):
+            performance_base("0.4.1", tags)
+        with self.assertRaisesRegex(ValueError, "predates the model runtime"):
+            performance_base("0.6.0", ["v0.3.0", "v0.4.0"])
+
     def test_shared_artifact_loaders_select_their_runtime_consumers(self):
-        for path in (
-            "tools/ci/native_artifact.py",
-            ".github/actions/load-native-artifact/action.yml",
-        ):
-            self.assertTrue(
-                {
-                    "core",
-                    "storage",
-                    "dashboard",
-                    "generated-contracts",
-                    *NATIVE,
-                    "performance",
-                }
-                <= set(classify([path]).selected_jobs)
-            )
         for path in (
             "tools/ci/image_artifacts.py",
             ".github/actions/load-ci-images/action.yml",
@@ -510,67 +439,22 @@ class SelectionTests(unittest.TestCase):
                 <= set(classify([path]).selected_jobs)
             )
 
-    def test_build_native_output_is_distinct_from_native_matrix(self):
-        plan = make_plan(["candle-binding/src/lib.rs"], source_sha=SHA)
+    def test_platform_output_lists_one_worker_per_contract(self):
+        plan = make_plan(["tools/calibration/image-routing/main.go"], source_sha=SHA)
         outputs = github_outputs(plan)
-        self.assertEqual(outputs["build_native"], "true")
-        self.assertIsInstance(json.loads(outputs["native-shared"]), list)
-        self.assertGreater(len(json.loads(outputs["native-shared"])), 0)
-
-    def test_riscv_is_an_emulated_native_contract_with_preserved_source_triggers(self):
-        identity = "native.candle-riscv64-qemu"
-        for path in (
-            "candle-binding/src/lib.rs",
-            "ml-binding/ml_binding.go",
-            "nlp-binding/nlp_binding.go",
-            "tools/make/rust.mk",
-            "tools/docker/check-native-abi.sh",
-            "tools/ci/riscv-qemu-router-smoke.sh",
-            "tools/ci/riscv_evidence.py",
-            "src/semantic-router/tools/model-test-assets/main.go",
-            "src/semantic-router/pkg/config/registry.go",
-            "src/semantic-router/pkg/modeldownload/revisions.go",
-            "tools/ci/runtime_evidence.py",
-            "tools/make/models.mk",
-            "e2e/config/config.riscv-qemu.yaml",
-            "src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go",
-            "src/semantic-router/pkg/cache/valkey_cache_unavailable.go",
-            "src/semantic-router/pkg/cache/exact_cache_valkey.go",
-            "src/semantic-router/pkg/memory/valkey_store_integration_test.go",
-            "src/semantic-router/pkg/vectorstore/valkey_backend.go",
-            "src/semantic-router/pkg/extproc/router_memory.go",
-            "src/semantic-router/pkg/extproc/router_memory_valkey.go",
-            "src/semantic-router/pkg/extproc/router_memory_valkey_unavailable.go",
-            ".github/workflows/test-native.yml",
-        ):
-            with self.subTest(path=path):
-                self.assertIn(identity, classify([path]).selected_jobs)
-        for profile in ("pr", "main"):
-            plan = make_plan(
-                ["candle-binding/src/lib.rs"], source_sha=SHA, profile=profile
-            )
-            self.assertIn(identity, plan["expected_verification_ids"])
-        plan = make_plan([], source_sha=SHA, requested=(identity,))
-        self.assertFalse(plan["native"])
-        self.assertEqual(plan["images"], [])
-        record = plan["verifications"][0]
-        self.assertEqual(record["executor"], "native")
-        self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
-        self.assertEqual(record["platform"], "linux/riscv64")
+        batches = json.loads(outputs["platform"])
         self.assertEqual(
-            record["execution"], {"mode": "qemu-user", "host_platform": "linux/amd64"}
+            [row["verifications"][0]["id"] for row in batches], [IMAGE_CALIBRATION]
         )
-        self.assertIn(identity, full_cpu_ids())
-        self.assertFalse((ROOT / ".github/workflows/riscv-qemu.yml").exists())
 
     def test_runtime_combinations_are_qualified_rows_not_cartesian_product(self):
         records = verification_records(load_domain_registry())
-        native = [
-            record for record in records.values() if record["executor"] == "native"
+        platform = [
+            record for record in records.values() if record["executor"] == "platform"
         ]
         self.assertEqual(
-            {(r["runtime"], r["device"]) for r in native},
-            {("candle", "cpu"), ("ort", "cpu"), ("openvino", "cpu")},
+            {(r["runtime"], r["device"], r["platform"]) for r in platform},
+            {("model-runtime", "cpu", "linux/amd64")},
         )
         self.assertIn("cuda", load_catalog()["full_cpu"]["excluded"])
 

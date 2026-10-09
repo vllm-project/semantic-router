@@ -1,5 +1,6 @@
 .card {
   display: grid;
+  align-content: start;
   gap: 0.55rem;
   min-width: 0;
   padding: 0.85rem 1rem;
@@ -96,14 +97,11 @@
 }
 
 .bio {
-  display: -webkit-box;
   margin: 0;
-  overflow: hidden;
   color: var(--site-muted-bright);
   font-size: 0.8rem;
   line-height: 1.5;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .links {

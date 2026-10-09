@@ -58,7 +58,7 @@ docker run -d \
   --name vllm \
   --network vllm-sr-network \
   --restart unless-stopped \
-  -p 8090:8000 \
+  -p 8000:8000 \
   -v "$VLLM_HF_CACHE:/root/.cache/huggingface" \
   --device=/dev/kfd \
   --device=/dev/dri \
@@ -90,6 +90,12 @@ docker run -d \
     --gpu-memory-utilization 0.85
 ```
 
+The host port is only for checking the backend yourself; the Router reaches it
+as `vllm:8000` on `vllm-sr-network`. Keep it off 8090, which the local stack's
+sr-bench service uses, or `vllm-sr serve` stops with "sr-bench port 8090 is
+already in use". With `VLLM_ROCM_USE_AITER=1`, the first start compiles AITER
+kernels, which can take tens of minutes on a host with few free CPU cores.
+
 This command mounts only the model cache. Do not mount an entire home directory
 into a model-serving container. The example also omits `SYS_PTRACE`, an
 unconfined seccomp profile, and `--trust-remote-code`; add broader privileges or
@@ -106,10 +112,10 @@ Wait for model loading to finish, then verify the backend independently of the
 Router:
 
 ```bash
-curl --fail http://127.0.0.1:8090/health
-curl --fail http://127.0.0.1:8090/v1/models
+curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:8000/v1/models
 
-curl --fail http://127.0.0.1:8090/v1/chat/completions \
+curl --fail http://127.0.0.1:8000/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{
     "model": "qwen/qwen3.5-rocm",
@@ -123,16 +129,26 @@ checks routing configuration; it does not prove that a provider can generate.
 
 ## Install and configure Semantic Router
 
-Install the CLI:
+Install the CLI as the [Quickstart](installation/installation.md#install) describes. To
+install only the CLI, without starting the stack:
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
-  bash -s -- --channel stable --mode cli --runtime skip --no-launch
+  bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-For a simple one-model deployment, open the Dashboard at
-`http://localhost:8700`, add an OpenAI-compatible backend at `vllm:8000`, and
-activate the generated config.
+For a simple one-model deployment, start the stack. Use `--platform cpu` to
+keep Router-side inference on the CPU. Plain `vllm-sr serve` uses automatic
+platform detection; `--platform rocm` selects the GPU-capable Router image
+([Run Vela routing models on AMD](#run-vela-routing-models-on-amd)):
+
+```bash
+vllm-sr serve --platform cpu
+```
+
+Then open the Dashboard at `http://localhost:8700`, connect a model with
+provider vLLM, the served model name and the address `vllm:8000`, and activate
+the generated config.
 
 To evaluate the maintained balance recipe, download it into the current
 workspace instead of relying on a repository-relative path:
@@ -153,7 +169,7 @@ configuration before replacing aliases, thresholds, prices, or provider roles.
 
 ## Verify the routed path
 
-Send a request through Envoy using the automatic entrypoint:
+Send a request through the Router's listener using the automatic entrypoint:
 
 ```bash
 curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
@@ -172,38 +188,39 @@ answer quality and operating behavior on the actual deployment.
 
 ## Run Vela routing models on AMD
 
-The [Vela AMD Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
-and complete config select GPU execution explicitly for all ten task models.
-Embedding and Reranker use their pinned CK FlashAttention graphs through ROCm,
-with native precision and no CPU fallback. Guard uses its fixed 8K ROCm graph;
-the other classifiers use MIGraphX.
-The complete signal pipeline is measured at 8K; standalone Embedding/Reranker
-execution is qualified through 32K. Hazard retains its qualified 2,048-token
-windows and 32K logical budget. These results do not establish 32K AMD execution
-for every classifier.
+The Router's own models (the Vela classifiers, embeddings, reranker and
+decision models) run in the [model runtime](model-runtime/overview.md). On
+AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
+which is validated. `--platform rocm` selects the AMD image, which ships the
+runtime with the validated stack (PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and
+`causal-conv1d` 1.7.0 built for ROCm), and passes the GPUs to the Router.
+Every model checks its answers against references verified on that stack
+when it loads; see
+[Choose a model](model-runtime/choose-a-model.md#hardware).
 
-Connect an existing OpenAI-compatible backend served with
-`--served-model-name vela-default`. The config expects `http://vllm:8000`; attach
-that backend to `vllm-sr-network` with network alias `vllm`, or edit the endpoint.
-The earlier multi-alias example does not expose `vela-default` unless you add
-that served name. Verify a direct request using that name before routing.
-Reserve enough memory and compute for the Router alongside the generation
-backend; use `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES` when selecting a Router GPU.
-The deployment's device index `0` refers to its visible GPU.
+The [Vela AMD Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
+and complete config place all ten task models on `rocm:0`. Connect an existing
+OpenAI-compatible backend served with `--served-model-name vela-default`. The
+config expects `http://vllm:8000`; attach that backend to `vllm-sr-network`
+with network alias `vllm`, or edit the endpoint. Verify a direct request using
+that name before routing. Reserve enough memory and compute for the Router
+alongside the generation backend; use `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES` when
+selecting a Router GPU. The deployment's device index `0` refers to its visible
+GPU.
 
 ```bash
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
-The platform flag selects the image and device access. Named deployments select
-the actual providers and graphs; explicit CPU choices remain CPU choices.
-Cold MIGraphX compilation can exceed a cached startup. The CLI waits up to 1,800
-seconds by default; use `--startup-timeout SECONDS` if measurements justify a
-longer bounded wait. A timeout leaves the owned containers available for logs
-and readiness inspection.
+The platform flag selects the image and device access. Each deployment's
+`device` decides where its model runs; explicit CPU choices remain CPU
+choices. The first start downloads the models; the CLI waits up to 1,800
+seconds by default, and `--startup-timeout SECONDS` sets a longer bounded wait.
+A timeout leaves the owned containers available for logs and readiness
+inspection.
 
 Once `/ready` succeeds, inspect the real signals and their timings:
 
@@ -215,92 +232,84 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
   | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace}'
 ```
 
-With the default recipe, keep all-signals Preview within the 8K classifier
-budget. Preview does not execute retrieval or generation. Follow the recipe and
+Preview does not execute retrieval or generation. Follow the recipe and
 [neural reranking](../tutorials/plugin/rag.md#neural-reranking) guide to index
 documents and test RAG through a real chat request using `vela-auto`.
 
-### Optional 32K Domain and FactCheck on ROCm
+### Longer inputs
 
-[Vela Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain)
-and [Vela FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck)
-provide a fixed 32K FP32 graph, `onnx/model_rocm_32k.onnx`. The configuration
-below pins model releases containing this graph.
-
-To opt in, replace the two binding entries and the two complete deployment
-entries in `vela-amd.yaml` with this fragment. The ROCm entries below replace
-the MIGraphX entries, including their `compilation_cache_dir` setting; keep the
-rest of your recipe.
+Every Vela task model reads up to 32,768 tokens on ROCm. Set the longest input
+a deployment accepts with `input.max_tokens`; short requests stay fast because
+nothing is padded to a fixed size:
 
 ```yaml
-routing:
-  model_bindings:
-    domain_classifier:
-      deployment: domain-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-      head: onnx/model_rocm_32k.onnx
-      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
-    fact_check_classifier:
-      deployment: factcheck-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-      head: onnx/model_rocm_32k.onnx
 global:
   model_catalog:
     deployments:
       domain-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Domain
-        revision: f6354f54adcf38770f635ad903be2b00577f6c11
-        provider: ort
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         device: rocm:0
-        precision: native
-        input:
-          max_tokens: 32768
-          overflow: truncate
-      factcheck-amd:
-        artifact: models/Vela-1.0-Encoder-307M-FactCheck
-        revision: 99ede1aba1563e59e416f744d25b3f6b7e9d8274
-        provider: ort
-        device: rocm:0
-        precision: native
         input:
           max_tokens: 32768
           overflow: truncate
 ```
 
-Validate and serve the edited file with the same commands above. Each binding
-always uses its selected graph; it does not switch graphs by request length.
-Here, `truncate` processes the first 32,768 tokens, including special tokens,
-when the encoder input exceeds its budget. Use `reject` if complete input is
-required. This policy affects the encoder view only; it does not shorten the
-chat request or change the generation model's context window. See
-[encoder input budgets](runtime/in-process.md#choose-an-input-budget).
-The fixed graph pads even short inputs to 32,768 tokens, increasing their
-latency and memory cost. Keep the default 8K MIGraphX deployments when that
-budget fits your workload.
+`truncate` classifies the first 32,768 tokens, including special tokens, and
+reports that it did; `reject` leaves the signal unknown for longer input
+instead. This limit applies to the classifier only; it does not shorten the
+chat request or change the generation model's context window. Guard and PII
+scan long inputs in overlapping windows (`overflow: window`); see
+[Prompt attacks and unsafe content](../model-runtime/guides/safety.md) and
+[Detect PII](../model-runtime/guides/pii.md).
 
-For capacity planning, one measured 27,001-token Preview request using these
-two classifiers completed in 15.84 seconds. Separate single-classifier
-validation reached 38.70 GiB of GPU memory; budget additionally for other
-resident models and concurrent requests. These measurements cover this
-Domain/FactCheck option. Other enabled classifiers retain their input limits,
-so changing these two deployments does not establish a 32K all-ten-model
-pipeline.
+Earlier releases selected fixed ONNX Runtime graphs (`head:
+onnx/model_rocm_32k.onnx`) and MIGraphX compilation caches here.
+`vllm-sr config migrate` removes those settings; see
+[Migrate from the native bindings](model-runtime/migrate.md).
 
-### Choose a Guard input budget
+## Compare with the 98x paper setup
 
-The default Guard deployment uses `onnx/model_rocm_8k.onnx` on ROCm. For requests
-up to 512 tokens, select `onnx/model_rocm_512.onnx` and set that deployment's
-`input.max_tokens: 512`. For long documents, select
-`onnx/model_rocm_32k.onnx` and set `input.max_tokens: 32768`. Keep
-`overflow: reject`, `precision: native`, and `device: rocm:0`.
+The [98x routing paper](https://arxiv.org/abs/2603.12646) benchmarks one
+classifier and prompt-compression setup on an AMD Instinct MI300X. The
+maintained [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
+and the reference [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+use different settings, so the paper's latency and memory figures describe that
+benchmark rather than these configurations.
 
-Set the graph through `routing.model_bindings.prompt_guard.head`. These are
-explicit deployment choices: the Router pads to the selected graph's input
-shape and does not switch graphs automatically. Use the smallest graph that
-covers your workload; a 32K graph can add substantial latency to short requests.
-Changing Guard's budget does not change other enabled classifiers' limits.
+| Setting | Paper benchmark | Current setting |
+| --- | --- | --- |
+| Router models | Three mmBERT-32K classifier sessions (270M parameters, FP16) for domain, jailbreak and PII | Vela AMD recipe: ten Vela 1.0 307M task models in the model runtime's exact FP32 profile; Domain, Guard and PII cover those three tasks |
+| Execution | ONNX Runtime ROCm with CK Flash Attention for all three classifiers | PyTorch for ROCm in the model runtime; the request's model work arrives in one bundled call |
+| Prompt compression | On, with a 512-token budget | Off by default and in the Vela AMD recipe. The reference config enables it with `max_tokens: 4096` |
+| Weights for TextRank, position, TF-IDF and novelty | 0.20, 0.40, 0.35, 0.05 | Reference config: 0.4, 0.2, 0.3, 0.1 |
+| Position depth | 0.5 | Reference config: 0.1 |
+| Sentences always kept | First 3 and last 2 | Reference config: first 3 and last 2 |
+| Classifiers that read compressed text | Domain, jailbreak and PII in the latency tables | Domain reads it. Jailbreak and PII read the full prompt through `skip_signals`, which matches the production setup the paper describes |
+
+The paper's router GPU footprint of under 800 MB covers its three classifier
+sessions with compression on. The Vela AMD recipe loads ten task models, so
+size Router memory from measurements on your hardware.
+
+To use the paper's 512-token compression profile, add this block to your
+config:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_compression:
+        enabled: true
+        profile: default
+        max_tokens: 512
+        skip_signals: [jailbreak, pii]
+```
+
+The `default` profile supplies the paper's weights, position depth and kept
+sentences. Explicit weight fields and `position_depth` override the profile, so
+remove them if you start from the reference config. Compression shortens only
+the text used for signal evaluation. Compare routing results on representative
+requests before you change the budget.
 
 ## Production checklist
 

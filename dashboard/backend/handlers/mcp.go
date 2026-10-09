@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 )
@@ -47,6 +49,10 @@ func prepareMCPServerConfig(w http.ResponseWriter, config *mcp.ServerConfig) boo
 	}
 	if config.Transport != mcp.TransportStdio && config.Transport != mcp.TransportStreamableHTTP {
 		http.Error(w, "Invalid transport type. Must be 'stdio' or 'streamable-http'", http.StatusBadRequest)
+		return false
+	}
+	if err := mcp.ValidateSecurity(config.Security); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
 	if config.Transport == mcp.TransportStdio && config.Connection.Command == "" {
@@ -114,6 +120,9 @@ func (h *MCPHandler) CreateServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.AddServer(&config); err != nil {
 			writeMCPInternalError(w, "Add server", err)
 			return
@@ -157,6 +166,13 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 
 		config.ID = id
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
+		if err := mcp.ValidateSecurity(config.Security); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if err := h.manager.UpdateServer(&config); err != nil {
 			writeMCPInternalError(w, "Update server", err)
 			return
@@ -196,6 +212,9 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.DeleteServer(id); err != nil {
 			writeMCPInternalError(w, "Delete server", err)
 			return
@@ -236,7 +255,14 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.Connect(ctx, id); err != nil {
+			if errors.Is(err, mcp.ErrUnsupportedSecurity) {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
 			writeMCPInternalError(w, "Connect server", err)
 			return
 		}
@@ -271,6 +297,9 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.Disconnect(id); err != nil {
 			writeMCPInternalError(w, "Disconnect server", err)
 			return
@@ -313,7 +342,7 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 	}
 }
 
-// TestConnectionHandler POST /api/mcp/servers/:id/test - Test connection
+// TestConnectionHandler POST /api/mcp/servers/:id/test and POST /api/mcp/servers/test - Test connection
 func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
@@ -339,13 +368,20 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.TestConnection(ctx, &config); err != nil {
 			log.Printf("[MCP-Handler] Test connection failed: error_class=%T", err)
+			message := "Connection test failed"
+			if errors.Is(err, mcp.ErrUnsupportedSecurity) {
+				message = err.Error()
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   "Connection test failed",
+				"error":   message,
 			})
 			return
 		}
@@ -412,6 +448,9 @@ func (h *MCPHandler) ExecuteToolHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		result, err := h.manager.ExecuteTool(r.Context(), req.ServerID, req.ToolName, req.Arguments)
 		if err != nil {
 			log.Printf(
@@ -430,7 +469,12 @@ func (h *MCPHandler) ExecuteToolHandler() http.HandlerFunc {
 	}
 }
 
-// ExecuteToolStreamHandler POST /api/mcp/tools/execute/stream - Stream execute tool
+// ExecuteToolStreamHandler POST /api/mcp/tools/execute/stream - Stream execute tool.
+//
+// SSE contract: each frame uses event names progress, partial, complete, or error.
+// The data line is JSON encoding of mcp.StreamChunk; data.type repeats the terminal
+// meaning for clients that only inspect the payload. The stream emits one terminal
+// complete or error event per request; closing the body without complete is a client-side failure.
 func (h *MCPHandler) ExecuteToolStreamHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
@@ -458,6 +502,9 @@ func (h *MCPHandler) ExecuteToolStreamHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		// Set SSE headers
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -469,26 +516,45 @@ func (h *MCPHandler) ExecuteToolStreamHandler() http.HandlerFunc {
 			return
 		}
 
+		wroteChunk := false
 		err := h.manager.ExecuteToolStreaming(r.Context(), req.ServerID, req.ToolName, req.Arguments, func(chunk mcp.StreamChunk) error {
-			data, _ := json.Marshal(chunk)
-			_, err := w.Write([]byte("event: message\n"))
-			if err != nil {
+			if err := writeMCPStreamEvent(w, chunk.Type, chunk); err != nil {
 				return err
 			}
-			_, err = w.Write([]byte("data: " + string(data) + "\n\n"))
-			if err != nil {
-				return err
-			}
+			wroteChunk = true
 			flusher.Flush()
 			return nil
 		})
 		if err != nil {
-			// Send error event
 			log.Printf("[MCP-Handler] ExecuteToolStream failed: error_class=%T", err)
-			errData, _ := json.Marshal(map[string]string{"error": "Tool execution failed"})
-			_, _ = w.Write([]byte("event: error\n"))
-			_, _ = w.Write([]byte("data: " + string(errData) + "\n\n"))
-			flusher.Flush()
+			// The client already emitted an error chunk for tool failures.
+			// A second event would look like a distinct failure to the browser.
+			if !wroteChunk {
+				if writeErr := writeMCPStreamEvent(w, "error", mcp.StreamChunk{Type: "error", Data: "Tool execution failed"}); writeErr == nil {
+					flusher.Flush()
+				}
+			}
 		}
+	}
+}
+
+func writeMCPStreamEvent(w http.ResponseWriter, event string, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, writeErr := w.Write([]byte("event: " + mcpStreamEventName(event) + "\n")); writeErr != nil {
+		return writeErr
+	}
+	_, writeErr := w.Write([]byte("data: " + string(data) + "\n\n"))
+	return writeErr
+}
+
+func mcpStreamEventName(event string) string {
+	switch strings.TrimSpace(event) {
+	case "progress", "partial", "complete", "error":
+		return strings.TrimSpace(event)
+	default:
+		return "message"
 	}
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // Global classification service instance
@@ -106,9 +105,12 @@ func SetGlobalClassificationService(service *ClassificationService) {
 // NewClassificationServiceFromConfig owns a canonical recipe graph and a pool
 // from its first generation, so reload reuses compatible physical resources.
 func NewClassificationServiceFromConfig(cfg *config.RouterConfig) (*ClassificationService, error) {
-	pool := binding.NewPool()
-	service := &ClassificationService{modelPool: pool}
-	if err := service.refreshRecipeClassifiers(cfg, nil, classification.RecipeRuntimeOptions{Runtime: native.New(pool)}); err != nil {
+	service := &ClassificationService{modelPool: binding.NewPool()}
+	options, lease, err := serviceModelRuntimes(cfg, service.modelPool)
+	if err != nil {
+		return nil, err
+	}
+	if err := service.refreshRecipeClassifiers(cfg, nil, options, lease); err != nil {
 		return nil, err
 	}
 	return service, nil
@@ -256,7 +258,7 @@ func (s *ClassificationService) classifierForRequestModel(modelName string) (*cl
 	}
 	trimmed := strings.TrimSpace(modelName)
 	if trimmed == "" {
-		trimmed = config.DefaultVSRAutoModelName
+		trimmed = s.config.DefaultEntrypointNames()[0]
 	}
 	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
 	if !ok {

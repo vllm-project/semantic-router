@@ -17,6 +17,7 @@ start those inference backends.
 | [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
 | [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
 | [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
+| [Decision Balance](decision-balance/README.md) | One decision-model call per request sets the reasoning effort and model across GLM-5.3-Flash and two Qwen3.8 models. |
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
@@ -76,8 +77,9 @@ into a built-in model or provision its runtime dependencies.
 When a managed recipe is mounted, Dashboard shows its Model Card and probe
 catalog. **Run** sends a probe to Playground, **Edit** prepares an editable
 request, and **Validate** evaluates routing without generating a model answer.
-See [Models and Recipes](../../website/docs/installation/models-and-recipes.md)
-for the user workflow.
+See [Configuration Workflows](../../website/docs/installation/configuration-workflows.md)
+for the Dashboard and probe workflow, and [Entrypoints and Recipes](../../website/docs/tutorials/global/entrypoints-and-recipes.md)
+for how virtual model names resolve to recipe-scoped routing policies.
 
 ## For contributors
 

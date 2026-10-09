@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -37,9 +39,17 @@ func BuiltIn() (*Registry, error) {
 			builtInErr = fmt.Errorf("decode generated model catalog: %w", err)
 			return
 		}
-		builtIn, builtInErr = registryFromSnapshot(document, builtInCatalogDigest)
+		builtIn, builtInErr = registryFromSnapshot(document, builtInCatalogDigest())
 	})
 	return builtIn, builtInErr
+}
+
+// builtInCatalogDigest equals the SHA-256 of the published public catalog. It is
+// computed rather than generated so concurrent catalog changes do not conflict
+// on a stored hash.
+func builtInCatalogDigest() string {
+	sum := sha256.Sum256([]byte(builtInCatalogJSON + "\n"))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
@@ -65,6 +75,14 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		registry.protocols[definition.ID] = definition
 	}
 	for _, definition := range document.Providers {
+		for _, operation := range sortedKeys(definition.OperationOverrides) {
+			if _, exists := definition.PathOverrides[operation]; exists {
+				return nil, fmt.Errorf(
+					"provider %q declares %q in both path_overrides and operation_overrides",
+					definition.ID, operation,
+				)
+			}
+		}
 		registry.providers[definition.ID] = definition
 	}
 	for _, definition := range document.ReasoningFamilies {
@@ -132,6 +150,26 @@ func (registry *Registry) Protocol(id string) (ProtocolDefinition, bool) {
 func (registry *Registry) Provider(id string) (ProviderDefinition, bool) {
 	value, ok := registry.providers[id]
 	return cloneProvider(value), ok
+}
+
+// ProviderIdentity is the part of a provider definition that request-time
+// resolution reads: its identity, default protocol, reasoning transport and
+// auth. Unlike Provider, it copies none of the definition's collections.
+type ProviderIdentity struct {
+	ID                 string
+	DefaultProtocol    string
+	ReasoningTransport ReasoningTransport
+	Auth               ProviderAuth
+}
+
+func (registry *Registry) ProviderIdentity(id string) (ProviderIdentity, bool) {
+	value, ok := registry.providers[id]
+	return ProviderIdentity{
+		ID:                 value.ID,
+		DefaultProtocol:    value.DefaultProtocol,
+		ReasoningTransport: value.ReasoningTransport,
+		Auth:               value.Auth,
+	}, ok
 }
 
 func (registry *Registry) ReasoningFamily(id string) (ReasoningFamilyDefinition, bool) {
@@ -269,6 +307,7 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 	value.Protocols = append([]string(nil), value.Protocols...)
 	value.SupportedOperations = append([]string(nil), value.SupportedOperations...)
 	value.PathOverrides = cloneMap(value.PathOverrides)
+	value.OperationOverrides = cloneMap(value.OperationOverrides)
 	value.DefaultHeaders = cloneMap(value.DefaultHeaders)
 	value.Models = append([]CatalogModelBinding(nil), value.Models...)
 	for index := range value.Models {

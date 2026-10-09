@@ -579,7 +579,7 @@ func newWorkflowTestServer(t *testing.T, responses map[string]string) *httptest.
 			t.Fatalf("decode request: %v", err)
 		}
 		content := responses[payload.Model]
-		if payload.Model == "qwen-coordinator" && strings.Contains(r.Header.Get("x-vsr-looper-iteration"), "4") {
+		if payload.Model == "qwen-coordinator" && strings.Contains(r.Header.Get(testHopIteration), "4") {
 			content = "final synthesized answer"
 		}
 		if payload.Model == "qwen-coordinator" && !json.Valid([]byte(content)) {

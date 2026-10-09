@@ -3,12 +3,14 @@ package routerruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,7 +51,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			cfg.ClassifierRules = []config.ClassifierSignalRule{{Name: "risk", Type: "local", Labels: []string{"safe", "unsafe"}}}
 			cfg.SafetyRules = []config.SafetyRule{{Name: "unsafe", Threshold: .5}}
 			cfg.ModelDeployments = map[string]config.ModelDeployment{
-				"classifier": {Provider: "candle", Device: "cpu", Artifact: "/unavailable/recipe-classifier"},
+				"classifier": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: "/unavailable/recipe-classifier"},
 				"embedder":   {Provider: "http", ExternalModel: "embedding-service"},
 			}
 			cfg.ExternalModels = []config.ExternalModelConfig{{Name: "embedding-service", ModelName: "selected", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: server.URL}}}
@@ -62,7 +64,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			}
 			if name == "global embedding" {
 				cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": cfg.ModelBindings["embedding"]}
-				cfg.ModelDeployments["local-override"] = config.ModelDeployment{Provider: "ort", Artifact: "/not-installed/recipe-only"}
+				cfg.ModelDeployments["local-override"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "/not-installed/recipe-only"}
 				cfg.ModelBindings["embedding"] = config.ModelBinding{Deployment: "local-override", Contract: "embedding.v1", Adapter: "bert"}
 			}
 			if _, err := config.CompileModelBindings(cfg); err != nil {
@@ -72,7 +74,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			runtime, err := NewVectorStoreRuntime(cfg)
+			runtime, err := NewVectorStoreRuntime(cfg, nil, nil)
 			if err != nil {
 				t.Fatalf("unrelated recipe bindings blocked vector store preparation: %v", err)
 			}
@@ -148,7 +150,7 @@ func TestVectorStoreRuntimeUsesEndpointWidthForStorage(t *testing.T) {
 				return cfg
 			}
 			cfg := makeConfig(0)
-			runtime, err := NewVectorStoreRuntime(cfg)
+			runtime, err := NewVectorStoreRuntime(cfg, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -168,12 +170,111 @@ func TestVectorStoreRuntimeUsesEndpointWidthForStorage(t *testing.T) {
 				t.Fatalf("full output lost: %d %v", len(values), err)
 			}
 			bad := makeConfig(128)
-			if _, err := NewVectorStoreRuntime(bad); err == nil {
+			if _, err := NewVectorStoreRuntime(bad, nil, nil); err == nil {
 				t.Fatal("explicit mismatch accepted")
 			}
 			if _, err := os.Stat(bad.VectorStore.FileStorageDir); !os.IsNotExist(err) {
 				t.Fatal("invalid width opened storage before rejecting")
 			}
 		})
+	}
+}
+
+// runtimeIdentityProvider identifies its vectors as a model runtime
+// embedding does, by package digest and view.
+type runtimeIdentityProvider struct {
+	embedding.Provider
+	digest string
+}
+
+func (p runtimeIdentityProvider) RepresentationIdentity(options embedding.Options, policy string) (embedding.ContentIdentity, error) {
+	return embedding.IdentityForRuntime(embedding.RuntimeDescriptor{
+		ModelType: "mmbert", Runtime: "model_runtime", PoolingContract: "mean",
+		Artifacts: []embedding.ArtifactDigest{{Role: "package", SHA256: p.digest}},
+		Layer:     options.Layer, Dimension: options.Dimension,
+	}, policy)
+}
+
+func TestVectorStoreRejectsStoresOfAnotherRepresentation(t *testing.T) {
+	ctx := context.Background()
+	provider, err := embedding.NewFuncProvider(config.ModelRuntimeProvider, 3, func(context.Context, string) ([]float32, error) {
+		t.Fatal("identity resolution ran inference")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.VectorStoreConfig{EmbeddingModel: "mmbert", EmbeddingDimension: 3}
+	identity, err := resolveVectorStoreEmbeddingIdentity(runtimeIdentityProvider{Provider: provider, digest: strings.Repeat("a", 64)}, cfg)
+	if err != nil || identity.Fingerprint == "" {
+		t.Fatalf("runtime embedding has no vector-store identity: %+v %v", identity, err)
+	}
+	upgraded, err := resolveVectorStoreEmbeddingIdentity(runtimeIdentityProvider{Provider: provider, digest: strings.Repeat("b", 64)}, cfg)
+	if err != nil || upgraded.Fingerprint == identity.Fingerprint {
+		t.Fatalf("a changed model package kept the vector-store identity: %+v %v", upgraded, err)
+	}
+
+	backend := vectorstore.NewMemoryBackend(vectorstore.MemoryBackendConfig{})
+	registry := vectorstore.NewMemoryMetadataRegistry()
+	old := vectorstore.NewManager(backend, registry, 3, vectorstore.BackendTypeMemory, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
+	store, err := old.CreateStore(ctx, vectorstore.CreateStoreRequest{Name: "old package"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := vectorstore.EmbeddedChunk{ID: "old", Content: "historical", Embedding: []float32{1, 0, 0}}
+	if err = old.InsertChunks(ctx, store.ID, []vectorstore.EmbeddedChunk{chunk}); err != nil {
+		t.Fatal(err)
+	}
+
+	current := vectorstore.NewManager(backend, registry, 3, vectorstore.BackendTypeMemory, vectorstore.WithEmbeddingIdentity(upgraded.Fingerprint))
+	if err = current.LoadFromRegistry(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = current.Search(ctx, store.ID, chunk.Embedding, 1, 0, nil); !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("a query of the new package compared with vectors of the old one: %v", err)
+	}
+	if err = current.InsertChunks(ctx, store.ID, []vectorstore.EmbeddedChunk{chunk}); !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("a vector of the new package appended to a store of the old one: %v", err)
+	}
+
+	fresh, err := current.CreateStore(ctx, vectorstore.CreateStoreRequest{Name: "new package"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Metadata[vectorstore.EmbeddingIdentityMetadataKey] != upgraded.Fingerprint {
+		t.Fatal("new vector store omitted the representation identity")
+	}
+	if err = current.InsertChunks(ctx, fresh.ID, []vectorstore.EmbeddedChunk{chunk}); err != nil {
+		t.Fatal(err)
+	}
+	restarted := vectorstore.NewManager(backend, registry, 3, vectorstore.BackendTypeMemory, vectorstore.WithEmbeddingIdentity(upgraded.Fingerprint))
+	if err = restarted.LoadFromRegistry(ctx); err != nil {
+		t.Fatal(err)
+	}
+	results, err := restarted.Search(ctx, fresh.ID, chunk.Embedding, 1, 0, nil)
+	if err != nil || len(results) != 1 {
+		t.Fatalf("matching identity could not reuse the new store: %v %v", results, err)
+	}
+	if _, err = restarted.Search(ctx, store.ID, chunk.Embedding, 1, 0, nil); !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("restart adopted the old package's vector store: %v", err)
+	}
+}
+
+// A provider that cannot state a content identity (a remote endpoint) keeps
+// the configured store namespace, whatever the model is called.
+func TestVectorStoreProvidersWithoutContentIdentityKeepTheirNamespace(t *testing.T) {
+	embed := func(context.Context, string) ([]float32, error) { return []float32{1, 0, 0}, nil }
+	for _, backend := range []string{"test", config.EmbeddingBackendOpenAICompatible} {
+		provider, err := embedding.NewFuncProvider(backend, 3, embed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, model := range []string{config.DefaultEmbeddingModel, "qwen3"} {
+			cfg := &config.VectorStoreConfig{EmbeddingModel: model, EmbeddingDimension: 3}
+			identity, err := resolveVectorStoreEmbeddingIdentity(provider, cfg)
+			if err != nil || identity.Fingerprint != "" {
+				t.Fatalf("%s %s acquired a new namespace: %+v %v", backend, model, identity, err)
+			}
+		}
 	}
 }

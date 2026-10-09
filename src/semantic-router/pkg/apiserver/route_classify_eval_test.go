@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -66,18 +66,11 @@ func (s *evalCaptureClassificationService) ClassifyUserFeedback(_ context.Contex
 	return &services.UserFeedbackResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyNLI(_ context.Context, _ services.NLIRequest) (*services.NLIResponse, error) {
-	return nil, fmt.Errorf("NLI not available in eval stub")
-}
-
-func (s *evalCaptureClassificationService) IsNLIReady() bool { return false }
-
-func (s *evalCaptureClassificationService) HasUnifiedClassifier() bool      { return true }
-func (s *evalCaptureClassificationService) HasClassifier() bool             { return true }
-func (s *evalCaptureClassificationService) HasFactCheckClassifier() bool    { return true }
-func (s *evalCaptureClassificationService) HasHallucinationDetector() bool  { return true }
-func (s *evalCaptureClassificationService) HasHallucinationExplainer() bool { return true }
-func (s *evalCaptureClassificationService) HasFeedbackDetector() bool       { return true }
+func (s *evalCaptureClassificationService) HasUnifiedClassifier() bool     { return true }
+func (s *evalCaptureClassificationService) HasClassifier() bool            { return true }
+func (s *evalCaptureClassificationService) HasFactCheckClassifier() bool   { return true }
+func (s *evalCaptureClassificationService) HasHallucinationDetector() bool { return true }
+func (s *evalCaptureClassificationService) HasFeedbackDetector() bool      { return true }
 func (s *evalCaptureClassificationService) UpdateConfig(_ *config.RouterConfig) {
 }
 

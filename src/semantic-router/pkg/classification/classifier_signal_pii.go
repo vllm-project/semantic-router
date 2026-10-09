@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -15,6 +16,11 @@ import (
 // content could not be fully classified and on_error is block. It mirrors the
 // fail-closed behavior of the jailbreak classifier.
 const PIIClassificationErrorType = "classification_error"
+
+// PIIUnscannedType is the entity type a PII rule reports when its model did
+// not read all of the content (JailbreakUnscannedType): unless on_unscanned is
+// allow, such content matches, so a long request routes as private.
+const PIIUnscannedType = "unscanned"
 
 // cachedPIIResult stores a cached PII token classification result.
 type cachedPIIResult struct {
@@ -71,6 +77,10 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 }
 
 func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
+	if backend := decisionPIIInference(c.piiInference); backend != nil {
+		c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, backend)
+		return
+	}
 	start := time.Now()
 
 	// Step 1: Collect the union of unique content pieces selected by all PII
@@ -89,60 +99,83 @@ func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, resul
 		}
 	}
 
-	// Step 2: Run PII token classification exactly once per unique content piece.
-	// Entity types are returned as "LABEL_{class_id}" and translated by
-	// PIIMapping. Tool-result content uses a request-scoped inference budget;
-	// legacy prompt/history content retains its existing behavior.
+	// Bound tool-result work before dispatching it through the model-service bundle.
 	piiCache := make(map[piiCacheKey]cachedPIIContent, len(uniqueContents))
-	toolResultBudget := piiToolResultScanBudget{remainingInferenceCalls: maxPIIToolResultInferenceCalls}
+	type piece struct {
+		key   piiCacheKey
+		chunk string
+	}
+	var pieces []piece
+	budget := piiToolResultScanBudget{remainingInferenceCalls: maxPIIToolResultInferenceCalls}
 	for _, key := range uniqueContents {
 		cached := cachedPIIContent{}
-		if key.source == config.PIISourceToolResult {
-			// A configured native long-context/window policy owns the input
-			// geometry. Otherwise tool results can be much larger than the
-			// request text and can contain thousands of blocks, so stream the
-			// bounded chunks without materializing them all first.
-			fullyScanned := true
-			if c.Config.PIIModel.Window != nil || c.hasLongContextClassifier(config.SignalTypePII) {
-				if toolResultBudget.consumeInferenceCall() {
-					tokenResult, err := c.classifyPIITokens(ctx, key.content)
-					cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
-				} else {
-					fullyScanned = false
-				}
-			} else {
-				fullyScanned = forEachUniquePIISignalChunk(key.content, func(chunk string) bool {
-					if !toolResultBudget.consumeInferenceCall() {
-						return false
-					}
-					tokenResult, err := c.classifyPIITokens(ctx, chunk)
-					cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
-					return true
-				})
+		add := func(chunk string) bool {
+			if key.source == config.PIISourceToolResult && !budget.consumeInferenceCall() {
+				return false
 			}
-			cached.incomplete = !fullyScanned
+			pieces = append(pieces, piece{key, chunk})
+			return true
+		}
+		if key.source == config.PIISourceToolResult && c.Config.PIIModel.Window == nil && !c.hasLongContextClassifier(config.SignalTypePII) {
+			cached.incomplete = !forEachUniquePIISignalChunk(key.content, add)
 		} else {
-			chunks := c.piiInputs(key.content)
-			cached.results = make([]cachedPIIResult, 0, len(chunks))
-			for _, chunk := range chunks {
-				tokenResult, err := c.classifyPIITokens(ctx, chunk)
-				cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
+			for _, chunk := range c.piiInputs(key.content) {
+				if !add(chunk) {
+					cached.incomplete = true
+					break
+				}
 			}
 		}
 		piiCache[key] = cached
 	}
-
-	// Step 3: Evaluate each rule concurrently using the cached token results.
-	// Each goroutine applies its own threshold and allow-list without re-running the model.
-	var ruleWg sync.WaitGroup
-	for _, rule := range c.Config.PIIRules {
-		ruleWg.Add(1)
-		go func() {
-			defer ruleWg.Done()
-			c.evaluatePIIRule(rule, piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, piiCache, start, results, mu)
-		}()
+	classified := make([]cachedPIIResult, len(pieces))
+	modelservice.Fan(ctx, len(pieces), func(i int) {
+		classified[i].result, classified[i].err = c.classifyPIITokens(ctx, pieces[i].chunk)
+		classified[i].err = signalDeadline(ctx, classified[i].err)
+	})
+	for i, piece := range pieces {
+		cached := piiCache[piece.key]
+		cached.results = append(cached.results, classified[i])
+		piiCache[piece.key] = cached
 	}
-	ruleWg.Wait()
+	rules := c.Config.PIIRules
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		c.evaluatePIIRule(rules[i], piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, piiCache, start, results, mu)
+	})
+
+	// Replay evidence must cover complete, clean content regardless of routing allow-lists.
+	verified := len(rules) > 0 && len(pieces) > 0 && !toolResultScanIncomplete
+	for _, content := range append(append([]string{piiText}, nonUserMessages...), toolResultTexts...) {
+		if content != "" {
+			_, legacy := contentSeen[piiCacheKey{source: "legacy", content: content}]
+			_, tool := contentSeen[piiCacheKey{source: config.PIISourceToolResult, content: content}]
+			if !legacy && !tool {
+				verified = false
+			}
+		}
+	}
+	for _, key := range uniqueContents {
+		complete, clean := !piiCache[key].incomplete, true
+		if key.source == config.PIISourceToolResult && toolResultScanIncomplete {
+			complete = false
+		}
+		for _, cached := range piiCache[key].results {
+			if cached.err != nil {
+				complete = false
+			}
+		}
+		for _, rule := range rules {
+			if piiCacheSource(rule.Source) != key.source {
+				continue
+			}
+			entities, status, _ := c.collectPIIEntityTypes([]string{key.content}, rule.Name, rule.Source, rule.Threshold, piiCache)
+			complete = complete && status == piiScanClean
+			clean = clean && len(entities) == 0
+		}
+		verified = verified && complete && clean
+		results.PIIEvidence = append(results.PIIEvidence, NewPrivacyEvidence("request", key.content, complete, clean))
+	}
+	results.PIIContentVerified = verified
 
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
@@ -168,6 +201,10 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 	if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete && status == piiScanClean {
 		status = piiScanIncomplete
 	}
+	unscanned := piiRuleUnscanned(ruleContents, rule.Source, piiCache) && c.Config.PIIModel.UnscannedBlocks()
+	if unscanned && errorCode == "" {
+		errorCode = signalInputLimitCode
+	}
 	if status != piiScanClean {
 		recordedStatus := status
 		// Legacy scans retain the historical failed code for incomplete
@@ -180,10 +217,14 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 	}
 	deniedEntities := findDeniedEntities(entityTypes, rule.PIITypesAllowed)
 	errorDrivenMatch := false
-	if status != piiScanClean && c.Config.PIIModel.IsBlock() {
+	if status != piiScanClean && (unscanned || c.Config.PIIModel.IsBlock()) {
 		logging.Errorf("[Signal Computation] PII rule %q: content not fully classified; failing closed", rule.Name)
 		errorDrivenMatch = len(deniedEntities) == 0
-		deniedEntities = append(deniedEntities, PIIClassificationErrorType)
+		sentinel := PIIClassificationErrorType
+		if unscanned {
+			sentinel = PIIUnscannedType
+		}
+		deniedEntities = append(deniedEntities, sentinel)
 	}
 
 	if len(deniedEntities) > 0 {
@@ -227,7 +268,7 @@ func (c *Classifier) recordPIIRuleErrorCode(rule config.PIIRule, status piiScanS
 	if status == piiScanIncomplete {
 		code = piiEvaluationIncompleteCode
 	}
-	if errorCode == signalInputLimitCode {
+	if errorCode != "" && errorCode != piiEvaluationFailedCode {
 		code = errorCode
 	}
 
@@ -237,4 +278,16 @@ func (c *Classifier) recordPIIRuleErrorCode(rule config.PIIRule, status piiScanS
 		results.SignalErrors = make(map[string]string)
 	}
 	results.SignalErrors[signalConfidenceKey(config.SignalTypePII, rule.Name)] = code
+}
+
+// piiRuleUnscanned distinguishes unread model input from a backend failure.
+func piiRuleUnscanned(contents []string, source string, cache map[piiCacheKey]cachedPIIContent) bool {
+	for _, content := range contents {
+		for _, result := range cache[piiCacheKey{source: piiCacheSource(source), content: content}].results {
+			if UnscannedInput(result.err) {
+				return true
+			}
+		}
+	}
+	return false
 }

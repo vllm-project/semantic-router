@@ -41,11 +41,10 @@ jobs:
             --output-dir .agent-harness/recipe-conformance static-all
 
       - id: plan
-        name: Materialize live CPU shards
+        name: Materialize live CPU recipe matrix
         run: |
           python tools/calibration/recipe/recipe_conformance.py \
             plan-all \
-            --shards 3 \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Publish static coverage summary
@@ -70,7 +69,6 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -108,6 +106,13 @@ jobs:
         if: inputs.prebuilt-images
         with:
           images: '["vllm-sr"]'
+      - name: Allocate CPUs for serial long-context probes
+        if: matrix.shard == 'built-in-latest-mom-v1'
+        run: |
+          # This shard runs one probe at a time, including full-context embeddings.
+          cpu_threads="$(nproc)"
+          printf 'VLLM_SRUN_CPU_THREADS=%s\n' "$cpu_threads" >> "$GITHUB_ENV"
+          printf 'Serial long-context worker threads: %s\n' "$cpu_threads"
       - name: Run maintained recipe probes
         env:
           RECIPE_CONFORMANCE_RECIPES: ${{ matrix.recipes }}

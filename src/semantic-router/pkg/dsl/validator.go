@@ -246,6 +246,23 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 
 // ---------- Level 2: Reference Checks ----------
 
+// routeAnswersWithFastResponse reports whether a route replies with the
+// fast_response plugin, inline or through a template: it calls no model, so
+// it needs no MODEL.
+func (v *Validator) routeAnswersWithFastResponse(route *RouteDecl) bool {
+	for _, ref := range route.Plugins {
+		if ref.Name == config.DecisionPluginFastResponse {
+			return true
+		}
+		for _, template := range v.prog.Plugins {
+			if template.Name == ref.Name && template.PluginType == config.DecisionPluginFastResponse {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (v *Validator) checkReferences() {
 	for _, route := range v.prog.Routes {
 		v.checkRouteReferences(route)
@@ -261,7 +278,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
 			fix := v.suggestPlugin(pr.Name)
 			v.addDiag(DiagWarning, pr.Pos,
-				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, response_cache, hallucination, memory, rag, tools, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: %s. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, strings.Join(config.SupportedDecisionPluginTypes(), ", "), pr.Name),
 				fix,
 			)
 		}
@@ -272,6 +289,9 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 	}
 
 	if !routeHasModelCandidates(route) {
+		if v.routeAnswersWithFastResponse(route) {
+			return
+		}
 		v.addDiag(DiagWarning, route.Pos,
 			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
 			nil,
@@ -405,6 +425,12 @@ func (v *Validator) checkConstraints() {
 	// Check signals
 	for _, s := range v.prog.Signals {
 		v.checkSignalConstraints(s)
+	}
+
+	for _, plugin := range v.prog.Plugins {
+		if config.NormalizeDecisionPluginType(plugin.PluginType) == config.DecisionPluginPromptCache {
+			v.checkPromptCachePluginConstraints(plugin.Pos, plugin.Fields)
+		}
 	}
 
 	// Check routes
@@ -552,6 +578,10 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 	// Check algorithm constraints
 	if r.Algorithm != nil {
 		v.checkAlgorithmConstraints(r.Algorithm, context)
+	}
+
+	for _, plugin := range r.Plugins {
+		v.checkPromptCachePluginRefConstraints(plugin)
 	}
 
 	for _, iter := range r.CandidateIterations {

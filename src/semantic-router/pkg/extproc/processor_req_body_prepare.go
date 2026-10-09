@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
@@ -54,6 +55,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if !ctx.Routing.IsResolved() {
 		r.resolveEntrypointForRequest(originalModel, ctx)
 	}
+	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
 	// Keep the general snapshot payload-free, but attach tool-result text at the
 	// signal-history boundary so opt-in PII rules can inspect it. This is the
@@ -77,20 +79,19 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
 		}
 		if errors.Is(decisionErr, errNoContextEligibleDecisionModel) {
-			logging.Warnf("[Request Body] Decision candidates cannot satisfy request context: %v", decisionErr)
-			return requestDecisionState{}, r.createErrorResponse(422, decisionErr.Error())
+			logRoutingFailure(ctx, "decision_context_ineligible", routingFailureContextLength.code, decisionErr)
+			return requestDecisionState{}, r.routingFailureResponse(ctx, routingFailureContextLength)
 		}
 		if errors.Is(decisionErr, selection.ErrNoEligibleCandidates) {
-			logging.Warnf("[Request Body] Selection policy rejected all candidates: %v", decisionErr)
 			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)
 		}
 		if response, handled := r.processBodyRoutingError(decisionErr, ctx); handled {
 			return requestDecisionState{}, response
 		}
-		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
 			return requestDecisionState{}, r.respondDecisionUnresolved(ctx, originalModel, decisionErr)
 		}
+		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
@@ -105,19 +106,20 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		return requestDecisionState{}, resp
 	}
 	metrics.RecordModelRequest(selectedModel)
+	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
 	}
@@ -136,7 +138,7 @@ func (r *OpenAIRouter) respondDecisionUnresolved(
 	originalModel string,
 	decisionErr error,
 ) *ext_proc.ProcessingResponse {
-	resp := r.respondRoutingRejected(ctx, originalModel, decisionErr, "decision_unresolved")
+	resp := r.respondRoutingRejected(ctx, originalModel, decisionErr, routingFailureDecisionUnresolved, "decision_unresolved")
 	addImmediateResponseHeader(resp, headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	return resp
 }
@@ -148,30 +150,34 @@ func (r *OpenAIRouter) respondSelectionRejected(
 	originalModel string,
 	selectionErr error,
 ) *ext_proc.ProcessingResponse {
-	return r.respondRoutingRejected(ctx, originalModel, selectionErr, "selection_rejected")
+	return r.respondRoutingRejected(ctx, originalModel, selectionErr, routingFailureNoEligibleModel, "selection_rejected")
 }
 
 func (r *OpenAIRouter) respondRoutingRejected(
 	ctx *RequestContext,
 	originalModel string,
 	routingErr error,
+	failure routingFailure,
 	terminalReason string,
 ) *ext_proc.ProcessingResponse {
-	status := 503
+	status := failure.status
+	var resp *ext_proc.ProcessingResponse
 	var budgetError *selection.RequestBudgetError
 	if errors.As(routingErr, &budgetError) {
-		status = 400
+		status = http.StatusBadRequest
 		terminalReason = "request_budget_exceeded"
 		ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, budgetError.Code, budgetError.Message, routingErr)
+		resp = r.createErrorResponse(status, routingErr.Error())
+		logRoutingFailure(ctx, terminalReason, budgetError.Code, routingErr)
+	} else {
+		resp = r.routingFailureResponse(ctx, failure)
+		logRoutingFailure(ctx, terminalReason, failure.code, routingErr)
 	}
-	resp := r.createErrorResponse(status, routingErr.Error())
-	if budgetError != nil {
-		// Retain exactly the client-visible error in Replay, including streams
-		// rejected before the provider has started an SSE response.
-		resp = r.encodeImmediateResponseForClient(resp, ctx)
-	}
-	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
-		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, nil)
+	// Retain exactly the client-visible error in Replay, including streams
+	// rejected before the provider has started an SSE response.
+	resp = r.encodeImmediateResponseForClient(resp, ctx)
+	if r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
 	r.updateRouterReplayStatus(ctx, status, false)

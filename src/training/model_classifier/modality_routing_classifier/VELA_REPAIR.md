@@ -66,7 +66,7 @@ requests. Keep the registry and its hash with the dataset artifacts.
 
 Initialize a fresh complete head on the Vela Base at an immutable revision;
 use `--method full --fresh-head` with the shared runner and explicitly provide
-`--base-id llm-semantic-router/Vela-1.0-Encoder-307M` and `--base-revision`.
+`--base-id vllm-sr/Vela-1.0-Encoder-307M` and `--base-revision`.
 Inspect confusion between AR, DIFFUSION, and BOTH across languages. Training loss near zero is not a
 reason to select a checkpoint if unseen development wording regresses. The
 context workflow provides task-bearing head/middle/tail stress and retains source

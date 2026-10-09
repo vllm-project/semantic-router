@@ -47,6 +47,7 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
 	RequestDemandSnapshot         = store.RequestDemandSnapshot
 	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
 	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
@@ -62,6 +63,19 @@ type (
 )
 
 type Recorder struct {
+	*recorderState
+
+	policyMu          sync.RWMutex
+	maxBodyBytes      int
+	maxToolTraceBytes int // 0 = no limit
+	maxToolTraceSteps int // 0 = no limit
+
+	captureRequestBody  bool
+	captureResponseBody bool
+}
+
+// recorderState owns the store and its lifecycle across request-specific views.
+type recorderState struct {
 	storage   store.Storage
 	outcomes  *outcomeQueue
 	closeOnce sync.Once
@@ -73,14 +87,6 @@ type Recorder struct {
 
 	lifecycleMu          sync.Mutex
 	lifecycleTransitions map[string]*lifecycleTransition
-
-	policyMu          sync.RWMutex
-	maxBodyBytes      int
-	maxToolTraceBytes int // 0 = no limit
-	maxToolTraceSteps int // 0 = no limit
-
-	captureRequestBody  bool
-	captureResponseBody bool
 }
 
 type lifecycleTransition struct {
@@ -91,13 +97,15 @@ type lifecycleTransition struct {
 // NewRecorder creates a new Recorder with the specified storage backend.
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
-		storage:              storage,
-		outcomes:             newOutcomeQueue(DefaultOutcomeQueueCapacity, outcomeShutdownGrace),
-		operationTimeout:     DefaultOperationTimeout,
-		lifecycleTransitions: make(map[string]*lifecycleTransition),
-		maxBodyBytes:         DefaultMaxBodyBytes,
-		maxToolTraceBytes:    DefaultMaxToolTraceBytes,
-		maxToolTraceSteps:    DefaultMaxToolTraceSteps,
+		recorderState: &recorderState{
+			storage:              storage,
+			outcomes:             newOutcomeQueue(DefaultOutcomeQueueCapacity, outcomeShutdownGrace),
+			operationTimeout:     DefaultOperationTimeout,
+			lifecycleTransitions: make(map[string]*lifecycleTransition),
+		},
+		maxBodyBytes:      DefaultMaxBodyBytes,
+		maxToolTraceBytes: DefaultMaxToolTraceBytes,
+		maxToolTraceSteps: DefaultMaxToolTraceSteps,
 	}
 }
 

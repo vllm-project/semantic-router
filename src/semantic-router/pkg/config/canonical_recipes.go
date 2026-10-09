@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // CanonicalEntrypoint maps request-facing virtual model names to a named
@@ -36,33 +34,17 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 	for _, recipe := range canonical.Recipes {
 		decisions := copyDecisions(recipe.Routing.Decisions)
 		ensureModelRefDefaults(decisions)
-		strategy := recipe.Routing.Strategy
-		if strategy == "" {
-			strategy = cfg.Strategy
-		}
-		var recipeFallback *fallback.FallbackPolicy
-		if recipe.Routing.Fallback != nil {
-			base := fallback.DefaultPolicy()
-			if cfg.Fallback != nil {
-				base = *cfg.Fallback
-			}
-			inherited := recipe.Routing.Fallback.Inherit(base)
-			recipeFallback = &inherited
-		} else if cfg.Fallback != nil {
-			recipeFallback = cfg.Fallback.Clone()
-		}
 		recipes = append(recipes, RoutingRecipe{
 			Name:        RecipeName(recipe.Name),
 			Description: recipe.Description,
 			Profile: RoutingProfile{
 				ModelBindings:         cloneModelMap(recipe.Routing.ModelBindings),
 				CandidateRequirements: recipe.Routing.CandidateRequirements.Clone(),
-				DataPolicy:            recipe.Routing.DataPolicy.Clone(),
 				Signals:               normalizeSignals(recipe.Routing.Signals, decisions),
 				Projections:           normalizeProjections(recipe.Routing.Projections),
 				Decisions:             decisions,
-				Strategy:              strategy,
-				Fallback:              recipeFallback,
+				Strategy:              cfg.RoutingDefaults.resolveStrategy(recipe.Routing.Strategy),
+				Fallback:              cfg.RoutingDefaults.resolveFallback(recipe.Routing.Fallback),
 			},
 		})
 	}
@@ -76,7 +58,6 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 		cfg.Strategy = explicitDefault.Profile.Strategy
 		cfg.ModelBindings = cloneModelMap(explicitDefault.Profile.ModelBindings)
 		cfg.CandidateRequirements = explicitDefault.Profile.CandidateRequirements.Clone()
-		cfg.DataPolicy = explicitDefault.Profile.DataPolicy.Clone()
 		if explicitDefault.Profile.Fallback != nil {
 			cfg.Fallback = explicitDefault.Profile.Fallback.Clone()
 		}
@@ -87,7 +68,6 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 			Profile: RoutingProfile{
 				ModelBindings:         cloneModelMap(cfg.ModelBindings),
 				CandidateRequirements: cfg.CandidateRequirements.Clone(),
-				DataPolicy:            cfg.DataPolicy.Clone(),
 				Signals:               cfg.Signals,
 				Projections:           cfg.Projections,
 				Decisions:             cfg.Decisions,
@@ -155,10 +135,6 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 
 func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig, recipes []RoutingRecipe) ([]EntrypointMapping, error) {
 	entrypoints := canonical.Entrypoints
-	if len(entrypoints) == 0 {
-		return nil, nil
-	}
-
 	result := make([]EntrypointMapping, 0, len(entrypoints))
 	claimed := make(map[string]struct{})
 	for index, entrypoint := range entrypoints {
@@ -170,7 +146,7 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 			return nil, fmt.Errorf("entrypoints[%d]: unknown recipe %q", index, recipeName)
 		}
 
-		names := normalizeAutoModelNames(entrypoint.ModelNames)
+		names := normalizeEntrypointNames(entrypoint.ModelNames)
 		if len(names) == 0 {
 			return nil, fmt.Errorf("entrypoints[%d].model_names cannot be empty", index)
 		}
@@ -189,6 +165,21 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 			Recipe:     recipeName,
 		})
 	}
+	view := *cfg
+	view.Entrypoints = result
+	for _, entrypoint := range view.EffectiveEntrypoints(ChatAPI) {
+		if entrypoint.Source != EntrypointBuiltin {
+			continue
+		}
+		for _, name := range entrypoint.ModelNames {
+			if _, exists := claimed[name]; exists {
+				return nil, fmt.Errorf("default entrypoint %q conflicts with a named recipe; declare explicit default model_names to replace it", name)
+			}
+			if meaning := configuredEntrypointNameConflict(canonical, name); meaning != "" {
+				return nil, fmt.Errorf("default entrypoint %q is already %s; declare explicit default model_names to replace it", name, meaning)
+			}
+		}
+	}
 	return result, nil
 }
 
@@ -200,14 +191,19 @@ func entrypointNameConflict(cfg *RouterConfig, canonical *CanonicalConfig, name 
 	if conflict := configuredEntrypointNameConflict(canonical, name); conflict != "" {
 		return conflict
 	}
-	return algorithmEntrypointNameConflict(cfg, name)
+	return ""
 }
 
 func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) string {
 	cards := canonicalRoutingModels(canonical.Routing)
 	for _, model := range canonical.Providers.Models {
-		if model.Name == name {
+		if model.Name == name || model.ProviderModelID == name {
 			return "a configured model"
+		}
+		for _, externalID := range model.ExternalModelIDs {
+			if externalID == name {
+				return "a configured provider model alias"
+			}
 		}
 		cardID := model.Catalog
 		if cardID == "" {
@@ -223,20 +219,6 @@ func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) s
 		if routingModelHasLoRA(card, name) {
 			return "a configured LoRA adapter"
 		}
-	}
-	return ""
-}
-
-func algorithmEntrypointNameConflict(cfg *RouterConfig, name string) string {
-	switch {
-	case cfg.IsAutoModelName(name):
-		return "an auto-model alias"
-	case cfg.IsReMoMModelName(name):
-		return "the ReMoM algorithm slug"
-	case cfg.IsFusionModelName(name):
-		return "the Fusion algorithm slug"
-	case cfg.IsFlowModelName(name):
-		return "the Flow algorithm slug"
 	}
 	return ""
 }
@@ -259,7 +241,6 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			Routing: CanonicalRouting{
 				ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
 				CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
-				DataPolicy:            recipe.Profile.DataPolicy.Clone(),
 				Signals:               canonicalSignalsFromSignals(recipe.Profile.Signals),
 				Projections:           canonicalProjectionsFromProjections(recipe.Profile.Projections),
 				Decisions:             copyDecisions(recipe.Profile.Decisions),
@@ -302,7 +283,7 @@ func findRecipe(recipes []RoutingRecipe, name RecipeName) *RoutingRecipe {
 // content (signals, projections, or decisions). modelCards do not count: they
 // are the shared model catalog, not part of any one profile.
 func canonicalRoutingHasProfile(routing CanonicalRouting) bool {
-	if routing.CandidateRequirements != nil || routing.DataPolicy != nil || routing.Fallback != nil {
+	if routing.CandidateRequirements != nil || routing.Fallback != nil {
 		return true
 	}
 	if len(routing.ModelBindings) > 0 {

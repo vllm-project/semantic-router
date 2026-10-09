@@ -115,6 +115,9 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **routing-errors**: all four Router error probes through Envoy, plus a routed positive control, without learned models or a default provider. The baseline retains its three unknown-model probes and its genuine default-provider fallback checks; `standalone` also runs all four error probes. Keeping the no-route policy separate avoids changing the baseline during parallel tests.
+- **model-runtime**: Router-managed and attached model runtimes on tiny fixture models: process groups, task signals and decision signals against the runtimes' own answers, the decision selector, request bundles, supervisor restarts, and fail-open.
+- **model-runtime-real** (opt-in, downloads about 4 GB): real Decision 2.0 Kai-0.6B and the Vela Domain, PII and Guard defaults on CPU in the Router's managed runtime; clear prompts take the routes the models decide, and the Router routes on Kai's own answer. Run it with `make e2e-test E2E_PROFILE=model-runtime-real` on a machine with Hugging Face Hub access.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
@@ -168,7 +171,10 @@ x 2 response modes, for 18 required end-to-end cells. Each cell validates the
 client-native response envelope or SSE sequence, the terminal event, translated
 backend output, and the absence of leaked backend wire shapes. The same profiles
 also cover tool-call lifecycles, structured JSON Schema output, provider transport
-errors, incomplete streams, and midstream failures. The `response-api` profile
+errors, incomplete streams, and midstream failures. Both profiles also replay the
+captured Claude Code and Copilot CLI tool loops in
+[`testcases/testdata/agent_clients`](testcases/testdata/agent_clients/README.md)
+against each backend a capture declares. The `response-api` profile
 also verifies the deployed provider fixture's native image-generation endpoint: two
 valid deterministic PNG payloads and strict unknown-field rejection. This direct
 fixture assertion does not claim Router image-generation support.

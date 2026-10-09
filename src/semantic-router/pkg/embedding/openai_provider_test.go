@@ -214,7 +214,7 @@ func TestOpenAICompatibleProviderResponseLimit(t *testing.T) {
 					Model:            "embedding-model",
 					MaxResponseBytes: tt.maxResponseBytes,
 				},
-			}, ProviderOptions{})
+			})
 			if err != nil {
 				t.Fatalf("NewProvider() error = %v", err)
 			}

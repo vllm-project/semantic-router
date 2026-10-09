@@ -26,10 +26,18 @@ from execution_batches import (
     e2e_batches,
     expected_dispatch_jobs,
     image_producers,
-    native_batches,
+    platform_batches,
 )
-from provider_mocker_image import IMAGE as MOCKER_IMAGE
-from provider_mocker_image import acquisition, published_from_plan, resolve_published
+from provider_mocker_image import (
+    IMAGE as MOCKER_IMAGE,
+)
+from provider_mocker_image import (
+    PublicationMissingError,
+    acquisition,
+    published_from_plan,
+    resolve_published,
+)
+from release_guard_waiver import planned_waiver
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -49,7 +57,7 @@ EXECUTORS = (
     "operator",
     "local",
     "recipes",
-    "native",
+    "platform",
     "performance",
     "package",
     "tools",
@@ -61,6 +69,30 @@ def digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def resolve_image_sources(plan: dict) -> None:
+    """Reuse exact-input fixtures when available, otherwise qualify them here."""
+    published = published_from_plan(plan)
+    if not published:
+        return
+    try:
+        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+    except PublicationMissingError:
+        if plan["profile"] not in {"pr", "main"}:
+            # Release and nightly runs require an already qualified main image.
+            raise
+        # A failed main gate can leave a valid fixture build unpublished. PRs
+        # still qualify their own exact inputs, without registry write access.
+        published["source"] = "candidate"
+        plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
+        if plan["profile"] == "main":
+            # The next successful main gate promotes this sealed candidate.
+            plan["publish_images"] = sorted({*plan["publish_images"], MOCKER_IMAGE})
+            plan["multiarch"] = True
+    plan["plan_sha256"] = digest(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
 
 
 def make_plan(
@@ -138,6 +170,8 @@ def make_plan(
             ]
         if record["executor"] == "e2e":
             record["baseline_suite"] = "full" if full else "standard"
+        if waiver := planned_waiver(profile, name):
+            record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)
         record["contract_sha256"] = digest(record)
         verifications.append(record)
@@ -180,7 +214,6 @@ def make_plan(
         "images": images,
         "build_images": build_images,
         "image_sources": image_sources,
-        "native": any(record["native"] for record in verifications),
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
@@ -196,7 +229,7 @@ def make_plan(
         "quality_context": dict(selection.signals),
     }
     plan["component_batches"] = component_batches(verifications)
-    plan["native_batches"] = native_batches(verifications)
+    plan["platform_batches"] = platform_batches(verifications)
     plan["e2e_batches"] = e2e_batches(verifications)
     plan["image_producers"] = image_producers(images)
     plan["expected_dispatch_jobs"] = expected_dispatch_jobs(plan)
@@ -205,17 +238,18 @@ def make_plan(
 
 
 def component_batches(verifications: list[dict]) -> list[dict]:
-    """Pack compatible lightweight contracts without changing their identities."""
+    """Give every selected component contract an independent Actions worker."""
+    workers = load_catalog()["component_workers"]
     return [
-        {"id": name, **worker, "verifications": selected}
-        for name, worker in load_catalog()["component_workers"].items()
-        if (
-            selected := [
-                row
-                for row in verifications
-                if row["executor"] == "tools" and row["worker"] == name
-            ]
-        )
+        {
+            "id": row["id"],
+            "worker": row["worker"],
+            **workers[row["worker"]],
+            "display_name": row["display_name"],
+            "verifications": [row],
+        }
+        for row in verifications
+        if row["executor"] == "tools"
     ]
 
 
@@ -223,10 +257,10 @@ def dispatch_records(plan: dict) -> dict[str, list[dict]]:
     """Map stable physical caller IDs to contracts or bounded workers."""
     result = {job: [] for job in EXECUTOR_JOBS}
     for record in plan["verifications"]:
-        if record["executor"] not in {"tools", "native", "e2e"}:
+        if record["executor"] not in {"tools", "platform", "e2e"}:
             result[record["dispatch_job"]].append(record)
     result["tools"] = plan["component_batches"]
-    for batch in [*plan["native_batches"], *plan["e2e_batches"]]:
+    for batch in [*plan["platform_batches"], *plan["e2e_batches"]]:
         result[batch["dispatch_job"]].append(batch)
     return result
 
@@ -265,7 +299,14 @@ def github_outputs(plan: dict) -> dict[str, str]:
         for job, selected in plan["image_producers"].items()
     }
     values = {
-        "plan": plan,
+        # The complete plan is uploaded as ci-plan for the gate. Passing it as a
+        # job output exceeds GitHub's 1 MiB UTF-16 limit for release profiles;
+        # callers only need these fields to select their workflow behavior.
+        "plan": {
+            "profile": plan["profile"],
+            "base_sha": plan["base_sha"],
+            "quality_context": plan["quality_context"],
+        },
         "dispatch": dispatch,
         "worker_labels": {job: list(rows) for job, rows in dispatch.items()},
         "image_producers": producers,
@@ -273,7 +314,6 @@ def github_outputs(plan: dict) -> dict[str, str]:
         "build_images": plan["build_images"],
         "published_images": [published] if published else [],
         "publish_images": plan["publish_images"],
-        "build_native": plan["native"],
         "multiarch": plan["multiarch"],
         "publish_helm": plan["publish_helm"],
         "publish_python": plan["publish_python"],
@@ -344,21 +384,70 @@ def previous_release(version: str, tags: list[str]) -> str:
     return max(candidates)[1]
 
 
+# Reviewed paired-performance bases for development cycles whose previous
+# release can't run the current harness. Each is a main commit whose
+# Production Benchmarks job passed with the harness that cycle measures.
+PERFORMANCE_BASES = {
+    # v0.3.0 predates the Vela benchmark contract and pkg/embedding, so the
+    # current harness cannot compile there. #3852 introduced the paired Vela
+    # CPU benchmarks.
+    "0.4.0": "12597be5ffae2319d856f230d61ca26248eb9b3b",
+    # v0.4.0 predates the model runtime, so compare-model-baseline.sh could
+    # only record a reset. #4707 pinned the classify benchmarks to the Vela 1.0
+    # specialists, and its own Production Benchmarks job passed with them.
+    "0.5.0": "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+}
+# The first release that serves the model benchmarks through the model
+# runtime. An older previous release can't be measured, only reset.
+MODEL_RUNTIME_RELEASE = (0, 5, 0)
+
+
+def performance_base(version: str, tags: list[str]) -> str:
+    """Choose an implementation that can run the current paired model harness.
+
+    A cycle with a declared base uses it. Every other cycle compares with its
+    previous release, which must include the model runtime; one that doesn't
+    must declare a base instead of resetting the comparison.
+    """
+    if version in PERFORMANCE_BASES:
+        return PERFORMANCE_BASES[version]
+    base = previous_release(version, tags)
+    released = tuple(map(int, base.removeprefix("v").split(".")))
+    if released < MODEL_RUNTIME_RELEASE:
+        raise ValueError(
+            f"{base} predates the model runtime, so the paired model benchmarks "
+            f"could only record a reset; declare the {version} base in "
+            "PERFORMANCE_BASES: a main commit whose Production Benchmarks job "
+            "passed with the current harness"
+        )
+    return base
+
+
 def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "previous-release":
+    if len(sys.argv) > 1 and sys.argv[1] in {"previous-release", "performance-base"}:
+        command = sys.argv[1]
         parser = argparse.ArgumentParser(
             description="Resolve an ancestor stable release in the same major version"
         )
         parser.add_argument("--version", required=True)
-        parser.add_argument("--github-output", type=Path, required=True)
+        parser.add_argument(
+            "--github-output", type=Path, help="Append ref=... here; else print it"
+        )
         args = parser.parse_args(sys.argv[2:])
         tags = subprocess.check_output(
             ["git", "tag", "--merged", "HEAD"], text=True
         ).splitlines()
         try:
-            ref = previous_release(args.version, tags)
+            ref = (
+                performance_base(args.version, tags)
+                if command == "performance-base"
+                else previous_release(args.version, tags)
+            )
         except ValueError as exc:
             parser.exit(1, str(exc) + "\n")
+        if args.github_output is None:
+            print(ref)
+            return 0
         with args.github_output.open("a") as stream:
             stream.write(f"ref={ref}\n")
         return 0
@@ -386,11 +475,7 @@ def main() -> int:
         draft=args.draft,
         requested=tuple(args.verification),
     )
-    if published := published_from_plan(plan):
-        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
-        plan["plan_sha256"] = digest(
-            {key: value for key, value in plan.items() if key != "plan_sha256"}
-        )
+    resolve_image_sources(plan)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:

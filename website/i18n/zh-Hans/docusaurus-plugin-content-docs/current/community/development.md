@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/community/development.md"
   outdated: false
 ---
@@ -29,17 +29,20 @@ make harness-bootstrap
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
-该构建会安装可编辑的 `vllm-sr` CLI，并创建本地 Router、控制面板和 Envoy 镜像。`--image-pull-policy never` 确保运行使用这些本地镜像。
+该构建会安装可编辑的 `vllm-sr` CLI，构建标记为 `latest` 的 Router 和控制面板镜像，并确保官方 Envoy 镜像可用。
+即使采用可编辑安装，只要包版本号是稳定版本，CLI 默认仍会选择对应的发布镜像，因此需要显式设置 `VLLM_SR_IMAGE`。
+CLI 会推导出相同 tag 的官方控制面板镜像；`--image-pull-policy never` 则禁止拉取缺失的镜像。
 
 常用生命周期命令：
 
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy -f
+vllm-sr logs envoy -f  # --gateway extproc only
 vllm-sr dashboard
 vllm-sr stop
 ```
@@ -47,9 +50,13 @@ vllm-sr stop
 ROCm 相关工作：
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
-vllm-sr serve --image-pull-policy never --platform amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
+
+如果自定义了 `DOCKER_TAG`、`DOCKER_REGISTRY` 或 Make 的镜像变量，请通过 `VLLM_SR_IMAGE` 将实际构建的镜像传给 `serve`，必要时同时设置 `VLLM_SR_DASHBOARD_IMAGE`。
+构建完成后的提示会打印包含所选镜像的启动命令。
 
 ## 选择正确的测试
 
@@ -63,20 +70,17 @@ make check CHANGED_FILES="path/one path/two"
 常见定向套件包括：
 
 ```bash
-# Router 和原生绑定
+# Router
 make test-semantic-router
-make test-binding
 
-# 分类器
-make test-category-classifier
-make test-pii-classifier
-make test-jailbreak-classifier
+# 模型运行时（小型夹具，CPU）
+make model-runtime-test
+
+# 通过模型运行时运行已发布模型
+make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# 机队模拟器
-make vllm-sr-sim-test
 ```
 
 当变更会通过启动、路由、API、部署配置或其他在线路经表现出来时，显式选择集成或 E2E：
@@ -126,7 +130,7 @@ curl -sS http://localhost:8899/v1/chat/completions \
 ## 调试
 
 - 先用 `vllm-sr logs <service>` 看组件日志，再依赖容器名。
-- 原生库诊断设 `RUST_LOG=debug`。
+- 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/troubleshooting.md)。
 - Router 诊断设 `SR_LOG_LEVEL=debug`。
 - 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
 - 启动和网络失败见[常见错误](/zh-Hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-Hans/docs/troubleshooting/container-connectivity)。

@@ -115,7 +115,7 @@ func TestEmbeddingNamespaceLeavesUnsupportedProvidersAndDisabledCachesUntouched(
 	for _, enabled := range []bool{false, true} {
 		cfg := namespaceFixture(RedisCacheType, 768)
 		cfg.Enabled = enabled
-		cfg.EmbeddingModel = "bert"
+		cfg.EmbeddingModel = "qwen3"
 		got, identity, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 			t.Fatal("unsupported provider resolved")
 			return embedding.ContentIdentity{}, nil

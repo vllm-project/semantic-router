@@ -58,6 +58,14 @@ func (r *OpenAIRouter) handleCaching(
 		return nil, false
 	}
 
+	if !r.cacheBackendEnabled() {
+		applyRequestIdentityWithoutCache(ctx)
+		if !ctx.LooperRequest {
+			applyRequestCacheControls(ctx)
+		}
+		return nil, false
+	}
+
 	if ctx.LooperRequest {
 		return r.handleLooperCacheSkip(ctx, categoryName, selectedModels...)
 	}
@@ -67,23 +75,7 @@ func (r *OpenAIRouter) handleCaching(
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
-
-	ctx.RequestModel = identity.Model
-	ctx.RequestQuery = identity.Query
-	ctx.CacheRequestModel = identity.Model
-	ctx.CacheQuery = identity.Query
-	policyFingerprint := responseCachePolicyFingerprint(ctx)
-	ctx.CacheExactFingerprint = cache.CombineFingerprints(
-		identity.ExactFingerprint,
-		policyFingerprint,
-	)
-	ctx.CacheCompatibilityFingerprint = cache.CombineFingerprints(
-		identity.CompatibilityFingerprint,
-		policyFingerprint,
-	)
-	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, selectedModels)
-	ctx.CacheSemanticSafe = identity.SemanticSafe
-	ctx.CacheIdentity = responseCacheIdentity(ctx, identity.Model)
+	applyCacheIdentity(ctx, identity, selectedModels)
 	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	applyRequestCacheControls(ctx)
 	if !ctx.CacheReadBypass {
@@ -132,6 +124,11 @@ func (r *OpenAIRouter) handleLooperCacheSkip(
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
+	applyCacheIdentity(ctx, identity, selectedModels)
+	return nil, false
+}
+
+func applyCacheIdentity(ctx *RequestContext, identity cache.RequestIdentity, selectedModels []string) {
 	ctx.RequestModel = identity.Model
 	ctx.RequestQuery = identity.Query
 	ctx.CacheRequestModel = identity.Model
@@ -148,7 +145,6 @@ func (r *OpenAIRouter) handleLooperCacheSkip(
 	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, selectedModels)
 	ctx.CacheSemanticSafe = identity.SemanticSafe
 	ctx.CacheIdentity = responseCacheIdentity(ctx, identity.Model)
-	return nil, false
 }
 
 func selectedCacheModel(requestModel string, selectedModels []string) string {
@@ -231,7 +227,7 @@ func (r *OpenAIRouter) performCacheLookup(
 	ctx *RequestContext, categoryName, requestModel string, cacheEnabled bool,
 ) (*ext_proc.ProcessingResponse, bool) {
 	cacheQuery := cacheQueryForContext(ctx)
-	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
+	if cacheQuery == "" || !r.cacheBackendEnabled() || !cacheEnabled {
 		return nil, false
 	}
 
@@ -293,6 +289,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		}
 
 		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
+		tracing.SetSpanAttributes(span, attribute.String(tracing.AttrCacheNegationGuard, string(lookupResult.NegationGuard)))
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		// The cache partition includes the selected backend, independently of
@@ -300,11 +297,12 @@ func (r *OpenAIRouter) performCacheLookup(
 		r.startRouterReplay(ctx, ctx.CacheRequestModel, ctx.CacheSelectedModel, categoryName)
 		r.reportCacheHitTelemetry(ctx, cachedResponse, lookupDuration)
 		logging.LogEvent("cache_hit", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      requestModel,
-			"query":      ctx.RequestQuery,
-			"category":   categoryName,
-			"threshold":  threshold,
+			"request_id":     ctx.RequestID,
+			"model":          requestModel,
+			"query":          ctx.RequestQuery,
+			"category":       categoryName,
+			"threshold":      threshold,
+			"negation_guard": string(lookupResult.NegationGuard),
 		})
 		// Intermediate cache detail (category, matched keywords, similarity) is
 		// demoted to the x-vsr-debug surface (#2205).
@@ -399,6 +397,9 @@ func refreshCachedSemanticResponse(response *llmprotocol.Response, ctx *RequestC
 	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1 {
 		response.ID = "resp_" + strings.TrimPrefix(response.ID, "item_")
 	}
+	if publicID := responseObjectPublicID(ctx); publicID != "" {
+		response.ID = publicID
+	}
 	response.CreatedAt = time.Now().UTC()
 	for index := range response.Output {
 		response.Output[index].ID = llmprotocol.StableID(response.ID, fmt.Sprint(index))
@@ -427,6 +428,20 @@ func applyCacheHitSelectedModel(ctx *RequestContext) {
 	if ctx != nil && ctx.CacheSelectedModel != "" {
 		ctx.RequestModel = ctx.CacheSelectedModel
 	}
+}
+
+func (r *OpenAIRouter) cacheBackendEnabled() bool {
+	return r != nil && r.Cache != nil && r.Cache.IsEnabled()
+}
+
+func applyRequestIdentityWithoutCache(ctx *RequestContext) {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return
+	}
+	ctx.RequestModel = ctx.SemanticRequest.Model
+	ctx.RequestQuery = cache.SemanticRequestQuery(*ctx.SemanticRequest)
+	ctx.CacheRequestModel = ctx.RequestModel
+	ctx.CacheQuery = ctx.RequestQuery
 }
 
 func cacheIdentityForContext(ctx *RequestContext) (cache.RequestIdentity, error) {

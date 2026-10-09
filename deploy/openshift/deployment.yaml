@@ -147,6 +147,7 @@ spec:
       labels:
         app: semantic-router
     spec:
+      serviceAccountName: semantic-router
       initContainers:
       - name: model-downloader
         image: python:3.11-slim
@@ -173,10 +174,10 @@ spec:
           from huggingface_hub import snapshot_download
 
           models = [
-              ("llm-semantic-router/Vela-1.0-Encoder-307M-Domain", "Vela-1.0-Encoder-307M-Domain", "f6354f54adcf38770f635ad903be2b00577f6c11"),
-              ("llm-semantic-router/Vela-1.0-Encoder-307M-PII", "Vela-1.0-Encoder-307M-PII", "6d3300c4bd7975f30a664503f6c725cf1fbbad48"),
-              ("llm-semantic-router/Vela-1.0-Encoder-307M-Guard", "Vela-1.0-Encoder-307M-Guard", "087f9e401012df839c83717b746967ac7aebfa3e"),
-              ("llm-semantic-router/Vela-1.0-Encoder-307M-Embedding", "Vela-1.0-Encoder-307M-Embedding", "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436")
+              ("vllm-sr/Vela-1.0-Encoder-307M-Domain", "Vela-1.0-Encoder-307M-Domain", "f6354f54adcf38770f635ad903be2b00577f6c11"),
+              ("vllm-sr/Vela-1.0-Encoder-307M-PII", "Vela-1.0-Encoder-307M-PII", "6d3300c4bd7975f30a664503f6c725cf1fbbad48"),
+              ("vllm-sr/Vela-1.0-Encoder-307M-Guard", "Vela-1.0-Encoder-307M-Guard", "087f9e401012df839c83717b746967ac7aebfa3e"),
+              ("vllm-sr/Vela-1.0-Encoder-307M-Embedding", "Vela-1.0-Encoder-307M-Embedding", "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436")
           ]
 
           cache_dir = "/app/cache/hf"
@@ -252,7 +253,7 @@ spec:
           mountPath: /app/cache
       containers:
       - name: semantic-router
-        image: ghcr.io/vllm-project/semantic-router/extproc:latest
+        image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -271,8 +272,16 @@ spec:
           name: classify-api
           protocol: TCP
         env:
-        - name: LD_LIBRARY_PATH
-          value: "/app/lib"
+        # Lets the config write API patch this ConfigMap through the
+        # Kubernetes API instead of the read-only mounted file (#3688).
+        - name: VLLM_SR_K8S_CONFIGMAP_NAME
+          value: "semantic-router-config"
+        - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: VLLM_SR_CONFIG_BACKUP_DIR
+          value: "/tmp/vllm-sr/config-history"
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE

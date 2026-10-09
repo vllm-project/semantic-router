@@ -38,12 +38,11 @@ make perf-bench-cache
 make perf-bench-looper
 ```
 
-The component targets build the Router and set the native-library path before
-running `go test -bench`. Classification benchmarks require the benchmark model
-artifacts; download them when they are not already available:
+Classification and cache benchmarks serve their models through the model
+runtime; install it once before running them:
 
 ```bash
-make download-models-perf
+make model-runtime-install
 ```
 
 ## Compare with the committed baselines
@@ -69,20 +68,21 @@ make perf-compare
 The parser writes `reports/current.json`; the comparison writes
 `reports/comparison.json`.
 
-Classification and cache benchmarks use canonical, revision-pinned Vela artifacts
-through owned native runtime handles. Missing weights or failed inference fail the
-run. `VLLM_SR_DOMAIN_MODEL`, `VLLM_SR_PII_MODEL`, `VLLM_SR_JAILBREAK_MODEL`, and
-`VLLM_SR_EMBEDDING_MODEL` can point to downloaded snapshots. The asset downloader's
-`VLLM_SR_MODEL_MANIFEST` freezes the current catalog for both sides of a comparison.
-No model IDs or revisions are maintained separately in this module.
+Classification and cache benchmarks serve the router catalog's revision-pinned
+Vela models through the model runtime, the way the Router does: one runtime
+manager, the serving facade, and a runtime process per deployment, which
+downloads its pinned model on first start (`VLLM_SRUN_CACHE_DIR` keeps
+it). Failed downloads or inference fail the run. `VLLM_SR_DOMAIN_MODEL`,
+`VLLM_SR_PII_MODEL`, `VLLM_SR_JAILBREAK_MODEL`, and `VLLM_SR_EMBEDDING_MODEL`
+can point to local packages instead. No model IDs or revisions are maintained
+separately in this module.
 
 The previous classification and cache baseline files contain no measurements.
 CI therefore measures those families against the PR base revision (or the prior
 main revision for scheduled runs), using the current benchmark program and the
-same downloaded Vela checkpoints on both revisions:
+same pinned models on both revisions:
 
 ```bash
-export VLLM_SR_MODEL_MANIFEST=/absolute/path/to/perf-models.json
 bash perf/scripts/compare-model-baseline.sh "$BASE_REF" reports
 cd perf
 go run ./cmd/perftest --compare-baseline=testdata/baselines \
@@ -94,14 +94,44 @@ go run ./cmd/perftest --compare-baseline=testdata/baselines \
 This is the report-only comparison used by CI. Add `--fail-on-regression` to
 request a strict local allocation check, as `make perf-check` does.
 
-The helper reuses native libraries only when their sources and build inputs are
-unchanged. Otherwise it builds the base revision's libraries. An incompatible
-base fails with its compile/runtime output. Reports record the measured source
-commit, registry revisions, actual artifact content hashes, device, precision,
-and benchmark protocol. Missing measurements or identity differences fail the
-comparison; Qwen3 and legacy classifier numbers cannot become Vela baselines.
-Model correctness belongs to the real-model regression suite; these benchmarks
-do not publish accuracy from a missing optional dataset.
+The base side runs its own model-runtime source on the installed dependencies.
+An incompatible base fails with its compile/runtime output. A base revision that
+predates the model runtime cannot run this harness at all: the helper then
+writes a model baseline that records the reset, and the comparison reports the
+model benchmarks as measured but not gated. Reports record the measured source
+commit, registry revisions, the content hash of the package each runtime
+loaded, device, precision, engine, and benchmark protocol. Missing measurements
+or identity differences fail the comparison; Qwen3 and legacy classifier numbers
+cannot become Vela baselines. Model correctness belongs to the runtime's golden
+answers; these benchmarks do not publish accuracy from a missing optional dataset.
+
+### Release comparisons
+
+A release compares with its development cycle's base instead of its parent
+revision:
+
+```bash
+make perf-check PERF_BASE_REF="$(python3 tools/ci/ci_plan.py performance-base --version X.Y.Z)"
+```
+
+The base is the previous release unless `PERFORMANCE_BASES` in
+`tools/ci/ci_plan.py` declares one. v0.4.0 predates the model runtime, so 0.5.0
+declares #4707 (`abae8ff99`): it pinned the classify benchmarks to the Vela 1.0
+specialists, and its own Production Benchmarks job passed with this harness.
+From 0.5.0 on, the previous release has the model runtime; when it can't run
+the current harness, declare a reviewed `main` commit whose Production
+Benchmarks job passed with it. Resolution refuses a previous release that
+predates the model runtime rather than turning the comparison into a reset.
+
+## Input-length measurement protocol
+
+`BenchmarkClassifyInputLength` times the Vela Domain classifier on inputs of up
+to 512, 2,048, and 8,192 tokens. Each input repeats the five fixture prompts
+until one more repetition would exceed its size, and each result reports the
+processed `tokens/op`. This classifier's deployment admits 8,192 tokens and
+rejects longer input, while the other classification benchmarks share a
+deployment that truncates at 512 tokens, so every size is one complete forward
+pass.
 
 ## Cache measurement protocol
 
@@ -148,8 +178,8 @@ the `default` thresholds.
   execution settings. Both measurements must cover the versioned inventory in
   `config/benchmark-inventory.json`; missing, extra, or duplicate workloads fail.
 
-Go allocation metrics do not include Rust/C++ allocations, process RSS, or GPU
-memory. Benchmark commands exclude ordinary unit tests, which run in their own
+Go allocation metrics do not include the model runtime's allocations, process
+RSS, or GPU memory. Benchmark commands exclude ordinary unit tests, which run in their own
 checks. The former JSON/map microbenchmarks did not call production ExtProc and
 are excluded from the production benchmark inventory.
 Record the source revision, Go version, model artifacts, CPU, and benchmark
@@ -171,7 +201,7 @@ different address, run `go tool pprof` directly against the profile file.
 
 | Family | Location | Measures |
 | --- | --- | --- |
-| Classification | `benchmarks/classification*_bench_test.go` | owned Vela Domain/PII/Guard batch inference, parallel calls, and Domain inference |
+| Classification | `benchmarks/classification*_bench_test.go` | owned Vela Domain/PII/Guard batch inference, parallel calls, and Domain inference on short and up to 8K-token inputs |
 | Decision | `benchmarks/decision_bench_test.go` | rule evaluation, priority selection, and parallel evaluation |
 | Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths through the owned Vela Embedding provider |
 | Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |

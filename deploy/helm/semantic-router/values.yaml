@@ -10,10 +10,26 @@ global:
   imageRegistry: ""
 # -- Number of replicas for the deployment
 replicaCount: 1
+# How client traffic reaches the Router
+gateway:
+  # -- `standalone`: the Router serves the OpenAI-compatible API on
+  # `config.listeners` itself, answers `/health` and `/ready` there, and the
+  # Service exposes each listener's port; no Envoy runs. `extproc`: the Router
+  # serves Envoy's ext_proc gRPC on `service.grpc.port` for a gateway you run
+  # (Envoy Gateway, Envoy AI Gateway, Istio, KServe, llm-d). Releases before
+  # standalone mode deployed `extproc`; set it to keep such an integration.
+  mode: standalone
+  tls:
+    # -- Standalone only. A `kubernetes.io/tls` Secret mounted at
+    # `/app/config/certs`, for listeners whose `tls` names
+    # `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is
+    # mounted as a volume, so a rotated certificate reaches new connections
+    # without a restart.
+    secretName: ""
 # Image configuration
 image:
   # -- Image repository
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag (overrides the image tag whose default is the chart appVersion)
@@ -63,9 +79,10 @@ securityContext:
   readOnlyRootFilesystem: true
 # Service configuration
 service:
-  # -- Service type
+  # -- Service type. In standalone mode the Service also exposes every port in
+  # `config.listeners`.
   type: ClusterIP
-  # gRPC service port
+  # ext_proc gRPC service port (extproc mode only)
   grpc:
     # -- gRPC port number
     port: 50051
@@ -101,13 +118,14 @@ ingress:
   annotations: {}
   # kubernetes.io/ingress.class: nginx
   # kubernetes.io/tls-acme: "true"
-  # -- Ingress hosts configuration
+  # -- Ingress hosts configuration. A path without `servicePort` goes to the
+  # first listener without TLS in standalone mode, and to `service.api.port`
+  # in extproc mode.
   hosts:
     - host: semantic-router.local
       paths:
         - path: /
           pathType: Prefix
-          servicePort: 8080
   # -- Ingress TLS configuration
   tls: []
   #  - secretName: semantic-router-tls
@@ -168,7 +186,8 @@ nodeSelector: {}
 tolerations: []
 # Affinity rules
 affinity: {}
-# Extra volumes for custom mounts (e.g., ML models via hostPath)
+# Extra volumes for custom mounts (e.g., a shared model cache via hostPath).
+# When extraVolumeMounts claims /app/models, it replaces the default model volume.
 extraVolumes: []
 # Example:
 #   - name: ml-models
@@ -176,7 +195,8 @@ extraVolumes: []
 #       path: /mnt/ml-models
 #       type: DirectoryOrCreate
 
-# Extra volume mounts
+# Extra volume mounts. A mount at /app/models replaces the default emptyDir/PVC
+# mount; supply its matching volume through extraVolumes.
 extraVolumeMounts: []
 # Example:
 #   - name: ml-models
@@ -237,7 +257,7 @@ persistence:
   storageClassName: "standard"
   # -- Access mode
   accessMode: ReadWriteOnce
-  # -- Storage size
+  # -- Storage size of the model volume. The runtime downloads the router's models here on first start; Vela Omni Mini alone takes 4.3 GB.
   size: 10Gi
   # -- Annotations for PVC
   annotations: {}
@@ -253,17 +273,26 @@ router:
 # `config`, this map atomically replaces chart defaults before Kubernetes
 # integration rewrites.
 configOverride: null
+# -- Optional default judgment deployment reference, for example
+# {deployment: primary}. Artifact, device and revision belong in
+# config.global.model_catalog.deployments. Empty preserves the config's choice.
+# A changed deployment reference is applied to the live config on upgrade.
+decisionModel: {}
+# Runtime management APIs may update the live Router ConfigMap after install.
+configMap:
+  # -- Helm values seed config.yaml at install. Change this revision to
+  # explicitly replace the live config.yaml with config/configOverride on an
+  # upgrade; reusing the same revision preserves later management API edits.
+  applyValuesRevision: ""
 # Application configuration
 config:
   version: v0.3
+  # Standalone mode serves these listeners and the Service exposes them;
+  # extproc mode doesn't use them.
   listeners:
-    - name: "grpc-50051"
+    - name: "http-8899"
       address: "0.0.0.0"
-      port: 50051
-      timeout: "300s"
-    - name: "http-8080"
-      address: "0.0.0.0"
-      port: 8080
+      port: 8899
       timeout: "300s"
   providers:
     defaults:
@@ -504,8 +533,6 @@ args:
   - "--secure=false"
 # Environment variables
 env:
-  - name: LD_LIBRARY_PATH
-    value: "/app/lib"
   # The runtime root filesystem is read-only. Keep user and Hugging Face cache
   # state on explicitly writable mounts.
   - name: HOME
@@ -574,8 +601,9 @@ dashboard:
     existingSecretKey: "jwt-secret"
   # -- Extra environment variables for the dashboard container, appended after the
   # chart-managed TARGET_* vars. Use this to set optional integration env the chart
-  # does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or
-  # PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list.
+  # does not expose explicitly (for example PROXY_OVERRIDE_ORIGIN, or in extproc
+  # mode TARGET_ENVOY_URL for your gateway) without forking the chart. Standard
+  # core/v1 EnvVar list.
   # Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it
   # produces a duplicate env key and Kubernetes applies last-wins.
   extraEnv: []
@@ -612,9 +640,10 @@ dashboard:
       memory: "128Mi"
       cpu: "100m"
   persistence:
-    # -- Persist dashboard-local SQLite state for auth/session/workflow data.
-    # This is restart-safe for one dashboard replica, not a shared HA session store.
-    enabled: false
+    # -- Persist dashboard-local auth/session/workflow state and config backups.
+    # ConfigMap edits require a rollout, so backups must survive pod replacement
+    # for the rollback API to remain usable. Set false only for disposable demos.
+    enabled: true
     # -- Existing PVC to mount for dashboard-local state.
     existingClaim: ""
     # -- Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "".

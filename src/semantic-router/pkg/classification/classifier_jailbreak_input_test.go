@@ -2,19 +2,24 @@ package classification
 
 import (
 	"context"
-	"reflect"
+	"slices"
 	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// guardProvenanceRecorder records which pieces Guard classified; pieces are
+// classified concurrently, so the order is not part of the contract.
 type guardProvenanceRecorder struct {
+	mu     sync.Mutex
 	inputs []string
 }
 
 func (r *guardProvenanceRecorder) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
+	r.mu.Lock()
 	r.inputs = append(r.inputs, text)
+	r.mu.Unlock()
 	// Deliberately match every input: these tests verify provenance, not language
 	// classification, and never need a model or security-quality fixture.
 	return SequenceClassificationResult{Probabilities: []float32{0.1, 0.9}}, nil
@@ -60,10 +65,13 @@ func TestGuardProvenanceDispatch(t *testing.T) {
 				ConversationFacts{}, RequestFacts{JailbreakInput: test.input}, nil)
 			for _, dispatcher := range dispatchers {
 				if dispatcher.signalType == config.SignalTypeJailbreak {
-					dispatcher.evaluate()
+					dispatcher.evaluate(context.Background())
 				}
 			}
-			if !reflect.DeepEqual(recorder.inputs, test.want) {
+			slices.Sort(recorder.inputs)
+			want := slices.Clone(test.want)
+			slices.Sort(want)
+			if !slices.Equal(recorder.inputs, want) {
 				t.Fatalf("Guard inputs = %v, want %v", recorder.inputs, test.want)
 			}
 			if results.JailbreakDetected != (len(test.want) > 0) {

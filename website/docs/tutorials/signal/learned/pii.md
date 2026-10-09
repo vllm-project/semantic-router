@@ -45,6 +45,9 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
+`threshold` is optional: a rule without one takes every span the PII model
+reports, and a Vela 2.0 model reports only spans above its size's calibrated
+threshold.
 
 To scan textual results returned by tools, opt in with `source: tool_result`:
 
@@ -68,15 +71,18 @@ leaving it empty) preserves the legacy prompt and optional history behavior.
 
 ## Complete local scans
 
-The implicit local Vela PII default scans each text item up to 32,768 tokens,
-including special tokens. Each forward uses at most 512 tokens, with 255 content
-tokens of overlap. The model tokenizer defines the windows; character estimates
+The default PII model, Vela 2.0 0.3B, reads each text item whole, up to its
+8,192-token input, and finds spans with its router span head. When the module
+runs Vela 1.0 PII, it scans each text item up to 32,768 tokens, including
+special tokens. Each forward uses at most 512 tokens, with 255 content tokens
+of overlap. The model tokenizer defines the windows; character estimates
 and text re-tokenization at window boundaries do not determine coverage.
 
-Native Candle and ORT preserve original UTF-8 offsets, choose one observation per
-token by its surrounding context, then decode BIO entities once. Overlap does not
-double-count input usage or entity confidence. This guarantees coverage of admitted
-tokens, not detection accuracy or the quality of a single 32K forward.
+The [model runtime](../../../model-runtime/guides/pii.md) reports spans as
+character offsets into the original text, chooses one observation per token by
+its surrounding context, then decodes BIO entities once. Overlap does not
+double-count input usage or entity confidence. This guarantees coverage of
+admitted tokens, not detection accuracy or the quality of a single 32K forward.
 
 An explicit module budget, backend, window, or recipe binding keeps its own
 policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
@@ -89,7 +95,6 @@ global:
     modules:
       classifier:
         pii:
-          use_mmbert_32k: true
           max_sequence_length: 65536  # Complete text budget, including special tokens.
           window: {size: 32768, overlap: 256}
 ```
@@ -107,6 +112,61 @@ A text beyond the document limit or a failed window produces a classifier error,
 not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`
 policies determine its routing effect. Remote backends and explicitly selected
 truncation retain the partial-result behavior described below.
+
+## Vela 2.0
+
+Bind `pii_classifier` to a Vela 2.0 deployment and the signal asks the model's
+ready-made PII question, answered by its router span head, instead of a
+separate PII model. The PII question then travels in the same call as the
+deployment's [`decision`](decision.md) questions about the same text:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+- The model finds the same 17 entity types as Vela 1.0 PII and names them in
+  its spans, so the binding takes no `mapping_path`.
+- The Router sends each text as one state. The runtime must cover the admitted
+  text within its model and scan budgets. Inputs outside that policy are
+  unscanned, not clean; one state does not promise one forward or unlimited
+  context. See the [PII runtime guide](../../../model-runtime/guides/pii.md).
+- The model's calibrated threshold decides which spans it reports. A rule's
+  `threshold` and `pii_types_allowed` then apply to those spans as they do for
+  Vela 1.0; the model's span probability is the mean over the span's words.
+- `head` may only be `router`, the span head that answers the PII question.
+
+Explicit Vela 1.0 PII bindings keep that specialist. An unbound task follows
+the configured default decision deployment.
+
+## Presence and categories with a decision model
+
+A decision model can answer whether PII is present and which categories occur
+without locating characters. Select this task contract explicitly:
+
+```yaml
+routing:
+  model_bindings:
+    pii_classifier:
+      deployment: primary
+      contract: decision.v1
+```
+
+This uses `pii_presence` (`noul`) and `pii_categories` (`set`). When the model
+has no native `set` head, the task compiler can ask one `noul` question per
+category. The complete input must still be covered. These answers provide no
+entity offsets and must not be used as fabricated redaction spans. Use a
+native `span` model with `token_spans.v1` when exact locations are required.
+Task availability establishes an executable contract, not detection accuracy.
 
 ## Remote backend (token_spans.v1)
 
@@ -130,7 +190,11 @@ list. A declared `truncated_at` keeps the spans before the cut and marks the
 rest of the content as unscored. What a rejected or partial response does to a
 PII rule is `on_error`: `allow` (default) treats the unread content as not
 matching, `block` matches it as `classification_error`, so unverified text
-cannot pass as clean.
+cannot pass as clean. Content the model did not read at all (an input over the
+model's input or [scan cap](../../../model-runtime/reference.md#long-inputs),
+a truncated one, or one not scanned by the signals' deadline) matches as
+`unscanned` whatever `on_error` says, so a long request routes as private;
+set `classifier.pii.on_unscanned: allow` to leave it to `on_error`.
 
 The PII mapping cannot declare `classification_error` as an entity label.
 Aliases with `B-`, `I-`, or `E-` prefixes, including stacked prefixes, are also

@@ -95,7 +95,6 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         ("pr.yml", "pr"),
         ("main.yml", "main"),
         ("nightly-build.yml", "nightly"),
-        ("release.yml", "release"),
     ):
         workflow = workflows.get(filename)
         call = workflow.jobs.get("ci", {}) if workflow else {}
@@ -170,12 +169,53 @@ def validate_release_contract(
 
 
 def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> None:
+    expected_jobs = {
+        "validate",
+        "images",
+        "helm-build",
+        "python-build",
+        "docker",
+        "helm",
+        "pypi",
+        "release-notes",
+    }
+    if set(release.jobs) != expected_jobs:
+        errors.append(
+            ".github/workflows/release.yml: publish graph must contain only "
+            "version validation, artifact builds, and publishers"
+        )
+    builder = release.jobs.get("images", {})
+    if (
+        local_target(builder) != "build-artifacts.yml"
+        or needs(builder) != {"validate"}
+        or builder.get("with", {}).get("mode") != "release"
+        or builder.get("with", {}).get("multiarch") is not True
+    ):
+        errors.append(
+            ".github/workflows/release.yml: images must build from the "
+            "validated release source without CI tests"
+        )
     expected_publishers = {
         "docker": "docker-publish.yml",
         "helm": "helm-publish.yml",
         "pypi": "pypi-publish.yml",
-        "crate": "publish-crate.yml",
     }
+    expected_prebuilds = {
+        "helm-build": ("helm-publish.yml", "prebuilt-chart"),
+        "python-build": ("pypi-publish.yml", "prebuilt-dist"),
+    }
+    for job_id, (target, prebuilt_input) in expected_prebuilds.items():
+        job = release.jobs.get(job_id, {})
+        if (
+            local_target(job) != target
+            or needs(job) != {"validate"}
+            or job.get("with", {}).get("build-only") is not True
+            or job.get("with", {}).get(prebuilt_input, False)
+        ):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' must build "
+                "the validated release artifact without publishing"
+            )
     for job_id, target in expected_publishers.items():
         job = release.jobs.get(job_id)
         if not isinstance(job, dict):
@@ -186,6 +226,48 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
                 f".github/workflows/release.yml: '{job_id}' must call '{target}' "
                 "after validate"
             )
+        if "github.event_name == 'push'" not in job.get("if", ""):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' may publish only "
+                "on a tag push"
+            )
+        if "images" not in needs(
+            job
+        ) or "needs.images.result == 'success'" not in job.get("if", ""):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' must wait for "
+                "successful release image builds"
+            )
+        for prebuild in expected_prebuilds:
+            if prebuild not in needs(
+                job
+            ) or f"needs.{prebuild}.result == 'success'" not in job.get("if", ""):
+                errors.append(
+                    f".github/workflows/release.yml: '{job_id}' must wait for "
+                    f"successful {prebuild}"
+                )
+    pypi_job = release.jobs.get("pypi", {})
+    if pypi_job.get("with", {}).get("prebuilt-dist") is not True or pypi_job.get(
+        "with", {}
+    ).get("build-only", False):
+        errors.append(
+            ".github/workflows/release.yml: Python publisher must promote "
+            "the validated prebuilt distribution"
+        )
+    helm_job = release.jobs.get("helm", {})
+    if helm_job.get("with", {}).get("prebuilt-chart") is not True or helm_job.get(
+        "with", {}
+    ).get("build-only", False):
+        errors.append(
+            ".github/workflows/release.yml: Helm publisher must promote "
+            "the validated prebuilt chart"
+        )
+    notes = release.jobs.get("release-notes", {})
+    if needs(notes) != {"validate", *expected_publishers}:
+        errors.append(
+            ".github/workflows/release.yml: GitHub Release must wait for "
+            "all publishers"
+        )
 
 
 def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
@@ -195,12 +277,19 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
         if isinstance(docker_job, dict)
         else None
     )
-    if images != "${{ needs.ci.outputs.publish_images }}":
-        errors.append("release images must consume the planner publication inventory")
+    builder = release.jobs.get("images", {})
+    built_images = (
+        builder.get("with", {}).get("images") if isinstance(builder, dict) else None
+    )
+    expected = "${{ needs.validate.outputs.images }}"
+    if images != expected or built_images != expected:
+        errors.append(
+            "release image builds and publishers must consume the validated "
+            "publication inventory"
+        )
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
         "- `provider-mocker`",
-        "- `vllm-sr-sim`",
     }
     if any(bullet in release_text for bullet in fixture_bullets):
         errors.append(

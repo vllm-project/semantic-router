@@ -3,6 +3,7 @@ package cache
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -90,6 +91,11 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 		return cfg, "", fmt.Errorf("unsupported local embedding cache backend %s", backend)
 	}
 	identity, err := resolve(settings)
+	// A provider without a content identity (a remote endpoint) keeps the
+	// configured namespace.
+	if errors.Is(err, embedding.ErrIdentityUnsupported) {
+		return cfg, "", nil
+	}
 	if err != nil {
 		return cfg, "", err
 	}

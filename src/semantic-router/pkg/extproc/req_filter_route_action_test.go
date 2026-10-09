@@ -142,7 +142,7 @@ func TestFinalizeDecisionEvaluationPIIMatchSelectsDeclaredSafeModel(t *testing.T
 
 	decisionName, _, _, selectedModel, err := router.finalizeDecisionEvaluation(
 		result,
-		config.DefaultVSRAutoModelName,
+		"vllm-sr/auto",
 		"continue",
 		ctx,
 	)

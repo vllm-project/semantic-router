@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adapt native, local-stack and Preview framework results for the CI gate."""
+"""Adapt platform, local-stack and Preview framework results for the CI gate."""
 
 from __future__ import annotations
 
@@ -12,9 +12,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 from image_calibration import evidence as image_calibration_evidence
-from openvino_evidence import evidence as openvino_evidence
-from riscv_evidence import evidence as riscv_evidence
-from run_model_tests import required_inventory, runtime_families
+from run_model_tests import required_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -30,75 +28,40 @@ def host_platform() -> str:
     return platform.system().lower() + "/" + arch
 
 
-def native_evidence(directory: Path) -> dict:
-    if (directory / "inference.json").exists():
-        return openvino_evidence(directory)
+def models_evidence(directory: Path) -> dict:
     report = read(directory / "results.json")
-    paths = [directory / "results.json"]
-    if report["provider"] == "candle":
-        paths.append(directory / "multimodal/results.json")
     actual_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], text=True
     ).strip()
-    cases, expected, models = [], [], []
-    for path in paths:
-        suite_report = read(path)
-        if (
-            suite_report["source_sha"] != actual_sha
-            or suite_report["provider"] != report["provider"]
-        ):
-            raise ValueError("Native evidence source or runtime mismatch")
-        suite_name = suite_report["suite"]
-        required_suite = (
-            "runtime" if path == directory / "results.json" else "multimodal"
+    if report["source_sha"] != actual_sha:
+        raise ValueError("Model evidence source differs from the checked-out commit")
+    if (report["runtime"], report["device"]) != ("model-runtime", "cpu"):
+        raise ValueError("Model suite qualifies the model runtime on CPU only")
+    inventory = [
+        (suite["package"], name)
+        for suite in report["suites"]
+        for name in suite["expected"]
+    ]
+    if len(inventory) != len(set(inventory)) or set(inventory) != required_inventory():
+        raise ValueError(
+            "Model evidence case inventory differs from the required inventory"
         )
-        if suite_name != required_suite:
-            raise ValueError(
-                "Native evidence suite identity differs from required inventory"
+    cases, expected = [], []
+    for suite in report["suites"]:
+        prefix = suite["package"] + ":"
+        expected.extend(prefix + name for name in suite["expected"])
+        for field in ("passed", "skipped", "failed"):
+            cases.extend(
+                {"id": prefix + name, "status": field} for name in suite[field]
             )
-        families = (
-            runtime_families(report["provider"])
-            if suite_name == "runtime"
-            else ("Multimodal",)
-        )
-        actual_models = [model["name"] for model in suite_report["models"]]
-        if len(actual_models) != len(families) or set(actual_models) != set(families):
-            raise ValueError(
-                "Native evidence model inventory differs from supported runtime inventory"
-            )
-        inventory = [
-            (suite["package"], name)
-            for suite in suite_report["suites"]
-            for name in suite["expected"]
-        ]
-        if len(inventory) != len(set(inventory)) or set(
-            inventory
-        ) != required_inventory(report["provider"], suite_name):
-            raise ValueError(
-                "Native evidence case inventory differs from required runtime inventory"
-            )
-        if suite_report["device"] != "cpu":
-            raise ValueError("Native model suite qualifies CPU execution only")
-        models.extend(suite_report["models"])
-        for suite in suite_report["suites"]:
-            prefix = suite_report["suite"] + ":" + suite["package"] + ":"
-            expected.extend(prefix + name for name in suite["expected"])
-            for field, status in (
-                ("passed", "passed"),
-                ("skipped", "skipped"),
-                ("failed", "failed"),
-            ):
-                cases.extend(
-                    {"id": prefix + name, "status": status} for name in suite[field]
-                )
-            # A crashed Go process can lack a terminal test event.
-            if suite["exit_code"] and not suite["failed"]:
-                cases.append({"id": prefix + "process", "status": "failed"})
+        # A crashed Go process can lack a terminal test event.
+        if suite["exit_code"] and not suite["failed"]:
+            cases.append({"id": prefix + "process", "status": "failed"})
     return {
-        "runtime": report["provider"],
-        "device": report["device"],
+        "runtime": "model-runtime",
+        "device": "cpu",
         "platform": host_platform(),
-        "models": models,
+        "models": report["models"],
         "cases": cases,
         "expected_cases": expected,
     }
@@ -106,7 +69,12 @@ def native_evidence(directory: Path) -> dict:
 
 def local_evidence(directory: Path, suite: str) -> dict:
     report = read(directory / f"{suite}-test-report.json")
-    return {**report, "runtime": "candle", "device": "cpu", "platform": host_platform()}
+    return {
+        **report,
+        "runtime": "model-runtime",
+        "device": "cpu",
+        "platform": host_platform(),
+    }
 
 
 def recipe_cases(evaluation: dict, prefix: str) -> list[dict]:
@@ -149,16 +117,20 @@ def recipe_evidence(directory: Path) -> dict:
         load_probe_manifest,
     )
     from recipe_conformance_sources import (  # noqa: PLC0415
-        discover_recipe_sources,
-        shard_inventory,
+        discover_source_inventories,
+        source_matrix_payload,
     )
 
+    inventories = discover_source_inventories(
+        ROOT / "config/recipes",
+        lambda root: cpu_inventory(discover_inventory(root)),
+    )
     cases, expected, identities = [], [], []
-    for source in discover_recipe_sources(ROOT / "config/recipes"):
-        inventory = cpu_inventory(discover_inventory(source.recipes_root))
-        for index, _ in enumerate(shard_inventory(inventory, 3)):
-            identities.extend(read(directory / f"image-{source.name}-{index}.json"))
-        for recipe in inventory:
+    for job in source_matrix_payload(inventories, None, ROOT)["include"]:
+        identities.extend(read(directory / f"image-{job['shard']}.json"))
+    for item in inventories:
+        source = item.source
+        for recipe in item.recipes:
             _, probes = load_probe_manifest(
                 source.recipes_root / recipe.name / "probes.yaml"
             )
@@ -170,7 +142,7 @@ def recipe_evidence(directory: Path) -> dict:
             )
             cases.extend(recipe_cases(report["evaluation"], prefix))
     return {
-        "runtime": "candle",
+        "runtime": "model-runtime",
         "device": "cpu",
         "platform": host_platform(),
         "cases": cases,
@@ -183,18 +155,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "kind",
-        choices=["native", "local", "recipes", "image-calibration", "riscv-qemu"],
+        choices=["local", "recipes", "models", "image-calibration"],
     )
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--suite", choices=["cli", "memory"], default="cli")
     args = parser.parse_args()
-    if args.kind == "image-calibration":
+    if args.kind == "models":
+        result = models_evidence(args.directory)
+    elif args.kind == "image-calibration":
         result = image_calibration_evidence(args.directory)
-    elif args.kind == "riscv-qemu":
-        result = riscv_evidence(args.directory)
-    elif args.kind == "native":
-        result = native_evidence(args.directory)
     elif args.kind == "local":
         result = local_evidence(args.directory, args.suite)
     else:

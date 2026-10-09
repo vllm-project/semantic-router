@@ -103,6 +103,11 @@ type TestOptions struct {
 
 	// UseWorkspaceModels mounts the workspace models/ directory into semantic-router.
 	UseWorkspaceModels bool
+
+	// FlakeAttempts is how many times a failing test case may run before it is
+	// reported as failed. 1 disables retries, and deterministic unit tests must
+	// stay at 1 so a real failure is never retried into a pass.
+	FlakeAttempts int
 }
 
 // TestResult represents the result of a test case
@@ -124,4 +129,12 @@ type TestResult struct {
 
 	// Details contains structured test-specific details (e.g., accuracy, hit rate)
 	Details map[string]interface{}
+
+	// Attempts is how many times the test case ran. It is greater than 1 only
+	// when FlakeAttempts allowed a retry.
+	Attempts int
+
+	// Flaked reports a test that failed at least once and passed on a later
+	// attempt. The run stays green, but the case is surfaced as flaky.
+	Flaked bool
 }

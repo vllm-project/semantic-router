@@ -93,7 +93,9 @@ describe('topology v0.3 surface alignment', () => {
     })
     expect(PLUGIN_ICONS).toMatchObject({
       tool_selection: 'TS',
+      prompt_cache: 'PC',
     })
+    expect(PLUGIN_TYPES).toContain('prompt_cache')
   })
 
   it('initializes topology groups from the generated signal inventory', () => {
