@@ -174,10 +174,11 @@ func thresholdAssertions(rules []ruleReport) []thresholdAssertion {
 func main() { os.Exit(runCalibration()) }
 
 func runCalibration() int {
-	modelPath := flag.String("model", os.Getenv("MULTIMODAL_MODEL_PATH"), "prepared Vela Omni artifact directory")
+	modelPath := flag.String("model", os.Getenv("MULTIMODAL_MODEL_PATH"), "published Vela Omni snapshot directory")
 	rulesPath := flag.String("rules", "../../config/fragments/signal/embedding/image-routing.yaml", "image-routing YAML fragment")
 	casesPath := flag.String("cases", "../../tools/calibration/image-routing/testdata/calibration-set.json", "labelled calibration set JSON")
 	fixtureRoot := flag.String("fixture-root", ".", "directory that relative fixture paths in the cases file resolve against")
+	artifactRepository := flag.String("artifact-repository", "", "published repository of the model snapshot")
 	artifactRevision := flag.String("artifact-revision", "", "resolved model snapshot commit (required for reproducible reports)")
 	output := flag.String("output", "image-routing-calibration.json", "JSON report path")
 	markdown := flag.String("markdown", "image-routing-calibration.md", "Markdown report path")
@@ -186,8 +187,8 @@ func runCalibration() int {
 	requireClean := flag.Bool("require-clean", false, "with -check: fail unless the worktree matches the recorded commit, so the report is reproducible evidence")
 	prototypePolicy := flag.String("prototype-policy", "default", "scoring policy: default, cluster, or raw-max (explicit diagnostic override, preserves all candidate text)")
 	flag.Parse()
-	if *modelPath == "" || *artifactRevision == "" || *casesPath == "" {
-		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
+	if *modelPath == "" || *artifactRepository == "" || *artifactRevision == "" || *casesPath == "" {
+		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-repository, -artifact-revision, and -cases are required")
 	}
 
 	root, err := canonicalRepoRoot(*fixtureRoot)
@@ -231,7 +232,7 @@ func runCalibration() int {
 		fatal("outputs: %v", outputErr)
 	}
 	*output, *markdown = outputs[0], outputs[1]
-	artifact, err := modelArtifact(*modelPath, *artifactRevision)
+	artifact, err := modelArtifact(*modelPath, *artifactRepository, *artifactRevision)
 	if err != nil {
 		fatal("model artifact: %v", err)
 	}

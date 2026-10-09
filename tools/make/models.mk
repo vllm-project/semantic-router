@@ -72,33 +72,43 @@ download-eval-models: ## Download Vela native eval models, including attack-only
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
 # The published-model contract and image calibration serve the runtime's pinned
-# releases; the prepared Omni Nano bundle is built once in the models directory.
+# releases; the pinned Omni Nano snapshot is downloaded once into the models directory.
 MODEL_TEST_MODELS_DIR ?= $(CURDIR)/$(MODELS_DIR)
 MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/image-calibration
 MODEL_TEST_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
 
-download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and attest its manifest
-	@CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" "$(AGENT_PYTHON)" tools/ci/prepare_model_test_assets.py \
+download-models-image-calibration: ## Download the pinned Omni Nano release and attest its files
+	@"$(AGENT_PYTHON)" tools/ci/prepare_model_test_assets.py \
 		--variants nano --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"
 	@"$(AGENT_PYTHON)" tools/ci/image_calibration.py --prepare-manifest \
 		--artifact "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
 		--manifest "$(MODEL_TEST_MANIFEST)"
 
 verify-image-routing-calibration: download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
-	@VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
 		"$(AGENT_PYTHON)" tools/ci/image_calibration.py \
 		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
 
 .PHONY: download-models-image-calibration verify-image-routing-calibration
 
 test-models: download-models-image-calibration ## Run the published-model contract through the model runtime
-	@VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
 		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
 		--models-dir "$(MODEL_TEST_MODELS_DIR)" \
 		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
 		--output "$(MODEL_TEST_REPORT_DIR)"
 
-.PHONY: test-models
+# After an intended change of the Router's Vela 2.0 questions, their fusion or
+# a pinned revision: serve each pinned size on this CPU and rewrite the
+# answers the contract compares with (needs model-runtime-install).
+record-vela2-answers: ## Re-record the Vela 2.0 answers of the published-model contract
+	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
+		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py --record-vela2 \
+		--models-dir "$(MODEL_TEST_MODELS_DIR)" \
+		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
+		--output "$(MODEL_TEST_REPORT_DIR)"
+
+.PHONY: test-models record-vela2-answers
 
 download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "📦 Downloading mmBERT LoRA adapters from Hugging Face..."

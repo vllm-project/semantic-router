@@ -44,6 +44,9 @@ needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 - `accepted` work may remain in the backlog until it is sufficiently specified
   and has review capacity.
 - `ready-for-dev` marks accepted, unassigned work that contributors may claim.
+- To claim `ready-for-dev` work, comment `/assign` on the issue. The claim
+  counts once your name appears under Assignees; comment `/unassign` to
+  release it. Assignments on issues that are not yet accepted are removed.
 - Assignment moves accepted work to `in-progress`.
 - `help wanted` and `good first issue` are curated subsets of
   `ready-for-dev`; they are not intake or acceptance labels.
@@ -133,7 +136,7 @@ domains' smallest unit or static checks. Common direct targets include:
 | Go router | `make test-semantic-router` |
 | Model runtime | `make model-runtime-test` |
 | Python CLI | `make vllm-sr-test` |
-| Published models (domain, PII, jailbreak and the other classifiers) | `make test-models` |
+| Published models (the Vela 1.0 classifiers and the Vela 2.0 decision models) | `make test-models` |
 | Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
 Integration and E2E are explicit because a path classifier cannot infer all

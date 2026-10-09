@@ -5,7 +5,9 @@ at the legacy commit) on the CPU as the router did (candle for Vela and Qwen3;
 ONNX Runtime on the prepared bundle for Omni text, images and audio), in a Go
 test written into a copy of that commit's tree with its built bindings (the
 setup of ``tools/legacy_parity.py``). The runtime side serves the same
-packages in-process through ``Runtime.call`` with its result cache off, timed
+packages in-process through ``Runtime.call`` with its result cache off (Omni's
+published snapshot on the native engine, or its prepared bundle on
+onnxruntime with ``--omni-engine onnxruntime``), timed
 inside an event loop that runs forever on its own thread, as the server's
 handler is. Both sides build every input's request before timing. Both
 answer one request at a time (one text per embedding call, a query with its
@@ -30,6 +32,12 @@ mask.
 
     python3 tools/embed_legacy.py build --tree TREE --cache HF --flat DIR --out legacy.test
     python3 tools/embed_legacy.py ab --binary legacy.test --cache HF --out ab.json [--legacy-cpus 16] [--gap-ms 50]
+    python3 tools/embed_legacy.py ab --baseline-engine onnxruntime --cache HF --prepared DIR --out ab.json
+
+With ``--baseline-engine`` the baseline side is the runtime itself in a
+second process (the ``serve`` command, which speaks the legacy binary's line
+protocol), with Omni on that engine: the same alternation compares two
+runtime engines.
 
 ``legacy`` and ``build`` need only the standard library (the runner image has
 a bare Python); ``compare`` needs NumPy.
@@ -608,15 +616,31 @@ def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
 def serve_runtime(
     args: argparse.Namespace, specs: list[dict[str, Any]]
 ) -> tuple[Any, dict[str, str]]:
-    """A started in-process runtime serving every job's model, and the served names."""
-    sys.path.insert(0, str(REPO / "src" / "model-runtime"))
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    """A started in-process runtime serving every job's model, and the served names.
 
-    os.environ["VLLM_SR_RUNTIME_PREPARED_DIR"] = args.prepared
+    Omni runs its published snapshot on the native engine, or with
+    ``--omni-engine onnxruntime`` its prepared bundle (``--prepared``). The
+    runtime is this checkout's, or with ``--runtime-src`` another tree's.
+    """
+    sys.path.insert(0, args.runtime_src or str(REPO / "src" / "model-runtime"))
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
     names = {spec["Repo"]: spec["Repo"].split("/")[-1] for spec in specs}
+    graphs = getattr(args, "omni_engine", "native") == "onnxruntime"
+    paths = {
+        spec["Repo"]: spec["Path"]
+        for spec in specs
+        if spec["Mode"] == "omni" and graphs
+    }
     models = tuple(
-        ModelConfig(model=repo, name=name, device=args.device, profile=args.profile)
+        ModelConfig(
+            model=paths.get(repo, repo),
+            name=name,
+            device=args.device,
+            profile=args.profile,
+            engine="onnxruntime" if repo in paths else "auto",
+        )
         for repo, name in names.items()
     )
     config = ServeConfig(
@@ -720,20 +744,86 @@ def legacy_command(binary: str, cpus: int | None) -> list[str]:
     return ["unshare", "-m", "sh", "-c", f'{mounts} && exec "$0" "$@"', *command]
 
 
+def run_serve(args: argparse.Namespace) -> None:
+    """The runtime as ``ab``'s baseline side: the legacy binary's line protocol on stdin and stdout.
+
+    ``call<TAB>job<TAB>id`` answers one input and prints its nanoseconds (-1
+    on an error); ``load<TAB>job<TAB>callers<TAB>seconds`` prints a load
+    window as JSON. ``READY`` follows the load.
+    """
+    specs = job_specs(args)
+    runtime, names = serve_runtime(args, specs)
+    loop = LoopThread()
+    requests = {
+        spec["Job"]: runtime_requests(spec, names[spec["Repo"]]) for spec in specs
+    }
+    positions = {
+        spec["Job"]: {item["id"]: index for index, item in enumerate(spec["Inputs"])}
+        for spec in specs
+    }
+    for spec in specs:
+        for _ in range(3):
+            loop.call(runtime, requests[spec["Job"]][0])
+    print("READY", flush=True)
+    for line in sys.stdin:
+        command, job, *rest = line.rstrip("\n").split("\t")
+        if command == "call":
+            elapsed, status, _ = loop.call(
+                runtime, requests[job][positions[job][rest[0]]]
+            )
+            print(elapsed if status == 200 else -1, flush=True)
+        elif command == "load":
+            args.concurrency, args.seconds = int(rest[0]), float(rest[1])
+            window = runtime_load(runtime, loop, job, requests[job], args)
+            print(json.dumps(window), flush=True)
+    loop.close()
+    runtime.stop()
+
+
+def baseline_command(args: argparse.Namespace) -> list[str]:
+    """The ``serve`` child that runs the jobs on ``--baseline-engine`` (the A side)."""
+    command = [sys.executable, str(Path(__file__).resolve()), "serve"]
+    command += ["--omni-engine", args.baseline_engine, "--cache", args.cache]
+    command += ["--prepared", args.prepared, "--jobs", args.jobs, "--out", os.devnull]
+    command += ["--device", args.device, "--profile", args.profile]
+    if args.threads:
+        command += ["--threads", str(args.threads)]
+    if args.baseline_runtime:
+        command += ["--runtime-src", args.baseline_runtime]
+    return command
+
+
 def run_ab(args: argparse.Namespace) -> None:
-    """Alternate legacy and runtime calls per input on the same cores, round after round."""
-    jobs = Path(args.binary).with_suffix(".jobs.json")
-    specs = json.loads(jobs.read_text(encoding="utf-8"))
-    if args.jobs:
-        specs = [spec for spec in specs if spec["Job"] in args.jobs.split(",")]
-    legacy = subprocess.Popen(
-        legacy_command(args.binary, args.legacy_cpus),
-        env=legacy_env(Path(args.tree), jobs),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-    )
+    """Alternate baseline and runtime calls per input on the same cores, round after round.
+
+    The baseline (reported as ``legacy``) is the legacy facade's binary, or
+    with ``--baseline-engine`` the runtime itself in another process, with
+    Omni on that engine.
+    """
+    if args.baseline_engine:
+        specs = job_specs(args)
+        overrides = dict(entry.split("=", 1) for entry in args.baseline_env)
+        legacy = subprocess.Popen(
+            baseline_command(args),
+            env={**os.environ, **overrides},
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    else:
+        jobs = Path(args.binary).with_suffix(".jobs.json")
+        specs = json.loads(jobs.read_text(encoding="utf-8"))
+        if args.jobs:
+            specs = [spec for spec in specs if spec["Job"] in args.jobs.split(",")]
+        legacy = subprocess.Popen(
+            legacy_command(args.binary, args.legacy_cpus),
+            env=legacy_env(Path(args.tree), jobs),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
     assert legacy.stdin is not None and legacy.stdout is not None
     while legacy.stdout.readline().strip() != "READY":
         if legacy.poll() is not None:
@@ -1009,9 +1099,31 @@ def main(argv: Iterable[str] | None = None) -> int:
     build.add_argument("--tree", required=True)
     build.add_argument("--flat", default=None)
     runtime = commands.add_parser("runtime", help="run the jobs on the runtime")
+    serve = commands.add_parser(
+        "serve", help="serve the jobs on the runtime as ab's baseline side"
+    )
     ab = commands.add_parser("ab", help="alternate legacy and runtime calls")
-    ab.add_argument("--binary", required=True)
-    ab.add_argument("--tree", required=True)
+    ab.add_argument("--binary", default=None)
+    ab.add_argument("--tree", default=None)
+    ab.add_argument(
+        "--baseline-engine",
+        choices=("native", "onnxruntime"),
+        default=None,
+        help="instead of the legacy binary, the runtime with Omni on this engine",
+    )
+    ab.add_argument(
+        "--baseline-env",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="an environment variable for the baseline runtime process only",
+    )
+    ab.add_argument(
+        "--baseline-runtime",
+        default=None,
+        metavar="DIR",
+        help="the baseline runtime's source (another tree's src/model-runtime)",
+    )
     ab.add_argument("--rounds", type=int, default=4)
     ab.add_argument("--legacy-cpus", type=int, default=None)
     ab.add_argument(
@@ -1020,18 +1132,28 @@ def main(argv: Iterable[str] | None = None) -> int:
         default=0.0,
         help="pause before every call and load window (the other side's pools settle)",
     )
-    for sub in (runtime, ab):
+    for sub in (runtime, serve, ab):
         sub.add_argument("--device", default="cpu")
         sub.add_argument("--profile", default="exact")
         sub.add_argument("--threads", type=int, default=None)
-    for sub in (legacy, build, runtime, ab):
+        sub.add_argument(
+            "--omni-engine",
+            choices=("native", "onnxruntime"),
+            default="native",
+            help="Omni's published snapshot on native, or its prepared bundle on onnxruntime",
+        )
+        sub.add_argument(
+            "--runtime-src",
+            default=None,
+            metavar="DIR",
+            help="import vllm_srun from this src/model-runtime instead of this checkout's",
+        )
+    for sub in (legacy, build, runtime, serve, ab):
         sub.add_argument("--cache", required=True)
         sub.add_argument(
             "--prepared",
-            default=os.environ.get(
-                "VLLM_SR_RUNTIME_PREPARED_DIR", "/opt/router-model-artifacts"
-            ),
-            help="the directory of the prepared Omni bundles",
+            required=True,
+            help="the directory of the prepared Omni bundles (their goldens are the Omni inputs)",
         )
         sub.add_argument("--out", required=True)
         sub.add_argument("--jobs", default="")
@@ -1045,10 +1167,17 @@ def main(argv: Iterable[str] | None = None) -> int:
     compare.add_argument("--out", required=True)
     compare.add_argument("--device-class", choices=("cpu", "rocm"), default="cpu")
     args = parser.parse_args(argv)
+    if (
+        args.command == "ab"
+        and not args.baseline_engine
+        and not (args.binary and args.tree)
+    ):
+        parser.error("ab needs --binary and --tree, or --baseline-engine")
     commands_by_name = {
         "legacy": run_legacy,
         "build": build_legacy,
         "runtime": run_runtime,
+        "serve": run_serve,
         "ab": run_ab,
         "compare": run_compare,
     }

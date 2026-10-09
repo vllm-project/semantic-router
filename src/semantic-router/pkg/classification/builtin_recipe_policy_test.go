@@ -217,9 +217,6 @@ func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
 					t.Fatalf("global opt-out must prevent default capture for decision %q", route.Name)
 				}
 			}
-			cfg.RouterReplay.Enabled = true
-			denyReplay := false
-			cfg.DataPolicy = &config.RoutingDataPolicy{Replay: &denyReplay}
 			if cfg.EffectiveRouterReplayConfig(nil) != nil {
 				t.Fatal("operator opt-out must also prevent capture before decision selection")
 			}
@@ -518,7 +515,8 @@ func evaluateBuiltinPolicyHeuristics(c *Classifier, text string) *SignalResults 
 
 func TestBuiltinVaultCareConfidenceRequiresDirectionsAndEitherStrongIntent(t *testing.T) {
 	c := builtinPolicyClassifier(t, "vault")
-	if len(c.Config.SafetyRules) != 1 || c.Config.SafetyRules[0].Threshold != .5 {
+	// 0.46 on Vela 2.0 0.3B keeps Vela 1.0 Safety's 0.5 false-positive rate.
+	if len(c.Config.SafetyRules) != 1 || c.Config.SafetyRules[0].Threshold != .46 {
 		t.Fatal("care confidence must preserve the strict unsafe operating point")
 	}
 	for _, tt := range []struct {

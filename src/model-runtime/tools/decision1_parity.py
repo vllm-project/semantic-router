@@ -11,7 +11,7 @@
 runtime the packages ship; it is a separate tool process, so the runtime itself
 never imports package code. On a GPU both sides run the built-in table's FLA
 kernel choices, so they run the same kernels. ``native``
-serves the package through ``vllm_sr_runtime`` (verification, readiness, the
+serves the package through ``vllm_srun`` (verification, readiness, the
 scheduler) on one profile; ``--also`` serves more built-in models in the same
 process on the same device, loaded first, as one GPU process of the default
 layout does, and the panel still asks ``--model``; ``--concurrent N`` sends N
@@ -38,9 +38,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.autotune import KernelChoices  # noqa: E402
-from vllm_sr_runtime.registry import builtin  # noqa: E402
-from vllm_sr_runtime.registry.artifacts import (  # noqa: E402
+from vllm_srun.accel.autotune import KernelChoices  # noqa: E402
+from vllm_srun.registry import builtin  # noqa: E402
+from vllm_srun.registry.artifacts import (  # noqa: E402
     canonical_json as canonical,
 )
 
@@ -114,8 +114,8 @@ def run_reference(args: argparse.Namespace) -> int:
 
 
 def run_native(args: argparse.Namespace) -> int:
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     others = tuple(
         ModelConfig(model=repo, device=args.device, profile=args.profile)

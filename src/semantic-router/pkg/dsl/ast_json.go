@@ -15,7 +15,6 @@ import (
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
 	CandidateRequirements *config.CandidateRequirements  `json:"candidateRequirements,omitempty"`
-	DataPolicy            *config.RoutingDataPolicy      `json:"dataPolicy,omitempty"`
 	ModelBindings         map[string]config.ModelBinding `json:"modelBindings,omitempty"`
 	Strategy              string                         `json:"strategy,omitempty"`
 	Entrypoints           []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
@@ -249,7 +248,6 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	result := &ProgramJSON{
 		ModelBindings:         cloneModelBindings(prog.ModelBindings),
 		CandidateRequirements: prog.CandidateRequirements.Clone(),
-		DataPolicy:            prog.DataPolicy.Clone(),
 		Strategy:              prog.Strategy,
 		Signals:               make([]*SignalDeclJSON, 0, len(prog.Signals)),
 		Routes:                make([]*RouteDeclJSON, 0, len(prog.Routes)),

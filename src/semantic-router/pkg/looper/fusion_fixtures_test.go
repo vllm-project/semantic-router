@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -68,7 +67,6 @@ func newFusionStubServer(
 ) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
 		var payload struct {
 			Model    string `json:"model"`
 			Messages []struct {

@@ -8,22 +8,22 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.engines.native.engine import NativeEngine
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.vela2.family import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.errors import PackageError
+from vllm_srun.families.vela2.family import (
     GOLDEN_QUESTIONS,
     GOLDEN_STATE,
     Vela2Family,
 )
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.plugins.base import (
     DEADLINE,
     EngineOptions,
     PackageRef,
     SurfacePlan,
     TreeBatch,
 )
-from vllm_sr_runtime.testing.vela2 import write_decoder_package, write_encoder_package
+from vllm_srun.testing.vela2 import write_decoder_package, write_encoder_package
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 # The 0.8B's backbone has as many gated-delta value heads as key heads; the 4B and 9B have twice as many.
@@ -201,8 +201,8 @@ def test_decoder_shared_context_path_runs_one_parts_pass(
 
 @pytest.mark.parametrize("name", ["encoder", "decoder"])
 def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
-    from vllm_sr_runtime.plugins.base import Job
-    from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
+    from vllm_srun.plugins.base import Job
+    from vllm_srun.profiles.shared_context import SharedContextProfile
 
     model = models[name]
     profile = SharedContextProfile()
@@ -219,11 +219,11 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
 
 
 def test_coalescing_profiles_fill_a_cpu_forward_only_up_to_the_budget(models) -> None:
-    from vllm_sr_runtime.families.vela2.family import CPU_PACKED_TOKENS
-    from vllm_sr_runtime.plugins.base import Job
-    from vllm_sr_runtime.profiles.batching import BatchingProfile
-    from vllm_sr_runtime.profiles.exact import ExactProfile
-    from vllm_sr_runtime.scheduler.planner import padded
+    from vllm_srun.families.vela2.family import CPU_PACKED_TOKENS
+    from vllm_srun.plugins.base import Job
+    from vllm_srun.profiles.batching import BatchingProfile
+    from vllm_srun.profiles.exact import ExactProfile
+    from vllm_srun.scheduler.planner import padded
 
     model = models["encoder"]
     assert model.forward_token_budget() == CPU_PACKED_TOKENS
@@ -278,8 +278,8 @@ def test_packed_encoder_batches_match_padded_ones(models) -> None:
 
 def consent(monkeypatch, verified, reduced: dict[str, str]) -> None:
     """Make ``verified`` a built-in whose entry consents to ``reduced`` copies."""
-    from vllm_sr_runtime.families.vela2 import family as module
-    from vllm_sr_runtime.registry.tables.common import BuiltinModel
+    from vllm_srun.families.vela2 import family as module
+    from vllm_srun.registry.tables.common import BuiltinModel
 
     entry = BuiltinModel(
         repo_id="vllm-sr/fixture",
@@ -313,7 +313,7 @@ def test_encoder_consent_to_a_reduced_copy_comes_from_its_builtin_entry(
 
 
 def test_only_the_measured_copy_is_consented() -> None:
-    from vllm_sr_runtime.registry import builtin
+    from vllm_srun.registry import builtin
 
     consent = {
         model.repo_id.rsplit("/", 1)[1]: dict(model.reduced)
@@ -326,8 +326,8 @@ def test_only_the_measured_copy_is_consented() -> None:
 def test_max_speed_runs_encoder_approximate_batches_on_the_copy(
     packages, monkeypatch
 ) -> None:
-    from vllm_sr_runtime.engines.native.reduced import unavailable
-    from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile
+    from vllm_srun.engines.native.reduced import unavailable
+    from vllm_srun.profiles.max_speed import MaxSpeedProfile
 
     reason = unavailable("float32-packed", torch.device("cpu"))
     if reason:
@@ -395,10 +395,13 @@ def test_failed_rows_deadlines_and_invalid_questions(models) -> None:
             "bad": {"type": "rank"},
         },
     )
-    assert response["answers"] == {
-        "big": {"type": "choice", "error": "max_length_exceeded"},
-        "bad": {"type": "rank", "error": "invalid_question"},
+    assert {key: answer["error"] for key, answer in response["answers"].items()} == {
+        "big": "max_length_exceeded",
+        "bad": "invalid_question",
     }
+    assert response["answers"]["big"]["type"] == "choice"
+    assert response["answers"]["bad"]["type"] == "rank"
+    assert "type must be one of" in response["answers"]["bad"]["message"]
     plan = model.plan("text", {"q": GOLDEN_QUESTIONS["jailbreak"]})
     expired = model.finish_surface(
         SurfacePlan("decisions", plan.items, plan.input_tokens, plan), DEADLINE
@@ -409,7 +412,7 @@ def test_failed_rows_deadlines_and_invalid_questions(models) -> None:
 
 
 def test_noul_calibration_is_a_model_option(packages) -> None:
-    from vllm_sr_runtime.plugins.base import RegistryOptions
+    from vllm_srun.plugins.base import RegistryOptions
 
     family = Vela2Family(RegistryOptions(model_options={"noul_calibration": True}))
     verified = family.verify(PackageRef(packages["decoder"]))

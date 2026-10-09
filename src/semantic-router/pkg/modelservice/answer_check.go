@@ -12,11 +12,12 @@ const probabilitySumTolerance = 0.02
 // checkAnswers marks every answer that does not fit the question it answers as
 // invalid_model_output, so neither the decision signal nor the selector acts on
 // it. The built-in runtime cannot produce such an answer, but an engine
-// attached through a deployment's endpoint can.
-func checkAnswers(request Request, response Response) Response {
-	for _, question := range request.Questions {
+// attached through a deployment's endpoint can. A preset question takes its
+// type from the model and is checked for finite numbers only.
+func checkAnswers(questions []Question, response Response) Response {
+	for _, question := range questions {
 		answer, ok := response.Answers[question.ID]
-		if !ok || answer.Error != "" || answerFits(question, answer) {
+		if !ok || answer.Error != "" || question.Preset != "" || answerFits(question, answer) {
 			continue
 		}
 		response.Answers[question.ID] = Answer{Type: answer.Type, Error: "invalid_model_output"}

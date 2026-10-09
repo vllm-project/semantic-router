@@ -647,8 +647,8 @@ def serve_runtime(
 ) -> Any:
     """A started in-process runtime serving every job's model, result cache off."""
     sys.path.insert(0, str(REPO / "src" / "model-runtime"))
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     models = tuple(
         ModelConfig(

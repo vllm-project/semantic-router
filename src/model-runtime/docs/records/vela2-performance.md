@@ -4,8 +4,9 @@ On the exact profile (answers identical to the packages' engine,
 `vela2-parity.md`) the `vela2` family is faster than the Vela 2.0 engine on
 every measured row on ROCm (15–30% at the median with one caller, 1.2–1.6×
 the requests per second with four). On CPU, where both run the same
-operations on MKL, the 0.3B is level with it or better; the 0.8B is 0.3–2.5%
-slower at 32 and 512 tokens (open), and the 4B's CPU timings are informative
+operations on MKL, the 0.3B is level with it or better, the 0.8B is level or
+better at 32 and 512 tokens (re-timed: the first run's 0.3–2.5% came from
+where the process's memory landed), and the 4B's CPU timings are informative
 only. The opt-in approximate profiles serve the
 0.8B 1.6–2.4× and the 4B and 9B 1.8–2.8× faster than the engine on ROCm, the
 4B 1.5× and the 0.8B 1.2× on CPU, and the 0.3B up to 1.9× the engine's
@@ -426,18 +427,18 @@ informative: no rounds or intervals, no verdict):
   over 3 rounds.
 - **Reading:** `shared_context` and `batching` are 15–19% faster than the
   engine at the median at every length, with every interval on the better
-  side. `exact` is level at 128 tokens and slightly slower at 32
+  side. In this run `exact` is level at 128 tokens and slightly slower at 32
   and 512 (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with
-  those intervals on the worse side: an open cell, not yet explained (the
-  4B's `exact` reads 1–3% faster than its engine on CPU, an informative
-  timing without rounds). The 2,048-token row
+  those intervals on the worse side. The re-time below finds `exact` level
+  or better at both lengths and shows where that difference came from. The
+  2,048-token row
   has 3 rounds, below the standard's 5, and gives no verdict; with 6
   requests per round no row reports a p95. The 0.3B is the size to serve on
   a CPU.
 - **Later commits:** `a1e1b4ccb` freezes the heap after each load pass,
   which leaves fewer objects for a request's garbage collections to walk: it
   can only shorten pauses. The huge-page default (`129be34ea`) changes how
-  CPU weight copies are laid out; these rows were not re-timed under it.
+  CPU weight copies are laid out; the re-time below runs under it.
 
 0.8B on CPU, p50 ms, engine and Δ against it (mean [95% interval]):
 
@@ -456,6 +457,70 @@ informative: no rounds or intervals, no verdict):
 | 128 | 0.148 | +0.001 [−0.003, +0.004] | +0.029 [+0.023, +0.035] | +0.028 [+0.024, +0.033] |
 | 512 | 0.094 | −0.001 [−0.001, +0.000] | +0.023 [+0.020, +0.025] | +0.022 [+0.019, +0.024] |
 | 2,048 | 0.057 | −0.001 [−0.003, +0.000] | +0.014 [+0.002, +0.027] | +0.014 [+0.000, +0.028] |
+
+### Vela-2.0-0.8B `exact` on CPU, re-timed
+
+- **Date:** 2026-10-06, at `0d8d76cec` (with the huge-page default and the
+  heap freeze; no other change to the CPU request path since the first run).
+- **Setup:** the first run's tool and node (`tools/vela2_bench.py --sides
+  reference,runtime`, both sides in one process, every forward on the CPU
+  device thread, 16 threads, a `systemd-run` scope), 32 and 512 tokens, 2
+  warm-up requests, then 6 per round over 10 interleaved rounds. Two
+  placements:
+  - the first run's cores (128–143, NUMA node 1), memory unbound: about a
+    third of the process's memory landed on node 0;
+  - cores 32–47 with `numactl --membind=0`: every page local.
+
+  Each placement at libgomp's default spin count (300,000, which
+  `vllm-srun serve` keeps for a process without ONNX Runtime models) and at
+  10,000. Node load at most 16 in the local rounds, and 33 in the unbound
+  ones, where another workstream's job ran on node 0.
+
+p50 ms of the engine, and runtime − engine (mean [95% interval]):
+
+| Memory | Spin | Tokens | engine | p50 Δ | p95 Δ | req/s Δ |
+| --- | --- | --- | --- | --- | --- | --- |
+| local | 300,000 | 32 | 3,309 | −28.3 [−34.7, −21.9] | −44.7 [−54.5, −34.9] | +0.003 [+0.003, +0.004] |
+| local | 300,000 | 512 | 6,701 | −16.5 [−28.7, −4.4] | −4.8 [−17.3, +7.8] | +0.001 [+0.000, +0.001] |
+| local | 10,000 | 32 | 3,348 | −15.5 [−29.3, −1.6] | −19.4 [−27.7, −11.1] | +0.001 [+0.001, +0.002] |
+| local | 10,000 | 512 | 6,791 | −26.6 [−37.6, −15.6] | −71.7 [−91.2, −52.1] | +0.001 [+0.000, +0.001] |
+| unbound | 300,000 | 32 | 5,297 | −2.6 [−18.5, +13.2] | −56.3 [−96.4, −16.3] | +0.000 [−0.000, +0.001] |
+| unbound | 300,000 | 512 | 10,907 | −169.7 [−185.4, −154.1] | −127.4 [−155.6, −99.1] | +0.001 [+0.001, +0.001] |
+| unbound | 10,000 | 32 | 5,711 | −115.9 [−138.1, −93.7] | −212.9 [−260.1, −165.7] | +0.005 [+0.004, +0.005] |
+| unbound | 10,000 | 512 | 11,037 | −193.5 [−221.3, −165.7] | −211.0 [−236.1, −185.9] | +0.001 [+0.001, +0.002] |
+
+- **Every cell is level or better.** On local memory `exact` is 0.2–0.9%
+  faster than the engine at the median, at both lengths and both spin
+  counts. The two level cells (unbound 32-token p50 and local 512-token p95,
+  both at 300,000) have the better point estimate.
+- **The same work.** Profiled on the device thread (torch.profiler, two
+  requests per side and length, local memory), both sides run the same
+  operations per request:
+  - 762 matrix products (`aten::mm`, 4.0 s of the 6.3 s of operator time at
+    32 tokens), 144 triangular solves and 1,516 batched products;
+  - the engine makes 24 more copies;
+  - the runtime's operator time is 2.0% below the engine's at 32 tokens and
+    0.1% below it at 512, with the matrix products within 0.7%.
+
+  Around the forward the runtime adds 1.6 ms at 32 tokens and 3.3 ms at
+  512: planning (tokenization and rendering) 0.7 and 1.9 ms, the hand-offs to
+  the device thread 0.4 ms, and the answers 0.6 and 0.9 ms.
+- **Where the first run's difference came from: memory placement.** Node B's
+  NUMA node 1 has little free memory beside its page cache, so a process on
+  its cores takes part of its memory from node 0, and each process places
+  the two sides' weights differently.
+  - In the unbound profiles all of the runtime's weights (it loads first)
+    were on node 1, and 2.0 of the engine's 3.2 GiB on node 0.
+  - In that process the engine was 0.9% slower at 32 tokens and 1.4% slower
+    at 512.
+  - The first run also predates the huge-page default, without which the
+    runtime's weight copies landed on 4 KiB pages differently in every
+    process (`decision1-performance.md`).
+
+  The forward is the engine's, operation for operation, so the cell stays
+  closed: what separates the sides by a few percent is where a process's
+  memory lands. `vela2-reduced.json` (`latency.cpu_08b_retime`) has the
+  intervals and the placements.
 
 ## Against the Vela 1.0 path
 

@@ -18,12 +18,12 @@ from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
-from vllm_sr_runtime.api.app import create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.errors import PlacementError, VerificationError
-from vllm_sr_runtime.placement import auto_order
-from vllm_sr_runtime.plugins import registry
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.api.app import create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.errors import PlacementError, VerificationError
+from vllm_srun.placement import auto_order
+from vllm_srun.plugins import registry
+from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
 from .test_api_contract import check
@@ -122,15 +122,21 @@ def test_models_describe_both_models_and_the_plugins(client):
     assert keywords["embedding"]["dimensions"] == [3]
     assert keywords["rerank"]["default"] == {"layer": 1, "dimension": 3}
     plugins = {(p["group"], p["name"]): p for p in keywords["plugins"]}
-    assert plugins[("vllm_sr_runtime.families", "example_keywords")][
-        "capabilities"
-    ] == {
+    assert plugins[("vllm_srun.families", "example_keywords")]["capabilities"] == {
         "surfaces": ["classify", "embeddings", "rerank"],
         "formats": ["vllm-sr-example/1"],
     }
-    assert plugins[("vllm_sr_runtime.engines", "example_counts")]["capabilities"][
-        "outputs"
-    ] == ["hidden"]
+    engines = {
+        name: entry["capabilities"]
+        for (group, name), entry in plugins.items()
+        if group == "vllm_srun.engines"
+    }
+    assert engines["example_counts"]["outputs"] == ["hidden"]
+    assert {name: card["auto_priority"] for name, card in engines.items()} == {
+        "example_counts": None,
+        "native": 0,
+        "onnxruntime": None,
+    }
     health = client.get("/health").json()
     check("Health", health)
     assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}
@@ -158,11 +164,12 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         )
         assert card["profile"] == "example_one_by_one"
         plugins = {(p["group"], p["name"]): p for p in card["plugins"]}
-        assert plugins[("vllm_sr_runtime.accelerators", "example_host")][
-            "capabilities"
-        ] == {"validated": False, "auto_priority": None}
+        assert plugins[("vllm_srun.accelerators", "example_host")]["capabilities"] == {
+            "validated": False,
+            "auto_priority": None,
+        }
         assert (
-            plugins[("vllm_sr_runtime.profiles", "example_one_by_one")]["capabilities"][
+            plugins[("vllm_srun.profiles", "example_one_by_one")]["capabilities"][
                 "numerics"
             ]
             == "exact"
@@ -423,7 +430,7 @@ def test_repeated_items_are_answered_from_the_result_cache(client, runtime):
     assert model.forwards == forwards
     assert second["results"] == first["results"]
     assert (
-        'vllm_sr_runtime_result_cache_total{model="keywords",outcome="hit"}'
+        'vllm_srun_result_cache_total{model="keywords",outcome="hit"}'
         in client.get("/metrics").text
     )
 
@@ -543,7 +550,7 @@ def test_a_model_that_fails_to_load_leaves_the_others_serving(
 def test_a_failed_load_is_retried_unless_the_answers_are_wrong(
     example_plugin, keyword_package, monkeypatch, failure, loads, state
 ):
-    import vllm_sr_runtime.runtime as runtime_module
+    import vllm_srun.runtime as runtime_module
 
     load = runtime_module.ServedModel.load
     seen = []

@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -113,10 +113,7 @@ config:
         embedding_model: mmbert
     integrations:
       looper:
-        endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/chat/completions
         flow:
-          model_names:
-            - openai/gpt-oss-20b
           state:
             store_backend: redis
             ttl_seconds: 1800
@@ -145,10 +142,10 @@ config:
 resources:
   limits:
     cpu: '2'
-    memory: 2Gi
+    memory: 10Gi
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:

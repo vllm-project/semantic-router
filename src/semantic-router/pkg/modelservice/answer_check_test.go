@@ -125,8 +125,11 @@ func TestDecideRejectsAnswersThatDoNotFitTheirQuestion(t *testing.T) {
 		if !testCase.valid {
 			want = "invalid_model_output"
 		}
-		if id == "runtime error" {
+		switch id {
+		case "runtime error":
 			want = "max_length_exceeded"
+		case "no choice", "noul without a value", "noul of null", "score without a value":
+			want = "missing_answer_value"
 		}
 		if got.Error != want {
 			t.Errorf("%s: error = %q, want %q (answer %+v)", id, got.Error, want, got)

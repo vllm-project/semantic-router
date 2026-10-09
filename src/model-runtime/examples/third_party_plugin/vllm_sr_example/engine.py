@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.plugins.base import (
     Accelerator,
     DeviceInfo,
     EncoderBatch,
@@ -47,6 +47,7 @@ class CountsEngine(Engine):
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         return {
+            **super().descriptor(),
             "architectures": ["example_counts"],
             "outputs": ["hidden"],
             "devices": ["cpu"],

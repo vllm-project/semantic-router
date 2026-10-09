@@ -10,14 +10,14 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
-  = 'Mixture-of-Models is a serving-system architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
+  = 'An open, programmable decision layer for models and compute.'
 const siteSocialTitle
-  = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
+  = 'Intelligence Beyond Any One Model | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Building a Mixture-of-Models Serving Architecture for Heterogeneous LLM Inference',
+  tagline: 'An open, programmable decision layer for models and compute.',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -252,7 +252,7 @@ const config: Config = {
       {
         name: 'keywords',
         content:
-          'Mixture-of-Models, heterogeneous LLM inference, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, semantic router, vLLM',
+          'programmable decision layer, agent harness, models and compute, Mixture-of-Models, open-source LLM router, multi-model routing, model selection, bounded model collaboration, semantic router, vLLM',
       },
       { name: 'author', content: 'vLLM Semantic Router Team' },
       { name: 'application-name', content: 'vLLM Semantic Router' },
