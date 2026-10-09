@@ -14,8 +14,8 @@ type chatStreamDecoder struct {
 	contentIndexes       map[chatContentKey]int
 	nextContentIndexes   map[int]int
 	lastWasReasoning     bool                 // choice 0's last text was reasoning; decodeChoice rejects other choices
-	heldChoice           *chatChunkChoiceWire // a first delta with an answer and reasoning, waiting for the next delta to show their order
-	answerFirst          bool                 // the delta after heldChoice showed its answer came first
+	heldChoice           *chatChunkChoiceWire // a first delta with an answer and reasoning, held until their order is chosen
+	answerFirst          bool                 // the delta after heldChoice had reasoning and no answer text
 	toolKinds            map[int]llmprotocol.ToolKind
 	providerReported     bool
 	nativeReasonReported bool
@@ -201,10 +201,11 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 }
 
 // A first delta with both the answer and reasoning has lost their order.
-// vLLM's think-first parsers put the reasoning first, but Mistral's parser
-// starts in content and can put the answer first. The next delta with output
-// tells them apart, so the delta's choice waits for it; the rest of the chunk,
-// such as the response start and usage, decodes now.
+// vLLM's basic think-first parsers put the reasoning first, but Mistral's
+// parser starts in content and can put the answer first. Unless the delta
+// finishes the choice, its choice is held until the next chunk that is not
+// quiet, which sets the order, or the end of the stream; the rest of the
+// chunk, such as the response start and usage, decodes now.
 func (decoder *chatStreamDecoder) decodeOrHoldChunk(chunk chatChunkWire) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var events []llmprotocol.Event
 	if decoder.heldChoice != nil && (!chatChunkIsQuiet(chunk) || decoder.heldChoiceNeedsBudget()) {
@@ -246,10 +247,10 @@ func (decoder *chatStreamDecoder) heldChoiceNeedsBudget() bool {
 	return limit > 0 && decoder.events+need+1 > limit
 }
 
-// releaseHeld decodes the held choice. Reasoning without answer text in the
-// next delta means the think block is still open, so the answer came before
-// it. Any other next delta, or the end of the stream (next is nil), puts the
-// reasoning first.
+// releaseHeld decodes the held choice. If the next delta is a single choice
+// with reasoning and no answer text, as when Mistral's answer-first opening
+// goes on, the held answer goes first. Any other next delta, or the end of the
+// stream (next is nil), puts the reasoning first.
 func (decoder *chatStreamDecoder) releaseHeld(next *chatChunkWire) ([]llmprotocol.Event, error) {
 	held := decoder.heldChoice
 	if held == nil {
@@ -507,11 +508,11 @@ func (decoder *chatStreamDecoder) chatChoiceEventFactories(choice chatChunkChoic
 	annotations := func() ([]llmprotocol.Event, error) { return decoder.decodeAnnotations(choice) }
 	refusal := func() ([]llmprotocol.Event, error) { return decoder.decodeRefusalDelta(choice) }
 	// vLLM can end the reasoning and start the answer in one delta, and a short
-	// think block can fit whole in the choice's first delta with text. Its
-	// reasoning parser puts the reasoning before the answer in both. So the
-	// reasoning goes first while it is in progress or the delta starts the
-	// text, unless the delta after a held opening showed the answer came
-	// first. Once the answer is under way, the content does.
+	// think block can fit whole in the choice's first delta with text. So the
+	// reasoning goes first while it is in progress (the choice's last text was
+	// reasoning) or the delta starts the text, unless it is a held opening whose
+	// next delta had reasoning and no answer text. Otherwise the content goes
+	// first.
 	_, textStarted := decoder.contentIndexes[chatContentKey{item: choice.Index, kind: llmprotocol.ContentText}]
 	if !decoder.answerFirst && (decoder.lastWasReasoning || !textStarted && chatDeltaHasText(choice)) {
 		return []chatEventFactory{reasoning, content, annotations, refusal}
