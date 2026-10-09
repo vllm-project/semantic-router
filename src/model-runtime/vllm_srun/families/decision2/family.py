@@ -177,7 +177,9 @@ class Decision2Family(ModelFamily):
         return ModelSpec(
             name=package.model_name,
             backbone=backbone,
-            dtype=DtypePolicy(),
+            # cuda-fused-approximate.md: no decision changed with CUDA's
+            # approximate fused kernels.
+            dtype=DtypePolicy(approximate_kernels=True),
             max_input_tokens=package.max_input_tokens,
             requires=backbone.requires,
         )
