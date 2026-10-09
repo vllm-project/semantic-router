@@ -2925,94 +2925,52 @@
     "message": "超越单一模型。"
   },
   "homepage.runtimeModes.label": {
-    "message": "融入你的技术栈"
+    "message": "应用场景"
   },
   "homepage.runtimeModes.title": {
-    "message": "路由推理，让智能融入应用。"
+    "message": "统一前端，按需组合。"
   },
   "homepage.runtimeModes.description": {
-    "message": "用 Router 编排模型，或在应用中直接调用它的模型运行时。"
+    "message": "通过决策引擎路由聊天请求，或直接调用模型智能。两条路径共享前端和可扩展的服务引擎。"
   },
   "homepage.runtimeModes.router.label": {
     "message": "Router 模式"
   },
-  "homepage.runtimeModes.router.title": {
-    "message": "一个端点，连接你的模型集群。"
-  },
   "homepage.runtimeModes.router.description": {
-    "message": "通过一个兼容 OpenAI 的 API 选择或组合模型后端。"
-  },
-  "homepage.runtimeModes.router.flow.client": {
-    "message": "应用与 Agent"
+    "message": "将 Chat 和 Responses 请求路由到模型后端，同时保留原生决策能力。"
   },
   "homepage.runtimeModes.router.extproc": {
-    "message": "原生 HTTP 网关，通过 {flag} 启用 Envoy。"
+    "message": "原生 HTTP 网关。通过 {flag} 接入 Envoy。"
   },
   "homepage.runtimeModes.router.cta": {
     "message": "运行 Router"
   },
   "homepage.runtimeModes.router.gatewayCta": {
-    "message": "对比网关模式"
+    "message": "比较网关模式"
   },
   "homepage.runtimeModes.engine.label": {
     "message": "Engine 模式"
   },
-  "homepage.runtimeModes.engine.title": {
-    "message": "把模型能力融入自己的代码。"
-  },
   "homepage.runtimeModes.engine.description": {
-    "message": "为自己的应用运行决策模型、分类器、嵌入模型和重排序模型。"
-  },
-  "homepage.runtimeModes.engine.flow.client": {
-    "message": "你的应用"
-  },
-  "homepage.runtimeModes.engine.tasks": {
-    "message": "API 取决于所加载的模型。"
+    "message": "启动相同的前端和模型工作进程，并关闭路由。后续逻辑由你的应用掌控。"
   },
   "homepage.runtimeModes.engine.cta": {
     "message": "运行 Engine"
   },
   "homepage.runtimeModes.engine.modelsCta": {
-    "message": "探索模型运行时"
+    "message": "了解模型运行时"
   },
   "homepage.runtimeModes.router.kicker": {
-    "message": "编排推理"
-  },
-  "homepage.runtimeModes.router.backend.cloud": {
-    "message": "云端"
-  },
-  "homepage.runtimeModes.router.backend.private": {
-    "message": "私有"
-  },
-  "homepage.runtimeModes.router.backend.local": {
-    "message": "本地"
-  },
-  "homepage.runtimeModes.router.visualCaption": {
-    "message": "选择、级联或组合多个模型"
+    "message": "加入路由策略"
   },
   "homepage.runtimeModes.engine.kicker": {
-    "message": "运行任务模型"
-  },
-  "homepage.runtimeModes.engine.typedResults": {
-    "message": "结构化结果"
-  },
-  "homepage.runtimeModes.engine.vectors": {
-    "message": "向量与排序"
-  },
-  "homepage.runtimeModes.engine.visualCaption": {
-    "message": "模型输出，由你的应用掌控逻辑"
+    "message": "直接使用模型智能"
   },
   "homepage.finalCta.playgroundDetail": {
     "message": "看看请求如何找到合适的模型。"
   },
   "homepage.finalCta.docsDetail": {
     "message": "从安装到发出第一个请求。"
-  },
-  "homepage.runtimeModes.router.coreLabel": {
-    "message": "Router"
-  },
-  "homepage.runtimeModes.engine.coreLabel": {
-    "message": "Engine"
   },
   "homepage.sovereigntyAI.label": {
     "message": "Sovereignty AI"
@@ -3181,5 +3139,122 @@
   },
   "homepage.sovereigntyAI.gate.access": {
     "message": "访问控制"
+  },
+  "homepage.runtimeModes.engine.endpoint": {
+    "message": "通过 {endpoint} 调用明确指定的已发布模型。"
+  },
+  "homepage.runtimeModes.startupNote": {
+    "message": "在 CLI 启动时选择组件组合。"
+  },
+  "homepage.runtimeModes.diagram.explore": {
+    "message": "探索请求路径"
+  },
+  "homepage.runtimeModes.diagram.chat": {
+    "message": "聊天路由"
+  },
+  "homepage.runtimeModes.diagram.native": {
+    "message": "原生决策"
+  },
+  "homepage.runtimeModes.diagram.direct": {
+    "message": "原生直达路径 · 绕过路由"
+  },
+  "homepage.runtimeModes.diagram.shared": {
+    "message": "共享入口"
+  },
+  "homepage.runtimeModes.diagram.frontend": {
+    "message": "前端"
+  },
+  "homepage.runtimeModes.diagram.frontendDescription": {
+    "message": "监听器、身份验证与 API 契约。"
+  },
+  "homepage.runtimeModes.diagram.chatApi": {
+    "message": "Chat 与 Responses"
+  },
+  "homepage.runtimeModes.diagram.nativeApi": {
+    "message": "System One · 原生决策"
+  },
+  "homepage.runtimeModes.diagram.alias": {
+    "message": "别名：/v1/decisions"
+  },
+  "homepage.runtimeModes.diagram.optional": {
+    "message": "可选的路由层"
+  },
+  "homepage.runtimeModes.diagram.decision": {
+    "message": "决策引擎"
+  },
+  "homepage.runtimeModes.diagram.recipe": {
+    "message": "每个入口解析到独立的配方。"
+  },
+  "homepage.runtimeModes.diagram.signals": {
+    "message": "信号"
+  },
+  "homepage.runtimeModes.diagram.projections": {
+    "message": "投影"
+  },
+  "homepage.runtimeModes.diagram.decisions": {
+    "message": "决策"
+  },
+  "homepage.runtimeModes.diagram.algorithms": {
+    "message": "算法"
+  },
+  "homepage.runtimeModes.diagram.plugins": {
+    "message": "配方插件 · 请求与响应钩子"
+  },
+  "homepage.runtimeModes.diagram.taskLink": {
+    "message": "模型任务"
+  },
+  "homepage.runtimeModes.diagram.execution": {
+    "message": "模型执行"
+  },
+  "homepage.runtimeModes.diagram.serving": {
+    "message": "服务引擎"
+  },
+  "homepage.runtimeModes.diagram.servingDescription": {
+    "message": "先选择模型部署，再分配就绪副本。"
+  },
+  "homepage.runtimeModes.diagram.deployment": {
+    "message": "模型部署"
+  },
+  "homepage.runtimeModes.diagram.replicaOne": {
+    "message": "副本 1"
+  },
+  "homepage.runtimeModes.diagram.replicaTwo": {
+    "message": "副本 2"
+  },
+  "homepage.runtimeModes.diagram.more": {
+    "message": "+ 更多副本"
+  },
+  "homepage.runtimeModes.diagram.scale": {
+    "message": "每个模型独立扩展"
+  },
+  "homepage.runtimeModes.diagram.specialists": {
+    "message": "专用工作进程：分类 · 嵌入 · 重排"
+  },
+  "homepage.runtimeModes.diagram.logical": {
+    "message": "按能力组合，不代表固定的进程边界。"
+  },
+  "homepage.runtimeModes.diagram.backends": {
+    "message": "聊天模型后端"
+  },
+  "homepage.runtimeModes.diagram.generation": {
+    "message": "本地、私有或云端生成"
+  },
+  "homepage.runtimeModes.diagram.ownership": {
+    "message": "托管或外部接入的工作进程"
+  },
+  "homepage.runtimeModes.diagram.workerApis": {
+    "message": "工作进程 API 与公共前端 API 相互独立。"
+  },
+  "homepage.runtimeModes.diagram.chatCaption": {
+    "message": "聊天请求按照配方策略抵达生成后端。信号或插件需要模型能力时，决策引擎会调用模型工作进程。"
+  },
+  "homepage.runtimeModes.diagram.nativeCaption": {
+    "message": "原生决策从前端直达指定模型及就绪副本，绕过路由流水线。Router 和 Engine 模式均可使用。"
+  },
+  "homepage.install.channel": {
+    "message": "开发通道"
+  },
+  "homepage.install.channelDescription": {
+    "message": "与最新文档一致，包含内置模型运行时。"
   }
 }

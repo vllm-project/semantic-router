@@ -4,7 +4,7 @@ description: 记录语义路由为何保持逐查询，而容量管理留在服�
 created: 2026-07-14
 status: 决策 record
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/batch-and-capacity-aware-routing.md"
   outdated: false
 ---
@@ -32,6 +32,8 @@ flowchart LR
 ```
 
 当算法显式支持时，路由器可以消费有界、对请求安全的性能信号。它不会在 ExtProc 热路径上收集批次并求解联合分配。
+
+内置模型运行时也是 serving 层：副本池根据有界队列与健康信息选择就绪 worker，不会重新匹配语义决策或选择不同逻辑模型。扩展判断模型副本与选择 Chat 后端是独立控制。
 
 ## 理由 {#rationale}
 
