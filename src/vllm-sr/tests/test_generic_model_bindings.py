@@ -116,11 +116,14 @@ def test_generic_llm_binding_replaces_obsolete_named_endpoint():
     assert validate_classifier_contracts(config) == []
 
 
-def test_unbound_classifier_still_requires_execution_selector():
+def test_unbound_local_classifier_uses_default_decision_deployment():
     document = generic_document()
     document["routing"]["model_bindings"] = {}
-    with pytest.raises(ValidationError, match="model_path"):
-        UserConfig.model_validate(document)
+    document["routing"]["signals"]["classifiers"][0][
+        "instructions"
+    ] = "Choose the matching category."
+    config = UserConfig.model_validate(document)
+    assert config.routing.signals.classifiers[0].model_path is None
 
 
 def test_multiple_local_multiclass_rules_roundtrip_without_process_limit():

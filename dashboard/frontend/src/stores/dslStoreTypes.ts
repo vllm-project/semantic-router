@@ -25,8 +25,8 @@ interface DSLState {
   baseConfigYaml: string
 
   // --- Runtime ---
-  wasmReady: boolean
-  wasmError: string | null
+  compilerReady: boolean
+  compilerError: string | null
   loading: boolean
   compileError: string | null
 
@@ -54,26 +54,26 @@ interface DSLState {
 }
 
 interface DSLActions {
-  /** Initialize WASM runtime. Call once at app startup. */
-  initWasm(): Promise<void>
+  /** Initialize DSL compiler. Called when an authoring page mounts. */
+  initCompiler(): Promise<void>
 
   /** Update DSL source (e.g., on editor keystroke). Triggers debounced validation. */
   setDslSource(source: string): void
 
   /** Run full compile: DSL → YAML + CRD + diagnostics. */
-  compile(): void
+  compile(): Promise<void>
 
   /** Validate only (faster than compile, for real-time feedback). */
-  validate(): void
+  validate(): Promise<void>
 
   /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
-  parseAST(): void
+  parseAST(): Promise<void>
 
   /** Decompile YAML → DSL-owned scopes, throwing the compiler's error on failure. */
-  decompile(yaml: string): string
+  decompile(yaml: string): Promise<string>
 
   /** Format the current DSL source. */
-  format(): void
+  format(): Promise<void>
 
   /** Switch editor mode. */
   setMode(mode: EditorMode): void
@@ -81,11 +81,14 @@ interface DSLActions {
   /** Reset editor state to initial values. */
   reset(): void
 
+  /** Cancel page-owned reads/compiler work without discarding the draft. */
+  pauseEditorWork(): void
+
   /** Load DSL source without preserving an imported full-config deploy base. */
   loadDsl(source: string): void
 
   /** Load YAML and decompile its complete DSL-owned surface. */
-  importYaml(yaml: string): void
+  importYaml(yaml: string): Promise<void>
 
   /** Fetch current router YAML and decompile its complete DSL-owned surface. */
   loadFromRouter(): Promise<void>
@@ -154,7 +157,7 @@ interface DSLActions {
   addRoute(name: string, input: RouteInput): void
 
   /** Show deploy confirmation dialog. Compiles first if needed. Fetches preview diff. */
-  requestDeploy(): void
+  requestDeploy(): Promise<void>
 
   /** Execute the deploy (called after user confirms). */
   executeDeploy(): Promise<void>

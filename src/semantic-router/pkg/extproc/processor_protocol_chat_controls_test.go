@@ -10,7 +10,7 @@ import (
 func TestChatDispatchPreservesInferenceControlsAndCacheSalt(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: llmprotocol.OpenAIChatV1}
-	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"same prompt"}],"stream":true,"top_k":-1,"min_p":0,"repetition_penalty":1,"cache_salt":"evaluation-phase","reasoning_effort":"high","chat_template_kwargs":{"enable_thinking":true}}`)
+	body := []byte(`{"model":"vllm-sr/auto","messages":[{"role":"user","content":"same prompt"}],"stream":true,"top_k":-1,"min_p":0,"repetition_penalty":1,"cache_salt":"evaluation-phase","reasoning_effort":"high","chat_template_kwargs":{"enable_thinking":true}}`)
 	request, response := router.prepareProtocolRequest(body, ctx)
 	if response != nil || request == nil {
 		t.Fatalf("strict ingress rejected supported controls: %+v", response)

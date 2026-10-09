@@ -33,17 +33,23 @@ func ReadyTimeout() time.Duration {
 // the model defines, which replaces the type, instructions and options.
 // Truncate asks a model with a scan budget to read a long part's first tokens
 // only (one forward on a CPU) instead of whole.
+// RequireFullInput rejects a judgment unless the runtime proves every supplied
+// input part was read completely; it is independent of scan-budget support.
 type Question struct {
-	ID           string
-	Type         string
-	Instructions string
-	Choices      []Choice
-	Levels       []string
-	Labels       []Choice
-	Threshold    *float64
-	Head         string
-	Preset       string
-	Truncate     bool
+	// TaskID and Stage describe the internal consumer; they are not wire fields.
+	TaskID           string
+	Stage            string
+	ID               string
+	Type             string
+	Instructions     string
+	Choices          []Choice
+	Levels           []string
+	Labels           []Choice
+	Threshold        *float64
+	Head             string
+	Preset           string
+	Truncate         bool
+	RequireFullInput bool
 }
 
 // Choice is one Choice option, a Noul description or a Set / Span label.
@@ -86,6 +92,7 @@ type Answer struct {
 	Threshold     float64
 	Head          string
 	Error         string
+	InputCoverage string
 }
 
 // Response holds the answers by question ID.

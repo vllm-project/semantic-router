@@ -607,6 +607,9 @@ def _example_model(config: dict | None) -> str:
 def _print_curl_example(
     listeners, stack_layout: RuntimeStackLayout, config: dict | None = None
 ) -> None:
+    if ((config or {}).get("global") or {}).get("router", {}).get("enabled") is False:
+        _print_native_curl_example(listeners, stack_layout)
+        return
     if not listeners:
         return
     first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
@@ -624,3 +627,44 @@ def _print_curl_example(
     echo('        {"role": "user", "content": "What is the derivative of x^2?"}')
     echo("      ]")
     echo("    }'")
+
+
+def _print_native_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
+    """Use a listener's published native identity, never an ungranted artifact."""
+    published = next(
+        (
+            (listener, listener["systemone"]["models"][0])
+            for listener in listeners
+            if (listener.get("systemone") or {}).get("models")
+        ),
+        None,
+    )
+    echo()
+    heading("Try System One")
+    if published is None:
+        echo("  No native model is published on a configured listener.")
+        echo("  Configure listeners[].systemone.models before calling /v1/systemone.")
+        return
+    listener, model = published
+    port = listener.get("port", DEFAULT_LISTENER_PORT) + stack_layout.port_offset
+    scheme = "https" if listener.get("tls") else "http"
+    if listener.get("api_keys"):
+        echo("  Set VLLM_SR_API_KEY to a key permitted by this listener.")
+    payload = json.dumps(
+        {
+            "model": model,
+            "state": "Explain why a Python function returns None.",
+            "questions": {
+                "needs_reasoning": {
+                    "type": "noul",
+                    "instructions": "Does this request require reasoning?",
+                }
+            },
+        },
+        indent=2,
+    ).replace("'", "'\"'\"'")
+    echo(f"  curl -v {scheme}://localhost:{port}/v1/systemone \\")
+    echo('    -H "Content-Type: application/json" \\')
+    if listener.get("api_keys"):
+        echo('    -H "Authorization: Bearer $VLLM_SR_API_KEY" \\')
+    echo("    -d '" + payload.replace("\n", "\n    ") + "'")

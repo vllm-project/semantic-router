@@ -23,7 +23,7 @@ This section covers creating and evaluating your own task models.
 | Detect personal information | [PII](./classifier-models#pii-detector) | Entity spans |
 | Apply a content-risk policy | [Safety and Hazard](./mmbert-safety-classifier) | Safe/unsafe and risk categories |
 
-[Vela's model catalog](./model-catalog) lists all eleven releases. Vela 1.0
+[Vela's model catalog](./model-catalog) lists the task checkpoints. Vela 1.0
 accepts text; [multimodal embeddings](./multimodal-embeddings) are a separate
 family. [Provider model evaluation](./model-performance-eval) and
 [learned model selection](./ml-model-selection) help choose the downstream LLM.
@@ -80,6 +80,6 @@ then validate your configuration:
 vllm-sr config validate --config config.yaml
 ```
 
-Use [route preview](model-runtime/troubleshooting.md) to check
+Use [route preview](../model-runtime/troubleshooting.md) to check
 the signal, selected decision, and latency on representative requests before
 deploying the model to traffic.

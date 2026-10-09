@@ -34,8 +34,8 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || len(defaultRecipe.Profile.Decisions) != 0 {
 		t.Fatalf("expected decisionless internal default recipe, got %+v", defaultRecipe)
 	}
-	if cfg.AutoModelNames == nil || len(cfg.EffectiveAutoModelNames()) != 0 {
-		t.Fatalf("expected entrypoint-only public catalog, got auto aliases %#v", cfg.EffectiveAutoModelNames())
+	if len(cfg.DefaultEntrypointNames()) != 1 || cfg.DefaultEntrypointNames()[0] != DefaultEntrypointModel {
+		t.Fatalf("expected entrypoint-only public catalog, got auto aliases %#v", cfg.DefaultEntrypointNames())
 	}
 	for modelName, recipeName := range expectedEntrypoints {
 		if _, exists := cfg.ModelConfig[modelName]; exists {

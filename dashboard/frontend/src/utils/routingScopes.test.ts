@@ -67,11 +67,12 @@ describe('routingScopes', () => {
     ).toEqual({})
   })
 
-  it('lists entrypoint-owned recipes without inventing an empty default scope', () => {
+  it('lists the effective builtin default beside named recipe entrypoints', () => {
     const scopes = listRoutingScopes(recipeConfig)
 
-    expect(scopes.map((scope) => scope.id)).toEqual(['balanced', 'privacy'])
-    expect(scopes[0].entrypointModelNames).toEqual(['vllm-sr/balanced'])
+    expect(scopes.map((scope) => scope.id)).toEqual(['default', 'balanced', 'privacy'])
+    expect(scopes[0].entrypointModelNames).toEqual(['vllm-sr/auto'])
+    expect(scopes[1].entrypointModelNames).toEqual(['vllm-sr/balanced'])
   })
 
   it('projects one recipe into the existing manager and topology view shape', () => {

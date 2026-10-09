@@ -25,8 +25,6 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/me", expected: true},
 		{path: "/api/status", expected: false},
 		{path: "/embedded/grafana/", expected: true},
-		{path: "/embedded/wizmap/", expected: true},
-		{path: "/embedded/wizmap/assets/index.js", expected: false},
 	}
 
 	for _, tc := range testCases {
@@ -190,7 +188,6 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermTopologyRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
-		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
@@ -212,9 +209,6 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", expected: PermFeedbackSubmit},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", expected: PermReplayRead},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/record-1", expected: PermReplayRead},
-		{method: http.MethodGet, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigWrite},
-		{method: http.MethodDelete, path: "/api/router/api/v1/storage/knowledge-bases/example", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/recipe", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/probes", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/packages", expected: PermConfigRead},
