@@ -144,6 +144,18 @@ class DomainRegistryTests(unittest.TestCase):
             "src/semantic-router/pkg/config/canonical.go",
             "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
             "dashboard/frontend/src/generated/routerConfigContract.ts",
+            "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
+            "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/decision1.py",
+            "src/model-runtime/vllm_srun/registry/tables/decision2.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/families/vela2/request.py",
+            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/common.py",
+            "src/model-runtime/vllm_srun/systemone.py",
+            "src/model-runtime/vllm_srun/families/decision1/family.py",
+            "src/model-runtime/vllm_srun/families/decision1/questions.py",
+            "src/model-runtime/vllm_srun/families/decision2/family.py",
             "tools/codegen/configschema/main.go",
             "tools/codegen/openapi/main.go",
             "tools/codegen/embed_generated_index.py",
@@ -162,6 +174,7 @@ class DomainRegistryTests(unittest.TestCase):
                     "generated-contracts",
                     commands_for_domains(domains, "verifications"),
                 )
+                self.assertIn("generated-contracts", classify((path,)).selected_jobs)
 
     def test_router_configs_the_cli_suite_parses_select_it(self) -> None:
         for path in (

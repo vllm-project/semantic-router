@@ -881,7 +881,7 @@ config:
       context:
         - name: long_context
           description: Requests estimated at 500 tokens or more.
-          min_tokens: 500
+          min_tokens: "500"
       domains: &baseline_domain_signals
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -970,7 +970,7 @@ config:
       recipe: entrypoint-probe
     - model_names: ["vllm-sr/metadata-policy"]
       recipe: metadata-policy
-    - model_names: ["vllm-sr/e2e-default-alias"]
+    - model_names: ["vllm-sr/auto", "vllm-sr/e2e-default-alias"]
       recipe: default
   recipes:
     - name: e2e-domain

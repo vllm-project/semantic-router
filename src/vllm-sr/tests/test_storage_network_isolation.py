@@ -153,6 +153,13 @@ def test_the_storage_backends_are_started_on_the_data_network(monkeypatch, tmp_p
         volumes=storage_secrets.StorageVolumes(postgres="pg-data", redis="redis-data"),
     )
     networks = {}
+    rekeyed = []
+    monkeypatch.setattr(storage_backends, "container_status", lambda _name: "not found")
+    monkeypatch.setattr(
+        storage_backends,
+        "rekey_managed_postgres",
+        lambda name, _secret: rekeyed.append(name),
+    )
 
     for backend, attribute in (
         ("redis", "container_start_redis"),
@@ -175,6 +182,7 @@ def test_the_storage_backends_are_started_on_the_data_network(monkeypatch, tmp_p
     )
 
     assert started == {"redis", "postgres", "milvus"}
+    assert rekeyed == [stack_layout.postgres_container_name]
     assert networks == {
         "redis": stack_layout.data_network_name,
         "postgres": stack_layout.data_network_name,
@@ -316,6 +324,10 @@ def test_re_serving_an_older_stack_moves_its_storage_off_the_application_network
     )
     commands = []
     _reusable_running_storage(monkeypatch, commands)
+    monkeypatch.setattr(storage_backends, "container_status", lambda _name: "running")
+    monkeypatch.setattr(
+        storage_backends, "_postgres_credentials_match", lambda *_args: True
+    )
 
     started = start_storage_backends(
         {"redis", "postgres"}, stack_layout, state_root_dir=str(tmp_path)
