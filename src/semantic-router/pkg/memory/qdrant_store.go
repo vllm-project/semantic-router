@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,10 @@ type QdrantStore struct {
 	qdrantConfig    *config.MemoryQdrantConfig
 	enabled         bool
 	embeddingConfig EmbeddingConfig
+
+	// retrievalUpdateMu serializes background reinforcement read-modify-writes so
+	// concurrent retrievals of the same memory cannot move access_count backwards.
+	retrievalUpdateMu sync.Mutex
 }
 
 type QdrantStoreOptions struct {
@@ -358,8 +363,67 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		status = "miss"
 	} else {
 		status = "hit"
+		//nolint:gosec // G118: reinforcement outlives the request by design; the
+		// batch derives its own bounded background context, matching Milvus/Valkey.
+		go s.recordRetrievalBatch(retrieveResultIDs(results))
 	}
 	return results, nil
+}
+
+// recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved
+// memory in the background. The read-modify-write runs under the store mutex so
+// concurrent retrievals of the same memory cannot lose an increment.
+func (s *QdrantStore) recordRetrievalBatch(ids []string) {
+	s.retrievalUpdateMu.Lock()
+	defer s.retrievalUpdateMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, id := range ids {
+		if err := s.recordRetrieval(ctx, id); err != nil {
+			logging.Warnf("QdrantStore.recordRetrievalBatch: id=%s: %v", id, err)
+		}
+	}
+}
+
+// recordRetrieval performs the reinforcement for a single memory
+// (S += 1, t = now). It writes only the access fields through SetPayload:
+// payloads do not carry vectors, so routing this through Update would
+// re-embed the content on every reinforcement.
+func (s *QdrantStore) recordRetrieval(ctx context.Context, id string) error {
+	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collectionName,
+		Ids:            []*qdrant.PointId{arbitraryIDToUUID(id)},
+		WithPayload:    qdrant.NewWithPayloadInclude("access_count"),
+	})
+	if err != nil {
+		return fmt.Errorf("qdrant get failed: %w", err)
+	}
+	if len(pts) == 0 {
+		return fmt.Errorf("memory %q not found", id)
+	}
+
+	var accessCount int
+	if v, ok := pts[0].Payload["access_count"]; ok {
+		accessCount = int(v.GetIntegerValue())
+	}
+
+	now := time.Now()
+	wait := true
+	_, err = s.client.SetPayload(ctx, &qdrant.SetPayloadPoints{
+		CollectionName: s.collectionName,
+		Payload: qdrant.NewValueMap(map[string]any{
+			"access_count":  int64(accessCount + 1),
+			"updated_at":    now.Unix(),
+			"last_accessed": now.Unix(),
+		}),
+		PointsSelector: qdrant.NewPointsSelector(arbitraryIDToUUID(id)),
+		Wait:           &wait,
+	})
+	if err != nil {
+		return fmt.Errorf("qdrant reinforcement update failed: %w", err)
+	}
+	return nil
 }
 
 func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
