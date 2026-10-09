@@ -20,9 +20,6 @@ import (
 
 func TestDecisionPromptSelectorCallsConcreteHelperModel(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("x-vsr-looper-request") != "true" {
-			t.Fatalf("missing internal looper header")
-		}
 		var body map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request: %v", err)

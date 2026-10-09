@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1370" viewBox="0 0 1900 1370" role="img"><title>Frontend and optional Decision Engine</title><desc>Request-visible routing path, native bypass and shared typed task execution.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+<rect width="100%" height="100%" fill="#fff"/>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="50" y="48.0" font-size="30" text-anchor="start" class="serif">(b) Protocols, routing policy and shared tasks</text>
+<text x="50" y="82.0" font-size="21" text-anchor="start" class="">Request processing is shown bottom → top. Return streams use the corresponding codec.</text>
+<g data-box="190.0 125 660 75">
+<rect x="190.0" y="125" width="660" height="75" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="520.0" y="156.62" font-size="24" text-anchor="middle" class="">Backend exchange</text>
+<text x="520.0" y="184.7" font-size="24" text-anchor="middle" class="">selected model or configured orchestration</text>
+</g>
+<rect x="125" y="255" width="790" height="742" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="149" y="295.0" font-size="29" text-anchor="start" class="">Decision Engine</text>
+<text x="800" y="295.0" font-size="20" text-anchor="middle" class="">Recipe-scoped</text>
+<g data-box="200.0 332 580 70">
+<rect x="200.0" y="332" width="580" height="70" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="490.0" y="361.12" font-size="24" text-anchor="middle" class="">Selection algorithm</text>
+<text x="490.0" y="389.2" font-size="24" text-anchor="middle" class="">choose / cascade / combine</text>
+</g>
+<g data-box="200.0 460 580 70">
+<rect x="200.0" y="460" width="580" height="70" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="490.0" y="489.12" font-size="24" text-anchor="middle" class="">Decision matching</text>
+<text x="490.0" y="517.2" font-size="24" text-anchor="middle" class="">conditions + strategy</text>
+</g>
+<g data-box="200.0 588 580 62">
+<rect x="200.0" y="588" width="580" height="62" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="490.0" y="627.16" font-size="24" text-anchor="middle" class="">Projection evaluation</text>
+</g>
+<g data-box="200.0 708 580 70">
+<rect x="200.0" y="708" width="580" height="70" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="490.0" y="737.12" font-size="24" text-anchor="middle" class="">Signal evaluation</text>
+<text x="490.0" y="765.2" font-size="24" text-anchor="middle" class="">rules and model-backed judgments</text>
+</g>
+<g data-box="200.0 856 580 82">
+<rect x="200.0" y="856" width="580" height="82" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="490.0" y="891.12" font-size="24" text-anchor="middle" class="">Entrypoint → isolated recipe</text>
+<text x="490.0" y="919.2" font-size="24" text-anchor="middle" class="">defaults resolved before execution</text>
+</g>
+<path d="M490,856 L490,778" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M490,708 L490,650" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M490,588 L490,530" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M490,460 L490,402" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M490,332 L490,200" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="515" y="971.0" font-size="20" text-anchor="middle" class="">Optional plugins attach to request, stream and response phases.</text>
+<rect x="1070" y="330" width="540" height="655" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="1094" y="370.0" font-size="29" text-anchor="start" class="">Shared task execution</text>
+<g data-box="1105.0 418 470 75">
+<rect x="1105.0" y="418" width="470" height="75" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1340.0" y="449.865" font-size="23" text-anchor="middle" class="">Bound deployment invocation</text>
+<text x="1340.0" y="476.775" font-size="23" text-anchor="middle" class="">same model pool as native calls</text>
+</g>
+<g data-box="1105.0 546 470 84">
+<rect x="1105.0" y="546" width="470" height="84" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1340.0" y="570.5699999999999" font-size="21" text-anchor="middle" class="">Binding + capability resolution</text>
+<text x="1340.0" y="595.14" font-size="21" text-anchor="middle" class="">recipe → global binding</text>
+<text x="1340.0" y="619.7099999999999" font-size="21" text-anchor="middle" class="">→ module / default model</text>
+</g>
+<g data-box="1105.0 684 470 84">
+<rect x="1105.0" y="684" width="470" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1340.0" y="720.365" font-size="23" text-anchor="middle" class="">Typed task contract</text>
+<text x="1340.0" y="747.275" font-size="23" text-anchor="middle" class="">coverage + output + error policy</text>
+</g>
+<g data-box="1105.0 830 470 84">
+<rect x="1105.0" y="830" width="470" height="84" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1340.0" y="866.61" font-size="22" text-anchor="middle" class="">Task registry and input adapters</text>
+<text x="1340.0" y="892.35" font-size="22" text-anchor="middle" class="">shared Router / Playground templates</text>
+</g>
+<path d="M1340,830 L1340,768" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1340,684 L1340,630" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1340,546 L1340,493" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1090.0 125 490 75">
+<rect x="1090.0" y="125" width="490" height="75" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1335.0" y="170.66" font-size="24" text-anchor="middle" class="">Serving Engine / deployment pools</text>
+</g>
+<path d="M1340,418 L1340,398 L1635,398 L1635,235 L1340,235 L1340,200" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M780,743 L993,743 L993,872 L1105,872" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M780,367 L993,367 L993,743" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="993" cy="743" r="3.5" fill="#111"/>
+<text x="992" y="1020.0" font-size="21" text-anchor="middle" class="">Model-backed work only</text>
+<rect x="125" y="1100" width="1485" height="170" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="149" y="1140.0" font-size="29" text-anchor="start" class="">Frontend: access checks, protocol codecs and dispatch</text>
+<g data-box="160.0 1180 560 62">
+<rect x="160.0" y="1180" width="560" height="62" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="440.0" y="1219.16" font-size="24" text-anchor="middle" class="">Chat Completions / Responses</text>
+</g>
+<g data-box="1065.0 1180 510 62">
+<rect x="1065.0" y="1180" width="510" height="62" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="1320.0" y="1219.16" font-size="24" text-anchor="middle" class="">System One: state + questions</text>
+</g>
+<path d="M490,1100 L490,997" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="510" y="1053.0" font-size="21" text-anchor="start" class="">Routing enabled</text>
+<path d="M1510,1100 L1830,1100 L1830,163 L1580,163" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1725" y="610.0" font-size="21" text-anchor="middle" class="">Native</text>
+<text x="1725" y="634.57" font-size="21" text-anchor="middle" class="">bypass</text>
+<text x="1725" y="684.0" font-size="20" text-anchor="middle" class="">No routing</text>
+<text x="1725" y="707.4" font-size="20" text-anchor="middle" class="">recipe</text>
+<text x="868" y="1314.0" font-size="21" text-anchor="middle" class="">Roadmap: System One auto will enter the recipe path and select among decision-model backends.</text>
+<text x="868" y="1348.0" font-size="20" text-anchor="middle" class="">Current native requests name a served decision model. The automatic native route is not implemented.</text>
+</svg>

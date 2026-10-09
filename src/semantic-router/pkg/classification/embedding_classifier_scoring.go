@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -135,19 +136,13 @@ func (c *EmbeddingClassifier) embeddingAggregationOptions(rule config.EmbeddingR
 	}
 }
 
-// cosineSimilarity computes cosine similarity between two vectors.
-// Assumes vectors are normalized (which they should be from BERT-style models).
+// cosineSimilarity is the cosine of normalized embeddings: their inner
+// product, on the shared SIMD kernel. Vectors of different lengths score 0.
 func cosineSimilarity(a, b []float32) float32 {
 	if len(a) == 0 || len(a) != len(b) {
 		return 0
 	}
-
-	var dotProduct float32
-	for i := 0; i < len(a); i++ {
-		dotProduct += a[i] * b[i]
-	}
-
-	return dotProduct
+	return vecmath.Dot(a, b)
 }
 
 // GetPreloadStats returns statistics about preloaded embeddings.

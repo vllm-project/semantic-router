@@ -158,7 +158,7 @@ func TestProtectedRouteRequiresAuditActionAtRegistration(t *testing.T) {
 func TestIndependentPermissionGrantAndRevoke(t *testing.T) {
 	svc := newTestAuthService(t)
 	user := newTestUser(t, svc, "policy-grants@example.com", RoleRead, "active")
-	for _, permission := range []string{PermConfigRead, PermReplayRead, PermFeedbackSubmit, PermInferenceRun, PermMlPipeline, PermOpenClaw} {
+	for _, permission := range []string{PermConfigRead, PermReplayRead, PermFeedbackSubmit, PermInferenceRun, PermMlPipeline, PermMcpManage} {
 		if _, err := svc.store.db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,0)
 ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, permission); err != nil {
 			t.Fatal(err)
@@ -191,7 +191,7 @@ func TestIndependentPermissionsAtProtectedRoutes(t *testing.T) {
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", PermFeedbackSubmit, ResourceOwnerFeedback},
 		{http.MethodPost, "/api/router/v1/chat/completions", PermInferenceRun, ResourceOwnerInference},
 		{http.MethodPost, "/api/ml-pipeline/train", PermMlPipeline, ResourceOwnerML},
-		{http.MethodPost, "/api/openclaw/rooms", PermOpenClaw, ResourceOwnerOpenClaw},
+		{http.MethodPost, "/api/mcp/servers", PermMcpManage, ResourceOwnerTools},
 	}
 	mux := NewPolicyMux()
 	allow := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
@@ -259,22 +259,17 @@ func TestSecretReadProducesRouteAudit(t *testing.T) {
 	}
 }
 
-func TestOpenClawReadAndManagePermissionsStayIndependent(t *testing.T) {
+func TestReadAndManagePermissionsStayIndependent(t *testing.T) {
 	svc := newTestAuthService(t)
-	user := newTestUser(t, svc, "openclaw-read-only@example.com", RoleRead, "active")
+	user := newTestUser(t, svc, "mcp-read-only@example.com", RoleRead, "active")
 	mux := NewPolicyMux()
 	allow := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
-	mux.HandlePolicyFunc(Route("/api/openclaw/rooms/{id}/messages",
-		ReadPolicy(http.MethodGet, PermOpenClawRead, SensitivitySensitive, ResourceOwnerOpenClaw),
-		MutationPolicy(http.MethodPost, PermOpenClaw, "openclaw.room.message", SensitivitySecret, ResourceOwnerOpenClaw, 1024),
+	mux.HandlePolicyFunc(Route("/api/mcp/servers",
+		ReadPolicy(http.MethodGet, PermMcpRead, SensitivitySensitive, ResourceOwnerTools),
+		MutationPolicy(http.MethodPost, PermMcpManage, "mcp.server.create", SensitivitySecret, ResourceOwnerTools, 1024),
 	), allow)
-	for _, contract := range []RouteContract{
-		ProtectedRoute("/api/openclaw/rooms/{id}/ws", PermOpenClaw, SensitivitySecret, ResourceOwnerOpenClaw, http.MethodGet),
-		ProtectedRoute("/api/openclaw/token", PermOpenClaw, SensitivitySecret, ResourceOwnerOpenClaw, http.MethodGet),
-		ProtectedRoute("/embedded/openclaw/", PermOpenClaw, SensitivitySecret, ResourceOwnerOpenClaw, http.MethodGet),
-	} {
-		mux.HandlePolicyFunc(contract, allow)
-	}
+	mux.HandlePolicyFunc(ProtectedMutationRoute("/api/mcp/servers/{id}/connect", PermMcpManage, "mcp.server.connect",
+		SensitivitySensitive, ResourceOwnerTools, 1024, http.MethodPost), allow)
 	mux.Seal()
 	handler := AuthenticateRequest(svc, mux)(mux)
 	requestStatus := func(method, path string) int {
@@ -283,52 +278,46 @@ func TestOpenClawReadAndManagePermissionsStayIndependent(t *testing.T) {
 		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, user, method, path, `{}`))
 		return response.Code
 	}
-	readPath := "/api/openclaw/rooms/room-1/messages"
-	managedPaths := []string{
-		"/api/openclaw/rooms/room-1/messages",
-		"/api/openclaw/rooms/room-1/ws",
-		"/api/openclaw/token",
-		"/embedded/openclaw/worker-1/",
-	}
-	managedMethods := []string{http.MethodPost, http.MethodGet, http.MethodGet, http.MethodGet}
+	readPath := "/api/mcp/servers"
+	managedPaths := []string{"/api/mcp/servers", "/api/mcp/servers/server-1/connect"}
 	if got := requestStatus(http.MethodGet, readPath); got != http.StatusNoContent {
-		t.Fatalf("room read with read permission returned %d", got)
+		t.Fatalf("server list with read permission returned %d", got)
 	}
-	for index, path := range managedPaths {
-		if got := requestStatus(managedMethods[index], path); got != http.StatusForbidden {
-			t.Errorf("read-only user reached %s %s: %d", managedMethods[index], path, got)
+	for _, path := range managedPaths {
+		if got := requestStatus(http.MethodPost, path); got != http.StatusForbidden {
+			t.Errorf("read-only user reached POST %s: %d", path, got)
 		}
 	}
 	if _, err := svc.store.db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,1)
-ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=1`, user.ID, PermOpenClaw); err != nil {
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=1`, user.ID, PermMcpManage); err != nil {
 		t.Fatal(err)
 	}
-	for index, path := range managedPaths {
-		if got := requestStatus(managedMethods[index], path); got != http.StatusNoContent {
-			t.Errorf("granted manager denied %s %s: %d", managedMethods[index], path, got)
+	for _, path := range managedPaths {
+		if got := requestStatus(http.MethodPost, path); got != http.StatusNoContent {
+			t.Errorf("granted manager denied POST %s: %d", path, got)
 		}
 	}
-	if _, err := svc.store.db.Exec(`UPDATE user_permissions SET allowed=0 WHERE user_id=? AND permission_key=?`, user.ID, PermOpenClaw); err != nil {
+	if _, err := svc.store.db.Exec(`UPDATE user_permissions SET allowed=0 WHERE user_id=? AND permission_key=?`, user.ID, PermMcpManage); err != nil {
 		t.Fatal(err)
 	}
-	for index, path := range managedPaths {
-		if got := requestStatus(managedMethods[index], path); got != http.StatusForbidden {
-			t.Errorf("revoked manager reached %s %s: %d", managedMethods[index], path, got)
+	for _, path := range managedPaths {
+		if got := requestStatus(http.MethodPost, path); got != http.StatusForbidden {
+			t.Errorf("revoked manager reached POST %s: %d", path, got)
 		}
 	}
 	if got := requestStatus(http.MethodGet, readPath); got != http.StatusNoContent {
-		t.Fatalf("revoking manage also revoked independent room read: %d", got)
+		t.Fatalf("revoking manage also revoked the independent read: %d", got)
 	}
 }
 
 func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 	svc := newTestAuthService(t)
-	user := newTestUser(t, svc, "openclaw-websocket@example.com", RoleWrite, "active")
+	user := newTestUser(t, svc, "audited-websocket@example.com", RoleWrite, "active")
 	mux := NewPolicyMux()
-	mux.HandlePolicyFunc(Route("/api/openclaw/rooms/{id}/ws", RoutePolicy{
-		Method: http.MethodGet, Permission: PermOpenClaw,
-		AuditMode: AuditRequired, AuditAction: "openclaw.room.ws.connect",
-		Sensitivity: SensitivitySecret, ResourceOwner: ResourceOwnerOpenClaw,
+	mux.HandlePolicyFunc(Route("/api/probe/{id}/ws", RoutePolicy{
+		Method: http.MethodGet, Permission: PermLogsRead,
+		AuditMode: AuditRequired, AuditAction: "probe.ws.connect",
+		Sensitivity: SensitivitySecret, ResourceOwner: ResourceOwnerObservability,
 	}), func(w http.ResponseWriter, r *http.Request) {
 		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
 		if err == nil {
@@ -343,7 +332,7 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn, response, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(server.URL, "http")+"/api/openclaw/rooms/room-1/ws",
+		"ws"+strings.TrimPrefix(server.URL, "http")+"/api/probe/probe-1/ws",
 		http.Header{"Authorization": []string{"Bearer " + token}},
 	)
 	if response != nil && response.Body != nil {
@@ -358,7 +347,7 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 	}
 	var recordedStatus int
 	if err := svc.store.db.QueryRow(`SELECT status_code FROM user_audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1`,
-		"openclaw.room.ws.connect").Scan(&recordedStatus); err != nil {
+		"probe.ws.connect").Scan(&recordedStatus); err != nil {
 		t.Fatal(err)
 	}
 	if recordedStatus != http.StatusSwitchingProtocols {

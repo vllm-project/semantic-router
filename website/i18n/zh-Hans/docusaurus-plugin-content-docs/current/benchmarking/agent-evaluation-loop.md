@@ -59,7 +59,7 @@ vllm-sr config plan --config candidate.yaml \
   --endpoint "$ROUTER_ORIGIN"
 ```
 
-可热更新的变更使用 `vllm-sr config apply`。如果计划返回 `RESTART_REQUIRED`，则通过部署流程激活。对于已授权替换的本地实例，运行 `vllm-sr serve --config candidate.yaml --replace-active-config`。测试前确认就绪状态和生效版本。
+可热更新的变更使用 `vllm-sr config apply`。如果计划返回 `RESTART_REQUIRED`，则通过部署流程激活；在本地实例上，`vllm-sr config apply` 会保存该变更，由下一次 `vllm-sr serve` 应用。对于已授权替换的本地实例，运行 `vllm-sr serve --config candidate.yaml --replace-active-config`。测试前确认就绪状态和生效版本。
 
 将 `ENTRYPOINT` 设为正在评测的公开入口，然后预览数据集中的一个用例：
 

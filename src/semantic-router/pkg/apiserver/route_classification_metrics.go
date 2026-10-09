@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -8,7 +8,6 @@ type ClassificationMetricsResponse struct {
 	UnifiedClassifier        bool           `json:"unified_classifier"`
 	FactCheckClassifier      bool           `json:"fact_check_classifier"`
 	HallucinationDetector    bool           `json:"hallucination_detector"`
-	HallucinationExplainer   bool           `json:"hallucination_explainer"`
 	FeedbackDetector         bool           `json:"feedback_detector"`
 	DecisionCount            int            `json:"decision_count"`
 	ProjectionPartitionCount int            `json:"projection_partition_count"`
@@ -22,13 +21,12 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 	cfg, service, release := s.acquireClassificationRuntime()
 	defer release()
 	response := ClassificationMetricsResponse{
-		UnifiedClassifier:      service.HasUnifiedClassifier(),
-		FactCheckClassifier:    service.HasFactCheckClassifier(),
-		HallucinationDetector:  service.HasHallucinationDetector(),
-		HallucinationExplainer: service.HasHallucinationExplainer(),
-		FeedbackDetector:       service.HasFeedbackDetector(),
-		RouterConfigAPI:        true,
-		SignalCounts:           map[string]int{},
+		UnifiedClassifier:     service.HasUnifiedClassifier(),
+		FactCheckClassifier:   service.HasFactCheckClassifier(),
+		HallucinationDetector: service.HasHallucinationDetector(),
+		FeedbackDetector:      service.HasFeedbackDetector(),
+		RouterConfigAPI:       true,
+		SignalCounts:          map[string]int{},
 	}
 	if cfg == nil {
 		s.writeJSONResponse(w, http.StatusOK, response)

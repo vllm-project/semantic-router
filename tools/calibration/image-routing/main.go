@@ -24,7 +24,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // calibrationSet is the labelled input: every fixture is listed explicitly
@@ -55,8 +54,7 @@ type excludedLabel struct {
 	Reason    string `json:"reason"`
 }
 
-// fixtureExtensions mirrors the image crate features compiled into
-// the native Omni image decoder (JPEG and PNG).
+// fixtureExtensions lists the image formats the calibration set uses.
 var fixtureExtensions = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
 type excludedFixture struct {
@@ -176,10 +174,11 @@ func thresholdAssertions(rules []ruleReport) []thresholdAssertion {
 func main() { os.Exit(runCalibration()) }
 
 func runCalibration() int {
-	modelPath := flag.String("model", os.Getenv("MULTIMODAL_MODEL_PATH"), "prepared Vela Omni artifact directory")
+	modelPath := flag.String("model", os.Getenv("MULTIMODAL_MODEL_PATH"), "published Vela Omni snapshot directory")
 	rulesPath := flag.String("rules", "../../config/fragments/signal/embedding/image-routing.yaml", "image-routing YAML fragment")
 	casesPath := flag.String("cases", "../../tools/calibration/image-routing/testdata/calibration-set.json", "labelled calibration set JSON")
 	fixtureRoot := flag.String("fixture-root", ".", "directory that relative fixture paths in the cases file resolve against")
+	artifactRepository := flag.String("artifact-repository", "", "published repository of the model snapshot")
 	artifactRevision := flag.String("artifact-revision", "", "resolved model snapshot commit (required for reproducible reports)")
 	output := flag.String("output", "image-routing-calibration.json", "JSON report path")
 	markdown := flag.String("markdown", "image-routing-calibration.md", "Markdown report path")
@@ -188,8 +187,8 @@ func runCalibration() int {
 	requireClean := flag.Bool("require-clean", false, "with -check: fail unless the worktree matches the recorded commit, so the report is reproducible evidence")
 	prototypePolicy := flag.String("prototype-policy", "default", "scoring policy: default, cluster, or raw-max (explicit diagnostic override, preserves all candidate text)")
 	flag.Parse()
-	if *modelPath == "" || *artifactRevision == "" || *casesPath == "" {
-		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
+	if *modelPath == "" || *artifactRepository == "" || *artifactRevision == "" || *casesPath == "" {
+		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-repository, -artifact-revision, and -cases are required")
 	}
 
 	root, err := canonicalRepoRoot(*fixtureRoot)
@@ -233,7 +232,7 @@ func runCalibration() int {
 		fatal("outputs: %v", outputErr)
 	}
 	*output, *markdown = outputs[0], outputs[1]
-	artifact, err := modelArtifact(*modelPath, *artifactRevision)
+	artifact, err := modelArtifact(*modelPath, *artifactRepository, *artifactRevision)
 	if err != nil {
 		fatal("model artifact: %v", err)
 	}
@@ -241,15 +240,11 @@ func runCalibration() int {
 	if err != nil {
 		fatal("model directory: %v", err)
 	}
-	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "image-calibration", Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "omni-calibration", Adapter: "vela_omni", Contract: "embedding.v1"},
-		Deployment: config.ModelDeployment{Provider: "ort", Device: "cpu", Artifact: modelDir, Precision: "native", Input: config.ModelInputBudget{MaxTokens: artifact.MaxTextLength, Overflow: "reject"}},
-	}, 0, 0)
+	provider, stopRuntime, err := omniEmbedding(context.Background(), modelDir, artifact.MaxTextLength)
 	if err != nil {
 		fatal("initialize Omni: %v", err)
 	}
-	defer provider.Close()
+	defer stopRuntime()
 	var prototypeRun *prototypeEvaluation
 	for _, rule := range rules {
 		if rule.HasImageCandidates() {

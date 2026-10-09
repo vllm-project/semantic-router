@@ -19,6 +19,7 @@ type StatusMonitor struct {
 	routerAPIURL       string
 	envoyURL           string
 	configDir          string
+	stack              StackState
 	historyStore       *statusstore.Store
 	credentialProvider []routerauth.CredentialProvider
 	interval           time.Duration
@@ -32,6 +33,7 @@ func NewStatusMonitor(
 	routerAPIURL string,
 	envoyURL string,
 	configDir string,
+	stack StackState,
 	historyStore *statusstore.Store,
 	credentialProvider ...routerauth.CredentialProvider,
 ) *StatusMonitor {
@@ -39,6 +41,7 @@ func NewStatusMonitor(
 		routerAPIURL:       routerAPIURL,
 		envoyURL:           envoyURL,
 		configDir:          configDir,
+		stack:              stack,
 		historyStore:       historyStore,
 		credentialProvider: credentialProvider,
 		interval:           statusObservationInterval,
@@ -80,7 +83,7 @@ func (m *StatusMonitor) sample() {
 	if m.historyStore == nil {
 		return
 	}
-	status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.credentialProvider...)
+	status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.stack, m.credentialProvider...)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := m.historyStore.Record(ctx, statusObservations(status.Services)); err != nil {

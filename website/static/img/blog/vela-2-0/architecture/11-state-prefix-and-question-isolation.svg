@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1190" viewBox="0 0 1500 1190" role="img"><title>Vela 2.0 hybrid models: state-prefix and question isolation</title><desc>Runtime tree forward for 0.8B, 4B, and 9B. Activation and cache flow run upward.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="280" y="68.0" font-size="27" text-anchor="middle" class="">Decision logits</text>
+<g data-box="95.0 112 370 80">
+<rect x="95.0" y="112" width="370" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="280" y="146.12" font-size="24" text-anchor="middle" class="">Choice / Noul / Score readout</text>
+<text x="280" y="174.2" font-size="24" text-anchor="middle" class="">from final-normalized states</text>
+</g>
+<path d="M280,111 L280,83" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 245 370 88">
+<rect x="95.0" y="245" width="370" height="88" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="280" y="283.12" font-size="24" text-anchor="middle" class="">Continue own question block</text>
+<text x="280" y="311.2" font-size="24" text-anchor="middle" class="">through every backbone layer</text>
+</g>
+<path d="M280,244 L280,193" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 390 370 80">
+<rect x="95.0" y="390" width="370" height="80" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="280" y="424.365" font-size="23" text-anchor="middle" class="">Own block tokens</text>
+<text x="280" y="451.275" font-size="23" text-anchor="middle" class="">position starts after the prefix</text>
+</g>
+<path d="M280,389 L280,334" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="750" y="68.0" font-size="27" text-anchor="middle" class="">Word × label logits</text>
+<g data-box="565.0 112 370 80">
+<rect x="565.0" y="112" width="370" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="750" y="146.12" font-size="24" text-anchor="middle" class="">Span readout</text>
+<text x="750" y="174.2" font-size="24" text-anchor="middle" class="">from final-normalized states</text>
+</g>
+<path d="M750,111 L750,83" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="565.0 245 370 88">
+<rect x="565.0" y="245" width="370" height="88" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="750" y="283.12" font-size="24" text-anchor="middle" class="">Continue own question block</text>
+<text x="750" y="311.2" font-size="24" text-anchor="middle" class="">through every backbone layer</text>
+</g>
+<path d="M750,244 L750,193" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="565.0 390 370 80">
+<rect x="565.0" y="390" width="370" height="80" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="750" y="424.365" font-size="23" text-anchor="middle" class="">Own block tokens</text>
+<text x="750" y="451.275" font-size="23" text-anchor="middle" class="">position starts after the prefix</text>
+</g>
+<path d="M750,389 L750,334" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1220" y="68.0" font-size="27" text-anchor="middle" class="">Decision logits</text>
+<g data-box="1035.0 112 370 80">
+<rect x="1035.0" y="112" width="370" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1220" y="146.12" font-size="24" text-anchor="middle" class="">Set readout</text>
+<text x="1220" y="174.2" font-size="24" text-anchor="middle" class="">from final-normalized states</text>
+</g>
+<path d="M1220,111 L1220,83" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1035.0 245 370 88">
+<rect x="1035.0" y="245" width="370" height="88" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="1220" y="283.12" font-size="24" text-anchor="middle" class="">Continue own question block</text>
+<text x="1220" y="311.2" font-size="24" text-anchor="middle" class="">through every backbone layer</text>
+</g>
+<path d="M1220,244 L1220,193" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1035.0 390 370 80">
+<rect x="1035.0" y="390" width="370" height="80" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="1220" y="424.365" font-size="23" text-anchor="middle" class="">Own block tokens</text>
+<text x="1220" y="451.275" font-size="23" text-anchor="middle" class="">position starts after the prefix</text>
+</g>
+<path d="M1220,389 L1220,334" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="380.0 620 740 88">
+<rect x="380.0" y="620" width="740" height="88" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="750" y="657.875" font-size="25" text-anchor="middle" class="">Shared state-prefix pass</text>
+<text x="750" y="687.125" font-size="25" text-anchor="middle" class="">F layers: KV; L layers: state + conv tail</text>
+</g>
+<path d="M750,619 L750,550 L68,550 L68,289 L94,289" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M750,619 L750,550 L538,550 L538,289 L564,289" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M750,619 L750,550 L1008,550 L1008,289 L1034,289" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="750" cy="550" r="3.5" fill="#111"/>
+<text x="715" y="586.0" font-size="23" text-anchor="end" class="">Independent prefix forks</text>
+<g data-box="380.0 780 740 88">
+<rect x="380.0" y="780" width="740" height="88" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="750" y="817.875" font-size="25" text-anchor="middle" class="">Typed state: request / context / answer</text>
+<text x="750" y="847.125" font-size="25" text-anchor="middle" class="">role-tagged text → prefix token embeddings</text>
+</g>
+<path d="M750,779 L750,709" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="750" y="929.0" font-size="27" text-anchor="middle" class="">Runtime request: one state and multiple questions</text>
+<path d="M750,902 L750,869" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="280" y="512.0" font-size="24" text-anchor="middle" class="">Question 1</text>
+<text x="750" y="512.0" font-size="24" text-anchor="middle" class="">Question 2</text>
+<text x="1220" y="512.0" font-size="24" text-anchor="middle" class="">Question 3</text>
+<text x="750" y="1011.0" font-size="23" text-anchor="middle" class="">For a fixed rendered state, each question sees its prefix and its own causal block.</text>
+<text x="750" y="1037.91" font-size="23" text-anchor="middle" class="">Each extra span question uses another rendered sequence.</text>
+<text x="750" y="1064.82" font-size="23" text-anchor="middle" class="">Span targets &gt; 2,048 tokens: 1,800-token windows, stride 1,536; mean word logits.</text>
+<text x="750" y="1144.0" font-size="31" text-anchor="middle" class="serif">State sharing and isolated question continuations</text>
+</svg>

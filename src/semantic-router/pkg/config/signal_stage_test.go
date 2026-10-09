@@ -226,7 +226,7 @@ func TestValidateHallucinationSignalContracts(t *testing.T) {
 	if err := validateHallucinationSignalContracts(cfg); err == nil || !strings.Contains(err.Error(), "duplicate rule name") {
 		t.Fatalf("expected the duplicate rule to be rejected, got %v", err)
 	}
-	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims", UseNLI: true}}
+	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}}
 	if err := validateHallucinationSignalContracts(cfg); err != nil {
 		t.Fatalf("a named rule is valid, got %v", err)
 	}
