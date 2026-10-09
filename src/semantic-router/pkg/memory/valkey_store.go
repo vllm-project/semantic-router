@@ -306,11 +306,7 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 	}
 
 	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
-		}
-		go v.recordRetrievalBatch(ids)
+		go v.recordRetrievalBatch(retrieveResultIDs(results))
 	}
 
 	return results
