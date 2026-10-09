@@ -2401,9 +2401,12 @@ global:
         conn_max_lifetime: 300
         table_name: vector_store_registry
 
-    # Session-scoped sticky tool-set selection's shared store (issue #3347).
+    # Session-scoped sticky tool-set selection's store (issue #3347).
     # Constructed only when at least one decision's tool_selection.sticky is
-    # enabled; see website/docs/tutorials/plugin/tool-selection.md. backend:
+    # enabled; see website/docs/tutorials/plugin/tool-selection.md. Sticky
+    # selection currently runs only on backend: local; an enabled sticky
+    # decision with backend: redis is rejected until the Redis store lands,
+    # while a disabled one leaves this block inert. backend:
     # redis is a self-consistent, Validate()-passing sample (matching
     # response_api's store_backend: redis above) rather than
     # vector_store's exhaustive-multiple-backends-at-once shape: local has

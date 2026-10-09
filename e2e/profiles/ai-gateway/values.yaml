@@ -296,6 +296,40 @@ config:
               mode: filter
               relevance_threshold: 0.95
               preserve_count: 2
+      - &tool_selection_sticky_decision
+        name: tool_selection_sticky_decision
+        description: Contract route for session-scoped sticky tool selection in filter mode
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_sticky
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+              trusted_facts:
+                enabled: true
+                enforcement: authoritative
+                trust_sources: [operator-policy]
+                stage_roles: [candidate, final]
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.95
+              preserve_count: 1
+              sticky:
+                enabled: true
+                max_tools: 4
+                max_new_tools_per_turn: 1
       - &tool_selection_filter_threshold_decision
         name: tool_selection_filter_threshold_decision
         description: Contract route for tool_selection filter mode with strict relevance threshold
@@ -828,6 +862,12 @@ config:
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
           case_sensitive: false
+        - &tool_selection_sticky
+          name: tool_selection_sticky
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_STICKY__
+          case_sensitive: false
         - &plugin_request_mutations
           name: plugin_request_mutations
           operator: OR
@@ -1060,6 +1100,7 @@ config:
             - *tool_selection_filter_threshold
             - *tool_selection_add_topk_one
             - *tool_selection_with_system_prompt
+            - *tool_selection_sticky
         decisions:
           - *plugin_request_mutations_decision
           - *tools_passthrough_decision
@@ -1071,6 +1112,7 @@ config:
           - *tool_selection_filter_threshold_decision
           - *tool_selection_add_topk_one_decision
           - *tool_selection_with_system_prompt_decision
+          - *tool_selection_sticky_decision
     - name: e2e-pii-precedence
       # Only the two decisions the case orders: the baseline's jailbreak guard
       # also reads the tool-selection marker, and Vela 2.0 scores the marker
@@ -1326,6 +1368,11 @@ toolsDb:
       - search
       - web
       - internet
+# Sticky tool selection keys session state with this test-only secret.
+extraEnv:
+  - name: USER_SCOPE_NAMESPACE_SECRET
+    value: e2e-sticky-tool-selection-secret
+
 resources:
   limits:
     cpu: "2"
