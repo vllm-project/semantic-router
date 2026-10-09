@@ -86,6 +86,8 @@ type Classifier struct {
 	admissionRegistry *admission.Registry
 	// decisionDecider answers decision signals; nil uses the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
+	// Immutable cards captured while preparing this classifier generation.
+	decisionCards map[string]modelservice.ModelCard
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 

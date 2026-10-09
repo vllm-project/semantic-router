@@ -89,10 +89,11 @@ func TestModelRuntimeEmbeddingPlanKeepsSecondaryGlobalConsumer(t *testing.T) {
 }
 
 func TestModelRuntimeEmbeddingPlanExcludesDormantRecipe(t *testing.T) {
-	cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{}}}
+	cfg := &RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.MmBertModelPath = "models/Vela-1.0-Encoder-307M-Embedding"
-	cfg.Recipes = []RoutingRecipe{{Name: DefaultRecipeName, Profile: RoutingProfile{Signals: Signals{EmbeddingRules: []EmbeddingRule{{Name: "dormant", Candidates: []string{"hello"}}}}}}}
+	cfg.EmbeddingRules = []EmbeddingRule{{Name: "dormant", Candidates: []string{"hello"}}}
+	moveTestRoutingToUnmappedRecipe(cfg)
 	if used := ModelRuntimeDeploymentsInUse(cfg); len(used) != 0 {
 		t.Fatalf("dormant recipe must not start its embedding: %v", used)
 	}

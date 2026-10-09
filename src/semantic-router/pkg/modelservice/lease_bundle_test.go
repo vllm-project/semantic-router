@@ -47,7 +47,7 @@ func classifyText(text string) ClassifyRequest {
 	return ClassifyRequest{Inputs: []ClassifyInput{{Text: text}}}
 }
 
-func TestBundleSendsOneCallPerProcessWhenEveryParticipantParks(t *testing.T) {
+func TestBundleSendsOneCallPerLogicalDeploymentWhenEveryParticipantParks(t *testing.T) {
 	encoders := runtimetest.New(classifyHead("domain"), classifyHead("guard"), classifyHead("feedback"))
 	decisions := runtimetest.New(runtimetest.Model{ID: "kai"})
 	lease := attachedLease(t, map[*runtimetest.Runtime][]string{encoders: {"domain", "guard", "feedback"}, decisions: {"kai"}})
@@ -86,8 +86,8 @@ func TestBundleSendsOneCallPerProcessWhenEveryParticipantParks(t *testing.T) {
 	if elapsed := time.Since(started); elapsed > 40*time.Millisecond {
 		t.Fatalf("an idle bundle flushes at once, not at its window: %v", elapsed)
 	}
-	if calls, tasks := encoders.Bundles(); calls != 1 || tasks != 3 || encoders.Calls("classify") != 0 {
-		t.Fatalf("encoder process: %d bundles with %d tasks, %d direct calls", calls, tasks, encoders.Calls("classify"))
+	if calls, tasks := encoders.Bundles(); calls != 3 || tasks != 3 || encoders.Calls("classify") != 0 {
+		t.Fatalf("independent encoder deployments: %d bundles with %d tasks, %d direct calls", calls, tasks, encoders.Calls("classify"))
 	}
 	if calls, tasks := decisions.Bundles(); calls != 1 || tasks != 1 {
 		t.Fatalf("decision process: %d bundles with %d tasks", calls, tasks)

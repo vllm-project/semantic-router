@@ -17,6 +17,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tidwall/sjson"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -307,12 +309,18 @@ func askVela2(t *testing.T, endpoint string, request vela2Call) map[string]inter
 	return answer
 }
 
-// questionsDigest identifies a state's questions as the runtime read them.
+// questionsDigest identifies the model-facing questions. Full-input admission
+// never enters the model's prompt; its request flag and response proof are
+// checked separately. Keep every other raw field and criteria ordering intact.
 func questionsDigest(questions map[string]json.RawMessage) string {
 	var digest bytes.Buffer
 	for _, id := range sortedKeys(questions) {
 		var compact bytes.Buffer
-		_ = json.Compact(&compact, questions[id])
+		question, err := sjson.DeleteBytes(questions[id], "require_full_input")
+		if err != nil {
+			question = questions[id]
+		}
+		_ = json.Compact(&compact, question)
 		fmt.Fprintf(&digest, "%s=%s\n", id, compact.Bytes())
 	}
 	return sha256Hex(digest.Bytes())
@@ -386,6 +394,16 @@ func recordedAnswer(answer map[string]interface{}) map[string]interface{} {
 	for key, value := range answer {
 		if key != "model" && key != "meta" && key != "states" {
 			out[key] = round(value)
+		}
+	}
+	// Coverage is transport evidence, checked before recording. Remove only
+	// the typed envelope field, never an identically named model label.
+	for _, section := range []string{"answers", "sets"} {
+		entries, _ := out[section].(map[string]interface{})
+		for _, value := range entries {
+			if entry, ok := value.(map[string]interface{}); ok {
+				delete(entry, "input_coverage")
+			}
 		}
 	}
 	return out

@@ -70,7 +70,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone(), DataPolicy: cfg.DataPolicy.Clone()}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -78,7 +78,7 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 }
 
 func (d *decompiler) decompileRoutingStrategy() {
-	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil && d.cfg.DataPolicy == nil {
+	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil {
 		return
 	}
 	d.writeSection("ROUTING PROFILE")

@@ -6,8 +6,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestImplicitEmbeddingSharesStartupCPUBudget(t *testing.T) {
-	t.Setenv(CPUProcessesEnv, "")
+func TestImplicitEmbeddingInInitialCPUPlan(t *testing.T) {
+	t.Setenv(CPUThreadsEnv, "")
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.MmBertModelPath = "models/Vela-1.0-Encoder-307M-Embedding"
@@ -26,10 +26,10 @@ func TestImplicitEmbeddingSharesStartupCPUBudget(t *testing.T) {
 	}
 	var embeddingPlanned bool
 	for _, plan := range plans {
-		if plan.threads != 96 {
-			t.Fatalf("process %q got %d threads instead of half the startup budget", plan.name, plan.threads)
+		if plan.threads != 16 {
+			t.Fatalf("process %q got %d threads instead of the default worker budget", plan.name, plan.threads)
 		}
-		if _, ok := plan.members["@embedding.mmbert"]; ok {
+		if plan.logical == "@embedding.mmbert" {
 			embeddingPlanned = true
 		}
 	}

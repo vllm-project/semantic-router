@@ -71,6 +71,28 @@ describe('chat routing metadata', () => {
   })
 })
 
+describe('System One routing headers', () => {
+  it('labels the decision model answers, recipe, confidence and routing latency', () => {
+    const markup = renderToStaticMarkup(
+      createElement(HeaderDisplay, {
+        headers: {
+          ...routingHeaders,
+          'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
+          'x-vsr-selected-recipe': 'default',
+          'x-vsr-selected-confidence': '0.91',
+          'x-vsr-routing-latency-ms': '61',
+        },
+      }),
+    )
+
+    expect(markup).toContain('System One Answers')
+    expect(markup).toContain('Recipe')
+    expect(markup).toContain('Decision Confidence')
+    expect(markup).toContain('Routing Latency')
+    expect(markup).toContain('61')
+  })
+})
+
 describe('looper latency and token usage headers (#2694)', () => {
   const looperMetricsHeaders = {
     ...routingHeaders,
