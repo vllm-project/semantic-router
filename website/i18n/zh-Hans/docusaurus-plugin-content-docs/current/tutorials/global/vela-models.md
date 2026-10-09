@@ -3,14 +3,14 @@
 ## 概览 {#overview}
 
 [Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
-是包含十四个已发布 checkpoint 的智能路由模型家族。当前 Router 模型注册表包含 Vela 307M Encoder 基座与十个任务模型，覆盖路由、提示词保护、内容安全、检索和重排，并将每个版本固定到不可变的 revision。
+是面向智能路由的专用模型家族。Router 注册表包含 Vela 307M Encoder 基座、任务分类器、检索与重排模型以及多模态嵌入模型，每个版本都固定到不可变的 revision。
 
 | 模型 | 作用 |
 | --- | --- |
 | Encoder | 适配新路由任务的共享基座 |
 | Domain | 识别 14 类请求主题 |
 | Guard | 检测提示注入和越狱攻击 |
-| Safety | 检测不安全内容 |
+| Safety / Shield | 可选的不安全内容分类器 |
 | Hazard | 识别 12 类独立内容风险 |
 | PII | 提取 17 类个人信息实体 |
 | FactCheck | 判断请求是否需要事实核查 |
@@ -21,7 +21,7 @@
 
 完整模型名由 `Vela-1.0-Encoder-307M` 和任务后缀组成。Modality 从文本请求判断所需的输出模态。FactCheck 判断是否需要核查，并不验证回答的事实真伪。
 
-公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。这三个 checkpoint 可直接使用并开展集成工作，尚未成为 Router 默认的幻觉检测或多模态组件。完整模型家族见 [Vela 1.0 发布公告](/blog/vela-models)。
+公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。Halu 已接入 Router 的专用幻觉检测，Omni 已接入多模态嵌入；见[检查回答依据](../../model-runtime/guides/hallucination)和[图像与音频](../../model-runtime/guides/multimodal)。完整模型家族见 [Vela 1.0 发布公告](/blog/vela-models)。
 
 ## 解决什么问题 {#what-problem-does-it-solve}
 
@@ -33,7 +33,7 @@
 
 ## Omni checkpoints {#omni-checkpoints}
 
-9 月 19 日发布的版本通过独立的文本、图像和音频编码器生成共享空间中的嵌入。这两个 checkpoint 仍供直接使用，尚未成为 Router 默认的多模态组件。
+9 月 19 日发布的版本通过独立的文本、图像和音频编码器生成共享空间中的嵌入。模型运行时支持将这两个 checkpoint 加载为多模态嵌入部署。
 
 | Checkpoint | 总参数量 | 输出维度 | 文本上限 | 文本基座与读出 |
 | --- | ---: | ---: | ---: | --- |
@@ -74,15 +74,15 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
-未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 Vela 2.0 0.3B 上运行，每个请求只调用一次（见[选择模型](model-runtime/choose-a-model.md#vela-20)）。语义 Embedding、Hazard 和 Reranker 使用 Vela 1.0；在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可恢复它。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
+未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 Vela 2.0 0.3B 上运行，兼容问题按部署、输入和执行阶段合并；一次 API 调用不等于整个请求只执行一次 forward（见[选择模型](../../model-runtime/choose-a-model.md#vela-20)）。语义 Embedding 和 Reranker 使用 Vela 1.0。内置 Vela 1.0 Hazard deployment 需要显式绑定；目录中存在它不代表自动启用 Safety 到 Hazard 的级联。在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可选择该专用模型。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
 
 运行 Vela 1.0 任务模型且未设置阈值的模块使用 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
 
-输入预算由部署选择。模块的 `max_sequence_length: 0` 保留保守的 512-token 策略；Embedding 默认采用 22 层、768 维和 `full_context: false`。显式模型绑定可设置最多 **32,768 tokens**（含特殊 token）及 `overflow: reject`，超限输入会被拒绝，不会静默缩短。
+输入预算取决于任务、加载的模型和部署策略；`0` 不代表无限上下文。Embedding 默认采用 22 层、768 维和 `full_context: false`。经过验证支持 32K 的模型可显式设置 **32,768 tokens**（含特殊 token）及 `overflow: reject`。PII 和 Guard 也可使用重叠窗口；完整文本预算与窗口参数应遵循各任务指南。被拒绝的输入不会静默缩短。
 
 ## 配置 {#configuration}
 
-每个 Vela 模型都运行在[模型运行时](model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
+每个 Vela 模型都运行在[模型运行时](../../model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
 
 ```yaml
 routing:
@@ -103,7 +103,7 @@ global:
           overflow: reject
 ```
 
-其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`，Embedding 使用 `embedding.v1`，Reranker 使用 `relevance_scores.v1`。运行时从模型包读取每个模型的架构，因此这些 binding 不需要 adapter。完整契约见[与路由器一起运行](model-runtime/deploy.md)。
+其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`，Embedding 使用 `embedding.v1`，Reranker 使用 `relevance_scores.v1`。运行时从模型包读取每个模型的架构，因此这些 binding 不需要 adapter。完整契约见[与路由器一起运行](../../model-runtime/deploy)。
 
 Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 
@@ -111,11 +111,11 @@ PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按
 
 ## 推理引擎与硬件 {#inference-engines-and-hardware}
 
-模型运行时用 PyTorch 运行 Vela 模型。CPU 执行（包括 32K 输入）已验证，经 ROCm 的 AMD Instinct MI300X 和 MI325X GPU 也已验证。CUDA 可用但尚未验证，NVIDIA 性能需要在目标硬件上测量。[Profiles](model-runtime/profiles.md) 在精确与速度之间取舍，[选择模型](model-runtime/choose-a-model.md)列出每个模型的开销。
+模型运行时用 PyTorch 在 CPU、CUDA 或 ROCm 上运行 Vela。支持的输入长度是容量上限，不是时延保证。长输入在少核 CPU 上可能超过请求截止时间；请按实际输入长度和并发测量，选择足够的 CPU 容量或 GPU，而不是假设延长超时就能解决容量不足。[Profiles](../../model-runtime/profiles) 在精确与速度之间取舍，[选择模型](../../model-runtime/choose-a-model.md)列出每个模型的开销。
 
 [Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform rocm` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
 
-早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](model-runtime/migrate.md)。
+早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](../../model-runtime/migrate.md)。
 
 各模型卡片列出支持的输入长度、用法及可比评测结果。公开对比以此前的 mmBERT 家族为基线，使用匹配数据；质量分数、最大可接受输入长度和推理性能衡量的是不同属性。
 

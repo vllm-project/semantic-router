@@ -53,9 +53,12 @@ global:
         enabled: true
 ```
 
-The router runs FactCheck and Halu on the CPU. Halu reads up to 8,192 tokens of
-context, question and answer together; longer context is shortened from its
-end so the answer is always checked.
+Without task overrides, these judgments use the default Vela 2.0 deployment.
+The explicit Vela 1.0 Halu binding below selects the specialist instead. That
+specialist reads up to 8,192 tokens of context, question, and answer together;
+its context preparation prioritizes retaining the answer. Input limits and
+complete-coverage requirements still apply; see
+[Long inputs](../reference.md#long-inputs).
 
 ## Choose where it runs
 

@@ -83,6 +83,7 @@ same final validation but are not replaced by another model.
 
 | Type | Status | Goal | Main dependency | Guide |
 |---|---|---|---|---|
+| `decision` | supported | Ask a typed choice question over the matched candidates | Decision deployment with Choice support | [Decision](./selection/decision) |
 | `static` | supported | Use declared order or fixed domain scores | None | [Static](./selection/static) |
 | `router_dc` | supported | Match request semantics to model descriptions | Embedding runtime and useful model cards | [Router DC](./selection/router-dc) |
 | `latency_aware` | supported | Prefer the candidate with the best observed TTFT/TPOT | Per-process latency observations | [Latency Aware](./selection/latency-aware) |
@@ -125,7 +126,7 @@ traffic before using them for production routing.
   its LoRA and reasoning controls, not just its model name. Scoring, composition,
   and dispatch retain the exact winning reference. A legacy model-only result
   that matches multiple different candidates is rejected rather than resolved
-  to the first reference. For a LoRA candidate, Envoy routes by the selected
+  to the first reference. For a LoRA candidate, the serving frontend routes by the selected
   base model while the provider request names the adapter.
 - Router Learning session memory retains the selected candidate's controls.
   Protection can hold that exact choice across tool-loop continuations even
