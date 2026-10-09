@@ -2937,10 +2937,10 @@
     "message": "Router 模式"
   },
   "homepage.runtimeModes.router.description": {
-    "message": "将 Chat 和 Responses 请求路由到模型后端，同时保留原生决策能力。"
+    "message": "将 Chat、Messages 和 Responses 请求路由到模型后端，同时保留原生决策能力。"
   },
-  "homepage.runtimeModes.router.extproc": {
-    "message": "原生 HTTP 网关。通过 {flag} 接入 Envoy。"
+  "homepage.runtimeModes.router.endpoint": {
+    "message": "调用 {chatEndpoint} 或 {messagesEndpoint}。"
   },
   "homepage.runtimeModes.router.cta": {
     "message": "运行 Router"
