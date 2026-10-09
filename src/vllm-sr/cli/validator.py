@@ -40,7 +40,6 @@ from cli.validator_projection_embedding import (
     validate_projection_score_dependencies,
 )
 from cli.validator_recipe_contracts import (
-    looper_alias_collision_warnings,
     validate_domain_references,
     validate_recipe_contracts,
 )
@@ -551,6 +550,10 @@ def validate_user_config(
         log.info("Validating user configuration...")
 
     errors = []
+    if not config.routing_enabled:
+        # Engine mode keeps dormant routing configuration without constructing
+        # its classifiers, algorithms or plugin dependencies.
+        return validate_model_runtime_references(config)
 
     errors.extend(validate_recipe_contracts(config))
 
@@ -595,7 +598,7 @@ def validate_user_config(
 
 def collect_validation_warnings(config: UserConfig) -> List[ValidationError]:
     """Return findings that leave the configuration valid but likely wrong."""
-    return looper_alias_collision_warnings(config)
+    return []
 
 
 def print_validation_warnings(warnings: List[ValidationError]):

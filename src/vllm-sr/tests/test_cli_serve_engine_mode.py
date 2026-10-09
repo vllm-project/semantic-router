@@ -1,483 +1,402 @@
-"""`vllm-sr serve MODEL [MODEL ...]` runs the model runtime in a container; router mode is unchanged."""
+"""One frontend with startup-only routing and explicit model placement overrides."""
 
-import os
-import signal
-import subprocess
-import sys
-import textwrap
-from pathlib import Path
+from contextlib import nullcontext
+from copy import deepcopy
 
 import pytest
 import yaml
-from cli import container_run_command, engine_container
-from cli.commands import runtime as runtime_commands
-from cli.commands import runtime_engine
+from cli import decision_model, execution_platform, runtime_lifecycle
+from cli.bootstrap import build_bootstrap_config
+from cli.commands import runtime
+from cli.commands.runtime_mode_config import (
+    apply_instance_options,
+    validate_model_options,
+)
+from cli.commands.runtime_serve_config import _prepare_docker_runtime_config
 from cli.main import main
+from cli.models import UserConfig
+from cli.validator import validate_user_config
 from click.testing import CliRunner
 
-REVISION = "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
-IMAGE = "registry.example/vllm-sr:1"
+MODEL = "vllm-sr/Decision-2.0-Kai-0.6B"
 
 
-class Engine:
-    """The container runtime and image engine mode resolves, and what it ran."""
-
-    def __init__(self, monkeypatch, cache_dir: Path):
-        self.cache_dir = cache_dir
-        self.runtime = "docker"
-        self.images: list[dict] = []
-        self.commands: list[list[str]] = []
-        self.models_files: list[dict] = []
-        self.exit_code = 0
-        monkeypatch.setattr(
-            runtime_engine, "get_container_runtime", lambda: self.runtime
-        )
-        monkeypatch.setattr(runtime_engine, "get_container_image", self._image)
-        monkeypatch.setattr(
-            engine_container, "_ensure_port_is_free", lambda *args: None
-        )
-        monkeypatch.setattr(engine_container, "run_foreground", self._run)
-
-    def _image(self, **kwargs):
-        self.images.append(kwargs)
-        return IMAGE
-
-    def _run(self, command):
-        self.commands.append(list(command))
-        for spec in _values(command, "-v"):
-            host, inside, _ = spec.split(":")
-            if inside == "/app/packages/models.yaml":
-                self.models_files.append(yaml.safe_load(Path(host).read_text()))
-        return self.exit_code
-
-    @property
-    def command(self) -> list[str]:
-        (command,) = self.commands
-        return command
-
-    def runtime_arguments(self) -> list[str]:
-        return self.command[self.command.index(IMAGE) + 1 :]
+def options(model=None, **kwargs):
+    return validate_model_options(
+        model=model,
+        revision=kwargs.pop("revision", None),
+        runtime_profile=kwargs.pop("runtime_profile", None),
+        **kwargs
+    )
 
 
-def _values(command, flag):
-    return [command[i + 1] for i, value in enumerate(command) if value == flag]
-
-
-@pytest.fixture
-def engine(monkeypatch, tmp_path):
-    for name in ("VLLM_SR_DNS", "HF_TOKEN", "HF_ENDPOINT", "HF_HUB_OFFLINE"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.delenv("VLLM_SR_PLATFORM", raising=False)
-    monkeypatch.delenv("DASHBOARD_PLATFORM", raising=False)
-    monkeypatch.setenv("VLLM_SR_ENGINE_CACHE_DIR", str(tmp_path / "cache"))
-    return Engine(monkeypatch, tmp_path / "cache")
-
-
-@pytest.fixture
-def router_serve(monkeypatch):
+@pytest.mark.parametrize(
+    "args,engine",
+    [([], False), ([MODEL], False), ([MODEL, "-e"], True), (["--engine"], True)],
+)
+def test_router_default_and_explicit_engine_share_serve(monkeypatch, args, engine):
     calls = []
-    monkeypatch.setattr(
-        runtime_commands, "_execute_serve", lambda *args, **kwargs: calls.append(args)
-    )
-    return calls
-
-
-def _serve(*arguments):
-    return CliRunner().invoke(main, ["serve", *arguments])
-
-
-def _text(result) -> str:
-    """The output with the terminal's line wrapping undone."""
-    return " ".join(result.output.split())
-
-
-def test_engine_mode_runs_the_runtime_in_the_platform_image(engine, router_serve):
-    result = _serve(
-        "vllm-sr/Decision-2.0-Kai-0.6B",
-        "--revision",
-        REVISION,
-        "--device",
-        "cpu",
-        "--port",
-        "8200",
-        "--runtime-profile",
-        "batching",
-        "--log-level",
-        "warn",
-    )
-
+    monkeypatch.setattr(runtime, "_execute_serve", lambda *a, **kw: calls.append(kw))
+    result = CliRunner().invoke(main, ["serve", *args])
     assert result.exit_code == 0, result.output
-    assert engine.command == [
-        "docker",
-        "run",
-        "--rm",
-        "--init",
-        "--name",
-        "vllm-sr-engine-8200",
-        "-p",
-        "127.0.0.1:8200:8100",
-        "-v",
-        f"{engine.cache_dir}:/app/models:z",
-        "--entrypoint",
-        "vllm-srun",
-        IMAGE,
-        "serve",
-        "vllm-sr/Decision-2.0-Kai-0.6B",
-        "--device",
-        "cpu",
-        "--profile",
-        "batching",
-        "--revision",
-        REVISION,
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8100",
-        "--cache-dir",
-        "/app/models/model-runtime",
-        "--log-level",
-        "warning",
-    ]
-    assert engine.images == [{"image": None, "pull_policy": "always", "platform": ""}]
-    assert engine.cache_dir.is_dir()
-    assert router_serve == []
+    assert calls[0]["engine"] is engine
+    if MODEL in args:
+        assert calls[0]["model_options"] == {"artifact": MODEL}
 
 
-def test_engine_mode_defaults(engine):
-    result = _serve("vllm-sr/Decision-2.0-Kai-0.6B")
-
-    assert result.exit_code == 0, result.output
-    assert _values(engine.command, "-p") == ["127.0.0.1:8100:8100"]
-    assert engine.runtime_arguments()[:6] == [
-        "serve",
-        "vllm-sr/Decision-2.0-Kai-0.6B",
-        "--device",
-        "auto",
-        "--profile",
-        "exact",
-    ]
-
-
-def test_host_and_port_are_the_host_publication(engine):
-    result = _serve("kai", "--host", "0.0.0.0", "--port", "9000")
-
-    assert result.exit_code == 0, result.output
-    assert _values(engine.command, "-p") == ["0.0.0.0:9000:8100"]
-    arguments = engine.runtime_arguments()
-    assert arguments[arguments.index("--host") + 1] == "0.0.0.0"
-    assert arguments[arguments.index("--port") + 1] == "8100"
+def test_no_engine_flag_enables_routing_without_discarding_saved_policy():
+    document = {
+        "version": "v0.3",
+        "routing": {"decisions": [{"name": "saved"}]},
+        "listeners": [{"name": "public", "models": ["router/auto"]}],
+    }
+    original = deepcopy(document)
+    assert apply_instance_options(document, engine=True)
+    assert document["global"]["router"]["enabled"] is False
+    assert apply_instance_options(document)
+    assert document["global"]["router"]["enabled"] is True
+    assert not apply_instance_options(document)
+    assert document["routing"] == original["routing"]
+    assert document["listeners"] == original["listeners"]
 
 
-def test_local_packages_are_mounted_read_only(engine, tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "kai").mkdir()
-    (tmp_path / "pkgs" / "domain").mkdir(parents=True)
-
-    result = _serve(
-        "kai",
-        str(tmp_path / "pkgs" / "domain") + "/",
-        "./kai",
-        f"vllm-sr/Vela-1.0-Encoder-307M-Domain@{REVISION}",
+def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
+    document = {"version": "v0.3", "setup": {"mode": True}}
+    apply_instance_options(document, engine=True, model_options=options(MODEL))
+    assert "setup" not in document
+    assert "providers" not in document and "routing" not in document
+    assert document["listeners"][0]["systemone"]["models"] == [MODEL]
+    assert document["global"]["model_catalog"]["system"]["decision_model"] == {
+        "deployment": "primary"
+    }
+    assert (
+        validate_user_config(UserConfig.model_validate(document), log_summary=False)
+        == []
     )
 
-    assert result.exit_code == 0, result.output
-    assert _values(engine.command, "-v")[1:] == [
-        f"{tmp_path / 'kai'}:/app/packages/0/kai:ro,z",
-        f"{tmp_path / 'pkgs' / 'domain'}:/app/packages/1/domain:ro,z",
-    ]
-    assert engine.runtime_arguments()[1:5] == [
-        "/app/packages/0/kai",
-        "/app/packages/1/domain",
-        "/app/packages/0/kai",
-        f"vllm-sr/Vela-1.0-Encoder-307M-Domain@{REVISION}",
-    ]
+
+def test_generated_engine_bootstrap_preserves_listener_settings():
+    document = build_bootstrap_config()
+    original = deepcopy(document["listeners"][0])
+    apply_instance_options(document, engine=True, model_options=options(MODEL))
+    assert document["listeners"] == [{**original, "systemone": {"models": [MODEL]}}]
 
 
-def test_a_models_file_names_the_mounts_of_its_local_packages(engine, tmp_path):
-    (tmp_path / "kai").mkdir()
-    models = tmp_path / "models.yaml"
-    models.write_text(
-        textwrap.dedent(
-            f"""\
-            models:
-              - {{model: {tmp_path / "kai"}, name: kai, device: cpu}}
-              - {{model: vllm-sr/Vela-1.0-Encoder-307M-PII, name: pii}}
-            """
-        )
-    )
-
-    result = _serve("--models", str(models), "--port", "8300")
-
-    assert result.exit_code == 0, result.output
-    assert engine.models_files == [
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"address": "127.0.0.1", "port": 9999},
+        {"api_keys": ["private-test-key"]},
+        {"models": ["vllm-sr/auto"]},
+        {"systemone": {"models": [MODEL]}},
         {
-            "models": [
-                {"model": "/app/packages/0/kai", "name": "kai", "device": "cpu"},
-                {"model": "vllm-sr/Vela-1.0-Encoder-307M-PII", "name": "pii"},
-            ]
+            "address": "127.0.0.1",
+            "port": 9999,
+            "api_keys": ["private-test-key"],
+            "systemone": {"models": [MODEL]},
+        },
+    ],
+)
+def test_engine_setup_preserves_authored_listener_policy(overrides):
+    document = build_bootstrap_config()
+    document["listeners"][0].update(overrides)
+    listeners = deepcopy(document["listeners"])
+    apply_instance_options(document, engine=True, model_options=options(MODEL))
+    assert "setup" not in document
+    assert document["global"]["router"]["enabled"] is False
+    assert document["listeners"] == listeners
+    assert (
+        validate_user_config(UserConfig.model_validate(document), log_summary=False)
+        == []
+    )
+
+
+def declaration(resource):
+    return {
+        "global": {
+            "model_catalog": {
+                "system": {"decision_model": {"deployment": "chosen"}},
+                "deployments": {"chosen": resource},
+            }
+        },
+        "listeners": [{"name": "main", "systemone": {"models": ["judge"]}}],
+    }
+
+
+def selected(document):
+    return document["global"]["model_catalog"]["deployments"]["chosen"]
+
+
+def test_model_only_keeps_placement_profile_identity_and_grants():
+    replicas = [{"device": "rocm:0"}, {"device": "rocm:1"}]
+    document = declaration(
+        {
+            "provider": "model_runtime",
+            "artifact": "old/model",
+            "revision": "a" * 40,
+            "public_name": "judge",
+            "profile": "batching",
+            "replicas": replicas,
+            "input": {"max_tokens": 4096, "overflow": "window"},
         }
-    ]
-    assert engine.runtime_arguments()[:3] == [
-        "serve",
-        "--models",
-        "/app/packages/models.yaml",
-    ]
-    assert models.read_text().count(str(tmp_path / "kai")) == 1
-
-
-def test_a_models_file_device_is_checked_against_the_image(engine, tmp_path):
-    models = tmp_path / "models.yaml"
-    models.write_text("models:\n  - {model: vllm-sr/Kai, device: cuda:0}\n")
-
-    result = _serve("--models", str(models))
-
-    assert result.exit_code == 1
-    assert "models[0].device cuda:0 needs --platform nvidia" in _text(result)
-    assert engine.commands == []
-
-
-def test_amd_passes_the_rocm_devices_through(engine, monkeypatch):
-    monkeypatch.setattr(container_run_command.os.path, "exists", lambda path: True)
-
-    result = _serve("vllm-sr/Kai", "--platform", "amd", "--device", "rocm:1")
-
-    assert result.exit_code == 0, result.output
-    assert engine.images[0]["platform"] == "amd"
-    container = engine.command[: engine.command.index(IMAGE)]
-    assert _values(container, "--device") == ["/dev/kfd", "/dev/dri"]
-    assert _values(container, "--group-add") == ["video"]
-    assert engine.runtime_arguments()[2:4] == ["--device", "rocm:1"]
-
-
-@pytest.mark.parametrize(
-    ("runtime", "flags"),
-    [
-        ("docker", ["--gpus", "all", "--runtime", "nvidia"]),
-        ("podman", ["--device", "nvidia.com/gpu=all"]),
-    ],
-)
-def test_nvidia_passes_the_gpus_through(engine, runtime, flags):
-    engine.runtime = runtime
-
-    result = _serve("vllm-sr/Kai", "--platform", "nvidia")
-
-    assert result.exit_code == 0, result.output
-    assert engine.command[6 : 6 + len(flags)] == flags
-    assert engine.command[0] == runtime
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        (["--device", "cuda"], "--device cuda needs --platform nvidia"),
-        (["--device", "rocm:0", "--platform", "nvidia"], "needs --platform amd"),
-        (["--device", "mps"], "mps needs macOS's Metal"),
-        (["--device", "xpu:0", "--platform", "amd"], "no router image runs xpu"),
-    ],
-)
-def test_the_device_must_be_one_the_image_runs(engine, arguments, message):
-    result = _serve("vllm-sr/Kai", *arguments)
-
-    assert result.exit_code == 2
-    assert message in result.output
-    assert engine.images == []
-
-
-def test_a_plugin_accelerator_is_the_runtimes_to_check(engine):
-    result = _serve("vllm-sr/Kai", "--device", "example_host", "--image", "mine:1")
-
-    assert result.exit_code == 0, result.output
-    assert engine.images[0]["image"] == "mine:1"
-    assert engine.runtime_arguments()[2:4] == ["--device", "example_host"]
-
-
-def test_hub_settings_are_inherited_by_name(engine, monkeypatch):
-    monkeypatch.setenv("HF_TOKEN", "hf_secret_value")
-    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
-
-    result = _serve("vllm-sr/Kai")
-
-    assert result.exit_code == 0, result.output
-    assert _values(engine.command, "-e") == ["HF_HUB_OFFLINE", "HF_TOKEN"]
-    assert "hf_secret_value" not in " ".join(engine.command)
-
-
-def test_container_options_apply_to_engine_mode(engine, monkeypatch):
-    # Recorded so the override the command applies is undone afterwards.
-    monkeypatch.setenv("CONTAINER_RUNTIME", "docker")
-
-    result = _serve(
-        "vllm-sr/Kai",
-        "--container-runtime",
-        "podman",
-        "--image-pull-policy",
-        "never",
     )
+    apply_instance_options(document, model_options=options(MODEL), platform="rocm")
+    result = selected(document)
+    assert result["artifact"] == MODEL and result["revision"] != "a" * 40
+    assert result["replicas"] == replicas and result["profile"] == "batching"
+    assert result["input"] == {"max_tokens": 4096, "overflow": "window"}
+    assert result["public_name"] == "judge"
+    assert document["listeners"][0]["systemone"]["models"] == ["judge"]
 
-    assert result.exit_code == 0, result.output
-    assert os.environ.get("CONTAINER_RUNTIME") == "podman"
-    assert engine.images[0]["pull_policy"] == "never"
+
+def test_same_artifact_keeps_revision_and_profile_when_unspecified():
+    document = declaration(
+        {
+            "provider": "model_runtime",
+            "artifact": MODEL,
+            "revision": "b" * 40,
+            "profile": "batching",
+            "device": "cpu",
+        }
+    )
+    apply_instance_options(document, model_options=options(MODEL))
+    assert selected(document)["revision"] == "b" * 40
+    assert selected(document)["profile"] == "batching"
 
 
-def test_the_runtimes_exit_code_is_the_commands(engine):
-    engine.exit_code = 3
+def test_new_multi_gpu_workers_use_available_devices():
+    document = {"version": "v0.3"}
+    apply_instance_options(
+        document,
+        model_options=options(MODEL, data_parallel_size=2),
+        platform="rocm",
+        available_devices=(2, 5),
+    )
+    result = document["global"]["model_catalog"]["deployments"]["primary"]
+    assert result["replicas"] == [{"device": "rocm:2"}, {"device": "rocm:5"}]
+    assert "device" not in result
+    assert result["profile"] == "exact"
 
-    result = _serve("vllm-sr/Kai")
 
-    assert result.exit_code == 3
+def test_new_dp_requires_explicit_colocation_when_capacity_is_short():
+    with pytest.raises(ValueError, match="available GPUs"):
+        apply_instance_options(
+            {},
+            model_options=options(MODEL, data_parallel_size=4),
+            platform="rocm",
+            available_devices=(0,),
+        )
+
+
+def test_explicit_host_device_can_repeat_workers_after_mask_mapping():
+    requested = options(MODEL, data_parallel_size=4, device_ids="7")
+    requested["device_ordinals"] = (0,)
+    document = {}
+    apply_instance_options(
+        document, model_options=requested, platform="rocm", available_devices=(0,)
+    )
+    result = document["global"]["model_catalog"]["deployments"]["primary"]
+    assert result["replicas"] == [{"device": "rocm:0"}] * 4
+    assert "data_parallel_size" not in result and "device_ids" not in result
+
+
+def test_dp_scaling_preserves_existing_placement_order():
+    document = declaration(
+        {
+            "provider": "model_runtime",
+            "artifact": MODEL,
+            "replicas": [{"device": "cuda:1"}, {"device": "cuda:3"}],
+        }
+    )
+    apply_instance_options(
+        document, model_options=options(data_parallel_size=3), platform="cuda"
+    )
+    assert selected(document)["replicas"] == [
+        {"device": "cuda:1"},
+        {"device": "cuda:3"},
+        {"device": "cuda:1"},
+    ]
+
+
+def test_attached_deployment_is_not_silently_replaced():
+    document = declaration(
+        {
+            "provider": "model_runtime",
+            "artifact": MODEL,
+            "endpoint": "http://runtime:8100",
+        }
+    )
+    with pytest.raises(ValueError, match="managed default deployment"):
+        apply_instance_options(document, model_options=options(MODEL))
 
 
 @pytest.mark.parametrize(
-    ("arguments", "message"),
+    "args",
     [
-        (["--config", "my.yaml"], "--config applies to router mode"),
-        (["--target", "k8s"], "--target applies to router mode"),
-        (["--gateway", "extproc"], "--gateway applies to router mode"),
-        (["--recipe-env", "TOKEN"], "--recipe-env applies to the docker target"),
-        (["--router-image", "r:1"], "--router-image applies to the docker target"),
-        (["--namespace", "ns"], "--namespace applies to the kubernetes target"),
-        (["--profile", "batching"], "engine mode takes --runtime-profile"),
-        (["--runtime-profile", "Fast!"], "is not a profile name"),
+        ["--mode", "engine"],
+        ["--model", MODEL],
+        ["--decision-model", "primary"],
+        ["--device", "cpu"],
+        ["--models", "models.yaml"],
+        ["--platform", "amd"],
+        ["--platform", "nvidia"],
+        ["-dp", "0"],
+        ["-dp", "65"],
+        ["--device-ids", "0,0"],
+        ["--device-ids", "-1"],
+        ["--runtime-profile", "Fast!"],
     ],
 )
-def test_engine_mode_rejects_other_modes_options(engine, arguments, message):
-    result = _serve("vllm-sr/Decision-2.0-Kai-0.6B", *arguments)
-
-    assert result.exit_code == 2
-    assert message in result.output
-    assert engine.commands == []
-
-
-def test_unix_sockets_are_gone(engine):
-    result = _serve("vllm-sr/Kai", "--uds", "/tmp/r.sock")
-
-    assert result.exit_code == 2
-    assert "No such option '--uds'" in result.output
+def test_removed_or_invalid_options_never_reach_startup(monkeypatch, args):
+    monkeypatch.setattr(
+        runtime,
+        "_execute_serve",
+        lambda *a, **kw: pytest.fail("invalid command reached startup"),
+    )
+    result = CliRunner().invoke(main, ["serve", *args])
+    assert result.exit_code == 2, result.output
 
 
-@pytest.mark.parametrize(
-    "arguments, message",
-    [
-        (["a", "b", "--revision", REVISION], "--revision applies to a single MODEL"),
-        (["a", "--models", "models.yaml"], "not both"),
-    ],
-)
-def test_engine_mode_rejects_ambiguous_model_lists(engine, arguments, message):
-    result = _serve(*arguments)
-
-    assert result.exit_code == 2
-    assert message in result.output
-    assert engine.commands == []
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        (["--device", "cpu"], "--device applies to engine mode"),
-        (["--runtime-profile", "exact"], "--runtime-profile applies to engine mode"),
-        (["--port", "8100"], "--port applies to engine mode"),
-    ],
-)
-def test_router_mode_rejects_engine_options(router_serve, arguments, message):
-    result = _serve(*arguments)
-
-    assert result.exit_code == 2
-    assert message in result.output
-    assert router_serve == []
-
-
-def test_router_mode_keeps_the_deployment_profile(router_serve):
-    result = _serve("--target", "k8s", "--profile", "dev")
-
-    assert result.exit_code == 0, result.output
-    assert len(router_serve) == 1
-    assert "dev" in router_serve[0]
-
-
-def test_engine_mode_on_macos_is_cpu_only(engine, monkeypatch):
-    monkeypatch.setattr(runtime_commands.sys, "platform", "darwin")
-
-    result = _serve("vllm-sr/Kai", "--platform", "nvidia")
-
-    assert result.exit_code == 1
-    assert "needs a Linux host" in result.output
-    assert engine.commands == []
-
-
-def test_serve_help_documents_engine_mode():
+def test_help_and_instance_commands_have_no_mode_bypass():
     result = CliRunner().invoke(main, ["serve", "--help"])
-
     assert result.exit_code == 0
-    assert "ENGINE MODE" in result.output
-    assert "Engine mode (vllm-sr serve MODEL)" in result.output
-    assert "--runtime-profile" in result.output
-    assert "--uds" not in result.output
-
-
-def test_a_running_engine_on_the_port_is_refused(monkeypatch):
-    calls = []
-
-    def fake_run(command, **kwargs):
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="true\n")
-
-    monkeypatch.setattr(engine_container.subprocess, "run", fake_run)
-
-    with pytest.raises(ValueError, match="already serves port 8100"):
-        engine_container._ensure_port_is_free("docker", "vllm-sr-engine-8100", 8100)
-    assert len(calls) == 1
-
-
-def test_a_stopped_leftover_on_the_port_is_removed(monkeypatch):
-    calls = []
-
-    def fake_run(command, **kwargs):
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="false\n")
-
-    monkeypatch.setattr(engine_container.subprocess, "run", fake_run)
-
-    engine_container._ensure_port_is_free("podman", "vllm-sr-engine-8100", 8100)
-    assert calls[-1] == ["podman", "rm", "-f", "vllm-sr-engine-8100"]
-
-
-FOREGROUND = textwrap.dedent(
-    """\
-    import sys
-    from cli.engine_container import run_foreground
-    child = '''
-    import signal, sys, time
-    signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
-    print("ready", flush=True)
-    if sys.argv[1] == "fail":
-        sys.exit(3)
-    time.sleep(60)
-    sys.exit(4)
-    '''
-    sys.exit(run_foreground([sys.executable, "-c", child, sys.argv[1]]))
-    """
-)
-
-
-def _foreground(mode: str) -> subprocess.Popen:
-    return subprocess.Popen(
-        [sys.executable, "-c", FOREGROUND, mode],
-        stdout=subprocess.PIPE,
-        text=True,
-        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
+    assert "[MODEL]" in result.output and "--engine" in result.output
+    assert (
+        "--model " not in result.output
+        and "--decision-model" not in result.output
+        and "--mode " not in result.output
+    )
+    assert "--data-parallel-size" in result.output and "--device-ids" in result.output
+    help_result = CliRunner().invoke(main, ["instance", "--help"])
+    assert (
+        "deploy" not in help_result.output
+        and "controller" not in help_result.output
+        and "attach" not in help_result.output
     )
 
 
-def test_a_stop_is_forwarded_once_and_exits_zero():
-    wrapper = _foreground("serve")
-    assert wrapper.stdout.readline().strip() == "ready"
+@pytest.mark.parametrize("enabled", ["false", 0, None])
+def test_routing_enabled_is_strictly_boolean(enabled):
+    with pytest.raises(ValueError, match="enabled must be a boolean"):
+        UserConfig.model_validate(
+            {"version": "v0.3", "global": {"router": {"enabled": enabled}}}
+        )
 
-    wrapper.send_signal(signal.SIGINT)
 
-    assert wrapper.wait(timeout=30) == 0
+def test_startup_mode_preserves_source_and_resets_engine_without_flag(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_status_strict", lambda _: "exited"
+    )
+    monkeypatch.setattr(runtime_lifecycle, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        runtime_lifecycle, "acquire_runtime_lifecycle_lock", lambda **_: nullcontext()
+    )
+    source = tmp_path / "config.yaml"
+    source.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [{"name": "private", "address": "0.0.0.0", "port": 8899}],
+                "routing": {"strategy": "confidence"},
+                "global": {
+                    "services": {"observability": {"tracing": {"enabled": False}}}
+                },
+            }
+        )
+    )
+    before = source.read_bytes()
+
+    def prepare(engine=False):
+        path, setup, lock = _prepare_docker_runtime_config(
+            source, None, False, "cpu", (), False, engine=engine
+        )
+        lock.close()
+        assert not setup
+        return yaml.safe_load(path.read_text())
+
+    assert prepare(True)["global"]["router"]["enabled"] is False
+    router = prepare()
+    assert router["global"]["router"]["enabled"] is True
+    assert router["routing"]["strategy"] == "confidence"
+    assert "systemone" not in router["listeners"][0]
+    assert source.read_bytes() == before
 
 
-def test_a_runtime_failure_keeps_its_exit_code():
-    wrapper = _foreground("fail")
+def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        execution_platform,
+        "_host_devices",
+        lambda: {"cuda": (), "rocm": tuple(range(8))},
+    )
+    monkeypatch.setenv("VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES", "7,3")
+    monkeypatch.setattr(decision_model, "host_has_gpu", lambda _: True)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_status_strict", lambda _: "exited"
+    )
+    monkeypatch.setattr(runtime_lifecycle, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        runtime_lifecycle, "acquire_runtime_lifecycle_lock", lambda **_: nullcontext()
+    )
+    source = tmp_path / "config.yaml"
+    source.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {"name": "private", "address": "127.0.0.1", "port": 8899}
+                ],
+                "global": {
+                    "services": {"observability": {"tracing": {"enabled": False}}}
+                },
+            }
+        )
+    )
+    before = source.read_bytes()
+    monkeypatch.setattr(runtime, "_resolve_serve_config", lambda *args: (source, False))
+    deployed = {}
+    monkeypatch.setattr(
+        runtime, "_deploy_serve_backend", lambda **kwargs: deployed.update(kwargs)
+    )
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            MODEL,
+            "-e",
+            "--platform",
+            "rocm",
+            "-dp",
+            "2",
+            "--device-ids",
+            "3,7",
+            "--config",
+            str(source),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    document = yaml.safe_load(deployed["effective_config_path"].read_text())
+    primary = document["global"]["model_catalog"]["deployments"]["primary"]
+    assert primary["replicas"] == [{"device": "rocm:1"}, {"device": "rocm:0"}]
+    assert len(primary["revision"]) == 40
+    assert deployed["env_vars"]["ROCR_VISIBLE_DEVICES"] == "7,3"
+    assert document["global"]["router"]["enabled"] is False
+    assert "systemone" not in document["listeners"][0]
+    assert source.read_bytes() == before
 
-    assert wrapper.wait(timeout=30) == 3
+
+def test_resource_without_authored_placement_uses_available_gpus():
+    document = declaration({"provider": "model_runtime", "artifact": MODEL})
+    apply_instance_options(
+        document,
+        model_options=options(data_parallel_size=2),
+        platform="cuda",
+        available_devices=(1, 3),
+    )
+    assert selected(document)["replicas"] == [
+        {"device": "cuda:1"},
+        {"device": "cuda:3"},
+    ]

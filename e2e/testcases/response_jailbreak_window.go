@@ -73,7 +73,7 @@ func testResponseJailbreakWindowBlock(ctx context.Context, client *kubernetes.Cl
 	defer stopPortForward()
 
 	prompt := responseJailbreakPrompt(responseJailbreakBlockProbe, responseJailbreakPhrase)
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", prompt, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", prompt, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}
@@ -120,7 +120,7 @@ func testResponseJailbreakWindowWarning(ctx context.Context, client *kubernetes.
 	defer stopPortForward()
 
 	unsafe := responseJailbreakPrompt(responseJailbreakWarnProbe, responseJailbreakPhrase)
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", unsafe, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", unsafe, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}
@@ -130,7 +130,7 @@ func testResponseJailbreakWindowWarning(ctx context.Context, client *kubernetes.
 	matched := response.Headers.Get(matchedJailbreakHeader)
 
 	control := responseJailbreakPrompt(responseJailbreakWarnProbe, "That is the whole history of navigation.")
-	controlResponse, err := sendLocalChatCompletion(ctx, localPort, "MoM", control, 60*time.Second)
+	controlResponse, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", control, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("control chat completion request failed: %w", err)
 	}

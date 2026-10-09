@@ -16,8 +16,6 @@ global:
       enabled: false
       backend_type: memory
   router:
-    auto_model_names:
-      - vllm-sr/auto
     learning:
       enabled: true
       adaptation:
@@ -662,8 +660,12 @@ routing:
       priority: 218
       rules:
         conditions:
-          - name: health
-            type: domain
+          - operator: OR
+            conditions:
+              - name: health
+                type: domain
+              - name: health_guidance
+                type: embedding
           - conditions:
               - name: verification_required
                 type: projection
@@ -745,6 +747,8 @@ routing:
                     type: keyword
                   - name: health
                     type: domain
+                  - name: health_guidance
+                    type: embedding
                   - name: law
                     type: domain
                   - name: wrong_answer
@@ -1080,6 +1084,8 @@ routing:
                       - conditions:
                           - name: health
                             type: domain
+                          - name: health_guidance
+                            type: embedding
                           - name: law
                             type: domain
                           - name: code_request_markers
@@ -2647,3 +2653,7 @@ routing:
         name: wrong_answer
       - description: Explicit request to restate the answer more clearly.
         name: need_clarification
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

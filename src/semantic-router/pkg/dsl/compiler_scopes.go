@@ -27,7 +27,6 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 		Profile: config.RoutingProfile{
 			ModelBindings:         cloneModelBindings(c.config.ModelBindings),
 			CandidateRequirements: c.config.CandidateRequirements.Clone(),
-			DataPolicy:            c.config.DataPolicy.Clone(),
 			Signals:               c.config.Signals,
 			Projections:           c.config.Projections,
 			Decisions:             c.config.Decisions,
@@ -65,7 +64,6 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 			Profile: config.RoutingProfile{
 				ModelBindings:         cloneModelBindings(child.config.ModelBindings),
 				CandidateRequirements: child.config.CandidateRequirements.Clone(),
-				DataPolicy:            child.config.DataPolicy.Clone(),
 				Signals:               child.config.Signals,
 				Projections:           child.config.Projections,
 				Decisions:             child.config.Decisions,
@@ -116,6 +114,5 @@ func newScopedCompiler(prog *Program) *Compiler {
 	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
 	c.config.ModelBindings = cloneModelBindings(prog.ModelBindings)
 	c.config.CandidateRequirements = prog.CandidateRequirements.Clone()
-	c.config.DataPolicy = prog.DataPolicy.Clone()
 	return c
 }
