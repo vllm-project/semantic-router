@@ -13,32 +13,28 @@ operates it.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Harness["Agent harness<br/>Task loop, tools, task state"] --> Envoy["Gateway / Envoy data plane"]
-    Envoy <-->|"ExtProc"| Router["Semantic Router"]
-    Envoy --> Pool["Configured model and compute backends"]
+![Frontend, optional decision engine, model runtime, and Chat backends](/img/architecture/system-one/01-component-composition.svg)
 
-    CLI["vllm-sr CLI"] --> Config["Canonical config and recipes"]
-    Dashboard["Dashboard"] --> Config
-    Operator["Helm / Operator"] --> Config
-    Config --> Router
-
-    Router --> Telemetry["Metrics, replay, evaluation"]
-    Pool --> Telemetry
-```
+The default standalone frontend accepts client traffic directly. Recipe routing
+and native System One serving compose in the same instance. An Envoy-based
+ExtProc gateway is an alternative ingress, not a required component.
+See [Component Architecture](component-architecture) for the protocol path,
+model-runtime replicas, and the separately marked System One auto roadmap.
 
 ### Data plane
 
 - **Agent harness** owns the task loop, tool execution, and durable task state.
   Each inference call crosses the Router boundary; the response returns to the
   harness for the next step.
-- **Envoy** accepts client traffic, invokes the Router through the External
-  Processing protocol, and forwards the resulting request upstream.
+- **Frontend** accepts client traffic, enforces listener access, and adapts
+  supported protocols. With `--gateway extproc`, an external gateway instead
+  owns ingress and forwarding while calling the Router through ExtProc.
 - **Semantic Router** extracts signals, evaluates policy, applies route-specific
   behavior, and selects or coordinates model candidates.
-- **Backends** are configured model services or provider endpoints. The
-  Router does not load their model weights.
+- **Model runtime** runs decision, classifier, embedding, and reranking models
+  needed by configured consumers. Its workers can be managed or attached.
+- **Chat backends** are configured model services or provider endpoints. Their
+  operators own the weights and generation capacity.
 
 ### Control plane
 
@@ -72,15 +68,16 @@ and evolve the physical pool behind a stable public entrypoint.
 
 1. A harness sends a request using OpenAI Chat Completions, OpenAI Responses, or
    Anthropic Messages.
-2. Envoy presents the request to the Router.
+2. The standalone frontend, or an ExtProc gateway, presents it to the Router.
 3. The requested model resolves to an entrypoint and its recipe.
 4. The Router extracts relevant signals and computes projections.
 5. Decisions enforce constraints and choose an eligible candidate set.
 6. The route's algorithm selects one model or executes a bounded multi-model
    strategy.
 7. Route plugins run at their configured request, execution, or response hook.
-8. Envoy sends the provider-shaped request to the selected backend and returns
-   the normalized response.
+8. The standalone upstream client, or the external gateway, sends the
+   provider-shaped request to the selected backend and returns the normalized
+   response.
 
 This lifecycle covers a model call inside the harness's task loop. Router
 plugins can filter the tools exposed to a model or process request context;
@@ -96,14 +93,14 @@ configured default provider model is used.
 
 ## Protocol and deployment boundaries
 
-Semantic Router can sit behind a direct Envoy listener or integrate with
-Kubernetes gateway and inference-platform deployments. The same routing model
-applies in local Docker, Kubernetes, and hybrid environments, but model
-provisioning and capacity management remain the responsibility of the chosen
-backend platform.
+Semantic Router serves its own listeners by default, or integrates through
+ExtProc with an external gateway. The same routing policy applies in local
+Docker, Kubernetes, and hybrid environments. Chat backend provisioning and
+capacity remain the responsibility of the chosen inference platform; the
+built-in model runtime separately manages its own decision-model replicas.
 
 The Router can consider request semantics and configured runtime observations;
-it does not replace a backend scheduler. A deployment may therefore use
+it does not replace a Chat backend's scheduler. A deployment may therefore use
 Semantic Router to choose a model class and an Inference Router to choose a
 healthy replica of that model. When an AI Gateway also fronts the stack, a
 request crosses three routing layers:

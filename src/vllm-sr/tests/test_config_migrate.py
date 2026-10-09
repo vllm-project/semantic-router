@@ -17,7 +17,7 @@ from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
 
 
-def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases():
+def test_migrate_preserves_named_entries_and_removes_retired_empty_auto_aliases():
     source = {
         "version": "v0.3",
         "providers": {"defaults": {}, "models": []},
@@ -35,7 +35,7 @@ def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases()
 
     assert migrated["entrypoints"] == source["entrypoints"]
     assert migrated["recipes"] == source["recipes"]
-    assert migrated["global"]["router"]["auto_model_names"] == []
+    assert "auto_model_names" not in migrated["global"]["router"]
 
 
 def test_migrate_is_idempotent_for_catalog_and_custom_provider_models():
@@ -281,7 +281,7 @@ def test_migrate_relocates_legacy_flat_empty_auto_aliases():
         }
     )
 
-    assert migrated["global"]["router"]["auto_model_names"] == []
+    assert "auto_model_names" not in migrated["global"]["router"]
     assert "auto_model_names" not in migrated["global"]
 
 
@@ -297,7 +297,9 @@ def test_migrate_prefers_canonical_auto_aliases_over_legacy_flat_value():
         }
     )
 
-    assert migrated["global"]["router"]["auto_model_names"] == ["router/canonical"]
+    assert migrated["entrypoints"] == [
+        {"model_names": ["router/canonical"], "recipe": "default"}
+    ]
     assert "auto_model_names" not in migrated["global"]
 
 
@@ -842,3 +844,21 @@ def test_parse_user_config_rejects_legacy_flat_signal_blocks(tmp_path: Path):
         assert "keyword_rules" in str(exc)
     else:
         raise AssertionError("expected ConfigParseError")
+
+
+def test_migrate_replaces_router_aliases_and_discovery_flag_once():
+    source = {
+        "version": "v0.3",
+        "global": {
+            "router": {
+                "auto_model_names": ["one", "two"],
+                "include_config_models_in_list": True,
+            }
+        },
+    }
+    migrated = migrate_config_data(source)
+    assert migrated["entrypoints"] == [
+        {"model_names": ["one", "two"], "recipe": "default"}
+    ]
+    assert migrated["global"]["router"] == {"list_backend_models": True}
+    assert migrate_config_data(migrated) == migrated

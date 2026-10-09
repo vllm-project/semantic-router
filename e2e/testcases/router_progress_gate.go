@@ -75,7 +75,7 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 	}
 	turn := func(keyword string, turnIndex int) (gateReplayRecord, error) {
 		body, headers, err := gateHTTPRequest(ctx, client, http.MethodPost, public+"/v1/chat/completions", "", map[string]any{
-			"model": "auto", "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": keyword}},
+			"model": "vllm-sr/auto", "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": keyword}},
 		}, map[string]string{"x-session-id": sid, "x-conversation-id": sid, "x-authz-user-id": "gate-e2e-user"})
 		if err != nil {
 			return gateReplayRecord{}, err

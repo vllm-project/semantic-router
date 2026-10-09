@@ -32,7 +32,11 @@ This proposal therefore treats `priority` as the ordering, confidence as a refin
 inside a pool that has declared itself comparable, and `routing.strategy` as the
 switch between the two within a tier.
 
-## Current ordering
+## Ordering at proposal time
+
+This section records the behavior that motivated the proposal. It is not the
+current configuration reference; see [decision ordering](../tutorials/decision/overview)
+for the shipped rules and confidence semantics.
 
 Which branch runs depends on whether any matched decision sets a tier.
 

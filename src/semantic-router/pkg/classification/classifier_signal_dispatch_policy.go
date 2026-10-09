@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -32,20 +33,20 @@ func (c *Classifier) buildPolicySignalDispatchers(
 	return []signalDispatch{
 		{
 			config.SignalTypeSafety, "Safety",
-			func() {
-				c.evaluateSafetySignals(requestFacts.Context, results, mu, textForSignal(config.SignalTypeSafety), usedSignals)
+			func(ctx context.Context) {
+				c.evaluateSafetySignals(ctx, results, mu, textForSignal(config.SignalTypeSafety), usedSignals)
 			},
 		},
 		{
 			config.SignalTypeJailbreak, "Jailbreak",
-			func() {
+			func(ctx context.Context) {
 				if input := requestFacts.JailbreakInput; input != nil {
-					c.evaluateJailbreakSignalPieces(requestFacts.Context, results, mu,
+					c.evaluateJailbreakSignalPieces(ctx, results, mu,
 						jailbreakInputTexts(input.Current), jailbreakInputTexts(input.History))
 					return
 				}
 				c.evaluateJailbreakSignal(
-					requestFacts.Context,
+					ctx,
 					results,
 					mu,
 					textForSignal(config.SignalTypeJailbreak),
@@ -55,9 +56,9 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		},
 		{
 			config.SignalTypePII, "PII",
-			func() {
+			func(ctx context.Context) {
 				c.evaluatePIISignal(
-					requestFacts.Context,
+					ctx,
 					results,
 					mu,
 					textForSignal(config.SignalTypePII),
@@ -67,11 +68,11 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		},
 		{
 			config.SignalTypeKB, "KB",
-			func() { c.evaluateKBSignals(results, mu, textForSignal(config.SignalTypeKB)) },
+			func(context.Context) { c.evaluateKBSignals(results, mu, textForSignal(config.SignalTypeKB)) },
 		},
 		{
 			config.SignalTypeConversation, "Conversation",
-			func() {
+			func(context.Context) {
 				c.evaluateConversationSignal(
 					results,
 					mu,
@@ -82,21 +83,21 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		},
 		{
 			config.SignalTypeEvent, "Event",
-			func() { c.evaluateEventSignal(results, mu, textForSignal(config.SignalTypeEvent)) },
+			func(context.Context) { c.evaluateEventSignal(results, mu, textForSignal(config.SignalTypeEvent)) },
 		},
 		{
 			config.SignalTypeMetadata, "Metadata",
-			func() { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
+			func(context.Context) { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
 			config.SignalTypeInputModality, "InputModality",
-			func() { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
+			func(context.Context) { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
 			config.SignalTypeDecision, "Decision",
-			func() {
+			func(ctx context.Context) {
 				c.evaluateDecisionModelSignals(
-					requestFacts.Context,
+					ctx,
 					results,
 					mu,
 					textForSignal(config.SignalTypeDecision),
@@ -107,13 +108,13 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		},
 		{
 			config.SignalTypeClassifier, "Classifier",
-			func() {
+			func(ctx context.Context) {
 				c.evaluateGenericClassifierSignals(
 					results,
 					mu,
 					textForSignal(config.SignalTypeClassifier),
 					usedSignals,
-					requestFacts.Context,
+					ctx,
 				)
 			},
 		},

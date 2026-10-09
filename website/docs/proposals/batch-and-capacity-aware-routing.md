@@ -36,6 +36,11 @@ The router may consume bounded, request-safe performance signals when an algorit
 explicitly supports them. It does not collect a batch and solve a joint assignment on
 the ExtProc hot path.
 
+The built-in model runtime is also a serving layer: its replica pool selects a
+ready worker using bounded queue and health information. This does not rematch
+semantic decisions or choose a different logical model. Scaling decision-model
+replicas and selecting Chat backends remain separate controls.
+
 ## Rationale
 
 - **Latency:** Waiting to form a batch adds queueing delay before routing begins.

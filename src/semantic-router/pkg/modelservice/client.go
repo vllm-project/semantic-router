@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -19,8 +21,10 @@ const DefaultBundleTasks = 64
 
 // Client calls one runtime through the generated contract client.
 type Client struct {
-	endpoint string
-	api      *api.ClientWithResponses
+	endpoint   string
+	base       string
+	httpClient api.HttpRequestDoer
+	api        *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
 	bundleTasks atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
@@ -28,6 +32,9 @@ type Client struct {
 	// scanning holds the served models whose card reports a scan budget, the
 	// only ones that take a decisions request's max_tokens and overflow.
 	scanning atomic.Pointer[map[string]bool]
+	// apiMinor is the minor version of the contract the runtime serves, as
+	// /v1/models last reported it (-1 until then).
+	apiMinor atomic.Int64
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -36,12 +43,14 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{endpoint: endpoint, api: generated}
+	client := &Client{endpoint: endpoint, base: base, httpClient: httpClient, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
+	client.apiMinor.Store(-1)
 	return client, nil
 }
 
@@ -76,6 +85,7 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
+	c.apiMinor.Store(contractMinor(response.JSON200.ApiVersion))
 	inputs := make(map[string]int, len(response.JSON200.Data))
 	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
@@ -87,6 +97,24 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	c.maxInputs.Store(&inputs)
 	c.scanning.Store(&scanning)
 	return response.JSON200.Data, nil
+}
+
+// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
+// of the major this client speaks, or -1.
+func contractMinor(version string) int64 {
+	major, rest, _ := strings.Cut(version, ".")
+	minor, _, _ := strings.Cut(rest, ".")
+	value, err := strconv.ParseInt(minor, 10, 64)
+	if major != RuntimeAPIMajor || err != nil || value < 0 {
+		return -1
+	}
+	return value
+}
+
+// takesStates reports whether the runtime answers a decisions call about
+// several states (DecisionRequest.states).
+func (c *Client) takesStates() bool {
+	return c.apiMinor.Load() >= statesMinor
 }
 
 // boundedRead is the request a model without a scan budget takes: it reads one
@@ -227,6 +255,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.Preset != "" {
 		preset := question.Preset
 		encoded := api.Question{Preset: &preset, Threshold: question.Threshold}
+		if question.RequireFullInput {
+			required := true
+			encoded.RequireFullInput = &required
+		}
 		if question.Truncate {
 			overflow := api.QuestionOverflowTruncate
 			encoded.Overflow = &overflow
@@ -236,6 +268,10 @@ func encodeQuestion(question Question) api.Question {
 	questionType := question.Type
 	var instructions interface{} = question.Instructions
 	encoded := api.Question{Type: &questionType, Instructions: &instructions, Threshold: question.Threshold}
+	if question.RequireFullInput {
+		required := true
+		encoded.RequireFullInput = &required
+	}
 	if len(question.Labels) > 0 {
 		var criteria interface{} = labelCriteria(question.Labels)
 		encoded.Criteria = &criteria
@@ -277,6 +313,7 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 	decoded := Response{Model: body.Model, Answers: make(map[string]Answer, len(questions)), InputTokens: body.Usage.InputTokens}
 	for _, question := range questions {
 		if answer, ok := decodeQuestionAnswer(body, question); ok {
+			answer = requireInputCoverage(question, answer)
 			decoded.Answers[question.ID] = answer
 		}
 	}
@@ -292,6 +329,9 @@ func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer,
 	threshold, _ := lookup(body.Thresholds, id)
 	if set, ok := lookup(body.Sets, id); ok {
 		decoded := Answer{Type: "set", Probabilities: set.Probabilities, Selected: set.Selected, Threshold: threshold}
+		if set.InputCoverage != nil {
+			decoded.InputCoverage = string(*set.InputCoverage)
+		}
 		return checkedAnswer(decoded), true
 	}
 	if spans, ok := lookup(body.Spans, id); ok && answered {
@@ -328,12 +368,32 @@ func lookupString(values *map[string]string, key string) string {
 
 func decodeAnswer(answer api.Answer) Answer {
 	decoded := Answer{}
+	if answer.InputCoverage != nil {
+		decoded.InputCoverage = string(*answer.InputCoverage)
+	}
 	if answer.Type != nil {
 		decoded.Type = *answer.Type
 	}
 	if answer.Error != nil {
 		decoded.Error = string(*answer.Error)
 		return decoded
+	}
+	// Missing scalar values are unknown evidence, never Go's zero/false.
+	switch decoded.Type {
+	case "noul":
+		if answer.Noul == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "score":
+		if answer.Score == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "choice":
+		if answer.Choice == nil || *answer.Choice == "" {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	default:
+		return Answer{Type: decoded.Type, Error: "invalid_model_output"}
 	}
 	if answer.Choice != nil {
 		decoded.Choice = *answer.Choice

@@ -369,6 +369,33 @@ def write_runtime_config_projection(
     return path
 
 
+def recover_pending_runtime_config_projection(path: Path) -> None:
+    """Recover a startup write before comparing source and active provenance."""
+    state_path = path.with_suffix(".projection.json")
+    data = read_private_state_bytes(state_path)
+    receipt = json.loads(data) if data else None
+    if receipt is None:
+        return
+    if not isinstance(receipt, dict) or set(receipt) != {
+        "pre_projection_digest",
+        "projected_digest",
+        "provenance",
+    }:
+        raise ValueError(f"Invalid runtime projection receipt: {state_path}")
+    recover_runtime_config_projection(path, receipt)
+    write_private_state_bytes(state_path, b"null\n")
+
+
+def write_journaled_runtime_config_projection(path: Path, data: bytes) -> Path:
+    """Record write intent before publishing, retaining unrelated edit ownership."""
+    state_path = path.with_suffix(".projection.json")
+    receipt = runtime_config_projection_receipt(path, data)
+    write_private_state_bytes(state_path, json.dumps(receipt).encode())
+    write_runtime_config_projection(path, data, receipt)
+    write_private_state_bytes(state_path, b"null\n")
+    return path
+
+
 def write_private_state_bytes(
     path: Path, data: bytes, *, mode: int = PRIVATE_STATE_FILE_MODE
 ) -> Path:
@@ -514,6 +541,7 @@ def materialize_runtime_config(
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
     replace_active: bool = False,
+    preserve_unchanged_source: bool = False,
     before_replace: Callable[[], None] | None = None,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
@@ -528,6 +556,9 @@ def materialize_runtime_config(
     drifted active document from the selected source config.
     ``before_replace`` lets restart orchestration stop old file consumers before
     an existing active document changes. It is not called for a preserved file.
+    ``preserve_unchanged_source`` retains resolved startup resources when the
+    authored source bytes are unchanged. Any source edit selects a fresh source
+    document; this does not merge old overrides into new authoring.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
@@ -589,6 +620,11 @@ def materialize_runtime_config(
                 runtime_config_path,
                 source_config_path,
             )
+            return runtime_config_path
+        if (
+            preserve_unchanged_source
+            and _digest_bytes(source_data) == provenance["source_digest"]
+        ):
             return runtime_config_path
 
     if runtime_config_path.exists() and before_replace is not None:

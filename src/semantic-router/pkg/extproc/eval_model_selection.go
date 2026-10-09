@@ -246,9 +246,12 @@ func configuredLooperFinalModel(decision *config.Decision) (string, bool) {
 	return model, model != ""
 }
 
+// evalSupportsDryRunSelection lists the selectors whose choice Eval can make
+// without executing the request: the decision selector only asks the decision
+// model, which keeps no state between requests.
 func evalSupportsDryRunSelection(method selection.SelectionMethod) bool {
 	switch method {
-	case selection.MethodStatic, selection.MethodMultiFactor, selection.MethodLatencyAware:
+	case selection.MethodStatic, selection.MethodMultiFactor, selection.MethodLatencyAware, selection.MethodDecision:
 		return true
 	default:
 		return false

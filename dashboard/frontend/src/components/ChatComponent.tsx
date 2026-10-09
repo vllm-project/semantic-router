@@ -221,9 +221,9 @@ const ChatComponent = ({
   }, [areConversationsHydrated, conversations, restoreMessages])
 
   useEffect(() => {
-    if (!hasHydratedConversation.current) return
+    if (!areConversationsHydrated || !hasHydratedConversation.current) return
     writeActiveConversationPreference(conversationId)
-  }, [conversationId])
+  }, [areConversationsHydrated, conversationId])
 
   // Persist changed conversations whenever in-memory messages change
   useEffect(() => {

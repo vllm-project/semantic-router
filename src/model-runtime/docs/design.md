@@ -12,12 +12,17 @@ legacy native bindings.
 | Status | Phase 1 merged ([#4481](https://github.com/vllm-project/semantic-router/pull/4481)); Phases 2–4 in implementation ([#4496](https://github.com/vllm-project/semantic-router/issues/4496)) |
 | Domain | `src/model-runtime/` (Python package `vllm_srun`) |
 | Router side | `src/semantic-router/pkg/modelservice/` (client, bundles, lifecycle) and `pkg/modelruntime/serving/` (typed task bindings) |
-| CLI | `vllm-sr serve <hf-model> [<hf-model> ...]` (engine mode); `vllm-sr serve --config ...` (router mode) |
+| CLI | `vllm-sr serve ARTIFACT --engine` (managed Engine instance); `vllm-srun serve` (direct worker); `vllm-sr serve --config ...` (Router mode) |
+
+This document records the original phased design. For current startup commands,
+replica placement and API publication, use the [deployment guide](../../../website/docs/model-runtime/deploy.md)
+and [managed instance guide](../../vllm-sr/INSTANCE_MODES.md). The managed frontend
+now supervises a separate worker for each replica of a logical deployment.
 
 ## 1. Goals
 
-1. **Out-of-the-box router models.** `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B`
-   or `vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain` downloads the
+1. **Out-of-the-box router models.** `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine`
+   or a direct worker command such as `vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain` downloads the
    pinned package, verifies every byte, loads it with model code built into
    the runtime, and serves typed answers. The router uses the same runtime for
    every signal, cache, store and selector that needs a model.
@@ -65,7 +70,7 @@ running packaged remote code (`trust_remote_code`).
 | Families | `decision1` (Decision 1.0), `task_heads` (Vela 1.0 and compatible HF encoder task models), `vela2` (Vela 2.0), `multimodal_embedding` (Vela 1.0 Omni). `decision2` is unchanged. |
 | Surfaces | `POST /v1/classify`, `/v1/embeddings` (OpenAI-compatible), `/v1/rerank`, and `/v1/bundle`; Set and Span answers on `/v1/decisions` where a model declares them. The Phase 1 surfaces are unchanged. |
 | Processes | One runtime process serves one or more models. Each model keeps its own worker, device and profile. The router groups its managed deployments into processes (by default one per device). |
-| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call. Bundling is transport only: every task keeps the semantics of its own surface. |
+| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call, and every question the stage asks one model as one decisions task, about one state or several (`states`). Bundling is transport only: every task keeps the semantics of its own surface. |
 | Engines | The native PyTorch engine first, for encoders and decoders, on every accelerator; every built-in model runs on it by default. An optional `onnxruntime` engine (the `onnx` extra, not in the router images) runs the ONNX graphs packages ship (Vela 1.0, Vela 2.0 0.3B) and prepared Omni bundles, for portability. |
 | Hardware | Accelerators `cpu`, `cuda`, `rocm` (built in) plus `xpu` and `mps` (built-in plugin slots, unvalidated). |
 | Router seam | The router's typed task bindings (`pkg/modelruntime/binding`, contracts `label_distribution.v1`, `label_scores.v1`, `token_spans.v1`, `embedding.v1`, `relevance_scores.v1`) are kept. The provider facade `pkg/modelruntime/native` (candle, ORT, OpenVINO) is replaced by `pkg/modelruntime/serving`, which implements every contract through the runtime. Consumers change their constructor, not their logic. |
@@ -83,7 +88,7 @@ running packaged remote code (`trust_remote_code`).
                  | caches, memory, vector stores, RAG, tools, hallucination, model selection            |
                  |   pkg/modelruntime/serving: typed task bindings (label distribution, scores, spans,  |
                  |   embeddings, relevance) over pkg/modelservice                                       |
-                 |   pkg/modelservice: generated client, request bundles, managed process groups,       |
+                 |   pkg/modelservice: generated client, request bundles, managed workers,              |
                  |   attached endpoints, per-deployment readiness, fail-open                            |
                  +---------------------------------|---------------------------------------------------+
                                                    | HTTP/JSON over UDS (managed) or TCP (attached)
@@ -328,7 +333,10 @@ Decision 2.0 GPU policy), and dynamic int8 on CPU where that measures faster
 than FP32. `max_speed` requests run the copy. A family consents to a copy
 (`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records show at
 least 99% label agreement with `exact` (embeddings: cosine of at least
-0.999); faster alone is not enough. Golden readiness always runs `exact`;
+0.999); faster alone is not enough. Approximate kernels follow the same rule
+per question type (`DtypePolicy.approximate_kernels`): Decision 2.0 consents
+to CUDA's approximate fused kernels, and Vela 2.0 does not, because they
+change 7% of its span answers. Golden readiness always runs `exact`;
 each family records the accuracy (label agreement, max |Δp| or embedding
 cosine against `exact`) and the latency of its reduced path. `vllm-sr config
 migrate` maps the legacy `precision: fp16` to `max_speed`.
@@ -403,6 +411,12 @@ declare them:
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
+- **Further states** (every decision family). `states` names more states, each
+  with its own questions; the runtime runs each as a request of its own in the
+  model's job group, as it runs a bundle's tasks, so a state's answers are
+  those it gets alone, and answers it under the same name in the response's
+  `states`. A typed-part state reads all its parts together, so texts a
+  client wants read apart are states, not parts.
 
 This follows the Vela 2.0 packages' own server, so the runtime is a drop-in
 for it. Decision models without Set or Span answer such a question with
@@ -872,7 +886,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; fused kernels only after a bit-exactness record |
+| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -934,17 +948,19 @@ Engine mode runs a runtime process in the current Python environment:
 
 ```bash
 pip install ./src/vllm-sr ./src/model-runtime   # after PyTorch; or the vllm-sr image, or src/model-runtime/Dockerfile
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
+vllm-srun serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
+vllm-srun serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
 vllm-srun serve --models models.yaml --uds /run/vllm-sr/runtime.sock
 ```
 
 Several `MODEL` arguments share the process options; `MODEL@REVISION` pins a
 revision per model; `--models FILE` lists models with their own name,
 revision, device, profile, engine and family options (the router writes this
-file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
-without `MODEL` keeps its router-mode behaviour. Every serve option's default
+file in managed mode). These are worker-level `vllm-srun` options. The managed
+`vllm-sr serve ARTIFACT --engine` command instead exposes the frontend and
+Dashboard, with named models and listeners configured in YAML. Every invocation
+of `vllm-sr serve` without `--engine` starts Router mode. Every serve option's default
 is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
 embedding host start alike. `vllm-srun fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any installed family
@@ -1004,7 +1020,6 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: auto
-        process: decisions           # optional: deployments with the same name share a process
         # endpoint: http://runtime:8100   # attach to a runtime the router does not manage
     bindings:
       domain_classifier: {deployment: vela-domain, contract: label_distribution.v1, adapter: modernbert}
@@ -1012,7 +1027,8 @@ global:
 
 - `artifact` is a Hub repository (pinned by the built-in table, or with
   `revision`) or an absolute package path. `revision`, `device`, `profile`,
-  `input` and `endpoint` keep their Phase 1 meaning; `process` is new.
+  `input` and `endpoint` keep their Phase 1 meaning. `replicas` declares
+  independent worker placements for one logical deployment.
 - Built-in module defaults (`global.model_catalog.system.*`, the embedding
   models) resolve to implicit `model_runtime` deployments of the same
   artifacts, on CPU unless `use_cpu: false` (then `auto`).
@@ -1069,40 +1085,45 @@ until `/v1/models` has been read); the router starts managed runtimes with
 `--max-bundle-tasks 1024` and `--max-request-bytes` 64 MiB, so a stage
 normally stays one call.
 
-A bundle is per runtime process, not per request. The default process groups
-(section 13.4) give each CPU model its own process, up to the process cap, and
-one process to each GPU device. So a request whose signals read several CPU
-models makes one bundle call per model process, and those calls run in
-parallel. One CPU process runs one forward at a time, so a single shared
-process would serialize the stage: on 16 cores it served 11.1 requests/s
-against 20.3 for the split (`router-latency-cpu.md`). Deployments that name
-the same `process` share one process and one bundle.
+A request stage bundles calls by runtime process. Each managed deployment or
+replica owns a separate worker (section 13.4), so calls to different workers
+can run in parallel. Attached runtimes may serve several models in one process;
+calls to that shared endpoint can use one bundle. Adding or removing a routing
+consumer does not regroup workers.
 
-### 13.4 Lifecycle: process groups and attached endpoints
+### 13.4 Lifecycle: managed workers and attached endpoints
 
-- **Managed (default).** The router groups its `model_runtime` deployments
-  without an `endpoint` into processes: by `process` when set; else each GPU
-  device gets one process, and each CPU model its own process (`cpu-0`,
-  `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SRUN_CPU_PROCESSES`; `1` folds them into one). A deployment on
-  `device: auto` is grouped by the device `auto` takes on the host, which the
-  router asks the runtime once (`vllm-srun devices`, section 12) and
-  keeps: on the CPU it is planned as a `cpu` deployment, so on a host without
-  a GPU each `auto` model gets a CPU process and thread share of its own; on a
-  GPU it joins that device's process (`rocm:0`, ...), and the runtime still
-  places it by free memory; one it then places on the CPU runs in that
-  process without a thread share. If the runtime cannot answer, the `auto`
-  deployments share one process, `auto`, until the router restarts, and the
-  router logs why: a later reload does not ask again, so a slow query (bounded
-  at two minutes) holds up only the first plan, and plans do not change under
-  a running router. A
-  CPU process runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
-  the cores an idle one leaves: on 16 cores and five task models, one shared
-  process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
-  shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
-  writes a models file and starts `vllm-srun serve --models <file>
-  --uds <path>` when the configuration loads, and stops it when the group
-  disappears or the router exits (SIGTERM, then SIGKILL after a 10 s grace
+- **Managed (default).** Every logical `model_runtime` deployment without an
+  `endpoint` owns a worker; an explicit `replicas` list creates one worker per
+  placement. Workers remain separate even when they use the same GPU. Their
+  identity includes the logical deployment, placement, artifact, runtime command,
+  cache directory and CPU thread setting, so unchanged workers survive Router
+  mode changes and configuration generations. A new generation leases compatible
+  workers; retired workers stop after their last reference drains.
+
+  For `device: auto`, the router asks `vllm-srun devices` once and keeps the
+  answer for the manager's lifetime. An `auto` placement resolved to CPU is
+  planned as `cpu` and receives the managed CPU thread budget. If detection
+  fails, the router logs it and each independent worker resolves its own
+  placement at startup. The query is bounded at two minutes and is not repeated
+  during later reloads.
+
+  Each managed CPU worker receives `--threads max(1, min(16, cores / 2))` by
+  default, using integer division.
+  `cores` is the router's `GOMAXPROCS`, normally based on affinity and the
+  container's CPU quota. `VLLM_SRUN_CPU_THREADS` overrides this with a positive
+  integer capped at the full `cores` budget; invalid or nonpositive values use
+  the default. This leaves room for peers in the default thread count but does
+  not cap the total threads of several concurrent workers.
+  This setting controls threads per worker, never worker count, and is
+  independent of the number of models or active consumers. GPU workers and
+  attached endpoints do not receive this CPU setting. The historical process
+  grouping and thread-share measurements remain in
+  [`router-latency-cpu.md`](records/router-latency-cpu.md).
+
+  For each worker the router writes a models file and starts
+  `vllm-srun serve --models <file> --uds <path>`. It stops the worker after its
+  leases drain or the router exits (SIGTERM, then SIGKILL after a 10 s grace
   period, logged as `runtime_process_killed`). Preparing a binding waits for the deployment's card while its model
   is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes), and building a
   router generation waits the same way for every managed deployment it leases, so the
@@ -1114,8 +1135,10 @@ the same `process` share one process and one bundle.
   unavailable. Sockets live in a private 0700 directory.
 - **Attached.** With an `endpoint` (`unix:///path` or `http(s)://host:port`)
   the router uses a runtime it does not manage, such as a Kubernetes sidecar or
-  a shared GPU runtime started with `vllm-sr serve <hf-model> ...`; the
-  deployment name or `served_name` selects the model on it.
+  a shared GPU runtime started with `vllm-srun serve <hf-model> ...`; the
+  deployment name or `served_name` selects the model on it. The attached owner
+  controls process layout and `--threads`; the router does not start or regroup
+  that runtime.
 - `VLLM_SRUN_COMMAND`, `VLLM_SRUN_DIR` and
   `VLLM_SRUN_CACHE_DIR` keep their Phase 1 meaning. Every router image
   ships the runtime, so managed deployments work out of the box on CPU, and on
@@ -1128,15 +1151,14 @@ the same `process` share one process and one bundle.
 ### 13.5 Client, supervisor, metrics
 
 `pkg/modelservice` owns the generated client, transports for UDS and TCP with
-keep-alive pools, request bundles, process groups, per-deployment state
+keep-alive pools, request bundles, worker leases, per-deployment state
 (`starting`, `ready`, `unavailable`), the supervisor and metrics
 (`vsr_model_runtime_*`: requests and latency per deployment and surface,
 result-cache outcomes, bundle sizes and waits, unknown answers by reason,
-readiness and restarts). A per-deployment LRU of classify and decision
-results (`VLLM_SRUN_RESULT_CACHE` entries, default 4,096, cleared when
-readiness changes) answers repeated requests without a round trip; the
-runtime's own item cache serves every router and deduplicates items inside a
-bundle.
+readiness and restarts). A single-worker deployment uses a frontend LRU of
+classify and decision results (`VLLM_SRUN_RESULT_CACHE` entries, default 4,096,
+cleared when readiness changes). Multi-worker pools bypass that cache; each
+worker keeps its own item cache and deduplicates items inside a bundle.
 
 `pkg/modelruntime/serving` is the facade the router's consumers use: typed
 readouts (`Sequence`, `Scores`, `Tokens`, `Grounded` and their windowed
@@ -1182,7 +1204,7 @@ layout and refuse every path below with a pointer to `config migrate`.
 | Registry | same | manifests and file digests, tampered, extra, missing and linked files, identity, offline cache |
 | API contract | same | every response validated against `openapi.yaml`; System One cases; bundles; error codes; UDS and TCP; multi-model processes |
 | Integration | same | `vllm-srun serve` on generated fixture packages of every family, readiness gating, deadlines, overload |
-| Router | `pkg/modelservice`, `pkg/modelruntime/serving`, consumers | generated client against an httptest runtime, bundles, process groups with a fake runtime binary, every contract, fail-open, config validation and migration |
+| Router | `pkg/modelservice`, `pkg/modelruntime/serving`, consumers | generated client against an httptest runtime, bundles, worker leases and replicas with a fake runtime binary, every contract, fail-open, config validation and migration |
 | Ports | `pkg/classification`, `pkg/modelselection` | BM25, n-gram, KNN, KMeans, SVM and MLP against fixtures recorded from the bindings they replace |
 | E2E (CPU, Kind) | `e2e/profiles/*` | managed and attached runtimes, every migrated signal and feature, decision signals and the selector, fail-open; tiny fixtures |
 | Real models (opt-in) | `e2e/profiles/model-runtime-real` | real Kai-0.6B and Vela models on CPU with explicit inputs |
@@ -1320,7 +1342,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 | Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
-| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md`, `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
+| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; independent deployment/replica workers with a stable CPU thread budget; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md` (historical process layout), `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
 | Router to runtime | HTTP/JSON on a Unix socket, timed per call from the runtime's `Server-Timing`: on CPU the transport is 0.6–2.2% of a call, so there is no binary fast path | `runtime-transport-cpu.md` |
 
 ## 19. Phase 1 follow-ups and later work
@@ -1347,7 +1369,7 @@ drop-in task bindings (`pii`, `halu`, `relevance`).
 | A ported backbone or head drifts from the scored numerics | Fixtures against the Transformers reference in CI; parity records against the legacy path and the bundled runtimes on real models |
 | CPU latency of the encoders regresses against candle | Measured per model; the `onnxruntime` engine runs the packages' graphs where it is faster; intra-op threads and inter-model parallelism are tunable |
 | Bundles add latency when one task is slow | Tasks run in parallel per model; a bundle waits only for its own tasks; consumers keep their own timeouts |
-| A shared process couples fault domains | `process` groups isolate deployments; a crash restarts one group; fail-open |
+| A worker crash interrupts inference | Independent deployment/replica workers isolate failures; a crash restarts that worker and affected consumers follow their error policy |
 | Removing the bindings breaks unmigrated configs | The parser points to `vllm-sr config migrate`; the migration guide lists every change |
 | Re-embedding after an embedding-model change | Representation identity in every cache and store key; old vectors are never silently reused |
 | Image size grows with PyTorch | CPU wheels in CPU images; GPU wheels only in GPU images; the Rust toolchain stages go away |
