@@ -4,7 +4,7 @@ import { mockAuthenticatedAppShell } from "./support/auth";
 const importedConfig = {
   version: "v0.3",
   providers: {
-    default_model: "remote-model-primary",
+    defaults: { model: "remote-model-primary" },
     models: [
       {
         name: "remote-model-primary",
@@ -135,7 +135,7 @@ test.describe("Setup wizard routing import", () => {
         config: {
           providers: {
             defaults: {
-              default_model: "qwen/qwen3.5-rocm",
+              model: "qwen/qwen3.5-rocm",
             },
             models: [
               {
@@ -147,18 +147,13 @@ test.describe("Setup wizard routing import", () => {
                     weight: 100,
                     endpoint: "vllm:8000",
                     protocol: "http",
+                    provider: "vllm",
                   },
                 ],
               },
             ],
           },
           routing: {
-            modelCards: [
-              {
-                name: "qwen/qwen3.5-rocm",
-                modality: "text",
-              },
-            ],
             decisions: [
               {
                 name: "default-route",

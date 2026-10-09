@@ -4,7 +4,7 @@ description: 记录路由器、CLI、仪表盘、Helm、operator 和 DSL 共享�
 created: 2026-03-17
 status: Implemented
 translation:
-  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
   outdated: false
 ---
@@ -48,7 +48,7 @@ global:
 `providers.defaults` 拥有默认提供商行为和默认模型。
 `providers.models[].backend_refs[]` 拥有物理后端绑定。
 `providers.models[].api_format` 只拥有上游线格式，从不选择 Provider。Router 拥有的监听器配置中的物理模型必须声明显式后端 Provider；仅元数据的外部网关配置和内置虚拟模型可以保持无后端。
-本地 CLI serve 路径拥有 Envoy 传输，并拒绝无后端物理模型；仅元数据的外部网关配置通过网关集成部署，而不是转换成独立 Envoy 数据面。
+本地 CLI serve 默认使用 standalone 前端，拒绝缺少后端的物理 Chat 模型；`--gateway extproc` 选择 Envoy 传输。仅元数据的外部网关配置使用相应网关集成，原生 System One 模型则引用 model-runtime deployment。
 `providers.models[].pricing` 拥有成本感知选择和账务使用的可选部署成本元数据。定价不属于路由模型卡片。
 
 `evaluation` 拥有可选运营方基准定义、指数 DAG 和测量记录。每个 `evaluation.records[].model` 引用一个规范 Model Card 身份，因此可复用评分语义和模型证据有一个顶层所有者，而不嵌入路由元数据。
@@ -84,9 +84,12 @@ DSL 是路由语义的编写视图。它不拥有提供商凭证、监听器、�
 
 内置默认值位于路由器中。`global.router.config_source` 选择基于文件的配置或 Kubernetes CRD 调和。外部模板不得在校验后应用隐藏默认值。
 
-内置类别/领域推断将其运行时策略保持在 `global.model_catalog.modules.classifier.domain`。本地模型使用规范 `variant` 字段；远程分类器使用共享 `backend` 块（`protocol`、`contract`、`model` 和 `deadline_ms`），并按精确外部目录名称解析 `model`。类别消费者目前接受 `http_classify` 加 `label_distribution.v1`，保留完整标签分数分布。提示词防护仍留在其现有配置表面，直到其单独范围的迁移。
+内置模型资源位于 `global.model_catalog.deployments`，`system.decision_model` 选择默认判断部署。模块保存任务策略，global bindings 提供共享默认绑定，recipe 的 `routing.model_bindings` 可为任务选择其他资源或契约。`candle`、`ort`、`openvino` 及 `variant` 等原生执行字段已退役，参见[模型运行时迁移](../model-runtime/migrate.md)。
 
-复杂度是第二个消费者，其运行时策略保持在 `global.model_catalog.modules.complexity`，因此后端能在每配方替换 `routing.signals` 后存活。它接受带 `score.v1` 的 `http_classify`（连续分数，信号通过每规则边界转换成裁决），或 `label_distribution.v1`（获胜标签即为裁决）。读取多于一种契约的消费者不能默认该字段：省略会使运行时猜测期望的响应形态，猜错会按请求而不是在配置加载时暴露。只读取一种契约的消费者将其作为默认，因此类别不变。连接器字节上限属于连接器配置。外部 LLM 分类器条目和 MCP 分类器模块使用 `max_response_bytes`。
+领域、复杂度、安全、PII 等消费者共用此边界。外部分类后端仍声明 `protocol`、`contract`、`model`、`deadline_ms`；`model` 是外部目录中的精确名称。接受多种响应契约的消费者必须显式指定契约。连接器响应体上限由其 `max_response_bytes` 管理。
+
+命名 recipe 不继承顶层 `routing` 的 signals、decisions、strategy 或 fallback，各自解析内置默认值。没有显式默认 recipe 入口时，`vllm-sr/auto` 指向顶层 routing；显式 `recipe: default` 映射替换这一名称。Replay 数据保留策略归属 `global.services.router_replay`，可由决策插件覆盖。
+
 仪表盘、Helm chart 和 operator 可以帮助用户编写或传输配置，但得到的文档仍使用同一契约。
 
 ## 仓库来源 {#repository-sources}

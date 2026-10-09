@@ -44,7 +44,7 @@ func testLooperLatencyTokenHeaders(ctx context.Context, client *kubernetes.Clien
 
 	query := "Diagnostics request " + looperMetricsProbeKeyword + " please run."
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", query, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", query, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("looper metrics request failed: %w", err)
 	}

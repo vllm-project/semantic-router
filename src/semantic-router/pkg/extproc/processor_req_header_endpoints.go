@@ -12,6 +12,7 @@ import (
 func (r *OpenAIRouter) handleModelsRequestHeaders(
 	method string,
 	path string,
+	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	if method != "GET" || normalizeRequestPath(path) != "/v1/models" {
 		return nil, nil
@@ -21,7 +22,7 @@ func (r *OpenAIRouter) handleModelsRequestHeaders(
 		"method": method,
 		"path":   path,
 	})
-	response, err := r.handleModelsRequest(path)
+	response, err := r.handleModelsRequest(path, ctx.ListenerModels)
 	if err != nil {
 		return nil, err
 	}

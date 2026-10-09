@@ -273,14 +273,11 @@ router:
 # `config`, this map atomically replaces chart defaults before Kubernetes
 # integration rewrites.
 configOverride: null
-# -- The Router's decision model, written to
-# global.model_catalog.system.decision_model: Vela-2.0-0.3B (the default),
-# Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, case-insensitive. It
-# answers the built-in signals and every routing.signals.decision question
-# that names no deployment. The 4B and 9B need a GPU in the Router pod. A
-# changed value is written into the live config on upgrade too; empty leaves
-# the config's own.
-decisionModel: ""
+# -- Optional default judgment deployment reference, for example
+# {deployment: primary}. Artifact, device and revision belong in
+# config.global.model_catalog.deployments. Empty preserves the config's choice.
+# A changed deployment reference is applied to the live config on upgrade.
+decisionModel: {}
 # Runtime management APIs may update the live Router ConfigMap after install.
 configMap:
   # -- Helm values seed config.yaml at install. Change this revision to

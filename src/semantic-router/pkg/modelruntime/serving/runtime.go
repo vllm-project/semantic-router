@@ -31,6 +31,8 @@ var ErrNotConfigured = errors.New("model runtime services are not configured")
 type Services interface {
 	// Card waits until the deployment is ready and returns its model card.
 	Card(ctx context.Context, deployment string) (modelservice.ModelCard, error)
+	// CurrentCard reads observed ready metadata without discovery or waiting.
+	CurrentCard(deployment string) (modelservice.ModelCard, bool)
 	Classify(ctx context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error)
 	Embed(ctx context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error)
 	Rerank(ctx context.Context, deployment string, request modelservice.RerankRequest) (modelservice.RerankResponse, error)

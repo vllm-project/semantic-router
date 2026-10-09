@@ -92,12 +92,17 @@ func nanValue() float64 {
 func stage(window time.Duration, calls ...func(context.Context)) *Bundle {
 	ctx, bundle := WithBundle(context.Background(), window)
 	var wg sync.WaitGroup
-	for _, call := range calls {
-		leave := bundle.Join()
+	// Register the complete stage before any participant can submit a call.
+	// Otherwise the first goroutine can flush while it is the only participant.
+	leaves := make([]func(), len(calls))
+	for i := range calls {
+		leaves[i] = bundle.Join()
+	}
+	for i, call := range calls {
 		wg.Add(1)
 		go func(call func(context.Context)) {
 			defer wg.Done()
-			defer leave()
+			defer leaves[i]()
 			call(ctx)
 		}(call)
 	}

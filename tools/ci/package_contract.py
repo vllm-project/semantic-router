@@ -57,8 +57,22 @@ def verify_resources(wheel: Path, sdist: Path) -> None:
             "prometheus.serve.yaml",
         )
     )
+    generated = {
+        "cli/config_schema/router-config-v0.3.schema.json": ROOT
+        / "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        "cli/config_schema/releases.generated.json": ROOT
+        / "src/model-runtime/vllm_srun/registry/releases.generated.json",
+    }
     with zipfile.ZipFile(wheel) as whl, tarfile.open(sdist) as archive:
         prefix = archive.getmembers()[0].name.split("/")[0]
+        for name, source in generated.items():
+            member = archive.extractfile(prefix + "/" + name)
+            if (
+                member is None
+                or member.read() != source.read_bytes()
+                or whl.read(name) != source.read_bytes()
+            ):
+                raise ValueError(f"Packaged generated resource differs: {name}")
         for path in paths:
             if not path.is_file() or path.suffix == ".pyc":
                 continue
