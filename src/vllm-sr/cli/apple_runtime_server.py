@@ -54,10 +54,10 @@ class Processes:
             artifact = model.get("model", "")
             # Image filesystem paths cannot be interpreted on the Mac host.
             engine_local = (
-                self.config.get("engine_mode")
-                and Path(artifact).is_absolute()
-                and Path(artifact).is_dir()
+                self.config.get("engine_mode") and Path(artifact).expanduser().is_dir()
             )
+            if engine_local:
+                artifact = str(Path(artifact).expanduser().resolve())
             if not engine_local and not re.fullmatch(
                 r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", artifact
             ):
@@ -66,7 +66,7 @@ class Processes:
                 )
             if model.get("device", "mps") != "mps":
                 raise ValueError("Apple models must explicitly select mps")
-            normalized.append({**model, "device": "mps"})
+            normalized.append({**model, "model": artifact, "device": "mps"})
         with self.lock:
             previous = self.children.get(key)
             if previous and previous["models"] != normalized:
@@ -134,8 +134,18 @@ class Processes:
             log.info("[%s] %s", key[:12], line.decode(errors="replace").rstrip())
         child.stdout.close()
 
-    def stop(self, key: str) -> None:
+    def stop(self, key: str, *, expired_child: dict | None = None) -> None:
         with self.lock:
+            if expired_child is not None:
+                # A renewal or replacement may have happened since reap took
+                # its snapshot. Decide and remove under the same process lock.
+                current = self.children.get(key)
+                if (
+                    current is not expired_child
+                    or not current["leased"]
+                    or current["expires"] >= time.monotonic()
+                ):
+                    return
             child = self.children.pop(key, None)
             if child:
                 process = child["process"]
@@ -151,12 +161,12 @@ class Processes:
     def reap(self) -> None:
         with self.lock:
             expired = [
-                key
+                (key, child)
                 for key, child in self.children.items()
                 if child["leased"] and child["expires"] < time.monotonic()
             ]
-        for key in expired:
-            self.stop(key)
+        for key, child in expired:
+            self.stop(key, expired_child=child)
 
     def close(self) -> None:
         with self.lock:

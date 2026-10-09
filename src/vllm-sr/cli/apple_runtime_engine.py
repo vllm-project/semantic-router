@@ -113,6 +113,12 @@ def run_apple_engine(
         raise click.UsageError(
             "each model entry requires a nonempty model name", ctx=ctx
         )
+    # Resolve against the caller's cwd before hashing or handing entries to
+    # the detached supervisor. Hub IDs remain unchanged when no directory exists.
+    for entry in entries:
+        local = Path(entry["model"]).expanduser()
+        if local.is_dir():
+            entry["model"] = str(local.resolve())
     key = hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()
     validate_local_docker()
     layout = resolve_runtime_stack()
