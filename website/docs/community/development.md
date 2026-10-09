@@ -50,9 +50,9 @@ vllm-sr stop
 For ROCm-specific work:
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
-  vllm-sr serve --image-pull-policy never --platform amd
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
 
 If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
@@ -72,20 +72,17 @@ make check CHANGED_FILES="path/one path/two"
 Common targeted suites include:
 
 ```bash
-# Router and native bindings
+# Router
 make test-semantic-router
-make test-binding
 
-# Classifiers
-make test-category-classifier
-make test-pii-classifier
-make test-jailbreak-classifier
+# Model runtime (tiny fixtures, CPU)
+make model-runtime-test
+
+# Published models through the model runtime
+make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# Fleet simulator
-make vllm-sr-sim-test
 ```
 
 Select integration or E2E explicitly when a change is visible through startup,

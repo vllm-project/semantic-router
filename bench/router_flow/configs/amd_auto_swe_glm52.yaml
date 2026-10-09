@@ -7,9 +7,6 @@ listeners:
     timeout: 1800s
 
 global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   integrations:
     looper:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
@@ -404,7 +401,7 @@ routing:
             policy: weight
             min_score: 0.0
             min_keep: 1
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0
             on_error: skip
 
     - name: swe_fallback_remom
@@ -479,3 +476,7 @@ routing:
             the checked-out source. When ready to submit, the single command
             must be exactly
             `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

@@ -47,7 +47,7 @@ func TestMLPipelineRejectedUploadsAreRemoved(t *testing.T) {
 			}
 			handler := &MLPipelineHandler{}
 			if test.failStart {
-				store, storeErr := workflowstore.Open(filepath.Join(root, "workflow.sqlite"), workflowstore.Options{})
+				store, storeErr := workflowstore.Open(filepath.Join(root, "workflow.sqlite"))
 				require.NoError(t, storeErr)
 				t.Cleanup(func() { require.NoError(t, store.Close()) })
 				dataPath := filepath.Join(root, "not-a-directory")

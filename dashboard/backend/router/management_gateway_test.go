@@ -27,7 +27,6 @@ func TestManagementGatewaySharesRBACAndReadonlyPolicy(t *testing.T) {
 		cfg := &config.Config{RouterAPIURL: upstream.URL, ReadonlyMode: readonly, RuntimeConfigWritable: true}
 		provider := routerProxyCredentialProvider{token: "router-management"}
 		registerRouterAPIProxy(mux, cfg, nil, nil, nil, provider)
-		registerKnowledgeBaseRoutes(mux, cfg, provider)
 		for _, policy := range routercontract.ManagementPolicies() {
 			path := strings.NewReplacer("{type}", "rag", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
 			perms := auth.RequiredPermissions(policy.Method, path)
@@ -65,6 +64,12 @@ func TestManagementGatewayRejectsUndeclaredAndOldRoutes(t *testing.T) {
 		method, path string
 		want         int
 	}{
+		{http.MethodGet, "/api/router/api/v1/storage/knowledge-bases", http.StatusNotFound},
+		{http.MethodPost, "/api/router/api/v1/storage/knowledge-bases", http.StatusNotFound},
+		{http.MethodPut, "/api/router/api/v1/storage/knowledge-bases/example", http.StatusNotFound},
+		{http.MethodDelete, "/api/router/api/v1/storage/knowledge-bases/example", http.StatusNotFound},
+		{http.MethodGet, "/api/router/api/v1/storage/knowledge-bases/example/map/metadata", http.StatusNotFound},
+		{http.MethodGet, "/api/router/api/v1/storage/knowledge-bases/example/map/data.ndjson", http.StatusNotFound},
 		{http.MethodGet, "/api/router/api/v1/response-cache/stats", http.StatusNotFound},
 		{http.MethodPost, "/api/router/api/v1/context-compression/preview", http.StatusNotFound},
 		{http.MethodPatch, "/api/router/api/v1/config", http.StatusNotFound},

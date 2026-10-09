@@ -1,3 +1,43 @@
+- id: xai/grok-4.7
+  display_name: Grok 4.7
+  description: xAI frontier reasoning model for coding, agentic tasks, and knowledge work.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
+  family: grok-4
+  reasoning_family: grok-4.6
+  lifecycle: active
+  limits:
+    context_window_size: 500000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://docs.x.ai/developers/models/grok-4.7
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-09-21'
 - id: xai/grok-4.6
   display_name: Grok 4.6
   description: xAI frontier reasoning model with image input and tool support.

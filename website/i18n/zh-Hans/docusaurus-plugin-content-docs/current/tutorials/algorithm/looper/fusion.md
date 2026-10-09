@@ -2,7 +2,7 @@
 translation:
   source_commit: "f538b1e52efaa172923a6764c8ad9ab18e0188af"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: false
+  outdated: true
 ---
 
 # 融合
@@ -11,7 +11,7 @@ translation:
 
 `fusion` 让多个模型回答同一请求，再由裁判模型合成一个最终答案。配方拥有的 `analysis_mode` 决定裁判是使用单独的结构化分析调用、在一次调用中同时完成分析与合成，还是直接合成。兼容性默认值是 `separate`。
 
-同一运行时也支持通过 `global.integrations.looper.fusion.model_names` 使用直接 Fusion 模型 slug。内置默认值是 `vllm-sr/fusion`；仅在你有意需要 OpenRouter 兼容别名时，才把 `openrouter/fusion` 加进去。直接 Fusion 仍由信号驱动：vLLM-SR 用可执行 Fusion 的决策评估请求，然后执行匹配决策的裁判与面板策略。
+通过 `entrypoints` 将公开模型名映射到 recipe 来暴露 fusion。公开名字没有内置分发逻辑：所选 recipe 评估自己的 signals 和 decisions，由 `algorithm.type=fusion` 启动算法。若入口只应运行 fusion 策略，请将这些策略放在独立 recipe 中。
 
 ## 主要优势
 
@@ -147,55 +147,47 @@ algorithm:
     judge_prompt_version: fusion-v1
 ```
 
-自动路由别名：
+未显式配置指向 `default` 的入口时，默认使用 `vllm-sr/auto`。
+要替换默认公开名字，请通过 `entrypoints` 声明完整别名列表：
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - model_names: [router/default, MoM]
+    recipe: default
 ```
 
-`vllm-sr/auto` 评估所有决策。如果匹配的决策使用 `algorithm.type=fusion`，请求进入 Fusion；否则走匹配的非 Fusion 路由。
+此时只有显式别名指向 `default`，`MoM` 没有特殊含义。
+匹配决策的 algorithm 为 `fusion` 时执行 Fusion。
 
-直接 Fusion slug 注册：
+若要提供专用 Fusion 入口，将公开名字映射到独立 recipe：
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      fusion:
-        model_names:
-          - vllm-sr/fusion
+entrypoints:
+  - model_names: [vllm-sr/fusion, openrouter/fusion]
+    recipe: fusion
+recipes:
+  - name: fusion
+    routing:
+      decisions:
+        - name: panel
+          priority: 1
+          rules: {operator: AND, conditions: []}
+          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+          algorithm:
+            type: fusion
+            fusion:
+              model: qwen3-32b
+              analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
-`global.integrations.looper.fusion` 只注册直接请求模型名。它不拥有路由策略、默认路由、裁判选择、面板选择、并发、模板或错误处理。
-
-裁判模型、分析面板、分析模式、采样设置、并发、token 与时间预算、法定人数、模板、提示词版本、追踪可见性、错误策略和依据策略都属于
-`routing.decisions[].algorithm.fusion`。直接 slug 调用只评估可执行 Fusion 的决策，因此 `vllm-sr/fusion` 不会静默回退到普通单模型路由。公开 HTTP 路径执行所选配方策略，不会通过
-`plugins[].id = fusion` 暴露 Fusion 执行覆盖。
-
-若要暴露 OpenRouter 兼容别名，请显式选择加入：
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-          - openrouter/fusion
-```
+公开入口名不能与后端模型冲突。Signals、裁判、面板、并发、预算、模板及错误策略
+均由 recipe 管理。`max_response_bytes_mb` 等共享限制属于
+`global.integrations.looper`，这里不再声明公开名字。
 
 ### 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | 触发 Fusion 决策匹配的直接请求模型 slug |
 | `model` | string | 第一个分析模型 | 配方拥有的裁判/调用模型，用于分析和最终合成 |
 | `analysis_models` | list[string] | `modelRefs` | 配方拥有的并行分析面板模型 |
 | `analysis_mode` | string | `separate` | 配方拥有的裁判执行：`separate`、`one_call` 或 `none` |
@@ -272,7 +264,7 @@ algorithm:
       policy: weight             # weight | annotate | filter
       min_score: 0.0             # filter policy only: drop below this (0-1)
       min_keep: 1                # filter policy only: keep at least this many
-      nli_contradiction_penalty: 1.0
+      contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
 ```
 
@@ -287,7 +279,7 @@ algorithm:
 | `policy` | string | `weight` | `weight`（软加权，全部保留）、`annotate`（备注，全部保留）或 `filter`（硬丢弃） |
 | `min_score` | float | `0.0` | 仅 `filter` 策略：丢弃分数低于该值的响应（0–1） |
 | `min_keep` | int | `1` | 仅 `filter` 策略：至少保留这么多最高分响应 |
-| `nli_contradiction_penalty` | float | `1.0` | `panel` 参考中同伴矛盾的权重 |
+| `contradiction_penalty` | float | `1.0` | `panel` 参考中同伴矛盾（幻觉检测器给出的无依据片段概率）的权重；`vllm-sr config migrate` 会把旧的 `nli_contradiction_penalty` 改名为此字段 |
 | `on_error` | string | `skip` | `skip`（回退到普通 Fusion）或 `fail` |
 
 面板响应和原始请求会发送给裁判模型。把所有面板和裁判提供商视为同一数据边界，并在中间追踪会暴露敏感内容时将其关闭。完整示例见：

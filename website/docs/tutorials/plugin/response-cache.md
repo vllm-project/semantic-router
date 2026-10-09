@@ -76,6 +76,10 @@ When request controls are enabled, the configured header accepts the authorized
 directives. `max-age` bounds read freshness and `ttl` bounds write lifetime;
 caller TTL values are clamped to `max_ttl_seconds`.
 
+Exact-cache promotion from L2 to L1 retains the original entry age and backend
+expiry. An entry whose age is unknown can serve an unrestricted lookup, but it
+cannot satisfy a `max-age` freshness bound in either tier.
+
 ## Migration
 
 `semantic-cache`, `semantic_cache`, and `response-cache` are accepted as
@@ -85,21 +89,14 @@ deprecated aliases and normalize to `response_cache`. Likewise,
 document. Export, Dashboard saves, and DSL decompilation always emit the
 canonical names.
 
-For local `mmbert` embeddings, including Vela Embedding, changing the model,
+For embeddings from the model runtime, including Vela Embedding, changing the model,
 tokenizer, representation size, or inference settings starts a separate cache
 space. The router retains your tenant namespace and explicit cache revision;
 historical entries remain stored until their normal expiry or explicit cleanup.
 The first requests after a model upgrade are cache misses. Restarting with the
 same representation reuses its compatible cache. The router rejects a
-[remote embedding endpoint](../../installation/runtime/embeddings.md#remote-embeddings)
+[remote embedding endpoint](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service)
 for the semantic cache, because the cache needs local tokenizer windows.
-
-Candle `bert` embeddings are keyed by an encoder version instead, which changes
-whenever Candle BERT vectors change, as they did when padding tokens stopped
-counting toward the average. Upgrading across such a change starts a new BERT
-cache space. Entries written before the upgrade are not reused and remain until
-they expire, and the cache fills again from new traffic. BERT served by another
-runtime keeps its existing cache.
 
 ## Operations
 
@@ -129,19 +126,15 @@ cannot judge, so the hit relied on vector similarity alone. Reworded English
 questions and most non-English hits report `not_applicable`; for example, the
 cue list does not recognize German `nicht` or Chinese `不`.
 
-The in-memory backend additionally supports the optional NLI verifier
-(`global.stores.response_cache.polarity_guard`; see
-[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With this
-optional tier enabled, an NLI-rejected candidate is logged as
-`cache_negation_reject` with `tier: nli`, is reported as a miss, and its
-similarity still appears on `x-vsr-cache-similarity` so near-threshold
-rejections stay diagnosable.
+The NLI tier that earlier releases offered on the in-memory backend is retired;
+`vllm-sr config migrate` keeps the lexical check. See
+[Stores and Tools](../global/stores-and-tools.md#negation-guard).
 
 Cached responses can contain user or tenant data. Choose an appropriate scope,
 TTL, backend authentication, encryption, and invalidation process. Semantic
 thresholds must be calibrated for the configured embedding model. A query longer
-than the embedding model's context window (512 tokens for the default `bert`
-model) is not cached, because a truncated embedding would match every query
+than the embedding deployment's input limit is not cached, because a truncated
+embedding would match every query
 sharing that prefix. Routes
 with personalized RAG or memory should not reuse pre-enrichment responses
 without an explicit policy. See complete examples:

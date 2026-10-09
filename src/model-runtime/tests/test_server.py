@@ -45,7 +45,7 @@ def start(args):
         [
             sys.executable,
             "-m",
-            "vllm_sr_runtime",
+            "vllm_srun",
             "serve",
             *args,
             "--device",
@@ -108,6 +108,26 @@ def test_server_process(qwen35_package, tmp_path, transport):
         assert set(answers) == set(QUESTIONS) and all(
             "error" not in a for a in answers.values()
         )
+        connection = connect()
+        connection.request(
+            "POST",
+            "/v1/bundle",
+            body=json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "t",
+                            "decisions": {"state": STATE, "questions": QUESTIONS},
+                        }
+                    ]
+                }
+            ),
+            headers={"content-type": "application/json"},
+        )
+        response = connection.getresponse()
+        assert response.status == 200 and response.read()
+        timing = response.getheader("server-timing", "")
+        assert timing.startswith("parse;dur=") and ", total;dur=" in timing
         status, body = request(connect(), "GET", "/v1/models")
         assert status == 200 and json.loads(body)["data"][0]["ready"]
     finally:
@@ -115,3 +135,64 @@ def test_server_process(qwen35_package, tmp_path, transport):
         process.wait(timeout=30)
     if transport == "uds":
         assert not Path(path).exists()
+
+
+def test_a_server_whose_pytorch_has_no_lapack_refuses_a_gated_delta_model_on_cpu(
+    qwen35_package,
+):
+    """``vllm-srun serve`` keeps serving its health while the refused model reports why, at once."""
+    port = free_port()
+    env = dict(
+        os.environ,
+        PYTHONPATH=str(SOURCE) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+    )
+    without_lapack = (
+        "import runpy, torch; torch._C.has_lapack = False; "
+        "runpy.run_module('vllm_srun', run_name='__main__')"
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            without_lapack,
+            "serve",
+            str(qwen35_package),
+            "--device",
+            "cpu",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
+    def connect():
+        return http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+
+    try:
+        deadline = time.monotonic() + 120
+        health = None
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise AssertionError(process.stdout.read().decode())
+            try:
+                status, body = request(connect(), "GET", "/health")
+                health = json.loads(body)
+                if health["status"] not in ("starting", "loading", "warming"):
+                    break
+            except OSError:
+                pass
+            time.sleep(0.2)
+        assert status == 503 and health["status"] == "failed"
+        status, body = request(connect(), "GET", "/v1/models")
+        (card,) = json.loads(body)["data"]
+        assert card["status"] == "failed" and not card["ready"]
+        assert card["reason"].startswith("UnsupportedDeviceError: no device can serve")
+        assert "built without LAPACK" in card["reason"]
+        assert "CPU image" in card["reason"] and "GPU device" in card["reason"]
+    finally:
+        process.terminate()
+        process.wait(timeout=30)

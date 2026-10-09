@@ -85,8 +85,9 @@ func bindManagementCredentialRole(auth *yaml.Node) error {
 func bindManagementCredentialToken(auth *yaml.Node) error {
 	tokens := mappingValueNode(auth, "tokens")
 	if tokens == nil {
-		tokens = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-		setMappingValueNode(auth, "tokens", tokens)
+		// The mapping stores a copy, so append to the node it holds.
+		setMappingValueNode(auth, "tokens", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"})
+		tokens = mappingValueNode(auth, "tokens")
 	}
 	if tokens.Kind != yaml.SequenceNode {
 		return errors.New("management API auth.tokens must be a sequence")

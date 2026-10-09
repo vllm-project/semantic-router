@@ -99,7 +99,7 @@ func testDynamicConfigGenerationLifecycle(ctx context.Context, client *kubernete
 		timeout:  10 * time.Minute,
 		probe: func(ctx context.Context, decision string, sample int) (lifecycleResponse, error) {
 			response, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-				Model: "MoM",
+				Model: "vllm-sr/auto",
 				Messages: []fixtures.ChatMessage{{Role: "user", Content: fmt.Sprintf(
 					"Please say hello for %s, phase %s, sample %d.", lifecycleKeyword, decision, sample)}},
 			}, nil)

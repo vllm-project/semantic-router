@@ -1,5 +1,7 @@
 # Native engine parity on ROCm (MI325X)
 
+> **Phase 1 record** (Decision 2.0, [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and its follow-ups). The Phases 2–4 records are the `decision1-*`, `vela1-*`, `vela2-*`, `embed-*`, `stores-*`, `router-latency-cpu*`, `router-latency-rocm*`, `rocm-router-image` and `removal-footprint*` files.
+
 The native engine answers exactly as each released package's own runtime on
 the four scored panels, on both of its paths, for all six Decision 2.0 sizes.
 

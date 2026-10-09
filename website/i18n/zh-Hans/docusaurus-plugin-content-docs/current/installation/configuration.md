@@ -4,7 +4,7 @@ description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配�
 translation:
   source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置
@@ -29,7 +29,7 @@ global:
 | 节 | 拥有 |
 | --- | --- |
 | `version` | Canonical schema 版本。使用 `v0.3`。 |
-| `listeners` | 公共 Router 监听器和超时。 |
+| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key、可选的请求模型白名单（`models`，为空时接受所有模型），以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
 | `providers` | 逻辑 provider 模型、物理后端端点、定价、能力和默认值。 |
 | `evaluation` | 可选的运维人员拥有的基准定义、带版本的索引 DAG，以及与模型关联的记录。 |
 | `routing` | 默认配方：model card、信号、投影、决策、strategy、算法和路由插件。 |
@@ -54,7 +54,7 @@ Provider 定价放在每个具体模型旁边，位于 `providers.models[].prici
 
 Router 范围的调试表面默认关闭。`global.services.observability.profiling` 提供 Go `pprof` 端点，并且仅在显式启用时提供；然后它绑定 `127.0.0.1:6060`，因此除非显式更改 `bind`，否则 profile 永远不会到达可路由接口。该开关在启动时读取一次，因此更改它需要重启 Router。参见 [API 与可观测性](../tutorials/global/api-and-observability)。
 
-当未配置远程后端时，内置类别/领域分类使用本地 `variant` 选择器。要调用命名的外部分类器，在 `global.model_catalog.modules.classifier.domain` 下附加 `backend`，并从 `global.model_catalog.external[]` 解析其 `model`，设置 `model_role: classification`。共享后端字段是 `protocol`、`contract`、`model` 和可选的 `deadline_ms`；类别当前支持带完整 `label_distribution.v1` 响应契约的 `http_classify`。省略 `backend` 以保留本地行为。已弃用的 `use_modernbert` 和 `use_mmbert_32k` 键仍可读，而生成的 canonical 配置使用 `variant: candle`、`variant: modernbert` 或 `variant: mmbert32k`。
+当未配置远程后端时，内置类别/领域分类在[模型运行时](model-runtime/overview.md)中运行 Vela Domain。要调用命名的外部分类器，在 `global.model_catalog.modules.classifier.domain` 下附加 `backend`，并从 `global.model_catalog.external[]` 解析其 `model`，设置 `model_role: classification`。共享后端字段是 `protocol`、`contract`、`model` 和可选的 `deadline_ms`；类别当前支持带完整 `label_distribution.v1` 响应契约的 `http_classify`。省略 `backend` 以保留运行时提供的模型。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
 
 复杂度在 `global.model_catalog.modules.complexity` 下附加相同的块，位于 `prototype_scoring` 旁边。它读取两种契约，因此 `contract` 不能默认，必须声明：回归模型使用 `score.v1`，每条规则通过自己的 `hard_above`/`easy_below` 边界（或当分数随难度上升而下降时使用 `hard_below`/`easy_above`）将分数转换为判定；直接返回 `hard`/`easy`/`medium` 的模型使用 `label_distribution.v1`。`threshold` 仍是本地带符号边距的对称简写。`score.v1` 不报告置信度，因此由这些规则门控的决策按引擎的结构默认值排序；Router 会在启动时发出警告。远程调用通过 `llm_remote_connector_*` 和 `llm_complexity_*` 指标可见，评分器失败会记录在每条复杂度规则的信号错误上，而不是被丢弃。
 
@@ -252,6 +252,8 @@ api_key: ${MODEL_API_KEY}
 
 入口点将一个或多个公共模型别名映射到配方。配方拥有其信号、投影、决策、算法、插件、缓存、回放、学习和路由状态。Providers、存储和 Router 拥有的分类器资产可以共享，而不允许策略状态跨越配方边界。
 
+`global.router.strategy` 和 `global.router.fallback` 提供共享默认值。顶层 `routing` 仅配置默认配方；每个 `recipes[].routing` 独立继承全局默认值，不继承顶层默认配方的设置。decision 的 fallback 再覆盖自身配方的有效 fallback。默认和具名配方都允许 `fallback: {enabled: false}` 这样的部分覆盖，其余字段保留共享默认值。运行时的内置 strategy 默认值为 `priority`。
+
 在外部 LLM 分类器条目和 MCP 分类器模块上设置 `max_response_bytes`，以限制一次上游分类器响应。
 
 在 schema 中，`entrypoints[].model_names` 列出公共别名，`entrypoints[].recipe` 选择命名配方，`recipes[].routing` 包含该配方的策略。
@@ -260,16 +262,14 @@ api_key: ${MODEL_API_KEY}
 
 内置虚拟模型、CLI 服务、后端绑定、分叉、打包和迁移见[模型、入口点与服务](../tutorials/global/models-entrypoints-serving)。完整 schema 见[虚拟模型](../tutorials/global/entrypoints-and-recipes)。
 
-### 配方级候选约束和回放策略
+### 配方候选约束
 
-可在默认配方或具名配方的 `routing` 中独立声明以下可选策略：
+可在默认配方或具名配方的 `routing` 中独立声明以下可选候选约束：
 
 ```yaml
 candidate_requirements:
   capabilities: declared
   context: known_limits
-data_policy:
-  replay: false
 ```
 
 `capabilities: declared` 要求模型显式声明请求所需的任务能力，包括工具和图像输入，并且提供方协议兼容。
@@ -289,15 +289,19 @@ plugins:
       max_tokens_limit: 8192
 ```
 
-配方的 `replay: false` 禁止路由器回放捕获，decision 不能重新开启；在尚未得到 decision 时被拒绝的请求同样适用。
-省略或 true 不额外限制现有全局和 decision 配置。该字段不控制其他存储、日志或后端留存；运营者仍需选择满足隐私要求的部署。
-
 多因素选择的 `latency_metric: ttft` 比较首 token 延迟，`tpot` 比较每个输出 token 的耗时。
 省略时保留原有的 TPOT 优先、TTFT 后备行为。如果质量是准入下限，可配合明确的质量证据和字典序目标使用。
 
-使用 `vllm-sr config schema --section routing.candidate_requirements` 和
-`vllm-sr config schema --section routing.data_policy` 查看当前契约。DSL 的 `ROUTING` 块支持相同对象。
+使用 `vllm-sr config schema --section routing.candidate_requirements` 查看当前契约。DSL 的 `ROUTING` 块支持相同对象。
 Kubernetes CRD 导出保留默认 routing 的策略；具名配方和入口点应使用 canonical YAML，CRD 导出会明确拒绝而不会静默丢弃。
+
+### 回放采集默认值与 decision 覆盖
+
+`global.services.router_replay` 管理共享存储、保留时间、启用状态和采集默认值。decision 的 `router_replay` 插件只覆盖明确填写的采集字段；省略字段时继承全局设置。`enabled: false` 关闭当前 decision 的采集，`enabled: true` 可在全局关闭时单独开启。回放不设置配方级默认值。
+
+在全局或插件中设置 `capture_personal_data: false`，可保留路由证据，同时在检测到 PII 或状态未知时省略内容。未配置检测器时保守地省略内容，不会阻止启动。尚未选中 decision 的被拒绝请求使用全局默认值。这些设置不控制其他存储或模型提供方的留存。
+
+完整示例见 [Router Replay](../tutorials/plugin/router-replay)，或运行 `vllm-sr config schema --section global.services.router_replay` 查看契约。
 
 ## 配置工作流
 
@@ -309,7 +313,7 @@ canonical 文档可以通过多个界面编写或应用：
 - Kubernetes Operator；以及
 - 路由 DSL。
 
-[配置工作流](configuration-workflows)解释哪个界面拥有文档的哪一部分，以及如何避免相互竞争的事实来源。[配置契约](configuration-contract)描述生成的机器可读 schema、Router 发现和校验 API，以及工具和 Agent 的安全编写循环。
+[配置工作流](configuration-workflows)解释哪个界面拥有文档的哪一部分，以及如何避免相互竞争的事实来源。[配置契约](configuration-contract)描述生成的机器可读 schema、Router 发现和校验 API，以及工具和 Agent 的安全编写循环。[配置管理](configuration-management)说明运行中的 Router 如何激活变更、被拒绝的变更如何报告，以及如何列出和回滚版本。
 
 ## 参考来源
 

@@ -10,7 +10,7 @@ model.
 ## Key Advantages
 
 - Learns complex, non-linear decision boundaries that linear methods (KNN, SVM with linear kernel) cannot capture.
-- Uses the [Candle](https://github.com/huggingface/candle) inference binding.
+- Runs in the router itself, in Go; it needs only the query embedding from the [model runtime](../../../model-runtime/guides/embeddings.md).
 - Supports custom hidden layer sizes to balance model capacity and inference speed.
 - Integrates into the same `decision.algorithm` surface as other selection algorithms.
 

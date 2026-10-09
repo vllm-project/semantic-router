@@ -59,7 +59,7 @@ func TestMultiObjectiveRecipePreservesAMDModelPool(t *testing.T) {
 	if len(physicalEndpoints) != 8 {
 		t.Fatalf("expected eight serving endpoints, got %v", physicalEndpoints)
 	}
-	if got := recipe.Global.Integrations.Looper.Endpoint; got != "http://vllm-sr-envoy-container:8899/v1/chat/completions" {
-		t.Fatalf("Looper endpoint must re-enter Envoy for cross-backend orchestration, got %q", got)
+	if got := recipe.Global.Integrations.Looper.Endpoint; got != "" {
+		t.Fatalf("the recipe sets the deprecated Looper endpoint %q; the Router calls the pool's backends in process", got)
 	}
 }

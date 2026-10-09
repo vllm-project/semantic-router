@@ -20,63 +20,6 @@ const (
 	ReMoMOnErrorFail = "fail"
 )
 
-// ReMoMRuntimeConfig registers direct ReMoM model slugs. ReMoM breadth,
-// compaction, and synthesis policy live on routing decisions.
-type ReMoMRuntimeConfig struct {
-	ModelNames []string `yaml:"model_names,omitempty" json:"model_names,omitempty"`
-}
-
-func DefaultReMoMModelNames() []string {
-	return []string{DefaultReMoMModelName}
-}
-
-func (c ReMoMRuntimeConfig) EffectiveModelNames() []string {
-	if len(c.ModelNames) > 0 {
-		return normalizeReMoMModelNames(c.ModelNames)
-	}
-	return DefaultReMoMModelNames()
-}
-
-func (c *RouterConfig) ExposedReMoMModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasReMoMDecision() {
-		return nil
-	}
-	return c.Looper.ReMoM.EffectiveModelNames()
-}
-
-func normalizeReMoMModelNames(names []string) []string {
-	seen := make(map[string]bool, len(names))
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		normalized := strings.TrimSpace(name)
-		if normalized == "" || seen[normalized] {
-			continue
-		}
-		seen[normalized] = true
-		result = append(result, normalized)
-	}
-	return result
-}
-
-func (c *RouterConfig) IsReMoMModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.ReMoM.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *RouterConfig) HasReMoMDecision() bool {
 	if c == nil {
 		return false
@@ -89,20 +32,14 @@ func (c *RouterConfig) HasReMoMDecision() bool {
 	return false
 }
 
-func ValidateReMoMRuntimeConfig(cfg ReMoMRuntimeConfig) error {
-	for i, name := range cfg.ModelNames {
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("model_names[%d] cannot be empty", i)
-		}
-	}
-	return nil
-}
-
 func ValidateReMoMAlgorithmConfig(cfg *ReMoMAlgorithmConfig) error {
 	if cfg == nil {
 		return nil
 	}
 	if err := validateReMoMBreadthSchedule(cfg.BreadthSchedule); err != nil {
+		return err
+	}
+	if err := validateReMoMBreadthScheduleBudget(cfg.BreadthSchedule); err != nil {
 		return err
 	}
 	if err := validateReMoMDistribution(cfg.ModelDistribution); err != nil {

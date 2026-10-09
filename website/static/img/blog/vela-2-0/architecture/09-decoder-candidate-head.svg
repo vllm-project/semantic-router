@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1330" viewBox="0 0 1500 1330" role="img"><title>Vela 2.0 decoder CandidateHead</title><desc>Vela 2.0 decoder-family CandidateHead. Each option endpoint and the question-block endpoint use separate LayerNorms. A scaled bilinear score and an additive GELU MLP score are summed. The same learned head serves Choice, Noul, Score and Set; Set adds one scalar bias before temperature scaling and sigmoid. Noul is a two-option Choice; Score returns the expectation of its ordered distribution. H is 1024, 2560 or 4096 for the 0.8B, 4B and 9B checkpoints; d is 256. These are independent checkpoints with the same topology, not shared weights.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<g data-box="400.0 1180 680 83">
+<rect x="400.0" y="1180" width="680" height="83" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="740" y="1214.885" font-size="27" text-anchor="middle" class="">Question-block hidden states</text>
+<text x="740" y="1246.475" font-size="27" text-anchor="middle" class="">H = 1024 / 2560 / 4096</text>
+</g>
+<g data-box="165.0 1060 450 78">
+<rect x="165.0" y="1060" width="450" height="78" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="390" y="1092.6299999999999" font-size="26" text-anchor="middle" class="">Select option endpoint</text>
+<text x="390" y="1123.05" font-size="26" text-anchor="middle" class="">cᵢ ∈ ℝᴴ</text>
+</g>
+<g data-box="855.0 1060 450 78">
+<rect x="855.0" y="1060" width="450" height="78" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="1092.6299999999999" font-size="26" text-anchor="middle" class="">Select block-last endpoint</text>
+<text x="1080" y="1123.05" font-size="26" text-anchor="middle" class="">q ∈ ℝᴴ</text>
+</g>
+<path d="M740,1180 L740,1160 L390,1160 L390,1138" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M740,1160 L1080,1160 L1080,1138" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="740" cy="1160" r="3.5" fill="#111"/>
+<g data-box="220.0 956 340 58">
+<rect x="220.0" y="956" width="340" height="58" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="390" y="993.84" font-size="26" text-anchor="middle" class="">LayerNorm candidate</text>
+</g>
+<g data-box="910.0 956 340 58">
+<rect x="910.0" y="956" width="340" height="58" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="993.84" font-size="26" text-anchor="middle" class="">LayerNorm query</text>
+</g>
+<path d="M390,1060 L390,1014" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1080,1060 L1080,1014" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="92.5 790 255 76">
+<rect x="92.5" y="790" width="255" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="220" y="821.875" font-size="25" text-anchor="middle" class="">Key Wₖ</text>
+<text x="220" y="851.125" font-size="25" text-anchor="middle" class="">H → 256, no bias</text>
+</g>
+<g data-box="407.5 790 255 76">
+<rect x="407.5" y="790" width="255" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="535" y="821.875" font-size="25" text-anchor="middle" class="">Query Wq</text>
+<text x="535" y="851.125" font-size="25" text-anchor="middle" class="">H → 256, no bias</text>
+</g>
+<g data-box="785.0 790 290 76">
+<rect x="785.0" y="790" width="290" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="930" y="821.875" font-size="25" text-anchor="middle" class="">Candidate MLP Wₘ</text>
+<text x="930" y="851.125" font-size="25" text-anchor="middle" class="">H → 256, bias</text>
+</g>
+<g data-box="1110.0 790 280 76">
+<rect x="1110.0" y="790" width="280" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1250" y="821.875" font-size="25" text-anchor="middle" class="">Query MLP Wₙ</text>
+<text x="1250" y="851.125" font-size="25" text-anchor="middle" class="">H → 256, no bias</text>
+</g>
+<path d="M390,956 L390,926 L220,926 L220,866" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M390,926 L930,926 L930,866" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="390" cy="926" r="3.5" fill="#111"/>
+<path d="M1080,956 L1080,900 L1250,900 L1250,866" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M921,900 L939,900" fill="none" stroke="#FFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1080,900 L535,900 L535,866" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1080" cy="900" r="3.5" fill="#111"/>
+<g data-box="115.5 598 525 82">
+<rect x="115.5" y="598" width="525" height="82" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="378" y="632.875" font-size="25" text-anchor="middle" class="">Scaled dot product</text>
+<text x="378" y="662.125" font-size="25" text-anchor="middle" class="">(Wₖ ĉᵢ)ᵀ (Wq q̂) / √256</text>
+</g>
+<path d="M220,790 L220,735 L285,735 L285,680" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M535,790 L535,735 L470,735 L470,680" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1090" cy="697" r="20" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="1090" y="705.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M930,790 L930,697 L1070,697" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1250,790 L1250,697 L1110,697" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="950.0 580 280 60">
+<rect x="950.0" y="580" width="280" height="60" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1090" y="619.18" font-size="27" text-anchor="middle" class="">GELU</text>
+</g>
+<path d="M1090,677 L1090,640" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="910.0 467 360 76">
+<rect x="910.0" y="467" width="360" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1090" y="498.63000000000005" font-size="26" text-anchor="middle" class="">Scalar projection vᵀ</text>
+<text x="1090" y="529.0500000000001" font-size="26" text-anchor="middle" class="">256 → 1, no bias</text>
+</g>
+<path d="M1090,580 L1090,543" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="740" cy="383" r="21" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="740" y="391.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M378,598 L378,383 L719,383" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1090,467 L1090,383 L761,383" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="540.0 266 400 76">
+<rect x="540.0" y="266" width="400" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="740" y="297.385" font-size="27" text-anchor="middle" class="">Option logits zᵢ</text>
+<text x="740" y="328.97499999999997" font-size="27" text-anchor="middle" class="">one shared head</text>
+</g>
+<path d="M740,362 L740,342" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="70.0 100 640 88">
+<rect x="70.0" y="100" width="640" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="390" y="137.38500000000002" font-size="27" text-anchor="middle" class="">Choice / Noul / Score</text>
+<text x="390" y="168.97500000000002" font-size="27" text-anchor="middle" class="">Softmax(z / Ttype)</text>
+</g>
+<g data-box="822.5 100 595 88">
+<rect x="822.5" y="100" width="595" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1120" y="137.63" font-size="26" text-anchor="middle" class="">Set</text>
+<text x="1120" y="168.04999999999998" font-size="26" text-anchor="middle" class="">Sigmoid((z + bset) / Tset)</text>
+</g>
+<path d="M740,266 L740,226 L390,226 L390,188" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M740,226 L1120,226 L1120,188" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="740" cy="226" r="3.5" fill="#111"/>
+<text x="390" y="45.0" font-size="27" text-anchor="middle" class="">Exclusive probability distribution</text>
+<text x="1120" y="45.0" font-size="27" text-anchor="middle" class="">Independent label probabilities</text>
+<path d="M390,100 L390,62" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1120,100 L1120,62" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="750" y="1300.0" font-size="31" text-anchor="middle" class="serif">(i) CandidateHead: bilinear + additive MLP</text>
+</svg>

@@ -36,8 +36,8 @@ def _bound_window_error(window, deployment):
         if overflow == "window":
             return "PII window overflow requires explicit module window geometry"
         return None
-    if deployment.get("provider") not in {"candle", "ort"}:
-        return "PII window requires a local Candle or ORT deployment"
+    if deployment.get("provider") != "model_runtime":
+        return "PII window requires a local deployment"
     if overflow != "window":
         return "PII window requires deployment input.overflow=window"
     limit = budget.get("max_tokens", 0)

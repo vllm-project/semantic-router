@@ -7,7 +7,7 @@ one final answer. The recipe-owned `analysis_mode` chooses whether the judge
 uses a separate structured analysis call, combines analysis and synthesis in
 one call, or synthesizes directly. The compatibility default is `separate`.
 
-The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
+Expose `fusion` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=fusion` activates the algorithm. Use a dedicated recipe when this entrypoint should run only fusion policies.
 
 ## Key Advantages
 
@@ -166,60 +166,48 @@ algorithm:
     judge_prompt_version: fusion-v1
 ```
 
-Automatic routing aliases:
+Default routing uses `vllm-sr/auto` when no entrypoint explicitly targets
+`default`. To replace that public name, declare all desired aliases:
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - model_names: [router/default, MoM]
+    recipe: default
 ```
 
-`vllm-sr/auto` evaluates all decisions. If the matched decision uses `algorithm.type=fusion`, the request enters Fusion; otherwise it follows the matched non-Fusion route.
+Only these explicit aliases resolve to `default`; `MoM` has no special meaning.
+The matched decision selects Fusion when its algorithm is `fusion`.
 
-Direct Fusion slug registration:
+For a dedicated Fusion surface, map its public names to an isolated recipe:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      fusion:
-        model_names:
-          - vllm-sr/fusion
+entrypoints:
+  - model_names: [vllm-sr/fusion, openrouter/fusion]
+    recipe: fusion
+recipes:
+  - name: fusion
+    routing:
+      decisions:
+        - name: panel
+          priority: 1
+          rules: {operator: AND, conditions: []}
+          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+          algorithm:
+            type: fusion
+            fusion:
+              model: qwen3-32b
+              analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
-`global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
-
-The judge model, analysis panel, analysis mode, sampling settings, concurrency,
-token and time budgets, quorum, templates, prompt version, trace visibility,
-error policy, and grounding policy belong under
-`routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only
-Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a
-normal single-model route. The public HTTP path executes the selected recipe
-policy and does not expose Fusion execution overrides through
-`plugins[].id = fusion`.
-
-To expose an OpenRouter-compatible alias, opt in explicitly:
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-          - openrouter/fusion
-```
+Public entrypoint names must not collide with backend models. Recipe signals,
+judge, panel, concurrency, budgets, templates and error policy remain inside
+that recipe. Shared orchestration limits such as `max_response_bytes_mb`
+belong under `global.integrations.looper`; it does not declare public names.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion decision matching |
 | `model` | string | first analysis model | Recipe-owned judge/calling model used for analysis and final synthesis |
 | `analysis_models` | list[string] | `modelRefs` | Recipe-owned panel models for parallel analysis |
 | `analysis_mode` | string | `separate` | Recipe-owned judge execution: `separate`, `one_call`, or `none` |
@@ -414,12 +402,12 @@ Public mode-trace transport remains deferred to
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses local encoder models (the hallucination/groundedness detector and an NLI entailment model).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses the hallucination detector (Vela Halu by default), which runs in the [model runtime](../../../model-runtime/guides/hallucination.md).
 
 Reference selection (what each answer is scored against):
 
 - `context` — score answers against provided RAG/tool context via the detector (strongest, but only when the request carries context such as system/tool messages).
-- `panel` — score answers against each other via cross-model NLI; the panel acts as its own mutual reference (no external dependency, works on any query).
+- `panel` — score answers against each other: the detector reads each answer with a peer's answer as its context, so the panel acts as its own mutual reference (no external dependency, works on any query).
 - `hybrid` (default) — use `context` when the request carries it, otherwise `panel`.
 
 Policy (how the scores are used):
@@ -434,7 +422,7 @@ quorum check on the reduced judge input.
 
 > Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 
-Requires the hallucination detector (and, for the `panel`/cross-model path, the NLI model) to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
+Requires the hallucination detector to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
 
 ```yaml
 algorithm:
@@ -448,7 +436,7 @@ algorithm:
       policy: weight             # weight | annotate | filter
       min_score: 0.0             # filter policy only: drop below this (0-1)
       min_keep: 1                # filter policy only: keep at least this many
-      nli_contradiction_penalty: 1.0
+      contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
 ```
 
@@ -463,7 +451,7 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `policy` | string | `weight` | `weight` (soft-weight, keep all), `annotate` (notes, keep all), or `filter` (hard-drop) |
 | `min_score` | float | `0.0` | `filter` policy only: drop responses scoring below this (0–1) |
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
-| `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
+| `contradiction_penalty` | float | `1.0` | Weight of a peer contradiction (the detector's unsupported-span probability) in the `panel` reference; `vllm-sr config migrate` renames the earlier `nli_contradiction_penalty` |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
 
 Panel responses and the original request are sent to the judge model. Treat all

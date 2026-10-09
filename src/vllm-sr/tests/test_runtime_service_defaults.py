@@ -126,18 +126,14 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
 
 @pytest.mark.parametrize(
     "endpoint",
-    [
-        None,
-        "http://localhost:8899/v1/chat/completions",
-        "http://127.0.0.2:8899/v1/chat/completions",
-        "http://[::1]:8899/v1/chat/completions",
-    ],
+    [None, "http://localhost:8899/v1/chat/completions"],
 )
-def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
+def test_resolve_effective_config_path_leaves_the_looper_endpoint_alone(
     endpoint: str | None,
     write_local_looper_config,
     monkeypatch,
 ):
+    """The Router makes Looper calls in process; serve points nothing at Envoy."""
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
     config_path = write_local_looper_config(endpoint)
 
@@ -149,52 +145,7 @@ def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    assert effective["global"]["integrations"]["looper"]["endpoint"] == (
-        "http://test-stack-vllm-sr-envoy-container:9011/v1/chat/completions"
-    )
-
-
-def test_resolve_effective_config_path_rewrites_default_envoy_service_for_named_stack(
-    write_local_looper_config,
-    monkeypatch,
-):
-    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
-    config_path = write_local_looper_config(
-        "http://vllm-sr-envoy-container:8899/v1/chat/completions"
-    )
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform=None,
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert effective["global"]["integrations"]["looper"]["endpoint"] == (
-        "http://test-stack-vllm-sr-envoy-container:9011/v1/chat/completions"
-    )
-
-
-def test_resolve_effective_config_path_preserves_external_looper_endpoint(
-    write_local_looper_config,
-    monkeypatch,
-):
-    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
-    external_endpoint = "https://gateway.example.test/v1/chat/completions"
-    config_path = write_local_looper_config(external_endpoint)
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform=None,
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["integrations"]["looper"]["endpoint"] == external_endpoint
-    )
+    assert effective["global"]["integrations"]["looper"].get("endpoint") == endpoint
 
 
 def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(

@@ -155,8 +155,9 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
-			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
+		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+		if applyErr != nil {
+			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
 		}
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -174,6 +175,10 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			DSLSnapshot: readArchivedDSL(configDir),
 		})
 
+		if restartMessage != "" {
+			writeRestartRequiredResponse(w, "", restartMessage)
+			return
+		}
 		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)
 		}
@@ -262,8 +267,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		if err := applyWrittenConfig(configPath, configDir, existingData, false); err != nil {
-			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
+		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, false)
+		if applyErr != nil {
+			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
 		}
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -274,6 +280,10 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
+		if restartMessage != "" {
+			writeRestartRequiredResponse(w, "", restartMessage)
+			return
+		}
 		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)
 		}
