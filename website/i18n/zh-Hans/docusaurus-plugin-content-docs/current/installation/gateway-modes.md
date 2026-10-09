@@ -2,14 +2,14 @@
 title: Gateway 模式
 description: 选择客户端流量从哪里进入 Router：standalone 直接服务，或放在基于 Envoy 的网关之后；适用于 docker 和 kubernetes 两种目标。
 translation:
-  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/gateway-modes.md"
   outdated: false
 ---
 
 # Gateway 模式
 
-`vllm-sr serve` 做两个选择：**gateway 模式**，即客户端流量从哪里进入；以及**目标**，即整套服务在哪里运行。
+**gateway 模式**决定客户端流量从哪里进入，**目标**决定整套服务在哪里运行。它们与 `--engine` 是不同的选择：`--engine` 提供原生判断请求，不启用 Chat 路由；省略时启动 Router 模式。共用的前端与模型运行时见[组件架构](../overview/component-architecture)。
 
 | 模式 | 客户端流量进入 | 适用场景 |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ vllm-sr serve --target kubernetes --config config.yaml
 `x-envoy-*` header。
 
 :::note 升级
-以前的版本总是在 Router 前面放 Envoy。现在默认是 standalone；`vllm-sr serve --gateway extproc` 会完全恢复以前的部署。
+以前的版本总是在 Router 前面放 Envoy。现在默认是 standalone；`vllm-sr serve --gateway extproc` 会恢复 Envoy 入口。
 参见[发布说明](../release-notes/standalone-mode)。
 :::
 
