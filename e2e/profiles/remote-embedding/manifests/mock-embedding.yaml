@@ -27,6 +27,8 @@ data:
         return [0.0, 1.0, 0.0, 0.0]
 
     class Handler(BaseHTTPRequestHandler):
+        last_batch = []
+
         def log_message(self, format, *args):
             return
 
@@ -39,6 +41,9 @@ data:
             self.wfile.write(body)
 
         def do_GET(self):
+            if self.path == "/last-batch":
+                self.send_json(200, {"inputs": Handler.last_batch})
+                return
             if self.path == "/health":
                 self.send_json(200, {"status": "ok"})
                 return
@@ -73,6 +78,9 @@ data:
                 {"object": "embedding", "index": index, "embedding": embedding_for(text)}
                 for index, text in enumerate(inputs)
             ]
+            if len(inputs) > 1:
+                data.reverse()
+                Handler.last_batch = inputs
             self.send_json(
                 200,
                 {

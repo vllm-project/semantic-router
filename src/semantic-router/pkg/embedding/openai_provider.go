@@ -73,7 +73,7 @@ type embeddingsResponse struct {
 }
 
 type embeddingDatum struct {
-	Index     int       `json:"index"`
+	Index     *int      `json:"index"`
 	Embedding []float64 `json:"embedding"`
 }
 
@@ -326,15 +326,13 @@ func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expect
 }
 
 func resolveEmbeddingIndex(item embeddingDatum, sequentialIndex int, expectedCount int) (int, error) {
-	index := item.Index
-	if expectedCount == 1 && index == 0 {
-		return 0, nil
-	}
-	if index == 0 && sequentialIndex > 0 {
-		index = sequentialIndex
+	// Omitted and null indexes use response order; explicit indexes, including zero, do not.
+	index := sequentialIndex
+	if item.Index != nil {
+		index = *item.Index
 	}
 	if index < 0 || index >= expectedCount {
-		return 0, fmt.Errorf("embedding provider returned invalid embedding index %d", item.Index)
+		return 0, fmt.Errorf("embedding provider returned invalid embedding index %d", index)
 	}
 	return index, nil
 }

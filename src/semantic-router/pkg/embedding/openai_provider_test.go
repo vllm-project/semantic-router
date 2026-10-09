@@ -183,8 +183,9 @@ func TestOpenAICompatibleProviderDimensionMismatch(t *testing.T) {
 }
 
 func TestOpenAICompatibleProviderResponseLimit(t *testing.T) {
+	index := 0
 	responseBody, err := json.Marshal(embeddingsResponse{
-		Data: []embeddingDatum{{Index: 0, Embedding: []float64{0.1, 0.2}}},
+		Data: []embeddingDatum{{Index: &index, Embedding: []float64{0.1, 0.2}}},
 	})
 	if err != nil {
 		t.Fatalf("marshal response: %v", err)
@@ -264,7 +265,7 @@ func writeEmbeddingResponse(t *testing.T, w http.ResponseWriter, embeddings [][]
 	t.Helper()
 	data := make([]embeddingDatum, len(embeddings))
 	for i, embedding := range embeddings {
-		data[i] = embeddingDatum{Index: i, Embedding: embedding}
+		data[i] = embeddingDatum{Index: &i, Embedding: embedding}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(embeddingsResponse{Data: data}); err != nil {
