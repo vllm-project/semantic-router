@@ -96,6 +96,20 @@ class TestRegexScannerSelfExclusion(unittest.TestCase):
                     f"expected {path} to still be scanned, not treated as self",
                 )
 
+    def test_signature_file_does_not_match_its_own_signatures(self):
+        # The signature file is not excluded, so the scanner reads it like any
+        # other file: none of its lines may match a signature.
+        result = regex_scanner.ScanResult()
+        regex_scanner.scan_source_patterns(
+            regex_scanner.SECURITY_DIR, result, *regex_scanner.load_signatures()
+        )
+        own = [
+            str(finding)
+            for finding in result.findings
+            if Path(finding.file).name == regex_scanner.SIGNATURES_CONFIG.name
+        ]
+        self.assertEqual(own, [])
+
 
 if __name__ == "__main__":
     unittest.main()

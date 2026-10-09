@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from router_calibration_support import utc_now
@@ -72,11 +73,9 @@ def _render_performance_section(performance: dict[str, Any]) -> list[str]:
 
 
 def _render_eval_summary(label: str, evaluation: dict[str, Any]) -> list[str]:
-    waived = evaluation.get("waived") or 0
-    waived_note = f", {waived} waived (see Known-issue waivers)" if waived else ""
     return [
         f"- {label} scope: `{evaluation.get('evaluation_scope', 'deployment')}`",
-        f"- {label} success: `{evaluation['matched']}/{evaluation['total']}` ({evaluation['success_rate']}%){waived_note}",
+        f"- {label} success: `{evaluation['matched']}/{evaluation['total']}` ({evaluation['success_rate']}%)",
         f"- {label} decision coverage: `{evaluation['matched_decisions']}/{evaluation['total_decisions']}` ({evaluation['decision_success_rate']}%)",
     ]
 
@@ -247,6 +246,7 @@ def _render_decision_failures(
                 ("plugins", result.get("plugins_matched", True)),
                 ("signals", result.get("signals_matched", True)),
                 ("signal values", result.get("signal_values_matched", True)),
+                ("signal errors", result.get("signal_errors_matched", True)),
                 ("trace", result.get("trace_matched", True)),
             )
             if not passed
@@ -261,6 +261,10 @@ def _render_decision_failures(
         if result.get("signal_value_errors"):
             value_errors = "; ".join(result["signal_value_errors"])
             lines.append(f"Signal value errors: `{value_errors}`")
+        if not result.get("signal_errors_matched", True):
+            expected = json.dumps(result.get("expected_signal_errors", {}))
+            actual = json.dumps(result.get("signal_errors", {}))
+            lines.append(f"Signal errors: expected `{expected}`; observed `{actual}`")
         if result.get("trace_errors"):
             lines.append(f"Trace errors: `{'; '.join(result['trace_errors'])}`")
         if result.get("error"):

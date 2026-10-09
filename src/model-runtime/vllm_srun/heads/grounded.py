@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from ..text import bounds
 from ..text.windows import InputTooLongError
 from .task import (
     ClassifierHead,
@@ -212,14 +213,38 @@ class GroundedHead(TaskHead):
     def prepare(self, value: Any, options: HeadOptions, identity: str) -> Prepared:
         context, question, answer = grounded_input(value)
         prompt = self.policy.prompt.format(question=question, context=context)
-        first = self.tokenizer.encode(prompt, add_special_tokens=False).ids
-        second = self.tokenizer.encode(answer, add_special_tokens=False)
-        tokens = len(first) + len(second.ids) + self.pair.size
-        usage = {"tokens": tokens, "processed_tokens": tokens, "truncated": False}
+        # The answer is read whole or not at all; the prompt only as far as the budget the answer leaves.
+        room = options.max_tokens - self.pair.size
+        if bounds.surely_over(self.tokenizer, answer, room):
+            raise InputTooLongError(
+                options.max_tokens + 1, options.max_tokens, "the complete answer"
+            )
+        answered = bounds.read(self.tokenizer, answer, room + 1)
+        second = answered.encoding
+        first: list[int] = []
+        prompted = answered
+        if answered.complete:
+            left = room - answered.tokens
+            if options.overflow != "truncate" and bounds.surely_over(
+                self.tokenizer, prompt, left
+            ):
+                raise InputTooLongError(
+                    options.max_tokens + 1, options.max_tokens, "grounded pair"
+                )
+            prompted = bounds.read(self.tokenizer, prompt, left + 1)
+            first = prompted.encoding.ids[: prompted.tokens]
+        tokens = len(first) + answered.tokens + self.pair.size
+        usage: dict[str, Any] = {
+            "tokens": tokens,
+            "processed_tokens": tokens,
+            "truncated": False,
+        }
+        if not (answered.complete and prompted.complete):
+            usage["tokens_lower_bound"] = True
         if tokens > options.max_tokens:
             if options.overflow != "truncate":
                 raise InputTooLongError(tokens, options.max_tokens, "grounded pair")
-            keep = options.max_tokens - len(second.ids) - self.pair.size
+            keep = options.max_tokens - answered.tokens - self.pair.size
             if keep < 0:
                 raise InputTooLongError(
                     tokens, options.max_tokens, "the complete answer"

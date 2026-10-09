@@ -51,8 +51,9 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
-	// A request the Router cannot route carries a stable reason code (issue #4653)
-	"routing-error-codes",
+	// Unknown names fail even with a global default (issue #4653). The
+	// routing-errors profile covers no_route without that fallback configured.
+	"unknown-model-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
@@ -130,6 +131,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
 	"protocol-codec-anthropic-backend-agent-client-replay",
+	// An empty POST fails closed at the Router before any dispatch (issue #4292)
+	"public-listener-empty-body-rejected",
 }
 
 // Combine preserves order while removing duplicate testcase names.

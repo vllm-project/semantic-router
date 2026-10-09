@@ -102,6 +102,21 @@ runtime edits.
 {{- end }}
 
 {{/*
+The decision model the chart last wrote into the live config, from the live
+ConfigMap's annotation; empty on install.
+*/}}
+{{- define "semantic-router.appliedDecisionModel" -}}
+{{- if .Release.IsUpgrade -}}
+{{- $current := lookup "v1" "ConfigMap" (include "semantic-router.namespace" .) (include "semantic-router.configMapName" .) -}}
+{{- if $current -}}
+{{- $metadata := (get $current "metadata") | default (dict) -}}
+{{- $annotations := (get $metadata "annotations") | default (dict) -}}
+{{- get $annotations "semantic-router.vllm.ai/decision-model" | default "" -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Get the dashboard service account name
 */}}
 {{- define "semantic-router.dashboardServiceAccountName" -}}

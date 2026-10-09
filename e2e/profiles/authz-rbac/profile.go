@@ -168,7 +168,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile.
 // The authz-rbac profile validates RBAC routing through the standard
-// chat-completions test, which sends model="MoM" requests through
+// chat-completions test, which sends model="vllm-sr/auto" requests through
 // the full pipeline. Tests should use JWT tokens in the Authorization header;
 // Envoy Gateway validates the JWT and extracts claims into identity headers.
 // Client-supplied identity headers are stripped by Envoy configuration.

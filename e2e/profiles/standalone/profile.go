@@ -7,6 +7,10 @@ import (
 	"os/exec"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/cluster"
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
@@ -20,9 +24,9 @@ const (
 	listenerPort        = "8899"
 )
 
-// Profile runs the Router on the Helm chart's defaults: standalone mode, where
-// clients reach the Router's own listener through its Service and no gateway
-// runs in the cluster.
+// Profile runs the Router on the Helm chart's defaults, its image included:
+// standalone mode, where clients reach the Router's own listener through its
+// Service and no gateway runs in the cluster.
 type Profile struct {
 	verbose bool
 }
@@ -42,7 +46,10 @@ func (p *Profile) Description() string {
 	return "Helm defaults: the standalone Router serves chat, models, fallback and config rollouts through its Service"
 }
 
-// Setup deploys the model backends and the chart with only its image overridden.
+// Setup deploys the model backends and the chart with nothing but its config
+// overridden. In a development cycle the chart's default image is the
+// development image, so this run's Router image answers to that name inside
+// the cluster.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
 	for _, args := range [][]string{{"-k", providerMockerKusto}, {"-f", unreachableBackend}} {
@@ -50,18 +57,19 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 			return fmt.Errorf("apply model backends: %w", err)
 		}
 	}
-	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-	release := helm.SemanticRouterRelease.Clone()
-	release.ValuesFiles = []string{valuesFile}
-	release.Set = map[string]string{
-		"image.tag":        opts.ImageTag,
-		"image.pullPolicy": "Never",
+	if err := cluster.TagLoadedImage(ctx, opts.ClusterName, helm.RouterImageRepository+":"+opts.ImageTag, helm.DevelopmentRouterImage); err != nil {
+		return fmt.Errorf("name this run's Router image %s: %w", helm.DevelopmentRouterImage, err)
 	}
+	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	release := chartDefaults()
 	if err := deployer.Install(ctx, release); err != nil {
 		return fmt.Errorf("install the chart on its defaults: %w", err)
 	}
 	client, err := helpers.NewKubeClient(opts.KubeConfig)
 	if err != nil {
+		return err
+	}
+	if err := requireDevelopmentImage(ctx, client, release); err != nil {
 		return err
 	}
 	for _, ref := range []helpers.DeploymentRef{
@@ -71,6 +79,34 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 		if err := helpers.WaitForDeploymentReady(ctx, client, ref.Namespace, ref.Name, 30*time.Minute, 5*time.Second, opts.Verbose); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// chartDefaults installs the chart with only the profile's config: no image,
+// pull policy, args or probe overrides. Setup waits for readiness itself, after
+// it has checked the image.
+func chartDefaults() helm.InstallOptions {
+	release := helm.SemanticRouterRelease.Clone()
+	release.ValuesFiles = []string{valuesFile}
+	release.Wait = false
+	return release
+}
+
+// requireDevelopmentImage fails at once when the chart's default Router image
+// isn't the development image, instead of waiting out a Router that can't
+// start.
+func requireDevelopmentImage(ctx context.Context, client *kubernetes.Clientset, release helm.InstallOptions) error {
+	deployment, err := client.AppsV1().Deployments(release.Namespace).Get(ctx, release.ReleaseName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("read the Router deployment: %w", err)
+	}
+	containers := deployment.Spec.Template.Spec.Containers
+	if len(containers) == 0 {
+		return fmt.Errorf("the Router deployment has no container")
+	}
+	if image := containers[0].Image; image != helm.DevelopmentRouterImage {
+		return fmt.Errorf("the chart's default Router image is %s, want the development image %s: a development cycle's chart deploys the image main publishes (tools/release/check_version_contract.py)", image, helm.DevelopmentRouterImage)
 	}
 	return nil
 }
@@ -90,10 +126,12 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the standalone cases; the config rollout runs last.
 func (p *Profile) GetTestCases() []string {
 	return []string{
+		"standalone-chart-defaults",
 		"standalone-chat-completions",
 		"standalone-models",
 		"standalone-fallback",
 		"routing-error-codes",
+		"standalone-decision-model",
 		"standalone-config-rollout",
 	}
 }

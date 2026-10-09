@@ -1448,6 +1448,19 @@ spec:
                         rule: '!(has(self.hard_below) && has(self.easy_above)) ||
                           double(self.hard_below) < double(self.easy_above)'
                     type: array
+                  decision_model:
+                    description: |-
+                      DecisionModel selects the declared deployment that answers default judgment tasks.
+                      Omitted uses the Router's primary deployment. Artifact identity belongs in
+                      model_deployments; the reference never infers a model family or alias.
+                    properties:
+                      deployment:
+                        description: Deployment is an exact key in model_deployments.
+                        minLength: 1
+                        type: string
+                    required:
+                    - deployment
+                    type: object
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,
                       etc.)
@@ -1985,7 +1998,8 @@ spec:
                         minimum: 0
                         type: integer
                       model_id:
-                        default: models/Vela-2.0-0.3B
+                        description: ModelID binds the guard to one model; empty runs
+                          the decision model.
                         type: string
                       on_error:
                         description: |-
@@ -2008,9 +2022,9 @@ spec:
                           type: string
                         type: array
                       threshold:
-                        default: "0.75"
-                        description: Jailbreak detection threshold (0.0-1.0). Stored
-                          as string to avoid float precision issues.
+                        description: |-
+                          Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
+                          precision issues; empty takes the threshold calibrated for the model.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       use_cpu:

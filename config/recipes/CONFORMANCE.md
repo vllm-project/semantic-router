@@ -58,7 +58,7 @@ authoring mechanics here and release operations in the maintainer guide.
 3. Set `schema_version: v1`, matching `name`, and correct `routing_assets` in
    `probes.yaml`.
 4. Add at least one probe for every decision and every request-facing model
-   entrypoint. Default recipes use `global.router.auto_model_names`; named
+   entrypoint. Default recipes use explicit `entrypoints` or the built-in `vllm-sr/auto`; named
    recipes set `model` and `expected_recipe`.
 5. Declare `expected_algorithm` for every decision and `expected_plugins` when
    the decision configures plugins. A model-free `fast_response` decision has no
@@ -213,22 +213,6 @@ all five entrypoints and all 315 authored probes; counts are checked against the
 discovered inventory rather than used to select a smaller sample. These fixtures
 do not measure backend LLM quality or call external providers.
 
-### Known-issue waiver on CPU
-
-On a 4-vCPU CPU runner, Vela 2.0 0.3B reads every token of a long-context
-input, so a few long-context probes can outlast the routing preview's deadline
-until [#4706](https://github.com/vllm-project/semantic-router/issues/4706)
-bounds that read. The CPU runner passes `--cpu-known-issue-waivers`, which
-waives exactly one outcome on exactly the probes that
-`tools/calibration/recipe/recipe_conformance_waivers.py` names: the preview's
-504 `REQUEST_TIMEOUT`, or a response at the deadline whose only failures are
-signal evaluations that the deadline cut short. A misroute, any other error,
-and a timeout on any other probe still fail. A waived probe leaves the pass
-rates, stays in the report, and appears in the summary's Known-issue waivers
-section. The CI plan records the same probe list for the `recipe-conformance`
-verification, whose receipt then reads `qualified-with-waiver`. Remove the
-waiver with #4706; the named probes must then pass without it.
-
 Each invocation owns an isolated stack and runtime directory under
 `.agent-harness/recipe-conformance-runtime/`; logs and reports are collected
 before that stack is stopped. Configured bearer credentials are supplied to
@@ -287,7 +271,9 @@ contains exact live results and T3 receipts.
 
 Static checks always include every maintained recipe. Live CPU planning derives
 hardware requirements from explicit `global.model_catalog.deployments.*.device`
-values. Recipes with non-CPU devices stay in the inventory and are listed with
+values and from a `global.model_catalog.system.decision_model` that runs on a
+GPU only (`Vela-2.0-4B`, `Vela-2.0-9B`), listed as `gpu`. Recipes with non-CPU
+devices stay in the inventory and are listed with
 their required devices in `cpu-eligibility.json` and the consolidated report;
 they do not count as CPU runtime passes. The CPU runner rejects an incompatible
 explicit selection before stopping or starting any containers. It never rewrites

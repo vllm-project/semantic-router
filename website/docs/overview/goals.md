@@ -70,8 +70,10 @@ vLLM Semantic Router is designed around five goals:
 
 - The agent harness owns task orchestration, tool execution, and durable task
   state. The Router supplies decisions for its model calls.
-- It is not an LLM server. Backends such as vLLM, Ollama, or hosted providers
-  still run the models.
+- Chat generation remains with backends such as vLLM, Ollama, or hosted
+  providers. The built-in model runtime serves the decision, classifier,
+  embedding, and reranking models that support routing; applications can also
+  call decision models through System One.
 - It is not only a load balancer. Replica health matters, but request meaning
   and policy determine which model pool is eligible.
 - It is not a universal quality guarantee. Routing quality depends on the

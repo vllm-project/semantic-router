@@ -160,7 +160,7 @@ func TestBindingsProvisionOnlyReachableRecipeArtifacts(t *testing.T) {
 
 func TestUnreachableDefaultStillProvisionsDeclaredPublicAPIModel(t *testing.T) {
 	cfg := &config.RouterConfig{MoMRegistry: map[string]string{"models/fact": "test/fact"}}
-	cfg.AutoModelNames = []string{}
+
 	cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact"
 	cfg.FactCheckRules = []config.FactCheckRule{{Name: "api-check"}}
 	specs, err := BuildModelSpecs(cfg)
