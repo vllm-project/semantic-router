@@ -173,9 +173,9 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert "pip index versions" not in docs
     assert "VLLM_SR_DEV_VERSION" not in docs
     assert "awk" not in docs
-    assert "python -m pip install --upgrade vllm-sr" in data
-    assert "uv tool install vllm-sr" in data
-    assert "--channel stable" in data
+    assert "python -m pip install --upgrade --pre vllm-sr" in data
+    assert "uv tool install --upgrade --prerelease allow vllm-sr" in data
+    assert "--channel dev" in data
 
     assert "For humans" in homepage
     assert "For agents" in homepage

@@ -2,7 +2,7 @@
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/decision.md"
-  outdated: false
+  outdated: true
 ---
 
 # Decision 信号
