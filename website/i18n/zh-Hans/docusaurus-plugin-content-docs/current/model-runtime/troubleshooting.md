@@ -3,14 +3,14 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "9995d68856b15ba944b16614d3e497a952691a10"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
 
 # 故障排查与常见问题
 
-先看运行时对自身的报告。对于你自己启动的运行时：
+先看运行时对自身的报告。对于在 8100 端口独立运行的 `vllm-srun` worker：
 
 ```bash
 curl -s localhost:8100/health
@@ -25,6 +25,8 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 `vsr_model_runtime_ready{deployment="..."} 1` 表示该 deployment 可以作答。
 路由器日志会列出每个托管运行时进程以及它停止的原因。
+
+使用 `vllm-sr serve ARTIFACT --engine` 时，应访问前端 listener 的 `/v1/systemone/models`。公网 `/v1/models` 列出 Chat 模型，不是私有 worker 清单；配置了 listener API key 时还需要携带相应凭据。
 
 ## 启动会等待模型 {#startup-waits-for-the-models}
 
@@ -41,6 +43,8 @@ deployment 及其状态：
 ```bash
 curl -s localhost:8080/startup-status
 ```
+
+离线的附加运行时不会阻塞自定义 `decision` 问题或显式 `decision.v1` 任务绑定的准备；当前能力信息就绪且兼容之前，这些任务不可用。隐式绑定和原生任务头仍可能需要在启动时读取模型元数据。见[部署就绪规则](/docs/model-runtime/deploy#when-a-model-is-not-ready)。
 
 首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
 并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。
@@ -103,7 +107,7 @@ curl -s localhost:8080/startup-status
 | a file hash does not match | 下载已损坏或仓库发生了变化。从缓存中删除该模型后重新启动。 |
 | a revision is required | 非内置仓库需要用 40 位 commit 设置 `revision`。 |
 | access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。 |
-| does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或给该模型单独的 `process`。 |
+| does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或把副本分配到不同 GPU。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
 | no family recognizes the package | 不支持该模型的架构。见[选择模型](model-runtime/choose-a-model.md#your-own-models)。 |
@@ -176,6 +180,11 @@ global:
           overflow: window
 ```
 
+对于 prompt guard 和 safety 信号，如果原生模型因单次输入过长而拒绝处理，路由器会以有限并发
+重试覆盖全文的重叠窗口，取各窗口的最高风险，并要求每个窗口确认已完整读取输入。
+未完成的扫描仍是未确定状态；扫描预算和截止时间继续生效。直接调用 `/v1/decisions` 时，
+仍遵循模型本身的输入长度限制。
+
 模型没有完整读取的内容会让越狱或 PII 规则匹配：在 `reject` 下超过模型 `max_tokens`
 的输入、超过其上限的输入、被截断的输入，或未能在信号截止时间内扫描完的输入。无论
 `on_error` 如何设置，匹配的类型都是 `unscanned`，并给出原因（`input_limit`、`scan_budget`
@@ -204,7 +213,11 @@ global:
   传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
 - 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
   `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
-- 在 CPU 上，同一进程中的模型共享 CPU 线程。用 `--threads` 指定你能分给运行时的核数来启动它。
+- 托管 CPU worker 默认使用路由器可用 CPU 预算的一半，向下取整，最少 1 个、最多 16 个线程。
+  在 `vllm-sr serve` 启动前设置正整数 `VLLM_SRUN_CPU_THREADS`，即可指定每个 worker 的线程数，上限为完整 CPU 预算。
+  用实际输入长度和并发量比较效果：多个模型同时忙碌时，减少线程可能降低争用；有专用核心时，长输入可能受益于更多线程。
+  参见 [CPU 线程](model-runtime/deploy.md#cpu-threads)。自行启动并通过 `endpoint` 挂载的运行时使用自己的
+  `--threads` 设置，同一进程中的模型共享这些线程。
 - 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
   的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
 - GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
@@ -223,7 +236,8 @@ global:
 
 **多个路由器可以共享一个运行时吗？** 可以。启动一次，并给每个路由器配置同一个 `endpoint`。
 
-**一个运行时可以提供多个模型吗？** 可以。给 `vllm-sr serve` 传入多个模型，或让路由器把它的 deployment 分组到进程中。
+**一个运行时可以提供多个模型吗？** 可以。给 `vllm-srun serve` 传入多个模型，再通过 `endpoint` 挂载各个 deployment。
+路由器托管的 deployment 和 replica 各自使用独立的 worker。
 
 **更换 embedding 模型后，我缓存和存储的向量会怎样？** 它们与新向量隔离，不会被复用。
 见[更换 embedding 模型时重新向量化](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes)。

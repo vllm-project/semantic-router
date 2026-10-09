@@ -12,12 +12,10 @@ func TestRecipePoliciesRoundTripAndIsolation(t *testing.T) {
 	input := []byte(`version: v0.3
 routing:
   candidate_requirements: {capabilities: declared}
-  data_policy: {replay: false}
 recipes:
   - name: constrained
     routing:
       candidate_requirements: {context: known_limits}
-      data_policy: {replay: true}
   - name: compatible
     routing: {}
 `)
@@ -30,14 +28,14 @@ recipes:
 		t.Fatal("missing constrained recipe")
 	}
 	scoped := cfg.ConfigForRecipe(recipe)
-	if scoped.CandidateRequirements.Capabilities != "" || scoped.CandidateRequirements.Context != CandidateContextKnownLimits || !scoped.DataPolicy.ReplayAllowed() {
+	if scoped.CandidateRequirements.Capabilities != "" || scoped.CandidateRequirements.Context != CandidateContextKnownLimits {
 		t.Fatal("recipe inherited another profile's policy")
 	}
-	if cfg.DataPolicy.ReplayAllowed() || cfg.CandidateRequirements.Context != "" {
+	if cfg.CandidateRequirements.Context != "" {
 		t.Fatal("default policy changed")
 	}
 	compatible, _ := cfg.RecipeByName("compatible")
-	if compatible.Profile.CandidateRequirements != nil || compatible.Profile.DataPolicy != nil {
+	if compatible.Profile.CandidateRequirements != nil {
 		t.Fatal("absent policy inherited")
 	}
 	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
@@ -51,13 +49,12 @@ recipes:
 	for _, name := range []RecipeName{DefaultRecipeName, "constrained", "compatible"} {
 		before, _ := cfg.RecipeByName(name)
 		after, _ := again.RecipeByName(name)
-		if !reflect.DeepEqual(before.Profile.CandidateRequirements, after.Profile.CandidateRequirements) || !reflect.DeepEqual(before.Profile.DataPolicy, after.Profile.DataPolicy) {
+		if !reflect.DeepEqual(before.Profile.CandidateRequirements, after.Profile.CandidateRequirements) {
 			t.Fatalf("%s policy changed through canonical export", name)
 		}
 	}
 	scoped.CandidateRequirements.Context = ""
-	*scoped.DataPolicy.Replay = false
-	if recipe.Profile.CandidateRequirements.Context != CandidateContextKnownLimits || !recipe.Profile.DataPolicy.ReplayAllowed() {
+	if recipe.Profile.CandidateRequirements.Context != CandidateContextKnownLimits {
 		t.Fatal("scoped mutation aliased recipe")
 	}
 }

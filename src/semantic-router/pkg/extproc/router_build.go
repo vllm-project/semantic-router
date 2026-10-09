@@ -35,6 +35,7 @@ type routerComponents struct {
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
 	modelLease                  *modelservice.Lease
+	decisionCards               map[string]modelservice.ModelCard
 	serving                     *serving.Runtime
 	rerankers                   map[config.RecipeName]modelruntime.PairScorer
 	cfg                         *config.RouterConfig
@@ -84,28 +85,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	config.Replace(cfg)
 	publishRouterLearningStateStore(router)
-	logLoadedRouterConfig(configPath, cfg)
-	return router, nil
-}
-
-func newOpenAIRouterForServer(
-	configPath string,
-	runtimeRegistry *routerruntime.Registry,
-	pool *binding.Pool,
-) (*OpenAIRouter, error) {
-	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
-	if err != nil {
-		return nil, err
-	}
-
-	router, err := buildOpenAIRouterFromConfig(cfg, pool)
-	if err != nil {
-		return nil, err
-	}
-
-	if publishGlobal {
-		config.Replace(cfg)
-	}
 	logLoadedRouterConfig(configPath, cfg)
 	return router, nil
 }
@@ -187,7 +166,7 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 }
 
 // validateStickyToolSelectionPhaseSupport rejects any decision that enables
-// tool_selection.sticky.enabled (issue #3347 phase 1 / sub-issue #3392): no
+// tool_selection.sticky.enabled through Phase 2 (#4517): no
 // production request path consumes ResolveStickyToolIdentity or the
 // sessiontools store yet, so accepting sticky.enabled: true here would
 // construct successfully and then silently never activate sticky selection
@@ -216,7 +195,7 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
 // whenever any decision enables tool_selection.sticky.enabled (issue #3347,
 // PL-0042 section 2.4). Retained as a construction-time guard for once
-// Phase 2 lifts validateStickyToolSelectionPhaseSupport's rejection above —
+// Phase 3 (#4519) lifts validateStickyToolSelectionPhaseSupport's rejection above —
 // sticky.enabled: true cannot reach this check today, since the
 // phase-support gate now rejects it first. Unlike
 // validateResponseCacheScopeSecret just below, this is unconditional — not
@@ -306,6 +285,10 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	components.useSignals(signals)
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	var err error
+	components.decisionCards, err = prepareDecisionSelectionCards(cfg, components.modelLease)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
 
 	components.categoryDescriptions = cfg.GetCategoryDescriptions()
 	logging.ComponentDebugEvent("extproc", "category_descriptions_loaded", map[string]interface{}{
@@ -329,30 +312,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	})
 	components.shadowDispatcher = newShadowDispatcher()
 	components.resources.add(components.shadowDispatcher.Close)
-	fallbackPolicy := fallback.DefaultPolicy()
-	if cfg.Fallback != nil {
-		fallbackPolicy = cfg.Fallback.WithDefaults()
-	}
-	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
-	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
-
-	breakersByPolicy := map[fallback.CircuitBreakerConfig]*fallback.BackendCircuitBreaker{
-		fallbackPolicy.CircuitBreaker: components.fallbackCircuitBreaker,
-	}
-
-	components.recipeFallbackOrchestrators = make(map[config.RecipeName]*fallback.Orchestrator, len(cfg.Recipes))
-	for _, recipe := range cfg.Recipes {
-		recipePolicy := fallbackPolicy
-		if recipe.Profile.Fallback != nil {
-			recipePolicy = recipe.Profile.Fallback.Inherit(fallbackPolicy).WithDefaults()
-		}
-		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
-		if !ok {
-			breaker = fallback.NewBackendCircuitBreaker(recipePolicy.CircuitBreaker)
-			breakersByPolicy[recipePolicy.CircuitBreaker] = breaker
-		}
-		components.recipeFallbackOrchestrators[recipe.Name] = fallback.NewOrchestrator(recipePolicy, breaker)
-	}
+	components.buildFallbackRuntime()
 	var replayReaderForLookup store.Reader
 	if components.replayRecorder != nil {
 		replayReaderForLookup = components.replayRecorder.Reader()
@@ -402,6 +362,34 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	}
 
 	return components, nil
+}
+
+func (components *routerComponents) buildFallbackRuntime() {
+	cfg := components.cfg
+	fallbackPolicy := fallback.DefaultPolicy()
+	if cfg.RoutingDefaults.Fallback != nil {
+		fallbackPolicy = cfg.RoutingDefaults.Fallback.WithDefaults()
+	}
+	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
+	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
+
+	breakersByPolicy := map[fallback.CircuitBreakerConfig]*fallback.BackendCircuitBreaker{
+		fallbackPolicy.CircuitBreaker: components.fallbackCircuitBreaker,
+	}
+
+	components.recipeFallbackOrchestrators = make(map[config.RecipeName]*fallback.Orchestrator, len(cfg.Recipes))
+	for _, recipe := range cfg.Recipes {
+		recipePolicy := fallback.DefaultPolicy()
+		if recipe.Profile.Fallback != nil {
+			recipePolicy = recipe.Profile.Fallback.WithDefaults()
+		}
+		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
+		if !ok {
+			breaker = fallback.NewBackendCircuitBreaker(recipePolicy.CircuitBreaker)
+			breakersByPolicy[recipePolicy.CircuitBreaker] = breaker
+		}
+		components.recipeFallbackOrchestrators[recipe.Name] = fallback.NewOrchestrator(recipePolicy, breaker)
+	}
 }
 
 func (components *routerComponents) buildEarlyResources() error {
@@ -525,6 +513,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		serviceEmbeddings:           components.serviceEmbeddings,
 		cacheEmbeddings:             components.cacheEmbeddings,
 		rerankers:                   components.rerankers,
+		decisionCards:               components.decisionCards,
 		CategoryDescriptions:        components.categoryDescriptions,
 		Classifier:                  components.classifier,
 		RecipeClassifiers:           components.recipeClassifiers,

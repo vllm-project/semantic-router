@@ -9,9 +9,6 @@ global:
     response_cache:
       enabled: false
       backend_type: memory
-  router:
-    auto_model_names:
-    - vllm-sr/auto
 providers:
   defaults:
     model: local/small-7b
@@ -260,3 +257,7 @@ routing:
         kind: label
         value: chemistry
       match: best
+
+entrypoints:
+- model_names: ["vllm-sr/auto"]
+  recipe: default

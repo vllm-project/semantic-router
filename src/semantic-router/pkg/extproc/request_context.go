@@ -380,9 +380,12 @@ type RequestContext struct {
 	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
-	PIIDetected bool     // True if PII was detected
-	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
-	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+	// PIIContentVerified means the classifier fully scanned the available text without PII.
+	PIIContentVerified bool
+	PIIEvidence        []classification.PrivacyEvidence
+	PIIDetected        bool     // True if PII was detected
+	PIIEntities        []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
@@ -404,6 +407,9 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
+	// RouterReplayContentOmitted records prompt omission. Response/tool capture
+	// separately checks stage-specific evidence and the resolved capture policy.
+	RouterReplayContentOmitted bool
 
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
@@ -414,6 +420,10 @@ type RequestContext struct {
 	Hop             *routing.Hop          // The routing context of a hop served in process
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+
+	// ListenerModels, when set, are the only request models the listener the
+	// client request arrived on accepts.
+	ListenerModels routing.ListenerModels
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
