@@ -90,6 +90,31 @@ type Schema struct {
 	AdditionalProperties any               `json:"additionalProperties,omitempty"`
 }
 
+// Accepts reports whether an object with exactly these property names would
+// validate against the schema: every required property present, and, when
+// the schema closes additional properties, no name outside those declared.
+// It exists so a oneOf's branches can be tested for exclusivity against the
+// real field sets a handler encodes.
+func (s Schema) Accepts(keys []string) bool {
+	present := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		present[key] = true
+	}
+	for _, required := range s.Required {
+		if !present[required] {
+			return false
+		}
+	}
+	if closed, ok := s.AdditionalProperties.(bool); ok && !closed {
+		for _, key := range keys {
+			if _, declared := s.Properties[key]; !declared {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 type Components struct {
 	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes"`
 }

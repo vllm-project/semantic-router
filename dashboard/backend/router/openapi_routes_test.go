@@ -265,3 +265,54 @@ func TestSetupActivationFailureStagesMatchHandler(t *testing.T) {
 		t.Fatalf("handler reports stages %v, documented %v", reported, setupActivationFailureStages)
 	}
 }
+
+// jsonLiteralKeys reads the quoted keys of the map literal enclosing anchor,
+// the exact text of one of its entries. It grounds a schema-exclusivity test
+// in the real field names a handler encodes, not a hand-copied list.
+func jsonLiteralKeys(t *testing.T, path, anchor string) []string {
+	t.Helper()
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := bytes.Index(source, []byte(anchor))
+	if start < 0 {
+		t.Fatalf("anchor %q not found in %s", anchor, path)
+	}
+	open := bytes.LastIndexByte(source[:start], '{')
+	closeOffset := bytes.IndexByte(source[start:], '}')
+	if open < 0 || closeOffset < 0 {
+		t.Fatalf("could not bound the map literal around %q in %s", anchor, path)
+	}
+	block := source[open : start+closeOffset]
+	matches := regexp.MustCompile(`"(\w+)":`).FindAllSubmatch(block, -1)
+	keys := make([]string, 0, len(matches))
+	for _, match := range matches {
+		keys = append(keys, string(match[1]))
+	}
+	return keys
+}
+
+// The 500 oneOf only validates real responses if its two branches never both
+// accept the same body. Each body's field set comes from the handler source,
+// not a hand-copied list, so a renamed or added field fails this test.
+func TestSetupActivationErrorSchemasAreExclusive(t *testing.T) {
+	activationKeys := jsonLiteralKeys(t, "../handlers/setup_activation_failure.go", `"error":                  "setup_activation_failed"`)
+	coordinationKeys := jsonLiteralKeys(t, "../handlers/runtime_config_coordinator.go", `"error":   mutationErr.code`)
+
+	activationSchema := setupActivationFailureSchema()
+	coordinationSchema := setupConfigCoordinationFailureSchema()
+
+	if !activationSchema.Accepts(activationKeys) {
+		t.Errorf("activation failure body %v does not match its own schema", activationKeys)
+	}
+	if coordinationSchema.Accepts(activationKeys) {
+		t.Errorf("activation failure body %v also matches the coordination schema; oneOf is ambiguous", activationKeys)
+	}
+	if !coordinationSchema.Accepts(coordinationKeys) {
+		t.Errorf("coordination failure body %v does not match its own schema", coordinationKeys)
+	}
+	if activationSchema.Accepts(coordinationKeys) {
+		t.Errorf("coordination failure body %v also matches the activation schema; oneOf is ambiguous", coordinationKeys)
+	}
+}

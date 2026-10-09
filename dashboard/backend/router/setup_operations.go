@@ -80,11 +80,24 @@ type setupActivationFailure struct {
 // setupActivationFailureStages are the stage values failSetupActivation reports.
 var setupActivationFailureStages = []string{"config_validation", "runtime_config_sync", "activation_record"}
 
+// setupActivationFailureSchema and setupConfigCoordinationFailureSchema both
+// close additional properties so the two never overlap: a real
+// setup_activation_failed body carries stage, configuration_restored, and
+// setupMode, which the coordination schema would otherwise also accept.
+// TestSetupActivationErrorSchemasAreExclusive checks both directions against
+// the field names each handler actually encodes.
 func setupActivationFailureSchema() apicontract.Schema {
 	schema := apicontract.SchemaFor[setupActivationFailure]()
 	stage := schema.Properties["stage"]
 	stage.Enum = setupActivationFailureStages
 	schema.Properties["stage"] = stage
+	schema.AdditionalProperties = false
+	return schema
+}
+
+func setupConfigCoordinationFailureSchema() apicontract.Schema {
+	schema := apicontract.SchemaFor[setupErrorBody]()
+	schema.AdditionalProperties = false
 	return schema
 }
 
@@ -117,7 +130,7 @@ var setupActivateOperation = apicontract.Operation{
 			"JSON error setup_activation_failed after the config was written: stage names the failed step and "+
 				"configuration_restored says whether a retry is safe. JSON error config_coordination_failed when the config lock "+
 				"is unavailable. Text when the config could not be read, converted, backed up, or persisted",
-			apicontract.JSONOneOfResponse("", setupActivationFailureSchema(), apicontract.SchemaFor[setupErrorBody]()),
+			apicontract.JSONOneOfResponse("", setupActivationFailureSchema(), setupConfigCoordinationFailureSchema()),
 			apicontract.TextResponse(""),
 		),
 	},

@@ -710,6 +710,91 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/decision-model/capabilities": {
+      "get": {
+        "operationId": "getApiDecisionModelCapabilities",
+        "summary": "GET /api/decision-model/capabilities",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/decision-model/tasks": {
+      "get": {
+        "operationId": "getApiDecisionModelTasks",
+        "summary": "GET /api/decision-model/tasks",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/decision-model/test": {
+      "post": {
+        "operationId": "postApiDecisionModelTest",
+        "summary": "POST /api/decision-model/test",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "evaluation.run",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "evaluation",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/dependencies": {
       "get": {
         "operationId": "getApiDependencies",
@@ -807,6 +892,151 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/dsl/compile": {
+      "post": {
+        "operationId": "postApiDslCompile",
+        "summary": "POST /api/dsl/compile",
+        "tags": [
+          "dsl"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/dsl/decompile": {
+      "post": {
+        "operationId": "postApiDslDecompile",
+        "summary": "POST /api/dsl/decompile",
+        "tags": [
+          "dsl"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/dsl/format": {
+      "post": {
+        "operationId": "postApiDslFormat",
+        "summary": "POST /api/dsl/format",
+        "tags": [
+          "dsl"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/dsl/parse": {
+      "post": {
+        "operationId": "postApiDslParse",
+        "summary": "POST /api/dsl/parse",
+        "tags": [
+          "dsl"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/dsl/validate": {
+      "post": {
+        "operationId": "postApiDslValidate",
+        "summary": "POST /api/dsl/validate",
+        "tags": [
+          "dsl"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/evaluation": {
       "get": {
         "operationId": "getApiEvaluation",
@@ -872,6 +1102,62 @@
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": false,
         "x-vllm-sr-route-pattern": "/api/evaluation/",
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/instance": {
+      "get": {
+        "operationId": "getApiInstance",
+        "summary": "GET /api/instance",
+        "tags": [
+          "instance"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/instance/models": {
+      "get": {
+        "operationId": "getApiInstanceModels",
+        "summary": "GET /api/instance/models",
+        "tags": [
+          "instance"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -2786,6 +3072,61 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/router/api/v1/diagnostics/models/systemone": {
+      "get": {
+        "operationId": "getApiRouterApiV1DiagnosticsModelsSystemone",
+        "summary": "GET /api/router/api/v1/diagnostics/models/systemone",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      },
+      "post": {
+        "operationId": "postApiRouterApiV1DiagnosticsModelsSystemone",
+        "summary": "POST /api/router/api/v1/diagnostics/models/systemone",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "evaluation.run",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "evaluation",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/router/api/v1/diagnostics/models/tokens": {
       "post": {
         "operationId": "postApiRouterApiV1DiagnosticsModelsTokens",
@@ -2922,7 +3263,7 @@
             "description": "Response body is not yet described by the Dashboard contract."
           }
         },
-        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-permission": "config.write",
         "x-vllm-sr-sensitivity": "sensitive",
         "x-vllm-sr-resource-owner": "config",
         "x-vllm-sr-audit-mode": "none",
@@ -2934,6 +3275,34 @@
       "get": {
         "operationId": "getApiRouterApiV1InventoryEmbeddingModels",
         "summary": "GET /api/router/api/v1/inventory/embedding-models",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/router/api/v1/inventory/model-runtime": {
+      "get": {
+        "operationId": "getApiRouterApiV1InventoryModelRuntime",
+        "summary": "GET /api/router/api/v1/inventory/model-runtime",
         "tags": [
           "router"
         ],
@@ -3714,252 +4083,6 @@
         "x-vllm-sr-audit-action": "router.management.post",
         "x-vllm-sr-csrf": true,
         "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/storage/knowledge-bases": {
-      "get": {
-        "operationId": "getApiRouterApiV1StorageKnowledgeBases",
-        "summary": "GET /api/router/api/v1/storage/knowledge-bases",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.read",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-schema-status": "undocumented"
-      },
-      "post": {
-        "operationId": "postApiRouterApiV1StorageKnowledgeBases",
-        "summary": "POST /api/router/api/v1/storage/knowledge-bases",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.write",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "router.management.post",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/storage/knowledge-bases/{name}": {
-      "delete": {
-        "operationId": "deleteApiRouterApiV1StorageKnowledgeBasesName",
-        "summary": "DELETE /api/router/api/v1/storage/knowledge-bases/{name}",
-        "tags": [
-          "router"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.write",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "router.management.delete",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      },
-      "get": {
-        "operationId": "getApiRouterApiV1StorageKnowledgeBasesName",
-        "summary": "GET /api/router/api/v1/storage/knowledge-bases/{name}",
-        "tags": [
-          "router"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.read",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-schema-status": "undocumented"
-      },
-      "put": {
-        "operationId": "putApiRouterApiV1StorageKnowledgeBasesName",
-        "summary": "PUT /api/router/api/v1/storage/knowledge-bases/{name}",
-        "tags": [
-          "router"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.write",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "router.management.put",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/storage/knowledge-bases/{name}/map/data.ndjson": {
-      "get": {
-        "operationId": "getApiRouterApiV1StorageKnowledgeBasesNameMapDataNdjson",
-        "summary": "GET /api/router/api/v1/storage/knowledge-bases/{name}/map/data.ndjson",
-        "tags": [
-          "router"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.read",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/storage/knowledge-bases/{name}/map/metadata": {
-      "get": {
-        "operationId": "getApiRouterApiV1StorageKnowledgeBasesNameMapMetadata",
-        "summary": "GET /api/router/api/v1/storage/knowledge-bases/{name}/map/metadata",
-        "tags": [
-          "router"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "config.read",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -5227,7 +5350,8 @@
                         "configuration_restored",
                         "setupMode",
                         "message"
-                      ]
+                      ],
+                      "additionalProperties": false
                     },
                     {
                       "type": "object",
@@ -5242,7 +5366,8 @@
                       "required": [
                         "error",
                         "message"
-                      ]
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }
@@ -7940,6 +8065,66 @@
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": false,
         "x-vllm-sr-schema-status": "typed"
+      }
+    },
+    "/v1/decisions": {
+      "post": {
+        "operationId": "postV1Decisions",
+        "summary": "POST /v1/decisions",
+        "tags": [
+          "v1"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/v1/systemone": {
+      "post": {
+        "operationId": "postV1Systemone",
+        "summary": "POST /v1/systemone",
+        "tags": [
+          "v1"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/v1/systemone/models": {
+      "get": {
+        "operationId": "getV1SystemoneModels",
+        "summary": "GET /v1/systemone/models",
+        "tags": [
+          "v1"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
       }
     }
   },

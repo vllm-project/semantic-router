@@ -243,3 +243,29 @@ func TestOperationIDsAndTags(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaAccepts(t *testing.T) {
+	open := Schema{Required: []string{"error", "message"}, Properties: map[string]Schema{
+		"error": {Type: "string"}, "message": {Type: "string"},
+	}}
+	closed := open
+	closed.AdditionalProperties = false
+
+	for _, test := range []struct {
+		name   string
+		schema Schema
+		keys   []string
+		want   bool
+	}{
+		{"open schema ignores extra keys", open, []string{"error", "message", "stage"}, true},
+		{"missing a required key", open, []string{"error"}, false},
+		{"closed schema rejects an extra key", closed, []string{"error", "message", "stage"}, false},
+		{"closed schema accepts its exact keys", closed, []string{"error", "message"}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.schema.Accepts(test.keys); got != test.want {
+				t.Errorf("Accepts(%v) = %v, want %v", test.keys, got, test.want)
+			}
+		})
+	}
+}
