@@ -264,6 +264,8 @@ type DecisionRanking struct {
 	DecidedBy  string `json:"decided_by"`
 	Winner     string `json:"winner"`
 	Candidates int    `json:"candidates"`
+	RunnerUp   string `json:"runner_up,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its details, mirroring
