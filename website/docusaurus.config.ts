@@ -39,7 +39,11 @@ const config: Config = {
     locales: ['en', 'zh-Hans'],
     localeConfigs: {
       'en': { label: 'English', htmlLang: 'en-US' },
-      'zh-Hans': { label: '简体中文', htmlLang: 'zh-Hans' },
+      'zh-Hans': {
+        label: '简体中文',
+        htmlLang: 'zh-Hans',
+        baseUrl: '/zh-hans/',
+      },
     },
   },
 

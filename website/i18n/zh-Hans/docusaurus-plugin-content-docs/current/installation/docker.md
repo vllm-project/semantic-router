@@ -15,7 +15,7 @@ CLI 会管理 Router、控制面板，以及所选配置所需的支持服务；
 
 ## 启动栈
 
-完成[快速开始](/zh-Hans/docs/installation)以安装 CLI 并创建配置，或从现有 canonical YAML 文件开始：
+完成[快速开始](/zh-hans/docs/installation)以安装 CLI 并创建配置，或从现有 canonical YAML 文件开始：
 
 ```bash
 vllm-sr config validate --config config.yaml

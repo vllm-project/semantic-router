@@ -104,4 +104,4 @@ Agent Router 和 agentgateway 通过 ExtProc 调用 Semantic Router。[Kubernete
 - [使用场景](use-cases)：实用部署模式。
 - [路由流水线](signal-driven-decisions)：策略分层。
 - [Mixture of Models](mom-model-family)：虚拟模型与多模型执行。
-- [快速开始](/zh-Hans/docs/installation)：运行本地协议栈。
+- [快速开始](/zh-hans/docs/installation)：运行本地协议栈。

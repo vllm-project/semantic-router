@@ -43,12 +43,12 @@ Harness 负责任务循环、工具执行与任务状态；Router 负责每次�
 
 ## 从这里开始
 
-- 完成[快速开始](/zh-Hans/docs/installation)。
-- [连接 agent harness](/zh-Hans/docs/installation/agent-harness)。
-- 浏览[使用场景](overview/use-cases)。
-- 阅读[系统概览](overview/semantic-router-overview)和[路由流水线](overview/signal-driven-decisions)。
-- 用[入口与配方](tutorials/global/entrypoints-and-recipes)构建虚拟模型。
-- 比较[部署选项](installation/deployment-options)。
+- 完成[快速开始](/zh-hans/docs/installation)。
+- [连接 agent harness](/zh-hans/docs/installation/agent-harness)。
+- 浏览[使用场景](/zh-hans/docs/overview/use-cases)。
+- 阅读[系统概览](/zh-hans/docs/overview/semantic-router-overview)和[路由流水线](/zh-hans/docs/overview/signal-driven-decisions)。
+- 用[入口与配方](/zh-hans/docs/tutorials/global/entrypoints-and-recipes)构建虚拟模型。
+- 比较[部署选项](/zh-hans/docs/installation/deployment-options)。
 
 ## 项目
 

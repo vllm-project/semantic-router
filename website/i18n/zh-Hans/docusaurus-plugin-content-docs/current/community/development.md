@@ -133,4 +133,4 @@ curl -sS http://localhost:8899/v1/chat/completions \
 - 原生库诊断设 `RUST_LOG=debug`。
 - Router 诊断设 `SR_LOG_LEVEL=debug`。
 - 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
-- 启动和网络失败见[常见错误](/zh-Hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-Hans/docs/troubleshooting/container-connectivity)。
+- 启动和网络失败见[常见错误](/zh-hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-hans/docs/troubleshooting/container-connectivity)。
