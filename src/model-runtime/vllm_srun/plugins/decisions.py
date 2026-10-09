@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any, Generic
 
@@ -55,6 +55,7 @@ class RequestPlan(Generic[ItemT]):
     items: Sequence[ItemT]
     errors: dict[str, dict[str, Any]]
     input_tokens: int
+    complete_inputs: frozenset[str] = field(default_factory=frozenset)
 
 
 def refuse_unanswerable(plan: RequestPlan[Any]) -> None:
@@ -255,7 +256,13 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
                 }
             else:
                 logits: Any = results[index]
-                answered[item.question_id] = self.answer(item, logits)
+                answer = self.answer(item, logits)
+                if (
+                    item.question_id in request_plan.complete_inputs
+                    and "error" not in answer
+                ):
+                    answer["input_coverage"] = "complete"
+                answered[item.question_id] = answer
         return {
             "answers": {
                 question_id: request_plan.errors.get(question_id)

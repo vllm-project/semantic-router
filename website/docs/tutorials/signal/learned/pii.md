@@ -45,6 +45,9 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
+`threshold` is optional: a rule without one takes every span the PII model
+reports, and a Vela 2.0 model reports only spans above its size's calibrated
+threshold.
 
 ## Complete local scans
 

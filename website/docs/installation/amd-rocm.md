@@ -138,7 +138,7 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
 ```
 
 For a simple one-model deployment, start the stack. Plain `vllm-sr serve`
-keeps the Router and its models on the CPU; `--platform amd` runs the Router's
+keeps the Router and its models on the CPU; `--platform rocm` runs the Router's
 models on the GPU as well
 ([Run Vela routing models on AMD](#run-vela-routing-models-on-amd)):
 
@@ -191,7 +191,7 @@ answer quality and operating behavior on the actual deployment.
 The Router's own models (the Vela classifiers, embeddings, reranker and
 decision models) run in the [model runtime](model-runtime/overview.md). On
 AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
-which is validated. `--platform amd` selects the AMD image, which ships the
+which is validated. `--platform rocm` selects the AMD image, which ships the
 runtime with the validated stack (PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and
 `causal-conv1d` 1.7.0 built for ROCm), and passes the GPUs to the Router.
 Every model checks its answers against references verified on that stack
@@ -212,7 +212,7 @@ GPU.
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
 The platform flag selects the image and device access. Each deployment's

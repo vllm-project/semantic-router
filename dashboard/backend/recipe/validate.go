@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -72,6 +73,7 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 	aliasPassed := aliasMatches(probe.Expected.Alias, actualModels)
 	selectionPassed, selectionFailures := compareExpectedSelection(probe.Expected, response, actualModels)
 	checks := ValidationChecks{
+		SignalErrors: maps.Equal(probe.Expected.SignalErrors, response.SignalErrors),
 		Decision:     actualDecision == probe.Expected.Decision,
 		Model:        probe.Model == "" || strings.TrimSpace(response.RequestedModel) == probe.Model,
 		Recipe:       strings.TrimSpace(response.Recipe) == expectedRecipe,
@@ -85,6 +87,9 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 	}
 
 	failures := []string{}
+	if !checks.SignalErrors {
+		failures = append(failures, fmt.Sprintf("signal errors: got %v, want %v", response.SignalErrors, probe.Expected.SignalErrors))
+	}
 	if !checks.Decision {
 		failures = append(failures, fmt.Sprintf("decision: got %q, want %q", actualDecision, probe.Expected.Decision))
 	}
@@ -107,6 +112,7 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 	failures = append(failures, traceFailures...)
 
 	return ActualOutcome{
+		SignalErrors:      cloneSignalErrors(response.SignalErrors),
 		Decision:          actualDecision,
 		Model:             firstNonEmpty(response.FinalModel, response.SelectedModel),
 		RequestedModel:    strings.TrimSpace(response.RequestedModel),

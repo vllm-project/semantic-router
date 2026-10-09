@@ -164,7 +164,6 @@ class TestServeAsksADecisionModelOneCallPerStage(
             },
             default_route,
         ]
-        config["global"].get("router", {}).pop("auto_model_names", None)
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
         )
@@ -174,7 +173,7 @@ class TestServeAsksADecisionModelOneCallPerStage(
         port = 8888 + self.runtime_stack.port_offset
         request = urllib_request.Request(
             f"http://localhost:{port}/v1/chat/completions",
-            data=json.dumps({"model": "auto", "messages": messages}).encode(),
+            data=json.dumps({"model": "vllm-sr/auto", "messages": messages}).encode(),
             headers={"Content-Type": "application/json", "x-vsr-debug": "true"},
             method="POST",
         )

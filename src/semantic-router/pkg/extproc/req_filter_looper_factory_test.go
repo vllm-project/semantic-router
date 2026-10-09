@@ -33,7 +33,7 @@ func TestHandleLooperExecutionRejectsUnknownAlgorithmBeforeUpstream(t *testing.T
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "unregistered"},
 	}
-	request := testNeutralRequest("auto", "hello")
+	request := testNeutralRequest("vllm-sr/auto", "hello")
 
 	response, err := router.handleLooperExecution(
 		context.Background(),

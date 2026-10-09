@@ -51,9 +51,10 @@ routing:
           gte: 0.7
 ```
 
-With `decision_model: Vela-1.0` the Vela 1.0 specialists answer only the
-built-in signals, so such a question is a load error that asks for a
-`deployment`.
+The binding uses `{deployment: primary}` and can select Vela or Decision
+1.0/2.0. The model must support every requested question type. The
+[`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
+uses the same default binding, so the resource can also choose a backend.
 
 To ask another model, such as a Decision 2.0 model, name it as a
 `model_runtime` deployment and give each question its `deployment`:
@@ -125,6 +126,63 @@ routing:
 
 A condition may add its own `predicate`; for a `choice`, `set` or `span`
 condition with a `label`, it reads that label's value.
+
+A [projection score](tutorials/projection/scores.md) reads the same values
+with `value_source: raw`: `name: <question>` reads `decision:<name>`, and
+`name: <question>:<key>` reads one option or label of a `choice`, `set` or
+`span` question. The question is asked whenever a used projection reads it:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: difficulty
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer well?
+          levels: [none, a little, multi-step, expert]
+        predicate:
+          gte: 2
+      - name: needs
+        question:
+          type: set
+          instructions: What does a good answer need?
+          labels:
+            - key: deliberation
+              description: a derivation, proof or careful step-by-step check
+            - key: tools
+              description: calling external tools or functions
+  projections:
+    scores:
+      - name: effort
+        method: weighted_sum
+        inputs:
+          - type: decision
+            name: difficulty
+            weight: 0.3
+            value_source: raw
+          - type: decision
+            name: needs:deliberation
+            weight: 0.4
+            value_source: raw
+    mappings:
+      - name: effort_band
+        source: effort
+        method: threshold_bands
+        outputs:
+          - name: effort_high
+            gte: 0.9
+  decisions:
+    - name: deliberate
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: effort_high
+      modelRefs:
+        - model: large-reasoner
+```
 
 ### Set and span questions
 

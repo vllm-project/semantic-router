@@ -197,7 +197,6 @@ class K8sBackend:
         readonly: bool = False,
         gateway: str | None = None,
         platform: str | None = None,
-        decision_model: str | None = None,
         **kwargs: Any,
     ) -> None:
         self._require_tool("helm")
@@ -236,9 +235,7 @@ class K8sBackend:
             gateway=gateway,
             platform=platform,
         )
-        if decision_model:
-            # The chart writes it into the live Router config on an upgrade too.
-            values["decisionModel"] = decision_model
+
         self._bind_env_secret_revision(values, secret_name)
         self._bind_dashboard_management_credential(values, secret_plan)
 

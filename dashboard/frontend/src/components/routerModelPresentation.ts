@@ -1,5 +1,12 @@
 import type { RouterModelInfo } from '../utils/routerRuntime'
 
+export function getRouterDecisionModelName(model: RouterModelInfo): string | undefined {
+  // The reserved implicit deployment identity is runtime evidence. A binding
+  // name or local artifact path alone does not identify its shared model.
+  if (model.metadata?.provider !== 'model_runtime') return undefined
+  return model.metadata.deployment?.match(/^@(Vela-2\.0-\d+(?:\.\d+)?B)(?:\/[^/]+)?$/)?.[1]
+}
+
 export function getRouterModelArtifactPath(model: RouterModelInfo): string {
   const runtimePath = model.model_path?.match(/path=([^,)]+)/)?.[1]?.trim()
   return (
@@ -9,7 +16,7 @@ export function getRouterModelArtifactPath(model: RouterModelInfo): string {
 
 export function getRouterModelDisplayName(model: RouterModelInfo): string {
   // A local export path is provenance, not evidence of its upstream identity.
-  return model.registry?.repo_id?.trim() || model.name
+  return model.registry?.repo_id?.trim() || getRouterDecisionModelName(model) || model.name
 }
 
 export function getRouterModelPreviewName(model: RouterModelInfo): {
@@ -18,6 +25,10 @@ export function getRouterModelPreviewName(model: RouterModelInfo): {
 } {
   const repository = model.registry?.repo_id?.trim()
   if (!repository) {
+    const decisionModel = getRouterDecisionModelName(model)
+    if (decisionModel) {
+      return { title: decisionModel, subtitle: 'Shared decision model runtime' }
+    }
     return { title: model.name, subtitle: 'Runtime identity · repository not reported' }
   }
   const separator = repository.lastIndexOf('/')
@@ -68,6 +79,7 @@ export function getRouterModelInputLimits(model: RouterModelInfo): {
 }
 
 export function getRouterModelKind(model: RouterModelInfo): string {
+  if (getRouterDecisionModelName(model)) return 'Decision model'
   return formatRouterModelLabel(model.registry?.purpose || model.type)
 }
 

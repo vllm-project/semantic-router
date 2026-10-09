@@ -115,7 +115,9 @@ signals. Speed and Cost use lighter routing signals. Accuracy normally selects
 one strong model; independent review and workflows require explicit intent.
 Long input or a subject label alone does not cause multi-model execution.
 
-Vault disables client tools and Router content storage on every path. Its
+Vault disables client tools, memory, response caching, and new Responses object
+writes on every path. Replay capture is configured separately and is enabled by
+default; see [Router Replay](../tutorials/plugin/router-replay). Its
 `guard` decision contains prompt attacks immediately. Safety and Hazard select
 `sensitive` for content risks, where an approved model can provide responsible
 help, explain risky material, or refuse harmful assistance. Hazard uses the
