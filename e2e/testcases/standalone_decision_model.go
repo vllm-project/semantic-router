@@ -11,9 +11,8 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-// standaloneDecisionModel is the profile's Helm decisionModel value, in the
-// casing a user may type: the Router matches decision model names in any case.
-const standaloneDecisionModel = "vela-1.0"
+// standaloneDecisionModel names the deployment selected by the Helm value.
+const standaloneDecisionModel = "primary"
 
 func init() {
 	pkgtestcases.Register("standalone-decision-model", pkgtestcases.TestCase{
@@ -34,15 +33,27 @@ func testStandaloneDecisionModel(ctx context.Context, client *kubernetes.Clients
 	var document struct {
 		Global struct {
 			ModelCatalog struct {
-				System map[string]any `json:"system"`
+				System struct {
+					DecisionModel struct {
+						Deployment string `json:"deployment"`
+					} `json:"decision_model"`
+				} `json:"system"`
+				Deployments map[string]struct {
+					Provider string `json:"provider"`
+					Artifact string `json:"artifact"`
+				} `json:"deployments"`
 			} `json:"model_catalog"`
 		} `json:"global"`
 	}
 	if err = yaml.Unmarshal([]byte(cm.Data["config.yaml"]), &document); err != nil {
 		return fmt.Errorf("decode the Router config: %w", err)
 	}
-	if got := document.Global.ModelCatalog.System["decision_model"]; got != standaloneDecisionModel {
+	if got := document.Global.ModelCatalog.System.DecisionModel.Deployment; got != standaloneDecisionModel {
 		return fmt.Errorf("global.model_catalog.system.decision_model = %v, want %q", got, standaloneDecisionModel)
+	}
+	deployment, exists := document.Global.ModelCatalog.Deployments[standaloneDecisionModel]
+	if !exists || deployment.Provider != "model_runtime" || deployment.Artifact != "vllm-sr/Vela-2.0-0.3B" {
+		return fmt.Errorf("the selected judgment deployment was not preserved: %+v", deployment)
 	}
 	// The Router refuses a decision model it does not know, so a routed reply
 	// shows it loaded the config that names this one.

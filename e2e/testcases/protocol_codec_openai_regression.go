@@ -38,7 +38,7 @@ func testProtocolCodecOpenAIRegression(ctx context.Context, client *kubernetes.C
 
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Briefly describe how DNS resolution works."},
 		},

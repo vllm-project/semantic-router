@@ -39,7 +39,7 @@ For a runtime you start yourself, pass `--runtime-profile` (`--profile` to
 `vllm-srun serve`):
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --platform amd --device rocm:0 --runtime-profile shared_context
+vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --engine --platform rocm --device-ids 0 --runtime-profile shared_context
 ```
 
 A runtime started with an approximate profile still answers requests that ask
@@ -51,11 +51,13 @@ your own traffic before you switch.
 The runtime is fast in the default profile too. It never trades correctness
 for these:
 
-- the signals of a request reach each runtime process in one bundled call;
-- features that ask one model about the same text share one pass through the
-  model;
-- work for different models runs in parallel, on different processes and
-  devices; the models that share one GPU take turns on it;
-- a repeated input is not computed again: each model keeps a cache of recent
-  results, keyed by the exact input and profile (`--result-cache-entries`);
+- compatible work for the same model and routing stage can share a bundled
+  call; one bundle may still require several forwards;
+- task families can fuse compatible work, while decision-model shared-context
+  execution is an explicit profile choice;
+- independent workers can execute in parallel when hardware capacity allows;
+  placing multiple workers on one GPU does not add compute capacity;
+- cacheable repeated work can reuse recent results while they remain in the
+  worker's bounded result cache (`--result-cache-entries`); replicas have
+  independent worker caches;
 - long inputs are split into windows only when you ask for windowing.

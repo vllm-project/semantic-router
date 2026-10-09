@@ -140,7 +140,7 @@ func testSinglePrioritySelection(ctx context.Context, testCase DecisionPriorityC
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM", // Use Mixture of Models to trigger decision engine
+		"model": "vllm-sr/auto", // Use the default recipe to trigger decision selection
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

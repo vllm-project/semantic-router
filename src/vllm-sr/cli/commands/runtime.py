@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import webbrowser
 from pathlib import Path
 
@@ -20,11 +19,10 @@ from cli.commands.runtime_config_mutation import (
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
-from cli.commands.runtime_engine import ENGINE_HELP, run_engine_mode
 from cli.commands.runtime_help import SERVE_HELP
+from cli.commands.runtime_mode_config import MODE_HELP, validate_model_options
 from cli.commands.runtime_serve_config import (
     _prepare_effective_serve_config,
-    validate_decision_model_flag,
 )
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
@@ -36,7 +34,6 @@ from cli.commands.runtime_support import (
     validate_setup_mode_flags,
 )
 from cli.commands.serve_options import (
-    MODE_ENGINE,
     GroupedServeCommand,
     reject_envoy_options,
     reject_misplaced_options,
@@ -48,18 +45,22 @@ from cli.consts import (
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
-    PLATFORM_AMD,
-    PLATFORM_NVIDIA,
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
-from cli.decision_model import DECISION_MODELS, DEFAULT_DECISION_MODEL
 from cli.deployment_backend import (
     DEFAULT_TARGET,
     TARGET_DOCKER,
     TARGET_KUBERNETES,
     VALID_TARGETS,
     resolve_target,
+)
+from cli.execution_platform import (
+    PLATFORMS,
+    device_ordinals,
+    placement_devices,
+    resolve_execution_platform,
+    runtime_gpu_environment,
 )
 from cli.gateway_mode import (
     GATEWAY_HELP,
@@ -152,22 +153,6 @@ def _platform_hint(platform: str | None) -> str:
     ).lower()
 
 
-def _validate_target_platform(resolved_target: str, platform: str | None) -> None:
-    """Reject a GPU platform the target cannot run before any mutation."""
-
-    if (
-        resolved_target == TARGET_DOCKER
-        and sys.platform == "darwin"
-        and _platform_hint(platform) in {PLATFORM_AMD, PLATFORM_NVIDIA}
-    ):
-        raise ValueError(
-            "--platform amd/nvidia needs a Linux host: on macOS the docker target "
-            "runs the CPU image, because Docker's Linux VM gets no GPU. Serve "
-            "without --platform; host GPU support is tracked in "
-            "https://github.com/vllm-project/semantic-router/issues/4636"
-        )
-
-
 def _deploy_serve_backend(
     *,
     resolved_target: str,
@@ -190,7 +175,6 @@ def _deploy_serve_backend(
     startup_timeout: int | None,
     gateway: str,
     platform: str,
-    decision_model: str | None = None,
 ) -> None:
     """Deploy one prepared runtime."""
 
@@ -218,7 +202,6 @@ def _deploy_serve_backend(
         readonly=readonly,
         gateway=gateway,
         platform=platform,
-        decision_model=decision_model,
         **({"startup_timeout": startup_timeout} if startup_timeout is not None else {}),
     )
 
@@ -245,7 +228,8 @@ def _execute_serve(
     recipe_env_names: tuple[str, ...] = (),
     startup_timeout: int | None = None,
     gateway: str | None = None,
-    decision_model: str | None = None,
+    engine: bool = False,
+    model_options: dict | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
@@ -256,15 +240,40 @@ def _execute_serve(
             raise ValueError(
                 "--startup-timeout is supported only for local Docker deployments"
             )
-    _validate_target_platform(resolved_target, platform)
-    decision_model = validate_decision_model_flag(
-        decision_model, resolved_target, _platform_hint(platform)
-    )
     apply_container_runtime_override(runtime)
+    platform = resolve_execution_platform(
+        platform, target=resolved_target, context=context
+    )
+    available_devices = ()
+    if model_options and any(
+        key in model_options for key in ("data_parallel_size", "device_ids")
+    ):
+        if resolved_target != TARGET_DOCKER and "device_ids" in model_options:
+            raise ValueError(
+                "--device-ids selects Docker host GPUs; Kubernetes placements use allocation ordinals in --config"
+            )
+        available = placement_devices(platform, target=resolved_target, context=context)
+        available_devices = (
+            device_ordinals(available, platform, available)
+            if resolved_target == TARGET_DOCKER
+            else available
+        )
+        if "device_ids" in model_options:
+            model_options = dict(model_options)
+            model_options["device_ordinals"] = device_ordinals(
+                model_options["device_ids"], platform, available
+            )
+            log.info(
+                "GPU placement: host IDs %s -> runtime ordinals %s",
+                model_options["device_ids"],
+                model_options["device_ordinals"],
+            )
     config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
     log.info(f"Using config file: {config_path}")
 
-    env_vars: dict[str, str] = {}
+    env_vars: dict[str, str] = (
+        runtime_gpu_environment(platform) if resolved_target == TARGET_DOCKER else {}
+    )
     if resolved_target == TARGET_DOCKER:
         # Kubernetes gets the mode from the Helm values' gateway.mode instead.
         apply_gateway_mode(env_vars, resolved_gateway)
@@ -284,7 +293,9 @@ def _execute_serve(
                 replace_active_config=replace_active_config,
                 minimal=minimal,
                 readonly=readonly,
-                decision_model=decision_model,
+                engine=engine,
+                available_devices=available_devices,
+                model_options=model_options,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -324,15 +335,20 @@ def _execute_serve(
             startup_timeout=startup_timeout,
             gateway=resolved_gateway,
             platform=_platform_hint(platform),
-            decision_model=decision_model,
         )
     finally:
         if runtime_lock is not None:
             runtime_lock.close()
 
 
-@click.command(cls=GroupedServeCommand, help=SERVE_HELP + ENGINE_HELP)
-@click.argument("model", nargs=-1, required=False)
+@click.command(cls=GroupedServeCommand, help=SERVE_HELP + MODE_HELP)
+@click.argument("model", required=False)
+@click.option(
+    "--engine",
+    "-e",
+    is_flag=True,
+    help="Start without recipe routing; otherwise start Router mode.",
+)
 @click.option(
     "--config",
     default="config.yaml",
@@ -416,16 +432,9 @@ def _execute_serve(
 )
 @click.option(
     "--platform",
+    type=click.Choice(PLATFORMS),
     default=None,
-    help="cpu (default), amd or nvidia, on both targets and in engine mode. It "
-    "selects the matching image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is "
-    "provided. On docker and in engine mode 'amd' passes the ROCm devices through "
-    "and 'nvidia' the NVIDIA GPUs (--gpus all); on kubernetes the Router requests "
-    "one GPU (amd.com/gpu or "
-    "nvidia.com/gpu). Internal models default to GPU, except AMD semantic "
-    "embeddings retain their configured use_cpu value (default true). Set "
-    "VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. On macOS the "
-    "docker target is CPU only.",
+    help="Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly.",
 )
 @click.option(
     "--algorithm",
@@ -436,19 +445,6 @@ def _execute_serve(
         f"{', '.join(ALGORITHM_OVERRIDE_TYPES)}. Algorithms that require an "
         "authored payload remain available in config.yaml. Cross-request learning "
         "uses global.router.learning.adaptation/protection."
-    ),
-)
-@click.option(
-    "--decision-model",
-    default=None,
-    metavar="NAME",
-    help=(
-        "The Vela model that answers the Router's questions: the built-in signals "
-        "and every routing.signals.decision question without a deployment. "
-        f"{', '.join(DECISION_MODELS)} (case-insensitive; default "
-        f"{DEFAULT_DECISION_MODEL}). The 4B and 9B need a GPU (--platform amd or "
-        "nvidia). serve writes it into the active config as a new configuration "
-        "version; later starts keep it."
     ),
 )
 @click.option("--target", default=None, help=TARGET_HELP)
@@ -492,45 +488,36 @@ def _execute_serve(
     ),
 )
 @click.option(
-    "--models",
-    "models_file",
+    "--revision",
     default=None,
-    help="Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile.",
+    help="Optional model branch, tag or commit; resolved once to an immutable startup revision.",
 )
 @click.option(
-    "--revision", default=None, help="Engine mode: 40-hex revision of a single MODEL."
+    "--data-parallel-size",
+    "-dp",
+    type=click.IntRange(min=1, max=64),
+    default=None,
+    help="Number of model replicas. Preserve configured placement; new GPU deployments use distinct available GPUs.",
 )
 @click.option(
-    "--device",
+    "--device-ids",
     default=None,
-    help=(
-        "Engine mode: auto (default), cpu, rocm[:N] with --platform amd, "
-        "cuda[:N] with --platform nvidia, or a plugin's accelerator."
-    ),
-)
-@click.option(
-    "--host",
-    default=None,
-    help="Engine mode: host address the runtime's port is published on (default 127.0.0.1).",
-)
-@click.option(
-    "--port",
-    type=click.IntRange(1, 65535),
-    default=None,
-    help="Engine mode: host port the runtime is published on (default 8100).",
+    metavar="IDS",
+    help="Docker host GPU indices, e.g. 0 or 0,1. One index shares a GPU across replicas; otherwise use one per replica. Existing visibility masks are respected, not changed.",
 )
 @click.option(
     "--runtime-profile",
     default=None,
     metavar="PROFILE",
     help=(
-        "Engine mode: the runtime's numerics profile (default exact; "
+        "Model runtime numerics profile (default exact; "
         "vllm-srun plugins lists the installed ones)."
     ),
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
-    model: tuple[str, ...],
+    model: str | None,
+    engine: bool,
     config: str,
     replace_active_config: bool,
     image: str | None,
@@ -543,7 +530,6 @@ def serve(
     log_level: str | None,
     platform: str | None,
     algorithm: str | None,
-    decision_model: str | None,
     target: str | None,
     gateway: str | None,
     namespace: str | None,
@@ -554,36 +540,19 @@ def serve(
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
     startup_timeout: int | None,
-    models_file: str | None,
     revision: str | None,
-    device: str | None,
-    host: str | None,
-    port: int | None,
+    data_parallel_size: int | None,
+    device_ids: str | None,
     runtime_profile: str | None,
 ) -> None:
     ctx = click.get_current_context()
-    if model or models_file:
-        reject_misplaced_options(ctx, MODE_ENGINE)
-        # Engine mode runs a container on this host: the docker target's rules.
-        _validate_target_platform(TARGET_DOCKER, platform)
-        run_engine_mode(
-            ctx,
-            model,
-            models_file=models_file,
-            revision=revision,
-            device=device,
-            host=host,
-            port=port,
-            runtime_profile=runtime_profile,
-            log_level=log_level,
-            platform=_platform_hint(platform),
-            image=image,
-            image_pull_policy=image_pull_policy,
-            container_runtime=resolve_container_runtime(
-                ctx, container_runtime, runtime
-            ),
-        )
-        return
+    model_options = validate_model_options(
+        model=model,
+        revision=revision,
+        runtime_profile=runtime_profile,
+        data_parallel_size=data_parallel_size,
+        device_ids=device_ids,
+    )
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
     reject_envoy_options(ctx, resolve_gateway(gateway))
@@ -609,7 +578,8 @@ def serve(
         recipe_env_names,
         startup_timeout,
         gateway,
-        decision_model=decision_model,
+        engine=engine,
+        model_options=model_options,
     )
 
 

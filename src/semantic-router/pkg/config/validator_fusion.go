@@ -5,13 +5,6 @@ import (
 	"strings"
 )
 
-func validateFusionContracts(cfg *RouterConfig) error {
-	if err := ValidateFusionRuntimeConfig(cfg.Looper.Fusion); err != nil {
-		return fmt.Errorf("global.integrations.looper.fusion: %w", err)
-	}
-	return nil
-}
-
 // validateDecisionFusionFallbackTarget validates the recipe-owned
 // quorum_fallback_target. The checks are split by what data they need so a
 // routing-only fragment, which carries no provider state, still round-trips
@@ -65,11 +58,7 @@ func validateFusionFallbackTargetIdentity(
 // isCompositeFusionFallbackTarget reports whether the target re-enters a
 // composite or virtual routing path instead of naming a concrete model.
 func isCompositeFusionFallbackTarget(cfg *RouterConfig, target string) bool {
-	return cfg.IsAutoModelName(target) ||
-		cfg.IsEntrypointModelName(target) ||
-		cfg.IsFusionModelName(target) ||
-		cfg.IsFlowModelName(target) ||
-		cfg.IsReMoMModelName(target)
+	return cfg.IsEntrypointModelName(target)
 }
 
 // validateFusionFallbackTargetModel covers the rules that need a declared model

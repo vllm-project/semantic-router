@@ -63,7 +63,6 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), reflect.TypeOf(fallback.FallbackPolicy{}), "routing.fallback")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), "circuit_breaker", "routing profiles"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "routing.fallback.circuit_breaker")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "candidate_requirements", "routing profiles"), reflect.TypeOf(CandidateRequirements{}), "routing.candidate_requirements")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "data_policy", "routing profiles"), reflect.TypeOf(RoutingDataPolicy{}), "routing.data_policy")
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, routing, "modelCards"),

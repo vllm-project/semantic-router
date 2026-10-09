@@ -10,8 +10,8 @@ import (
 
 func TestProcessExitsCountAsRestartsOfEveryDeployment(t *testing.T) {
 	plan := planProcesses(map[string]config.ModelDeployment{
-		"domain": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu", Process: "encoders"},
-		"guard":  {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Guard", Device: "cpu", Process: "encoders"},
+		"domain": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu"},
+		"guard":  {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Guard", Device: "cpu"},
 	}, []string{"vllm-srun"}, "", 4, "")[0]
 	client, err := NewClient("http://127.0.0.1:1")
 	if err != nil {
@@ -22,7 +22,7 @@ func TestProcessExitsCountAsRestartsOfEveryDeployment(t *testing.T) {
 	g.processExited(errors.New("killed"), time.Minute)
 
 	statuses := g.status()
-	if len(statuses) != 2 {
+	if len(statuses) != 1 {
 		t.Fatalf("statuses = %+v", statuses)
 	}
 	for _, status := range statuses {

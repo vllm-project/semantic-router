@@ -26,7 +26,7 @@ config:
       context:
         - name: long_context
           description: Requests estimated at 500 tokens or more.
-          min_tokens: 500
+          min_tokens: "500"
     decisions:
       - name: long_context_routing
         description: Route requests whose estimated token count matches the long_context band.
