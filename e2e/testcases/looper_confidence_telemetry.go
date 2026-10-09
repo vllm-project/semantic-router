@@ -47,7 +47,7 @@ func testLooperConfidenceTelemetry(ctx context.Context, client *kubernetes.Clien
 	}
 	defer stop()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperConfidenceTraceProbe, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperConfidenceTraceProbe, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("confidence telemetry request: %w", err)
 	}

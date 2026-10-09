@@ -37,7 +37,7 @@ var (
 )
 
 // testModelRuntimeEmbeddingsRerank asks the Router's embedding API and its
-// prepared rag.reranker binding, then the runtime that serves both directly:
+// prepared rag.reranker binding, then each deployment's own worker directly:
 // the fixtures' weights are random, so the runtime's answer is the expectation.
 func testModelRuntimeEmbeddingsRerank(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	session, err := openRouterRuntimeSession(ctx, client, opts)
@@ -55,6 +55,10 @@ func testModelRuntimeEmbeddingsRerank(ctx context.Context, client *kubernetes.Cl
 	dimension, err := checkRouterEmbedding(ctx, session, runtime)
 	if err != nil {
 		return fmt.Errorf("embedding: %w", err)
+	}
+	runtime, _, err = session.managed(ctx, mrRerankerDeployment)
+	if err != nil {
+		return err
 	}
 	logits, err := checkRouterRerank(ctx, session, runtime)
 	if err != nil {

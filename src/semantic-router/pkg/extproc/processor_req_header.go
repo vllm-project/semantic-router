@@ -21,7 +21,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 	span := startRequestHeaderSpan(v, ctx)
 
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
+	// The skip-processing opt-out would bypass a listener's model allow-list,
+	// so a restricted listener does not honor it.
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
@@ -62,7 +64,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	}
 
 	detectStreamingExpectation(ctx)
-	if modelsResp, err := r.handleModelsRequestHeaders(method, path); err != nil || modelsResp != nil {
+	if modelsResp, err := r.handleModelsRequestHeaders(method, path, ctx); err != nil || modelsResp != nil {
 		return modelsResp, err
 	}
 	if responseAPIResp, err := r.handleResponseAPIRequestHeaders(method, path, ctx); err != nil || responseAPIResp != nil {

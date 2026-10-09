@@ -119,19 +119,21 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
 	bestRisk := float32(-1)
 	for _, chunk := range c.jailbreakModelInputs(text) {
-		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
-		if err == nil {
-			err = validateJailbreakDistribution(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
-		}
-		if err != nil {
-			logging.Errorf("jailbreak classification failed on one chunk: %v", err)
-			lastErr = err
-			continue
-		}
-		risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
-		if risk > bestRisk {
-			bestRisk = risk
-			result = chunkResult
+		for _, window := range c.classifyJailbreakWindows(ctx, chunk) {
+			chunkResult, err := window.result, window.err
+			if err == nil {
+				err = validateJailbreakDistribution(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+			}
+			if err != nil {
+				logging.Errorf("jailbreak classification failed on one chunk: %v", err)
+				lastErr = err
+				continue
+			}
+			risk := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, chunkResult)
+			if risk > bestRisk {
+				bestRisk = risk
+				result = chunkResult
+			}
 		}
 	}
 	return result, bestRisk >= 0, lastErr

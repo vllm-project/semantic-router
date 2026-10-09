@@ -285,7 +285,10 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 		)
 		switch rule.Type {
 		case config.ClassifierSignalTypeLocal:
-			classifier, err = newLocalLabelClassifier(rule, b.models)
+			classifier, err = prepareDecisionLabelClassifier(b.models, rule)
+			if err == nil && classifier == nil {
+				classifier, err = newLocalLabelClassifier(rule, b.models)
+			}
 		case config.ClassifierSignalTypeLLM:
 			external := b.cfg.FindExternalModelByName(rule.Model)
 			reasoning, reasoningErr := resolveExternalModelReasoningControl(

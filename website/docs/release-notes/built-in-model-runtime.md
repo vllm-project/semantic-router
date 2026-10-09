@@ -14,15 +14,17 @@ or a runtime you run yourself.
 
 The runtime is the `vllm-srun` package and command. Every router image ships
 it, and it is not published to PyPI: `vllm-sr` stays the only PyPI package.
-Engine mode (`vllm-sr serve MODEL`) runs the runtime in a container from the
-router image, so the CLI and Docker or Podman are all it needs:
+Engine mode (`vllm-sr serve ARTIFACT --engine`) runs the persistent
+instance frontend and its managed model workers with routing disabled. The
+CLI and Docker or Podman are all it needs. To try this development version,
+install without automatically starting a stack, then start Engine mode:
 
 ```bash
-pip install vllm-sr
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 ```
 
-`--platform amd` or `--platform nvidia` runs the `vllm-sr-rocm` or
+`--platform rocm` or `--platform cuda` runs the `vllm-sr-rocm` or
 `vllm-sr-cuda` image with the GPUs passed through. The images carry the
 release's own PyTorch build, so their answers are byte-identical to the
 released model packages. See the
@@ -37,13 +39,20 @@ named the runtime `vllm-sr-runtime`. If you used one, rename what you set:
 | `vllm-sr-runtime` (package and command) | `vllm-srun` |
 | `vllm_sr_runtime` (module) | `vllm_srun` |
 | `vllm_sr_runtime.families`, `.engines`, `.accelerators`, `.profiles` (plugin entry-point groups) | `vllm_srun.families`, `.engines`, `.accelerators`, `.profiles` |
-| `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
+| `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
+| `VLLM_SR_RUNTIME_CPU_PROCESSES` or `VLLM_SRUN_CPU_PROCESSES` | Removed. Set `VLLM_SRUN_CPU_THREADS` to choose threads per managed CPU worker; process counts do not translate directly to thread counts. |
 | `VLLM_SR_RUNTIME_PREPARED_DIR` | removed: Vela Omni downloads like every model (below) |
 | `vllm_sr_runtime_*` metrics | `vllm_srun_*` |
 
 `VLLM_SR_RUNTIME_CONFIG_PATH`, `VLLM_SR_RUNTIME_STATUS_DIR` and
 `VLLM_SR_RUNTIME_CONTAINERS` belong to the CLI and the dashboard, shipped in
 v0.4.0, and keep their names.
+
+Managed CPU workers now default to half the router's available CPU budget,
+rounded down, with a minimum of one thread and a maximum of 16. The thread count
+stays independent of the number of active models; attached runtimes keep their
+own settings. See
+[CPU threads](model-runtime/deploy.md#cpu-threads) before choosing an override.
 
 ## Breaking changes
 

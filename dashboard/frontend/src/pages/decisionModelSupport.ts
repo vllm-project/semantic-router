@@ -1,88 +1,110 @@
-// The Router's decision model: global.model_catalog.system.decision_model.
-// It answers the built-in signals and every routing.signals.decision question
-// that names no deployment (src/semantic-router/pkg/config/decision_model.go).
+import { DECISION_RUNTIME_CATALOG, DECISION_RUNTIME_CAPABILITIES } from './decisionRuntimeCatalog'
 
-export const DECISION_MODELS = [
-  'Vela-2.0-0.3B',
-  'Vela-2.0-0.8B',
-  'Vela-2.0-4B',
-  'Vela-2.0-9B',
-  'Vela-1.0',
-] as const
-
-export type DecisionModelName = (typeof DECISION_MODELS)[number]
-
-export const DEFAULT_DECISION_MODEL: DecisionModelName = 'Vela-2.0-0.3B'
-
+export type DecisionModelName = string
+export const DEFAULT_DECISION_MODEL = 'Vela-2.0-0.3B'
 export interface DecisionModelOption {
-  name: DecisionModelName
+  name: string
+  artifact: string
   label: string
+  family: string
+  provider: string
   hardware: string
   summary: string
+  questionTypes: readonly string[]
+  revision?: string
 }
 
+const velaSizes = ['0.3B', '0.8B', '4B', '9B'] as const
 export const DECISION_MODEL_OPTIONS: readonly DecisionModelOption[] = [
-  {
-    name: 'Vela-2.0-0.3B',
-    label: 'Vela 2.0 0.3B',
-    hardware: 'CPU or GPU',
-    summary: 'The default: tens of milliseconds per request on a CPU.',
-  },
-  {
-    name: 'Vela-2.0-0.8B',
-    label: 'Vela 2.0 0.8B',
-    hardware: 'GPU recommended',
-    summary: 'Runs on a CPU at seconds per request; tens of milliseconds on a GPU.',
-  },
-  {
-    name: 'Vela-2.0-4B',
-    label: 'Vela 2.0 4B',
-    hardware: 'GPU only, about 17 GB',
-    summary: 'Needs a GPU in the Router: serve with --platform amd or nvidia.',
-  },
-  {
-    name: 'Vela-2.0-9B',
-    label: 'Vela 2.0 9B',
-    hardware: 'GPU only, about 32 GB',
-    summary: 'Needs a GPU in the Router: serve with --platform amd or nvidia.',
-  },
-  {
-    name: 'Vela-1.0',
-    label: 'Vela 1.0 specialists',
-    hardware: 'CPU or GPU',
-    summary: 'One encoder per signal. A decision question then needs its own deployment.',
-  },
+  ...velaSizes.map(
+    (size): DecisionModelOption => ({
+      name: `Vela-2.0-${size}`,
+      artifact: `vllm-sr/Vela-2.0-${size}`,
+      label: `Vela 2.0 ${size}`,
+      family: 'Vela 2.0',
+      provider: 'vllm-sr',
+      hardware:
+        size === '0.3B' ? 'CPU or GPU' : size === '0.8B' ? 'GPU recommended' : 'GPU required',
+      summary: 'Typed decisions with classification, scoring, label sets and precise spans.',
+      questionTypes: ['choice', 'score', 'noul', 'span', 'set'],
+    }),
+  ),
+  ...DECISION_RUNTIME_CATALOG.map(
+    (entry): DecisionModelOption => ({
+      name: entry.name,
+      artifact: entry.id,
+      label: entry.name.replace('Decision-', 'Decision ').replace(/-/g, ' '),
+      family: entry.family === 'decision1' ? 'Decision 1.0' : 'Decision 2.0',
+      provider: entry.provider,
+      hardware: `${entry.minMemoryGiB} GiB minimum memory`,
+      summary: 'General judgment questions for classification, scoring and routing decisions.',
+      questionTypes: DECISION_RUNTIME_CAPABILITIES,
+      revision: entry.revision,
+    }),
+  ),
 ]
+export const DECISION_MODELS = DECISION_MODEL_OPTIONS.map((option) => option.name)
+export const DECISION_MODEL_HINT =
+  'Choose a deployed decision model. Task support follows its native capabilities and available adapters.'
 
-export const DECISION_MODEL_HINT = DECISION_MODEL_OPTIONS.map(
-  (option) => `${option.name}: ${option.hardware}`,
-).join('; ')
-
-function record(value: unknown): Record<string, unknown> | null {
+function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
-    : null
+    : {}
 }
-
-// configuredDecisionModel returns the decision model a config names, matched
-// case-insensitively as the Router does, or the default.
+function catalogOf(config: unknown): Record<string, unknown> {
+  return record(record(record(config).global).model_catalog)
+}
+export function configuredDecisionDeployment(config: unknown): string {
+  const binding = record(record(catalogOf(config).system).decision_model)
+  return typeof binding.deployment === 'string' ? binding.deployment : 'primary'
+}
 export function configuredDecisionModel(config: unknown): DecisionModelName {
-  const system = record(record(record(record(config)?.global)?.model_catalog)?.system)
-  const value = typeof system?.decision_model === 'string' ? system.decision_model.trim() : ''
-  return (
-    DECISION_MODELS.find((name) => name.toLowerCase() === value.toLowerCase()) ??
-    DEFAULT_DECISION_MODEL
-  )
+  const catalog = catalogOf(config)
+  const deployment = configuredDecisionDeployment(config)
+  const artifact = record(record(catalog.deployments)[deployment]).artifact
+  if (typeof artifact === 'string')
+    return DECISION_MODEL_OPTIONS.find((entry) => entry.artifact === artifact)?.name ?? artifact
+  return deployment === 'primary' && !record(record(catalog.system).decision_model).deployment
+    ? DEFAULT_DECISION_MODEL
+    : deployment
 }
 
-// withDecisionModel returns a copy of a config that names the decision model.
+// Default selection references a resource; never mutate a previous resource that
+// another task may explicitly bind. Callers provide a fresh canonical snapshot.
 export function withDecisionModel<T extends Record<string, unknown>>(
   config: T,
   name: DecisionModelName,
 ): T {
-  const global = { ...(record(config.global) ?? {}) }
-  const catalog = { ...(record(global.model_catalog) ?? {}) }
-  catalog.system = { ...(record(catalog.system) ?? {}), decision_model: name }
-  global.model_catalog = catalog
-  return { ...config, global }
+  const option = DECISION_MODEL_OPTIONS.find((entry) => entry.name === name)
+  if (!option) throw new Error('Choose a decision model from the catalog.')
+  const global = record(config.global)
+  const catalog = record(global.model_catalog)
+  const deployments = { ...record(catalog.deployments) }
+  let deployment = Object.keys(deployments).find(
+    (key) => record(deployments[key]).artifact === option.artifact,
+  )
+  if (!deployment) {
+    const stem = option.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    deployment = stem
+    let suffix = 2
+    while (deployments[deployment]) deployment = `${stem}-${suffix++}`
+    deployments[deployment] = {
+      provider: 'model_runtime',
+      artifact: option.artifact,
+      ...(option.revision ? { revision: option.revision } : {}),
+      device: 'auto',
+    }
+  }
+  return {
+    ...config,
+    global: {
+      ...global,
+      model_catalog: {
+        ...catalog,
+        deployments,
+        system: { ...record(catalog.system), decision_model: { deployment } },
+      },
+    },
+  }
 }

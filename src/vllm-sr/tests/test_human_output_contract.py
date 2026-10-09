@@ -38,10 +38,9 @@ def _assert_no_log_decoration(value: str) -> None:
 def test_validate_result_uses_clean_stdout() -> None:
     config_path = REPO_ROOT / "config/config.yaml"
 
-    # Use the CLI runner so the unit suite's Router-image isolation fixture
-    # applies. A subprocess would validate against an unrelated installed image.
+    # This stream contract must not depend on a Router image cached on the host.
     result = CliRunner().invoke(
-        main, ["config", "validate", "--config", str(config_path)]
+        main, ["config", "validate", "--offline", "--config", str(config_path)]
     )
 
     assert result.exit_code == 0, result.output
