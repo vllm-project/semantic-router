@@ -44,9 +44,9 @@ global:
 
 从以下指南开始：
 
-- [快速入门](../../model-runtime/quickstart.md)：提供模型服务并从 Router 使用它。
-- [选择模型、规模和硬件](../../model-runtime/choose-a-model.md)。
-- [与 Router 一起运行](../../model-runtime/deploy.md)：设备、进程、外部连接和 Kubernetes。
-- [运行配置档](../../model-runtime/profiles.md)：精确答案或更快的近似设置。
-- [从原生绑定迁移](../../model-runtime/migrate.md)。
-- [故障排查与常见问题](../../model-runtime/troubleshooting.md)。
+- [快速入门](../../model-runtime/quickstart)：提供模型服务并从 Router 使用它。
+- [选择模型、规模和硬件](../../model-runtime/choose-a-model)。
+- [与 Router 一起运行](../../model-runtime/deploy)：设备、进程、外部连接和 Kubernetes。
+- [运行配置档](../../model-runtime/profiles)：精确答案或更快的近似设置。
+- [从原生绑定迁移](../../model-runtime/migrate)。
+- [故障排查与常见问题](../../model-runtime/troubleshooting)。

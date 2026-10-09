@@ -9,13 +9,13 @@ translation:
 
 ## 概述
 
-`decision` 向决策模型提出有关请求的类型化问题，并将答案转换为路由事实。问题使用自然语言编写，可以选择选项（`choice`）、回答是或否（`noul`），或在等级范围内评分（`score`）。支持相应能力的模型，例如 Vela 2.0，还能回答哪些标签适用（`set`）以及标签在原文中的位置（`span`）。模型在 Router 启动的[内置模型运行时](../../../model-runtime/overview.md)中运行。
+`decision` 向决策模型提出有关请求的类型化问题，并将答案转换为路由事实。问题使用自然语言编写，可以选择选项（`choice`）、回答是或否（`noul`），或在等级范围内评分（`score`）。支持相应能力的模型，例如 Vela 2.0，还能回答哪些标签适用（`set`）以及标签在原文中的位置（`span`）。模型在 Router 启动的[内置模型运行时](../../../model-runtime/overview)中运行。
 
 ## 主要优势
 
 - 编写新问题即可使用，无需训练新的分类器。
 - 答案包含概率，路由可以要求足够置信度。
-- 共享部署且输入兼容的问题可以合并为一次请求阶段调用，包括 [`pii` 信号](pii.md#vela-20)。
+- 共享部署且输入兼容的问题可以合并为一次请求阶段调用，包括 [`pii` 信号](pii#vela-20)。
 - 回答超时或失败时，信号为未知，决策的失败策略决定继续路由还是拒绝请求。
 
 ## 解决什么问题？
@@ -28,7 +28,7 @@ translation:
 
 ## 配置
 
-没有指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model`，默认为 Vela 2.0 0.3B，也可以[选择其他规模](../../../model-runtime/choose-a-model.md#choose-a-size)。它会与输入兼容的内置问题一起进入请求阶段批处理。复用部署可以避免加载另一份模型，但不保证整个路由请求只执行一次 forward。
+没有指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model`，默认为 Vela 2.0 0.3B，也可以[选择其他规模](../../../model-runtime/choose-a-model#choose-a-size)。它会与输入兼容的内置问题一起进入请求阶段批处理。复用部署可以避免加载另一份模型，但不保证整个路由请求只执行一次 forward。
 
 ```yaml
 routing:
@@ -42,7 +42,7 @@ routing:
           gte: 0.7
 ```
 
-绑定通过 `{deployment: primary}` 指定，可以选择 Vela 或 Decision 1.0/2.0。模型必须支持请求中的每种题型。[Decision 选模算法](../../algorithm/selection/decision.md)也使用同一个默认绑定，因此模型资源还可以用于选择后端。
+绑定通过 `{deployment: primary}` 指定，可以选择 Vela 或 Decision 1.0/2.0。模型必须支持请求中的每种题型。[Decision 选模算法](../../algorithm/selection/decision)也使用同一个默认绑定，因此模型资源还可以用于选择后端。
 
 要使用另一个模型，例如 Decision 2.0，先声明 `model_runtime` 部署，再为每个问题指定 `deployment`：
 
@@ -113,7 +113,7 @@ routing:
 
 条件可以指定自己的 `predicate`。带 `label` 的 `choice`、`set` 或 `span` 条件读取对应标签的值。
 
-[投影分数](../../projection/scores.md)通过 `value_source: raw` 读取同样的值：`name: <question>` 读取 `decision:<name>`，`name: <question>:<key>` 读取 `choice`、`set` 或 `span` 的某个选项或标签。使用中的投影读取问题时，Router 会提出该问题：
+[投影分数](../../projection/scores)通过 `value_source: raw` 读取同样的值：`name: <question>` 读取 `decision:<name>`，`name: <question>:<key>` 读取 `choice`、`set` 或 `span` 的某个选项或标签。使用中的投影读取问题时，Router 会提出该问题：
 
 ```yaml
 routing:
@@ -230,4 +230,4 @@ routing:
 
 Decision 信号可能按照部署的扫描预算截取路由判断视图。这不会缩短发送给选中 Chat 后端的请求。需要完整输入覆盖时，使用专用 PII 或 Reask 任务。匹配的 Decision 信号列在响应头 `x-vsr-matched-decision-model` 中。
 
-选择模型、规模、硬件或在自己的 GPU 服务器上运行模型，请参阅 [Decision 模型指南](../../../model-runtime/guides/decisions.md)。
+选择模型、规模、硬件或在自己的 GPU 服务器上运行模型，请参阅 [Decision 模型指南](../../../model-runtime/guides/decisions)。

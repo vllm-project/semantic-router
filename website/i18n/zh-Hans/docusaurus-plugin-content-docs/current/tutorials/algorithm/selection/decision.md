@@ -28,7 +28,7 @@ translation:
 
 ## 配置
 
-未设置 `deployment` 时，选择由 `global.model_catalog.system.decision_model` 指向的 Router 决策模型完成，默认为 Vela 2.0 0.3B，也可以[选择其他规模](../../../model-runtime/choose-a-model.md#choose-a-size)。它已经负责内置信号和未指定部署的 Decision 问题，因此选模无需加载第二份模型：
+未设置 `deployment` 时，选择由 `global.model_catalog.system.decision_model` 指向的 Router 决策模型完成，默认为 Vela 2.0 0.3B，也可以[选择其他规模](../../../model-runtime/choose-a-model#choose-a-size)。它已经负责内置信号和未指定部署的 Decision 问题，因此选模无需加载第二份模型：
 
 ```yaml
 global:
@@ -132,4 +132,4 @@ routing:
 
 模型未就绪、响应超时、过载或返回无效答案时，Router 会记录选模回退并使用第一个 `modelRef`。选中的模型通过响应头 `x-vsr-selected-model` 报告。Routing Preview 会向决策模型提出同样的问题并报告选中的模型，但不调用 Chat 后端。
 
-选择模型及运行位置，请参阅 [Decision 模型指南](../../../model-runtime/guides/decisions.md)。
+选择模型及运行位置，请参阅 [Decision 模型指南](../../../model-runtime/guides/decisions)。
