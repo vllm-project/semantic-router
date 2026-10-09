@@ -138,8 +138,8 @@ type readinessPorts struct {
 func readinessDocument(ports readinessPorts, backend string, deployments ...string) string {
 	var signals, decision, catalog strings.Builder
 	for index, deployment := range deployments {
-		fmt.Fprintf(&catalog, "      %s:\n        provider: model_runtime\n        artifact: /opt/vsr-test/%s\n        device: cpu\n        process: %s\n",
-			deployment, deployment, deployment)
+		fmt.Fprintf(&catalog, "      %s:\n        provider: model_runtime\n        artifact: /opt/vsr-test/%s\n        device: cpu\n",
+			deployment, deployment)
 		fmt.Fprintf(&signals, "      - name: hard_%d\n        deployment: %s\n        question: {type: noul, instructions: \"Is this request hard?\"}\n        predicate: {gte: 0.5}\n",
 			index, deployment)
 	}
@@ -348,7 +348,7 @@ func TestStartupWaitsForTheRouterManagedModelDeployments(t *testing.T) {
 			})
 			deployments := loading.ModelDeployments
 			if len(deployments) != 1 || deployments[0].Name != "decider" || deployments[0].Ready ||
-				deployments[0].Artifact != "/opt/vsr-test/decider" || deployments[0].Process != "decider" ||
+				deployments[0].Artifact != "/opt/vsr-test/decider" || deployments[0].Process == "" ||
 				loading.TotalModels != 1 || loading.ReadyModels != 0 || !slices.Equal(loading.PendingModels, []string{"decider"}) ||
 				!strings.Contains(loading.Message, "decider") {
 				t.Fatalf("startup status while the model loads: %+v", loading)

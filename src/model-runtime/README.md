@@ -2,8 +2,10 @@
 
 `vllm-srun` serves the router's models (decision models, classifiers,
 embedders and rerankers) behind one HTTP contract. One process can serve
-several models. The router manages it for `model_runtime` deployments, and
-`vllm-sr serve <hf-model> [<hf-model> ...]` runs it on its own.
+several models. The router manages it for `model_runtime` deployments.
+Use `vllm-sr serve ARTIFACT --engine` for a managed instance with a Dashboard
+and public System One API. Use `vllm-srun serve` to operate a worker directly,
+including its classify, embeddings, rerank and bundle APIs.
 
 Every router image ships it; it is not published to PyPI. To run it on your
 own machine, install it from a checkout of the repository, after PyTorch from
@@ -41,6 +43,27 @@ The contract is
 [`vllm_srun/api/openapi.yaml`](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/vllm_srun/api/openapi.yaml)
 and the design is
 [`docs/design.md`](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/design.md).
+
+## Complete input coverage
+
+Native questions retain their model's ordinary input-fitting behavior by
+default. An accepted request or its token usage does not prove that every
+supplied part was read. Set `require_full_input: true` on a question when that
+guarantee is required. It covers **all** supplied state parts, including context
+outside `over`, and cannot be combined with `overflow: truncate`.
+
+A strict question succeeds only when every part fits or its supported windows
+cover all tokens and every scored word completely. Otherwise the question
+returns `max_length_exceeded` (or `scan_budget_exceeded` beyond the scan limit).
+Success includes `input_coverage: "complete"` on its answer. Native Set reports
+the proof on `sets.<id>` and every `answers.<id>.<label>` answer; Span reports it
+on `answers.<id>`. Errors and ordinary questions omit this proof.
+
+Router tasks that require full input consume this proof before accepting an
+answer. Missing proof, including from an older attached worker, is an unknown
+result, never evidence that content is clean or grounded. Composed Set requires
+the proof from every constituent Noul question. Complete coverage describes
+what was read; it does not establish prediction accuracy.
 
 ## Built-in models
 

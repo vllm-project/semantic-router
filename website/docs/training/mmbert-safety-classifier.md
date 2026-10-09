@@ -133,7 +133,7 @@ The [Safety signal guide](/docs/tutorials/signal/learned/safety) explains how
 to use a binary risk rule or a category condition. In a category-specific
 Safety rule, the router runs Hazard after Safety passes its threshold.
 
-Use [route preview](model-runtime/troubleshooting.md) to verify
+Use [route preview](../model-runtime/troubleshooting.md) to verify
 scores, decisions, errors, and latency with your actual serving configuration.
 
 ## Earlier Safety models

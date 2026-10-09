@@ -336,6 +336,15 @@ components:
             The state field a question reads (typed-part models): a field name, or a list of field names it reads
             together in state order; default the whole state, or for a span the answer if present, else the
             request. A span reads one field.
+        require_full_input:
+          type: boolean
+          default: false
+          description: |
+            Require every supplied state part to be read completely, including context outside `over`.
+            Clipping fails this question with max_length_exceeded unless complete window coverage is
+            guaranteed. Cannot be combined with overflow truncate. Success includes input_coverage complete;
+            absence of that proof must not be treated as full coverage by clients. Omitted or false retains
+            the model's ordinary input-fitting behavior.
         overflow:
           type: string
           enum: [window, truncate]
@@ -489,6 +498,10 @@ components:
         For NLI classifiers, Choice probabilities are a softmax over candidate entailment logits; Noul is
         the entailment probability against all non-entailment labels. These scores are not calibrated confidence.
       properties:
+        input_coverage:
+          type: string
+          enum: [complete]
+          description: Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
         type:
           type: string
           nullable: true
@@ -549,6 +562,10 @@ components:
       type: object
       required: [selected, probabilities]
       properties:
+        input_coverage:
+          type: string
+          enum: [complete]
+          description: Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
         selected:
           type: array
           items:

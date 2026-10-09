@@ -1,46 +1,82 @@
 import { describe, expect, it } from 'vitest'
+import {
+  DECISION_MODEL_OPTIONS,
+  configuredDecisionDeployment,
+  configuredDecisionModel,
+  withDecisionModel,
+} from './decisionModelSupport'
 
-import { DECISION_MODELS, configuredDecisionModel, withDecisionModel } from './decisionModelSupport'
-
-describe('decision model', () => {
-  it('reads the configured decision model as the Router does', () => {
+describe('default decision deployment', () => {
+  it('resolves the resource reference without interpreting the deployment name', () => {
     expect(configuredDecisionModel({})).toBe('Vela-2.0-0.3B')
+    const config = {
+      global: {
+        model_catalog: {
+          system: { decision_model: { deployment: 'judge' } },
+          deployments: { judge: { artifact: 'vllm-sr/Vela-2.0-9B' } },
+        },
+      },
+    }
+    expect(configuredDecisionDeployment(config)).toBe('judge')
+    expect(configuredDecisionModel(config)).toBe('Vela-2.0-9B')
     expect(
       configuredDecisionModel({
-        global: { model_catalog: { system: { decision_model: ' vela-2.0-9b ' } } },
+        global: {
+          model_catalog: {
+            system: { decision_model: { deployment: 'custom-judge' } },
+          },
+        },
       }),
-    ).toBe('Vela-2.0-9B')
-    expect(
-      configuredDecisionModel({
-        global: { model_catalog: { system: { decision_model: 'Decision-2.0-Kai' } } },
-      }),
-    ).toBe('Vela-2.0-0.3B')
-    expect(DECISION_MODELS).toEqual([
-      'Vela-2.0-0.3B',
-      'Vela-2.0-0.8B',
-      'Vela-2.0-4B',
-      'Vela-2.0-9B',
-      'Vela-1.0',
-    ])
+    ).toBe('custom-judge')
   })
 
-  it('writes the decision model without touching the rest of the config', () => {
+  it('offers all generic families with truthful native question types', () => {
+    expect(new Set(DECISION_MODEL_OPTIONS.map((model) => model.family))).toEqual(
+      new Set(['Vela 2.0', 'Decision 1.0', 'Decision 2.0']),
+    )
+    for (const model of DECISION_MODEL_OPTIONS) {
+      expect(model.label).not.toMatch(/Qwen|Llama/i)
+      expect(model.questionTypes).toContain('choice')
+      if (model.family.startsWith('Decision')) expect(model.questionTypes).not.toContain('span')
+    }
+  })
+
+  it('preserves existing resources and task overrides when changing the default', () => {
     const config = {
       version: 'v0.3',
       global: {
         model_catalog: {
-          system: { hazard: 'models/Vela-1.0-Encoder-307M-Hazard' },
-          modules: { prompt_guard: {} },
+          system: { decision_model: { deployment: 'judge' }, hazard: 'models/custom-hazard' },
+          deployments: { judge: { artifact: 'vllm-sr/Vela-2.0-4B', device: 'cuda:1' } },
+          modules: { prompt_guard: { model_binding: { deployment: 'judge' } } },
         },
       },
     }
     const chosen = withDecisionModel(config, 'Vela-2.0-0.8B')
-    expect(chosen.global.model_catalog).toEqual({
-      system: { hazard: 'models/Vela-1.0-Encoder-307M-Hazard', decision_model: 'Vela-2.0-0.8B' },
-      modules: { prompt_guard: {} },
-    })
-    expect(config.global.model_catalog.system).toEqual({
-      hazard: 'models/Vela-1.0-Encoder-307M-Hazard',
-    })
+    expect(configuredDecisionModel(chosen)).toBe('Vela-2.0-0.8B')
+    expect(chosen.global.model_catalog.deployments.judge).toEqual(
+      config.global.model_catalog.deployments.judge,
+    )
+    expect(chosen.global.model_catalog.modules).toEqual(config.global.model_catalog.modules)
+    expect(chosen.global.model_catalog.system.hazard).toBe('models/custom-hazard')
+    expect(config.global.model_catalog.system.decision_model).toEqual({ deployment: 'judge' })
+  })
+
+  it('reuses an existing resource and avoids overwriting occupied names', () => {
+    const config = {
+      global: {
+        model_catalog: {
+          deployments: {
+            'vela-2-0-0-8b': { artifact: 'other/model' },
+            existing: { artifact: 'vllm-sr/Vela-2.0-9B', device: 'cpu' },
+          },
+        },
+      },
+    }
+    expect(configuredDecisionDeployment(withDecisionModel(config, 'Vela-2.0-9B'))).toBe('existing')
+    expect(configuredDecisionDeployment(withDecisionModel(config, 'Vela-2.0-0.8B'))).toBe(
+      'vela-2-0-0-8b-2',
+    )
+    expect(() => withDecisionModel(config, 'unsupported')).toThrow('catalog')
   })
 })

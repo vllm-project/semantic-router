@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import ProductLoadingState from '../components/ProductLoadingState'
 import type { SystemStatus } from '../utils/routerRuntime'
 import StatusAvailabilityPanel from './StatusAvailabilityPanel'
+import { fetchDashboardJson } from './dashboardPageRequests'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import styles from './StatusPage.module.css'
 
@@ -14,9 +15,7 @@ const StatusPage: React.FC = () => {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/status', { headers: { Accept: 'application/json' } })
-      if (!response.ok) throw new Error(`Status request failed (${response.status}).`)
-      setStatus((await response.json()) as SystemStatus)
+      setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
       setLastUpdated(new Date())
       setError(null)
     } catch (cause) {

@@ -6,9 +6,12 @@ description: Ask a decision model your own routing questions in plain language, 
 # Decision models
 
 A decision model answers questions you write in plain language about a
-request, without training a classifier for each one. The router uses it in two
-places:
+request, without training a classifier for each one. The Router can use it for
+registered judgment tasks, custom questions, and backend selection:
 
+- task bindings connect domain, complexity, preference, classification, safety,
+  PII judgments, hallucination judgments, and other supported consumers to a
+  deployment; capability checks use the model's actual question types;
 - a [`decision` signal](tutorials/signal/learned/decision.md) asks a
   question and routes on the answer;
 - the [`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
@@ -24,9 +27,16 @@ places:
 | `set` | Which of these labels apply? (Vela 2.0) | Every label's probability, and the labels above its threshold |
 | `span` | Where in the text is ...? (Vela 2.0) | Labelled spans of the text, each with its probability |
 
-All questions of one request that go to the same model travel in one call and
-are answered together, including the PII question when the
-[`pii` signal](tutorials/signal/learned/pii.md#vela-20) runs on that model.
+These are native question types; their availability depends on the model card.
+Router task adapters can also compose a `set` from one `noul` question per label.
+That adapter does not add native `set` support to the public System One API.
+Exact `span` results require a span-capable model.
+
+Compatible questions for the same model and input within one routing stage can
+travel together, including PII questions when they use that deployment. Window
+scans, batch limits, and later routing stages can require additional calls or
+forwards. In particular, selecting the Chat backend after signal evaluation is
+a separate task; sharing a deployment avoids another model copy, not that task.
 
 ## Ask a question
 
@@ -109,6 +119,10 @@ routing:
 
 The model's probability for each candidate becomes its selection score. If the
 model is not ready or answers late, the first model in `modelRefs` answers.
+Without a `deployment`, the Router's
+[decision model](model-runtime/choose-a-model.md#choose-a-size) chooses: the
+Vela 2.0 model that answered the request's signals also picks its model, with
+no second copy loaded.
 
 ## Route on labels and spans
 
@@ -168,10 +182,13 @@ probability instead. Every label's probability is a signal value
 `threshold` replaces the model's own threshold. See the
 [signal reference](tutorials/signal/learned/decision.md#set-and-span-questions).
 
-When the router loads the configuration, it checks every `set` and `span`
-question against the model that answers it, and fails with the signal's name
-if that model answers only `choice`, `noul` and `score` questions (Decision
-1.0 and 2.0).
+The Router compiles each question against the selected model's capabilities.
+A `set` can use a native set head or composed Noul judgments, including on
+Decision 1.0 and 2.0. A `span` needs native span support; a model that lacks it
+cannot provide exact positions. Managed models are checked during preparation.
+Offline attached models remain unavailable until their current card can be
+checked. The public System One API accepts the model's native question types,
+so use Vela 2.0 for direct Set and Span requests.
 
 Vela 2.0 also answers PII and unsupported claims with its router span head:
 bind the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
@@ -181,12 +198,13 @@ questions to it.
 
 ## Which decision model
 
-Decision 2.0 is the default family; Kai-0.6B runs on a CPU and the larger
-sizes are more accurate on a GPU. Decision 1.0 models answer the same
+The Router defaults to Vela 2.0 0.3B. For custom questions, Decision 2.0
+Kai-0.6B also runs on a CPU; its larger sizes target more demanding questions
+on a GPU. Decision 1.0 models answer the same
 questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
 questions for PII and unsupported claims, and its 0.3B answers the router's
-[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, in one
-call. See
+[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, batching
+compatible questions within a routing stage. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 
 ### External NLI models

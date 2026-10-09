@@ -10,6 +10,7 @@ from cli.validation_error import ValidationError
 from cli.validator_decision_model import (
     model_runtime_deployment_error,
     validate_decision_model_references,
+    validate_systemone_listener_models,
 )
 from cli.validator_pii_window import validate_pii_windows
 
@@ -27,6 +28,7 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
             )
         )
     deployments = effective_model_deployments(config)
+    errors.extend(validate_systemone_listener_models(config, deployments))
     external_names = {item.get("name") for item in catalog.get("external", [])}
     for name, deployment in deployments.items():
         message = _deployment_error(name, deployment, external_names)
@@ -36,6 +38,8 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
                     message, field=f"global.model_catalog.deployments.{name}"
                 )
             )
+    if not config.routing_enabled:
+        return errors
     for consumer, binding in global_model_bindings(config).items():
         field = f"global.model_catalog.bindings.{consumer}"
         if binding.deployment not in deployments:
@@ -257,10 +261,10 @@ def _deployment_error(name, deployment, external_names):
         return model_runtime_deployment_error(deployment)
     if any(
         deployment.get(field)
-        for field in ("profile", "endpoint", "process", "served_name")
+        for field in ("profile", "endpoint", "process", "served_name", "replicas")
     ):
         return (
-            "profile, endpoint, process and served_name apply only to "
+            "profile, endpoint, replicas and served_name apply only to "
             "model_runtime deployments"
         )
     if provider != "http":

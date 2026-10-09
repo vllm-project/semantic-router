@@ -212,6 +212,36 @@ routing: {}
         )
 
 
+def test_envoy_mode_refuses_a_listener_model_allow_list(tmp_path, monkeypatch):
+    with pytest.raises(
+        ValueError, match="listener 'public': models is enforced in standalone mode"
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    api_keys: [workshop-key]
+    models: [vllm-sr/auto]
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+routing: {}
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
     """Weighted refs should retain endpoint weights and one shared route path."""
     rendered = _render_envoy_config(

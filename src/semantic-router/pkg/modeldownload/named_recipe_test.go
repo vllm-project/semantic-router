@@ -162,14 +162,13 @@ func TestBuildModelSpecsAccountsForDefaultAutoReachability(t *testing.T) {
 	}
 	assertExactModelSpecs(t, specs, []string{defaultModel})
 
-	cfg.AutoModelNames = []string{}
+	// Renaming the default public entrypoint preserves its model dependencies.
+	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"special"}, Recipe: config.DefaultRecipeName}}
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
-		t.Fatalf("BuildModelSpecs() with auto aliases disabled error = %v", err)
+		t.Fatalf("BuildModelSpecs() with an explicit default entrypoint: %v", err)
 	}
-	if len(specs) != 0 {
-		t.Fatalf("disabled default aliases produced model specs: %#v", specs)
-	}
+	assertExactModelSpecs(t, specs, []string{defaultModel})
 }
 
 func loadGenericMultiRecipeModelNeedsConfig(t *testing.T) *config.RouterConfig {

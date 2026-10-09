@@ -145,7 +145,7 @@ func testLooperFusionQuorumDeadlineCancellation(ctx context.Context, client *kub
 	}
 	defer counters.close()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionDeadlineProbeKeyword, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionDeadlineProbeKeyword, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("fusion deadline request failed: %w", err)
 	}
@@ -197,7 +197,7 @@ func testLooperFusionQuorumBudgetExhausted(ctx context.Context, client *kubernet
 	}
 	defer counters.close()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionBudgetProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionBudgetProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("fusion budget request failed: %w", err)
 	}
@@ -239,7 +239,7 @@ func testLooperFusionQuorumZeroUsable(ctx context.Context, client *kubernetes.Cl
 	}
 	defer counters.close()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionZeroUsableProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionZeroUsableProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("fusion zero-usable request failed: %w", err)
 	}
@@ -283,7 +283,7 @@ func testLooperFusionQuorumFallbackFailure(ctx context.Context, client *kubernet
 	}
 	defer counters.close()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionFallbackFailureProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionFallbackFailureProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("fusion fallback-failure request failed: %w", err)
 	}
@@ -331,7 +331,7 @@ func testLooperFusionQuorumFallback(ctx context.Context, client *kubernetes.Clie
 	}
 	defer counters.close()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionFallbackProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionFallbackProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("fusion quorum fallback request failed: %w", err)
 	}
@@ -376,7 +376,7 @@ func testLooperFusionUsableQuorum(ctx context.Context, client *kubernetes.Client
 	}
 	defer counters.close()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionQuorumProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionQuorumProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("fusion quorum request failed: %w", err)
 	}
