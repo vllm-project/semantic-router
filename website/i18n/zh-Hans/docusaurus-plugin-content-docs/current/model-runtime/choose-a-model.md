@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "83b848c3b6a8a5cf17e488ca84975103a2855b46"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -24,18 +24,21 @@ translation:
 | 拦截提示词注入和越狱 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
 | 标记不安全内容 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` | Shield 是另一种安全模型 |
 | 对照来源检查回答 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 标出回答中无依据的片段 |
-| 指出风险类别 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | | 12 个独立的危害类别，带已发布的阈值 |
+| 识别风险类别 | 显式绑定 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 12 个独立类别；绑定 `hazard` deployment 及其发布的 operating point |
 | 用于缓存、记忆、RAG 和工具的 embedding | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | 更小的维度和更少的层以质量换速度 |
 | 更大或带指令的文本 embedding | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B，1,024 维 |
 | 对检索到的文档重排序 | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
 | 把文本、图片和音频放进同一向量空间 | `vllm-sr/Vela-1.0-Omni-Nano` 或 `-Mini` | | 164M / 1.36B；Mini 更准确，并接受更长的文本 |
 | 用自然语言提出你自己的问题 | 决策模型（见下一节） | | 0.6B 到 27B |
 
-未配置模型时，表中默认为 Vela 2.0 0.3B 的内置信号共用它的一个部署，每个请求只调用一次（[见下文](#vela-20)）。
+未配置模型时，表中默认为 Vela 2.0 0.3B 的内置信号共用一个部署，在同一路由阶段批量处理兼容的问题（[见下文](#vela-20)）。
 Hazard、embedding、重排序和 Omni 使用各自的模型。Vela 1.0 专用模型仍然内置，写明它们即可恢复。
 它们都是 307M 的编码器，在 CPU 上运行良好：在 16 个核上，Vela Domain 请求的中位耗时约 12 ms
 （[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)）。
 它们大多最多读取 32,768 个 token，0.3B 读取 8,192 个；上限列在每个模型卡片和 `GET /v1/models` 中。
+
+输入上限不代表延迟保证。完整的长输入 embedding 和扫描在少核 CPU 上可能超过信号截止时间。
+请按实际输入长度和并发量测量，再选择足够的专用 CPU 资源或 GPU，并为该流量调整 worker 线程数。
 
 ## 决策模型 {#decision-models}
 
@@ -64,13 +67,16 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 
 domain、prompt guard、safety、fact check、user feedback、modality、PII 和 hallucination 信号默认使用
 `vllm-sr/Vela-2.0-0.3B`（[合集](https://huggingface.co/collections/vllm-sr/vela-20)）。它们共用一个部署
-`@Vela-2.0-0.3B`，一个请求的所有问题在一次调用中提出。
+`primary`，在同一路由阶段批量处理兼容的问题。一次 API 调用可以携带多个问题；
+窗口扫描和批次限制仍可能需要多次模型前向计算，后续路由阶段也可以发起额外调用。
 
 - **问题：** 每个信号提出模型针对它训练过的问题，并沿用对应 Vela 1.0 模型的标签，因此规则和策略照旧读取答案。
   PII 和 hallucination 使用模型的片段头，片段保留精确的字符偏移。
 - **CPU profile：** 在 CPU 上该部署运行 `max_speed`，使用模型权重的打包副本：答案误差约在 0.00001 以内，
   速度约为 `exact` 的 1.6 倍。
-- **输入：** 模型读取请求的前 8,192 个 token，超出部分截断；Vela 1.0 的 Guard 和 PII 专用模型按窗口扫描最多 32K。
+- **输入：** 普通路由判断可以按模型输入上限截断。Prompt guard、safety、PII 和 hallucination 要求完整读取输入；
+  支持窗口扫描的任务可在扫描预算内覆盖更长的输入。覆盖不完整时返回错误或未知结果。
+  具体限制和路由策略见[长输入](/docs/model-runtime/reference#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
 - **阈值：** 模块默认阈值按 0.3B 的分数校准（见下文）。
 
 维护者选择了这个默认值，尽管它没有达到当初设定的两个目标
@@ -80,12 +86,12 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 （[A/B 记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)）：
 
 - **领先：** prompt guard（留出集 AUC +0.026；在 E2E 攻击样例上它拦下全部六个攻击，Vela 1.0 Guard 拦下五个）和
-  safety（留出集 +0.052，在每个数据集上都领先）。一个模型、一次调用回答所有信号。
+  safety（留出集 +0.052，在每个数据集上都领先）。这些信号共用一个模型。
 - **持平：** PII 和 hallucination 在留出集和新留出集上持平。
 - **落后最多：** modality（留出集 AUC −0.180；0.3B 漏掉了大多数要求生成新图片的请求）和 user feedback
   （准确率留出集 −0.038、新留出集 −0.178）。
 - **落后：** domain（准确率留出集 −0.037、新留出集 −0.088）和 fact check（留出集 AUC −0.101）。
-- **CPU 时间：** 每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送进一次 3.07 亿参数的前向计算，
+- **CPU 时间：** 在这项测量中，每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送入 3.07 亿参数的模型，
   而每个 Vela 1.0 模型只读取请求本身。在 12 个 CPU 核上，针对
   [延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号，
   请求的中位耗时约为原来的 4.9 倍：
@@ -152,27 +158,35 @@ global:
 配置自己设置的规则阈值保持不变。内置配方的规则按 0.3B 校准，因此改回 Vela 1.0 的信号要连同它的 Vela 1.0
 规则阈值一起改回。在 `mom-v1` 中，它们是 prompt guard 0.5、safety 0.5 和 PII 0.7；记录列出了每个配方的值。
 
-`decision_model: Vela-1.0`（见下文）一行即可恢复全部专用模型。
+专用模型通过明确的任务绑定选择；切换默认决策模型会保留这些覆盖。
 
 ## 选择规模 {#choose-a-size}
 
-决策模型是回答 Router 自身问题的 Vela 模型：上面的每个内置信号，以及每个未指定 `deployment` 的
-[`decision` 问题](tutorials/signal/learned/decision.md)，每个请求一次调用。一个参数或一行配置即可选择：
+默认决策绑定引用一个已声明的 deployment，用于 Router 判断任务及未指定覆盖的
+[`decision` 问题](tutorials/signal/learned/decision.md)。模型、设备和 profile 仅在该资源中声明；
+没有覆盖配置时，内置默认模型为 Vela 2.0 0.3B。传入模型 artifact 可更新当前默认 deployment；
+`--platform` 选择运行平台，deployment 中显式设置的设备位置仍优先。例如：
 
 ```bash
-vllm-sr serve --decision-model Vela-2.0-4B --platform amd
+vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm
 ```
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm:0
     system:
-      decision_model: Vela-2.0-4B
+      decision_model:
+        deployment: primary
 ```
 
 `serve` 把这一行作为新版本写入当前生效的配置，`vllm-sr config versions` 会列出它，
 `vllm-sr config rollback` 可以撤销；之后的启动会保留它，`vllm-sr status` 会显示它。Helm chart 的
-`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置的是同一个字段。名称不区分大小写。
+`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置相同绑定。deployment key 必须精确匹配，区分大小写。
 
 通过 Router 在 router signal suite 上与 Vela 1.0 专用模型对比测得，延迟针对延迟记录的五个请求信号
 （[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)）：
@@ -181,19 +195,17 @@ global:
 | --- | --- | --- | ---: | ---: |
 | `Vela-2.0-0.3B`（默认） | CPU 或 GPU | prompt guard 和 safety 领先，domain、modality 和 feedback 落后 | 6.6 ms | 79 ms |
 | `Vela-2.0-0.8B` | CPU 或 GPU | domain、prompt guard、safety、modality 和 hallucination 领先；PII 落后 | 40.1 ms | 约 3 s |
-| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 55.2 ms | 仅 GPU |
-| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 76.5 ms | 仅 GPU |
+| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 55.2 ms | 未测量 |
+| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 76.5 ms | 未测量 |
 | `Vela-1.0` | CPU 或 GPU | 专用模型本身 | 不适用 | 16 ms |
 
 - **GPU：** 一块 AMD Instinct MI325X，顺序请求。并发 16 时，一块 GPU 每秒约处理 154（0.3B）、
   25（0.8B）、18（4B）和 13（9B）个请求。
-- **4B 和 9B 需要 GPU。** 在 `--platform cpu` 或没有该平台 GPU 的主机上，`vllm-sr serve` 会拒绝它们；
-  在模型运行时找不到 GPU 的地方，Router 也会拒绝。在 GPU 上，无论模块的 `use_cpu` 如何设置，它们都在 GPU 上运行。
+- **该工作负载建议为 4B 和 9B 使用 GPU。** 这份记录未测量它们的 CPU 延迟。设备位置由 deployment 和运行时要求决定，CLI 不按模型名称禁止 CPU；显式 GPU 设备必须与所选平台一致，并且在主机上可用。
 - **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
 - **每个规模** 在 user feedback 的新留出文件（CrossWOZ）和分布内的 PII 上都落后于 Vela 1.0。带区间的逐信号数据见记录。
-- **`Vela-1.0`** 恢复九个专用模型。它们只回答内置信号，因此此时未指定 `deployment` 的 `decision` 问题会导致加载错误。
-- **其他名称** 都会报错。Decision 2.0 模型（Kai、Eos、Sol、Nox、Lux、Vega）回答你自己的问题：
-  把它声明为 deployment，并在问题的 `deployment` 中指定它。
+- **Decision 1.0 和 Decision 2.0** 都可作为默认判断模型；可用任务取决于其原生能力，不按家族名称限制。
+- **专用模型** 通过任务绑定覆盖默认值，并可与默认决策模型同时运行。
 
 每个规模都有自己的模块阈值；切换时，未设置阈值的模块会采用它们：
 
@@ -214,8 +226,8 @@ global:
 | 硬件 | 状态 | 用法 |
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
-| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform amd` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
-| NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform nvidia` 自带 CUDA 版 PyTorch。 |
+| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform rocm` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
+| NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
 | Apple 芯片 | 本版本仅支持 CPU | 在 macOS 上 docker 目标使用 CPU 镜像，因为 Docker 的 Linux 虚拟机拿不到 GPU。通过宿主机使用 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。 |
 
@@ -231,10 +243,10 @@ global:
 
 ### 需要多少内存 {#how-much-memory}
 
-按 CPU 上每个参数约 4 字节、GPU 上每个参数约 2 字节估算，再为请求留出余量：
-一个 307M 的任务模型在 CPU 上约需 1.3 GB，Decision 2.0 Lux-9B 在 GPU 上约需 18 GB。
-运行时会拒绝加载放不进设备的模型并说明原因。要让大模型彼此隔离，给它们各自的 process
-（见[与路由器一起运行](model-runtime/deploy.md#group-models-into-processes)）。
+内存取决于模型家族和 profile，而不只是设备。FP32 权重约占每参数 4 字节，低精度模型可能约占 2 字节；
+还需要为输入、激活和并发请求留出余量。307M FP32 任务模型仅权重就约需 1.3 GB。
+请查看模型记录并测量实际工作负载的峰值。每个副本有独立进程和权重副本，通过 `replicas` 配置设备位置
+（见[放置和扩展副本](model-runtime/deploy.md#place-and-scale-replicas)）。
 
 ## 你自己的模型 {#your-own-models}
 

@@ -198,7 +198,11 @@ func encodeResponsesMessage(message llmprotocol.Message, textDirection string) (
 	if err != nil {
 		return nil, err
 	}
-	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection}
+	contentDirection := textDirection
+	if message.Role == llmprotocol.RoleAssistant && !hasResponsesInputMedia(message.Content) {
+		contentDirection = "output"
+	}
+	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection, contentDirection: contentDirection}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
 			return nil, err
@@ -213,13 +217,23 @@ func encodeResponsesMessage(message llmprotocol.Message, textDirection string) (
 	return state.items, nil
 }
 
+func hasResponsesInputMedia(contents []llmprotocol.Content) bool {
+	for _, content := range contents {
+		if content.Kind == llmprotocol.ContentImage || content.Kind == llmprotocol.ContentFile {
+			return true
+		}
+	}
+	return false
+}
+
 type responsesMessageEncodingState struct {
-	messageID     string
-	role          string
-	textDirection string
-	ordinary      []llmprotocol.Content
-	reasoning     []llmprotocol.Content
-	items         []responsesItemWire
+	messageID        string
+	role             string
+	textDirection    string
+	contentDirection string
+	ordinary         []llmprotocol.Content
+	reasoning        []llmprotocol.Content
+	items            []responsesItemWire
 }
 
 func (state *responsesMessageEncodingState) appendContent(content llmprotocol.Content) error {
@@ -281,7 +295,7 @@ func (state *responsesMessageEncodingState) flushOrdinary() error {
 	if len(state.ordinary) == 0 {
 		return nil
 	}
-	content, err := encodeResponsesContent(state.ordinary, state.textDirection)
+	content, err := encodeResponsesContent(state.ordinary, state.contentDirection)
 	if err != nil {
 		return err
 	}

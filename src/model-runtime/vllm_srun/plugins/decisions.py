@@ -14,7 +14,8 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any, Generic
 
 from ..errors import INVALID_QUESTION, RuntimeServiceError
@@ -54,6 +55,7 @@ class RequestPlan(Generic[ItemT]):
     items: Sequence[ItemT]
     errors: dict[str, dict[str, Any]]
     input_tokens: int
+    complete_inputs: frozenset[str] = field(default_factory=frozenset)
 
 
 def refuse_unanswerable(plan: RequestPlan[Any]) -> None:
@@ -112,7 +114,7 @@ def join_states(
     is valid is refused, as ``refuse_unanswerable`` refuses one about one state.
     """
     for status, body in outcomes:
-        if status != 200:
+        if status != HTTPStatus.OK:
             return status, body
     answers = [
         (question_id, answer)
@@ -134,7 +136,7 @@ def join_states(
     response["states"] = {
         name: body for name, (_, body) in zip(names, outcomes[1:], strict=True)
     }
-    return 200, response
+    return HTTPStatus.OK, response
 
 
 def well_formed(answer: dict[str, Any]) -> bool:
@@ -254,7 +256,13 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
                 }
             else:
                 logits: Any = results[index]
-                answered[item.question_id] = self.answer(item, logits)
+                answer = self.answer(item, logits)
+                if (
+                    item.question_id in request_plan.complete_inputs
+                    and "error" not in answer
+                ):
+                    answer["input_coverage"] = "complete"
+                answered[item.question_id] = answer
         return {
             "answers": {
                 question_id: request_plan.errors.get(question_id)

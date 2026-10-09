@@ -1,0 +1,210 @@
+.card {
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-secondary);
+}
+
+.header,
+.model,
+.inventoryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.action {
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.action:hover {
+  text-decoration: underline;
+}
+
+.model {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.eyebrow,
+.runtime,
+.counts,
+.scopeIdentity > span,
+.inventoryHeader > span {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+
+.model h3 {
+  margin: 5px 0;
+  font-size: 1.12rem;
+}
+
+.model p,
+.scopeContent p,
+.unavailable {
+  margin: 5px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.runtime {
+  display: grid;
+  flex-shrink: 0;
+  gap: 6px;
+  text-align: right;
+}
+
+.ready,
+.pending {
+  font-weight: 600;
+}
+
+.ready {
+  color: var(--color-success, #2ea86b);
+}
+
+.pending {
+  color: var(--color-text-secondary);
+}
+
+.scopes {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.subheading {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.scope {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.scope summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.scope summary::before {
+  content: '›';
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
+.scope[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.scopeIdentity {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.scopeContent {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.group h4 {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chips > span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+.chips strong {
+  font-weight: 500;
+}
+
+.chips > span > span {
+  color: var(--color-text-muted);
+}
+
+.inventoryHeader {
+  justify-content: flex-start;
+  margin: 18px 0 12px;
+}
+
+.inventoryHeader .action {
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .header,
+  .model {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .runtime {
+    text-align: left;
+  }
+
+  .counts {
+    width: 100%;
+    padding-left: 20px;
+  }
+
+  .group {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+}

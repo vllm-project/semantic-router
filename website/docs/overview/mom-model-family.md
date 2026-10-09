@@ -37,8 +37,10 @@ internal architecture does not change the routing abstraction.
 | **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
 | **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
 
-Router system models support the decision process; they are not themselves the
-Mixture of Models product exposed to clients.
+Router system models support the decision process. A decision deployment can
+also be published directly through System One. Routing System One across
+several decision models is a [roadmap extension](component-architecture#roadmap-route-system-one-across-decision-models),
+separate from the current Chat Mixture of Models.
 
 ## Execution patterns
 
@@ -115,7 +117,9 @@ signals. Speed and Cost use lighter routing signals. Accuracy normally selects
 one strong model; independent review and workflows require explicit intent.
 Long input or a subject label alone does not cause multi-model execution.
 
-Vault disables client tools and Router content storage on every path. Its
+Vault disables client tools, memory, response caching, and new Responses object
+writes on every path. Replay capture is configured separately and is enabled by
+default; see [Router Replay](../tutorials/plugin/router-replay). Its
 `guard` decision contains prompt attacks immediately. Safety and Hazard select
 `sensitive` for content risks, where an approved model can provide responsible
 help, explain risky material, or refuse harmful assistance. Hazard uses the

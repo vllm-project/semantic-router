@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/decision/not.md"
   outdated: false
 ---
@@ -52,5 +52,5 @@ routing:
 
 请谨慎使用 `NOT`，并保持被排除信号显式，否则决策会难以审计。
 
-当子信号不可用或未触发时，`NOT` 也会匹配，因此不要把它当作内容安全的证明。对访问敏感路由，优先使用正向可信条件。完整示例见：
+`NOT` 只反转已知结果；`NOT Unknown` 仍为 `Unknown`，由根决策的 `rules.on_unknown` 决定后续行为。当未完成的安全检查必须拒绝请求时，设置 `fail_request`。即使已知结果为阴性，也不代表内容一定安全；访问控制应使用可信身份。完整示例见：
 [`config/fragments/decision/not/exclude-jailbreak.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/not/exclude-jailbreak.yaml)。

@@ -14,10 +14,10 @@ or selected backend wire format. Wire JSON is decoded once at ingress and encode
 once at the provider boundary. Response bodies and streaming events take the inverse
 path before returning to the client.
 
-Envoy remains the production transport. It owns listeners, upstream clusters,
-connection lifecycle, retries, and request forwarding. The ExtProc service owns
-semantic model selection and request or response policy. The codec layer only maps
-between wire contracts and the Router's neutral types.
+Standalone is the default transport; `--gateway extproc` attaches the same routing
+core to Envoy. The selected transport owns listeners, connections, retries and
+forwarding. The routing core owns semantic model selection and request or response
+policy. Codecs map wire contracts to neutral types and do not own either lifecycle.
 
 ```mermaid
 flowchart LR
@@ -25,8 +25,8 @@ flowchart LR
   Ingress --> Request["Neutral request"]
   Request --> Router["Signals, decisions, algorithms, plugins"]
   Router --> Provider["Provider codec"]
-  Provider --> Envoy["Envoy upstream transport"]
-  Envoy --> ProviderResponse["Provider response codec"]
+  Provider --> Transport["Standalone or Envoy transport"]
+  Transport --> ProviderResponse["Provider response codec"]
   ProviderResponse --> Response["Neutral response or event stream"]
   Response --> ClientResponse["Client response codec"]
 ```
@@ -170,7 +170,7 @@ event fail before a client success terminal can be published.
 
 Router-produced responses use a neutral event encoder directly. They do not create
 an intermediate provider-shaped stream. Cancellation and backpressure stay with
-Envoy and ExtProc's request lifecycle.
+the selected transport’s request lifecycle.
 
 ## Usage and cost
 
@@ -199,14 +199,14 @@ free rate.
 
 ## Security boundary
 
-Client-controlled headers and body metadata are untrusted. Only the ExtProc boundary
+Client-controlled headers and body metadata are untrusted. Only an authenticated transport boundary
 may populate trusted identity, session, task, and correlation fields after the
 transport has established them. Codecs cannot promote wire metadata into trusted
 metadata.
 
-Public inference listeners and the management listener remain separate. This design
-does not add a direct Router HTTP proxy, an agent service, a product management
-plane, or a second upstream transport.
+Public inference listeners and the management listener remain separate. The codec layer does not itself
+authenticate callers, proxy requests, or manage model workers; those are frontend
+and runtime responsibilities.
 
 ## Extension checklist
 

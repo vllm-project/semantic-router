@@ -47,14 +47,14 @@ func TestDefaultHazardDeploymentIsPinnedAndOptIn(t *testing.T) {
 		Provider: ModelRuntimeProvider, Device: "cpu", Profile: "exact",
 		Input: ModelInputBudget{MaxTokens: 32768, Overflow: "reject"},
 	}
-	if deployment != want {
+	if !reflect.DeepEqual(deployment, want) {
 		t.Fatalf("deployment=%+v, want %+v", deployment, want)
 	}
 	if cfg.SafetyModels.Hazard.ModelID != "" || len(cfg.ClassifierRules) != 0 || len(cfg.ModelBindings) != 0 {
 		t.Fatal("declaring a Hazard deployment activated a consumer")
 	}
 	exported := CanonicalConfigFromRouterConfig(cfg)
-	if exported.Global.ModelCatalog.Deployments["hazard"] != want {
+	if !reflect.DeepEqual(exported.Global.ModelCatalog.Deployments["hazard"], want) {
 		t.Fatal("canonical export lost default deployment")
 	}
 }

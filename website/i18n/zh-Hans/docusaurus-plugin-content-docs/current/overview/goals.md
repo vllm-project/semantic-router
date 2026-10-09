@@ -3,7 +3,7 @@ sidebar_position: 1
 title: 为何需要语义路由
 description: Agent harness 为何需要覆盖异构模型与算力的可编程决策层。
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/goals.md"
   outdated: false
 ---
@@ -47,7 +47,7 @@ vLLM Semantic Router 围绕五个目标设计：
 ## Semantic Router 不是什么
 
 - Agent harness 负责任务编排、工具执行与持久任务状态；Router 为其中的模型调用提供决策。
-- 它不是 LLM 服务器。vLLM、Ollama 或托管提供方等后端仍负责运行模型。
+- Chat 生成由 vLLM、Ollama 或托管提供方等后端负责。内置模型运行时负责判断、分类、embedding 等任务，也可以通过 System One 直接提供判断模型服务。
 - 它不只是负载均衡器。副本健康很重要，但请求含义和策略决定哪个模型池有资格。
 - 它不是通用质量保证。路由质量取决于已配置的模型、信号、策略和评估数据。
 - 它不替代网络、身份或数据治理控制。它在更广的安全架构内执行路由策略。

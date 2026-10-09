@@ -148,7 +148,6 @@ func requiredPermission(method, path string) string {
 		adminPermission,
 		settingsPermission,
 		routerPermission,
-		knowledgePermission,
 		toolsPermission,
 		observabilityPermission,
 		recipePermission,
@@ -289,15 +288,6 @@ func routerGatewayRequestAllowed(method, path string) bool {
 	}
 	_, ok := routercontract.LookupManagement(method, path)
 	return ok
-}
-
-func knowledgePermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
 }
 
 func toolsPermission(method string, path string) (string, bool) {
@@ -505,8 +495,6 @@ func requiresAuthentication(path string) bool {
 	case strings.HasPrefix(path, "/api/setup/state"):
 		return false
 	case path == "/api/status" || path == "/api/status/":
-		return false
-	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false
 	case strings.HasPrefix(path, "/api/"):
 		return true

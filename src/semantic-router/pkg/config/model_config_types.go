@@ -210,16 +210,12 @@ type PreferenceModelConfig struct {
 
 func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
 	result := c
-	if result.UseContrastive == nil {
-		defaultEnabled := true
-		result.UseContrastive = &defaultEnabled
-	}
 	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
 	return result
 }
 
 func (c PreferenceModelConfig) ContrastiveEnabled() bool {
-	return *c.WithDefaults().UseContrastive
+	return c.UseContrastive != nil && *c.UseContrastive
 }
 
 type ComplexityModelConfig struct {

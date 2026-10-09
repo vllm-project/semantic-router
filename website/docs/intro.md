@@ -24,6 +24,11 @@ Give your agent harness a stable model API. vLLM Semantic Router selects or
 combines models through explicit policy, behind an OpenAI- or Anthropic-compatible
 endpoint. Change the models and policy without rewriting the harness integration.
 
+Applications can also call [System One](model-runtime/quickstart) directly for
+typed judgments. Router and Engine modes share a frontend and model runtime;
+recipes add the optional routing layer. See the [component architecture](overview/component-architecture)
+for the module boundaries and replica pools.
+
 ## Why route?
 
 One call needs a fast local model; another needs a specialist, longer context,
@@ -47,9 +52,10 @@ Use those signals to:
   evaluation.
 
 The harness owns the agent loop, tool execution, and task state. The Router owns
-per-call policy and bounded model collaboration. Gateways and Envoy carry
-requests; inference platforms execute models and manage placement, batching,
-and capacity.
+per-call policy and bounded model collaboration. The standalone frontend carries
+requests by default; Envoy is an optional transport integration. The model runtime
+executes judgment and feature-extraction tasks, while external inference platforms
+run the Chat backends and manage their placement, batching, and capacity.
 
 ## Start here
 

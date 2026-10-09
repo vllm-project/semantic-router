@@ -1,15 +1,15 @@
 ---
 translation:
-  source_commit: "e86e1ac69ece8f9921cddbbfa12a4c2d8f50b66b"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/api/apiserver.md"
-  outdated: true
+  outdated: false
 ---
 
 # 路由器管理接口 {#router-management-api}
 
 Router 管理 API 提供配置、路由预览、插件检查、模型诊断、存储和可观测性操作。默认监听端口 `8080`，本地栈将其绑定到 `127.0.0.1`。
 
-模型流量请使用配置的 Envoy 监听器，见 [Router API](./router)。
+模型流量请使用配置的推理监听器，见 [Router API](./router)。
 
 ## 从实时 schema 开始 {#start-with-the-live-schema}
 
