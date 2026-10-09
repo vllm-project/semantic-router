@@ -1,9 +1,10 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import path from 'node:path'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { mockAuthenticatedAppShell, test } from './support/compiler'
 
-// Uses the real Go WASM compiler built by dashboard-build-wasm; only server data is a fixture.
+// Uses the production Go compiler through its HTTP handler; only server data is a fixture.
+// A context signal saves without a model deployment; a domain signal needs one.
 const config = `version: v0.3
 providers:
   models:
@@ -17,10 +18,10 @@ routing:
     - name: model-a
       modality: text
   signals:
-    domains:
-      - name: computer science
-        description: Computer science prompts.
-        mmlu_categories: [computer science]
+    context:
+      - name: long prompts
+        min_tokens: 32K
+        description: Prompts that need a large context window.
   decisions:
     - name: coding_help_route
       description: Answer coding questions (debugging and reviews).
@@ -28,8 +29,8 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: computer science
+          - type: context
+            name: long prompts
       modelRefs:
         - model: model-a
 `
@@ -64,15 +65,15 @@ const compiledOutput = async (page: Page, name: string) => {
 test('saves a Builder signal whose name needs quotes', async ({ page }) => {
   await openBuilder(page)
 
-  await page.getByRole('button', { name: /^Computer science\b/i }).click()
-  await fieldInput(page, 'Description').fill('Programming and systems prompts.')
-  await expect(page.locator('pre').filter({ hasText: 'SIGNAL domain' })).toContainText(
-    'SIGNAL domain "computer science" {',
+  await page.getByRole('button', { name: /^Long prompts\b/i }).click()
+  await fieldInput(page, 'Description').fill('Prompts with 32K tokens or more.')
+  await expect(page.locator('pre').filter({ hasText: 'SIGNAL context' })).toContainText(
+    'SIGNAL context "long prompts" {',
   )
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
-  await expect(await compiledOutput(page, 'computer science')).toContainText(
-    'description: Programming and systems prompts.',
+  await expect(await compiledOutput(page, 'long prompts')).toContainText(
+    'description: Prompts with 32K tokens or more.',
   )
 })
 
@@ -94,7 +95,7 @@ test('deletes Builder entities whose headers need quotes', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(route).toHaveCount(0)
 
-  const signal = page.getByRole('button', { name: /^Computer science\b/i })
+  const signal = page.getByRole('button', { name: /^Long prompts\b/i })
   await signal.click()
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(signal).toHaveCount(0)
