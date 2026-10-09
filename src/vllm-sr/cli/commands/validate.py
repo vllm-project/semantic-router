@@ -9,7 +9,6 @@ from cli.config_contract import (
     SIGNAL_FAMILY_SPECS,
     iter_routing_profiles,
 )
-from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.router_validation import RouterValidationUnavailableError, RouterVerdict
 from cli.terminal import echo, error, fields, heading, success
