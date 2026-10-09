@@ -1,3 +1,4 @@
+import { SignalCapabilityProvider } from './SignalCapabilityContext'
 import React, { useCallback, useMemo, useState } from 'react'
 
 import type { Diagnostic, EditorMode, DSLFieldObject } from '@/types/dsl'
@@ -23,6 +24,25 @@ import { BuilderRoutingScopeBar } from './builderPageRoutingScopeBar'
 import { useResizableWidth } from './builderPageResizeHooks'
 import ProductLoadingState from '../components/ProductLoadingState'
 
+interface SidebarEntityItemProps {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}
+
+const SidebarEntityItem: React.FC<SidebarEntityItemProps> = ({ active, onClick, children }) => (
+  <li>
+    <button
+      type="button"
+      className={active ? styles.sidebarItemActive : styles.sidebarItem}
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  </li>
+)
+
 interface VisualModeProps {
   ast: ReturnType<typeof useDSLStore.getState>['ast']
   dslSource: string
@@ -39,8 +59,8 @@ interface VisualModeProps {
   projectionMappingCount: number
   routeCount: number
   pluginCount: number
-  wasmReady: boolean
-  wasmError: string | null
+  compilerReady: boolean
+  compilerError: string | null
   addingEntity: EntityKind | null
   onSetAddingEntity: (kind: EntityKind | null) => void
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void
@@ -81,8 +101,8 @@ const VisualMode: React.FC<VisualModeProps> = ({
   projectionMappingCount,
   routeCount,
   pluginCount,
-  wasmReady,
-  wasmError,
+  compilerReady,
+  compilerError,
   addingEntity,
   onSetAddingEntity,
   onDeleteEntity,
@@ -185,10 +205,13 @@ const VisualMode: React.FC<VisualModeProps> = ({
     const newSrc = lines.join('\n')
     useDSLStore.getState().setDslSource(newSrc)
     // Re-parse AST for visual mode
-    if (useDSLStore.getState().wasmReady) useDSLStore.getState().parseAST()
+    if (useDSLStore.getState().compilerReady) useDSLStore.getState().parseAST()
   }, [])
 
+  const homeActive = selection === null && !addingEntity
+
   return (
+    <SignalCapabilityProvider active={addingEntity === 'signal' || selection?.kind === 'signal'} scope={{ recipe: routingScopes.find((scope) => scope.id === activeRoutingScopeId)?.recipeName || 'default', bindings: ast?.modelBindings }}>
     <div className={styles.visualContainer}>
       <BuilderRoutingScopeBar
         scopes={routingScopes}
@@ -199,10 +222,10 @@ const VisualMode: React.FC<VisualModeProps> = ({
         {/* Sidebar */}
         <div className={styles.sidebar} style={{ width: sidebarWidth }}>
           {/* Dashboard home link */}
-          <div
-            className={
-              selection === null && !addingEntity ? styles.sidebarHomeActive : styles.sidebarHome
-            }
+          <button
+            type="button"
+            className={homeActive ? styles.sidebarHomeActive : styles.sidebarHome}
+            aria-current={homeActive ? 'page' : undefined}
             onClick={() => {
               onSetAddingEntity(null)
               onSelect(null)
@@ -224,7 +247,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               <rect x="14" y="14" width="7" height="7" />
             </svg>
             Dashboard
-          </div>
+          </button>
 
           <SidebarSection
             title="Models"
@@ -237,13 +260,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.models?.map((model) => (
-              <li
+              <SidebarEntityItem
                 key={model.name}
-                className={
-                  selection?.kind === 'model' && selection.name === model.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
+                active={selection?.kind === 'model' && selection.name === model.name}
                 onClick={() => {
                   onSetAddingEntity(null)
                   onSelect({ kind: 'model', name: model.name })
@@ -252,7 +271,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 <ModelIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>{model.name}</span>
                 <span className={styles.sidebarItemType}>catalog</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
 
@@ -268,13 +287,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.signals?.map((s) => (
-              <li
+              <SidebarEntityItem
                 key={s.name}
-                className={
-                  selection?.kind === 'signal' && selection.name === s.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
+                active={selection?.kind === 'signal' && selection.name === s.name}
                 onClick={() => {
                   onSetAddingEntity(null)
                   onSelect({ kind: 'signal', name: s.name })
@@ -288,7 +303,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                   )}
                 </span>
                 <span className={styles.sidebarItemType}>{s.signalType}</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
 
@@ -303,12 +318,10 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.projectionPartitions?.map((partition) => (
-              <li
+              <SidebarEntityItem
                 key={partition.name}
-                className={
+                active={
                   selection?.kind === 'projection-partition' && selection.name === partition.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
                 }
                 onClick={() => {
                   onSetAddingEntity(null)
@@ -320,7 +333,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                   {formatRoutingMetadataValue('x-vsr-matched-projections', partition.name)}
                 </span>
                 <span className={styles.sidebarItemType}>partition</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
 
@@ -335,13 +348,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.projectionScores?.map((score) => (
-              <li
+              <SidebarEntityItem
                 key={score.name}
-                className={
-                  selection?.kind === 'projection-score' && selection.name === score.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
+                active={selection?.kind === 'projection-score' && selection.name === score.name}
                 onClick={() => {
                   onSetAddingEntity(null)
                   onSelect({ kind: 'projection-score', name: score.name })
@@ -352,7 +361,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                   {formatRoutingMetadataValue('x-vsr-matched-projections', score.name)}
                 </span>
                 <span className={styles.sidebarItemType}>score</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
 
@@ -367,13 +376,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.projectionMappings?.map((mapping) => (
-              <li
+              <SidebarEntityItem
                 key={mapping.name}
-                className={
-                  selection?.kind === 'projection-mapping' && selection.name === mapping.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
+                active={selection?.kind === 'projection-mapping' && selection.name === mapping.name}
                 onClick={() => {
                   onSetAddingEntity(null)
                   onSelect({ kind: 'projection-mapping', name: mapping.name })
@@ -384,7 +389,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                   {formatRoutingMetadataValue('x-vsr-matched-projections', mapping.name)}
                 </span>
                 <span className={styles.sidebarItemType}>mapping</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
 
@@ -400,13 +405,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.routes?.map((r) => (
-              <li
+              <SidebarEntityItem
                 key={r.name}
-                className={
-                  selection?.kind === 'route' && selection.name === r.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
+                active={selection?.kind === 'route' && selection.name === r.name}
                 onClick={() => {
                   onSetAddingEntity(null)
                   onSelect({ kind: 'route', name: r.name })
@@ -417,7 +418,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                   {formatRoutingMetadataValue('x-vsr-selected-decision', r.name)}
                 </span>
                 <span className={styles.sidebarItemType}>P{r.priority}</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
 
@@ -433,13 +434,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
             }}
           >
             {ast?.plugins?.map((p) => (
-              <li
+              <SidebarEntityItem
                 key={p.name}
-                className={
-                  selection?.kind === 'plugin' && selection.name === p.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
+                active={selection?.kind === 'plugin' && selection.name === p.name}
                 onClick={() => {
                   onSetAddingEntity(null)
                   onSelect({ kind: 'plugin', name: p.name })
@@ -448,7 +445,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 <PluginIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>{p.name}</span>
                 <span className={styles.sidebarItemType}>{p.pluginType}</span>
-              </li>
+              </SidebarEntityItem>
             ))}
           </SidebarSection>
         </div>
@@ -465,7 +462,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
 
         {/* Main panel */}
         <div className={styles.mainPanel}>
-          {!wasmReady && !wasmError && (
+          {!compilerReady && !compilerError && (
             <div className={styles.wasmOverlay}>
               <ProductLoadingState label="Loading compiler" compact />
             </div>
@@ -556,6 +553,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
       />
       {sidebarDragging ? <div className={styles.dragOverlay} aria-hidden="true" /> : null}
     </div>
+    </SignalCapabilityProvider>
   )
 }
 

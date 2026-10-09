@@ -5,10 +5,10 @@ import type { EditorMode } from '@/types/dsl'
 import styles from './BuilderPage.module.css'
 
 interface BuilderToolbarProps {
-  dirty: boolean
+  unsaved: boolean
   mode: EditorMode
-  wasmReady: boolean
-  wasmError: string | null
+  compilerReady: boolean
+  compilerError: string | null
   dslSource: string
   loading: boolean
   deploying: boolean
@@ -29,10 +29,10 @@ interface BuilderToolbarProps {
 }
 
 const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
-  dirty,
+  unsaved,
   mode,
-  wasmReady,
-  wasmError,
+  compilerReady,
+  compilerError,
   dslSource,
   loading,
   deploying,
@@ -68,7 +68,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
           <rect x="9" y="9" width="5" height="5" rx="1" />
         </svg>
         Config Builder
-        {dirty && (
+        {unsaved && (
           <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>
         )}
       </div>
@@ -115,17 +115,17 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
 
       <span className={styles.divider} />
 
-      {wasmError ? (
-        <span className={styles.statusError} title={wasmError}>
-          <span className={styles.dot} /> WASM Error
+      {compilerError ? (
+        <span className={styles.statusError} title={compilerError}>
+          <span className={styles.dot} /> Compiler unavailable
         </span>
-      ) : wasmReady ? (
+      ) : compilerReady ? (
         <span className={styles.statusReady}>
           <span className={styles.dot} /> Ready
         </span>
       ) : (
         <span className={styles.statusLoading}>
-          <span className={styles.dotPulse} /> Loading WASM…
+          <span className={styles.dotPulse} /> Connecting…
         </span>
       )}
 
@@ -133,7 +133,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         <button
           className={styles.toolbarBtnPrimary}
           onClick={onImport}
-          disabled={!wasmReady}
+          disabled={!compilerReady}
           title="Import router config"
         >
           <svg
@@ -152,7 +152,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         <button
           className={styles.toolbarBtnPrimary}
           onClick={onCompile}
-          disabled={!wasmReady || !dslSource.trim() || loading}
+          disabled={!compilerReady || !dslSource.trim() || loading}
           title="Compile (Ctrl+Enter)"
         >
           <svg
@@ -170,7 +170,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         <button
           className={styles.toolbarBtnDeploy}
           onClick={onRequestDeploy}
-          disabled={!wasmReady || !dslSource.trim() || loading || deploying || deployDisabled}
+          disabled={!compilerReady || !dslSource.trim() || loading || deploying || deployDisabled}
           title={deployDisabledReason || 'Deploy config to router'}
         >
           <svg
@@ -191,7 +191,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             <button
               className={styles.toolbarBtn}
               onClick={onFormat}
-              disabled={!wasmReady || !dslSource.trim()}
+              disabled={!compilerReady || !dslSource.trim()}
               title="Format DSL"
             >
               Format
@@ -199,7 +199,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             <button
               className={styles.toolbarBtn}
               onClick={onValidate}
-              disabled={!wasmReady || !dslSource.trim()}
+              disabled={!compilerReady || !dslSource.trim()}
               title="Validate"
             >
               Validate

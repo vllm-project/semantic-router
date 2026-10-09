@@ -43,12 +43,14 @@ new evaluation data, and keep prior published datasets unchanged.
 
 Use the [shared sequence trainer](../sequence_repair/README.md) with a fresh
 complete classification head and the explicit `benign=0`, `jailbreak=1` label
-contract. The base identity and immutable revision are required:
+contract. The builder's `contract.json` also sets `classifier_pooling` to `cls`,
+as the released Vela Guard uses. The base identity and immutable revision are
+required:
 
 ```bash
 python -m src.training.model_classifier.sequence_repair.train \
   --base artifacts/vela/base \
-  --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-id vllm-sr/Vela-1.0-Encoder-307M \
   --base-revision fe9ccc074b781bc0e2e13c2c8d26f2640410636a \
   --method full --fresh-head \
   --contract artifacts/vela/guard/contract.json \

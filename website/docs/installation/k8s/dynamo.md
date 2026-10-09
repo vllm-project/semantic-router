@@ -235,7 +235,7 @@ Router. The sample values use the default automatic entrypoint:
 curl -fsS -D - "$GATEWAY_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {"role": "user", "content": "Explain why prefix caching can reduce inference latency."}
     ],
@@ -255,7 +255,7 @@ through the intended route or reached the selected Dynamo deployment.
 | Direct frontend request fails | Dynamo deployment status, GPU allocation, model credentials, and frontend logs |
 | Direct frontend works but Gateway fails | `HTTPRoute` backend name and port, `ReferenceGrant`, and Gateway address |
 | Patch policy is not accepted | Envoy Gateway extension setting, patch target namespace, and release compatibility |
-| Physical model works but `auto` fails | Semantic Router entrypoint, provider model name, decisions, and classifier readiness |
+| Physical model works but `vllm-sr/auto` fails | Semantic Router entrypoint, provider model name, decisions, and classifier readiness |
 | Request reaches the wrong Dynamo deployment | Selected-model headers, provider endpoint, Dynamo frontend model list, and both routing layers' logs |
 
 ## Cleanup

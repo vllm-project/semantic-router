@@ -135,7 +135,7 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 
 **Test Results** (2026-02-18):
 
-- **Model Download**: Successfully downloaded from HuggingFace Hub (`LLM-Semantic-Router/pii_classifier_modernbert-base_model`)
+- **Model Download**: Successfully downloaded from HuggingFace Hub (`vllm-sr/pii_classifier_modernbert-base_model`)
 - **Classifier Compatibility**: PASSED - Existing PII classifier weights compatible with Extended32K base model
 - **Full Inference 32K**: PASSED - Complete inference pipeline working
 - **32K Classifier Inference**: PASSED - All components loading and working correctly

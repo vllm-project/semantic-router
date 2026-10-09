@@ -71,10 +71,6 @@ func TestOwnedRemoteEmbeddingRejectsLocalCapabilitiesBeforeProvisioning(t *testi
 		name   string
 		mutate func(*config.RouterConfig)
 	}{
-		{"cache windows", func(cfg *config.RouterConfig) {
-			cfg.SemanticCache.Enabled = true
-			cfg.SemanticCache.EmbeddingModel = "mmbert"
-		}},
 		{"audio query", func(cfg *config.RouterConfig) { cfg.EmbeddingRules[0].QueryModality = config.QueryModalityAudio }},
 		{"image query", func(cfg *config.RouterConfig) { cfg.EmbeddingRules[0].QueryModality = config.QueryModalityImage }},
 		{"image candidates", func(cfg *config.RouterConfig) {
@@ -85,11 +81,7 @@ func TestOwnedRemoteEmbeddingRejectsLocalCapabilitiesBeforeProvisioning(t *testi
 			cfg := base()
 			test.mutate(cfg)
 			before := calls.Load()
-			prepare := PrepareOwnedEmbeddings
-			if test.name == "cache windows" {
-				prepare = PrepareOwnedResponseCacheEmbeddings
-			}
-			_, prepareErr := prepare(context.Background(), cfg, nil)
+			_, prepareErr := PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 			if !errors.Is(prepareErr, binding.ErrCapability) {
 				t.Fatalf("capability error = %v", prepareErr)
 			}

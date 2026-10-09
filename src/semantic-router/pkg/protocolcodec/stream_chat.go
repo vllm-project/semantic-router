@@ -16,6 +16,7 @@ type chatStreamDecoder struct {
 	toolKinds            map[int]llmprotocol.ToolKind
 	providerReported     bool
 	nativeReasonReported bool
+	stopSequence         string
 }
 
 type chatContentKey struct {
@@ -68,6 +69,8 @@ type chatChunkWire struct {
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Ollama reports generation timings in an object beside the final usage.
+	Timings map[string]json.RawMessage `json:"timings,omitempty"`
 	// Aggregator gateways may report the handling agent alongside a chunk.
 	// It is transport metadata, not response content.
 	Agent json.RawMessage `json:"agent,omitempty"`
@@ -150,8 +153,8 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
 	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
-		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, Usage: &decoder.usage})
-		return []llmprotocol.Event{event}, nil, err
+		event, doneErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
+		return []llmprotocol.Event{event}, nil, doneErr
 	}
 	var chunk chatChunkWire
 	_, vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
@@ -217,6 +220,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
 			"stream.x_groq", "provider request metadata is not model output",
+		)
+	}
+	if len(chunk.Timings) > 0 {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.timings", "provider generation timings are not model output",
 		)
 	}
 	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
@@ -355,7 +364,7 @@ func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]ll
 		return nil, err
 	}
 	events = append(events, toolEvents...)
-	completed, err := decoder.completeChoice(choice.FinishReason)
+	completed, err := decoder.completeChoice(choice.FinishReason, choice.StopReason)
 	return append(events, completed...), err
 }
 
@@ -514,13 +523,13 @@ func (decoder *chatStreamDecoder) observeToolKind(itemIndex int, call chatChunkT
 	return nil
 }
 
-func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.Event, error) {
+func (decoder *chatStreamDecoder) completeChoice(reason *string, detail *chatStopReasonWire) ([]llmprotocol.Event, error) {
 	if reason == nil {
 		return nil, nil
 	}
-	stop := decodeChatStop(*reason)
+	stop, matched := decodeChatStopWithMatch(*reason, detail, decoder.policy)
 	if len(decoder.items) == 0 {
-		decoder.stop = stop
+		decoder.stop, decoder.stopSequence = stop, matched
 		if stop == llmprotocol.StopToolCall {
 			return nil, invalidProviderResponse("stream_tool_output_missing", "Chat stream ended with tool_calls but emitted no tool call")
 		}
@@ -547,12 +556,16 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.
 	// chunk. Accept the repeat without emitting a second completion, but keep
 	// rejecting a changed terminal reason.
 	if len(active) == 0 {
-		if decoder.stop != stop {
+		if decoder.stop == llmprotocol.StopSequence && detail == nil && *reason == "stop" {
+			// A repeat may omit stop_reason or send null; one that names it must agree.
+			return nil, nil
+		}
+		if decoder.stop != stop || decoder.stopSequence != matched {
 			return nil, invalidProviderResponse("stream_finish_reason_changed", "Chat stream changed its finish reason")
 		}
 		return nil, nil
 	}
-	decoder.stop = stop
+	decoder.stop, decoder.stopSequence = stop, matched
 	sort.Ints(active)
 	events := make([]llmprotocol.Event, 0, len(active))
 	for _, itemIndex := range active {

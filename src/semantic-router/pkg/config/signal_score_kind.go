@@ -31,6 +31,9 @@ const (
 var signalScoreKinds = map[string]ScoreKind{
 	SignalTypeDomain:     ScoreKindProbability,
 	SignalTypeClassifier: ScoreKindProbability,
+	// A decision leaf reports the answer's probability: P(true), the chosen
+	// option's probability, or a Score answer's most likely level.
+	SignalTypeDecision:   ScoreKindProbability,
 	SignalTypeSafety:     ScoreKindProbability,
 	SignalTypePreference: ScoreKindProbability,
 	SignalTypeEmbedding:  ScoreKindSimilarity,

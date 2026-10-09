@@ -11,7 +11,10 @@ answers, and outputs:
 Pure stdlib — no external dependencies required.
 
 Answer extraction protocol:
-  1. Last "Answer: X" / "answer: X" / "答案:X" occurrence in the text;
+  1. Last valid "Answer: X" / "answer: X" / "答案:X" occurrence in the text,
+     with an uppercase A-J not followed by an ASCII letter, digit, or
+     underscore. Non-ASCII explanation text may follow directly. Both ASCII
+     and fullwidth colons (U+FF1A) are accepted;
   2. Fallback: last standalone "(X)" or "X" line;
   3. Failure -> no_answer (counted as wrong, tracked separately).
 
@@ -29,7 +32,9 @@ import re
 import statistics
 from collections import defaultdict
 
-ANSWER_RE = re.compile(r"(?:[Aa]nswer|ANSWER|答案)\s*[::]\s*\(?([A-J])\)?")
+ANSWER_RE = re.compile(
+    r"(?:[Aa]nswer|ANSWER|答案)\s*[:\uFF1A]\s*\(?([A-J])(?![A-Za-z0-9_])\)?"
+)
 STANDALONE_RE = re.compile(r"^\(?([A-J])\)?$")
 
 

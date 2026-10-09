@@ -142,8 +142,6 @@ func TestRecorderUpdateHallucinationStatusClonesStoredValues(t *testing.T) {
 			Start:                   0,
 			End:                     6,
 			HallucinationConfidence: 0.9,
-			NLILabel:                "CONTRADICTION",
-			NLIConfidence:           0.8,
 			Severity:                4,
 			Explanation:             "contradicts context",
 		},
@@ -169,7 +167,7 @@ func TestRecorderUpdateHallucinationStatusClonesStoredValues(t *testing.T) {
 		t.Fatalf("expected 1 stored span detail, got %d", len(record.HallucinationSpanDetails))
 	}
 	got := record.HallucinationSpanDetails[0]
-	if got.Text != "span-a" || got.Severity != 4 || got.NLILabel != "CONTRADICTION" {
+	if got.Text != "span-a" || got.Severity != 4 || got.Explanation != "contradicts context" {
 		t.Fatalf("unexpected cloned span detail: %#v", got)
 	}
 }

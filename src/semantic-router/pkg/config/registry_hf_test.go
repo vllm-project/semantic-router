@@ -99,22 +99,22 @@ func newFeedbackDetectorFixtureServer(t *testing.T, hits *hfFixtureHits) *httpte
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/models/llm-semantic-router/mmbert32k-feedback-detector-merged":
+		case "/api/models/vllm-sr/mmbert32k-feedback-detector-merged":
 			hits.api++
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":           "llm-semantic-router/mmbert32k-feedback-detector-merged",
+				"id":           "vllm-sr/mmbert32k-feedback-detector-merged",
 				"pipeline_tag": "text-classification",
 				"tags": []string{
 					"transformers",
 					"text-classification",
 					"feedback-detection",
-					"dataset:llm-semantic-router/feedback-detector-dataset",
+					"dataset:vllm-sr/feedback-detector-dataset",
 				},
 				"cardData": map[string]any{
-					"base_model":   "llm-semantic-router/mmbert-32k-yarn",
+					"base_model":   "vllm-sr/mmbert-32k-yarn",
 					"license":      "apache-2.0",
 					"language":     []string{"en", "zh"},
-					"datasets":     []string{"llm-semantic-router/feedback-detector-dataset"},
+					"datasets":     []string{"vllm-sr/feedback-detector-dataset"},
 					"pipeline_tag": "text-classification",
 					"tags":         []string{"text-classification", "feedback-detection", "multilingual"},
 				},
@@ -122,7 +122,7 @@ func newFeedbackDetectorFixtureServer(t *testing.T, hits *hfFixtureHits) *httpte
 					"total": 307533316,
 				},
 			})
-		case "/llm-semantic-router/mmbert32k-feedback-detector-merged/raw/main/config.json":
+		case "/vllm-sr/mmbert32k-feedback-detector-merged/raw/main/config.json":
 			hits.config++
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"hidden_size":             768,
@@ -134,12 +134,12 @@ func newFeedbackDetectorFixtureServer(t *testing.T, hits *hfFixtureHits) *httpte
 					"3": "WANT_DIFFERENT",
 				},
 			})
-		case "/llm-semantic-router/mmbert32k-feedback-detector-merged/raw/main/tokenizer_config.json":
+		case "/vllm-sr/mmbert32k-feedback-detector-merged/raw/main/tokenizer_config.json":
 			hits.tokenizer++
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"model_max_length": 32768,
 			})
-		case "/llm-semantic-router/mmbert32k-feedback-detector-merged/raw/main/README.md":
+		case "/vllm-sr/mmbert32k-feedback-detector-merged/raw/main/README.md":
 			hits.readme++
 			_, _ = w.Write([]byte(`---
 license: apache-2.0
@@ -185,7 +185,7 @@ func requireFeedbackDetectorOverlay(t *testing.T, info *ModelRegistryInfo) {
 func requireFeedbackDetectorIdentity(t *testing.T, info *ModelRegistryInfo) {
 	t.Helper()
 
-	if info.RepoID != "llm-semantic-router/mmbert32k-feedback-detector-merged" {
+	if info.RepoID != "vllm-sr/mmbert32k-feedback-detector-merged" {
 		t.Fatalf("expected canonical repo id, got %q", info.RepoID)
 	}
 	if info.Description != "A 4-class user feedback classifier based on mmbert-32k-yarn." {
@@ -216,7 +216,7 @@ func requireFeedbackDetectorCapabilities(t *testing.T, info *ModelRegistryInfo) 
 func requireFeedbackDetectorCardMetadata(t *testing.T, info *ModelRegistryInfo) {
 	t.Helper()
 
-	if info.BaseModel != "llm-semantic-router/mmbert-32k-yarn" {
+	if info.BaseModel != "vllm-sr/mmbert-32k-yarn" {
 		t.Fatalf("expected base model, got %q", info.BaseModel)
 	}
 	if info.License != "apache-2.0" {

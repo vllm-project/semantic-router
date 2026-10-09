@@ -21,9 +21,10 @@ const routerReplayManagementToken = "router-replay-e2e-viewer-token"
 
 func init() {
 	pkgtestcases.Register("router-replay-restart-recovery", pkgtestcases.TestCase{
-		Description: "Router Replay records stored in Postgres survive a semantic-router pod restart",
-		Tags:        []string{"router-replay", "functional", "postgres", "restart"},
-		Fn:          testRouterReplayRestartRecovery,
+		Description:         "Router Replay records stored in Postgres survive a semantic-router pod restart",
+		Tags:                []string{"router-replay", "functional", "postgres", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testRouterReplayRestartRecovery,
 	})
 }
 
@@ -79,7 +80,7 @@ func triggerReplayRecordBeforeRestart(
 	providerObservationID := fmt.Sprintf("prepared-dispatch-%d", time.Now().UnixNano())
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "auto",
+		Model: "vllm-sr/auto",
 		User:  "e2e-replay-user",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "What is 2+2? Reply with just the number."},

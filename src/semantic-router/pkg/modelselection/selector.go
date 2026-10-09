@@ -14,1052 +14,190 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package modelselection provides ML-based model selection algorithms
-// for choosing the optimal model from a set of candidates.
+// Package modelselection chooses a candidate model with a trained KNN,
+// KMeans, SVM or MLP artifact over the query embedding and its category.
 //
-// This package uses:
-// - Linfa (Rust) via ml-binding for traditional ML algorithms:
-//   - KNN (K-Nearest Neighbors)
-//   - KMeans clustering
-//   - SVM (Support Vector Machine)
-//
-// - Candle (Rust) via candle-binding for GPU-accelerated algorithms:
-//   - MLP (Multi-Layer Perceptron) with GPU support
-//
-// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
-//
-// Training is done in Python (src/training/model_selection/ml_model_selection/).
-// This package provides inference-only functionality, loading models from JSON.
+// Training happens in Python (src/training/model_selection/ml_model_selection);
+// this package loads the JSON artifacts and runs inference in pure Go with the
+// numerics of the bindings it replaces (FusionFactory, arXiv:2507.10540, and
+// Avengers-Pro, arXiv:2508.12631).
 package modelselection
 
 import (
-	"encoding/json"
 	"fmt"
-	"math"
 	"os"
-	"sync"
-	"time"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// UseLinfa enables Rust/Linfa implementations for KNN, KMeans, SVM.
-// When true, uses ml-binding (faster, battle-tested Linfa algorithms).
-// When false, uses pure Go implementations (no Rust dependency).
-var UseLinfa = false
-
-// Selector interface for all model selection algorithms
+// Selector chooses the best model from refs based on the selection context.
 type Selector interface {
-	// Select chooses the best model from refs based on the selection context
 	Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error)
-
-	// Name returns the algorithm name
 	Name() string
-
-	// Train updates the model with new training data (for learning-based algorithms)
-	Train(data []TrainingRecord) error
 }
 
-// SelectionContext contains information for model selection
+// SelectionContext contains information for model selection.
 type SelectionContext struct {
-	// QueryEmbedding is the embedding vector of the user query
+	// QueryEmbedding is the embedding vector of the user query.
 	QueryEmbedding []float64
-
-	// QueryText is the raw user query text
+	// QueryText is the raw user query text.
 	QueryText string
-
-	// CategoryName is the detected category/domain
+	// CategoryName is the detected category/domain.
 	CategoryName string
-
-	// DecisionName is the matched decision name
+	// DecisionName is the matched decision name.
 	DecisionName string
-
-	// RequestMetadata contains additional request information
-	RequestMetadata *RequestMetadata
 }
 
-// RequestMetadata contains metadata about the request
-type RequestMetadata struct {
-	// EstimatedTokens is the estimated input token count
-	EstimatedTokens int
-
-	// MaxOutputTokens is the requested max output tokens
-	MaxOutputTokens int
-
-	// HasTools indicates if the request includes tool definitions
-	HasTools bool
-
-	// StreamingEnabled indicates if streaming is requested
-	StreamingEnabled bool
-
-	// Timestamp is when the request was received
-	Timestamp time.Time
+// classifier is a loaded, immutable artifact that names the selected model
+// for a feature vector.
+type classifier interface {
+	classify(features []float64) (string, error)
 }
 
-// TrainingRecord represents a historical request-response pair for training
-type TrainingRecord struct {
-	// QueryEmbedding is the embedding of the query
-	QueryEmbedding []float64 `json:"query_embedding"`
-
-	// SelectedModel is the model that was selected
-	SelectedModel string `json:"selected_model"`
-
-	// ResponseLatencyNs is how long the response took in nanoseconds
-	ResponseLatencyNs int64 `json:"response_latency_ns"`
-
-	// ResponseQuality is a quality score (0-1)
-	ResponseQuality float64 `json:"response_quality"`
-
-	// Success indicates if the request was successful
-	Success bool `json:"success"`
-
-	// TimestampUnix is when this record was created (Unix timestamp)
-	TimestampUnix int64 `json:"timestamp"`
+// artifactSelector holds the artifact of one algorithm. Load swaps it
+// atomically, so selections never block on a reload.
+type artifactSelector struct {
+	algorithm string
+	parse     func([]byte) (classifier, error)
+	model     atomic.Pointer[classifier]
 }
 
-// ResponseLatency returns the response latency as time.Duration
-func (r TrainingRecord) ResponseLatency() time.Duration {
-	return time.Duration(r.ResponseLatencyNs)
+// KNNSelector votes over the k nearest training queries, weighted by their
+// recorded quality and latency.
+type KNNSelector struct{ artifactSelector }
+
+// KMeansSelector routes to the model assigned to the nearest cluster centroid.
+type KMeansSelector struct{ artifactSelector }
+
+// SVMSelector runs a trained support-vector classifier (linear or RBF kernel).
+type SVMSelector struct{ artifactSelector }
+
+// MLPSelector runs a trained multi-layer perceptron classifier.
+type MLPSelector struct{ artifactSelector }
+
+// NewKNNSelector returns a KNN selector without an artifact.
+func NewKNNSelector() *KNNSelector {
+	return &KNNSelector{artifactSelector{algorithm: "knn", parse: parseKNN}}
 }
 
-// Timestamp returns the timestamp as time.Time
-func (r TrainingRecord) Timestamp() time.Time {
-	return time.Unix(r.TimestampUnix, 0)
+// NewKMeansSelector returns a KMeans selector without an artifact.
+func NewKMeansSelector() *KMeansSelector {
+	return &KMeansSelector{artifactSelector{algorithm: "kmeans", parse: parseKMeans}}
 }
 
-// ModelStats tracks performance statistics for a model
-type ModelStats struct {
-	// ModelName is the model identifier
-	ModelName string
-
-	// AverageLatency in milliseconds
-	AverageLatency float64
-
-	// SuccessRate is the success rate (0-1)
-	SuccessRate float64
-
-	// QualityScore is the average quality score (0-1)
-	QualityScore float64
-
-	// RequestCount is the total number of requests
-	RequestCount int64
-
-	// LastUpdated is when stats were last updated
-	LastUpdated time.Time
+// NewSVMSelector returns an SVM selector without an artifact.
+func NewSVMSelector() *SVMSelector {
+	return &SVMSelector{artifactSelector{algorithm: "svm", parse: parseSVM}}
 }
 
-// StatsTracker tracks model performance statistics (thread-safe)
-type StatsTracker struct {
-	mu    sync.RWMutex
-	stats map[string]*ModelStats
+// NewMLPSelector returns an MLP selector without an artifact.
+func NewMLPSelector() *MLPSelector {
+	return &MLPSelector{artifactSelector{algorithm: "mlp", parse: parseMLP}}
 }
 
-// NewStatsTracker creates a new stats tracker
-func NewStatsTracker() *StatsTracker {
-	return &StatsTracker{
-		stats: make(map[string]*ModelStats),
-	}
-}
-
-// GetStats returns stats for a model
-func (t *StatsTracker) GetStats(modelName string) *ModelStats {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if stats, ok := t.stats[modelName]; ok {
-		statsCopy := *stats
-		return &statsCopy
-	}
-	return nil
-}
-
-// UpdateStats updates stats for a model (thread-safe)
-func (t *StatsTracker) UpdateStats(modelName string, latency time.Duration, quality float64, success bool) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	stats, ok := t.stats[modelName]
-	if !ok {
-		stats = &ModelStats{
-			ModelName:    modelName,
-			SuccessRate:  1.0,
-			QualityScore: quality,
-		}
-		t.stats[modelName] = stats
-	}
-
-	// Update running averages using Welford's algorithm for numerical stability
-	stats.RequestCount++
-	n := float64(stats.RequestCount)
-
-	// Update average latency
-	delta := float64(latency.Milliseconds()) - stats.AverageLatency
-	stats.AverageLatency += delta / n
-
-	// Update success rate
-	successVal := 0.0
-	if success {
-		successVal = 1.0
-	}
-	deltaSuccess := successVal - stats.SuccessRate
-	stats.SuccessRate += deltaSuccess / n
-
-	// Update quality score
-	deltaQuality := quality - stats.QualityScore
-	stats.QualityScore += deltaQuality / n
-
-	stats.LastUpdated = time.Now()
-}
-
-// GetAllStats returns all model stats (thread-safe copy)
-func (t *StatsTracker) GetAllStats() map[string]*ModelStats {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	result := make(map[string]*ModelStats, len(t.stats))
-	for k, v := range t.stats {
-		statsCopy := *v
-		result[k] = &statsCopy
-	}
-	return result
-}
-
-// NewSelector creates a new selector based on the configuration
-// If ModelsPath is specified, loads pre-trained models from disk
+// NewSelector creates the configured selector. With ModelsPath it loads
+// <ModelsPath>/<type>_model.json; otherwise the selector fails every
+// multi-candidate selection until an artifact is loaded.
 func NewSelector(cfg *config.MLModelSelectionConfig) (Selector, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("model selection config is nil")
 	}
-
-	// If ModelsPath is specified, try to load pre-trained model
-	if cfg.ModelsPath != "" {
-		return loadPretrainedSelectorFromPath(cfg.Type, cfg.ModelsPath)
+	var selector interface {
+		Selector
+		Load(string) error
 	}
-
-	// Otherwise create a new empty selector (for training mode)
-	return NewEmptySelector(cfg)
-}
-
-// loadPretrainedSelectorFromPath loads a pre-trained selector from the specified path
-// The configured models directory contains one artifact per algorithm.
-func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector, error) {
-	// Construct model file path
-	modelPath := modelsPath + "/" + algorithmType + "_model.json"
-
-	logging.ComponentEvent("modelselection", "selector_load_started", map[string]interface{}{
-		"algorithm":  algorithmType,
-		"model_path": modelPath,
-	})
-
-	// Load the model file
-	data, err := os.ReadFile(modelPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load pre-trained model %s: %w", modelPath, err)
-	}
-
-	// Parse based on algorithm type
-	switch algorithmType {
-	case "knn":
-		selector := NewKNNSelector(3)
-		if err := selector.LoadFromJSON(data); err != nil {
-			return nil, fmt.Errorf("failed to parse KNN model: %w", err)
-		}
-		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
-			"algorithm":        "knn",
-			"model_path":       modelPath,
-			"training_records": selector.getTrainingCount(),
-		})
-		return selector, nil
-
-	case "kmeans":
-		selector := NewKMeansSelector(8)
-		if err := selector.LoadFromJSON(data); err != nil {
-			return nil, fmt.Errorf("failed to parse KMeans model: %w", err)
-		}
-		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
-			"algorithm":        "kmeans",
-			"model_path":       modelPath,
-			"training_records": selector.getTrainingCount(),
-		})
-		return selector, nil
-
-	case "svm":
-		selector := NewSVMSelector("rbf") // Default to RBF, will be overridden by JSON if present
-		if err := selector.LoadFromJSON(data); err != nil {
-			return nil, fmt.Errorf("failed to parse SVM model: %w", err)
-		}
-		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
-			"algorithm":        "svm",
-			"model_path":       modelPath,
-			"training_records": selector.getTrainingCount(),
-		})
-		return selector, nil
-
-	case "mlp":
-		selector := NewMLPSelector()
-		if err := selector.LoadFromJSON(data); err != nil {
-			return nil, fmt.Errorf("failed to parse MLP model: %w", err)
-		}
-		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
-			"algorithm":  "mlp",
-			"model_path": modelPath,
-			"backend":    "candle",
-		})
-		return selector, nil
-
-	default:
-		return nil, fmt.Errorf("unknown algorithm type: %s (supported: knn, kmeans, svm, mlp)", algorithmType)
-	}
-}
-
-// NewEmptySelector creates a new empty selector for training mode
-func NewEmptySelector(cfg *config.MLModelSelectionConfig) (Selector, error) {
 	switch cfg.Type {
 	case "knn":
-		k := cfg.K
-		if k <= 0 {
-			k = 3 // default
-		}
-		return NewKNNSelector(k), nil
-
+		selector = NewKNNSelector()
 	case "kmeans":
-		numClusters := cfg.NumClusters
-		if numClusters <= 0 {
-			numClusters = 0 // will be set to number of models
-		}
-		// Use pointer to distinguish "not set" (nil) from "explicitly 0"
-		if cfg.EfficiencyWeight != nil {
-			return NewKMeansSelectorWithEfficiency(numClusters, *cfg.EfficiencyWeight), nil
-		}
-		return NewKMeansSelector(numClusters), nil // Uses default 0.3
-
+		selector = NewKMeansSelector()
 	case "svm":
-		kernel := cfg.Kernel
-		if kernel == "" {
-			kernel = "rbf" // Default to RBF - better for high-dimensional embeddings
-		}
-		return NewSVMSelector(kernel), nil
-
+		selector = NewSVMSelector()
 	case "mlp":
-		return NewMLPSelector(), nil
-
+		selector = NewMLPSelector()
 	default:
 		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm, mlp)", cfg.Type)
 	}
+	if cfg.ModelsPath == "" {
+		return selector, nil
+	}
+	path := filepath.Join(cfg.ModelsPath, cfg.Type+"_model.json")
+	if err := selector.Load(path); err != nil {
+		return nil, err
+	}
+	return selector, nil
 }
 
-// =============================================================================
-// Numerical Utilities (pure Go implementations)
-// =============================================================================
+// Name returns the algorithm name.
+func (s *artifactSelector) Name() string { return s.algorithm }
 
-// CosineSimilarity computes cosine similarity between two vectors
-func CosineSimilarity(a, b []float64) float64 {
-	if len(a) != len(b) || len(a) == 0 {
-		return 0
+// Load reads and activates an artifact file.
+func (s *artifactSelector) Load(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s artifact: %w", s.algorithm, err)
 	}
-
-	var dot, normA, normB float64
-	for i := 0; i < len(a); i++ {
-		dot += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
+	if err := s.LoadFromJSON(data); err != nil {
+		return fmt.Errorf("%w (%s)", err, path)
 	}
-
-	normA = math.Sqrt(normA)
-	normB = math.Sqrt(normB)
-
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-
-	return dot / (normA * normB)
+	logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
+		"algorithm": s.algorithm, "model_path": path,
+	})
+	return nil
 }
 
-// EuclideanDistance computes Euclidean distance between two vectors
-func EuclideanDistance(a, b []float64) float64 {
-	if len(a) != len(b) {
-		return math.MaxFloat64
+// LoadFromJSON validates and activates an artifact.
+func (s *artifactSelector) LoadFromJSON(data []byte) error {
+	model, err := s.parse(data)
+	if err != nil {
+		return fmt.Errorf("invalid %s artifact: %w", s.algorithm, err)
 	}
-
-	var sum float64
-	for i := 0; i < len(a); i++ {
-		diff := a[i] - b[i]
-		sum += diff * diff
-	}
-	return math.Sqrt(sum)
+	s.model.Store(&model)
+	return nil
 }
 
-// NormalizeVector normalizes a vector to unit length
-func NormalizeVector(v []float64) []float64 {
-	var norm float64
-	for _, val := range v {
-		norm += val * val
+// Select returns the candidate the artifact chooses. A single candidate is
+// returned as is; otherwise the artifact and the query embedding are required.
+func (s *artifactSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
+	name := strings.ToUpper(s.algorithm)
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("%s: no model refs provided", name)
 	}
-	norm = math.Sqrt(norm)
-
-	if norm == 0 {
-		return v
+	if len(refs) == 1 {
+		return &refs[0], nil
 	}
-
-	result := make([]float64, len(v))
-	for i, val := range v {
-		result[i] = val / norm
+	model := s.model.Load()
+	if model == nil {
+		return nil, fmt.Errorf("%s: model not trained - load pretrained model first", name)
 	}
-	return result
-}
-
-// Float32ToFloat64 converts float32 slice to float64
-func Float32ToFloat64(input []float32) []float64 {
-	result := make([]float64, len(input))
-	for i, v := range input {
-		result[i] = float64(v)
+	if ctx == nil || len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("%s: no query embedding provided", name)
 	}
-	return result
-}
-
-// Softmax computes softmax with numerical stability
-func Softmax(x []float64) []float64 {
-	if len(x) == 0 {
-		return x
+	selected, err := (*model).classify(CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName))
+	if err != nil {
+		return nil, fmt.Errorf("%s selection failed: %w", name, err)
 	}
-
-	// Find max for numerical stability
-	maxVal := x[0]
-	for _, v := range x[1:] {
-		if v > maxVal {
-			maxVal = v
+	match := -1
+	for i := range refs {
+		if candidateName(refs[i]) == selected {
+			match = i
 		}
 	}
-
-	result := make([]float64, len(x))
-	var sum float64
-	for i, v := range x {
-		result[i] = math.Exp(v - maxVal)
-		sum += result[i]
+	if match < 0 {
+		return nil, fmt.Errorf("%s: selected model %s not found in available refs", name, selected)
 	}
-
-	if sum > 0 {
-		for i := range result {
-			result[i] /= sum
-		}
-	}
-
-	return result
+	logging.Debugf("%s selected model %s", name, selected)
+	return &refs[match], nil
 }
 
-// =============================================================================
-// Base implementations
-// =============================================================================
-
-// baseSelector provides common functionality for all selectors
-type baseSelector struct {
-	mu       sync.RWMutex
-	training []TrainingRecord
-	maxSize  int
-}
-
-func newBaseSelector(maxSize int) baseSelector {
-	return baseSelector{
-		training: make([]TrainingRecord, 0, maxSize),
-		maxSize:  maxSize,
-	}
-}
-
-func (s *baseSelector) addTrainingData(data []TrainingRecord) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.training = append(s.training, data...)
-
-	// Keep only recent records
-	if len(s.training) > s.maxSize {
-		s.training = s.training[len(s.training)-s.maxSize:]
-	}
-}
-
-func (s *baseSelector) getTrainingData() []TrainingRecord {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	result := make([]TrainingRecord, len(s.training))
-	copy(result, s.training)
-	return result
-}
-
-func (s *baseSelector) getTrainingCount() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return len(s.training)
-}
-
-// SavedModelData represents the JSON structure of saved models
-type SavedModelData struct {
-	Version   string           `json:"version"`
-	Algorithm string           `json:"algorithm"`
-	Training  []TrainingRecord `json:"training"`
-	Trained   bool             `json:"trained"` // Whether the model was successfully trained
-	InputDim  int              `json:"input_dim,omitempty"`
-	// Algorithm-specific fields
-	K             int                            `json:"k,omitempty"`
-	NumClusters   int                            `json:"num_clusters,omitempty"`
-	Centroids     [][]float64                    `json:"centroids,omitempty"`
-	ClusterModels []string                       `json:"cluster_models,omitempty"`
-	ClusterStats  map[int]map[string]interface{} `json:"cluster_stats,omitempty"`
-	Kernel        string                         `json:"kernel,omitempty"`
-	EffWeight     float64                        `json:"efficiency_weight,omitempty"`
-	Gamma         float64                        `json:"gamma,omitempty"`
-}
-
-// loadBaseTrainingData loads training data from JSON into the base selector
-func (s *baseSelector) loadFromJSON(data []byte) (*SavedModelData, error) {
-	var modelData SavedModelData
-	if err := json.Unmarshal(data, &modelData); err != nil {
-		return nil, fmt.Errorf("failed to parse model JSON: %w", err)
-	}
-
-	// Load training records
-	if len(modelData.Training) > 0 {
-		s.mu.Lock()
-		s.training = modelData.Training
-		s.mu.Unlock()
-	}
-
-	return &modelData, nil
-}
-
-// getModelIndex returns the index of the model in refs, using LoRA name if present
-func getModelName(ref config.ModelRef) string {
+// candidateName is the name artifacts use for a candidate: its LoRA name when set.
+func candidateName(ref config.ModelRef) string {
 	if ref.LoRAName != "" {
 		return ref.LoRAName
 	}
 	return ref.Model
-}
-
-// buildModelIndex builds a map from model name to ref index
-func buildModelIndex(refs []config.ModelRef) map[string]int {
-	index := make(map[string]int, len(refs))
-	for i, ref := range refs {
-		index[getModelName(ref)] = i
-	}
-	return index
-}
-
-// =============================================================================
-// KNN Selector - Linfa/Rust Implementation (via ml-binding)
-// =============================================================================
-
-// KNNSelector implements K-Nearest Neighbors using Linfa (linfa-nn)
-type KNNSelector struct {
-	baseSelector
-	k     int
-	mlKNN *ml_binding.KNNSelector
-}
-
-// NewKNNSelector creates a new KNN selector using Linfa
-func NewKNNSelector(k int) *KNNSelector {
-	if k <= 0 {
-		k = 3
-	}
-	return &KNNSelector{
-		baseSelector: newBaseSelector(10000),
-		k:            k,
-		mlKNN:        ml_binding.NewKNNSelector(k),
-	}
-}
-
-func (s *KNNSelector) replaceMLKNN(next *ml_binding.KNNSelector) {
-	previous := s.mlKNN
-	s.mlKNN = next
-
-	if previous != nil && previous != next {
-		previous.Close()
-	}
-}
-
-func (s *KNNSelector) Close() error {
-	s.replaceMLKNN(nil)
-	return nil
-}
-
-func (s *KNNSelector) Name() string { return "knn" }
-
-// LoadFromJSON loads a pre-trained KNN model from JSON data
-func (s *KNNSelector) LoadFromJSON(data []byte) error {
-	// Load into baseSelector for compatibility
-	modelData, err := s.loadFromJSON(data)
-	if err != nil {
-		return err
-	}
-	if modelData.K > 0 {
-		s.k = modelData.K
-	}
-
-	// Also load into ml-binding
-	knn, err := ml_binding.KNNFromJSON(string(data))
-	if err != nil {
-		// Fallback: train ml-binding from loaded training data
-		s.trainMLBinding()
-		return nil
-	}
-	s.replaceMLKNN(knn)
-	return nil
-}
-
-// trainMLBinding is deprecated - training should now be done in Python
-// See: src/training/model_selection/ml_model_selection/train.py
-// This method logs a warning and does nothing. Use LoadPretrainedModel() instead.
-func (s *KNNSelector) trainMLBinding() {
-	training := s.getTrainingData()
-	if len(training) == 0 {
-		return
-	}
-
-	// Training is now done in Python (src/training/model_selection/ml_model_selection/)
-	// The Go/Rust code only loads pretrained models via LoadFromJSON()
-	logging.Warnf("KNN training in Go is deprecated. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
-	logging.Infof("To load pretrained models, use LoadPretrainedSelector() with JSON files")
-
-	// Initialize empty selector if needed (for compatibility)
-	if s.mlKNN == nil {
-		s.mlKNN = ml_binding.NewKNNSelector(s.k)
-	}
-}
-
-func (s *KNNSelector) Train(data []TrainingRecord) error {
-	s.addTrainingData(data)
-	s.trainMLBinding()
-	return nil
-}
-
-func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
-	if len(refs) == 0 {
-		return nil, fmt.Errorf("KNN: no model refs provided")
-	}
-	if len(refs) == 1 {
-		return &refs[0], nil
-	}
-
-	if s.mlKNN == nil {
-		return nil, fmt.Errorf("KNN: model not initialized")
-	}
-	if !s.mlKNN.IsTrained() {
-		return nil, fmt.Errorf("KNN: model not trained - load pretrained model first")
-	}
-	if len(ctx.QueryEmbedding) == 0 {
-		return nil, fmt.Errorf("KNN: no query embedding provided")
-	}
-
-	// Build feature vector: embedding + category one-hot (matches Python training format)
-	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
-	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
-
-	// Use ml-binding for selection
-	selectedModel, err := s.mlKNN.Select(featureVector)
-	if err != nil {
-		return nil, fmt.Errorf("KNN (Linfa) selection failed: %w", err)
-	}
-
-	// Find the selected model in refs
-	modelIndex := buildModelIndex(refs)
-	if idx, ok := modelIndex[selectedModel]; ok {
-		logging.Infof("KNN (Linfa) selected model %s", selectedModel)
-		return &refs[idx], nil
-	}
-
-	return nil, fmt.Errorf("KNN: selected model %s not found in available refs", selectedModel)
-}
-
-// =============================================================================
-// KMeans Selector - Linfa/Rust Implementation (via ml-binding)
-// Based on Avengers-Pro framework (arXiv:2508.12631)
-// =============================================================================
-
-// KMeansSelector implements KMeans clustering using Linfa (linfa-clustering)
-type KMeansSelector struct {
-	baseSelector
-	numClusters      int
-	efficiencyWeight float64
-	mlKMeans         *ml_binding.KMeansSelector
-}
-
-// NewKMeansSelector creates a new KMeans selector using Linfa
-func NewKMeansSelector(numClusters int) *KMeansSelector {
-	if numClusters <= 0 {
-		numClusters = 4
-	}
-	return &KMeansSelector{
-		baseSelector:     newBaseSelector(10000),
-		numClusters:      numClusters,
-		efficiencyWeight: 0.3, // Default: 70% performance, 30% efficiency
-		mlKMeans:         ml_binding.NewKMeansSelector(numClusters),
-	}
-}
-
-// NewKMeansSelectorWithEfficiency creates a KMeans selector with custom efficiency weight
-func NewKMeansSelectorWithEfficiency(numClusters int, efficiencyWeight float64) *KMeansSelector {
-	s := NewKMeansSelector(numClusters)
-	s.efficiencyWeight = math.Max(0, math.Min(1, efficiencyWeight))
-	return s
-}
-
-func (s *KMeansSelector) replaceMLKMeans(next *ml_binding.KMeansSelector) {
-	previous := s.mlKMeans
-	s.mlKMeans = next
-
-	if previous != nil && previous != next {
-		previous.Close()
-	}
-}
-
-func (s *KMeansSelector) Close() error {
-	s.replaceMLKMeans(nil)
-	return nil
-}
-
-func (s *KMeansSelector) Name() string { return "kmeans" }
-
-// LoadFromJSON loads a pre-trained KMeans model from JSON data
-func (s *KMeansSelector) LoadFromJSON(data []byte) error {
-	// Load into baseSelector for compatibility
-	modelData, err := s.loadFromJSON(data)
-	if err != nil {
-		return err
-	}
-	if modelData.NumClusters > 0 {
-		s.numClusters = modelData.NumClusters
-	}
-	if modelData.EffWeight > 0 {
-		s.efficiencyWeight = modelData.EffWeight
-	}
-
-	// Also load into ml-binding
-	kmeans, err := ml_binding.KMeansFromJSON(string(data))
-	if err != nil {
-		// Fallback: train ml-binding from loaded training data
-		s.trainMLBinding()
-		return nil
-	}
-	s.replaceMLKMeans(kmeans)
-	return nil
-}
-
-// trainMLBinding is deprecated - training should now be done in Python
-// See: src/training/model_selection/ml_model_selection/train.py
-// This method logs a warning and does nothing. Use LoadPretrainedModel() instead.
-func (s *KMeansSelector) trainMLBinding() {
-	training := s.getTrainingData()
-	if len(training) == 0 {
-		return
-	}
-
-	// Training is now done in Python (src/training/model_selection/ml_model_selection/)
-	// The Go/Rust code only loads pretrained models via LoadFromJSON()
-	logging.Warnf("KMeans training in Go is deprecated. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
-	logging.Infof("To load pretrained models, use LoadPretrainedSelector() with JSON files")
-
-	// Initialize empty selector if needed (for compatibility)
-	if s.mlKMeans == nil {
-		s.mlKMeans = ml_binding.NewKMeansSelector(s.numClusters)
-	}
-}
-
-func (s *KMeansSelector) Train(data []TrainingRecord) error {
-	s.addTrainingData(data)
-	s.trainMLBinding()
-	return nil
-}
-
-func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
-	if len(refs) == 0 {
-		return nil, fmt.Errorf("KMeans: no model refs provided")
-	}
-	if len(refs) == 1 {
-		return &refs[0], nil
-	}
-
-	if s.mlKMeans == nil {
-		return nil, fmt.Errorf("KMeans: model not initialized")
-	}
-	if !s.mlKMeans.IsTrained() {
-		return nil, fmt.Errorf("KMeans: model not trained - load pretrained model first")
-	}
-	if len(ctx.QueryEmbedding) == 0 {
-		return nil, fmt.Errorf("KMeans: no query embedding provided")
-	}
-
-	// Build feature vector: embedding + category one-hot (matches Python training format)
-	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
-	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
-
-	// Use ml-binding for selection
-	selectedModel, err := s.mlKMeans.Select(featureVector)
-	if err != nil {
-		return nil, fmt.Errorf("KMeans (Linfa) selection failed: %w", err)
-	}
-
-	// Find the selected model in refs
-	modelIndex := buildModelIndex(refs)
-	if idx, ok := modelIndex[selectedModel]; ok {
-		logging.Infof("KMeans (Linfa) selected model %s", selectedModel)
-		return &refs[idx], nil
-	}
-
-	return nil, fmt.Errorf("KMeans: selected model %s not found in available refs", selectedModel)
-}
-
-// =============================================================================
-// SVM Selector - Linfa/Rust Implementation (via ml-binding)
-// =============================================================================
-
-// SVMSelector implements SVM using Linfa (linfa-svm)
-type SVMSelector struct {
-	baseSelector
-	kernel string
-	mlSVM  *ml_binding.SVMSelector
-}
-
-// NewSVMSelector creates a new SVM selector using Linfa
-func NewSVMSelector(kernel string) *SVMSelector {
-	if kernel == "" {
-		kernel = "rbf" // Default to RBF - better for high-dimensional embeddings with quality filtering
-	}
-
-	// Create ml-binding SVM with appropriate kernel
-	var mlSVM *ml_binding.SVMSelector
-	switch kernel {
-	case "rbf", "gaussian":
-		mlSVM = ml_binding.NewSVMSelectorWithKernel(ml_binding.SVMKernelRBF, 0) // 0 = auto gamma
-	default:
-		mlSVM = ml_binding.NewSVMSelectorWithKernel(ml_binding.SVMKernelLinear, 0)
-	}
-
-	return &SVMSelector{
-		baseSelector: newBaseSelector(5000),
-		kernel:       kernel,
-		mlSVM:        mlSVM,
-	}
-}
-
-func (s *SVMSelector) replaceMLSVM(next *ml_binding.SVMSelector) {
-	previous := s.mlSVM
-	s.mlSVM = next
-
-	if previous != nil && previous != next {
-		previous.Close()
-	}
-}
-
-func (s *SVMSelector) Close() error {
-	s.replaceMLSVM(nil)
-	return nil
-}
-
-func (s *SVMSelector) Name() string { return "svm" }
-
-// LoadFromJSON loads a pre-trained SVM model from JSON data
-func (s *SVMSelector) LoadFromJSON(data []byte) error {
-	// Load into baseSelector for compatibility
-	modelData, err := s.loadFromJSON(data)
-	if err != nil {
-		return err
-	}
-	if modelData.Kernel != "" {
-		s.kernel = modelData.Kernel
-	}
-
-	// Also load into ml-binding
-	svm, err := ml_binding.SVMFromJSON(string(data))
-	if err != nil {
-		// Fallback: train ml-binding from loaded training data
-		s.trainMLBinding()
-		return nil
-	}
-	s.replaceMLSVM(svm)
-	return nil
-}
-
-// trainMLBinding is deprecated - training should now be done in Python
-// See: src/training/model_selection/ml_model_selection/train.py
-// This method logs a warning and does nothing. Use LoadPretrainedModel() instead.
-func (s *SVMSelector) trainMLBinding() {
-	training := s.getTrainingData()
-	if len(training) == 0 {
-		return
-	}
-
-	// Training is now done in Python (src/training/model_selection/ml_model_selection/)
-	// The Go/Rust code only loads pretrained models via LoadFromJSON()
-	logging.Warnf("SVM training in Go is deprecated. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
-	logging.Infof("To load pretrained models, use LoadPretrainedSelector() with JSON files")
-
-	// Initialize empty selector if needed (for compatibility)
-	if s.mlSVM == nil {
-		switch s.kernel {
-		case "rbf", "gaussian":
-			s.mlSVM = ml_binding.NewSVMSelectorWithKernel(ml_binding.SVMKernelRBF, 0)
-		default:
-			s.mlSVM = ml_binding.NewSVMSelectorWithKernel(ml_binding.SVMKernelLinear, 0)
-		}
-	}
-}
-
-func (s *SVMSelector) Train(data []TrainingRecord) error {
-	s.addTrainingData(data)
-	s.trainMLBinding()
-	return nil
-}
-
-func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
-	if len(refs) == 0 {
-		return nil, fmt.Errorf("SVM: no model refs provided")
-	}
-	if len(refs) == 1 {
-		return &refs[0], nil
-	}
-
-	if s.mlSVM == nil {
-		return nil, fmt.Errorf("SVM: model not initialized")
-	}
-	if !s.mlSVM.IsTrained() {
-		return nil, fmt.Errorf("SVM: model not trained - load pretrained model first")
-	}
-	if len(ctx.QueryEmbedding) == 0 {
-		return nil, fmt.Errorf("SVM: no query embedding provided")
-	}
-
-	// Build feature vector: embedding + category one-hot (matches Python training format)
-	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
-	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
-
-	// Use ml-binding for selection
-	selectedModel, err := s.mlSVM.Select(featureVector)
-	if err != nil {
-		return nil, fmt.Errorf("SVM (Linfa) selection failed: %w", err)
-	}
-
-	// Find the selected model in refs
-	modelIndex := buildModelIndex(refs)
-	if idx, ok := modelIndex[selectedModel]; ok {
-		logging.Infof("SVM (Linfa) selected model %s", selectedModel)
-		return &refs[idx], nil
-	}
-
-	return nil, fmt.Errorf("SVM: selected model %s not found in available refs", selectedModel)
-}
-
-// =============================================================================
-// MLP Selector - Candle/Rust Implementation (GPU-accelerated)
-// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
-// Note: MLP uses candle-binding (not ml-binding) for GPU acceleration
-// =============================================================================
-
-// MLPSelector implements Multi-Layer Perceptron using Candle (GPU-accelerated)
-type MLPSelector struct {
-	baseSelector
-	mlMLP *candle_binding.MLPSelector
-}
-
-// NewMLPSelector creates a new MLP selector using Candle (CPU)
-func NewMLPSelector() *MLPSelector {
-	return &MLPSelector{
-		baseSelector: newBaseSelector(10000),
-		mlMLP:        candle_binding.NewMLPSelector(),
-	}
-}
-
-// NewMLPSelectorWithDevice creates a new MLP selector with GPU support
-func NewMLPSelectorWithDevice(deviceType candle_binding.MLPDeviceType) *MLPSelector {
-	return &MLPSelector{
-		baseSelector: newBaseSelector(10000),
-		mlMLP:        candle_binding.NewMLPSelectorWithDevice(deviceType),
-	}
-}
-
-func (s *MLPSelector) replaceMLMLP(next *candle_binding.MLPSelector) {
-	previous := s.mlMLP
-	s.mlMLP = next
-
-	if previous != nil && previous != next {
-		previous.Close()
-	}
-}
-
-func (s *MLPSelector) Close() error {
-	s.replaceMLMLP(nil)
-	return nil
-}
-
-func (s *MLPSelector) Name() string { return "mlp" }
-
-// LoadFromJSON loads a pre-trained MLP model from JSON data
-func (s *MLPSelector) LoadFromJSON(data []byte) error {
-	// Load into baseSelector for compatibility
-	_, err := s.loadFromJSON(data)
-	if err != nil {
-		return err
-	}
-
-	// Load into candle-binding
-	mlp, err := candle_binding.MLPFromJSON(string(data))
-	if err != nil {
-		logging.Warnf("MLP: Failed to load model: %v", err)
-		return nil
-	}
-	s.replaceMLMLP(mlp)
-	return nil
-}
-
-// Load loads a pre-trained MLP model from a file path
-func (s *MLPSelector) Load(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read MLP model file: %w", err)
-	}
-	return s.LoadFromJSON(data)
-}
-
-func (s *MLPSelector) Train(data []TrainingRecord) error {
-	s.addTrainingData(data)
-	// Training is done in Python (src/training/model_selection/ml_model_selection/)
-	logging.Warnf("MLP training in Go is not supported. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
-	return nil
-}
-
-func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
-	if len(refs) == 0 {
-		return nil, fmt.Errorf("MLP: no model refs provided")
-	}
-	if len(refs) == 1 {
-		return &refs[0], nil
-	}
-
-	if s.mlMLP == nil {
-		return nil, fmt.Errorf("MLP: model not initialized")
-	}
-	if !s.mlMLP.IsTrained() {
-		return nil, fmt.Errorf("MLP: model not trained - load pretrained model first")
-	}
-	if len(ctx.QueryEmbedding) == 0 {
-		return nil, fmt.Errorf("MLP: no query embedding provided")
-	}
-
-	// Build feature vector: embedding + category one-hot (matches Python training format)
-	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
-
-	// Use candle-binding for selection
-	selectedModel, err := s.mlMLP.Select(featureVector)
-	if err != nil {
-		return nil, fmt.Errorf("MLP (Candle) selection failed: %w", err)
-	}
-
-	// Find the selected model in refs
-	modelIndex := buildModelIndex(refs)
-	if idx, ok := modelIndex[selectedModel]; ok {
-		logging.Infof("MLP (Candle) selected model %s", selectedModel)
-		return &refs[idx], nil
-	}
-
-	return nil, fmt.Errorf("MLP: selected model %s not found in available refs", selectedModel)
 }

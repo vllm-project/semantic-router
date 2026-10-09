@@ -146,7 +146,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
@@ -256,6 +256,19 @@ def test_catalog_evaluates_cli_and_router_versions_independently(
             CatalogComponentVersions(cli="0.5.0-rc.1", router="0.3.0"),
             True,
             "compatible",
+        ),
+        # A PEP 440 dev build precedes its release, as a prerelease does.
+        (
+            CatalogComponentVersions(
+                cli="0.5.0.dev20261007063125", router="0.5.0.dev20261007063125"
+            ),
+            True,
+            "compatible",
+        ),
+        (
+            CatalogComponentVersions(cli="0.3.0.dev1", router="0.3.0"),
+            False,
+            "requires cli >= 0.3.0",
         ),
     ],
 )

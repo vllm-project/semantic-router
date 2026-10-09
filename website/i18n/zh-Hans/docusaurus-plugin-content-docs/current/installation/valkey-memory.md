@@ -1,7 +1,7 @@
 ---
 sidebar_position: 6
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/installation/valkey-memory.md"
   outdated: false
 ---
@@ -146,11 +146,11 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384               # 必须与嵌入模型匹配
+        dimension: 256               # mmbert：64、128、256、512 或 768
         metric_type: COSINE           # COSINE、L2 或 IP
         index_m: 16
         index_ef_construction: 256
-      embedding_model: bert
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.40
       hybrid_search: true
@@ -158,8 +158,10 @@ global:
       adaptive_threshold: true
 ```
 
-此示例的阈值适用于使用加权混合评分的 `bert`（`mom-embedding-light`）。
-其他嵌入模型和检索模式应分别验证事实召回与无关查询后再选择阈值。
+`dimension` 必须是嵌入模型提供的维度之一。若设为其他值，Router 会记录
+`Failed to create memory store: … Memory will be disabled`，并在没有记忆的情况下运行。
+
+0.40 阈值是加权混合评分的起点，而不是校准值。每种嵌入模型、向量维度和检索模式都应先验证事实召回与无关查询，再选择阈值。
 较低阈值也可能同时召回更正前后的事实；在生产环境使用前应检查更新后的事实。
 
 ### 配置参考
@@ -173,7 +175,7 @@ global:
 | `timeout` | `10` | 连接超时（秒） |
 | `collection_prefix` | `mem:` | HASH 文档的键前缀 |
 | `index_name` | `mem_idx` | FT.CREATE 索引名称 |
-| `dimension` | 派生 | 嵌入向量维度；省略时，`mmbert` 使用 256，当前其他记忆嵌入模型使用 384 |
+| `dimension` | 派生 | 嵌入向量维度；省略时，`mmbert` 使用 256，其他嵌入模型使用其完整宽度 |
 | `metric_type` | `COSINE` | 距离度量：`COSINE`、`L2` 或 `IP` |
 | `index_m` | `16` | HNSW M 参数（每个节点的链接数） |
 | `index_ef_construction` | `256` | HNSW 构建时搜索宽度 |

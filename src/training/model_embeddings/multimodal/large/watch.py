@@ -117,7 +117,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--repo-id",
-        default="llm-semantic-router/multi-modal-embed-large",
+        default="vllm-sr/multi-modal-embed-large",
         help="Destination Hugging Face model repository",
     )
     parser.add_argument(

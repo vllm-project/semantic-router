@@ -12,87 +12,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // CKFlashAttentionLibrary is an installed trusted implementation. A policy may
 // bind its content identity but cannot select an executable library path.
 const CKFlashAttentionLibrary = "/usr/local/lib/libort_ck_flash_attn.so.1"
 
-// Load verifies only explicitly selected files. The native provider remains the
-// model loader and owns its actual input budget, task head and resource identity.
-func Load(ctx context.Context, spec config.ResolvedModelBinding, labels []string) (*Policy, error) {
-	ref := spec.Binding.OperatingPoint
-	if ref == nil {
-		return nil, fmt.Errorf("independent scores require an explicit operating point reference")
-	}
-	if err := ref.Validate(); err != nil {
-		return nil, err
-	}
-	if spec.Binding.Contract != config.RemoteClassifierContractLabelScores || (spec.Deployment.Provider != "candle" && spec.Deployment.Provider != "ort") {
-		return nil, fmt.Errorf("operating point requires a complete local label_scores.v1 artifact")
-	}
-	file, err := os.Open(ref.ResolvePath(spec.Deployment.Artifact))
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, 1<<20))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) == 1<<20 {
-		return nil, fmt.Errorf("operating point exceeds the metadata size limit")
-	}
-	digest := sha256.Sum256(data)
-	if hex.EncodeToString(digest[:]) != ref.SHA256 {
-		return nil, fmt.Errorf("operating point SHA256 differs from its immutable reference")
-	}
-	p, err := Decode(data, ref.SHA256)
-	if err != nil {
-		return nil, err
-	}
-	if !slices.Equal(labels, p.definition.Labels) {
-		return nil, fmt.Errorf("operating point labels differ from the generic rule's ordered labels")
-	}
-	deployment := spec.Deployment.WithDefaults()
-	if deployment.Input.MaxTokens != p.MaxTokens() || deployment.Input.Overflow != "reject" {
-		return nil, fmt.Errorf("deployment must explicitly match the operating point document budget and reject overflow")
-	}
-	precision := deployment.Precision
-	if deployment.Provider == "candle" && (precision == "native" || precision == "fp32") {
-		precision = "float32"
-	}
-	execution, err := p.selectExecution(deployment.Provider, precision, deployment.Device)
-	if err != nil {
-		return nil, err
-	}
-	p.execution = execution
-	if execution.ONNX == nil && spec.Binding.Head != "" {
-		return nil, fmt.Errorf("operating point forbids separate Candle heads")
-	}
-	if execution.ONNX != nil && spec.Binding.Head != "" && spec.Binding.Head != execution.ONNX.File {
-		return nil, fmt.Errorf("selected ONNX head differs from operating point")
-	}
-	profile := ""
-	if execution.ONNX != nil {
-		profile = execution.ONNX.CustomOpsProfile
-	}
-	if deployment.CustomOpsProfile != profile {
-		return nil, fmt.Errorf("operating point graph does not declare a custom-ops execution")
-	}
-	if err := p.VerifyArtifacts(ctx, deployment.Artifact); err != nil {
-		return nil, err
-	}
-	if err := p.validateMetadata(deployment.Artifact); err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-
-// VerifyArtifacts is also called after native preparation. Startup replacement
-// cannot bind a policy to different files; a published generation is immutable.
+// VerifyArtifacts checks a policy's bound files under root.
 func (p *Policy) VerifyArtifacts(ctx context.Context, root string) error {
 	return p.verifyArtifacts(ctx, root, CKFlashAttentionLibrary)
 }

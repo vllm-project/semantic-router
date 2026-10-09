@@ -28,7 +28,7 @@ class ArtifactContractTest(unittest.TestCase):
         artifact = manifest["artifacts"][0]
         self.assertEqual(
             artifact["repo_id"],
-            "llm-semantic-router/multi-modal-embed-small",
+            "vllm-sr/multi-modal-embed-small",
         )
         for key in (
             "config",

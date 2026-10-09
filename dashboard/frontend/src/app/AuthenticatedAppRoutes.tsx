@@ -1,14 +1,9 @@
 import React from 'react'
 import { Navigate, Route } from 'react-router-dom'
 import AppShellLayout from './AppShellLayout'
-import {
-  ConfigSectionRoute,
-  KnowledgeBaseRoute,
-  LegacyTaxonomyRedirect,
-} from './ConfigSectionRoutes'
+import { ConfigSectionRoute } from './ConfigSectionRoutes'
 import {
   fallbackRouteTarget,
-  redirectRouteDefinitions,
   shellRouteDefinitions,
   type ShellRouteDefinition,
   type ShellRoutePage,
@@ -20,15 +15,16 @@ import {
   loadBuilderPage,
   loadConfigSchemaReferencePage,
   loadDashboardPage,
+  loadDecisionModelPage,
+  loadDecisionMonitoringPage,
+  loadSystemOnePlaygroundPage,
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
-  loadKnowledgeMapPage,
   loadLogsPage,
   loadMLSetupPage,
   loadModelHubPage,
   loadMonitoringPage,
-  loadOpenClawPage,
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
   loadSetupWizardPage,
@@ -39,7 +35,10 @@ import {
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
-  canUseMLSetup: boolean
+  canAccessMLSetup: boolean
+  mlPipelineAvailable: boolean
+  mlPipelineUnavailableReason: string
+  mlPipelineAvailabilityChecked: boolean
   user: PermissionUser | null
   setupMode: boolean
   settingsLoading: boolean
@@ -55,6 +54,15 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
     <RecoverableLazyRoute loader={loadConfigSchemaReferencePage} routeLabel="Schema reference" />
   ),
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,
+  'decision-model': (
+    <RecoverableLazyRoute loader={loadDecisionModelPage} routeLabel="Decision Models" />
+  ),
+  'decision-model-playground': (
+    <RecoverableLazyRoute loader={loadSystemOnePlaygroundPage} routeLabel="Decision Playground" />
+  ),
+  'decision-model-monitoring': (
+    <RecoverableLazyRoute loader={loadDecisionMonitoringPage} routeLabel="Decision Monitoring" />
+  ),
   evaluation: <RecoverableLazyRoute loader={loadEvaluationPage} routeLabel="Evaluation" />,
   insights: <RecoverableLazyRoute loader={loadInsightsPage} routeLabel="Insights" />,
   'insights-record': (
@@ -63,7 +71,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   models: <RecoverableLazyRoute loader={loadModelHubPage} routeLabel="Model Hub" />,
-  openclaw: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
@@ -107,7 +114,10 @@ const renderShellElement = (
 }
 
 export const renderAuthenticatedAppRoutes = ({
-  canUseMLSetup,
+  canAccessMLSetup,
+  mlPipelineAvailable,
+  mlPipelineUnavailableReason,
+  mlPipelineAvailabilityChecked,
   user,
   setupMode,
   settingsLoading,
@@ -143,21 +153,6 @@ export const renderAuthenticatedAppRoutes = ({
     ))}
     <Route path="/config" element={<ConfigSectionRoute />} />
     <Route path="/config/:section" element={<ConfigSectionRoute />} />
-    {redirectRouteDefinitions.map((route) => (
-      <Route key={route.path} path={route.path} element={<Navigate to={route.to} replace />} />
-    ))}
-    <Route
-      path="/knowledge-bases/:name/map"
-      element={
-        canAccessDashboardPath(user, '/knowledge-bases/map') ? (
-          <RecoverableLazyRoute loader={loadKnowledgeMapPage} routeLabel="Knowledge map" />
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
-      }
-    />
-    <Route path="/knowledge-bases/:view" element={<KnowledgeBaseRoute />} />
-    <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
     <Route
       path="/playground/fullscreen"
       element={
@@ -170,11 +165,20 @@ export const renderAuthenticatedAppRoutes = ({
     <Route
       path="/ml-setup"
       element={
-        canUseMLSetup ? (
-          renderShellContent(
-            {},
-            <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-          )
+        canAccessMLSetup ? (
+          <EvaluationAvailabilityRoute
+            available={mlPipelineAvailable}
+            isLoading={settingsLoading}
+            reason={mlPipelineUnavailableReason}
+            settingsError={mlPipelineAvailabilityChecked ? null : settingsError}
+            onRefreshAccess={onRefreshAccess}
+            featureName="ML pipeline"
+          >
+            {renderShellContent(
+              {},
+              <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
+            )}
+          </EvaluationAvailabilityRoute>
         ) : (
           <Navigate to="/dashboard" replace />
         )

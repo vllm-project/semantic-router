@@ -75,7 +75,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: binary
+          install-mode: goinstall
           working-directory: deploy/operator
           args: --timeout=5m
 
@@ -203,25 +203,50 @@ jobs:
 
       - name: Install kubectl
         run: |
-          curl -LO "https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/kubectl
+          source tools/ci/retry.sh
+
+          install_kubectl() {
+            curl -fsSLO "https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl" &&
+              chmod +x kubectl &&
+              sudo mv kubectl /usr/local/bin/kubectl
+          }
+
+          retry_run 3 10 install_kubectl
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image "${KIND_NODE_IMAGE}" --config=-
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          nodes:
-          - role: control-plane
-          EOF
-          kubectl cluster-info
-          kubectl get nodes
+          source tools/ci/retry.sh
+
+          cluster="operator-test-${{ matrix.cache-backend }}"
+          config="$(mktemp)"
+          printf '%s\n' \
+            'kind: Cluster' \
+            'apiVersion: kind.x-k8s.io/v1alpha4' \
+            'nodes:' \
+            '- role: control-plane' >"${config}"
+
+          delete_cluster() {
+            kind delete cluster --name "${cluster}" >/dev/null 2>&1 || true
+          }
+
+          create_cluster() {
+            kind create cluster --name "${cluster}" --image "${KIND_NODE_IMAGE}" --config "${config}" &&
+              kubectl cluster-info &&
+              kubectl get nodes
+          }
+
+          RETRY_CLEANUP=delete_cluster retry_run 2 60 create_cluster
 
       - name: Install Gateway API CRDs
         run: |
-          echo "Installing Gateway API CRDs..."
-          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+          source tools/ci/retry.sh
+
+          install_crds() {
+            kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+          }
+
+          retry_run 3 15 install_crds
+
           kubectl wait --for condition=established --timeout=60s crd/gateways.gateway.networking.k8s.io
           kubectl wait --for condition=established --timeout=60s crd/httproutes.gateway.networking.k8s.io
 
@@ -432,11 +457,11 @@ jobs:
       - name: Load verified operator and request-path images
         uses: ./.github/actions/load-ci-images
         with:
-          images: '["operator","extproc","provider-mocker"]'
+          images: '["operator","vllm-sr","provider-mocker"]'
       - name: Assign verified local tags
         run: |
           docker tag "$E2E_PREBUILT_OPERATOR_IMAGE" semantic-router-operator:test
-          docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-extproc:test
+          docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-vllm-sr:test
           docker tag "$E2E_PREBUILT_PROVIDER_MOCKER_IMAGE" semantic-router-operator-mock:test
       - name: Deploy request-observing backend
         run: |
@@ -470,24 +495,24 @@ jobs:
             exit 1
           }
 
-      - name: Verify extproc image loaded
+      - name: Verify router image loaded
         run: |
-          echo "Verifying extproc image is available..."
-          docker images | grep semantic-router-extproc || {
-            echo "ERROR: semantic-router-extproc:test image not found!"
+          echo "Verifying router image is available..."
+          docker images | grep semantic-router-vllm-sr || {
+            echo "ERROR: semantic-router-vllm-sr:test image not found!"
             echo "Available images:"
             docker images
             exit 1
           }
 
-      - name: Load extproc image into kind
-        run: kind load docker-image semantic-router-extproc:test --name operator-test-${{ matrix.cache-backend }}
+      - name: Load router image into kind
+        run: kind load docker-image semantic-router-vllm-sr:test --name operator-test-${{ matrix.cache-backend }}
 
-      - name: Verify extproc image in kind
+      - name: Verify router image in kind
         run: |
-          echo "Verifying extproc image is available in kind cluster..."
-          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-extproc || {
-            echo "ERROR: semantic-router-extproc:test image not found in kind!"
+          echo "Verifying router image is available in kind cluster..."
+          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-vllm-sr || {
+            echo "ERROR: semantic-router-vllm-sr:test image not found in kind!"
             echo "Available images in kind:"
             docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
             exit 1
@@ -781,7 +806,7 @@ jobs:
                     port: 8000
                 weight: 1
             image:
-              repository: semantic-router-extproc
+              repository: semantic-router-vllm-sr
               tag: test
               pullPolicy: Never
             service:

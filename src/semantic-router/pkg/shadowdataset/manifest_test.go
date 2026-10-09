@@ -1,6 +1,10 @@
 package shadowdataset
 
 import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -422,5 +426,155 @@ func TestBuildKeepsEveryArmOfOneCandidate(t *testing.T) {
 	}
 	if arms[0].OutputDigest != "d1" || arms[1].OutputDigest != "d2" {
 		t.Fatalf("arms read %s then %s, want d1 then d2", arms[0].OutputDigest, arms[1].OutputDigest)
+	}
+}
+
+func balancedPolicy(by string, max int) Policy {
+	policy := testPolicy()
+	policy.Balance = &Balance{By: by, Max: max}
+	return policy
+}
+
+// recipeRecord is a compared observation in a named recipe, so a balance by
+// recipe has more than one group to choose between.
+func recipeRecord(id, recipe, request string) store.Record {
+	record := comparedRecord(id, request, "answer "+id, shadowOutcome("candidate-a", "d"+id))
+	record.Recipe = recipe
+	return record
+}
+
+func TestBuildCapsEachGroupAndCountsWhatItDropped(t *testing.T) {
+	records := []store.Record{
+		recipeRecord("r1", "busy", "ask one"),
+		recipeRecord("r2", "busy", "ask two"),
+		recipeRecord("r3", "busy", "ask three"),
+		recipeRecord("r4", "quiet", "ask four"),
+	}
+
+	manifest := buildOrFail(t, records, balancedPolicy(BalanceByRecipe, 1))
+
+	if manifest.Counts.Examples != 2 {
+		t.Fatalf("kept %d examples, want one per recipe", manifest.Counts.Examples)
+	}
+	if dropped := manifest.Counts.Excluded[ExcludeBalanceCap]; dropped != 2 {
+		t.Fatalf("counted %d rows dropped for balance, want 2", dropped)
+	}
+	seen := map[string]int{}
+	for _, example := range manifest.Examples {
+		seen[example.Lineage.Recipe]++
+	}
+	if seen["busy"] != 1 || seen["quiet"] != 1 {
+		t.Fatalf("kept %v, want one example per recipe", seen)
+	}
+}
+
+// The rows a cap keeps follow the seed, not the clock. Taking them in record
+// order would make every balanced dataset the oldest observations of its group,
+// which is a sample of when traffic arrived rather than of the traffic.
+func TestBuildSamplesABalancedGroupBySeedRatherThanByAge(t *testing.T) {
+	var records []store.Record
+	for i := 0; i < 6; i++ {
+		record := recipeRecord(fmt.Sprintf("r%d", i), "busy", fmt.Sprintf("ask %d", i))
+		record.Timestamp = record.Timestamp.Add(time.Duration(i) * time.Minute)
+		records = append(records, record)
+	}
+	oldest := keptIDs(buildOrFail(t, records[:3], balancedPolicy(BalanceByRecipe, 3)))
+
+	first := keptIDs(buildOrFail(t, records, balancedPolicy(BalanceByRecipe, 3)))
+	if equalIDs(first, oldest) {
+		t.Fatalf("a cap of 3 kept the three oldest rows %v", first)
+	}
+
+	other := balancedPolicy(BalanceByRecipe, 3)
+	other.Seed = "seed-b"
+	if second := keptIDs(buildOrFail(t, records, other)); equalIDs(first, second) {
+		t.Fatalf("two seeds kept the same rows %v", first)
+	}
+}
+
+func keptIDs(manifest Manifest) []string {
+	ids := make([]string, 0, len(manifest.Examples))
+	for _, example := range manifest.Examples {
+		ids = append(ids, example.Lineage.ReplayID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func equalIDs(left, right []string) bool {
+	return strings.Join(left, ",") == strings.Join(right, ",")
+}
+
+// A group that keeps growing must not displace the rows another group already
+// contributed, the same property the split assignment holds.
+func TestBuildKeepsOtherGroupsWhenOneGroupGrows(t *testing.T) {
+	policy := balancedPolicy(BalanceByRecipe, 1)
+	quiet := recipeRecord("r4", "quiet", "ask four")
+
+	before := buildOrFail(t, []store.Record{recipeRecord("r1", "busy", "ask one"), quiet}, policy)
+	after := buildOrFail(t, []store.Record{
+		recipeRecord("r1", "busy", "ask one"),
+		recipeRecord("r2", "busy", "ask two"),
+		recipeRecord("r3", "busy", "ask three"),
+		quiet,
+	}, policy)
+
+	quietBefore := examplesInRecipe(before, "quiet")
+	quietAfter := examplesInRecipe(after, "quiet")
+	if len(quietBefore) != 1 || len(quietAfter) != 1 || quietBefore[0] != quietAfter[0] {
+		t.Fatalf("quiet recipe kept %v before and %v after", quietBefore, quietAfter)
+	}
+}
+
+func examplesInRecipe(manifest Manifest, recipe string) []string {
+	var ids []string
+	for _, example := range manifest.Examples {
+		if example.Lineage.Recipe == recipe {
+			ids = append(ids, example.ID)
+		}
+	}
+	return ids
+}
+
+func TestBuildRejectsABalanceItCannotApply(t *testing.T) {
+	for name, policy := range map[string]Policy{
+		"unknown group": balancedPolicy("caller", 1),
+		"cap of zero":   balancedPolicy(BalanceByRecipe, 0),
+		"negative cap":  balancedPolicy(BalanceByRecipe, -1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Build([]store.Record{recipeRecord("r1", "busy", "ask one")}, policy); err == nil {
+				t.Fatal("Build accepted a balance it cannot apply")
+			}
+		})
+	}
+}
+
+// Validate runs against a manifest read back from wherever it was published, so
+// a cap edited into a manifest that never respected it has to be rejected.
+func TestValidateRejectsAManifestOverItsBalanceCap(t *testing.T) {
+	manifest := buildOrFail(t, []store.Record{
+		recipeRecord("r1", "busy", "ask one"),
+		recipeRecord("r2", "busy", "ask two"),
+	}, testPolicy())
+
+	manifest.Policy.Balance = &Balance{By: BalanceByRecipe, Max: 1}
+	if err := Validate(manifest); err == nil {
+		t.Fatal("Validate accepted a manifest carrying more than its own cap")
+	}
+}
+
+// A policy without a balance encodes exactly as it did before balancing
+// existed, so a manifest published earlier keeps the digest it was cited by.
+func TestBuildKeepsTheDigestOfAnUnbalancedPolicy(t *testing.T) {
+	records := []store.Record{recipeRecord("r1", "busy", "ask one")}
+	manifest := buildOrFail(t, records, testPolicy())
+
+	encoded, err := json.Marshal(manifest.Policy)
+	if err != nil {
+		t.Fatalf("marshal policy: %v", err)
+	}
+	if strings.Contains(string(encoded), "balance") {
+		t.Fatalf("policy without a balance encoded as %s", encoded)
 	}
 }

@@ -65,7 +65,7 @@ spec:
               # Download category classifier model
               if [ ! -d "category_classifier_modernbert-base_model" ]; then
                 echo "Downloading category classifier model..."
-                hf download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir category_classifier_modernbert-base_model
+                hf download vllm-sr/category_classifier_modernbert-base_model --local-dir category_classifier_modernbert-base_model
               else
                 echo "Category classifier model already exists, skipping..."
               fi
@@ -73,7 +73,7 @@ spec:
               # Download PII classifier model
               if [ ! -d "pii_classifier_modernbert-base_model" ]; then
                 echo "Downloading PII classifier model..."
-                hf download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model
+                hf download vllm-sr/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model
               else
                 echo "PII classifier model already exists, skipping..."
               fi
@@ -81,7 +81,7 @@ spec:
               # Download jailbreak classifier model
               if [ ! -d "jailbreak_classifier_modernbert-base_model" ]; then
                 echo "Downloading jailbreak classifier model..."
-                hf download LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model --local-dir jailbreak_classifier_modernbert-base_model
+                hf download vllm-sr/jailbreak_classifier_modernbert-base_model --local-dir jailbreak_classifier_modernbert-base_model
               else
                 echo "Jailbreak classifier model already exists, skipping..."
               fi
@@ -89,7 +89,7 @@ spec:
               # Download PII token classifier model
               if [ ! -d "pii_classifier_modernbert-base_presidio_token_model" ]; then
                 echo "Downloading PII token classifier model..."
-                hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir pii_classifier_modernbert-base_presidio_token_model
+                hf download vllm-sr/pii_classifier_modernbert-base_presidio_token_model --local-dir pii_classifier_modernbert-base_presidio_token_model
               else
                 echo "PII token classifier model already exists, skipping..."
               fi
@@ -123,7 +123,7 @@ spec:
               mountPath: /app/models
       containers:
         - name: semantic-router
-          image: ghcr.io/vllm-project/semantic-router/extproc:latest
+          image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
           args: ["--secure=true"]
           securityContext:
             runAsNonRoot: false
@@ -139,8 +139,6 @@ spec:
               name: classify-api
               protocol: TCP
           env:
-            - name: LD_LIBRARY_PATH
-              value: "/app/lib"
             # Lets the config write API patch this ConfigMap through the
             # Kubernetes API instead of the read-only mounted file (#3688).
             - name: VLLM_SR_K8S_CONFIGMAP_NAME
@@ -150,7 +148,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: VLLM_SR_CONFIG_BACKUP_DIR
-              value: /app/models/.vllm-sr/config-backups
+              value: /tmp/vllm-sr/config-history
           volumeMounts:
             - name: config-volume
               mountPath: /app/config/config.yaml

@@ -21,7 +21,7 @@ var BaselineRouterContract = []string{
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
-	// NLI polarity tier of the semantic cache (issue #2751)
+	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"exact-cache-multilingual-negation",
 	"pii-detection",
@@ -51,10 +51,17 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// Unknown names fail even with a global default (issue #4653). The
+	// routing-errors profile covers no_route without that fallback configured.
+	"unknown-model-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
 	"plugin-short-circuit-no-dispatch",
+	// Streaming dispatch always requests the usage chunk, even for
+	// byte-replay-eligible requests, and the client only sees usage it asked
+	// for (issue #3182)
+	"streaming-usage-settlement",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
@@ -65,6 +72,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
+	"context-safety-overlap",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
@@ -81,6 +90,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// A semantically invalid deploy must leave the active config serving (issue #3233)
 	"dashboard-deploy-safe-failure",
+	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
+	"dashboard-deploy-rollback",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
@@ -120,6 +131,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
 	"protocol-codec-anthropic-backend-agent-client-replay",
+	// An empty POST fails closed at the Router before any dispatch (issue #4292)
+	"public-listener-empty-body-rejected",
 }
 
 // Combine preserves order while removing duplicate testcase names.

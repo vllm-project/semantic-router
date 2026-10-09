@@ -99,14 +99,8 @@ export interface MCPSecurityConfig {
  * 高级选项
  */
 export interface MCPServerOptions {
-  /** 自动重连 */
-  autoReconnect?: boolean
-  /** 重连间隔 (ms) */
-  reconnectInterval?: number
   /** 请求超时 (ms) */
   timeout?: number
-  /** 最大重试次数 */
-  maxRetries?: number
 }
 
 // ========== Server Status ==========
