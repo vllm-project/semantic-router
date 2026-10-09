@@ -439,6 +439,79 @@ vllm_srun_forward_duration_seconds_sum 0.25
     )
 
 
+def test_metrics_count_signal_and_algorithm_exchanges(monkeypatch):
+    body = b"""vllm_srun_requests_total{endpoint="/v1/systemone",status="200"} 12
+vllm_srun_requests_total{status="200",endpoint="/v1/bundle"} 7
+vllm_srun_requests_total{endpoint="/v1/decisions",status="500"} 3
+vllm_srun_requests_total{endpoint="/v1/models",status="200"} 100
+vllm_srun_requests_total{not_endpoint="/v1/systemone"} 100
+vllm_srun_forward_duration_seconds_sum 0.25
+"""
+    monkeypatch.setattr(
+        live.urllib.request,
+        "build_opener",
+        lambda *_: SimpleNamespace(
+            open=lambda *_args, **_kwargs: nullcontext(
+                SimpleNamespace(read=lambda _limit: body)
+            )
+        ),
+    )
+    endpoints = {"kai": "http://unused.invalid/metrics"}
+    before = live.metric_snapshot(endpoints, None, 1)
+    assert before["kai"]["physical_calls"] == 22
+    # One signal bundle, one answer and one failed native exchange all count.
+    body = body.replace(b"} 12\n", b"} 13\n")
+    body = body.replace(b"} 7\n", b"} 8\n")
+    body = body.replace(b"} 3\n", b"} 4\n")
+    after = live.metric_snapshot(endpoints, None, 1)
+    assert live.metric_delta(before, after)["kai"]["physical_calls"] == 3
+
+
+@pytest.mark.parametrize("endpoint", ["classify", "embeddings", "rerank"])
+def test_metrics_include_other_native_inference_surfaces(monkeypatch, endpoint):
+    body = (
+        f'vllm_srun_requests_total{{endpoint="/v1/{endpoint}",status="200"}} 2\n'
+        "vllm_srun_forward_duration_seconds_sum 0.25\n"
+    ).encode()
+    monkeypatch.setattr(
+        live.urllib.request,
+        "build_opener",
+        lambda *_: SimpleNamespace(
+            open=lambda *_args, **_kwargs: nullcontext(
+                SimpleNamespace(read=lambda _limit: body)
+            )
+        ),
+    )
+    assert live._counters("http://unused.invalid/metrics", None, 1) == {
+        "physical_calls": 2,
+        "forward_seconds": 0.25,
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'vllm_srun_requests_total{endpoint="/v1/models"} 100\n'
+        b"vllm_srun_forward_duration_seconds_sum 0.25\n",
+        b'vllm_srun_requests_total{endpoint="/v1/bundle"} 2\n',
+        b"",
+    ],
+)
+def test_metrics_missing_inference_counters_stay_unknown(monkeypatch, body):
+    monkeypatch.setattr(
+        live.urllib.request,
+        "build_opener",
+        lambda *_: SimpleNamespace(
+            open=lambda *_args, **_kwargs: nullcontext(
+                SimpleNamespace(read=lambda _limit: body)
+            )
+        ),
+    )
+    assert (
+        live.metric_snapshot({"kai": "http://unused.invalid/metrics"}, None, 1) is None
+    )
+
+
 def test_wrong_public_alias_is_unresolved_without_recording_it(
     tmp_path, monkeypatch, suite
 ):

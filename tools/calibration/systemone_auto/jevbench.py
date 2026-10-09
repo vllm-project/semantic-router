@@ -29,6 +29,14 @@ from .jevbench_suite import (
 
 MAX_PASSES = 100
 COUNTER_TOLERANCE = 1e-9
+INFERENCE_ENDPOINTS = {
+    "/v1/systemone",
+    "/v1/decisions",
+    "/v1/bundle",
+    "/v1/classify",
+    "/v1/embeddings",
+    "/v1/rerank",
+}
 
 
 def add_parser(commands) -> None:
@@ -113,6 +121,7 @@ def _secret(name: str) -> str | None:
 
 
 def _counters(url: str, key: str | None, timeout: float) -> dict:
+    """Count native inference HTTP exchanges, not subtasks or GPU forwards."""
     headers = {"Authorization": "Bearer " + key} if key else {}
     request = urllib.request.Request(url, headers=headers)
     with urllib.request.build_opener(_NoRedirect).open(
@@ -131,13 +140,18 @@ def _counters(url: str, key: str | None, timeout: float) -> dict:
             match = re.fullmatch(
                 re.escape(name) + r"(\{[^\n]*\})?\s+(\S+)(?:\s+\S+)?", line
             )
-            if match and (
-                not endpoint_only or 'endpoint="/v1/systemone"' in (match[1] or "")
-            ):
-                number = float(match[2])
-                if not math.isfinite(number) or number < 0:
-                    raise ValueError("invalid native counter")
-                values.append(number)
+            if not match:
+                continue
+            if endpoint_only:
+                endpoint = re.search(
+                    r'(?:\{|,)\s*endpoint="([^"\\]*)"(?=,|\})', match[1] or ""
+                )
+                if not endpoint or endpoint[1] not in INFERENCE_ENDPOINTS:
+                    continue
+            number = float(match[2])
+            if not math.isfinite(number) or number < 0:
+                raise ValueError("invalid native counter")
+            values.append(number)
         if not values:
             raise ValueError("required native counter absent")
         result[field] = sum(values)
@@ -335,6 +349,9 @@ def summarize(rows: list[dict], planned_per_arm: int) -> dict:
             "Serial frontend timing; repeated passes do not increase quality sample size",
             "All planned failures remain in the quality denominator; timing includes errors",
             "Counter deltas require exclusive runtimes; unknown counters stay null",
+            "physical_calls counts native inference HTTP exchanges across "
+            + ", ".join(sorted(INFERENCE_ENDPOINTS))
+            + "; includes errors, excludes control requests, not GPU forwards",
             "No equal-resource throughput, GPU-active time or provisioned cost claim",
         ],
     }

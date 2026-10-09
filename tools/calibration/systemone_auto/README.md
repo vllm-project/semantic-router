@@ -170,14 +170,21 @@ exact published run, add the archived `--schedule request-schedule.json` and
 `--warmups warmup-requests.json` from its evidence package; do not silently
 substitute a new seeded order when reproducing historical timing.
 
-Physical-call verification is optional. Pass both `--kai-metrics` and
+Native inference HTTP-call verification is optional. Pass both `--kai-metrics` and
 `--vega-metrics` with the dedicated native runtime `/metrics` URLs; add
 `--metrics-key-env` if they need authentication. Counter reads happen outside
 the timed frontend request. Missing counters, metric failures and counter
 resets produce `null` deltas, never fabricated zero calls. The runtimes must
 have no other inference traffic during this counter comparison. Omitting
 metrics still gives real frontend timing and quality, without a measured
-physical-call claim.
+HTTP-call claim. The `physical_calls` field sums runtime request counters across
+`/v1/systemone`, `/v1/decisions`, `/v1/bundle`, `/v1/classify`, `/v1/embeddings`,
+and `/v1/rerank`, including unsuccessful exchanges. A signal's bundle counts
+once, regardless of its number of tasks. GET controls such as model discovery
+and health checks are excluded. This counts HTTP exchanges, not GPU forwards;
+batching and caching can change how many forwards an exchange requires.
+The original A experiment used no model-backed signals and only
+`/v1/systemone` inference exchanges, so its published counts are unchanged.
 
 This collector measures serial latency. Two resident model runtimes, native
 compute milliseconds or fewer large-model calls do not establish lower GPU
