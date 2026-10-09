@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   fallbackRouteTarget,
-  redirectRouteDefinitions,
   shellRouteDefinitions,
 } from './routeManifest'
 
@@ -24,16 +23,17 @@ describe('dashboard route manifest', () => {
 
   it('registers Model Hub as an authenticated shell page', () => {
     expect(shellRouteDefinitions).toContainEqual({ path: '/models', page: 'models' })
-  })
-
-  it('keeps legacy redirects pointed at canonical dashboard routes', () => {
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/knowledge-bases',
-      to: '/knowledge-bases/bases',
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/decision-model',
+      page: 'decision-model',
     })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/taxonomy',
-      to: '/knowledge-bases/bases',
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/decision-model/playground',
+      page: 'decision-model-playground',
+    })
+    expect(shellRouteDefinitions).toContainEqual({
+      path: '/decision-model/monitoring',
+      page: 'decision-model-monitoring',
     })
   })
 

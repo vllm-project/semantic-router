@@ -78,11 +78,13 @@ contract; callers supplying flat text remain responsible for its scope.
 
 ### Token windows for a local classifier
 
-The implicit local `mmbert32k` default scans each text piece in 512-token
-windows with 255 content tokens of overlap. Its document budget comes from the
-registered default Guard model: 32,768 tokens including special tokens. This
-applies only when no recipe model binding or `window` is specified and
-`max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
+The default prompt guard, Vela 2.0 0.3B, reads each text whole, up to its
+8,192-token input, and takes no window
+([Choose a model](../../../model-runtime/choose-a-model.md#vela-20)). When the
+module runs Vela 1.0 Guard, it scans each text piece in 512-token windows with
+255 content tokens of overlap, within that model's document budget: 32,768
+tokens including special tokens. This applies only when no recipe model binding
+or `window` is specified and `max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
 a long piece requires multiple forwards. Preparation records the resolved window and document budget
 and checks the loaded model's actual capacity. An incompatible custom artifact
 fails preparation, and a piece exceeding the document budget produces an
@@ -138,10 +140,16 @@ another window require separate evaluation. Model bindings to a
 select token windows; the model must support the requested window size.
 
 A provider result declaring truncated or incompletely processed input is an
-unresolved scan. Request rules, the text detection APIs, and response scans
-cannot use its probabilities to report a clean complete input. A detection on
-another completely scored piece still counts; errors remain subject to the
-configured `on_error` and response-rule policies.
+unscanned input, as is an input over the guard's input under `reject` or over
+its [scan budget](../../../model-runtime/reference.md#long-inputs). Request
+rules, the text detection APIs, and response scans cannot use its
+probabilities to report a clean complete input: a rule matches it with the
+type `unscanned`, whatever `on_error` says, so padding a prompt cannot carry an
+attack past the guard. So does a scan that misses the signals' deadline
+(`global.model_catalog.signal_timeout_ms`). Set `prompt_guard.on_unscanned:
+allow` to let such content follow `on_error` instead. A detection on another
+completely scored piece still counts as a detection; backend failures remain
+subject to the configured `on_error` and response-rule policies.
 
 ### Direction
 

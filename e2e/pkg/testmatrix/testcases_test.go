@@ -11,7 +11,7 @@ func TestBaselineScopesPreserveEveryFunctionalCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(full) != 42 || len(standard) != 40 {
+	if len(full) != 43 || len(standard) != 41 {
 		t.Fatalf("inventory changed: standard=%d full=%d", len(standard), len(full))
 	}
 	selected := map[string]bool{}

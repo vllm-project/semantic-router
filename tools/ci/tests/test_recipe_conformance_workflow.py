@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
+import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
@@ -71,6 +76,38 @@ class RecipeConformanceWorkflowTests(unittest.TestCase):
         self.assertIn("make recipe-conformance-report", self.text)
         self.assertIn("**/conformance-report.md", self.text)
         self.assertIn("if-no-files-found: error", self.text)
+
+    def test_full_cpu_allocation_only_targets_serial_probe_manifests(self) -> None:
+        allocation = next(
+            step
+            for step in self.workflow.jobs["live-cpu"]["steps"]
+            if "VLLM_SRUN_CPU_THREADS=" in step.get("run", "")
+        )
+        condition = re.fullmatch(r"matrix\.shard == '([^']+)'", allocation["if"])
+        self.assertIsNotNone(condition, "Full CPU allocation must select one shard")
+        assert condition is not None
+        matrix = json.loads(
+            subprocess.check_output(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "tools/calibration/recipe/recipe_conformance.py"),
+                    "plan-all",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+            )
+        )
+        shard = next(
+            row for row in matrix["include"] if row["shard"] == condition.group(1)
+        )
+        for recipe in shard["recipes"].split(","):
+            manifest = REPO_ROOT / shard["recipes_root"] / recipe / "probes.yaml"
+            probes = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(
+                probes["evaluation"]["concurrency"],
+                1,
+                f"{manifest}: full CPU allocation requires serial probes",
+            )
 
     def test_inventory_validates_assets_without_repeating_authoring_units(self) -> None:
         steps = self.workflow.jobs["inventory"]["steps"]

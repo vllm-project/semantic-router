@@ -28,7 +28,7 @@ func testLooperFusionSynthesisTrace(ctx context.Context, client *kubernetes.Clie
 		return err
 	}
 	defer stopPortForward()
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionSynthesisProbeKeyword, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionSynthesisProbeKeyword, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("request traced synthesis: %w", err)
 	}
@@ -38,7 +38,7 @@ func testLooperFusionSynthesisTrace(ctx context.Context, client *kubernetes.Clie
 	if traceErr := validateLooperSynthesisTrace(response.Body); traceErr != nil {
 		return traceErr
 	}
-	stream, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "looper-fusion-synthesis-trace", looperFusionSynthesisProbeKeyword, nil)
+	stream, err := requestResponseAPIStreamingSSE(ctx, client, opts, "vllm-sr/auto", "looper-fusion-synthesis-trace", looperFusionSynthesisProbeKeyword, nil)
 	if err != nil {
 		return fmt.Errorf("request traced Responses synthesis stream: %w", err)
 	}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check configured module graphs and report package-health evidence."""
+"""Check configured module graphs for forbidden edges and new cycles."""
 
 from __future__ import annotations
 
@@ -281,47 +281,6 @@ def cyclic_components(graph: dict[str, set[str]]) -> tuple[frozenset[str], ...]:
     return tuple(sorted(components, key=sorted))
 
 
-def health_message(
-    scope: dict,
-    sources: dict[str, str],
-    graph: dict[str, set[str]] | None = None,
-) -> str:
-    test_patterns = scope.get("test_patterns", [])
-    test_files = sum(matches_any(path, test_patterns) for path in sources)
-    production_files = len(sources) - test_files
-    source_lines = sum(len(source.splitlines()) for source in sources.values())
-    fields = [
-        f"production_files={production_files}",
-        f"test_files={test_files}",
-        f"source_lines={source_lines}",
-    ]
-    if graph is not None:
-        fields.extend(
-            (
-                f"internal_edges={sum(len(targets) for targets in graph.values())}",
-                f"cycles={len(cyclic_components(graph))}",
-                f"max_fan_out={max((len(targets) for targets in graph.values()), default=0)}",
-            )
-        )
-    return ", ".join(fields)
-
-
-def focused_graph(
-    scope: dict, sources: dict[str, str], graph: dict[str, set[str]]
-) -> tuple[dict[str, str], dict[str, set[str]]]:
-    focused_sources = {
-        path: source
-        for path, source in sources.items()
-        if matches_any(path, focus_patterns(scope))
-    }
-    focused_paths = set(focused_sources)
-    return focused_sources, {
-        path: targets.intersection(focused_paths)
-        for path, targets in graph.items()
-        if path in focused_paths
-    }
-
-
 def evaluate_forbidden_edges(
     scope: dict,
     current_graph: dict[str, set[str]],
@@ -366,12 +325,7 @@ def evaluate_dependency_graph(
     current_graph = build_graph(scope, current_sources)
     baseline_graph = build_graph(scope, baseline_sources)
     baseline_cycles = set(cyclic_components(baseline_graph))
-    focused_sources, focus_graph = focused_graph(scope, current_sources, current_graph)
-    findings = [
-        Finding(
-            "INFO", scope["name"], health_message(scope, focused_sources, focus_graph)
-        )
-    ]
+    findings: list[Finding] = []
     findings.extend(
         evaluate_forbidden_edges(scope, current_graph, baseline_graph, changed_files)
     )
@@ -392,16 +346,9 @@ def evaluate_dependency_graph(
     return findings
 
 
-def evaluate_health_scope(scope: dict, changed_files: set[str]) -> list[Finding]:
-    if not scope_is_touched(scope, changed_files):
-        return []
-    sources = load_current_sources(scope)
-    return [Finding("INFO", scope["name"], health_message(scope, sources))]
-
-
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Check configured dependency graphs and package health"
+        description="Check configured dependency graphs for forbidden edges and cycles"
     )
     parser.add_argument("files", nargs="*")
     parser.add_argument("--base-ref", default=os.getenv("BASE_REF"))
@@ -426,11 +373,9 @@ def main() -> int:
                 changed_files,
             )
         )
-    for scope in architecture.get("health_scopes", []):
-        findings.extend(evaluate_health_scope(scope, changed_files))
 
     if not findings:
-        print("Architecture check passed (no configured scope changed).")
+        print("Architecture check passed.")
         return 0
     exit_code = 0
     for finding in findings:

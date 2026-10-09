@@ -38,9 +38,14 @@ routing:
         - model: private-model
 ```
 
-The router runs Vela PII on the CPU. It reads the whole request, up to 32,768
-tokens, in overlapping 512-token windows, so a name near the end of a long
-document is found as reliably as one at the start.
+Without an override, the Router uses the default Vela 2.0 deployment for PII.
+Its input limits and coverage differ from the Vela 1.0 specialist below; see
+[Choose a model](../choose-a-model#vela-20). Rule thresholds are explicit
+policy: calibrate this example's value for the model you select.
+
+The Vela 1.0 binding below scans up to 32,768 tokens in overlapping 512-token
+windows. Coverage includes the end of the document, but detection accuracy
+still depends on the text and model.
 
 ## Choose where it runs
 
@@ -73,10 +78,42 @@ Keep `overflow: window` for PII: the model reads the whole request in
 512-token windows that overlap by 255 tokens. `truncate` would scan only the
 beginning, and `reject` makes the signal unknown for longer requests.
 
+### On Vela 2.0
+
+Vela 2.0 finds the same 17 types with its router span head, as a ready-made
+question. Bind `pii_classifier` to a Vela 2.0 deployment and the PII question
+travels in the same call as the [decision questions](model-runtime/guides/decisions.md) the
+request asks that deployment about the same text:
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+Vela 2.0 uses its own full-input checks and supported scan budget; it does not
+use the specialist's 512-token PII window settings. An `input` override can
+set the deployment's scan budget. Incomplete coverage remains unresolved;
+see [Long inputs](../reference.md#long-inputs) and the
+[`pii` signal](tutorials/signal/learned/pii.md#vela-20) for how rule
+thresholds apply to its spans.
+
 ## When the scan cannot finish
 
-If the model is not ready or a scan fails, the signal is unknown. The PII
-module's `on_error` decides what that means: `allow` (default) treats the
+If the model is not ready or a scan fails, the signal is unknown. Content the
+model did not read (over its input or
+[scan cap](model-runtime/reference.md#long-inputs), truncated, or not scanned
+by the signals' deadline) matches as `unscanned` unless the module sets
+`on_unscanned: allow`. The PII module's `on_error` decides what an unknown
+signal means: `allow` (default) treats the
 unread text as clean, and `block` matches it as `classification_error`, so
 text that could not be checked cannot pass as clean.
 
@@ -91,8 +128,12 @@ global:
 
 ## Check it
 
+These worker-level examples run inside an environment containing `vllm-srun`
+(such as the Router image). Classify, embeddings, rerank and bundle are worker
+APIs; the instance frontend publishes System One and decision requests.
+
 ```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu --port 8100
 curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
   -d '{"input": ["Hi, I am Tom Baker, write to tom.baker@example.com."]}'
 ```
@@ -100,3 +141,13 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 Each span has its `label`, `start` and `end` (in characters, end exclusive),
 the `text` and its `probability`. Through the router, `x-vsr-matched-pii`
 lists the PII rules that matched.
+
+On Vela 2.0, ask the ready-made question on `/v1/decisions`; the spans are in
+`spans.pii`:
+
+```bash
+curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
+  "state": "Hi, I am Tom Baker, write to tom.baker@example.com.",
+  "questions": {"pii": {"preset": "pii"}}
+}'
+```

@@ -73,6 +73,7 @@ class WorkItem(Protocol):
 
 ItemT = TypeVar("ItemT", bound=WorkItem)
 ResultT = TypeVar("ResultT")
+ModuleT = TypeVar("ModuleT", bound="torch.nn.Module")
 # A plan's results: one per item in order, ``DEADLINE`` for an item that
 # expired while others were cached, or ``DEADLINE`` for the whole plan.
 Results = list[ResultT | Expired] | Expired
@@ -149,7 +150,10 @@ class DtypePolicy:
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
     exact weights. A family consents only
     where its records show at least 99% label agreement with the exact path
-    (embeddings: cosine of at least 0.999).
+    (embeddings: cosine of at least 0.999). ``approximate_kernels`` consents,
+    on the same evidence per question type, to the accelerator's approximate
+    kernels when the profile allows them (``EngineOptions.exact_kernels_only``
+    off).
     """
 
     weights: str = "float32"
@@ -159,6 +163,7 @@ class DtypePolicy:
     gpu_weights: str | None = None
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
+    approximate_kernels: bool = False
 
 
 @dataclass(frozen=True)
@@ -431,7 +436,7 @@ class EngineModel(ABC):
         """Most tokens one forward may hold on this device's kernels; None when they set no limit."""
         return None
 
-    def place(self, module: torch.nn.Module) -> torch.nn.Module:
+    def place(self, module: ModuleT) -> ModuleT:
         """A family's own module (a head) on this device, laid out as the backbone is."""
         return module.to(self.device)
 
@@ -629,7 +634,9 @@ class SurfaceRequest:
 
     ``body`` is the JSON body; the runtime has checked its top-level fields
     and parsed the generic options (deadline, profile, return_meta). The
-    family validates everything else in ``plan_surface``.
+    family validates everything else in ``plan_surface``. ``part`` marks one
+    state of a decisions request with several (``states``): only the whole
+    request is refused when none of its questions is valid.
     """
 
     surface: str
@@ -638,6 +645,7 @@ class SurfaceRequest:
     profile: str
     return_meta: bool
     received: float
+    part: bool = False
 
     @property
     def options(self) -> dict[str, Any]:

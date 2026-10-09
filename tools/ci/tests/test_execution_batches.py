@@ -159,7 +159,7 @@ class ExecutionBatchTests(unittest.TestCase):
         original = plan["platform_batches"][0]
         variants = []
         changed = copy.deepcopy(original)
-        changed["images"] = ["extproc"]
+        changed["images"] = ["vllm-sr"]
         variants.append(changed)
         changed = copy.deepcopy(original)
         changed["verifications"] *= 2

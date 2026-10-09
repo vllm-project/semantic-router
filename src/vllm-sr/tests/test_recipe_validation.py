@@ -17,6 +17,7 @@ from cli.models import (
     Entrypoint,
     EvaluationRecord,
     KeywordSignal,
+    Listener,
     LoRAAdapter,
     ProjectionMapping,
     ProjectionMappingOutput,
@@ -27,6 +28,7 @@ from cli.models import (
     UserConfig,
 )
 from cli.validator import validate_user_config
+from cli.validator_recipe_contracts import effective_entrypoints
 from click.testing import CliRunner
 from pydantic import ValidationError as PydanticValidationError
 
@@ -453,11 +455,13 @@ def test_entrypoint_names_cannot_collide_with_provider_models():
 
     errors = validate_user_config(config)
 
-    assert any("conflicts with a configured model" in error.message for error in errors)
+    assert any(
+        "conflicts with a configured backend model" in error.message for error in errors
+    )
     assert any(
         error.hint and "distinct entrypoint model name" in error.hint
         for error in errors
-        if "conflicts with a configured model" in error.message
+        if "conflicts with a configured backend model" in error.message
     )
 
 
@@ -683,18 +687,10 @@ def test_decision_names_can_repeat_across_recipes():
     assert not any("more than one routing profile" in error.message for error in errors)
 
 
-def test_default_looper_aliases_are_reserved_for_entrypoints():
+def test_orchestration_names_are_ordinary_explicit_entrypoints():
     config = recipe_config()
     config.entrypoints[0].model_names = ["vllm-sr/remom"]
-
-    errors = validate_user_config(config)
-
-    assert any("reserved alias" in error.message for error in errors)
-    assert any(
-        error.hint and "distinct entrypoint model name" in error.hint
-        for error in errors
-        if "reserved alias" in error.message
-    )
+    assert not validate_user_config(config)
 
 
 def test_nullable_global_sections_do_not_crash_validation():
@@ -734,14 +730,14 @@ def test_malformed_alias_values_are_reported_without_crashing():
     )
 
 
-def test_reserved_aliases_are_trimmed_before_collision_checks():
+def test_removed_alias_fields_require_entrypoint_configuration():
     config = recipe_config()
     config.global_ = {"router": {"auto_model_names": [" amd/custom-auto "]}}
     config.entrypoints[0].model_names = ["amd/custom-auto"]
 
     errors = validate_user_config(config)
 
-    assert any("reserved alias" in error.message for error in errors)
+    assert any("was removed" in error.message for error in errors)
 
 
 def test_configured_model_names_keep_exact_collision_semantics():
@@ -859,3 +855,44 @@ def test_domain_names_can_have_different_definitions_across_recipes():
     errors = validate_user_config(config)
 
     assert not any("conflicting definitions" in error.message for error in errors)
+
+
+def test_default_entrypoint_override_and_reset():
+    config = recipe_config()
+    assert effective_entrypoints(config)[0].model_names == ["vllm-sr/auto"]
+    config.entrypoints.append(
+        Entrypoint(recipe="default", model_names=["our/router", "MoM"])
+    )
+    assert [
+        entry.model_names
+        for entry in effective_entrypoints(config)
+        if entry.recipe == "default"
+    ] == [["our/router", "MoM"]]
+    config.entrypoints = [
+        entry for entry in config.entrypoints if entry.recipe != "default"
+    ]
+    assert effective_entrypoints(config)[0].model_names == ["vllm-sr/auto"]
+
+
+def test_systemone_listener_scope_is_explicit_and_nonempty():
+    listener = Listener(
+        name="public", address="0.0.0.0", port=8000, models=["chat-only"]
+    )
+    assert listener.systemone is None
+    for models in ([], [""], [" padded "], ["one", "one"]):
+        with pytest.raises(PydanticValidationError):
+            Listener(
+                name="public",
+                address="0.0.0.0",
+                port=8000,
+                systemone={"models": models},
+            )
+    listener = Listener(
+        name="public",
+        address="0.0.0.0",
+        port=8000,
+        models=["chat-only"],
+        systemone={"models": ["decision-public"]},
+    )
+    assert listener.models == ["chat-only"]
+    assert listener.systemone.models == ["decision-public"]

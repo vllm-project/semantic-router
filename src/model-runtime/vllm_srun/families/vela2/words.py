@@ -14,8 +14,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # The packages' CJK class, code point for code point. Its compatibility block
 # starts at U+8C48 (an NFC-normalised U+F900 in the released source), so the
@@ -58,8 +62,8 @@ class Words:
     index of each word's first overlapping sub-word token (W,).
     """
 
-    offsets: np.ndarray
-    first: np.ndarray
+    offsets: NDArray[np.int32]
+    first: NDArray[np.int32]
 
     def __len__(self) -> int:
         return len(self.first)
@@ -70,7 +74,7 @@ def split_words(text: str) -> list[tuple[int, int]]:
     return [(match.start(), match.end()) for match in _WORD.finditer(text)]
 
 
-def words_of(text: str, token_offsets: np.ndarray | None) -> Words:
+def words_of(text: str, token_offsets: NDArray[np.int32] | None) -> Words:
     """Every word of ``text`` with the first token that overlaps it (words no token covers are dropped)."""
     units = split_words(text)
     if not units or token_offsets is None or len(token_offsets) == 0:
@@ -99,7 +103,7 @@ def words_of(text: str, token_offsets: np.ndarray | None) -> Words:
     return Words(spans[covered].astype(np.int32), token[covered].astype(np.int32))
 
 
-def _word_units(text: str, offsets: np.ndarray) -> np.ndarray:
+def _word_units(text: str, offsets: NDArray[np.int32]) -> NDArray[np.intp]:
     """The unit (of ``_UNIT``) each word's first non-space character belongs to, -1 for none."""
     bounds = np.asarray(
         [match.span() for match in _UNIT.finditer(text)], np.int64
@@ -138,13 +142,20 @@ def trim(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
+class DecodedSpan(TypedDict):
+    start: int
+    end: int
+    label: str
+    probability: float
+
+
 def decode_spans(
-    probabilities: np.ndarray,
-    offsets: np.ndarray,
+    probabilities: NDArray[np.float64],
+    offsets: NDArray[np.int32],
     labels: list[str],
     text: str,
     threshold: float,
-) -> list[dict[str, object]]:
+) -> list[DecodedSpan]:
     """Labelled spans from word x label probabilities (the packages' word readout decoder).
 
     Each word (a non-empty span of ``words_of``) takes its most probable label
@@ -172,22 +183,22 @@ def decode_spans(
     run_end = np.append(run_start[1:], count)
     run_of = np.cumsum(change) - 1
     for run in np.unique(run_of[labelled]):
-        first, stop = int(run_start[run]), int(run_end[run])
+        first, end = int(run_start[run]), int(run_end[run])
         if unit[first] < 0:
             continue
-        members = [i for i in range(first, stop) if label[i] >= 0]
+        members = [i for i in range(first, end) if label[i] >= 0]
         values = [int(label[i]) for i in members]
         if len(set(values)) > 1:
             votes: dict[int, float] = {}
             for i, value in zip(members, values, strict=True):
                 votes[value] = votes.get(value, 0.0) + float(best_probability[i])
-            winner = max(votes, key=votes.get)
+            winner = max(votes, key=votes.__getitem__)
             label[members] = winner
         low, high = members[0], members[-1]
         gap = label[low + 1 : high] < 0
         label[low + 1 : high][gap] = label[low]
     edges = np.flatnonzero(np.diff(np.concatenate(([-2], label, [-2]))) != 0)
-    spans = []
+    spans: list[DecodedSpan] = []
     for begin, stop in pairwise(edges):
         value = int(label[begin])
         if value < 0:

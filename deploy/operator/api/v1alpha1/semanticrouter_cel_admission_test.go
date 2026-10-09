@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -148,5 +149,61 @@ spec:
 `)
 	if !strings.Contains(strings.Join(errs, "\n"), "backend.contract must be stated") {
 		t.Fatalf("complexity backend without contract was admitted: %v", errs)
+	}
+}
+
+// The Operator derives the gateway mode from spec.gateway, so args that set it
+// would contradict the ports and probes it renders.
+func TestCRDRefusesGatewayModeFlagsInArgs(t *testing.T) {
+	structural, validator := loadCRDValidator(t)
+	const cr = `
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata: {name: r}
+spec:
+  args: [%s]
+`
+	for _, test := range []struct {
+		args    string
+		refused bool
+	}{
+		{`"--secure=false"`, false},
+		{`"--secure=false", "-gateway=extproc"`, true},
+		{`"--gateway", "standalone"`, true},
+		{`"-listener-address=127.0.0.1"`, true},
+		{`"-gateway-mode-is-not-a-flag"`, false},
+	} {
+		errs := celErrors(t, structural, validator, strings.Replace(cr, "%s", test.args, 1))
+		refused := len(errs) > 0 && strings.Contains(strings.Join(errs, "; "), "spec.args must not set -gateway")
+		if refused != test.refused {
+			t.Errorf("args [%s]: refused = %v, errors = %v", test.args, refused, errs)
+		}
+	}
+}
+
+// The bounds on spec.args are what let the API server estimate the rule's
+// cost; the largest list they admit must also fit the per-call CEL budget, or
+// a valid CR would be refused when it is written.
+func TestCRDAdmitsTheLargestArgsItsBoundsAllow(t *testing.T) {
+	structural, validator := loadCRDValidator(t)
+	args := structural.Properties["spec"].Properties["args"]
+	if args.ValueValidation == nil || args.ValueValidation.MaxItems == nil ||
+		args.Items == nil || args.Items.ValueValidation == nil || args.Items.ValueValidation.MaxLength == nil {
+		t.Fatal("spec.args must bound its length and each item's, or the API server refuses the CRD")
+	}
+	item := strconv.Quote("--secure=" + strings.Repeat("x", int(*args.Items.ValueValidation.MaxLength)-len("--secure=")))
+	items := make([]string, *args.ValueValidation.MaxItems)
+	for i := range items {
+		items[i] = item
+	}
+	errs := celErrors(t, structural, validator, `
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata: {name: r}
+spec:
+  args: [`+strings.Join(items, ", ")+`]
+`)
+	if len(errs) != 0 {
+		t.Fatalf("%d args of %d characters were refused: %v", len(items), *args.Items.ValueValidation.MaxLength, errs)
 	}
 }

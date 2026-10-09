@@ -39,7 +39,6 @@ type values struct {
 					Artifact   string `yaml:"artifact"`
 					Endpoint   string `yaml:"endpoint"`
 					ServedName string `yaml:"served_name"`
-					Process    string `yaml:"process"`
 					Device     string `yaml:"device"`
 				} `yaml:"deployments"`
 				Bindings map[string]struct {
@@ -95,23 +94,23 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	deployments := profile.Config.Global.ModelCatalog.Deployments
 
 	// The names testcases/model_runtime_support.go relies on, with their
-	// process and device: the lifecycle case requires the one on auto to run
-	// in the cpu device group.
-	managed := map[string]struct{ process, device string }{
-		"decision-fixture": {"decisions", "cpu"}, "vela-domain": {"", "cpu"}, "vela-pii": {"", "cpu"}, "vela-guard": {"", "cpu"},
-		"vela-embedding": {"", "auto"}, "vela-reranker": {"", "cpu"}, "vela-modality": {"", "cpu"},
+	// device: the lifecycle case checks independent workers, including auto
+	// resolving to CPU on a node without an accelerator.
+	managed := map[string]struct{ device string }{
+		"decision-fixture": {"cpu"}, "vela-domain": {"cpu"}, "vela-pii": {"cpu"}, "vela-guard": {"cpu"},
+		"vela-embedding": {"auto"}, "vela-reranker": {"cpu"}, "vela-modality": {"cpu"},
 	}
 	for name, want := range managed {
 		deployment, ok := deployments[name]
-		if !ok || deployment.Provider != "model_runtime" || deployment.Endpoint != "" || deployment.Device != want.device || deployment.Process != want.process {
-			t.Fatalf("%s must be a managed %s deployment in process %q: %+v", name, want.device, want.process, deployment)
+		if !ok || deployment.Provider != "model_runtime" || deployment.Endpoint != "" || deployment.Device != want.device {
+			t.Fatalf("%s must be a managed %s deployment: %+v", name, want.device, deployment)
 		}
 		directory := strings.TrimPrefix(deployment.Artifact, "/tmp/vsr-fixtures/")
 		if !packages[directory] {
 			t.Fatalf("%s names %s, which runtime_with_fixtures.py does not write", name, deployment.Artifact)
 		}
 	}
-	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a"}
+	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a", "attached-vela2": "vela2-a"}
 	for name, served := range attached {
 		deployment := deployments[name]
 		if !strings.Contains(deployment.Endpoint, "model-runtime-attached.") || deployment.ServedName != served {

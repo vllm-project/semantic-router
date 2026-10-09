@@ -219,3 +219,12 @@ ROUTE feedback_default (description = "Explicit cheap fallback for ordinary traf
   PRIORITY 10
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}
