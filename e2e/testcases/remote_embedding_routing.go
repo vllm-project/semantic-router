@@ -160,7 +160,7 @@ func checkRemoteEmbeddingBatch(
 	var batch struct {
 		Inputs []string `json:"inputs"`
 	}
-	if err := json.Unmarshal(batchResponse.Body, &batch); err != nil {
+	if err = json.Unmarshal(batchResponse.Body, &batch); err != nil {
 		return err
 	}
 	if !slices.Contains(batch.Inputs, texts[0]) || !slices.Contains(batch.Inputs, texts[1]) {
@@ -188,7 +188,7 @@ func checkRemoteEmbeddingBatch(
 			Embedding []float32 `json:"embedding"`
 		} `json:"embeddings"`
 	}
-	if err := json.Unmarshal(vectorsResponse.Body, &vectors); err != nil {
+	if err = json.Unmarshal(vectorsResponse.Body, &vectors); err != nil {
 		return err
 	}
 	want := [][]float32{{1, 0, 0, 0}, {0, 1, 0, 0}}
