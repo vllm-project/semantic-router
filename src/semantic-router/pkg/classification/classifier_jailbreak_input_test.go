@@ -64,7 +64,7 @@ func TestGuardProvenanceDispatch(t *testing.T) {
 				ConversationFacts{}, RequestFacts{JailbreakInput: test.input}, nil)
 			for _, dispatcher := range dispatchers {
 				if dispatcher.signalType == config.SignalTypeJailbreak {
-					dispatcher.evaluate()
+					dispatcher.evaluate(context.Background())
 				}
 			}
 			slices.Sort(recorder.inputs)

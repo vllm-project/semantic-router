@@ -111,27 +111,6 @@ def render_tag_acceptance_markdown(receipt: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_waiver_markdown(
-    waivers: dict[str, Any], heading: str = "## Known-issue waivers"
-) -> str:
-    lines = [
-        heading,
-        "",
-        f"#{waivers['issue']} (`{waivers['kind']}`): {waivers['reason']}",
-        "",
-        f"Removal: {waivers['removal']}",
-        "",
-        "| Variant | Outcome | Latency (ms) |",
-        "| --- | --- | ---: |",
-    ]
-    for item in _sequence(waivers.get("waived")):
-        lines.append(
-            f"| `{item['id']}` | `{item['outcome']}` | {item.get('latency_ms') or 0:.0f} |"
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
 def build_consolidated_report(report_root: Path) -> dict[str, Any]:
     inventory_path = report_root / "inventory.json"
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
@@ -179,7 +158,6 @@ def build_consolidated_report(report_root: Path) -> dict[str, Any]:
             "requires_hardware_recipes": requires_hardware,
             "matched": sum(result["matched"] for result in results),
             "total": sum(result["total"] for result in results),
-            "waived": sum(result["waived"] for result in results),
             "complete": reported == expected,
             "passed": reported == expected and failed == 0,
             "cpu_compatible_complete": bool(cpu_results)
@@ -198,10 +176,9 @@ def _recipe_result(
     evaluation = _mapping(report.get("evaluation")) if report else {}
     is_reported = report is not None
     total = int(evaluation.get("total") or 0)
-    waived = int(evaluation.get("waived") or 0)
-    expected = int(recipe.get("variants") or total + waived)
+    expected = int(recipe.get("variants") or total)
     execution = _mapping(evaluation.get("execution"))
-    complete = total > 0 and total + waived == expected
+    complete = total > 0 and total == expected
     if "variants" in recipe:
         complete = complete and bool(execution.get("complete"))
     is_passed = is_reported and bool(evaluation.get("passed")) and complete
@@ -228,8 +205,6 @@ def _recipe_result(
         ),
         "matched": int(evaluation.get("matched") or 0),
         "total": total,
-        "waived": waived,
-        "known_issue_waivers": evaluation.get("known_issue_waivers"),
         "expected_probes": expected,
         "execution": execution,
         "passed": is_passed,
@@ -251,29 +226,21 @@ def render_consolidated_markdown(payload: dict[str, Any]) -> str:
             f"{summary['failed_recipes']} failed, "
             f"{summary['missing_recipes']} missing, "
             f"{summary.get('requires_hardware_recipes', 0)} require hardware; "
-            f"{summary['matched']}/{summary['total']} probes matched, "
-            f"{summary.get('waived', 0)} waived."
+            f"{summary['matched']}/{summary['total']} probes matched."
         ),
         "",
         f"Evaluation scopes: {', '.join(summary.get('evaluation_scopes') or ['deployment'])}. Deployment passed: `{summary.get('deployment_passed', False)}`.",
         "",
-        "| Recipe | Scope | Status | Matched | Total | Waived | Required devices |",
-        "| --- | --- | --- | ---: | ---: | ---: | --- |",
+        "| Recipe | Scope | Status | Matched | Total | Required devices |",
+        "| --- | --- | --- | ---: | ---: | --- |",
     ]
-    waived = []
     for result in _sequence(payload.get("results")):
         lines.append(
             f"| {result['recipe']} | {result.get('evaluation_scope', 'deployment')} | {result['status']} | "
-            f"{result['matched']} | {result['total']} | {result.get('waived', 0)} | "
+            f"{result['matched']} | {result['total']} | "
             f"{', '.join(result.get('required_devices', []))} |"
         )
-        if result.get("known_issue_waivers"):
-            waived.append((result["recipe"], result["known_issue_waivers"]))
     lines.append("")
-    for recipe, waivers in waived:
-        lines.append(
-            render_waiver_markdown(waivers, f"### Known-issue waivers: {recipe}")
-        )
     return "\n".join(lines)
 
 

@@ -13,6 +13,8 @@ type Component string
 const (
 	// ComponentRouter is the routing pipeline. Every change rebuilds it.
 	ComponentRouter Component = "router"
+	// ComponentModelService serves native model APIs independently of routing.
+	ComponentModelService Component = "model_service"
 	// ComponentSignals extracts signals: the recipe classifiers, embeddings
 	// and rerankers, and the model runtime deployments they run on.
 	ComponentSignals Component = "signals"
@@ -25,9 +27,10 @@ const (
 // candidate whose resources of those kinds equal the active snapshot's keeps
 // the active component, the same instance, instead of building another.
 var Dependencies = map[Component][]Kind{
-	ComponentRouter:   Kinds,
-	ComponentSignals:  {KindRuntimeModel, KindSettings, KindProgram},
-	ComponentUpstream: {KindEndpoint, KindCluster, KindListener},
+	ComponentRouter:       Kinds,
+	ComponentModelService: {KindRuntimeModel, KindSettings, KindProgram, KindListener},
+	ComponentSignals:      {KindRuntimeModel, KindSettings, KindProgram},
+	ComponentUpstream:     {KindEndpoint, KindCluster, KindListener},
 }
 
 // ComponentKey identifies what component c is built from in the snapshot:
@@ -35,6 +38,9 @@ var Dependencies = map[Component][]Kind{
 // comparable within one process only.
 func (s *Snapshot) ComponentKey(c Component) string {
 	var inputs []any
+	if c == ComponentUpstream {
+		inputs = append(inputs, s.Config().RoutingEnabled())
+	}
 	for _, kind := range Dependencies[c] {
 		for _, resource := range s.resources.List(kind) {
 			inputs = append(inputs, resource.Ref.String(), resource.Hash)

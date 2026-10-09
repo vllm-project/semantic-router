@@ -3,8 +3,9 @@
 ## Overview
 
 Use Router Replay to inspect requests in Dashboard Insights: the selected route,
-model, token usage, response, and tool trajectory. Configure storage globally;
-use the `router_replay` plugin only when a decision needs different capture settings.
+model, token usage, response, and tool trajectory. Configure storage and capture
+defaults in `global.services.router_replay`; use a decision's `router_replay`
+plugin to override only the capture fields that differ.
 
 ## What Problem Does It Solve?
 
@@ -29,6 +30,28 @@ The generic `memory` store is useful for temporary inspection but loses records
 when the Router restarts or reloads configuration. Use PostgreSQL or Redis when
 you need durable history. Set retention for the data you intend to keep.
 
+### Set shared capture defaults
+
+```yaml
+global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      capture_request_body: true
+      capture_response_body: true
+      capture_personal_data: false
+      max_records: 10000
+      max_body_bytes: 4096
+      max_tool_trace_bytes: 0
+      max_tool_trace_steps: 100
+```
+
+Absent service configuration leaves Replay disabled. Capture defaults are
+request and response bodies enabled, personal data enabled, 10,000 records,
+4,096 bytes per body, no per-field tool-trace byte limit, and 100 tool steps.
+Storage, retention and asynchronous writes are global service settings.
+
 ### Limit capture on a decision
 
 Add this fragment to the decision's `plugins` to record bounded excerpts:
@@ -39,7 +62,8 @@ plugins:
     configuration:
       enabled: true
       capture_request_body: true
-      capture_response_body: true
+      capture_response_body: false
+      capture_personal_data: false
       max_body_bytes: 4096
       max_tool_trace_steps: 100
 ```
@@ -53,11 +77,37 @@ To opt one decision out of capture, use `configuration: {enabled: false}`.
 To change the deployment-wide default, set
 `global.services.router_replay.enabled: false`; a decision can still opt in.
 
-### Forbid capture for a recipe
+Every omitted plugin field inherits its global capture default. Explicit
+`false` remains an override, and `max_tool_trace_bytes: 0` or
+`max_tool_trace_steps: 0` removes that limit. There is no recipe-level Replay
+policy. Requests rejected before a decision is selected use the global defaults;
+a decision override applies after that decision is selected. These settings do
+not change provider-side retention or delete existing records.
 
-Set `routing.data_policy.replay: false` inside the recipe. This blocks all Replay
-capture for that recipe, including rejected requests and decisions that otherwise
-opt in. It does not change provider-side retention or delete existing records.
+The existing recorder fallbacks still apply to explicit `max_body_bytes: 0`
+(4,096 bytes) and `max_records: 0` (200 records for the memory store). These zeros
+override an inherited value; omit a field when you want to inherit it.
+
+### Keep personal data out of Replay
+
+Set `capture_personal_data: false` globally or on a decision's `router_replay`
+plugin. The record keeps routing evidence, model, signals and detected PII types,
+while personal-data requests omit request and response bodies, prompts, tool
+definitions and tool traces. The recipe's configured PII signals are evaluated
+when needed for this capture setting, even if no decision references them.
+
+When PII evidence is unavailable, classification fails, or the recipe has no
+PII detector configured, capture omits content conservatively. A PII signal is
+optional; configuring one allows content capture for requests it identifies as
+free of personal data. For example:
+
+```yaml
+routing:
+  signals:
+    pii:
+      - name: personal_data
+        pii_types_allowed: []
+```
 
 Request bodies, responses, and tool traces can contain secrets or personal data.
 Capture only what you need and restrict access with `replay.read` and
@@ -73,11 +123,12 @@ not invoices. Missing prices and usage remain unknown.
 Every record carries `route_diagnostics.decision_ranking`: the strategy
 selection ran under, the tier the winning decision came from, whether that pool
 ranked by confidence and which decision stopped it, and the key that separated
-the winner from the decision behind it. A replayed request therefore explains
+the winner from the decision behind it, which is recorded as `runner_up`, with
+a `reason` stating the values compared. A replayed request therefore explains
 its route the same way the eval API does.
 
 Detail responses can also include `route_diagnostics.prepared_dispatch`, a
-versioned receipt for the exact primary provider-bound body returned to Envoy
+versioned receipt for the exact primary provider-bound body prepared for primary dispatch
 after protocol encoding and provider adaptation. It records the wire format,
 SHA-256 digest, and encoded byte length without retaining another copy of the
 body. Internal Looper calls and response-time fallback attempts are not part of

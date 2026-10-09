@@ -1,4 +1,4 @@
-"""Setuptools hooks for staging the canonical Router schema into artifacts."""
+"""Stage canonical Router schema, runtime releases, and proposal assets."""
 
 from __future__ import annotations
 
@@ -14,7 +14,20 @@ PACKAGE_SCHEMA = PROJECT_ROOT / "cli" / "config_schema" / SCHEMA_FILENAME
 REPOSITORY_SCHEMA = (
     PROJECT_ROOT.parent / "semantic-router" / "pkg" / "configschema" / SCHEMA_FILENAME
 )
+RELEASE_FILENAME = "releases.generated.json"
+REPOSITORY_RELEASES = (
+    PROJECT_ROOT.parent / "model-runtime/vllm_srun/registry" / RELEASE_FILENAME
+)
 PROPOSAL_ASSET_PATHS = ("fragments/algorithm/selection/latency-aware.yaml",)
+
+
+def release_source() -> Path:
+    if REPOSITORY_RELEASES.is_file():
+        return REPOSITORY_RELEASES
+    packaged = PROJECT_ROOT / "cli/config_schema" / RELEASE_FILENAME
+    if packaged.is_file():
+        return packaged
+    raise FileNotFoundError("canonical model runtime releases are unavailable")
 
 
 def schema_source() -> Path:
@@ -47,13 +60,14 @@ def stage_proposal_assets(destination_root: Path) -> None:
 
 
 class BuildPy(build_py):
-    """Copy the single source artifact into build output, never the worktree."""
+    """Copy canonical generated artifacts into build output, never the worktree."""
 
     def run(self) -> None:
         super().run()
         destination = Path(self.build_lib) / "cli" / "config_schema" / SCHEMA_FILENAME
         destination.parent.mkdir(parents=True, exist_ok=True)
         copy2(schema_source(), destination)
+        copy2(release_source(), destination.with_name(RELEASE_FILENAME))
         stage_proposal_assets(Path(self.build_lib) / "cli" / "proposal_assets")
 
     def get_outputs(self, include_bytecode: bool = True) -> list[str]:
@@ -61,22 +75,21 @@ class BuildPy(build_py):
         schema_output = str(
             Path(self.build_lib) / "cli" / "config_schema" / SCHEMA_FILENAME
         )
-        if schema_output not in outputs:
-            outputs = [*outputs, schema_output]
+        release_output = str(Path(schema_output).with_name(RELEASE_FILENAME))
+        extra = [schema_output, release_output]
         asset_root = Path(self.build_lib) / "cli" / "proposal_assets"
         for relative in PROPOSAL_ASSET_PATHS:
-            asset_output = str(asset_root / relative)
-            if asset_output not in outputs:
-                outputs = [*outputs, asset_output]
-        return outputs
+            extra.append(str(asset_root / relative))
+        return [*outputs, *[path for path in extra if path not in outputs]]
 
 
 class SDist(sdist):
-    """Include the schema in an sdist release tree without tracking a copy."""
+    """Include generated resources in an sdist without tracking duplicate copies."""
 
     def make_release_tree(self, base_dir: str, files: list[str]) -> None:
         super().make_release_tree(base_dir, files)
         destination = Path(base_dir) / "cli" / "config_schema" / SCHEMA_FILENAME
         destination.parent.mkdir(parents=True, exist_ok=True)
         copy2(schema_source(), destination)
+        copy2(release_source(), destination.with_name(RELEASE_FILENAME))
         stage_proposal_assets(Path(base_dir) / "cli" / "proposal_assets")

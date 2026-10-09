@@ -18,7 +18,7 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 			return fmt.Errorf("routing.signals.decision[%d]: duplicate name %q", index, rule.Name)
 		}
 		seen[rule.Name] = struct{}{}
-		if err := validateDecisionQuestionDeployment(cfg, rule); err != nil {
+		if err := validateDecisionDeployment(cfg, rule.Deployment, "question"); err != nil {
 			return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
 		}
 	}
@@ -30,7 +30,7 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 		if algorithm == nil || !strings.EqualFold(strings.TrimSpace(algorithm.Type), DecisionAlgorithmDecision) || algorithm.Decision == nil {
 			continue
 		}
-		if err := validateModelRuntimeReference(cfg, algorithm.Decision.Deployment); err != nil {
+		if err := validateDecisionDeployment(cfg, algorithm.Decision.Deployment, "selector"); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.decision: %w", decision.Name, err)
 		}
 	}
@@ -58,18 +58,15 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 	return nil
 }
 
-// validateDecisionQuestionDeployment checks the deployment a decision question
-// asks: a declared model_runtime deployment, or, when it names none, the
-// decision model, which Vela 1.0 cannot be.
-func validateDecisionQuestionDeployment(cfg *RouterConfig, rule DecisionSignalRule) error {
-	if rule.Deployment != "" {
-		return validateModelRuntimeReference(cfg, rule.Deployment)
+// validateDecisionDeployment checks the deployment a decision question or
+// selector asks: a declared model_runtime deployment, or, when it names none,
+// the decision model, which must support the requested task.
+func validateDecisionDeployment(cfg *RouterConfig, deployment, asker string) error {
+	if deployment != "" {
+		return validateModelRuntimeReference(cfg, deployment)
 	}
-	if _, _, ok, err := cfg.DecisionModelDeployment(); err != nil {
-		return fmt.Errorf("the decision model %s: %w", cfg.DecisionModelSpec().Name, err)
-	} else if !ok {
-		return fmt.Errorf("deployment is required: the decision model is %s, whose specialists answer only the built-in signals. "+
-			"Name a model_runtime deployment for the question, or choose a Vela 2.0 decision model in global.model_catalog.system.decision_model", cfg.DecisionModelSpec().Name)
+	if _, _, _, err := cfg.DecisionModelDeployment(); err != nil {
+		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
 	}
 	return nil
 }
@@ -205,10 +202,7 @@ func validateModelRuntimeReference(cfg *RouterConfig, name string) error {
 	if !deployment.IsModelRuntime() {
 		return fmt.Errorf("deployment %q must use provider %s", name, ModelRuntimeProvider)
 	}
-	if input := deployment.WithDefaults().Input; input.MaxTokens != 0 || input.Overflow != "reject" {
-		return fmt.Errorf("deployment %q: decision models reject over-length input and never truncate; remove input", name)
-	}
-	return nil
+	return deployment.ValidateDecisionInput(name)
 }
 
 func decisionSignalRuleByName(rules []DecisionSignalRule, name string) *DecisionSignalRule {
@@ -247,8 +241,8 @@ func validateDecisionSelectorConfig(decisionName string, modelRefs []ModelRef, a
 		return fmt.Errorf("decision '%s': algorithm.type=decision requires algorithm.decision configuration", decisionName)
 	}
 	path := fmt.Sprintf("decision '%s', algorithm.decision", decisionName)
-	if strings.TrimSpace(cfg.Deployment) == "" {
-		return fmt.Errorf("%s: deployment is required", path)
+	if strings.TrimSpace(cfg.Deployment) != cfg.Deployment {
+		return fmt.Errorf("%s: deployment must name a model_runtime deployment; omit it to ask the decision model", path)
 	}
 	if strings.TrimSpace(cfg.Instructions) == "" {
 		return fmt.Errorf("%s: instructions are required", path)

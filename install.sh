@@ -223,7 +223,7 @@ Options:
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use
-  --platform PLATFORM      Platform hint for first-run serve. Use 'amd' for ROCm.
+  --platform PLATFORM      Execution platform: auto, cpu, cuda or rocm.
                            Default: auto
   --no-launch              Skip the installer's automatic first `vllm-sr serve`
                            and dashboard open step
@@ -313,37 +313,18 @@ detect_os_label() {
 }
 
 resolve_launch_platform() {
-  if [ "$REQUESTED_PLATFORM" != "auto" ]; then
-    printf '%s\n' "$REQUESTED_PLATFORM"
-    return
-  fi
-
-  if [ -n "${VLLM_SR_PLATFORM:-}" ]; then
-    printf '%s\n' "$VLLM_SR_PLATFORM"
-    return
-  fi
-
-  if has_cmd rocm-smi || has_cmd rocminfo || [ -e /dev/kfd ] || [ -d /opt/rocm ]; then
-    printf 'amd\n'
-    return
-  fi
-
-  printf '\n'
+  case "$REQUESTED_PLATFORM" in
+    auto|cpu|cuda|rocm) printf '%s\n' "$REQUESTED_PLATFORM" ;;
+    *) die "Invalid platform: use auto, cpu, cuda or rocm" ;;
+  esac
 }
 
 display_platform_plan() {
-  local platform
-  platform="$(resolve_launch_platform)"
-  if [ -n "$platform" ]; then
-    if [ "$REQUESTED_PLATFORM" = "auto" ]; then
-      printf '%s (auto-detected)\n' "$platform"
-    else
-      printf '%s\n' "$platform"
-    fi
-    return
+  if [ "$REQUESTED_PLATFORM" = "auto" ]; then
+    printf 'auto (detected by serve on the execution target)\n'
+  else
+    resolve_launch_platform
   fi
-
-  printf 'default\n'
 }
 
 detect_primary_ip() {

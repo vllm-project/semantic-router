@@ -7,7 +7,7 @@ func taskBindingConfig() *RouterConfig {
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"vela-domain": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu"},
 		"vela-pii": {
-			Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "cpu", Process: "privacy",
+			Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "cpu",
 			Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"},
 		},
 		"vela-factcheck": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-FactCheck"},
@@ -27,7 +27,7 @@ func TestModelRuntimeServesTaskBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec, ok := plan.Lookup(DefaultRecipeName, "pii_classifier")
-	if !ok || !spec.Deployment.IsModelRuntime() || spec.Deployment.Input.Overflow != "window" || spec.Deployment.Process != "privacy" {
+	if !ok || !spec.Deployment.IsModelRuntime() || spec.Deployment.Input.Overflow != "window" {
 		t.Fatalf("pii binding = %+v", spec)
 	}
 	cfg := taskBindingConfig()
@@ -50,7 +50,8 @@ func TestModelRuntimeDeploymentsInUseFollowActiveConsumers(t *testing.T) {
 	if _, ok := ModelRuntimeDeploymentsInUse(cfg)["vela-pii"]; !ok {
 		t.Fatal("a decision that reads the PII signal activates its deployment")
 	}
-	cfg.AutoModelNames = []string{}
+
+	moveTestRoutingToUnmappedRecipe(cfg)
 	if used := ModelRuntimeDeploymentsInUse(cfg); len(used) != 0 {
 		t.Fatalf("an unreachable routing profile starts nothing, in use = %v", used)
 	}

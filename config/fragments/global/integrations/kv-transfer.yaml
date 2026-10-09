@@ -1,0 +1,7 @@
+# Cross-model KV transfer is opt-in. Add pinned backend identities and directional
+# mapper pairs before enabling it. Credentials and tenant secrets belong in the
+# deployment environment.
+kv_transfer:
+  enabled: false
+  backends: []
+  pairs: []

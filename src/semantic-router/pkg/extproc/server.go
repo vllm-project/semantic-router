@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -111,10 +112,21 @@ func NewServer(
 	if runtimeRegistry != nil {
 		modelPool = runtimeRegistry.ModelPool()
 	}
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry, modelPool)
+	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
 	if err != nil {
 		return nil, err
 	}
+	var router *OpenAIRouter
+	if cfg.RoutingEnabled() {
+		router, err = buildOpenAIRouterFromConfig(cfg, modelPool)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if publishGlobal {
+		config.Replace(cfg)
+	}
+	logLoadedRouterConfig(configPath, cfg)
 	attachRuntimeRegistry(router, runtimeRegistry)
 	server := &Server{
 		modelPool:  modelPool,
@@ -128,15 +140,15 @@ func NewServer(
 	server.configs = server.newConfigManager(openConfigHistory(configPath, options.historyLimit), options.parts...)
 	snapshot, err := server.configManager().Install(context.Background(), configsnapshot.Update{
 		Origin:   configsnapshot.Origin{Source: configsnapshot.SourceStartup},
-		Config:   router.Config,
-		Document: parsedDocument(configPath, router.Config),
+		Config:   cfg,
+		Document: parsedDocument(configPath, cfg),
 	})
 	if err != nil {
 		return nil, errors.Join(err, router.Close())
 	}
 	router.nameSignals(snapshot.ComponentKey(configsnapshot.ComponentSignals))
 	server.service = newRouterServiceWithSnapshot(router, snapshot)
-	publishSnapshotState(router.Config, snapshot, router, runtimeRegistry, server.service.current.Load().acquire)
+	publishSnapshotState(cfg, snapshot, router, runtimeRegistry, server.service.current.Load().acquire)
 	return server, nil
 }
 
@@ -570,12 +582,20 @@ func (rs *RouterService) Snapshot() *configsnapshot.Snapshot {
 
 // Process delegates to the current router.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	router, release, err := rs.lease()
+	lease, err := rs.Pin()
 	if err != nil {
 		return err
 	}
-	defer release()
-	return router.Process(stream)
+	defer lease.Release()
+	if lease.Router == nil {
+		// Send an HTTP decision, not a transport failure an Envoy configured
+		// with failure_mode_allow could bypass.
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		return stream.Send(createImmediateJSONResponse(http.StatusNotFound, []byte(`{"error":{"code":"routing_disabled","message":"Chat routing is disabled for this instance."}}`)))
+	}
+	return lease.Router.Process(stream)
 }
 
 // lease pins the current router generation until release is called.
@@ -583,6 +603,10 @@ func (rs *RouterService) lease() (*OpenAIRouter, func(), error) {
 	pin, err := rs.Pin()
 	if err != nil {
 		return nil, nil, err
+	}
+	if pin.Router == nil {
+		pin.Release()
+		return nil, nil, errors.New("routing is disabled for this instance")
 	}
 	return pin.Router, pin.Release, nil
 }
@@ -745,6 +769,9 @@ func (s *Server) configuredGRPCMaxMessageSize() int {
 
 func resolveServerConfig(s *Server) *config.RouterConfig {
 	if s != nil && s.service != nil {
+		if snapshot := s.service.Snapshot(); snapshot != nil {
+			return snapshot.Config()
+		}
 		if router := s.service.GetRouter(); router != nil && router.Config != nil {
 			return router.Config
 		}
@@ -809,6 +836,15 @@ func publishSnapshotState(
 	acquire AcquireFunc,
 ) {
 	if router == nil {
+		if runtimeRegistry != nil {
+			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+				Config: cfg, ConfigSnapshot: snapshot, AcquireClassification: routerruntime.AcquireClassification(acquire),
+			})
+		} else {
+			services.SetGlobalClassificationService(nil)
+			memory.SetGlobalMemoryStore(nil)
+			selection.SetGlobalRegistry(nil)
+		}
 		return
 	}
 	publishRouterLearningStateStore(router)

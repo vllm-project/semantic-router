@@ -116,12 +116,6 @@ type FusionGroundingConfig struct {
 	OnError              string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 }
 
-// FusionRuntimeConfig registers direct Fusion model slugs. The panel and judge
-// policy live on routing decisions, not in global runtime config.
-type FusionRuntimeConfig struct {
-	ModelNames []string `yaml:"model_names,omitempty" json:"model_names,omitempty"`
-}
-
 // FusionRequestConfig is the request-level OpenAI-compatible extension parsed
 // from plugins[].id=fusion. It intentionally uses JSON tags first because it is
 // not a decision plugin config surface.
@@ -150,57 +144,6 @@ type FusionModelOverride struct {
 	Model               string   `json:"model,omitempty" yaml:"model,omitempty"`
 	Temperature         *float64 `json:"temperature,omitempty" yaml:"temperature,omitempty"`
 	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
-}
-
-func DefaultFusionModelNames() []string {
-	return []string{DefaultFusionModelName}
-}
-
-func (c FusionRuntimeConfig) EffectiveModelNames() []string {
-	if len(c.ModelNames) > 0 {
-		return normalizeFusionModelNames(c.ModelNames)
-	}
-	return DefaultFusionModelNames()
-}
-
-func (c *RouterConfig) ExposedFusionModelNames() []string {
-	if c == nil {
-		return nil
-	}
-	if len(c.Looper.Fusion.ModelNames) == 0 && !c.HasFusionDecision() {
-		return nil
-	}
-	return c.Looper.Fusion.EffectiveModelNames()
-}
-
-func normalizeFusionModelNames(names []string) []string {
-	seen := make(map[string]bool, len(names))
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		normalized := strings.TrimSpace(name)
-		if normalized == "" || seen[normalized] {
-			continue
-		}
-		seen[normalized] = true
-		result = append(result, normalized)
-	}
-	return result
-}
-
-func (c *RouterConfig) IsFusionModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.Fusion.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *RouterConfig) HasFusionDecision() bool {
@@ -309,15 +252,6 @@ func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
 		return fmt.Errorf("grounding.contradiction_penalty must be >= 0")
 	}
 	return validateFusionOnError(cfg.OnError)
-}
-
-func ValidateFusionRuntimeConfig(cfg FusionRuntimeConfig) error {
-	for i, name := range cfg.ModelNames {
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("model_names[%d] cannot be empty", i)
-		}
-	}
-	return nil
 }
 
 func (c *FusionRequestConfig) Validate() error {

@@ -201,12 +201,12 @@ def test_agent_skill_installs_a_current_cli_and_verifies_a_routed_answer() -> No
     references = VLLM_SR_AGENT_SKILL_PATH.parent / "references"
     agent_docs = " ".join(AGENT_INSTALL_DOC_PATH.read_text(encoding="utf-8").split())
 
-    # A stable release that predates standalone mode falls back to the dev
-    # channel, so neither channel is pinned.
-    assert "grep -q -- '--gateway'" in skill
+    # A stable release that predates the current serve contract falls back to
+    # the dev channel, so neither channel is pinned.
+    assert "grep -q -- '--data-parallel-size'" in skill
     assert "--channel dev --mode cli --runtime skip --no-launch" in skill
     assert "python3 -m ensurepip --version" in skill
-    assert "--platform amd" in skill
+    assert "--platform rocm" in skill
     # A complete config, bound to loopback; bare serve waits for the Dashboard.
     assert "address: 127.0.0.1" in skill
     assert "Never run `vllm-sr serve` without a complete `--config`" in skill
@@ -217,7 +217,9 @@ def test_agent_skill_installs_a_current_cli_and_verifies_a_routed_answer() -> No
         "x-vsr-selected-decision: code-route",
         "vllm-sr route preview",
         "--max-completion-tokens 256",
-        '"device":"rocm:0"',
+        "vllm-sr instance models",
+        "--device-ids 0",
+        "-e --platform rocm",
     ):
         assert evidence in skill
     assert "through Envoy" not in skill

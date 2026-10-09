@@ -104,19 +104,19 @@ func TestFusionFallbackTargetRejectsCompositeSlugs(t *testing.T) {
 		{
 			name: "fusion slug",
 			apply: func(cfg *RouterConfig, slug string) {
-				cfg.Looper.Fusion.ModelNames = []string{slug}
+				cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{slug}, Recipe: DefaultRecipeName}}
 			},
 		},
 		{
 			name: "flow slug",
 			apply: func(cfg *RouterConfig, slug string) {
-				cfg.Looper.Flow.ModelNames = []string{slug}
+				cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{slug}, Recipe: DefaultRecipeName}}
 			},
 		},
 		{
 			name: "remom slug",
 			apply: func(cfg *RouterConfig, slug string) {
-				cfg.Looper.ReMoM.ModelNames = []string{slug}
+				cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{slug}, Recipe: DefaultRecipeName}}
 			},
 		},
 	}
