@@ -143,6 +143,7 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/decision-model/test", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), decisionModel)
 	nativeRoutes := auth.ProtectedRoute("/api/decision-model/routes", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet)
 	nativeRoutes.Policies = append(nativeRoutes.Policies, auth.ProtectedBoundedRoute("/api/decision-model/routes", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost).Policies...)
+	nativeRoutes = nativeRoutes.Describe(http.MethodGet, decisionRoutesOperation).Describe(http.MethodPost, decisionRouteRunOperation)
 	registerRouteFunc(mux, nativeRoutes, handlers.DecisionModelRoutesHandler(cfg.RouterAPIURL, store))
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/models/catalog", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/models/discover", auth.PermConfigWrite, "model.discover", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.ModelDiscoveryHandler(nil))

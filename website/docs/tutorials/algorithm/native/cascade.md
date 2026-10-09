@@ -179,7 +179,7 @@ Native signals inspect the complete task document, including its states and ques
 
 Preference signals must use a native decision task deployment. Explicit contrastive or external preference adapters and MCP domain classifiers are unavailable in native recipes until they share the request lifecycle. Supported model-backed signals retain their own transport timeouts and request cancellation. They run before the selected algorithm starts its budget.
 
-The recipe's `strategy` still chooses among matching decisions. Native execution uses its explicit stages and budget rather than Chat fallback, candidate requirements, decision reliability, output contracts or adaptation controls. Keep inherited Chat fallback disabled for this recipe. `modelRefs` declares aliases only; stage order determines selection, so Chat reasoning controls and model weights are rejected. Provider-level retry and timeout settings still apply to remote exchanges.
+The recipe's `strategy` still chooses among matching decisions. Native execution uses its explicit stages and budget rather than Chat fallback, candidate requirements, decision reliability, output contracts or adaptation controls. Keep Chat fallback disabled for this native recipe. `modelRefs` declares aliases only; stage order determines selection, so Chat reasoning controls and model weights are rejected. Provider-level retry and timeout settings still apply to remote exchanges.
 
 ### Choose a branch before running its cascade
 

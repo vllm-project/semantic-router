@@ -119,6 +119,71 @@ the stock command as bit-identical to a controlled acquisition with extra
 options. Keep the frozen request mapping, model identities, configuration and
 measurement method with each experiment's receipts.
 
+### Repeat the controlled quality and frontend timing run
+
+Use the integrated collector when you need question-level full-input checks,
+immutable native metadata and a repeatable serial schedule. It renders requests
+with the pinned upstream TypeSafe adapter, uses the existing one-attempt native
+transport and passes probabilities to the unchanged upstream scorer. It never
+fits a threshold or changes Router configuration.
+
+Deploy the cascade from the guide, explicitly publish `kai`, `vega` and
+`vllm-sr/auto`, and verify the service loaded that configuration. From the Router
+repository, run:
+
+```bash
+PYTHONPATH=tools/calibration .venv-agent/bin/python -m systemone_auto jevbench \
+  --jevbench-checkout /path/to/jevbench \
+  --endpoint http://127.0.0.1:8801 \
+  --config config.yaml \
+  --gate-threshold 0.6059704079536342 \
+  --output-dir .agent-harness/jevbench-controlled
+```
+
+The default performs nine separate typed warmups, then three sequential passes
+of all 231 tasks through each of the three aliases: **2,079 measured requests**.
+Only pass 0 contributes quality results. Every HTTP error, timeout, invalid
+answer or missing input-coverage/identity proof stays in the intended quality
+denominator. No failed request is retried and no latency outlier is removed.
+The output directory must be empty; interrupted runs remain marked incomplete.
+
+Use `--key-env SYSTEMONE_API_KEY` for a protected listener; credentials and
+endpoints are not written to artifacts. `--kai-model`, `--vega-model` and
+`--auto-model` customize the published aliases. The two checkpoint revisions
+above and native `exact` profile/numerics are pinned. Every response must retain
+the requested public model alias, while its native revision identifies Kai or
+Vega independently. Metadata records and checks the numerical profile and model
+artifact hash throughout the run.
+`--config` records the local YAML hash without copying its contents. It does
+not replace checking the configuration actually deployed on the target.
+
+`plan.json` freezes the label-free request order, request hashes, warmups,
+predeclared gate, source hashes and controls before the first request.
+`observations.jsonl` retains safe native answer values, timings and outcomes.
+`summary.json` reports exact-label quality, unresolved requests, Kai coverage,
+and separate mean/p50/p95/p99 for every arm and pass. Costs are not inferred.
+
+To inspect the plan without any network call, use `--plan-only` and a separate
+output directory. The default order is seeded with `20261010`, interleaves the
+three arms per task, rotates their order and keeps passes sequential. For the
+exact published run, add the archived `--schedule request-schedule.json` and
+`--warmups warmup-requests.json` from its evidence package; do not silently
+substitute a new seeded order when reproducing historical timing.
+
+Physical-call verification is optional. Pass both `--kai-metrics` and
+`--vega-metrics` with the dedicated native runtime `/metrics` URLs; add
+`--metrics-key-env` if they need authentication. Counter reads happen outside
+the timed frontend request. Missing counters, metric failures and counter
+resets produce `null` deltas, never fabricated zero calls. The runtimes must
+have no other inference traffic during this counter comparison. Omitting
+metrics still gives real frontend timing and quality, without a measured
+physical-call claim.
+
+This collector measures serial latency. Two resident model runtimes, native
+compute milliseconds or fewer large-model calls do not establish lower GPU
+provisioning cost or concurrent throughput. Keep cold/first-pass results
+separate and show mean and tail together.
+
 ## Separate exploratory pilot and follow-up tools
 
 The commands below describe the earlier Banking77/BoolQ/DynaSent pilot and

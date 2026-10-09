@@ -8,6 +8,8 @@ from pathlib import Path
 from .artifacts import canonical, write_json
 from .collection import collect
 from .dataset import prepare
+from .jevbench import add_parser as add_jevbench_parser
+from .jevbench import run as run_jevbench
 from .judge import collect_judge, score_judge
 from .replay import replay
 from .sources import download
@@ -85,8 +87,11 @@ def main() -> None:
     judge_score.add_argument("--requests", type=Path, required=True)
     judge_score.add_argument("--collection-dir", type=Path, required=True)
     judge_score.add_argument("--output", type=Path, required=True)
+    add_jevbench_parser(commands)
     args = parser.parse_args()
-    if args.command == "download":
+    if args.command == "jevbench":
+        summary = run_jevbench(args)
+    elif args.command == "download":
         result = download(args.directory, args.lock)
         summary = {"sources": list(result["sources"])}
     elif args.command == "prepare":

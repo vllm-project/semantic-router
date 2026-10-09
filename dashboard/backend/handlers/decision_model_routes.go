@@ -14,6 +14,13 @@ import (
 
 const decisionModelRoutesPath = "/api/v1/diagnostics/routes/systemone"
 
+// DecisionModelRouteRequest selects an active native route. Request stays raw
+// so the frontend owns native validation and receives the original question order.
+type DecisionModelRouteRequest struct {
+	Model   string          `json:"model"`
+	Request json.RawMessage `json:"request"`
+}
+
 // DecisionModelRoutesHandler delegates operator diagnostics to the active
 // frontend. The Router owns route admission, lifecycle and execution budgets;
 // no public listener credential or browser-selected endpoint is forwarded.
@@ -38,10 +45,7 @@ func DecisionModelRoutesHandler(upstream string, providers ...routerauth.Credent
 			ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 		} else {
-			var input struct {
-				Model   string          `json:"model"`
-				Request json.RawMessage `json:"request"`
-			}
+			var input DecisionModelRouteRequest
 			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, decisionModelRequestLimit))
 			decoder.DisallowUnknownFields()
 			err := decoder.Decode(&input)
