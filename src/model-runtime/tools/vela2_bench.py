@@ -4,6 +4,7 @@
         [--sides runtime,runtime-shared,runtime-batching,max_speed:KIND,reference,reference-onnx]
         [--tokens 32,128,512,2048] [--requests 40] [--warmup 5] [--concurrency 1,8]
         [--prompts PROMPTS.jsonl] [--rounds 5 --baselines reference,runtime] [--no-graphs] [--no-fused]
+        [--questions QUESTIONS.json]
 
 Workload: the router's signals as one Vela 2.0 request (domain over 14 subject areas,
 jailbreak, PII spans, fact-check, feedback, modality and safety categories) over a
@@ -349,6 +350,11 @@ def main() -> int:
     parser.add_argument("--engine", default="native", help="runtime engine plugin")
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--baselines", default="reference,runtime")
+    parser.add_argument(
+        "--questions",
+        type=Path,
+        help="a JSON object of questions to ask instead of the router's signals",
+    )
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--no-fused", action="store_true")
     parser.add_argument(
@@ -357,6 +363,9 @@ def main() -> int:
         help="record each runtime side's forwards (rows, tokens, time) per row",
     )
     args = parser.parse_args()
+    if args.questions:
+        ROUTER_QUESTIONS.clear()
+        ROUTER_QUESTIONS.update(json.loads(args.questions.read_text(encoding="utf-8")))
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
     concurrency = [int(x) for x in args.concurrency.split(",")]
