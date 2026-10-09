@@ -13,40 +13,6 @@ import type {
 } from '../types/mlPipeline';
 import * as api from '../utils/mlPipelineApi';
 
-// Hook for managing the list of ML pipeline jobs
-export function useMLJobs(autoRefresh = false, refreshInterval = 5000) {
-  const [jobs, setJobs] = useState<MLJob[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchJobs = useCallback(async () => {
-    try {
-      const data = await api.listJobs();
-      setJobs(data);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch ML jobs');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchJobs();
-    if (autoRefresh) {
-      const interval = setInterval(fetchJobs, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [fetchJobs, autoRefresh, refreshInterval]);
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    fetchJobs();
-  }, [fetchJobs]);
-
-  return { jobs, loading, error, refresh };
-}
-
 // Hook for tracking a single job with SSE progress + polling fallback
 export function useMLJobProgress(jobId: string | null) {
   const [job, setJob] = useState<MLJob | null>(null);

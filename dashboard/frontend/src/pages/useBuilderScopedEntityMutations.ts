@@ -25,7 +25,7 @@ export const useBuilderScopedEntityMutations = ({
       const nextSource = mutateBuilderRecipeSource(store.dslSource, recipeName, mutation);
       if (nextSource === store.dslSource) return;
       store.setDslSource(nextSource);
-      if (store.wasmReady) store.parseAST();
+      if (store.compilerReady) store.parseAST();
     },
     [recipeName],
   );

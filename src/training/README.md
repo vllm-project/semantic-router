@@ -16,7 +16,7 @@ MOM artifacts retain their original training owners.
 | `model_eval/` | cross-family evaluation utilities |
 | `model_experiment/` | experiments that are not release owners |
 | `model_selection/` | learned model-selection research |
-| `kv_mapper/` | cross-model KV ridge-mapper artifacts (#2976) |
+| `kv_mapper/` | cross-model KV mapper artifacts, ridge fit and distillation (#2976) |
 
 Each release-owning family has a focused directory with a README,
 machine-readable configuration, explicit data/output paths, train and export
@@ -29,20 +29,22 @@ data preparation, commands, evaluation, and artifact format.
 
 ## Training control-plane contract
 
-`semantic-router.training/v1` defines shared resources and messages for selector
+`semantic-router.training/v2` defines shared resources and messages for selector
 training and neural fine-tuning. This is a contract for future management and
 worker implementations; HTTP routes, persistence, scheduling and Console training
-flows are not implemented by this package.
+flows are not implemented by this package. v2 replaced v1 when the Router's
+embedded Candle and ONNX Runtime runtimes were removed: classifiers qualify on the
+model runtime, and v1 documents are refused.
 
 The canonical [Go contract](../semantic-router/pkg/trainingcontract/) generates
-[JSON Schema](../semantic-router/pkg/trainingcontract/training-v1.schema.json) and
+[JSON Schema](../semantic-router/pkg/trainingcontract/training-v2.schema.json) and
 [Console types](../../dashboard/frontend/src/generated/trainingContract.ts).
 [Python validation](control_plane/contracts.py) consumes that schema directly.
-The [OpenAPI contract](../semantic-router/pkg/trainingcontract/training-v1.openapi.yaml)
+The [OpenAPI contract](../semantic-router/pkg/trainingcontract/training-v2.openapi.yaml)
 defines management operations, ownership, output discovery, submission idempotency,
 cancellation and retry semantics.
 
-`APIError.code` is an open string. New codes may be added within v1 without a
+`APIError.code` is an open string. New codes may be added within v2 without a
 contract-version bump; existing codes retain their meanings. Clients must accept
 unknown codes and handle them as generic errors using HTTP status and `message`.
 The OpenAPI error response lists the well-known codes and their HTTP statuses.
@@ -104,12 +106,14 @@ attempt with diagnostics.
 The capability layer resolves a requested training outcome across independently extensible
 trainer, architecture, hardware, artifact, and runtime capabilities without central switch
 statements or hard-coded UI enums. Capability IDs follow `<domain>/<name>@<version>`
-(e.g. `trainer/hf-peft@v1`, `architecture/hf-modernbert@v1`, `hardware/rocm@v1`, `runtime/onnxruntime@v1`).
+(e.g. `trainer/hf-peft@v1`, `architecture/hf-modernbert@v1`, `hardware/rocm@v1`, `runtime/model-runtime@v1`).
 
 Training hardware requirements remain distinct from inference qualification hardware requirements:
 a neural model trained on CUDA/ROCm GPUs may be planned and qualified across multiple runtime targets
-(such as CPU with Candle or GPU with ONNX Runtime), automatically scheduling format conversions
-(e.g. Safetensors to ONNX) when direct runtime loading is unavailable.
+(such as `runtime/model-runtime@v1`, the model runtime's OpenAPI 2.x contract, on a CPU or an AMD GPU).
+The built-in catalog qualifies ModernBERT label-score and span classifiers from Safetensors
+checkpoints on the model runtime and selectors on the native runtime. When a registered runtime
+accepts only another format, the planner schedules the conversion a registered rule provides.
 
 Clients query `GET /capabilities` to discover supported descriptors and `POST /capabilities/plan`
 to validate proposed combinations. Unsupported combinations return stable machine-readable reason

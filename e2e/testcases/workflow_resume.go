@@ -15,7 +15,12 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-const workflowRedisKeyPrefix = "vllm-sr:flow:state:"
+const (
+	workflowRedisKeyPrefix = "vllm-sr:flow:state:"
+	// workflowFlowModel is the Router's default Flow alias. A backend model
+	// named as a Flow alias would send all of its traffic to Flow decisions.
+	workflowFlowModel = "vllm-sr/auto"
+)
 
 func init() {
 	pkgtestcases.Register("workflow-resume-restart-recovery", pkgtestcases.TestCase{
@@ -101,7 +106,7 @@ func triggerWorkflowToolPauseBeforeRestart(
 	chatClient := fixtures.NewChatCompletionsClient(session, 45*time.Second)
 
 	initReq := fixtures.ChatCompletionsRequest{
-		Model: "openai/gpt-oss-20b",
+		Model: workflowFlowModel,
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Run workflow task: calculate sum of 2 and 2"},
 		},
@@ -182,7 +187,7 @@ func resumeAndVerifyWorkflowStateAfterRestart(
 	chatClient := fixtures.NewChatCompletionsClient(session, 45*time.Second)
 
 	resumeReq := fixtures.ChatCompletionsRequest{
-		Model: "openai/gpt-oss-20b",
+		Model: workflowFlowModel,
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Run workflow task: calculate sum of 2 and 2"},
 			{

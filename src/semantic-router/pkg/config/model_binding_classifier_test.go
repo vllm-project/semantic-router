@@ -31,7 +31,7 @@ func genericBindingConfig(provider, ruleType string) *RouterConfig {
 }
 
 func TestGenericBindingUsesResolvedProviderAndKeepsCanonicalSelectors(t *testing.T) {
-	for _, provider := range []string{"candle", "ort", "http"} {
+	for _, provider := range []string{ModelRuntimeProvider, "http"} {
 		for _, ruleType := range []string{ClassifierSignalTypeLocal, ClassifierSignalTypeSequenceClassifier} {
 			t.Run(provider+"/"+ruleType, func(t *testing.T) {
 				cfg := genericBindingConfig(provider, ruleType)
@@ -76,7 +76,7 @@ func TestGenericBindingRequiresExactPrivateRuleAndSupportedExtraction(t *testing
 			case "chat sequence":
 				decl.Adapter = RemoteClassifierProtocolHTTPChat
 			case "local llm":
-				cfg = genericBindingConfig("candle", ClassifierSignalTypeLLM)
+				cfg = genericBindingConfig(ModelRuntimeProvider, ClassifierSignalTypeLLM)
 				decl = cfg.ModelBindings["classifier.risk.tenant"]
 			case "decision contract":
 				decl.Contract = RemoteClassifierContractLabelDecision
@@ -127,7 +127,7 @@ func TestMultipleLocalClassifierRulesRoundTripIndependently(t *testing.T) {
 }
 
 func TestIndependentBindingAndDecisionContract(t *testing.T) {
-	cfg := genericBindingConfig("candle", ClassifierSignalTypeLocal)
+	cfg := genericBindingConfig(ModelRuntimeProvider, ClassifierSignalTypeLocal)
 	decl := cfg.ModelBindings["classifier.risk.tenant"]
 	decl.Contract = RemoteClassifierContractLabelScores
 	decl.OperatingPoint = &OperatingPointReference{Path: "point.json", SHA256: strings.Repeat("a", 64)}
@@ -153,21 +153,17 @@ func TestIndependentBindingAndDecisionContract(t *testing.T) {
 	if !reflect.DeepEqual(decl, restored) {
 		t.Fatal("policy reference lost in canonical roundtrip")
 	}
-	for _, scenario := range []string{"no policy", "categorical policy", "HTTP", "separate head", "bad sha", "escape", "missing budget", "truncate", "half precision"} {
+	for _, scenario := range []string{"categorical policy", "HTTP", "bad sha", "escape", "missing budget", "truncate"} {
 		t.Run(scenario, func(t *testing.T) {
 			bad := decl
 			dep := deployment
 			ref := *decl.OperatingPoint
 			bad.OperatingPoint = &ref
 			switch scenario {
-			case "no policy":
-				bad.OperatingPoint = nil
 			case "categorical policy":
 				bad.Contract = RemoteClassifierContractLabelDistribution
 			case "HTTP":
 				dep.Provider = "http"
-			case "separate head":
-				bad.Head = "head"
 			case "bad sha":
 				ref.SHA256 = "abc"
 			case "escape":
@@ -176,8 +172,6 @@ func TestIndependentBindingAndDecisionContract(t *testing.T) {
 				dep.Input.MaxTokens = 0
 			case "truncate":
 				dep.Input.Overflow = "truncate"
-			case "half precision":
-				dep.Precision = "fp16"
 			}
 			cfg.ModelBindings["classifier.risk.tenant"] = bad
 			cfg.ModelDeployments["selected"] = dep
@@ -189,25 +183,5 @@ func TestIndependentBindingAndDecisionContract(t *testing.T) {
 	cfg.ModelBindings = nil
 	if validateClassifierDecisionLeaf(cfg, "route", &node) == nil {
 		t.Fatal("unbound classifier omitted predicate")
-	}
-}
-
-func TestIndependentORTBindingDefersGraphIdentityToPreparation(t *testing.T) {
-	cfg := genericBindingConfig("ort", ClassifierSignalTypeLocal)
-	decl := cfg.ModelBindings["classifier.risk.tenant"]
-	decl.Contract = RemoteClassifierContractLabelScores
-	decl.OperatingPoint = &OperatingPointReference{Path: "point.json", SHA256: strings.Repeat("a", 64)}
-	decl.Head = "onnx/model.onnx"
-	cfg.ModelBindings["classifier.risk.tenant"] = decl
-	dep := cfg.ModelDeployments["selected"]
-	dep.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
-	cfg.ModelDeployments["selected"] = dep
-	if _, err := CompileModelBindings(cfg); err != nil {
-		t.Fatal(err)
-	}
-	dep.Precision = "fp16"
-	cfg.ModelDeployments["selected"] = dep
-	if _, err := CompileModelBindings(cfg); err == nil {
-		t.Fatal("unqualified conversion accepted")
 	}
 }

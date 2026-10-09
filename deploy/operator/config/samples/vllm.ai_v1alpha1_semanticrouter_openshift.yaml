@@ -9,7 +9,7 @@ spec:
   # Image Configuration
   # ====================
   image:
-    repository: ghcr.io/vllm-project/semantic-router/extproc
+    repository: ghcr.io/vllm-project/semantic-router/vllm-sr
     tag: latest
     pullPolicy: IfNotPresent
     # imageRegistry: quay.io  # Optional registry prefix
@@ -74,8 +74,8 @@ spec:
   # ====================
   # NEW: Gateway Integration (Optional)
   # ====================
-  # Reuse existing Gateway (Envoy Gateway, Istio) instead of deploying Envoy sidecar
-  # The Operator skips its Envoy sidecar. Configure the Gateway-specific ExtProc
+  # Reuse an existing Gateway (Envoy Gateway, Istio): the Router serves ext_proc
+  # instead of its own listener. Configure the Gateway-specific ExtProc
   # policy targeting this Router Service on port 50051 and model backend routes
   # separately. The Operator does not create an HTTPRoute.
   gateway:
@@ -163,12 +163,11 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
-      variant: mmbert32k
-      model_id: models/Vela-1.0-Encoder-307M-Guard
-      threshold: "0.5"
+      model_id: models/Vela-2.0-0.3B
+      threshold: "0.75"
       use_cpu: true
 
-    # Domain and PII classifiers use the Vela defaults.
+    # Domain and PII classifiers use the Vela 2.0 0.3B defaults.
 
     # Reasoning families configuration
     reasoning_effort: medium  # low, medium, high

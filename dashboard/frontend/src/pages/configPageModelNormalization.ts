@@ -1,6 +1,6 @@
 import { effectiveModelAPIFormat, protocolForModelAPIFormat } from './configPageModelCatalogSupport'
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../modelCatalogDocument'
+import bundledCatalog from '../modelCatalogMetadata'
 import type { BuiltInModelCatalog, BuiltInModelMetadata } from '../types/modelCatalog'
 import {
   normalizeEndpoint,

@@ -81,13 +81,13 @@ func TestRemoteVectorCachePolarityCandidates(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					var lookup func(context.Context, string, string, float32) (LookupResult, error)
 					if backend == "milvus" {
-						c := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, model string, _ []float32) ([]client.SearchResult, error) {
+						c := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, model string, _ []float32) ([]client.SearchResult, error) {
 							require.Equal(t, "tenant-a", model)
 							return []client.SearchResult{milvusPolarityFixture(tc.candidates)}, nil
 						}}
 						lookup = c.LookupSimilarWithThreshold
 					} else {
-						c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, request *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+						c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, request *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
 							require.True(t, request.GetWithPayload().GetEnable())
 							require.Equal(t, float32(.8), request.GetScoreThreshold())
 							require.Equal(t, "tenant-a", request.Filter.Must[0].GetField().GetMatch().GetKeyword())
@@ -113,10 +113,10 @@ func TestRemoteVectorCachePolarityCandidates(t *testing.T) {
 func TestRemoteVectorCacheHitReportsNegationGuard(t *testing.T) {
 	for _, tc := range negationGuardServedPairs {
 		candidates := []remotePolarityCandidate{{tc.cached, "ANSWER", .95}}
-		milvus := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
+		milvus := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
 			return []client.SearchResult{milvusPolarityFixture(candidates)}, nil
 		}}
-		qdrantCache := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+		qdrantCache := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
 			return qdrantPolarityFixture(candidates), nil
 		}}
 		for backend, lookup := range map[string]func(context.Context, string, string, float32) (LookupResult, error){
@@ -168,10 +168,10 @@ func TestRemoteVectorCacheSearchErrors(t *testing.T) {
 				}
 				var lookup func(context.Context, string, string, float32) (LookupResult, error)
 				if backend == "milvus" {
-					c := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) { return nil, searchFailure() }}
+					c := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) { return nil, searchFailure() }}
 					lookup = c.LookupSimilarWithThreshold
 				} else {
-					c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) { return nil, searchFailure() }}
+					c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) { return nil, searchFailure() }}
 					lookup = c.LookupSimilarWithThreshold
 				}
 				got, err := lookup(ctx, "model", "enable logging", .8)
@@ -202,12 +202,12 @@ func TestRemoteVectorCachePolarityThroughService(t *testing.T) {
 				var cache CacheBackend
 				var expectedPartition string
 				if backend == MilvusCacheType {
-					cache = &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, model string, _ []float32) ([]client.SearchResult, error) {
+					cache = &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, model string, _ []float32) ([]client.SearchResult, error) {
 						require.Equal(t, expectedPartition, model)
 						return []client.SearchResult{milvusPolarityFixture(candidates)}, nil
 					}}
 				} else {
-					cache = &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, request *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+					cache = &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, request *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
 						require.Equal(t, expectedPartition, request.Filter.Must[0].GetField().GetMatch().GetKeyword())
 						return qdrantPolarityFixture(candidates), nil
 					}}
@@ -295,7 +295,7 @@ func TestMilvusNamedSemanticFieldsRequested(t *testing.T) {
 }
 
 func TestQdrantSemanticCandidateBound(t *testing.T) {
-	c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, request *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+	c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(_ context.Context, request *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
 		require.Equal(t, uint64(5), request.GetLimit())
 		return nil, nil
 	}}
@@ -326,7 +326,7 @@ func TestRemoteVectorCacheMissingQueryMetadata(t *testing.T) {
 					if wrongType {
 						result.Fields = append(result.Fields, entity.NewColumnInt64("query", []int64{1}))
 					}
-					c := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
+					c := &MilvusCache{enabled: true, config: milvusCacheTestConfig("Strong"), embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
 						return []client.SearchResult{result}, nil
 					}}
 					lookup = c.LookupSimilarWithThreshold
@@ -336,7 +336,7 @@ func TestRemoteVectorCacheMissingQueryMetadata(t *testing.T) {
 					if wrongType {
 						points[0].Payload["query"] = qdrant.NewValueInt(1)
 					}
-					c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) { return points, nil }}
+					c := &QdrantCache{enabled: true, cfg: &config.QdrantConfig{}, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) { return points, nil }}
 					lookup = c.LookupSimilarWithThreshold
 				}
 				result, err := lookup(context.Background(), "model", "enable logging", .8)
@@ -352,7 +352,7 @@ func TestMilvusNamedSemanticL2Fallback(t *testing.T) {
 	cfg := milvusCacheTestConfig("Strong")
 	cfg.Collection.VectorField.MetricType = "L2"
 	result := milvusPolarityFixture([]remotePolarityCandidate{{"disable logging", "opposite", .01}, {"enable logging", "correct", .25}})
-	c := &MilvusCache{enabled: true, config: cfg, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
+	c := &MilvusCache{enabled: true, config: cfg, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(), searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
 		return []client.SearchResult{result}, nil
 	}}
 	got, err := c.LookupSimilarWithThreshold(context.Background(), "model", "enable logging", .75)
