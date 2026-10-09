@@ -69,10 +69,20 @@ type DeployPreviewResponse struct {
 // DeployPreviewHandler returns the current config and the merged preview
 // so the frontend can show a side-by-side diff before confirming deploy.
 // POST /api/router/config/deploy/preview
-func DeployPreviewHandler(configPath string) http.HandlerFunc {
+func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if readonlyMode {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":   "readonly_mode",
+				"message": "Dashboard is in read-only mode. Deploy is disabled.",
+			})
 			return
 		}
 

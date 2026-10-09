@@ -285,8 +285,8 @@ func appendLooperRoutingFacts(
 }
 
 // appendLooperDecisionDetailHeaders adds the intermediate decision details
-// (selected category, session phase). Demoted to the x-vsr-debug surface
-// (#2205); both remain recoverable from the replay record.
+// (selected category, decision ranking, session phase). Demoted to the
+// x-vsr-debug surface (#2205); all remain recoverable from the replay record.
 func appendLooperDecisionDetailHeaders(
 	setHeaders *[]*core.HeaderValueOption,
 	reqCtx *RequestContext,
@@ -295,6 +295,7 @@ func appendLooperDecisionDetailHeaders(
 		return
 	}
 	appendOptionalHeader(setHeaders, headers.VSRSelectedCategory, reqCtx.VSRSelectedCategory)
+	appendOptionalHeader(setHeaders, headers.VSRDecisionRanking, decisionRankingHeader(reqCtx))
 	appendOptionalHeader(setHeaders, headers.VSRSessionPhase, sessionPolicyPhase(reqCtx))
 }
 

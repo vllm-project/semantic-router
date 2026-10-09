@@ -173,11 +173,16 @@ func TestHallucinationDetectorOnVela2ReadsTheWholeAnswerInOneQuestion(t *testing
 	}
 }
 
-func TestSetOrSpanQuestionToAModelWithoutThemFailsPreparation(t *testing.T) {
+func TestGenericDecisionSetCompositionAndNativeSpanCapability(t *testing.T) {
 	yaml := strings.Replace(vela2RoutingConfig, "      - name: topics\n        deployment: vela2", "      - name: topics\n        deployment: kai", 1)
 	classifier, _ := vela2Classifier(t, yaml)
+	if err := classifier.InitializeRuntime(); err != nil {
+		t.Fatalf("a set task can compose native noul questions: %v", err)
+	}
+	yaml = strings.Replace(vela2RoutingConfig, "      - name: places\n        deployment: vela2", "      - name: places\n        deployment: kai", 1)
+	classifier, _ = vela2Classifier(t, yaml)
 	err := classifier.InitializeRuntime()
-	if err == nil || !strings.Contains(err.Error(), "routing.signals.decision[topics]") || !strings.Contains(err.Error(), "not set") {
-		t.Fatalf("a set question to a System One model must fail preparation, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "routing.signals.decision[places]") || !strings.Contains(err.Error(), "span") {
+		t.Fatalf("precise spans require a native span capability, got %v", err)
 	}
 }

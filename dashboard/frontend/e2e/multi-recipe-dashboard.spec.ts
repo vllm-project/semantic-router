@@ -169,6 +169,10 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
     model_names: ['vllm-sr/new-mixture', 'new-mixture'],
     recipe: 'balanced',
   })
+  expect(savedConfig?.entrypoints).not.toContainEqual({
+    model_names: ['vllm-sr/auto'],
+    recipe: 'default',
+  })
   expect(savedConfig?.recipes[0].routing.decisions[0].modelRefs).toEqual([
     { model: 'model-a', use_reasoning: false },
   ])
@@ -182,17 +186,18 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await expect(page.getByText('balanced-route')).toBeVisible()
   await expect(page.getByText('private-route')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Routing objectives' })).toBeVisible()
-  await expect(page.getByText('2 profiles')).toBeVisible()
+  await expect(page.getByText('3 profiles')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View Default routing topology' })).toBeVisible()
   await page.getByRole('button', { name: 'View privacy topology' }).click()
   await expect(page).toHaveURL(/\/topology\?scope=privacy$/)
 
   await page.goto('/config/signals')
   const signalScope = page.getByLabel('Routing profile')
   await expect(signalScope).toHaveValue('balanced')
-  await expect(page.getByRole('button', { name: 'View Keywords-balanced-keyword' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View keyword-balanced-keyword' })).toBeVisible()
   await signalScope.selectOption('privacy')
-  await expect(page.getByRole('button', { name: 'View PII-private-pii' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'View Keywords-balanced-keyword' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'View pii-private-pii' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View keyword-balanced-keyword' })).toHaveCount(0)
 
   await page.goto('/config/projections')
   const projectionScope = page.getByLabel('Routing profile')
@@ -216,6 +221,11 @@ test('topology switches the complete graph and test model by entrypoint recipe',
   await page.goto('/topology')
 
   const scope = page.getByLabel('Entrypoint / recipe')
+  await expect(scope).toHaveValue('default')
+  await expect(scope.locator('option:checked')).toHaveText('Default routing · vllm-sr/auto')
+  await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
+  await expect(page.getByTestId('rf__node-decision-private-route')).toHaveCount(0)
+  await scope.selectOption('balanced')
   await expect(scope).toHaveValue('balanced')
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toBeVisible()
   await expect(

@@ -269,7 +269,7 @@ verifications:
 # Versioned required inventory, shared by ci/full, nightly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 full_cpu:
-  version: 3
+  version: 4
   required:
     - quality
     - generated-contracts
@@ -296,6 +296,7 @@ full_cpu:
     - e2e-unit
     - e2e.standalone
     - e2e.envoy-ai-gateway
+    - e2e.routing-errors
     - e2e.local-classifier-backend
     - e2e.dashboard
     - e2e.remote-embedding

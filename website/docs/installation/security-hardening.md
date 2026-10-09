@@ -17,7 +17,7 @@ controls of the surrounding platform.
 
 ```mermaid
 flowchart LR
-    Client["Client"] --> Listener["Public Envoy listener"]
+    Client["Client"] --> Listener["Standalone frontend / external gateway"]
     Listener --> Router["Semantic Router"]
     Router --> Provider["Model providers"]
     Admin["Authenticated Dashboard / API"] --> Router
@@ -36,9 +36,14 @@ Review each boundary separately:
 
 ## Protect the public listener
 
-The maintained Envoy configuration removes internal control headers before a
-client request reaches the Router. Do the same when supplying a custom Envoy or
-gateway configuration. Internal examples include:
+The standalone frontend strips untrusted identity and proxy-control headers.
+Configure listener API keys, Chat model allowlists, and native model grants
+separately; see [Gateway Modes](gateway-modes). Do not treat a Dashboard login
+as a public inference credential.
+
+The maintained Envoy configuration also removes internal control headers. Keep
+that boundary when supplying a custom Envoy or gateway configuration. Internal
+examples include:
 
 ```yaml
 request_headers_to_remove:
@@ -77,7 +82,7 @@ api_key: ${MODEL_API_KEY}
 Do not commit literal API keys, passwords, authorization headers, credential
 query parameters, or URLs containing user information.
 
-For `vllm-sr serve --target k8s`, the CLI places sensitive environment values
+For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment values
 in an immutable Secret revision scoped to the namespace and Helm release. Helm
 values and the Deployment reference the Secret by name; they do not contain
 the credential value. A failed upgrade keeps the previous workload and Secret

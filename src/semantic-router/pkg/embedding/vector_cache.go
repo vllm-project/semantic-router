@@ -43,8 +43,9 @@ const vectorCacheShards = 32
 // Embedded is one input's vector and whether the input was truncated to fit
 // the model's input budget.
 type Embedded struct {
-	Vector    []float32
-	Truncated bool
+	Vector     []float32
+	Truncated  bool
+	InputKnown bool
 }
 
 // VectorCache is a bounded, sharded LRU of embedding vectors with in-flight

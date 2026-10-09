@@ -169,8 +169,8 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 		t.Fatalf("failed to decode config payload: %v", err)
 	}
 
-	if cfg["AutoModelName"] != "LiveRouter" {
-		t.Fatalf("expected live config payload, got %#v", cfg["AutoModelName"])
+	if cfg["Entrypoints"] == nil {
+		t.Fatalf("expected live entrypoint config payload, got %#v", cfg["Entrypoints"])
 	}
 }
 
@@ -317,6 +317,7 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 	}
 
 	return &config.RouterConfig{
+		Entrypoints: []config.EntrypointMapping{{ModelNames: []string{autoModelName}, Recipe: config.DefaultRecipeName}},
 		BackendModels: config.BackendModels{
 			VLLMEndpoints: []config.VLLMEndpoint{
 				{
@@ -329,8 +330,7 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 			ModelConfig: modelConfig,
 		},
 		RouterOptions: config.RouterOptions{
-			AutoModelName:             autoModelName,
-			IncludeConfigModelsInList: includeConfigModels,
+			ListBackendModels: includeConfigModels,
 		},
 	}
 }
