@@ -93,12 +93,12 @@ export default function InstallQuickStartSection(): JSX.Element {
             {activeAudience === 'human'
               ? (
                   <Translate id="homepage.install.title.human">
-                    Install locally in one line
+                    Get started in one line
                   </Translate>
                 )
               : (
                   <Translate id="homepage.install.title.agent">
-                    Hand the setup to your agent
+                    Let your agent set it up
                   </Translate>
                 )}
           </h2>
@@ -175,6 +175,12 @@ export default function InstallQuickStartSection(): JSX.Element {
           </button>
         </div>
 
+        <p className={styles.channelNote}>
+          <strong><Translate id="homepage.install.channel">Development channel</Translate></strong>
+          <span aria-hidden="true"> · </span>
+          <Translate id="homepage.install.channelDescription">Matches the latest docs, including the built-in model runtime.</Translate>
+        </p>
+
         <div className={styles.actions}>
           {activeAudience === 'agent'
             ? (
@@ -196,7 +202,13 @@ export default function InstallQuickStartSection(): JSX.Element {
               )}
           {activeAudience === 'agent'
             ? (
-                <PillLink className={styles.docsLink} href={AGENT_SKILL_PATH} muted>
+                <PillLink
+                  className={styles.docsLink}
+                  href={AGENT_SKILL_PATH}
+                  muted
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
                   <Translate id="homepage.install.secondaryCta">View raw skill</Translate>
                 </PillLink>
               )

@@ -25,9 +25,7 @@ import type {
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
-    auto_model_name: 'vllm-sr/auto',
-    auto_model_names: ['vllm-sr/auto', 'auto', 'MoM'],
-    include_config_models_in_list: false,
+    list_backend_models: false,
     clear_route_cache: true,
     model_selection: {
       enabled: true,
@@ -67,6 +65,13 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     store_backend: 'memory',
     ttl_seconds: 2592000,
     async_writes: false,
+    capture_request_body: true,
+    capture_response_body: true,
+    capture_personal_data: true,
+    max_records: 10000,
+    max_body_bytes: 4096,
+    max_tool_trace_bytes: 0,
+    max_tool_trace_steps: 100,
   } satisfies RouterReplayConfig,
   authz: {
     fail_open: false,
@@ -87,7 +92,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     auto_store: false,
     milvus: {
       collection: 'agentic_memory',
-      dimension: 384,
     },
     default_retrieval_limit: 5,
     default_similarity_threshold: 0.7,
@@ -105,7 +109,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     file_storage_dir: '/var/lib/vsr/data',
     max_file_size_mb: 50,
     embedding_model: 'mmbert',
-    embedding_dimension: 384,
     ingestion_workers: 2,
     ingestion_drain_timeout_seconds: 25,
     supported_formats: ['.txt', '.md', '.json', '.csv', '.html'],
@@ -122,26 +125,19 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   prompt_guard: {
     enabled: true,
     model_ref: 'prompt_guard',
-    threshold: 0.7,
+    threshold: 0.75,
     use_cpu: true,
-    use_mmbert_32k: true,
-    jailbreak_mapping_path:
-      'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
       model_ref: 'domain_classifier',
-      threshold: 0.5,
+      threshold: 0.28,
       use_cpu: true,
-      use_mmbert_32k: true,
-      category_mapping_path: 'models/Vela-1.0-Encoder-307M-Domain/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
-      threshold: 0.9,
+      threshold: 0.01,
       use_cpu: true,
-      use_mmbert_32k: true,
-      pii_mapping_path: 'models/Vela-1.0-Encoder-307M-PII/pii_mapping.json',
     },
     preference: {
       use_contrastive: false,
@@ -151,9 +147,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.85,
+      threshold: 0.93,
       use_cpu: true,
-      use_mmbert_32k: true,
     },
     detector: {
       model_ref: 'hallucination_detector',
@@ -162,44 +157,28 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       min_span_length: 1,
       min_span_confidence: 0,
       context_window_size: 50,
-      enable_nli_filtering: false,
-      nli_entailment_threshold: 0.75,
-    },
-    explainer: {
-      model_ref: 'hallucination_explainer',
-      threshold: 0.9,
-      use_cpu: true,
     },
   } satisfies CanonicalHallucinationModuleConfig,
   feedback_detector: {
     enabled: true,
     model_ref: 'feedback_detector',
-    threshold: 0.7,
+    threshold: 0.37,
     use_cpu: true,
-    use_mmbert_32k: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
   complexity: {},
   external_models: [],
-  knowledge_bases: [],
   admission: {},
+  // Every module follows the decision model unless a line binds it.
   system_models: {
-    prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
-    domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
-    pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
-    fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
-    hallucination_detector: 'models/Vela-1.0-Encoder-307M-Halu',
-    hallucination_explainer: 'models/mom-halugate-explainer',
-    feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
+    decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',
-    gemma_model_path: '',
     mmbert_model_path: 'models/Vela-1.0-Encoder-307M-Embedding',
     multimodal_model_path: 'models/vela-1.0-omni-nano',
-    bert_model_path: '',
     use_cpu: true,
     embedding_config: {
-      backend: 'candle',
+      backend: 'model_runtime',
       model_type: 'mmbert',
       preload_embeddings: true,
       target_dimension: 0,
@@ -282,7 +261,7 @@ export const SECTION_META: Record<
     title: 'Router Replay',
     eyebrow: 'Services',
     description:
-      'Persistence policy for replay records written by replay-enabled decision plugins.',
+      'Shared Replay storage and capture defaults. Each decision can override capture settings through its Replay plugin.',
   },
   authz: {
     title: 'Authorization',
@@ -340,7 +319,7 @@ export const SECTION_META: Record<
   hallucination_mitigation: {
     title: 'Hallucination Mitigation',
     eyebrow: 'Model Catalog',
-    description: 'Fact-check, detector, and explainer modules used for hallucination review.',
+    description: 'Fact-check and detector modules used for hallucination review.',
   },
   feedback_detector: {
     title: 'Feedback Detector',
@@ -357,20 +336,16 @@ export const SECTION_META: Record<
     eyebrow: 'Model Catalog',
     description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
   },
-  knowledge_bases: {
-    title: 'Knowledge Bases',
-    eyebrow: 'Model Catalog',
-    description: 'Canonical knowledge-base definitions available to KB-aware routing signals.',
-  },
   admission: {
     title: 'Model Admission',
     eyebrow: 'Model Catalog',
     description: 'Named admission policies used to qualify models before routing.',
   },
   system_models: {
-    title: 'System Model Bindings',
+    title: 'Decision Model & Bindings',
     eyebrow: 'Model Catalog',
-    description: 'Stable capability-to-model bindings for the router-owned built-in model catalog.',
+    description:
+      'Choose the Vela decision model for built-in signals and decision questions, with optional per-signal model overrides.',
   },
   embedding_models: {
     title: 'Embedding Models',

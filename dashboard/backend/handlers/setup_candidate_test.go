@@ -105,16 +105,10 @@ func TestSetupSparsePIIRoundTripPreservesOmittedAndExplicitEmptyMapping(t *testi
 			if !reflect.DeepEqual(resolvedGlobal["model_catalog"], global["model_catalog"]) {
 				t.Fatalf("validation changed the authored model catalog: %#v", resolvedGlobal["model_catalog"])
 			}
+			// The local model serves its own labels, so neither form names a mapping.
 			active := activateSetupRoundTrip(t, configPath, root, returned)
-			wantMapping := "models/Vela-1.0-Encoder-307M-PII/pii_mapping.json"
-			if clear {
-				wantMapping = ""
-			}
-			if active.PIIModel.UseCPU || active.PIIMappingPath != wantMapping || !active.PIIModel.UseMmBERT32K {
+			if active.PIIModel.UseCPU || active.PIIMappingPath != "" {
 				t.Fatalf("sparse PII override changed inherited settings: %+v", active.PIIModel)
-			}
-			if active.IsPIIClassifierEnabled() == clear {
-				t.Fatalf("PII enablement does not follow the effective mapping: %v", active.IsPIIClassifierEnabled())
 			}
 			if active.ManagementAPI.BindAddress != "0.0.0.0" {
 				t.Fatalf("omitted management listener became authored: %+v", active.ManagementAPI)
@@ -138,9 +132,8 @@ func TestSetupSparseDomainRoundTripUsesCanonicalBackendResolution(t *testing.T) 
 	returned := validateSetupRoundTrip(t, configPath, patch)
 	active := activateSetupRoundTrip(t, configPath, root, returned)
 	category := active.CategoryModel
-	if category.Backend == nil || category.Backend.Model != "named-category" ||
-		category.Variant != "" || category.UseModernBERT || category.UseMmBERT32K {
-		t.Fatalf("sparse remote backend did not clear the inherited local variant: %+v", category)
+	if category.Backend == nil || category.Backend.Model != "named-category" {
+		t.Fatalf("sparse remote backend did not resolve: %+v", category)
 	}
 }
 

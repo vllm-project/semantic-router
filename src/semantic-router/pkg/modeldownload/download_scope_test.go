@@ -7,13 +7,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels guards the download
-// scope for the default local backend: the candle runtime loads model.safetensors +
+// TestBuildModelSpecsExcludesOnnxWeightsForLocalEmbeddingModels guards the download
+// scope for local embeddings: the model runtime loads model.safetensors +
 // tokenizer.json, so the multi-gigabyte ONNX exports shipped in the same repository
-// must not be fetched. Every candle embedding path gets the same narrowing.
-func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T) {
-	requireCandleEmbeddingRuntime(t)
-	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
+// must not be fetched. Every local embedding path gets the same narrowing.
+func TestBuildModelSpecsExcludesOnnxWeightsForLocalEmbeddingModels(t *testing.T) {
+	specs, err := BuildModelSpecs(newLocalEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
@@ -21,7 +20,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T
 	for _, modelPath := range []string{
 		testEmbeddingModelPath,
 		testQwen3ModelPath,
-		testGemmaModelPath,
 		testMultiModalModelPath,
 	} {
 		spec, ok := findSpecByPath(specs, modelPath)
@@ -39,7 +37,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T
 // is keyed and looked up by the canonical path, so it must match whether the collected
 // provisioning path is the literal alias or has already been canonicalized (#2828).
 func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T) {
-	requireCandleEmbeddingRuntime(t)
 	for _, configured := range []string{
 		"models/mom-embedding-ultra", // models/-prefixed alias
 		testEmbeddingModelPath,       // canonical path
@@ -76,57 +73,26 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 	}
 }
 
-// TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend keeps ONNX deployments whole:
-// the OpenVINO embedding backend consumes the ONNX exports, so it must keep receiving
-// the unfiltered repository.
-func TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend(t *testing.T) {
-	cfg := newCandleEmbeddingConfig()
-	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
-		Backend: config.EmbeddingBackendOpenVINO,
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-
-	for _, spec := range specs {
-		if len(spec.ExcludePatterns) != 0 {
-			t.Fatalf("%s ExcludePatterns = %#v, want none for the openvino backend", spec.LocalPath, spec.ExcludePatterns)
-		}
-	}
-}
-
-// TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered limits the blast radius to the
+// TestEmbeddingExcludePatternsLeaveOtherModelsUnfiltered limits the blast radius to the
 // embedding runtime: other locally provisioned models keep the full snapshot until their
 // own runtime contract is encoded.
-func TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered(t *testing.T) {
-	const bertModelPath = "models/all-MiniLM-L12-v2"
+func TestEmbeddingExcludePatternsLeaveOtherModelsUnfiltered(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
-	cfg.MoMRegistry[bertModelPath] = "sentence-transformers/all-MiniLM-L12-v2"
-	cfg.BertModelPath = bertModelPath
-	cfg.Memory.Enabled = true
-	cfg.Memory.EmbeddingModel = "bert"
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
+	cfg.CategoryModel.ModelID = "models/mom-domain-classifier"
+	excluded := embeddingModelExcludePatterns(cfg)
+	if patterns, ok := excluded["models/mom-domain-classifier"]; ok {
+		t.Fatalf("a classifier snapshot is filtered: %#v", patterns)
 	}
-
-	spec, ok := findSpecByPath(specs, config.ResolveModelPath(bertModelPath))
-	if !ok {
-		t.Fatalf("BuildModelSpecs() did not produce a spec for %q; got %#v", bertModelPath, specs)
-	}
-	if len(spec.ExcludePatterns) != 0 {
-		t.Fatalf("%s ExcludePatterns = %#v, want none", bertModelPath, spec.ExcludePatterns)
+	if got := excluded[config.ResolveModelPath(testEmbeddingModelPath)]; !reflect.DeepEqual(got, onnxWeightExcludePatterns) {
+		t.Fatalf("embedding ExcludePatterns = %#v", got)
 	}
 }
 
-// TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles keeps the exclude list
+// TestOnnxWeightExcludePatternsNeverMatchRuntimeRequiredFiles keeps the exclude list
 // and the completeness contract aligned: a pattern that matched a hard-loaded file
 // would make every download incomplete and loop forever.
-func TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles(t *testing.T) {
-	required := candleEmbeddingModelRequiredFiles(newCandleEmbeddingConfig())
+func TestOnnxWeightExcludePatternsNeverMatchRuntimeRequiredFiles(t *testing.T) {
+	required := embeddingModelRequiredFiles(newLocalEmbeddingConfig())
 	protected := append([]string{}, DefaultRequiredFiles...)
 	protected = append(protected, "onnx/model_config.json")
 	for _, files := range required {

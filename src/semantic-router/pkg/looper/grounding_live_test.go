@@ -15,8 +15,8 @@ import (
 
 // TestFusionWeightPolicy_LiveOllama exercises the full Fusion path with the default
 // weight grounding policy against locally-running Ollama models via the
-// OpenAI-compatible endpoint. The cross-model NLI scorer is stubbed (the candle NLI
-// model is not needed for this check), so this validates the orchestration + the
+// OpenAI-compatible endpoint. The hallucination detector is stubbed (no model
+// runtime is needed for this check), so this validates the orchestration + the
 // new soft-weight policy against REAL panel/judge/synthesis LLM calls: the panel is
 // scored, nothing is dropped, the groundedness notes reach synthesis, and a real
 // answer comes back.
@@ -34,15 +34,15 @@ func TestFusionWeightPolicy_LiveOllama(t *testing.T) {
 	panelEnv := envOr("OLLAMA_PANEL", "llama3.1:8b,gemma3:12b")
 	panelModels := strings.Split(panelEnv, ",")
 
-	// Deterministic NLI stub: flag any answer mentioning "teleport" as contradicted
-	// by its peers, everything else entailed. Produces a real score spread so the
-	// weight policy has something to surface to the judge — without the candle model.
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(strings.ToLower(hypothesis), "teleport") {
-			return 0.05, 0.9, nil
+	// Deterministic detector stub: flag any answer mentioning "teleport" as
+	// unsupported by its peers, everything else supported. Produces a real score
+	// spread so the weight policy has something to surface to the judge.
+	withGroundingDetector(t, func(_ context.Context, _, _, answer string) (GroundingEvidence, error) {
+		if strings.Contains(strings.ToLower(answer), "teleport") {
+			return spanEvidence([]string{"teleport"}, 0.9), nil
 		}
-		return 0.9, 0.05, nil
-	}, nil)
+		return GroundingEvidence{}, nil
+	})
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{

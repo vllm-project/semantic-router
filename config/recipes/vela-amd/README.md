@@ -14,24 +14,16 @@ revision. The shared Encoder is a training parent and is not loaded separately.
 
 | Models | Execution | Input policy |
 | --- | --- | --- |
-| Embedding, Reranker | ORT ROCm with CK FlashAttention, native graph precision | 32,768 tokens, including special tokens; reject overflow |
-| Guard | ORT ROCm, native precision, `onnx/model_rocm_8k.onnx` | 8,192 tokens, including special tokens; reject overflow |
-| Domain, Safety, PII, FactCheck, Feedback, Modality | ORT MIGraphX, native precision | 8,192 tokens, including special tokens; reject overflow |
-| Hazard | ORT MIGraphX, native precision | Artifact-bound 2,048-token overlapping windows within a 32,768-token logical budget |
+| Embedding, Reranker | Built-in model runtime on `rocm:0`, `exact` profile | 32,768 tokens, including special tokens; reject overflow |
+| Guard, Domain, Safety, PII, FactCheck, Feedback, Modality | Built-in model runtime on `rocm:0`, `exact` profile | 8,192 tokens, including special tokens; reject overflow |
+| Hazard | Built-in model runtime on `rocm:0`, `exact` profile | The package's operating point: 2,048-token overlapping windows within a 32,768-token logical budget |
 
-Embedding uses layer 22 and dimension 768, with `full_context: true`.
-Both representation bindings select `head: onnx/model_fa.onnx` and deployments
-select `custom_ops_profile: ck_flash_attention`, `device: rocm:0` and
-`precision: native`. The Reranker's `pair_scorer` is exactly layer 22, dimension
-768. The GPU provider must execute the model without CPU fallback.
-
-The published CK graphs also contain Embedding exits at layers 3, 6 and 11 and
-Reranker exits at layers 3, 6, 11 and 22 with dimensions 64, 128, 256, 512 and
-768. For a reduced Reranker, choose `onnx/model_fa_layer_N_dim_D.onnx` and set
-both `pair_scorer` coordinates to those same values. The full 22/768 selection
-uses `onnx/model_fa.onnx`. Embedding resolves matching flat
-`onnx/model_fa_layer_N.onnx` companions for enabled consumers. Keep the CK graph
-family consistent; portable and FP16 graph variants are different selections.
+Every deployment is a `model_runtime` deployment: the Router starts the runtime
+and the runtime loads each pinned package on the GPU and chooses its kernels.
+Embedding uses layer 22 and dimension 768, with `full_context: true`. The
+Reranker's `pair_scorer` is exactly layer 22, dimension 768; a reduced Reranker
+sets both coordinates to another published exit (layers 3, 6 and 11,
+dimensions 64, 128, 256 and 512).
 
 ## Intended use
 
@@ -58,12 +50,11 @@ pinned operating point's twelve independent thresholds and window policy.
 
 ## Requirements
 
-Use an AMD Router image containing ORT ROCm, MIGraphX and the CK custom operator
-library, a supported AMD GPU, device access through `/dev/kfd` and `/dev/dri`,
+Use the ROCm Router image (it ships the model runtime with ROCm PyTorch), a
+supported AMD GPU, device access through `/dev/kfd` and `/dev/dri`,
 and enough memory for ten loaded task models and the chosen concurrency.
-The CLI downloads the pinned artifacts. Cold MIGraphX compilation can take
-longer than startup on a cached deployment; size the startup budget from actual
-hardware measurements.
+The runtime downloads the pinned packages on first start; size the startup
+budget from actual hardware measurements.
 
 Start your generation backend separately with `--served-model-name vela-default`.
 It must be reachable from the Router as `http://vllm:8000`. For a Docker backend,
@@ -73,10 +64,10 @@ request first. The recipe does not provision a generation model.
 
 ## Data handling and safety
 
-The ten task models run inside the Router. Chat text and retrieved context are
+The ten task models run in the Router's model runtime on the same host. Chat text and retrieved context are
 sent to the configured backend. Uploaded documents and vectors use local stores;
 the example's in-memory vector index does not survive a restart. The CLI mounts
-its workspace state at `/app/.vllm-sr`, including the compilation cache and files.
+its workspace state at `/app/.vllm-sr`, including the files.
 
 This recipe observes risk signals; it does not block requests merely because a
 risk label matches. Configure your application's enforcement policy before
@@ -88,17 +79,17 @@ responses as application data.
 
 ## Quick start
 
-Install the CLI using the [installation guide](https://vllm-sr.ai/docs/installation/installation),
+Install the CLI using the [installation guide](https://vllm-sr.ai/docs/installation/),
 connect the backend described above, and download the recipe:
 
 ```bash
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
-`--platform amd` selects the AMD image and device access; the recipe's explicit
+`--platform rocm` selects the AMD image and device access; the recipe's explicit
 deployments select which models use the GPU. It does not override an authored
 CPU deployment. On a shared machine, select the Router's visible GPU with
 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`; deployment index `0` refers to that visible

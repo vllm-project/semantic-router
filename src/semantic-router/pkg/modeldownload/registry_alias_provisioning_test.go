@@ -10,14 +10,12 @@ import (
 )
 
 func TestBuildModelSpecsCanonicalEmbeddingAliases(t *testing.T) {
-	requireCandleEmbeddingRuntime(t)
 	for _, tc := range []struct {
 		family string
 		field  string
 		alias  string
 	}{
 		{"qwen3", "qwen3_model_path", "qwen3"},
-		{"gemma", "gemma_model_path", "gemma"},
 		{"mmbert", "mmbert_model_path", "embedding-ultra"},
 		{"mmbert", "mmbert_model_path", "Vela-1.0-Encoder-307M-Embedding"},
 	} {
@@ -52,7 +50,7 @@ func TestBuildModelSpecsCanonicalEmbeddingAliases(t *testing.T) {
 					}
 					for _, file := range files {
 						if !slices.Contains(spec.RequiredFiles, file) {
-							t.Errorf("required Candle file %q absent from %v", file, spec.RequiredFiles)
+							t.Errorf("required runtime file %q absent from %v", file, spec.RequiredFiles)
 						}
 					}
 				})
@@ -89,9 +87,7 @@ global:
 func TestExtractModelPathsCanonicalAliasScope(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.Qwen3ModelPath = "qwen3"
-	cfg.GemmaModelPath = "models/qwen3"
 	cfg.MmBertModelPath = "models/mom-embedding-pro"
-	cfg.BertModelPath = "example/unregistered-model"
 	cfg.MultiModalModelPath = "/opt/local-model"
 	cfg.CategoryModel.ModelID = "models/local-weights.safetensors"
 	if got := ExtractModelPaths(cfg); !reflect.DeepEqual(got, []string{"models/mom-embedding-pro"}) {
@@ -101,18 +97,18 @@ func TestExtractModelPathsCanonicalAliasScope(t *testing.T) {
 
 func TestAliasedModelRequirementsShareCanonicalKey(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.GemmaModelPath = "gemma"
-	cfg.MmBertModelPath = "models/gemma"
-	required := candleEmbeddingModelRequiredFiles(cfg)
-	if _, exists := required["gemma"]; exists {
-		t.Fatal("Candle requirements retained a bare alias key")
+	cfg.Qwen3ModelPath = "qwen3"
+	cfg.MmBertModelPath = "models/qwen3"
+	required := embeddingModelRequiredFiles(cfg)
+	if _, exists := required["qwen3"]; exists {
+		t.Fatal("runtime requirements retained a bare alias key")
 	}
-	if _, exists := required["models/gemma"]; exists {
-		t.Fatal("Candle requirements retained a prefixed alias key")
+	if _, exists := required["models/qwen3"]; exists {
+		t.Fatal("runtime requirements retained a prefixed alias key")
 	}
-	want := []string{"model.safetensors", "tokenizer.json", "2_Dense/model.safetensors", "3_Dense/model.safetensors"}
-	if got := required["models/mom-embedding-flash"]; !reflect.DeepEqual(got, want) {
-		t.Fatalf("merged Candle requirements = %v, want %v", got, want)
+	want := []string{"model.safetensors", "tokenizer.json"}
+	if got := required["models/mom-embedding-pro"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("merged runtime requirements = %v, want %v", got, want)
 	}
 	cfg.CategoryMappingPath = "models/domain-classifier/category_mapping.json"
 	if got := ExtractRequiredFilesByModel(cfg)["models/mom-domain-classifier"]; !reflect.DeepEqual(got, []string{"category_mapping.json"}) {

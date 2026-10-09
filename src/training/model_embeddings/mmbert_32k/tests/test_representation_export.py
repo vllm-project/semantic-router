@@ -29,7 +29,7 @@ class RepresentationExportTest(unittest.TestCase):
     def test_export_variants_cannot_mix_source_weights_or_tokenizers(self):
         root = Path(__file__).resolve().parents[5]
         spec = importlib.util.spec_from_file_location(
-            "vela_artifacts", root / "onnx-binding/scripts/onnx_artifacts.py"
+            "vela_artifacts", root / "tools/models/onnx/onnx_artifacts.py"
         )
         artifacts = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(artifacts)
@@ -62,7 +62,7 @@ class RepresentationExportTest(unittest.TestCase):
     def test_external_data_hashes_nested_tensors_and_rejects_escapes(self):
         root = Path(__file__).resolve().parents[5]
         spec = importlib.util.spec_from_file_location(
-            "vela_artifacts", root / "onnx-binding/scripts/onnx_artifacts.py"
+            "vela_artifacts", root / "tools/models/onnx/onnx_artifacts.py"
         )
         artifacts = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(artifacts)
@@ -105,7 +105,7 @@ class RepresentationExportTest(unittest.TestCase):
     def test_dynamic_embedding_and_reranker_match_native(self):
         root = Path(__file__).resolve().parents[5]
         spec = importlib.util.spec_from_file_location(
-            "vela_export", root / "onnx-binding/scripts/export_2d_matryoshka.py"
+            "vela_export", root / "tools/models/onnx/export_2d_matryoshka.py"
         )
         exporter = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(exporter)

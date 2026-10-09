@@ -7,9 +7,11 @@ settings. Define preference rules under `routing.signals.preferences`.
 
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
-`global.model_catalog.modules.classifier.preference.use_contrastive` defaults
-to `true`. Set it to `false` only when you intentionally want the alternative
-classifier path.
+Rules with authored examples use embedding similarity by default. Rules with
+only descriptions use the default decision deployment. An explicit
+`embedding_model` also selects embedding similarity. A configured external
+preference-role backend keeps its own path unless you explicitly choose another
+mode.
 
 ## Key Advantages
 
@@ -48,7 +50,12 @@ routing:
         threshold: 0.7
 ```
 
-Treat the examples as training anchors for the preference detector, not as literal keyword rules.
+The examples describe the style you want to recognize; they are compared by
+meaning rather than matched as literal keywords. Their `threshold` applies to
+the embedding similarity score, not a decision-model probability.
+
+To use this comparison explicitly, including when your rules contain only
+descriptions, set `use_contrastive: true`:
 
 ```yaml
 global:
@@ -56,7 +63,7 @@ global:
     modules:
       classifier:
         preference:
-          use_contrastive: false # optional override; default is true
+          use_contrastive: true
           prototype_scoring:
             enabled: true
             cluster_similarity_threshold: 0.9
@@ -67,6 +74,17 @@ global:
 ```
 
 In contrastive mode, the router embeds each preference rule's descriptions and examples, compresses them into representative prototypes when `prototype_scoring` is enabled, and compares the incoming request against those prototypes. `margin_threshold` lets you reject ambiguous winners instead of forcing a weak preference match.
+
+An explicit `use_contrastive: false` disables this embedding comparison and uses
+the external preference backend when configured, or otherwise the default
+decision deployment. Prototype settings alone do not select contrastive mode.
+
+To select a native decision task explicitly, bind `preference` with
+`contract: decision.v1` under `routing.model_bindings` or
+`global.model_catalog.bindings`. That binding takes precedence over examples
+and `use_contrastive`, and its rule thresholds apply to native choice
+probabilities. Keep cosine thresholds and prototype margins with the embedding
+path; check your examples again when switching to native judgments.
 
 ## Dependencies and Limitations
 

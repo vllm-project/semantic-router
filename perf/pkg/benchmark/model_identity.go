@@ -24,7 +24,7 @@ type ModelIdentity struct {
 }
 
 func IsModelBenchmark(name string) bool {
-	return strings.HasPrefix(name, "BenchmarkClassify") || strings.HasPrefix(name, "BenchmarkCGO") || strings.HasPrefix(name, "BenchmarkCache")
+	return strings.HasPrefix(name, "BenchmarkClassify") || strings.HasPrefix(name, "BenchmarkCache")
 }
 
 func parseModelIdentity(line string) (string, *ModelIdentity, error) {
@@ -53,6 +53,17 @@ func parseModelIdentity(line string) (string, *ModelIdentity, error) {
 func OverlayModelBaseline(baseline, current, models *Baseline) error {
 	if models.GitCommit == "" || models.GitCommit == "unknown" {
 		return fmt.Errorf("model baseline must identify its measured source commit")
+	}
+	if models.ModelBaselineReset != "" {
+		if len(models.Benchmarks) != 0 {
+			return fmt.Errorf("a reset model baseline cannot carry measurements")
+		}
+		if len(models.LegacyComparisonRecords) == 0 {
+			return fmt.Errorf("a reset model baseline must cite the legacy-versus-runtime records")
+		}
+		baseline.ModelBaselineReset = models.ModelBaselineReset
+		baseline.LegacyComparisonRecords = models.LegacyComparisonRecords
+		return nil
 	}
 	measured := 0
 	for name := range models.Benchmarks {

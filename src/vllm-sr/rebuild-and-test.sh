@@ -43,7 +43,7 @@ echo "  Building from: $(pwd)/../.."
 echo "  Note: Use 'make docker-buildx' for multi-platform builds"
 echo ""
 cd ../..
-docker build -t "${IMAGE}" -f src/vllm-sr/Dockerfile .
+docker build -t "${IMAGE}" -f tools/docker/Dockerfile.extproc --target vllm-sr .
 docker image inspect "${ENVOY_IMAGE}" >/dev/null 2>&1 || docker pull "${ENVOY_IMAGE}"
 docker build -t "${DASHBOARD_IMAGE}" -f dashboard/backend/Dockerfile .
 cd src/vllm-sr

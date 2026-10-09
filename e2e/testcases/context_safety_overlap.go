@@ -47,7 +47,7 @@ func testContextSafetyOverlap(ctx context.Context, client *kubernetes.Clientset,
 	}
 	defer stopPortForward()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", contextSafetyOverlapPrompt, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", contextSafetyOverlapPrompt, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("context-safety-overlap request failed: %w", err)
 	}

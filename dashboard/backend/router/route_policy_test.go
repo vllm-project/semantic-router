@@ -1,9 +1,7 @@
 package router
 
 import (
-	"context"
 	"database/sql"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,27 +9,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
-
-func TestOpenClawProxyClosesConnectionAfterPermissionRevocation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = auth.WithPermissionRevalidator(ctx, func(context.Context) error {
-		return errors.New("permission revoked")
-	})
-	r := httptest.NewRequest(http.MethodGet, "/embedded/openclaw/worker-1/", nil).WithContext(ctx)
-	go revalidateOpenClawProxyConnection(r, cancel, ctx.Done())
-	select {
-	case <-ctx.Done():
-	case <-time.After(3 * time.Second):
-		t.Fatal("proxy context stayed active after permission revocation")
-	}
-}
 
 func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 	server := setupRouteInventoryServer(t)
@@ -100,33 +82,38 @@ func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
 func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 	server := setupRouteInventoryServer(t)
 	for _, test := range []struct{ method, path, permission string }{
+		{http.MethodPost, "/api/dsl/compile", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/validate", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/parse", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/decompile", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/format", auth.PermConfigRead},
+		{http.MethodGet, "/api/instance", auth.PermConfigRead},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/config/deploy", auth.PermConfigDeploy},
+		{http.MethodGet, "/api/router/api/v1/inventory/model-runtime", auth.PermConfigRead},
+		{http.MethodGet, "/api/decision-model/capabilities", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/test", auth.PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/diagnostics/models/systemone", auth.PermConfigRead},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/systemone", auth.PermEvalRun},
 		{http.MethodPost, "/api/mcp/tools/execute", auth.PermToolsUse},
 		{http.MethodPatch, "/api/admin/users/user-1", auth.PermUsersManage},
-		{http.MethodGet, "/api/openclaw/teams", auth.PermOpenClawRead},
-		{http.MethodPost, "/api/openclaw/teams", auth.PermOpenClaw},
-		{http.MethodGet, "/api/openclaw/rooms/room-1/messages", auth.PermOpenClawRead},
-		{http.MethodPost, "/api/openclaw/rooms/room-1/messages", auth.PermOpenClaw},
-		{http.MethodGet, "/api/openclaw/rooms/room-1/ws", auth.PermOpenClaw},
-		{http.MethodGet, "/api/openclaw/token", auth.PermOpenClaw},
-		{http.MethodGet, "/embedded/openclaw/worker-1/", auth.PermOpenClaw},
+		{http.MethodGet, "/api/mcp/servers", auth.PermMcpRead},
+		{http.MethodPost, "/api/mcp/servers", auth.PermMcpManage},
 	} {
 		policy, result := server.routePolicies.LookupRoutePolicy(test.method, test.path)
 		if result != auth.RouteFound || policy.Permission != test.permission {
 			t.Errorf("%s %s: lookup=%v permission=%q, want %q", test.method, test.path, result, policy.Permission, test.permission)
 		}
 	}
-	for _, test := range []struct{ path, action string }{
-		{"/api/openclaw/token", "openclaw.token.read"},
-		{"/api/openclaw/rooms/room-1/ws", "openclaw.room.ws.connect"},
-	} {
-		policy, result := server.routePolicies.LookupRoutePolicy(http.MethodGet, test.path)
-		if result != auth.RouteFound || policy.AuditMode != auth.AuditRequired || policy.AuditAction != test.action {
-			t.Errorf("GET %s audit policy=%+v lookup=%v, want %q", test.path, policy, result, test.action)
-		}
+	if _, result := server.routePolicies.LookupRoutePolicy(http.MethodPost, "/api/instance/deploy"); result != auth.RouteNotFound {
+		t.Errorf("retired instance mode route lookup=%v", result)
+	}
+	rawGlobal := "/api/router/config/global/raw"
+	if policy, result := server.routePolicies.LookupRoutePolicy(http.MethodGet, rawGlobal); result != auth.RouteFound ||
+		policy.AuditMode != auth.AuditRequired || policy.AuditAction == "" {
+		t.Errorf("GET %s audit policy=%+v lookup=%v, want a required audit", rawGlobal, policy, result)
 	}
 	for _, path := range []string{"/api/unmapped", "/api/router/api/v1/observability/replays/record-1/unmapped", "/api/services-status"} {
 		if _, result := server.routePolicies.LookupRoutePolicy(http.MethodGet, path); result != auth.RouteNotFound {
@@ -162,16 +149,15 @@ func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 		{"/api/topology/test-query", "topology.test_query"},
 		{"/api/mcp/servers/server-1/test", "mcp.server.test"},
 		{"/api/mcp/servers/test", "mcp.server.test"},
-		{"/api/openclaw/mcp", "openclaw.mcp.call"},
 	} {
 		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, test.path)
 		if lookup != auth.RouteFound || !policy.Revalidate || policy.AuditMode != auth.AuditRequired || policy.AuditAction != test.action {
 			t.Errorf("POST %s policy=%+v lookup=%v, want live revalidation and %q audit", test.path, policy, lookup, test.action)
 		}
 	}
-	policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodDelete, "/api/openclaw/mcp")
-	if lookup != auth.RouteFound || !policy.Revalidate || policy.AuditMode != auth.AuditRequired || policy.AuditAction != "openclaw.mcp.delete" {
-		t.Errorf("DELETE /api/openclaw/mcp policy=%+v lookup=%v", policy, lookup)
+	policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodDelete, "/api/mcp/servers/server-1")
+	if lookup != auth.RouteFound || !policy.Revalidate || policy.AuditMode != auth.AuditRequired || policy.AuditAction != "mcp.server.delete" {
+		t.Errorf("DELETE /api/mcp/servers/server-1 policy=%+v lookup=%v", policy, lookup)
 	}
 }
 
@@ -203,11 +189,13 @@ func TestDashboardProductionRoutePermissionsGrantAndRevokeIndependently(t *testi
 	t.Cleanup(func() { _ = db.Close() })
 	routes := []struct{ method, path, permission string }{
 		{http.MethodGet, "/api/router/config/all", auth.PermConfigRead},
+		{http.MethodGet, "/api/decision-model/capabilities", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/test", auth.PermEvalRun},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/ml-pipeline/train", auth.PermMlPipeline},
-		{http.MethodPost, "/api/openclaw/teams", auth.PermOpenClaw},
+		{http.MethodPost, "/api/mcp/servers", auth.PermMcpManage},
 	}
 	setPermission := func(permission string, allowed bool) {
 		t.Helper()
@@ -275,8 +263,7 @@ func setupRouteInventoryServerWithConfig(t *testing.T, options ...func(*config.C
 		Port: "19000", AuthDBPath: filepath.Join(dir, "auth.db"), JWTSecret: "route-inventory-secret",
 		JWTExpiryHours: 1, StaticDir: staticDir, ConfigFile: configPath, AbsConfigPath: configPath,
 		ConfigDir: dir, RouterAPIURL: "http://127.0.0.1:18080", RouterMetrics: "http://127.0.0.1:19190/metrics",
-		MCPEnabled: true, OpenClawEnabled: true, OpenClawDataDir: filepath.Join(dir, "openclaw"),
-		MLPipelineEnabled: true, MLPipelineDataDir: filepath.Join(dir, "ml-pipeline"),
+		MCPEnabled: true, MLPipelineEnabled: true, MLPipelineDataDir: filepath.Join(dir, "ml-pipeline"),
 		WorkflowDBPath:         filepath.Join(dir, "workflow.sqlite"),
 		ConfigProjectionDBPath: filepath.Join(dir, "projection.sqlite"),
 	}
