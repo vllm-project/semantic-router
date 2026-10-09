@@ -69,6 +69,8 @@ type chatChunkWire struct {
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Ollama reports generation timings in an object beside the final usage.
+	Timings map[string]json.RawMessage `json:"timings,omitempty"`
 	// Aggregator gateways may report the handling agent alongside a chunk.
 	// It is transport metadata, not response content.
 	Agent json.RawMessage `json:"agent,omitempty"`
@@ -227,6 +229,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
 			"stream.p", "provider metadata is not model output",
+		)
+	}
+	if len(chunk.Timings) > 0 {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.timings", "provider generation timings are not model output",
 		)
 	}
 	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {

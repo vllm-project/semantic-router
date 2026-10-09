@@ -2,7 +2,7 @@
 title: Docker 部署
 description: 将 Semantic Router 作为本地或单主机容器栈运行，并连接你单独运维的模型后端。
 translation:
-  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/docker.md"
   outdated: false
 ---
@@ -70,4 +70,4 @@ vllm-sr stop
 
 ## 何时迁移到 Kubernetes
 
-Docker 不提供多节点调度、滚动部署控制或集群级恢复。当你需要副本、声明式发布、网关集成或平台管理的模型发现时，迁移到 Kubernetes 路径。同一份 canonical 配置可以通过 CLI 和 Helm 部署，或通过 Semantic Router Operator 管理。
+Docker 不提供多节点调度、滚动部署控制或集群级恢复。当你需要跨节点 Router 副本、声明式发布、网关集成或平台管理的模型发现时，迁移到 Kubernetes 路径。同一份 canonical 配置可以通过 CLI 和 Helm 部署，或通过 Semantic Router Operator 管理。

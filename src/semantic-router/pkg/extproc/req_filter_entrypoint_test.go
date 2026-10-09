@@ -54,7 +54,7 @@ recipes:
 entrypoints:
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
-  - model_names: ["vllm-sr/default-alias"]
+  - model_names: ["vllm-sr/auto", "vllm-sr/default-alias"]
     recipe: default
 providers:
   defaults:
@@ -119,7 +119,7 @@ func TestRequestModelActsAsAuto(t *testing.T) {
 		model string
 		want  bool
 	}{
-		{model: config.DefaultVSRAutoModelName, want: true},
+		{model: config.DefaultEntrypointModel, want: true},
 		{model: "vllm-sr/privacy", want: true},
 		{model: "vllm-sr/default-alias", want: true},
 		{model: "model-a", want: false},
@@ -154,8 +154,8 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 	}
 
 	ctx = &RequestContext{}
-	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, ctx)
-	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
+	router.resolveEntrypointForRequest(config.DefaultEntrypointModel, ctx)
+	if candidates := router.decisionCandidatesForRequest(config.DefaultEntrypointModel, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
 		t.Fatalf("expected the auto model to use default recipe candidates, got %+v", candidates)
 	}
 }
@@ -178,15 +178,12 @@ func TestDirectLooperAliasesResolveOnlyTheirAlgorithm(t *testing.T) {
 			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmWorkflows},
 		},
 	}
-	router := &OpenAIRouter{Config: &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{Decisions: decisions},
-		Looper: config.LooperConfig{
-			Endpoint: "http://router.test/v1/chat/completions",
-			ReMoM:    config.ReMoMRuntimeConfig{ModelNames: []string{"router/remom"}},
-			Fusion:   config.FusionRuntimeConfig{ModelNames: []string{"router/fusion"}},
-			Flow:     config.FlowRuntimeConfig{ModelNames: []string{"router/flow"}},
-		},
-	}}
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	for i, alias := range []string{"router/remom", "router/fusion", "router/flow"} {
+		recipeName := config.RecipeName(decisions[i].Name)
+		router.Config.Entrypoints = append(router.Config.Entrypoints, config.EntrypointMapping{ModelNames: []string{alias}, Recipe: recipeName})
+		router.Config.Recipes = append(router.Config.Recipes, config.RoutingRecipe{Name: recipeName, Profile: config.RoutingProfile{Decisions: []config.Decision{decisions[i]}}})
+	}
 
 	testCases := []struct {
 		alias        string
@@ -200,7 +197,7 @@ func TestDirectLooperAliasesResolveOnlyTheirAlgorithm(t *testing.T) {
 		t.Run(testCase.alias, func(t *testing.T) {
 			ctx := &RequestContext{}
 			router.resolveEntrypointForRequest(testCase.alias, ctx)
-			if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != config.DefaultRecipeName {
+			if ctx.Routing.SelectedRecipe() == nil || string(ctx.Routing.SelectedRecipe().Name) != testCase.wantDecision {
 				t.Fatalf("direct alias %q did not resolve the default recipe", testCase.alias)
 			}
 			candidates := router.decisionCandidatesForRequest(testCase.alias, ctx)
@@ -255,14 +252,14 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 		{
 			// The privacy signal does not even run for the default recipe.
 			name:         "auto model ignores other recipes' decisions",
-			model:        config.DefaultVSRAutoModelName,
+			model:        config.DefaultEntrypointModel,
 			message:      "my ssn is exposed",
 			wantDecision: "",
 			wantModel:    "model-a",
 		},
 		{
 			name:         "auto model matches the default recipe decision",
-			model:        config.DefaultVSRAutoModelName,
+			model:        config.DefaultEntrypointModel,
 			message:      "this is urgent",
 			wantDecision: "default_route",
 			wantModel:    "model-a",
@@ -322,7 +319,7 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 	router := newEntrypointTestRouter(t)
 
-	response, err := router.handleModelsRequest("/v1/models")
+	response, err := router.handleModelsRequest("/v1/models", nil)
 	if err != nil {
 		t.Fatalf("handleModelsRequest failed: %v", err)
 	}
@@ -354,10 +351,9 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			RouterOptions: config.RouterOptions{
-				AutoModelNames: []string{"router/balanced"},
-			},
+			RouterOptions: config.RouterOptions{},
 			Entrypoints: []config.EntrypointMapping{
+				{ModelNames: []string{"router/balanced"}, Recipe: config.DefaultRecipeName},
 				{ModelNames: []string{"router/flash"}, Recipe: "speed-first"},
 			},
 			Recipes: []config.RoutingRecipe{
@@ -369,7 +365,7 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 		},
 	}
 
-	response, err := router.handleModelsRequest("/v1/models")
+	response, err := router.handleModelsRequest("/v1/models", nil)
 	if err != nil {
 		t.Fatalf("handleModelsRequest failed: %v", err)
 	}
@@ -478,7 +474,7 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 		},
 		{
 			name:         "auto model keeps the default profile fallback",
-			model:        config.DefaultVSRAutoModelName,
+			model:        config.DefaultEntrypointModel,
 			message:      "my ssn is exposed",
 			wantDecision: "",
 			wantModel:    "model-a",

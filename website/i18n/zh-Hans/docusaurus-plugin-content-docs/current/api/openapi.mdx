@@ -4,7 +4,7 @@ sidebar_label: OpenAPI 参考
 description: 检索生成的 vLLM Semantic Router 管理 API 契约。
 hide_table_of_contents: true
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/api/openapi.mdx"
   outdated: false
 ---
@@ -28,7 +28,7 @@ curl -sS http://localhost:8080/openapi.json
 
 控制面板只是面向人的代理，不是 Agent 或 Router 运行所必需的。
 
-本规范描述 Router 的**管理监听器**。被路由的模型流量经过 Envoy，遵循单独的[推理 API 契约](./router)。因此存储路由仅以 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores` 出现；Router 不发布 `/v1/files` 或 `/v1/vector_stores` 别名。
+本规范描述 Router 的**管理监听器**。模型流量默认由 standalone frontend 服务，使用 `--gateway extproc` 时经过 Envoy，遵循单独的[推理 API 契约](./router)。因此存储路由仅以 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores` 出现；Router 不发布 `/v1/files` 或 `/v1/vector_stores` 别名。
 
 生成的契约声明运行时可配置的 Bearer 方案，以及每个操作所需的权限。管理认证关闭时，非健康检查操作也接受匿名访问；设为 `bearer` 时，发送 `Authorization: Bearer <token>`。
 

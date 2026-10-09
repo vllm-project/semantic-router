@@ -150,7 +150,10 @@ class DtypePolicy:
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
     exact weights. A family consents only
     where its records show at least 99% label agreement with the exact path
-    (embeddings: cosine of at least 0.999).
+    (embeddings: cosine of at least 0.999). ``approximate_kernels`` consents,
+    on the same evidence per question type, to the accelerator's approximate
+    kernels when the profile allows them (``EngineOptions.exact_kernels_only``
+    off).
     """
 
     weights: str = "float32"
@@ -160,6 +163,7 @@ class DtypePolicy:
     gpu_weights: str | None = None
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
+    approximate_kernels: bool = False
 
 
 @dataclass(frozen=True)

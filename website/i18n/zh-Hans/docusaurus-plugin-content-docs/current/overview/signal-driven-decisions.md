@@ -3,7 +3,7 @@ sidebar_position: 4
 title: 路由流水线
 description: 信号、投影、决策、插件、算法和模型池如何把一次请求变成执行路径。
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/signal-driven-decisions.md"
   outdated: false
 ---
@@ -74,6 +74,8 @@ flowchart LR
 ## 模型池：执行请求
 
 提供方把逻辑模型名绑定到物理推理端点。池中可以包含本地 vLLM 或 Ollama 服务、Kubernetes 托管模型，或远程 OpenAI 兼容提供方。Semantic Router 选择模型路径；模型服务器或后端调度器执行它，并拥有副本放置。
+
+需要模型的信号会使用模型运行时中的 deployment；多个任务可以共用同一部署和副本池。算法选择回答用户的后端模型，运行时副本池则为某个部署选择可用 worker，两者是不同的调度层。见[组件架构](component-architecture)。
 
 能力和运行时元数据只在策略边界内有用。如果快速后端无法满足请求的模态、上下文、工具或本地性要求，它就不合格。
 

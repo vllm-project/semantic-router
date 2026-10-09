@@ -42,9 +42,18 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 		modelVerificationAuditor: options.modelVerificationAuditor,
 	})
 	registerToolRoutes(mux, cfg)
+	for _, operation := range []string{"compile", "validate", "parse", "decompile", "format"} {
+		registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/dsl/"+operation, auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.DSLEditorHandler(operation))
+	}
 	registerStatusRoutes(mux, cfg, options.statusHandler, stackState(cfg, setupResolver), store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
+	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
+		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
+	}
+	registerRouteFunc(mux, auth.PublicRoute("/v1/systemone/models", http.MethodGet), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
 }
 
 func registerRecipeRoutes(mux routeRegistrar, cfg *config.Config, stores ...*recipe.Store) {
@@ -128,6 +137,10 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
+	decisionModel := handlers.DecisionModelHandler(cfg.RouterAPIURL, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/tasks", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.DecisionTaskCatalogHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/capabilities", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), decisionModel)
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/decision-model/test", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), decisionModel)
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/models/catalog", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/models/discover", auth.PermConfigWrite, "model.discover", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.ModelDiscoveryHandler(nil))
 	registerRouteFunc(mux, auth.ProtectedDelegatedAuditRoute("/api/models/verify", auth.PermEvalRun, "model.inference_verify", auth.SensitivitySensitive, auth.ResourceOwnerInference, 2<<20, http.MethodPost), handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
@@ -155,7 +168,6 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/global/update", auth.PermConfigWrite, "config.global.update", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost, http.MethodPut), handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/router/config/global/raw", auth.PermConfigRead, auth.SensitivitySecret, auth.ResourceOwnerConfig, http.MethodGet), handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/global/raw/update", auth.PermConfigWrite, "config.global_raw.update", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost, http.MethodPut), handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	registerKnowledgeBaseRoutes(mux, cfg, store)
 	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update")
 }
 

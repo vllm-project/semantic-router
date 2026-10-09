@@ -101,13 +101,14 @@ entrypoints:
     recipe: production
 ```
 
-### Model or reserved alias collision
+### Default entrypoint name collision {#model-or-reserved-alias-collision}
 
 ```text
-Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
-Hint: Use a distinct entrypoint model name; do not reuse a configured model or
-reserved alias such as vllm-sr/auto.
+Entrypoint model 'vllm-sr/auto' is mapped more than once
 ```
+
+`vllm-sr/auto` publishes the default recipe unless an explicit entrypoint
+replaces it. Giving that same name to a named recipe creates a duplicate.
 
 Broken:
 
@@ -125,36 +126,28 @@ entrypoints:
     recipe: production
 ```
 
-### Looper alias names a model
+### Entrypoint name collides with a backend model
 
-```text
-Warning: [global.integrations.looper.flow.model_names] Flow alias 'openai/gpt-oss-20b' is also a model that providers.models serves and decisions 'workflow_route', 'default_route' route to; requests for it evaluate only workflows decisions, so the model cannot be requested directly and a request that matches none of them fails with no_route
-Hint: Give the alias a name that no model uses, such as vllm-sr/flow.
-```
+A public recipe entrypoint must have its own name. The Router rejects an
+entrypoint whose name also identifies a backend model, including Fusion,
+ReMoM and Flow entrypoints. There is no special dispatch namespace for these
+algorithms.
 
-The configuration is valid, so it loads, and the Router logs the same warning
-as `looper_alias_shadows_model`. Until the alias is renamed, every request for
-the model returns [`no_route`](../api/router.md#routing-errors) unless it
-matches a workflows decision. The same applies to ReMoM and Fusion aliases.
-
-Broken:
+Broken, if `openai/gpt-oss-20b` is a configured backend:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      flow:
-        model_names: [openai/gpt-oss-20b]
+entrypoints:
+  - model_names: [openai/gpt-oss-20b]
+    recipe: flow
 ```
 
-Corrected, with Flow requests sent to `vllm-sr/flow`:
+Corrected, with Flow requests sent to `vllm-sr/flow` and the flow recipe
+containing decisions with `algorithm.type: workflows`:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      flow:
-        model_names: [vllm-sr/flow]
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: flow
 ```
 
 See the
@@ -171,10 +164,9 @@ vllm-sr logs router | grep '<x-request-id>'
 ```
 
 For `no_route`, the `entrypoint_routing_no_selection` line names the model,
-the recipe, and any decision that matched. A `looper_algorithm` value means the
-model is a Looper alias that evaluates only that algorithm's decisions; if it
-is also a backend model's name, see
-[Looper alias names a model](#looper-alias-names-a-model).
+the recipe, and any decision that matched. Fusion, Flow and ReMoM are
+selected by decisions inside that recipe; their public names are ordinary
+entrypoints. Check the entrypoint mapping and recipe rules first.
 
 ## Response cache cannot start
 
@@ -445,7 +437,7 @@ See [Container connectivity](./container-connectivity) for end-to-end checks.
 
 ## A classifier or embedding model cannot load
 
-Every model runs in the [model runtime](model-runtime/overview.md). When a
+Every model runs in the [model runtime](../model-runtime/overview.md). When a
 model cannot load, its feature reports unknown results and the runtime records
 why. Check the router's `vsr_model_runtime_ready{deployment="..."}` metric and
 the router log, or ask a runtime you run yourself:
@@ -457,7 +449,7 @@ curl -s localhost:8100/v1/models
 Each model's `status` and `reason` say what failed: a damaged download, a
 missing `revision`, a private repository without a token, a device that does
 not exist, or a model too large for its device.
-[Troubleshooting and FAQ](model-runtime/troubleshooting.md) lists each
+[Troubleshooting and FAQ](../model-runtime/troubleshooting.md) lists each
 reason and the fix.
 
 ## Container image has no matching platform

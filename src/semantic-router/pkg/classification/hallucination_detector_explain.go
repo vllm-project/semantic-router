@@ -35,6 +35,13 @@ type EnhancedHallucinationResult struct {
 func (d *HallucinationDetector) DetectWithExplanations(ctx context.Context, contextText, question, answer string) (*EnhancedHallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+	if d.judgment != nil {
+		verdict, err := d.detectJudgment(ctx, contextText, question, answer)
+		if err != nil {
+			return nil, err
+		}
+		return &EnhancedHallucinationResult{HallucinationDetected: verdict.HallucinationDetected, Confidence: verdict.Confidence, ScoreAvailable: verdict.ScoreAvailable, ScoreKind: verdict.ScoreKind}, nil
+	}
 	spans, err := d.detectSpans(ctx, contextText, question, answer)
 	if err != nil {
 		return nil, err

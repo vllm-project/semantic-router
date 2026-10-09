@@ -214,7 +214,7 @@ x-vsr-replay-id: replay_01J...
 
 ## 兼容性与解读
 
-- 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。路由推理响应总会携带它。改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）从不携带该头，因此那里缺失属于预期，而不是合约违规。
+- 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。未由响应缓存返回的路由推理响应携带它。改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）从不携带该头，因此那里缺失属于预期，而不是合约违规。
 - `x-vsr-matched-projections` 是投影头。单数形式不属于公开合约。
 - 配方名限定本地信号、投影、决策、缓存、回放、指标以及学习/会话身份。把响应与 Insights 或指标关联时，把 `x-vsr-selected-recipe` 与本地决策/信号名一起使用。
 - `event` 是决策和 DSL 使用的公开信号类型。规范 YAML 把 event 规则存在 `routing.signals.events` 下，与其他复数信号容器一致。

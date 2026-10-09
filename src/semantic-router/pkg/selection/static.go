@@ -107,6 +107,7 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	allScores := make(map[string]float64)
 	var bestModel *config.ModelRef
 	var bestScore float64
+	foundConfiguredScore := false
 
 	// model_scores are configured on domains, so prefer the matched domain and
 	// fall back to the decision name for callers that only set DecisionName.
@@ -125,6 +126,7 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		if categoryScores != nil {
 			if cs, ok := categoryScores[model.Model]; ok {
 				score = cs
+				foundConfiguredScore = true
 			}
 		}
 
@@ -137,7 +139,7 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	}
 
 	// If no scores found and useFirstCandidate is true, use first
-	if bestModel == nil || (s.config.UseFirstCandidate && bestScore == 1.0) {
+	if bestModel == nil || (s.config.UseFirstCandidate && !foundConfiguredScore) {
 		bestModel = &selCtx.CandidateModels[0]
 		bestScore = allScores[bestModel.Model]
 	}
