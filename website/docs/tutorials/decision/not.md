@@ -46,7 +46,10 @@ routing:
 
 Use `NOT` sparingly and keep the excluded signal explicit, otherwise the decision becomes hard to audit.
 
-`NOT` also matches when its child signal is unavailable or does not fire, so do
-not treat it as proof that content is safe. Prefer a positive trusted condition
-for access-sensitive routes. See a complete example:
+`NOT` reverses a known match; it does not turn an unavailable signal into a
+negative result. `NOT Unknown` remains `Unknown`, and the root decision's
+`rules.on_unknown` policy determines the outcome. Use `fail_request` when an
+unresolved safety check must reject the request. A known negative prediction
+still does not prove that content is safe; use trusted identity for access
+control. See a complete example:
 [`config/fragments/decision/not/exclude-jailbreak.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/not/exclude-jailbreak.yaml).

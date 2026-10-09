@@ -513,14 +513,14 @@ func routingTestRouterForFormat(format llmprotocol.WireFormat) (*OpenAIRouter, s
 
 func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	router := routingTestRouter("qwen14b-dev")
-	request := testNeutralRequest("MoM", "hello from routed model")
+	request := testNeutralRequest("vllm-sr/auto", "hello from routed model")
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.ModalityClassification = &ModalityClassificationResult{
 		Modality: ModalityBoth, Confidence: 0.97, Method: "signal",
 	}
 
 	response, err := router.handleEntrypointModelRouting(
-		request, "MoM", "", entropy.ReasoningDecision{}, "qwen14b-dev", ctx,
+		request, "vllm-sr/auto", "", entropy.ReasoningDecision{}, "qwen14b-dev", ctx,
 	)
 	if err != nil {
 		t.Fatalf("handleEntrypointModelRouting returned error: %v", err)

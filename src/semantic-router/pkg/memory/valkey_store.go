@@ -288,7 +288,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts RetrieveOptions, threshold float32, limit int) []*RetrieveResult {
 	candidates = retainProjectMatches(candidates, opts.ProjectID)
 	if opts.HybridSearch && len(candidates) > 1 {
-		candidates = v.hybridRerank(candidates, opts)
+		candidates = hybridRerankCandidates(candidates, opts)
 	}
 
 	if opts.AdaptiveThreshold && len(candidates) > 1 {

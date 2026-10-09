@@ -2,7 +2,7 @@
 title: 提案
 description: vLLM Semantic Router 的设计提案、概念验证探索、实现记录和架构决策。
 translation:
-  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/index.md"
   outdated: false
 ---
@@ -38,7 +38,7 @@ translation:
 
 | 提案 | 创建日期 | 状态 | 范围 |
 | --- | --- | --- | --- |
-| [模型执行回退](./model-execution-fallback) | 2026-08-10 | 提案 | 跨模型回退的安全所有权边界。 |
+| [模型执行回退](./model-execution-fallback) | 2026-08-10 | 已实现 | 跨模型回退的安全所有权边界。 |
 | [PRISM](./Prism-153key) | 2026-03-20 | 提案 | 模型资格与合法性检查。 |
 | [TruthLens](./hallucination-mitigation-milestone) | 2025-12-02 | 提案 | 网关级幻觉检测与缓解。 |
 
@@ -50,9 +50,9 @@ translation:
 | --- | --- | --- | --- |
 | [Open Intelligence Index 1.0 与 Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | 已实现 | 定义六个开放核心基准、完整案例指数、物理/虚拟排名、运营方证据、路由目标和基准版本迁移。 |
 | [统一模型目录与评估指数](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | 已实现 | 统一提供商、协议、模型、推理、展示、Day-0 和基准比较元数据。 |
-| [Standalone 模式](./standalone-mode) | 2026-10-06 | 提案 | Router 自己提供 OpenAI 兼容接口并代理到后端，standalone 与 extproc 模式共用一个路由核心（[#4623](https://github.com/vllm-project/semantic-router/issues/4623)）。 |
+| [Standalone 模式](./standalone-mode) | 2026-10-06 | 已实现 | Router 自己提供 OpenAI 兼容接口并代理到后端，standalone 与 extproc 模式共用一个路由核心（[#4623](https://github.com/vllm-project/semantic-router/issues/4623)）。 |
 | [统一配置契约 v0.3](./unified-config-contract-v0-3) | 2026-03-17 | 已实现 | 跨编写和部署面的单一配置契约。 |
-| [多协议适配器架构](./multi-protocol-adaptor) | 2026-02-18 | 提案 | 与协议无关地访问路由引擎。 |
+| [多协议适配器架构](./multi-protocol-adaptor) | 2026-02-18 | 已实现 | 与协议无关地访问路由引擎。 |
 | [独立 HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | 已取代 | 链接路由器包的独立网关二进制；已被 [Standalone 模式](./standalone-mode) 取代。 |
 
 ## 服务集成 {#serving-integrations}

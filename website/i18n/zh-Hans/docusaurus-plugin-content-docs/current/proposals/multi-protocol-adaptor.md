@@ -4,7 +4,7 @@ description: 定义 Router 数据面使用的协议中立请求、响应、错�
 created: 2026-02-18
 status: Implemented
 translation:
-  source_commit: "e5da889c843d6dba90bd749e7a59ae146a4e672e"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/multi-protocol-adaptor.md"
   outdated: false
 ---
@@ -15,7 +15,7 @@ translation:
 
 无论客户端或所选后端线格式如何，Router 都评估一份协议中立的语义请求。线 JSON 在入站解码一次，在提供商边界编码一次。响应体和流式事件沿相反路径返回给客户端。
 
-Envoy 仍是生产传输。它拥有监听器、上游集群、连接生命周期、重试和请求转发。ExtProc 服务拥有语义模型选择以及请求或响应策略。编解码层只在线契约与 Router 的中立类型之间映射。
+默认使用 standalone 传输；`--gateway extproc` 将同一核心连接到 Envoy。所选传输拥有监听器、连接、重试和转发；路由核心拥有语义模型选择以及请求/响应策略。编解码层只负责线契约与中立类型之间的映射，不拥有生命周期。
 
 ```mermaid
 flowchart LR
@@ -23,8 +23,8 @@ flowchart LR
   Ingress --> Request["Neutral request"]
   Request --> Router["Signals, decisions, algorithms, plugins"]
   Router --> Provider["Provider codec"]
-  Provider --> Envoy["Envoy upstream transport"]
-  Envoy --> ProviderResponse["Provider response codec"]
+  Provider --> Transport["Standalone or Envoy transport"]
+  Transport --> ProviderResponse["Provider response codec"]
   ProviderResponse --> Response["Neutral response or event stream"]
   Response --> ClientResponse["Client response codec"]
 ```
@@ -112,7 +112,7 @@ NNN-{client-protocol}-{case}-{backend-protocol}-out.json
 
 托管图像生成遵循同一流引擎。输出项从 `in_progress` 开始，进度可以经过 `generating` 和有序部分图像推进，并且该项恰好一次以 `completed` 或 `failed` 结束。反向转换、稀疏部分索引、冲突终端状态，以及进度事件上的结果数据，会在客户端成功终端发布之前失败。
 
-Router 产生的响应直接使用中立事件编码器。它们不创建中间的提供商形态流。取消和反压留在 Envoy 和 ExtProc 的请求生命周期中。
+Router 产生的响应直接使用中立事件编码器。它们不创建中间的提供商形态流。取消和反压由所选传输的请求生命周期管理。
 
 ## 用量与成本 {#usage-and-cost}
 
@@ -136,7 +136,7 @@ providers:
 
 ## 安全边界 {#security-boundary}
 
-客户端控制的头和体元数据不受信任。只有 ExtProc 边界可以在传输确立之后填充可信身份、会话、任务和关联字段。编解码器不能把线元数据提升为可信元数据。
+客户端控制的头和体元数据不受信任。只有经过认证的传输边界可以在传输确立之后填充可信身份、会话、任务和关联字段。编解码器不能把线元数据提升为可信元数据。
 
 公开推理监听器和管理监听器保持分开。本设计不添加直接的 Router HTTP 代理、智能体服务、产品管理面或第二套上游传输。
 

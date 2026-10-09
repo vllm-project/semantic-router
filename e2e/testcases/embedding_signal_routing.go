@@ -139,7 +139,7 @@ func testSingleEmbeddingSignal(ctx context.Context, testCase EmbeddingSignalTest
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "auto", // Use "auto" to trigger intelligent routing with decision evaluation
+		"model": "vllm-sr/auto", // Use "vllm-sr/auto" to trigger intelligent routing with decision evaluation
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

@@ -103,6 +103,13 @@ class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
                 items = []
                 break
         return RequestPlan(
+            complete_inputs=frozenset(
+                key
+                for key, question in questions.items()
+                if isinstance(question, dict)
+                and question.get("require_full_input") is True
+                and key not in errors
+            ),
             question_ids=list(questions),
             items=items,
             errors=errors,
