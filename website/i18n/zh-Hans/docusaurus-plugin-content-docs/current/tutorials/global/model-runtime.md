@@ -1,37 +1,52 @@
 ---
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/global/model-runtime.md"
   outdated: false
 ---
 
-# 模型运行时
+# 内置模型运行时
 
-内置模型在 `vllm-srun` worker 中运行。Router 通过模型服务接口使用任务能力；前端保持控制与请求入口，deployment 声明模型资源，副本池提供多个独立 worker。
+## 概览 {#overview}
 
-## 配置部署与绑定
+模型运行时负责运行 Router 使用的所有模型：为领域、PII 和越狱等信号提供支持的分类器，为语义缓存、记忆和 RAG 提供支持的嵌入模型，以及重排序器、幻觉检测器和判断模型。受管部署使用独立的 worker，通过统一的模型服务 API 提供能力。Router 会启动并监管这些 worker，也可以连接你自行运行的运行时。
+
+## 解决什么问题？ {#what-problem-does-it-solve}
+
+所有依赖模型的功能都通过同一种方式获取模型：由统一的运行时下载、校验、加载模型，并在 CPU 或 GPU 上提供服务。模型输入兼容的调用可以共享原生批次。独立的逻辑部署使用各自的受管 worker。
+
+模型失败或超过截止时间时，相关证据变为不可用，由决策的未知信号策略决定如何路由。请求可能一直等待到截止时间；调用方停止等待后，已经开始的模型 forward 仍可能继续。应根据输入长度和并发量规划运行时资源。
+
+## 何时使用 {#when-to-use}
+
+只要配置的功能需要模型，就会使用模型运行时，无需额外启用。需要将模型放到 GPU、固定其他模型、放置或扩展副本，或连接共享的外部 worker 时，可以自行配置。
+
+使用 `vllm-sr serve ARTIFACT --engine`，可通过同一个持久前端提供原生 System One 请求服务。启动时不加 `--engine`，即可启用已保存配方的路由。两种启动模式都保留前端和 Dashboard。
+
+## 配置 {#configuration}
+
+自行选择的模型通过 `model_runtime` 部署声明：
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      primary:
+      decision-kai:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.3B
-        device: cpu
-    system:
-      decision_model:
-        deployment: primary
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: auto
+      decision-shared:
+        provider: model_runtime
+        endpoint: http://decision-runtime:8100
 ```
 
-命名部署集中保存产物、设备与输入策略；任务绑定引用部署。相同模型可以供多个任务使用，而不必为每个消费者加载一份。目录中仅存在条目不会自动启动未被使用的模型。
+不设置 `endpoint` 时，Router 会为该部署启动运行时，并在其退出后重启。设置 `endpoint` 时，Router 会连接你自行运行的运行时。
 
-在 CLI 中，`vllm-sr serve MODEL` 使用 Router 模式；添加 `--engine`（`-e`）启动不要求 Router YAML 或 Chat 后端的 Engine 模式。`--platform cpu|cuda|rocm` 选择运行平台。模式由启动方式决定，Dashboard 用于管理模型、任务和副本。
+从以下文档开始：
 
-## 副本、状态与输入
-
-部署可配置多个副本，由运行时池根据就绪状态和队列负载分发。副本调度不改变 Router 的 signals → decisions → algorithm 语义。增加副本需要足够的计算与内存资源，不保证在同一张 GPU 上线性提速。
-
-未就绪、失败或超时的模型任务按可用性策略处理。截止时间约束调用方等待，不保证正在进行的底层 forward 立即中止。长输入在少核 CPU 上可能超过请求预算，应按实际文本长度、并发和任务选择硬件与部署规模。
-
-继续阅读[部署指南](../../model-runtime/deploy)、[选择模型](../../model-runtime/choose-a-model.md)与[输入限制](../../model-runtime/reference#long-inputs)。
+- [快速开始](../../model-runtime/quickstart.md)：启动模型并在 Router 中使用。
+- [选择模型、规模和硬件](../../model-runtime/choose-a-model.md)。
+- [与 Router 一起运行](/docs/model-runtime/deploy)：设备、进程、外部运行时和 Kubernetes。
+- [运行配置](/docs/model-runtime/profiles)：精确答案或更快的近似设置。
+- [从原生绑定迁移](../../model-runtime/migrate.md)。
+- [故障排查与常见问题](../../model-runtime/troubleshooting.md)。
