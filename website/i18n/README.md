@@ -21,6 +21,7 @@ Each translated markdown file must include translation metadata:
 
 ```yaml
 ---
+is_mtpe: false                    # Set true only after human review
 translation:
   source_commit: "abc1234def5678"  # Commit SHA when translation was made
   source_file: "docs/intro.md"     # Path to English source file
@@ -32,9 +33,16 @@ translation:
 
 | Field | Description |
 | ----- | ----------- |
+| `is_mtpe` | Required top-level boolean: `true` records human review; `false` leaves the AI translation notice visible |
 | `source_commit` | Commit SHA of the English source file at translation time |
 | `source_file` | Relative path to the English source file |
 | `outdated` | **Auto-managed by CI** - do not manually edit |
+
+`is_mtpe` sits beside `translation`, not inside it. Use an unquoted `true` or
+`false`; a quoted value is a string, and even `"false"` suppresses the notice in
+the banner. The translation team decides when a page qualifies as reviewed.
+The audit never assigns or changes this field. An outdated translation still
+shows its warning regardless of `is_mtpe`.
 
 ## Workflow
 
@@ -67,6 +75,11 @@ The audit uses two signals:
 
 The audit is read-only and returns nonzero while translation or metadata work remains.
 
+Review-state validation covers Markdown and MDX pages in both `current/` and
+versioned translation directories. Missing or invalid `is_mtpe` declarations
+appear under `Metadata issues`. Source-drift checks remain limited to current
+documentation.
+
 Current-document coverage is tracked as an exact, reviewable path inventory in
 `translation-coverage-baseline.txt`. Deleting a recorded locale override fails
 the audit while its English source still exists. New overrides and intentional
@@ -87,7 +100,9 @@ To update only unambiguous `translation.outdated` flags, run:
 make docs-fix-translation-status
 ```
 
-This command does not translate prose or advance `source_commit`. It does not automatically change ambiguous `Metadata needs verification` entries.
+This command does not translate prose, advance `source_commit`, or change
+`is_mtpe`. It does not automatically change ambiguous `Metadata needs
+verification` entries.
 
 To inspect the report without failing a local shell session:
 
@@ -104,7 +119,7 @@ make docs-check-translations || true
    git log -1 --format="%h" -- website/docs/your-file.md
    ```
 
-3. Add the frontmatter with that commit SHA
+3. Add the frontmatter with that commit SHA and an explicit `is_mtpe` boolean
 4. Translate the content
 5. Submit a PR
 
