@@ -8,8 +8,8 @@ from cli.consts import (
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
-    PLATFORM_AMD,
-    PLATFORM_NVIDIA,
+    PLATFORM_CUDA,
+    PLATFORM_ROCM,
     VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
@@ -43,8 +43,8 @@ def _normalize_platform(platform):
 # variant image, human label). Used to upgrade a non-GPU official image to the
 # matching GPU image when --platform selects a GPU platform.
 _GPU_IMAGE_VARIANTS = {
-    PLATFORM_AMD: ("rocm", VLLM_SR_CONTAINER_IMAGE_ROCM, "ROCm"),
-    PLATFORM_NVIDIA: ("cuda", VLLM_SR_CONTAINER_IMAGE_CUDA, "CUDA"),
+    PLATFORM_ROCM: ("rocm", VLLM_SR_CONTAINER_IMAGE_ROCM, "ROCm"),
+    PLATFORM_CUDA: ("cuda", VLLM_SR_CONTAINER_IMAGE_CUDA, "CUDA"),
 }
 
 
@@ -130,7 +130,7 @@ def _select_image_source(image, normalized_platform):
     if env_image:
         log.info(f"Using image from VLLM_SR_IMAGE: {env_image}")
         return env_image
-    if normalized_platform == PLATFORM_AMD:
+    if normalized_platform == PLATFORM_ROCM:
         amd_image = os.getenv("VLLM_SR_IMAGE_AMD", VLLM_SR_CONTAINER_IMAGE_ROCM).strip()
         selected_image = amd_image or VLLM_SR_CONTAINER_IMAGE_ROCM
         log.info(
@@ -138,7 +138,7 @@ def _select_image_source(image, normalized_platform):
             f"{selected_image}"
         )
         return selected_image
-    if normalized_platform == PLATFORM_NVIDIA:
+    if normalized_platform == PLATFORM_CUDA:
         nvidia_image = os.getenv(
             "VLLM_SR_IMAGE_NVIDIA", VLLM_SR_CONTAINER_IMAGE_CUDA
         ).strip()
@@ -360,6 +360,7 @@ def get_runtime_images(
     pull_policy=None,
     platform=None,
     include_dashboard=True,
+    include_envoy=True,
 ):
     """Resolve role-specific runtime images with backward-compatible fallback."""
     if pull_policy is None:
@@ -376,14 +377,15 @@ def get_runtime_images(
             base_image=base_image,
             normalized_platform=normalized_platform,
         ),
-        "envoy": _resolve_runtime_service_image(
+    }
+    if include_envoy:
+        selected_images["envoy"] = _resolve_runtime_service_image(
             "envoy",
             explicit_image=envoy_image,
             base_image_is_explicit=base_image_is_explicit,
             base_image=base_image,
             normalized_platform=normalized_platform,
-        ),
-    }
+        )
     if include_dashboard:
         selected_images["dashboard"] = _resolve_runtime_service_image(
             "dashboard",

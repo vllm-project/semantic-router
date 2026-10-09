@@ -16,7 +16,7 @@ import (
 
 func publishedUnifiedClassifier(t *testing.T) (*UnifiedClassifier, *Classifier) {
 	t.Helper()
-	defaults := config.DefaultGlobalConfig()
+	defaults := vela1SpecialistsConfig()
 	domain := requireRealModel(t, "VLLM_SR_DOMAIN_MODEL", defaults.CategoryModel.ModelID)
 	pii := requireRealModel(t, "VLLM_SR_PII_MODEL", defaults.PIIModel.ModelID)
 	guard := requireRealModel(t, "VLLM_SR_JAILBREAK_MODEL", defaults.PromptGuard.ModelID)

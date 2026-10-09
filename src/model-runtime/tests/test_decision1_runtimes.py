@@ -446,7 +446,11 @@ def test_one_over_long_question_fails_every_question(runtimes):
     assert {answers[q]["error"] for q in (*QUESTIONS, "long")} == {
         "max_length_exceeded"
     }
-    assert answers["bad"] == {"type": None, "error": "invalid_question"}
+    assert (answers["bad"]["type"], answers["bad"]["error"]) == (
+        None,
+        "invalid_question",
+    )
+    assert answers["bad"]["message"]
     assert body["usage"]["input_tokens"] == 0
 
 

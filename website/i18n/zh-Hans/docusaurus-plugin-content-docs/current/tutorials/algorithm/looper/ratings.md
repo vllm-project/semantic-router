@@ -42,7 +42,7 @@ algorithm:
 
 ## 依赖与限制
 
-- 需要多于一个 `modelRef`，以及可访问的 `global.integrations.looper.endpoint`。
+- 需要多于一个 `modelRef`，且每个都在 `providers.models[].backend_refs` 中有后端。
 - 每个候选都会收到请求内容，因此所有候选提供商都必须被路由的数据策略允许。
 - 成本随候选数量增长。并发降低墙上时钟时间，但不减少总模型调用次数。
 - `on_error: skip` 返回成功的 choice；`on_error: fail` 在任一模型调用失败时使本次运行失败。若全部模型失败，运行也会失败。

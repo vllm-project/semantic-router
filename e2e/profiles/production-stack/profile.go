@@ -536,7 +536,7 @@ func availablePort() (string, error) {
 
 func sendGatewayProbeRequest(ctx context.Context, httpClient *http.Client, baseURL string, requestID int) error {
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": fmt.Sprintf("Warm up the production-stack gateway path. Request %d.", requestID)},
 		},

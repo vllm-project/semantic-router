@@ -410,7 +410,7 @@ func newWorkflowStepCollector(
 
 func (c *workflowStepCollector) handleResult(result workflowModelResult) ([]*ModelResponse, error, bool) {
 	if result.err != nil {
-		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: result.err.Error()})
+		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: modelFailureReason(result.err)})
 		if c.cfg.OnError == config.WorkflowOnErrorFail {
 			return nil, fmt.Errorf("workflow step %q failed for model %q: %w", c.step.ID, result.model, result.err), true
 		}
@@ -465,7 +465,7 @@ func (l *WorkflowsLooper) executeWorkflowStepSequential(
 		modelName := step.Models[modelIndex]
 		resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, true, iterationStart+(modelIndex-modelStartIndex), req)
 		if err != nil {
-			failed = append(failed, FusionFailedModel{Model: modelName, Error: err.Error()})
+			failed = append(failed, FusionFailedModel{Model: modelName, Error: modelFailureReason(err)})
 			if stepCtx.Err() != nil && len(responses) > 0 && cfg.OnError != config.WorkflowOnErrorFail {
 				return responses, failed, nil, nil
 			}

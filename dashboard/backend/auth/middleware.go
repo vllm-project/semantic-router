@@ -23,6 +23,9 @@ const (
 	maxAccessTokenBytes   = 8192
 )
 
+// SessionCookieName is the browser session cookie, exported for the OpenAPI document.
+const SessionCookieName = authSessionCookieName
+
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
 	UserID    string
@@ -148,7 +151,6 @@ func requiredPermission(method, path string) string {
 		adminPermission,
 		settingsPermission,
 		routerPermission,
-		knowledgePermission,
 		toolsPermission,
 		observabilityPermission,
 		recipePermission,
@@ -291,15 +293,6 @@ func routerGatewayRequestAllowed(method, path string) bool {
 	return ok
 }
 
-func knowledgePermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
 func toolsPermission(method string, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/api/mcp/tools/execute"):
@@ -358,8 +351,6 @@ func featurePermission(method, path string) (string, bool) {
 			return PermEvalWrite, true
 		}
 		return PermEvalRead, true
-	case strings.HasPrefix(path, "/api/openclaw/"), strings.HasPrefix(path, "/embedded/openclaw/"):
-		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
 	default:
@@ -381,58 +372,6 @@ func isSRBenchRunAction(path, action string) bool {
 	}
 	parts := strings.Split(rest, "/")
 	return len(parts) == 2 && parts[0] != "" && parts[1] == action
-}
-
-func openclawPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/mcp"):
-		return PermMcpManage, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/provision",
-		"/api/openclaw/start",
-		"/api/openclaw/stop",
-		"/api/openclaw/containers/",
-		"/api/openclaw/next-port",
-		"/api/openclaw/token",
-	):
-		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/rooms/") &&
-		(strings.HasSuffix(path, "/ws") || (method == http.MethodPost && strings.HasSuffix(path, "/messages"))):
-		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
-		return PermOpenClawRead, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/status",
-		"/api/openclaw/skills",
-	):
-		return PermOpenClawRead, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/teams",
-		"/api/openclaw/workers",
-		"/api/openclaw/rooms",
-	):
-		return openclawMethodPermission(method), true
-	default:
-		return openclawMethodPermission(method), true
-	}
-}
-
-func hasAnyPrefix(path string, prefixes ...string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func openclawMethodPermission(method string) string {
-	if method == http.MethodGet {
-		return PermOpenClawRead
-	}
-	return PermOpenClaw
 }
 
 func AuthFromContext(r *http.Request) (AuthContext, bool) {
@@ -559,8 +498,6 @@ func requiresAuthentication(path string) bool {
 	case strings.HasPrefix(path, "/api/setup/state"):
 		return false
 	case path == "/api/status" || path == "/api/status/":
-		return false
-	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false
 	case strings.HasPrefix(path, "/api/"):
 		return true

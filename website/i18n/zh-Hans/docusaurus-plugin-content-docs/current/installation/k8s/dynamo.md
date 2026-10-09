@@ -199,7 +199,7 @@ kubectl describe envoypatchpolicy semantic-router-extproc-patch-policy \
 curl -fsS -D - "$GATEWAY_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {"role": "user", "content": "Explain why prefix caching can reduce inference latency."}
     ],
@@ -217,7 +217,7 @@ curl -fsS -D - "$GATEWAY_URL/v1/chat/completions" \
 | 直接前端请求失败 | Dynamo 部署状态、GPU 分配、模型凭证和前端日志 |
 | 直接前端可用但 Gateway 失败 | `HTTPRoute` 后端名称和端口、`ReferenceGrant` 和 Gateway 地址 |
 | patch 策略未被接受 | Envoy Gateway 扩展设置、patch 目标命名空间和发行兼容性 |
-| 物理模型可用但 `auto` 失败 | Semantic Router 入口、提供商模型名称、决策和分类器就绪状态 |
+| 物理模型可用但 `vllm-sr/auto` 失败 | Semantic Router 入口、提供商模型名称、决策和分类器就绪状态 |
 | 请求到达错误的 Dynamo 部署 | 所选模型头、提供商端点、Dynamo 前端模型列表，以及两层路由的日志 |
 
 ## 清理

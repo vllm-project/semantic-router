@@ -2,16 +2,16 @@
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
-  source_commit: "8d971517501f80107607162e8aebcc084ca71923"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/nvidia-cuda.md"
-  outdated: true
+  outdated: false
 ---
 
 # 使用 NVIDIA CUDA 部署
 
 模型服务器和 Semantic Router 是独立服务。常见部署将 Router 保留在 CPU 上，并把 NVIDIA GPU 交给 vLLM。当本地嵌入或分类器也需要 GPU 加速时，使用 Router 的 CUDA 镜像。
 
-`--platform nvidia` 仅影响本地 Router 栈。它选择 CUDA Router 镜像，将 NVIDIA GPU 传入 Router 容器，并更改其生成的运行时配置，使受支持的本地信号模型优先使用 CUDA。它**不会**下载语言模型或启动 vLLM 服务器。
+`--platform cuda` 为实例选择 CUDA 执行平台。对于 Docker，它选择 CUDA Router 镜像，将 NVIDIA GPU 传入 Router 容器，并更改其生成的运行时配置，使受支持的本地信号模型优先使用 CUDA。它**不会**下载语言模型或启动 vLLM 服务器。
 
 ## 前置条件
 
@@ -95,27 +95,27 @@ providers:
 
 ## 在 NVIDIA 上运行 Router
 
-如果 vLLM 应拥有全部 GPU 内存，将 Router 保留在 CPU 上：
+如果 vLLM 应拥有全部 GPU 内存，用 `--platform cpu` 将 Router 的自动设备选择限制为 CPU；省略时 CLI 会自动检测平台：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --config config.yaml --platform cpu
 ```
 
-要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform nvidia`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
+要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --platform nvidia --config config.yaml
+vllm-sr serve --platform cuda --config config.yaml
 ```
 
 对于源码检出，先构建维护中的 CUDA 镜像，并显式选择它的 `latest` tag。即使采用可编辑安装，只要包版本号是稳定版本，CLI 默认仍会选择发布 tag。设置镜像覆盖后，`ifnotpresent` 会复用本地构建，同时允许 CLI 获取缺失的配套镜像：
 
 ```bash
-VLLM_SR_PLATFORM=nvidia make vllm-sr-build
+VLLM_SR_PLATFORM=cuda make vllm-sr-build
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
   vllm-sr serve \
-  --platform nvidia \
+  --platform cuda \
   --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
@@ -156,7 +156,7 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ### Router 使用 CPU
 
-确认 `--platform nvidia` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_NVIDIA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
+确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_CUDA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
 
 ### vLLM 或 Router 耗尽 GPU 内存
 
@@ -168,4 +168,4 @@ vLLM 模型、KV cache 和 Router 侧模型争夺同一设备内存。将 Router
 
 ### Kubernetes 不调度 GPU
 
-`--platform nvidia` 是本地容器快捷方式。对于 Kubernetes，通过 Helm values 或 Operator 选择 CUDA 镜像，并配置 GPU 资源、NVIDIA 设备插件和节点放置。部署边界见[配置工作流](configuration-workflows#helm)。
+`--platform cuda` 是本地容器快捷方式。对于 Kubernetes，通过 Helm values 或 Operator 选择 CUDA 镜像，并配置 GPU 资源、NVIDIA 设备插件和节点放置。部署边界见[配置工作流](configuration-workflows#helm)。

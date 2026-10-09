@@ -246,26 +246,19 @@ func TestCacheKeyVersionedEncodingPreservesThresholdPrecision(t *testing.T) {
 }
 
 func TestCacheKeyHybridDefaultsAgreeWithActualRerankers(t *testing.T) {
-	for name, rerank := range map[string]func([]*RetrieveResult, RetrieveOptions) []*RetrieveResult{
-		"milvus": (&MilvusStore{}).hybridRerank,
-		"valkey": (&ValkeyStore{}).hybridRerank,
-	} {
-		t.Run(name, func(t *testing.T) {
-			candidates := func() []*RetrieveResult {
-				return []*RetrieveResult{
-					{Memory: &Memory{ID: "coffee", Content: "coffee preference"}, Score: 0.8},
-					{Memory: &Memory{ID: "tea", Content: "tea preference"}, Score: 0.4},
-				}
-			}
-			implicit := RetrieveOptions{Query: "coffee", HybridSearch: true}
-			explicit := implicit
-			explicit.HybridMode = "weighted"
-			rrf := implicit
-			rrf.HybridMode = "rrf"
-			assert.Equal(t, rerank(candidates(), implicit), rerank(candidates(), explicit))
-			assert.NotEqual(t, rerank(candidates(), implicit), rerank(candidates(), rrf))
-			assert.Equal(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", explicit))
-			assert.NotEqual(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", rrf))
-		})
+	candidates := func() []*RetrieveResult {
+		return []*RetrieveResult{
+			{Memory: &Memory{ID: "coffee", Content: "coffee preference"}, Score: 0.8},
+			{Memory: &Memory{ID: "tea", Content: "tea preference"}, Score: 0.4},
+		}
 	}
+	implicit := RetrieveOptions{Query: "coffee", HybridSearch: true}
+	explicit := implicit
+	explicit.HybridMode = "weighted"
+	rrf := implicit
+	rrf.HybridMode = "rrf"
+	assert.Equal(t, hybridRerankCandidates(candidates(), implicit), hybridRerankCandidates(candidates(), explicit))
+	assert.NotEqual(t, hybridRerankCandidates(candidates(), implicit), hybridRerankCandidates(candidates(), rrf))
+	assert.Equal(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", explicit))
+	assert.NotEqual(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", rrf))
 }

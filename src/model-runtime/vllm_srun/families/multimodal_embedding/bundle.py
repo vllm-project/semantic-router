@@ -78,7 +78,8 @@ class OmniBundle:
 
     @property
     def processors(self) -> dict[str, Any]:
-        return self.manifest["processors"]
+        processors: dict[str, Any] = self.manifest["processors"]
+        return processors
 
     def file(self, name: str) -> Path:
         return self.root / name
