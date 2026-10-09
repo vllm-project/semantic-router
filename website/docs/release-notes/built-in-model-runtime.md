@@ -26,9 +26,9 @@ vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 
 `--platform rocm` or `--platform cuda` runs the `vllm-sr-rocm` or
 `vllm-sr-cuda` image with the GPUs passed through. The images carry the
-release's own PyTorch build, so their answers are byte-identical to the
-released model packages. See the
-[model runtime Quickstart](model-runtime/quickstart.md).
+release's pinned PyTorch build. Numerical equivalence depends on the model,
+profile and hardware; validate it before changing precision or execution settings. See the
+[model runtime Quickstart](../model-runtime/quickstart).
 
 Builds of `main` between
 [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and #4618
@@ -52,7 +52,7 @@ Managed CPU workers now default to half the router's available CPU budget,
 rounded down, with a minimum of one thread and a maximum of 16. The thread count
 stays independent of the number of active models; attached runtimes keep their
 own settings. See
-[CPU threads](model-runtime/deploy.md#cpu-threads) before choosing an override.
+[CPU threads](../model-runtime/deploy.md#cpu-threads) before choosing an override.
 
 ## Breaking changes
 
@@ -60,7 +60,7 @@ own settings. See
   and their execution fields (`precision`, `custom_ops_profile`,
   `compilation_cache_dir`, `variant`, `use_mmbert_32k` and the like), stop the
   router at startup. `vllm-sr config migrate` rewrites them; see
-  [Migrate from the native bindings](model-runtime/migrate.md).
+  [Migrate from the native bindings](../model-runtime/migrate).
 - **Retired router keys are refused.** The router and the CLI refuse
   `gemma_model_path` and `bert_model_path`, even when empty, and point to
   `vllm-sr config migrate`, which drops them.
@@ -68,7 +68,7 @@ own settings. See
   MiniLM, `mmbert-embed-32k-2d-matryoshka` and `multi-modal-embed-small` /
   `-large` are replaced by Vela Embedding and Omni. Vectors they stored in the
   semantic cache, memory, vector stores or RAG must be
-  [re-embedded](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes).
+  [re-embedded](../model-runtime/migrate#re-embed-when-the-embedding-model-changes).
   Older classifier names map to the Vela 1.0 model for the same task, with the
   same labels.
 - **The operator CRD no longer has `gemma_model_path`.** kubectl's default
@@ -83,7 +83,7 @@ own settings. See
   1.0 Omni runs on the native engine from its published repository, which the
   runtime downloads (Nano 0.67 GB, Mini 4.3 GB) and verifies like every model.
   An air-gapped cluster that routes images fetches it into the model volume
-  first ([Troubleshooting](model-runtime/troubleshooting.md#the-runtime-stays-in-loading-or-warming)).
+  first ([Troubleshooting](../model-runtime/troubleshooting#the-runtime-stays-in-loading-or-warming)).
   `vllm-sr config migrate` moves deployments off the retired
   `/opt/router-model-artifacts/vela-1.0-omni-*` paths. ONNX Runtime is the
   optional `onnx` extra of `vllm-srun`, for ONNX packages and prepared Omni
@@ -103,16 +103,17 @@ own settings. See
   CPU. Contract 2.1.0 adds `scan_budget_exceeded`, the usage flag
   `tokens_lower_bound`, the model limits `max_scan_tokens` and
   `truncate_tokens`, the decisions option `max_tokens` and the question field
-  `overflow` ([Long inputs](model-runtime/reference.md#long-inputs)).
+  `overflow` ([Long inputs](../model-runtime/reference.md#long-inputs)).
 - **Routing reads a long request's beginning, safety reads it whole.** Through
   Vela 2.0, routing questions truncate. Safety questions (prompt guard,
   safety, PII, hallucination) read a long request whole up to the scan budget,
-  or a question deployment's `input: {overflow: window, max_tokens}`. A short
-  request is read as before, every question in one model input.
+  or a question deployment's `input: {overflow: window, max_tokens}`. Compatible questions can share a bundle; input states, task stages and
+  window policies can still require separate forwards.
 - **Model signals have a deadline.** A model-runtime signal still running at
   `global.model_catalog.signal_timeout_ms` (by default the request's deadline
-  less a tenth, or 45 s for a served request) resolves through its policy
-  instead of failing the request.
+  less a tenth, or 45 s for a served request) resolves through its availability policy. A decision using
+  `rules.on_unknown: fail_request` can reject the request. The deadline does
+  not guarantee that an active model forward stops immediately.
 - **Jailbreak and PII rules match content their model did not read**: over the
   model's input or cap, truncated, or not scanned by the deadline. The match
   has the type `unscanned` and holds whatever `on_error` says, on requests and

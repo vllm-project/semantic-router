@@ -3,7 +3,7 @@ sidebar_position: 5
 title: 多模型混合
 description: 虚拟模型如何把共享的独立模型池变成稳定、面向目标的 AI 服务。
 translation:
-  source_commit: "6e177d91a30a4336a105ff82310f0f5d3a85b8dd"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/mom-model-family.md"
   outdated: false
 ---
@@ -35,7 +35,7 @@ MoM 可以组合稠密模型、MoE 模型、托管 API 和本地模型。它们�
 | **虚拟模型** | `vllm-sr/mom-v1-flash` | 为客户端给出稳定目标，并选择配方。 |
 | **Router 系统模型** | 嵌入或分类器资产 | 帮助检测意图、风险、相似度或其他路由信号。 |
 
-Router 系统模型支撑决策过程；它们本身不是面向客户端的 Mixture of Models 产品。
+Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 System One 直接发布。在多个判断模型间路由 System One 属于[规划中的扩展](component-architecture#roadmap-route-system-one-across-decision-models)，与当前 Chat Mixture of Models 分开。
 
 ## 执行模式
 

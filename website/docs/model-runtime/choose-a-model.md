@@ -21,7 +21,7 @@ Face revision, so the same name always loads the same files.
 | Stop prompt injection and jailbreaks | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
 | Flag unsafe content | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Safety` or `-Shield` | Shield is an alternative safety model |
 | Check an answer against its sources | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | Marks unsupported spans of the answer |
-| Name the kind of risk | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | | 12 independent hazard categories with published thresholds |
+| Name the kind of risk | Explicit binding | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 12 independent categories; bind the `hazard` deployment with its published operating point |
 | Embeddings for cache, memory, RAG and tools | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | Smaller sizes and fewer layers trade quality for speed |
 | Larger or instructed text embeddings | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B, 1,024 dimensions |
 | Rerank retrieved documents | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
@@ -201,10 +201,12 @@ decision model does not remove them.
 The default decision binding names a deployment that answers the Router's
 judgment tasks and [`decision` questions](tutorials/signal/learned/decision.md)
 without an override. Declare the resource once, then select its exact key.
-Omission selects the built-in `primary` deployment, Vela 2.0 0.3B on CPU:
+Without an override, the built-in default is Vela 2.0 0.3B. Passing a model
+artifact updates the active default deployment; `--platform` selects the runtime
+platform while explicit deployment placement remains authoritative. For example:
 
 ```bash
-vllm-sr serve --platform rocm
+vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm
 ```
 
 ```yaml
@@ -214,13 +216,13 @@ global:
       primary:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-4B
-        device: rocm
+        device: rocm:0
     system:
       decision_model:
         deployment: primary
 ```
 
-`serve` writes the line into the active configuration as a new version, which
+The CLI saves this deployment choice in the active configuration as a new version, which
 `vllm-sr config versions` lists and `vllm-sr config rollback` undoes; later
 starts keep it, and `vllm-sr status` shows it. The Helm chart's
 `decisionModel` value and the operator's `spec.config.decision_model` set the
@@ -235,17 +237,17 @@ specialists, and for the latency record's five request signals
 | --- | --- | --- | ---: | ---: |
 | `Vela-2.0-0.3B` (default) | CPU or GPU | Ahead on prompt guard and safety, behind on domain, modality and feedback | 6.6 ms | 79 ms |
 | `Vela-2.0-0.8B` | CPU or GPU | Ahead on domain, prompt guard, safety, modality and hallucination; behind on PII | 40.1 ms | about 3 s |
-| `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 55.2 ms | GPU only |
-| `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 76.5 ms | GPU only |
+| `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 55.2 ms | Not measured |
+| `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 76.5 ms | Not measured |
 | `Vela-1.0` | CPU or GPU | The specialists themselves | n/a | 16 ms |
 
 - **GPU:** one AMD Instinct MI325X, sequential requests. At concurrency 16 a
   GPU serves about 154 (0.3B), 25 (0.8B), 18 (4B) and 13 (9B) requests per
   second.
-- **The 4B and 9B need a GPU.** `vllm-sr serve` refuses them with
-  `--platform cpu` or on a host without the platform's GPU, and the Router
-  refuses them where the model runtime finds no GPU. On a GPU they run whatever
-  a module's `use_cpu` says.
+- **Use a GPU for the 4B and 9B in this workload.** Their CPU latency was
+  not measured in this record. Placement follows the deployment and runtime
+  requirements, not a CLI ban based on the model name. Explicit GPU devices
+  must match the selected platform and be available on the host.
 - **The 0.8B on a CPU** is a decoder: a request takes seconds, as the table
   shows. Serve it on a GPU, or keep the 0.3B on a CPU.
 - **Every size** is behind Vela 1.0 on user feedback's fresh file (CrossWOZ)
@@ -301,11 +303,12 @@ model fails to load with a clear reason instead of quietly running on the CPU.
 
 ### How much memory
 
-Plan for about 4 bytes per parameter on a CPU and 2 bytes per parameter on a
-GPU, plus room for the requests: a 307M task model needs about 1.3 GB on a
-CPU, and Decision 2.0 Lux-9B about 18 GB on a GPU. The runtime refuses to load
-a model that does not fit its device and says why. To keep large models apart,
-give them their own process (see
+Memory depends on the model family and profile, not just the device. FP32
+weights use about 4 bytes per parameter; a lower-precision model may use about
+2, with additional memory needed for inputs, activations, and concurrency. A
+307M FP32 task model therefore needs roughly 1.3 GB for its weights alone.
+Check the model record and measure peak memory for your workload. Each replica
+has its own process and weight copy; place replicas on suitable devices (see
 [Run it with the router](./deploy.md#place-and-scale-replicas)).
 
 ## Your own models

@@ -3,17 +3,17 @@
 ## Overview
 
 [Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
-is a family of fourteen published model checkpoints for intelligent routing.
-The Router registry currently includes the Vela 307M encoder base and ten task
-models covering routing, prompt protection, content safety, retrieval and
-reranking. Each registered release is pinned to an immutable revision.
+is a family of specialist models for intelligent routing. The Router registry
+includes the Vela 307M encoder base, task classifiers, retrieval and reranking
+models, and multimodal embedders. Each registered release is pinned to an
+immutable revision.
 
 | Model | Role |
 | --- | --- |
 | Encoder | Shared base for adapting new routing tasks |
 | Domain | Request subject across 14 domains |
 | Guard | Prompt injection and jailbreak detection |
-| Safety | Unsafe content detection |
+| Safety / Shield | Alternative unsafe-content classifiers |
 | Hazard | Twelve independent content risk categories |
 | PII | Personal information spans across 17 entity types |
 | FactCheck | Whether a request needs factual verification |
@@ -132,10 +132,11 @@ establish full multilingual or image coverage, latency, or memory performance.
 ## Defaults and input budgets
 
 With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
-Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, in one call
-per request ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
-Semantic Embedding, Hazard and the Reranker use Vela 1.0, and naming a Vela 1.0
-task model in `global.model_catalog.system` restores it. Only models required by
+Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
+Semantic Embedding and the Reranker use Vela 1.0. The built-in Vela 1.0
+Hazard deployment is an explicit specialist binding; its presence in the
+catalog does not enable a Safety-to-Hazard cascade. Naming a Vela 1.0 task
+model in `global.model_catalog.system` selects that specialist. Only models required by
 a recipe are loaded. The base encoder is a training parent and is not loaded as
 an additional routing signal.
 
@@ -145,15 +146,17 @@ of Guard, so an unsafe content request need not be classified as a prompt attack
 Hazard uses per-label thresholds from its artifact-bound operating point; a
 single threshold does not represent its published decision policy.
 
-An input budget is a deployment choice. A module `max_sequence_length` of `0`
-keeps the conservative 512-token policy. Embedding defaults to 22 layers,
-768 dimensions and `full_context: false`. Explicit model bindings can accept
-up to **32,768 tokens**, including special tokens, with `overflow: reject`.
-A rejected input is not silently shortened.
+Input budgets depend on the task, loaded model and deployment policy; `0`
+does not mean unlimited context. Embedding defaults to 22 layers, 768
+dimensions and `full_context: false`. A qualified 32K model can use an explicit
+**32,768-token** budget, including special tokens, with `overflow: reject`.
+PII and Guard may instead scan overlapping windows; use their task guides to
+choose the complete-text budget and window geometry. A rejected input is not
+silently shortened.
 
 ## Configuration
 
-Every Vela model runs in the [model runtime](model-runtime/overview.md),
+Every Vela model runs in the [model runtime](../../model-runtime/overview.md),
 so the defaults need no configuration. The following excerpt binds Domain to
 an explicit CPU deployment with a 32K budget. Apply it to an existing
 configuration containing providers, signals and decisions.
@@ -195,11 +198,13 @@ with the input lengths your application will send.
 
 ## Inference engines and hardware
 
-The model runtime runs Vela models with PyTorch. CPU execution is validated,
-including 32K inputs, and so are AMD Instinct MI300X and MI325X GPUs through
-ROCm. CUDA works but is not yet validated; measure NVIDIA performance on the
-target hardware. [Profiles](../../model-runtime/profiles.md) trade exactness
-for speed, and [Choose a model](model-runtime/choose-a-model.md) lists
+The model runtime runs Vela models with PyTorch on CPU, CUDA or ROCm.
+A supported input length is a capacity limit, not a latency guarantee. Long
+inputs can exceed request deadlines on a CPU with few cores; measure the
+actual input lengths and concurrency on the hardware you plan to serve.
+Select suitable CPU capacity or a GPU deployment rather than assuming a longer
+timeout will solve a capacity problem. [Profiles](../../model-runtime/profiles.md) trade exactness
+for speed, and [Choose a model](../../model-runtime/choose-a-model.md) lists
 what each model costs.
 
 The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
@@ -212,7 +217,7 @@ Earlier releases ran Vela through Candle, ONNX Runtime, MIGraphX or OpenVINO
 and selected exported ONNX graphs with `head`. Those providers are removed; the
 model repositories keep their ONNX exports for other tools.
 `vllm-sr config migrate` rewrites old deployments; see
-[Migrate from the native bindings](model-runtime/migrate.md).
+[Migrate from the native bindings](../../model-runtime/migrate.md).
 
 All models expose their supported input length, usage and comparable evaluation
 results in their model cards. Published comparisons use the previous mmBERT

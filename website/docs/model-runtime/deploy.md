@@ -38,8 +38,10 @@ default decision deployment; embeddings and other specialist tasks use their
 configured models. To choose CPU or GPU placement, configure the deployment's
 `device` or `replicas` as described below.
 
-The default decision model and deployments used by enabled consumers or published
-native model grants are loaded. Other declarations do not start workers.
+Deployments used by enabled consumers or published native model grants are
+loaded. Engine mode also loads the default decision deployment. In Router mode,
+the default deployment is loaded when a consumer needs it. Other declarations
+do not start workers.
 
 ## Describe a deployment
 
@@ -86,18 +88,22 @@ global:
         contract: label_distribution.v1
 ```
 
-Each feature reads one kind of answer, its `contract`: label probabilities
-(`label_distribution.v1`), independent label scores (`label_scores.v1`), text
-spans (`token_spans.v1`), vectors (`embedding.v1`) or relevance scores
-(`relevance_scores.v1`). The task guides list the binding for each feature.
-At startup the router checks every binding against the model's own
-description (its heads, labels, dimensions and input limit) and refuses a
-mismatch before it serves traffic.
+Each feature reads one kind of answer, its `contract`: a semantic judgment
+(`decision.v1`), label probabilities (`label_distribution.v1`), independent
+label scores (`label_scores.v1`), text spans (`token_spans.v1`), vectors
+(`embedding.v1`) or relevance scores (`relevance_scores.v1`). The task guides list the binding for each feature.
+The Router checks bindings against the model's description: heads, labels,
+dimensions, question types, and input limits. A known mismatch is rejected.
+For offline attached custom questions or explicit `decision.v1` tasks, metadata
+validation is deferred until a ready model card is observed; requests cannot
+run an unchecked task. See [readiness](#when-a-model-is-not-ready).
 
 A binding under `global.model_catalog.bindings` applies everywhere. A recipe
 can override it under its own `routing.model_bindings`.
 
 ## Place and scale replicas
+
+![Per-deployment replica dispatch and the interfaces inside a model worker](/img/architecture/system-one/03-serving-engine-and-workers.svg)
 
 Use `-dp` to set the default deployment's independent worker count. Keep its
 numerical profile separate from placement:
@@ -119,8 +125,10 @@ For Kubernetes, use allocation ordinals in config instead of host IDs.
 Each managed replica has its own process. All replicas of a deployment use the
 same artifact, revision, profile and capabilities. A request's fused question
 batch is dispatched as one unit after the logical model is selected. The pool
-uses its own in-flight work observations to select a ready worker; those
-observations are not the attached runtime's internal queue length.
+selects the ready worker with the fewest outstanding request bytes, breaking
+ties by the least recently assigned worker. This is a local load estimate,
+not the attached runtime's queue length or a measured token count. Native
+requests and routing tasks share the physical worker's load accounting.
 
 ```yaml
 global:
@@ -156,8 +164,10 @@ placement is independent of bindings, so changes to routing consumers retain
 unchanged worker identities. Reconfiguration prepares a compatible pool before
 publishing it, and retired workers drain existing requests.
 
-The pool admits a bounded number of outstanding requests per replica. It
-returns overload when all ready replicas are full. Inventory reports desired
+The pool admits at most 32 in-flight HTTP requests per worker and has no pool
+waiting queue. It returns overload when all ready replicas are full. This
+limit is not GPU-forward concurrency; a forward already running may continue
+after its caller times out. Inventory reports desired
 and ready replica counts, per-worker readiness, in-flight requests and
 restarts. A degraded pool can keep serving through its healthy replicas.
 
@@ -321,9 +331,8 @@ The router serves a configuration only once the models it runs for it have
 loaded. At startup it waits for every deployment it manages: the task models
 its routes use (domain, PII, guard, safety, fact-check, feedback and
 hallucination models, and your own classifiers) and the decision models that
-`decision` signals and the `decision` selection algorithm ask. It also waits
-for the task models of an attached runtime, so start that runtime before the
-router. While it waits, `/health` answers and `/ready` returns `503`;
+`decision` signals and the `decision` selection algorithm ask. Implicit and native-head bindings to attached runtimes also need model
+metadata during preparation, so start those runtimes before the Router. While it waits, `/health` answers and `/ready` returns `503`;
 `/startup-status` lists each managed deployment with its state (`starting`,
 `loading`, `warming`, `ready`, ...), and `vllm-sr serve` prints the ones it
 still waits for. The wait, a first download included, is bounded by
@@ -332,10 +341,14 @@ is not ready in time, the router does not start; its log and its last startup
 status (`phase: error`) name the deployment and the reason (see
 [Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)).
 
-The router does not wait for a decision model on an attached runtime, which has
-a lifecycle of its own: until it answers, its signals are unknown. A deployment
-that the configuration declares but that nothing uses is never started and does
-not hold up the start.
+Custom `decision` questions and explicit `contract: decision.v1` task bindings
+can target an offline attached runtime without blocking startup. They remain
+unknown until the current model card is ready and supports the required task.
+Recovery does not bypass capability checks: a ready incompatible card rejects
+the task. Native-head bindings still require their specific metadata; readiness
+does not silently switch a PII span detector to a presence-only judgment.
+
+A deployment declared but unused is never started and does not hold up startup.
 
 A configuration reload or `vllm-sr config apply` that adds a model waits the
 same way while the previous configuration keeps serving. `/ready` stays `200`,
