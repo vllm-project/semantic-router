@@ -7,9 +7,9 @@ model runtime in the current Python environment (`make model-runtime-install`,
 whose test extra brings the example's build backend). pip installs the example
 plugin from the repository into a private directory on PYTHONPATH instead of
 the environment, so no other test sees its entry points; discovery still reads
-the entry points of the installed distribution. The `vllm-sr serve` case builds
-the guide's image, the router image (`VLLM_SR_IMAGE`) with the example
-installed, and serves the package from it.
+the entry points of the installed distribution. The container case builds the
+guide's image, the router image (`VLLM_SR_IMAGE`) with the example installed,
+and runs the guide's explicit worker container.
 """
 
 import json
@@ -23,13 +23,16 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from urllib.error import URLError
 
 import tomllib
 from runtime_http import (
     HTTP_OK,
+    READY_TIMEOUT_SECONDS,
     ServeProcess,
     call,
     container_runtime,
+    free_port,
     page_requests,
     router_image,
 )
@@ -191,21 +194,64 @@ class TestPluginExample(unittest.TestCase):
             "vllm-srun serve", arguments, "--profile"
         )
 
-    def test_vllm_sr_serve_serves_the_plugin_from_an_image_that_has_it(self):
-        (arguments,) = _serve_commands("vllm-sr serve")
-        arguments = _with_option(arguments, "--image", self._build_plugin_image())
-        self._assert_serves_on_its_own_accelerator_and_profile(
-            "vllm-sr serve", arguments, "--runtime-profile"
+    def test_the_guides_container_serves_the_installed_plugin(self):
+        (arguments,) = _serve_commands("docker run")
+        port = free_port()
+        container_port = _option(arguments, "--port")
+        name = f"vllm-sr-plugin-example-{port}"
+        arguments = _with_option(arguments, "-p", f"127.0.0.1:{port}:{container_port}")
+        _, target, mode = _option(arguments, "-v").rsplit(":", 2)
+        arguments = _with_option(arguments, "-v", f"{self.local}:{target}:{mode}")
+        # Preserve the guide's worker command and options, isolating the image,
+        # host port, mount source and container name for concurrent suites.
+        image_index = arguments.index("--entrypoint") + 2
+        arguments[image_index] = self._build_plugin_image()
+        runtime = container_runtime()
+        self.addCleanup(
+            subprocess.run,
+            [runtime, "rm", "-f", name],
+            capture_output=True,
+            check=False,
         )
+        subprocess.run(
+            [runtime, "run", "-d", "--name", name, *arguments],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        )
+        base = f"http://127.0.0.1:{port}"
+        deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            try:
+                status, _ = call(base, "/health")
+                if status == HTTP_OK:
+                    break
+            except (URLError, ConnectionError):
+                pass
+            time.sleep(0.25)
+        else:
+            logs = subprocess.run(
+                [runtime, "logs", name], capture_output=True, text=True, check=False
+            )
+            self.fail(
+                f"plugin container did not become ready: {logs.stdout}{logs.stderr}"
+            )
+        self._assert_runtime_answers(base, arguments, "--profile")
 
     def _assert_serves_on_its_own_accelerator_and_profile(
         self, command: str, arguments: list[str], profile_option: str
     ):
         runtime = self._serve(arguments, command)
+        self._assert_runtime_answers(runtime.base, arguments, profile_option)
+
+    def _assert_runtime_answers(
+        self, base: str, arguments: list[str], profile_option: str
+    ):
         prose = " ".join(GUIDE.read_text(encoding="utf-8").split())
         expected = list(OUTCOME.search(prose).groups())
 
-        status, models = call(runtime.base, "/v1/models")
+        status, models = call(base, "/v1/models")
         self.assertEqual(status, HTTP_OK, models)
         (card,) = models["data"]
         self.assertEqual(
@@ -217,7 +263,7 @@ class TestPluginExample(unittest.TestCase):
             ),
         )
         status, response = call(
-            runtime.base, "/v1/classify", page_requests(GUIDE)["/v1/classify"]
+            base, "/v1/classify", page_requests(GUIDE)["/v1/classify"]
         )
         self.assertEqual(status, HTTP_OK, response)
         self.assertEqual([result["label"] for result in response["results"]], expected)

@@ -1,3 +1,10 @@
+import { SignalCapabilityNotice } from "./SignalCapabilityContext";
+import { useSignalCapabilities } from "./signalCapabilityState";
+import {
+  signalAvailability,
+  signalCapabilitySchema,
+  decisionQuestionTypes,
+} from "./signalCapabilities";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
@@ -372,13 +379,17 @@ const SignalEditorForm: React.FC<{
   signal: ASTSignalDecl;
   onUpdate: (fields: DSLFieldObject) => void;
 }> = ({ signal, onUpdate }) => {
-  const schema = useMemo(
-    () => getSignalFieldSchema(signal.signalType),
-    [signal.signalType],
-  );
-  const [localFields, setLocalFields] = useState<DSLFieldObject>(
-    () => ({ ...signal.fields }),
-  );
+  const [localFields, setLocalFields] = useState<DSLFieldObject>(() => ({ ...signal.fields }));
+
+  const { data, scope } = useSignalCapabilities();
+  const availability = signalAvailability(data, scope, signal.signalType, signal.name, localFields);
+  const schema =
+    signal.signalType === "decision"
+      ? signalCapabilitySchema(
+          getSignalFieldSchema(signal.signalType),
+          decisionQuestionTypes(data, scope, localFields),
+        )
+      : getSignalFieldSchema(signal.signalType);
 
   useEffect(() => {
     setLocalFields({ ...signal.fields });
@@ -389,8 +400,8 @@ const SignalEditorForm: React.FC<{
   }, []);
 
   const handleSave = useCallback(() => {
-    onUpdate(localFields);
-  }, [localFields, onUpdate]);
+    if (availability.supported) onUpdate(localFields);
+  }, [localFields, onUpdate, availability.supported]);
 
   const dslPreview = useMemo(
     () => generateSignalDslPreview(signal.signalType, signal.name, localFields),
@@ -399,12 +410,14 @@ const SignalEditorForm: React.FC<{
 
   return (
     <>
+      <SignalCapabilityNotice reason={availability.reason} />
       <div className={styles.dslPreview}>
         <div className={styles.dslPreviewHeader}>
           <span className={styles.dslPreviewTitle}>Fields</span>
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSave}
+            disabled={!availability.supported}
             style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
           >
             Save

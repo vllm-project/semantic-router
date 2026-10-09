@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -78,10 +79,11 @@ func TestEndpointOnlyChangeKeepsSignalsAndModelBindings(t *testing.T) {
 	if second.ClassificationService == first.ClassificationService {
 		t.Fatal("the new generation shares the old one's classification service, which wraps its configuration")
 	}
-	if reused := server.service.Snapshot().Reused(); len(reused) != 1 || reused[0] != configsnapshot.ComponentSignals {
-		t.Fatalf("Reused() = %v, want the signals component", reused)
+	expectedReuse := []configsnapshot.Component{configsnapshot.ComponentModelService, configsnapshot.ComponentSignals}
+	if reused := server.service.Snapshot().Reused(); !slices.Equal(reused, expectedReuse) {
+		t.Fatalf("Reused() = %v, want %v", reused, expectedReuse)
 	}
-	if attempt := server.configs.Status().Latest; len(attempt.Reused) != 1 {
+	if attempt := server.configs.Status().Latest; !slices.Equal(attempt.Reused, expectedReuse) {
 		t.Fatalf("the attempt does not record the reuse: %+v", attempt)
 	}
 

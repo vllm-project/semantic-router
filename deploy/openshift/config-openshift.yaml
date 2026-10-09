@@ -297,8 +297,6 @@ routing:
     - name: Model-A
     - name: Model-B
 global:
-  router:
-    auto_model_name: auto
   services:
     observability:
       tracing:
@@ -336,3 +334,7 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
+
+entrypoints:
+  - model_names: ["auto"]
+    recipe: default

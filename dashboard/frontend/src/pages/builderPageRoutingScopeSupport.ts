@@ -20,7 +20,7 @@ export function listBuilderRoutingScopes(ast: ASTProgram | null): BuilderRouting
   return [
     {
       id: 'global',
-      label: 'Global catalog',
+      label: hasDefaultRouting(ast) ? 'Default routing' : 'Shared model catalog',
       recipeName: null,
       modelNames: [],
     },
@@ -61,9 +61,13 @@ export function resolveBuilderRoutingScope(
 export function chooseDefaultBuilderRoutingScope(ast: ASTProgram | null): string {
   if (!ast?.recipes?.length) return 'global'
 
-  const hasGlobalRouting =
+  return hasDefaultRouting(ast) ? 'global' : `recipe:${ast.recipes[0].name}`
+}
+
+function hasDefaultRouting(ast: ASTProgram): boolean {
+  return (
+    Boolean(ast.strategy) ||
     ast.candidateRequirements != null ||
-    ast.dataPolicy != null ||
     Object.keys(ast.modelBindings ?? {}).length > 0 ||
     (ast.signals?.length ?? 0) > 0 ||
     (ast.routes?.length ?? 0) > 0 ||
@@ -71,8 +75,7 @@ export function chooseDefaultBuilderRoutingScope(ast: ASTProgram | null): string
     (ast.projectionPartitions?.length ?? 0) > 0 ||
     (ast.projectionScores?.length ?? 0) > 0 ||
     (ast.projectionMappings?.length ?? 0) > 0
-
-  return hasGlobalRouting ? 'global' : `recipe:${ast.recipes[0].name}`
+  )
 }
 
 export function mutateBuilderRecipeSource(
