@@ -250,6 +250,7 @@ export interface DecisionModelSignal {
   }
   predicate?: NumericPredicate
   timeout_ms?: number
+  prior_user_turns?: number
 }
 
 export interface ComplexityCandidates {

@@ -184,6 +184,46 @@ routing:
         - model: large-reasoner
 ```
 
+### Follow-up turns
+
+A question reads the current user turn. A follow-up such as "Rewrite your
+previous answer in fewer words" says little about its task on its own, so a
+question can also read earlier user turns with `prior_user_turns` (0 to 8):
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: auto
+
+routing:
+  signals:
+    decision:
+      - name: request_kind
+        deployment: decision-kai
+        prior_user_turns: 1
+        question:
+          type: choice
+          instructions: What kind of request is the latest user turn?
+          choices:
+            - key: code
+              description: Writing, reviewing or debugging code
+            - key: chat
+              description: Anything else
+```
+
+The state is then up to that many earlier user turns, oldest first, then the
+current turn, one blank line apart; each earlier turn is cut to its first
+1,760 characters. Assistant and tool messages are not included. Questions to
+one deployment share a call only when they read the same number of turns. On
+MT-Bench's 80 two-turn conversations, an eight-way Choice over its categories
+on the second turn was right 41% to 55% of the time from that turn alone and
+71% to 84% with the first turn read too (Decision 2.0 Kai-0.6B to Lux-9B), and
+35% to 51% against 67.5% to 87.5% on Vela 2.0 0.3B to 9B.
+
 ### Set and span questions
 
 A `set` question names labels and asks which apply; a `span` question asks

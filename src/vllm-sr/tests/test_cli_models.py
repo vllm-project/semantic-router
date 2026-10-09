@@ -205,3 +205,28 @@ def test_custom_evaluation_requires_versioned_namespace():
                 },
             }
         )
+
+
+def _decision_signal(**overrides):
+    rule = {
+        "name": "request_kind",
+        "deployment": "decision-kai",
+        "question": {
+            "type": "choice",
+            "instructions": "Which kind?",
+            "choices": [{"key": "code"}, {"key": "chat"}],
+        },
+    }
+    rule.update(overrides)
+    return rule
+
+
+def test_decision_signal_reads_up_to_eight_prior_user_turns():
+    signals = {"decision": [_decision_signal(prior_user_turns=8)]}
+    config = UserConfig(version="0.3", routing={"signals": signals})
+    assert config.signals.decision[0].prior_user_turns == 8
+    with pytest.raises(ValueError):
+        UserConfig(
+            version="0.3",
+            routing={"signals": {"decision": [_decision_signal(prior_user_turns=9)]}},
+        )

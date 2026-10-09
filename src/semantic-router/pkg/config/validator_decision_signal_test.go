@@ -86,6 +86,7 @@ func TestDecisionSignalContracts(t *testing.T) {
 		"type":             func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Type = "rank" },
 		"instructions":     func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Instructions = " " },
 		"timeout":          func(cfg *RouterConfig) { cfg.DecisionRules[0].TimeoutMs = MaxDecisionTimeoutMs + 1 },
+		"prior turns":      func(cfg *RouterConfig) { cfg.DecisionRules[0].PriorUserTurns = MaxDecisionPriorUserTurns + 1 },
 		"colon in name":    func(cfg *RouterConfig) { cfg.DecisionRules[0].Name = "a:b" },
 		"input budget": func(cfg *RouterConfig) {
 			decider := cfg.ModelDeployments["decider"]

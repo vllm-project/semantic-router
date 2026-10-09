@@ -18,7 +18,7 @@ func TestDecisionModelSignalAndAlgorithmRoundTrip(t *testing.T) {
 			Predicate: &config.NumericPredicate{GTE: &threshold}, TimeoutMs: 800,
 		},
 		{
-			Name: "request_kind", Deployment: "decision-kai",
+			Name: "request_kind", Deployment: "decision-kai", PriorUserTurns: 2,
 			Question: config.DecisionQuestion{Type: "choice", Instructions: "Which kind?", Choices: []config.DecisionChoice{
 				{Key: "code", Description: "Code"}, {Key: "math"},
 			}},

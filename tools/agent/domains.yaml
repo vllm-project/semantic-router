@@ -822,6 +822,7 @@ profiles:
       - e2e/pkg/modelruntime/**
       - e2e/testcases/model_runtime_*.go
       - e2e/testcases/decision_runtime_routing.go
+      - e2e/testcases/decision_prior_user_turns.go
       - src/model-runtime/Dockerfile
       - src/model-runtime/vllm_srun/**
       - src/semantic-router/pkg/modelservice/**
