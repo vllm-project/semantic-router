@@ -580,6 +580,9 @@ components:
     ResponseMeta:
       type: object
       properties:
+        model_id:
+          type: string
+          description: The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
         revision:
           type: string
           nullable: true

@@ -1,0 +1,67 @@
+{
+  "scope": "Cascade and ecosystem system diagrams; not the marketing cover, neural architecture or new measurement",
+  "visual_review": {
+    "status": "passed",
+    "formats": [
+      "Chromium-rendered PNG",
+      "PDFium-rendered vector PDF preview"
+    ],
+    "checked": [
+      "Arrow endpoints and branch/join semantics",
+      "No overlapping or clipped text",
+      "Original request is reused, with no mandatory extra classifier",
+      "Chat/Responses and System One answer contracts remain distinct",
+      "Threshold acceptance is not measured correctness",
+      "Broader provider evaluation marked next; external support is not presented as absent"
+    ]
+  },
+  "geometry": {
+    "cascade": {
+      "text_objects": 30,
+      "outside_canvas": [],
+      "text_overlaps": [],
+      "outside_declared_container": []
+    },
+    "ecosystem": {
+      "text_objects": 29,
+      "outside_canvas": [],
+      "text_overlaps": [],
+      "outside_declared_container": []
+    }
+  },
+  "pdf_exports": {
+    "cascade": {
+      "pages": 1,
+      "points": [
+        1350.0,
+        757.91998
+      ],
+      "extractable_text_characters": 553,
+      "raster_images": 0,
+      "raster_note": "None; text and shapes remain vector"
+    },
+    "ecosystem": {
+      "pages": 1,
+      "points": [
+        1350.0,
+        870.0
+      ],
+      "extractable_text_characters": 529,
+      "raster_images": 0,
+      "raster_note": "None; text and shapes remain vector"
+    }
+  },
+  "unchanged_measured_charts": {
+    "quality.svg": "4204af50cba6971609e8f33a43d4371c1d6c4ca46a0c7d2f9a696b2ae2d3d2cf",
+    "quality.pdf": "598286e9d7003449f7f222fe6a769b1c8fb37d45c65dc925ac3e2b632f28a5a4",
+    "quality.png": "6158ce65591094482db61d6c723e08855079190f2a2441c74db44dcbfc26c017",
+    "latency.svg": "1337094669abb4a524ddd8ce864352cc57368009c6c239bf1c3299b6d584bae4",
+    "latency.pdf": "010e41c2d0e63843f5ba5be7074e6b14a7ebf9453cb17f200fc0a7f953055e47",
+    "latency.png": "bd300005071b69c4b9b198d3c298fd7d95c0e34ca9543c928e5e55bc00577bb8",
+    "paths.svg": "0069b0541efb0036b7b06e47c81800ff9ec109f44761e9328b83f64272cc8086",
+    "paths.pdf": "005305b9a1bf73bf63fb9868c7a43343085a15fe5f15486ea7a3b99b170940a3",
+    "paths.png": "ce1f5f9f5d836c84892ca5d3333891b649b18d1f8e5275b358a2aa3d4f319839"
+  },
+  "frozen_data_and_evidence_unchanged": true,
+  "no_model_or_network_calls": true
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 const systemOneForwardRequestLimit = systemOneRequestLimit + 8192
@@ -39,7 +40,7 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 		writeSystemOneError(w, http.StatusBadRequest, "invalid_request", "Provide a native inference or discovery operation")
 		return
 	}
-	snapshot, release, ok := s.runtimeRegistry.AcquireConfigSnapshot()
+	snapshot, router, release, ok := s.runtimeRegistry.AcquireSystemOne()
 	if !ok {
 		writeSystemOneError(w, http.StatusServiceUnavailable, "not_ready", "The frontend has no active configuration")
 		return
@@ -58,12 +59,23 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	}
 	request.Header.Set("Authorization", forwarded.Authorization)
 	request.Header.Set("Api-Key", forwarded.APIKey)
+	if forwarded.BackendRequest {
+		request.Header.Set(systemone.BackendRequestHeader, "1")
+	}
+	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name))(w, request)
+}
+
+// retainedSystemOneInvoker uses only services from the caller's acquired
+// generation. Public forwarding and operator diagnostics share this owner.
+func retainedSystemOneInvoker(snapshot *configsnapshot.Snapshot, router systemone.Router, listener string) systemone.Invoke {
 	models, _ := snapshot.Part(configsnapshot.ComponentModelService).(nativeModelRuntime)
-	systemone.Handler(cfg, listener, func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
+	remote, _ := snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
+	local := func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
 		if models == nil {
 			return 0, nil, modelservice.ErrUnavailable
 		}
 		result, err := models.SystemOne(ctx, deployment, body)
 		return result.Status, result.Body, err
-	})(w, request)
+	}
+	return systemone.ServingInvoker(snapshot.Config(), listener, router, local, remote)
 }

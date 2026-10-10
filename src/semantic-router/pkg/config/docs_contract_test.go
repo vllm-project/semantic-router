@@ -167,7 +167,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
 		needles: []string{
-			"Envoy presents the request to the Router.",
+			"The standalone frontend, or an ExtProc gateway, presents it to the Router.",
 			"**Entrypoint**",
 			"**Recipe**",
 			"direct selection",
