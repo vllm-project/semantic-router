@@ -26,6 +26,12 @@ var (
 	leftCityTurn           = formatTurnChunk("I don't live in Boston anymore.", "Thanks for letting me know.")
 	contractedNotNurseTurn = formatTurnChunk("I'm no longer a nurse.", "Understood.")
 	contractedMoveTurn     = formatTurnChunk("I've moved to Denver, and I live there now.", "Welcome to Denver!")
+	bostonTerrierTurn      = formatTurnChunk("I live in Boston.", "Your dog Biscuit is a Boston terrier.")
+	nurseAndSisterTurn     = formatTurnChunk("I work as a nurse.", "Got it, you work as a nurse. Your sister is a nurse too.")
+	bostonAndParentsTurn   = formatTurnChunk("I live in Boston.", "Your parents visit often. They live in Boston too.")
+	budgetRestatedTurn     = formatTurnChunk("My budget for the Japan trip is 4000 dollars.", "Your budget is 4000 dollars.")
+	bostonInTheFallTurn    = formatTurnChunk("I live in Boston.", "Got it, you live in Boston. Boston is lovely in the fall.")
+	hopeYouLoveBostonTurn  = formatTurnChunk("I live in Boston.", "I hope you love Boston.")
 	chicagoTurn            = formatTurnChunk("I moved to Chicago, and I live there now.", "Welcome to Chicago!")
 	jobAndCity             = formatTurnChunk("I changed jobs and now work as a paramedic, and I live in Boston.", "Noted.")
 	jobNearPark            = formatTurnChunk("I changed jobs and now work as a paramedic near Central Park.", "Congratulations!")
@@ -157,6 +163,36 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 				{content: denverTurn, daysAgo: 9},
 			},
 			want: []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name:      "a correction keeps an assistant fact about the user's dog that shares a word",
+			retrieved: []datedContent{{content: bostonTerrierTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your dog Biscuit is a Boston terrier.", denverTurn},
+		},
+		{
+			name:      "a job change keeps the job of another person",
+			retrieved: []datedContent{{content: nurseAndSisterTurn, daysAgo: 30}, {content: paramedicTurn, daysAgo: 9}},
+			want:      []string{"A: Your sister is a nurse too.", paramedicTurn},
+		},
+		{
+			name:      "a move keeps where other people live",
+			retrieved: []datedContent{{content: bostonAndParentsTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your parents visit often. They live in Boston too.", denverTurn},
+		},
+		{
+			name:      "a move keeps a sentence that only mentions the old city",
+			retrieved: []datedContent{{content: bostonInTheFallTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Boston is lovely in the fall.", denverTurn},
+		},
+		{
+			name:      "a move drops a reply that speaks to the user about the old city",
+			retrieved: []datedContent{{content: hopeYouLoveBostonTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{denverTurn},
+		},
+		{
+			name:      "a correction drops the assistant restating what the user owns",
+			retrieved: []datedContent{{content: budgetRestatedTurn, daysAgo: 30}, {content: budget6kTurn, daysAgo: 9}},
+			want:      []string{budget6kTurn},
 		},
 		{
 			name:      "a session chunk keeps its other turns",

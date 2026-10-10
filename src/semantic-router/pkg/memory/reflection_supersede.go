@@ -234,9 +234,25 @@ func independentAssistantAnswer(turn string, corrections []wordPair) string {
 			originalContentWords[word] = true
 		}
 	}
+	originalPairs := make(map[wordPair]bool)
+	for _, sentence := range statementSentences(userStatement(turn)) {
+		clauses, _ := sentenceClauses(sentence.text)
+		for _, clause := range clauses {
+			for _, pair := range anchorPairs(clause) {
+				originalPairs[pair] = true
+			}
+		}
+	}
 
 	var independent []string
 	for _, sentence := range statementSentences(answer) {
+		clauses, _ := sentenceClauses(sentence.text)
+		repeatsOriginal := slices.ContainsFunc(clauses, func(clause []string) bool {
+			return restatesOriginal(clause, originalContentWords, originalPairs)
+		})
+		if repeatsOriginal {
+			continue
+		}
 		words := statementWords(sentence.text)
 		for i, word := range words {
 			switch word {
@@ -245,12 +261,6 @@ func independentAssistantAnswer(turn string, corrections []wordPair) string {
 			case "your":
 				words[i] = "my"
 			}
-		}
-		repeatsOriginal := slices.ContainsFunc(words, func(word string) bool {
-			return isContentWord(word) && originalContentWords[word]
-		})
-		if repeatsOriginal {
-			continue
 		}
 		answerPairs := anchorPairs(words)
 		if len(answerPairs) == 0 {
@@ -262,13 +272,54 @@ func independentAssistantAnswer(turn string, corrections []wordPair) string {
 		if corrected {
 			continue
 		}
-		text := sentence.text
+		text := strings.TrimSpace(sentence.text)
 		if sentence.ending != 0 {
 			text += string(sentence.ending)
 		}
 		independent = append(independent, text)
 	}
-	return strings.TrimSpace(strings.Join(independent, " "))
+	return strings.Join(independent, " ")
+}
+
+var (
+	secondPersonWords   = vocabulary("you you're you've you'd you'll your yours yourself")
+	otherPersonSubjects = vocabulary("he she they")
+	possessiveSubjects  = vocabulary("your his her their")
+)
+
+// restatesOriginal reports that an assistant clause repeats the corrected
+// statement: it shares a word with it and either speaks to the user, as in
+// "you live in Boston", or repeats one of its word pairs, as "welcome to
+// Chicago" repeats "moved to Chicago". A clause such as "Biscuit is a Boston
+// terrier" may state a separate fact, so it is kept.
+func restatesOriginal(clause []string, originalContentWords map[string]bool, originalPairs map[wordPair]bool) bool {
+	if namesAnotherSubject(clause, originalContentWords) {
+		return false
+	}
+	sharesWord := slices.ContainsFunc(clause, func(word string) bool {
+		return isContentWord(word) && originalContentWords[word]
+	})
+	if !sharesWord {
+		return false
+	}
+	if slices.ContainsFunc(clause, func(word string) bool { return secondPersonWords[word] }) {
+		return true
+	}
+	return slices.ContainsFunc(anchorPairs(clause), func(pair wordPair) bool { return originalPairs[pair] })
+}
+
+// namesAnotherSubject reports that an assistant clause opens with someone or
+// something other than the corrected statement, as in "your dog Biscuit is a
+// Boston terrier" or "they live in Boston too". "Your budget" still names
+// what "my budget" stated.
+func namesAnotherSubject(clause []string, originalContentWords map[string]bool) bool {
+	if len(clause) == 0 {
+		return false
+	}
+	if otherPersonSubjects[clause[0]] {
+		return true
+	}
+	return len(clause) > 1 && possessiveSubjects[clause[0]] && !originalContentWords[clause[1]]
 }
 
 func (s *supersession) correctsAll(corrector turnRef, turns []turnRef) bool {

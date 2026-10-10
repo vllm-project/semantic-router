@@ -84,7 +84,10 @@ their turns never correct other memories.
 Stored records don't change. An old turn is hidden only when its correction is
 injected in the same request, and only if it states a single fact. A turn with
 several sentences or clauses, such as "I live in Boston and work as a nurse" or
-"I live in Boston, my dog is Biscuit", is kept because it may hold other facts. A session window carries the time of
+"I live in Boston, my dog is Biscuit", is kept because it may hold other facts.
+When a turn is hidden, a reply sentence about something else stays in the
+prompt, such as "Your dog Biscuit is a Boston terrier" after a move away from
+Boston. A session window carries the time of
 its newest turn only, so its earlier turns can correct turns before them in
 that window but not other memories. Corrections phrased another way or written
 in another language aren't recognized yet. Setting

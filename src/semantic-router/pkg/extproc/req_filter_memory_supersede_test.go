@@ -43,6 +43,11 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 		assistant: "Your dog Biscuit is a beagle.",
 	}
 	cityAndDog := storedMemoryTurn{user: "I live in Boston, my dog is Biscuit.", assistant: "Noted."}
+	bostonWithTerrier := storedMemoryTurn{user: "I live in Boston.", assistant: "Your dog Biscuit is a Boston terrier."}
+	nurseWithSister := storedMemoryTurn{
+		user:      "I work as a nurse.",
+		assistant: "Got it, you work as a nurse. Your sister is a nurse too.",
+	}
 	// A session window stored before quoted turn boundaries were escaped.
 	oldWindow := memory.Memory{
 		Source: "session_window",
@@ -114,6 +119,20 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			query:      "Where do I live now, and what do you know about my dog?",
 			injected:   []string{"Denver", "Your dog Biscuit is a beagle"},
 			superseded: []string{"I live in Boston"},
+		},
+		{
+			name:       "a corrected residence keeps a dog fact that shares the city's name",
+			turns:      []storedMemoryTurn{bostonWithTerrier, denver},
+			query:      "Where do I live now, and what breed is my dog?",
+			injected:   []string{"Denver", "Your dog Biscuit is a Boston terrier"},
+			superseded: []string{"I live in Boston"},
+		},
+		{
+			name:       "a job change keeps another person's matching job",
+			turns:      []storedMemoryTurn{nurseWithSister, paramedic},
+			query:      "What is my job now, and what does my sister do?",
+			injected:   []string{"paramedic", "Your sister is a nurse too"},
+			superseded: []string{"I work as a nurse", "you work as a nurse"},
 		},
 		{
 			name:     "a correction keeps a comma clause's own fact",

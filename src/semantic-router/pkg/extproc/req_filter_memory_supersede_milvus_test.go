@@ -92,6 +92,28 @@ func TestMemoryRetrievalDropsSupersededFactsWithLiveMilvus(t *testing.T) {
 			present: []string{"Denver", "Your dog Biscuit is a beagle"},
 			absent:  []string{"I live in Boston"},
 		},
+		{
+			name:   "corrected residence preserves a dog fact that shares the city's name",
+			userID: "pr4260-terrier",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "Your dog Biscuit is a Boston terrier."},
+				{user: "I just moved to Denver, and I live there now.", assistant: "Welcome to Denver!"},
+			},
+			query:   "Where do I live now, and what breed is my dog?",
+			present: []string{"Denver", "Your dog Biscuit is a Boston terrier"},
+			absent:  []string{"I live in Boston"},
+		},
+		{
+			name:   "job change preserves another person's matching job",
+			userID: "pr4260-sister",
+			turns: []storedMemoryTurn{
+				{user: "I work as a nurse.", assistant: "Got it, you work as a nurse. Your sister is a nurse too."},
+				{user: "I changed jobs, and I work as a paramedic now.", assistant: "Congratulations!"},
+			},
+			query:   "What is my job now, and what does my sister do?",
+			present: []string{"paramedic", "Your sister is a nurse too"},
+			absent:  []string{"I work as a nurse", "you work as a nurse"},
+		},
 	}
 
 	for _, scenario := range scenarios {
