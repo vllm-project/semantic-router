@@ -19,22 +19,20 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_ROOT = Path(__file__).resolve().parents[1]
 PROD_DEADLINE_SECONDS = 900
 
-LOAD = """
+LOAD = f"""
 import os
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.runtime import Runtime
 
 runtime = Runtime(
     ServeConfig(
-        models=(ModelConfig(model=os.environ[%r], device="cpu"),),
+        models=(ModelConfig(model=os.environ[{PACKAGE!r}], device="cpu"),),
         load_attempts=1,
     )
 )
 runtime.start(background=False)
 runtime.stop()
-""" % (
-    PACKAGE,
-)
+"""
 
 PRODUCTION_PACKAGES = [
     pytest.param(

@@ -38,28 +38,26 @@ CONFIG = {
     "id2label": {"0": "other", "1": "math"},
 }
 
-LOAD = """
+LOAD = f"""
 import os
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.runtime import Runtime
 
 runtime = Runtime(
     ServeConfig(
-        models=(ModelConfig(model=os.environ[%r], device="cpu"),),
+        models=(ModelConfig(model=os.environ[{PACKAGE!r}], device="cpu"),),
         load_attempts=1,
     )
 )
 runtime.start(background=False)
 runtime.stop()
-""" % (
-    PACKAGE,
-)
+"""
 
 
 def test_mmbert_classifier_verify_returns_before_weights(tmp_path: Path) -> None:
     (tmp_path / "config.json").write_text(json.dumps(CONFIG))
     with pytest.raises(
-        PackageError, match="package file is missing: model.safetensors"
+        PackageError, match=r"package file is missing: model\.safetensors"
     ):
         TaskHeadsFamily().verify(PackageRef(root=tmp_path))
     assert not (tmp_path / "model.safetensors").exists()
