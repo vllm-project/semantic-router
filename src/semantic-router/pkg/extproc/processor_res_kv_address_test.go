@@ -18,6 +18,7 @@ func testKVAddressRoutingContext(t *testing.T) *RequestContext {
 func TestShouldWriteKVAddressRegistryRequiresSuccessfulUpstream(t *testing.T) {
 	ctx := testKVAddressRoutingContext(t)
 	ctx.SessionID = "sess-1"
+	ctx.SessionProvenance = SessionProvenanceHeader
 	ctx.RequestModel = "qwen3-14b"
 	ctx.UpstreamBackendAddress = "10.0.1.5:8000"
 	ctx.UpstreamStatusCode = 503
@@ -30,10 +31,24 @@ func TestShouldWriteKVAddressRegistryRequiresSuccessfulUpstream(t *testing.T) {
 func TestShouldWriteKVAddressRegistryRequiresBackendAddress(t *testing.T) {
 	ctx := testKVAddressRoutingContext(t)
 	ctx.SessionID = "sess-1"
+	ctx.SessionProvenance = SessionProvenanceHeader
 	ctx.RequestModel = "qwen3-14b"
 
 	if shouldWriteKVAddressRegistry(ctx) {
 		t.Fatal("shouldWriteKVAddressRegistry() = true, want false without backend address")
+	}
+}
+
+func TestShouldWriteKVAddressRegistrySkipsDerivedSessionProvenance(t *testing.T) {
+	ctx := testKVAddressRoutingContext(t)
+	ctx.SessionID = "cc-full-a1b2c3d4e5f67890"
+	ctx.SessionProvenance = SessionProvenanceMessageHash
+	ctx.RequestModel = "qwen3-14b"
+	ctx.UpstreamBackendAddress = "10.0.1.5:8000"
+	ctx.UpstreamStatusCode = 200
+
+	if shouldWriteKVAddressRegistry(ctx) {
+		t.Fatal("shouldWriteKVAddressRegistry() = true, want false for message_hash / cc-full sessions")
 	}
 }
 
@@ -43,6 +58,7 @@ func TestUpdateKVAddressRegistryWritesSuccessfulTurn(t *testing.T) {
 	ctx := testKVAddressRoutingContext(t)
 	ctx.RequestID = "req-1"
 	ctx.SessionID = "sess-abc"
+	ctx.SessionProvenance = SessionProvenanceHeader
 	ctx.RequestModel = "qwen3-14b"
 	ctx.TurnIndex = 4
 	ctx.UpstreamBackendAddress = "10.0.1.5:8000"

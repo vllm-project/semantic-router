@@ -57,6 +57,10 @@ func shouldWriteKVAddressRegistry(ctx *RequestContext) bool {
 	if skip, _ := shouldSkipCacheWriteForStatus(ctx); skip {
 		return false
 	}
+
+	if !isTrustedStickySessionProvenance(ctx.SessionProvenance) {
+		return false
+	}
 	if routingSessionStateKey(ctx) == "" {
 		return false
 	}
