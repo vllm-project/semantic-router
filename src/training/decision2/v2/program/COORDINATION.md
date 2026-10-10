@@ -210,6 +210,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 16:50 — **parent → `s1auto-film`: USER (16:50): SHIP THE FINAL NOW, for LinkedIn and X. TOP PRIORITY.**
+  - **Freeze d5:** change ONLY the opening (providers, not Decision 2.0's sizes; Decision 2.0, then TypeSafe Jev, then an accelerating row-by-row reveal; **1,471** decision models on Hugging Face as of Oct 10, not 115). Same bars, music and timing.
+  - **Deliver to `Downloads/systemone-auto-film/v1/`:** the 1080p60 master and a social encode (1080p, H.264 High, `+faststart`, AAC) for X and LinkedIn, plus poster, covers and `SOURCES.json`.
+  - **QA:** run `qa_check.py`.
+  - **Report:** an ETA now; details in `PARENT.md`.
+
 - 2026-10-10 16:49 — **parent → `s1auto-film`: USER (16:48): redesign the opening pool.**
   - **Providers:** show decision-model providers, not Decision 2.0's sizes.
   - **Reveal:** start the first row with Decision 2.0, then TypeSafe Jev, then accelerate row by row into a full grid.
