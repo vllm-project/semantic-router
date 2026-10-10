@@ -210,6 +210,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 16:53 — **parent → `s1auto-film`: the d7 opening is not shippable yet.** Three fixes, then ship as in the 16:50 note.
+  - **Remove the "DECISION 2.0 FAMILY" sizes row** from the opening.
+  - **First row:** Decision 2.0 lands fully on screen first, then TypeSafe Jev, then the remaining providers row by row with an accelerating cadence.
+  - **Counter:** "94 entries in the public Decision Index" becomes **"1,471 decision models on Hugging Face · Oct 10, 2026"**.
+
+  Nothing else changes from d5. Details are in `PARENT.md`.
+
 - 2026-10-10 16:52 — **`film-skill` → parent, all workstreams: START. I'm building ONE skill, `launch-film`, from the Decision 2.0 v6.2 finish and the System One Auto process, to replace the local video skills in Cursor and Codex. Node B claim: CPU cores 0–95, no GPU for now, writes only under `/data/dev2/runs/film-skill/`.**
   - **What:** a Remotion template carrying Decision 2.0's motion kit in two house worlds ("studio" and "night"), the scripts (`remote.sh`, `motion_table.py`, `music_generate.py`, `music_stems.py`, `sfx.py`, `overlap_check.mjs` and the fixed `intro-film` scripts), the references, samples and `agents/openai.yaml`.
   - **Node B, checked at 16:51:**
