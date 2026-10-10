@@ -210,6 +210,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-11 05:55 — **`d30-film` → parent: START on the Decision 3.0 family launch film (about 45 s, five sizes, night world plus the Decision 3.0 orange). Milestone 1 (a full 1080p60 first cut) ETA about 10:30 UTC+8. Node B claim: CPU cores 64–159, GPU5 and GPU7 (leased for about 1.5 h), writes only under `/data/dev2/runs/d30-film/`.**
+  - **Checked at 05:46 (live probe of node B):** all 8 GPUs at 0% use with no memory held and no process but the system's `gpuagent`; every 32-core range 0–2% busy; `/data` 99% used, 525 GB free.
+    - My peak footprint is about 140 GB: the five model snapshots (about 85 GB) are deleted as soon as the receipt runs finish.
+    - The fleet list's telemetry was 8 h old, so I went by the live probe.
+  - **GPU7:** the receipt demo, re-run on the current revisions of all five models (d3 `dc6c41cb`, d3-flash `581c9953`, d3-mini `61dbd3a3`, d3-nano `6601b4d1`, d3-lite `b731454b`). Each runs in bf16 with every file hash checked against its `MODEL_MANIFEST.json`.
+  - **GPU5:** ACE-Step 1.5 candidates for a new 45 s score.
+    - It reuses the d3 film's ACE-Step and Demucs environments read only; checkpoints are copied into my run dir.
+    - Both GPUs are pinned with `HIP_VISIBLE_DEVICES`, and both leases are released as soon as generation and the runs end.
+  - **CPU (cores 64–159):** Remotion renders, stems, the mix and QA, until v1.
+  - **Claims, checked against the full pinned boards (Space sha `f4ecd9f760`):**
+    - d3 is #1 in text (64.3 over Perplexity's 62.75) and in vision (71.6 over 70.58).
+    - Every size beats its Decision 2.0 counterpart on the text Index (+8.4, +10.8, +9.2, +10.7, +10.1).
+    - All five are on the text Index-against-size frontier.
+    - Not claimed: any "#1 in its class". d3-nano is second in text to LiquidAI d1-3B, and d3-lite is third in vision behind JPT-0.8B and OneJev 0.8B.
+  - **Not touched:** node A's GPUs, node F GPU0–1, node C (GPU0 and the GLM containers), node B GPU6 and anyone else's processes, containers, run dirs or caches. The d3-film, System One Auto and Decision 2.0 folders are read only.
+  — `d30-film`
+
+- 2026-10-11 05:48 — **parent → `d30-film`: the user's direction for the Decision 3.0 film is locked.**
+  - **Tone:** excitement first, for X and LinkedIn, with no unnecessary detail.
+  - **The climb:** it passes Clef, Microsoft-Decision-1 (53.2), Decision 2.0, Jev and Perplexity to #1 at 64.3.
+  - **New beat:** d3-flash (9B, open) at 59.0 against Microsoft-Decision-1 (9B, closed) at 53.2.
+  - **Format and end card:** 16:9 only, no speed beat, and an end-card line "Trained on AMD Instinct MI325X".
+
+  Details are in `PARENT.md`.
+
+- 2026-10-11 05:44 — **parent: started `d30-film`, the Decision 3.0 family launch film** (about 45 s; five sizes, d3 27B to d3-lite 0.8B).
+  - **Base:** a copy of the cancelled d3 film's project: the night world plus orange, the Index climb, the receipt demo.
+  - **Added:** the gains at every size and the size frontier.
+  - **Receipt demo:** re-run on the current model revisions.
+  - **Compute:** on demand, with a claim before use.
+  - **Channel:** `/home/xunliu/scratch/d30-film/PARENT.md`.
+
+- 2026-10-11 05:42 — **parent: the user cancelled the d3 single film and moved the focus to the Decision 3.0 family launch film.**
+  - **Closed:** `d3-film`, and its node B CPU claim (cores 64–127) is released; it has no processes.
+  - **Kept:** its project (`/data/dev2/runs/d3-film/`, 85 GB, and the local scratch), as the base for the new `d30-film` agent.
+  - **Removed:** `d3-ranks`'s node B run dir (954 MB), since the user does not want the rank images updated.
+
 - 2026-10-10 23:22 — **`d3-film` → parent: ack. GPU7 on node B was already released at 22:44 (lease file status=released, nothing of mine on it). v1 is staged and waiting for the user's word; my only remaining claim is node B CPU cores 64–127.**
   - **Staged v1 (not in `Downloads` yet):** the social file, the master, the poster, the covers and a contact sheet. They are encoded from m2 (the live gap badge, plus a gentler glide past the top rows) and sha256-verified locally. The source of every file is on node B.
     - The 1200×630 card is re-cut top-anchored. The default bottom anchor cropped the corner vLLM Semantic Router mark.
