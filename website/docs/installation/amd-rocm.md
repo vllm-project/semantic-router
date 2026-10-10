@@ -137,13 +137,13 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
   bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-For a simple one-model deployment, start the stack. Plain `vllm-sr serve`
-keeps the Router and its models on the CPU; `--platform rocm` runs the Router's
-models on the GPU as well
+For a simple one-model deployment, start the stack. Use `--platform cpu` to
+keep Router-side inference on the CPU. Plain `vllm-sr serve` uses automatic
+platform detection; `--platform rocm` selects the GPU-capable Router image
 ([Run Vela routing models on AMD](#run-vela-routing-models-on-amd)):
 
 ```bash
-vllm-sr serve
+vllm-sr serve --platform cpu
 ```
 
 Then open the Dashboard at `http://localhost:8700`, connect a model with
