@@ -384,7 +384,7 @@ def main() -> int:
             kind = side.split(":", maxsplit=1)[1]
             copy = execute(
                 lambda kind=kind: load_runtime(
-                    args.package, args.device, args.engine, kind
+                    args.package, args.device, args.engine, kind, options
                 )
             )
             callers[side], _ = runtime_side(
