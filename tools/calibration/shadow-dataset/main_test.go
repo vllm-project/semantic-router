@@ -42,10 +42,12 @@ func writeJSON(t *testing.T, dir, name string, value any) string {
 // scratch directory, and returns their paths with the tasks it built.
 func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgmentsPath string, tasks shadowdataset.JudgeTaskSet) {
 	t.Helper()
+	// The request as stored, naming the upstream model the judge must not see.
+	request := `{"model":"primary-upstream","messages":[{"role":"user","content":"secret prompt"}]}`
 	record := store.Record{
 		ID: "r1", RequestID: "req-r1", Recipe: "vault", Decision: "guard",
 		Timestamp:     time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC),
-		SelectedModel: "primary-model", RequestBody: "secret prompt", ResponseStatus: 200,
+		SelectedModel: "primary-model", RequestBody: request, ResponseStatus: 200,
 		LifecycleState: store.LifecycleCompleted,
 		Outcomes: []store.Outcome{
 			{Source: "primary_response", Verdict: "completed", Metadata: map[string]string{"response_sha256": sha("secret primary answer")}},
@@ -58,10 +60,13 @@ func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgments
 		t.Fatalf("Build: %v", err)
 	}
 	tasks, err = shadowdataset.BuildJudgeTasks(manifest, map[string]shadowdataset.ExampleText{
-		manifest.Examples[0].ID: {Input: "secret prompt", Primary: "secret primary answer", Shadows: []string{"secret shadow answer"}},
+		manifest.Examples[0].ID: {Input: request, Primary: "secret primary answer", Shadows: []string{"secret shadow answer"}},
 	}, judgeKey)
 	if err != nil {
 		t.Fatalf("BuildJudgeTasks: %v", err)
+	}
+	if strings.Contains(tasks.Tasks[0].Input, "primary-upstream") {
+		t.Fatalf("the judge input names the upstream model: %s", tasks.Tasks[0].Input)
 	}
 	judgments := shadowdataset.JudgmentSet{
 		Version:        shadowdataset.JudgmentsVersion,
