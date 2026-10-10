@@ -146,7 +146,7 @@ func maskToolResult(
 		block := &result.Content[i]
 		structured := block.Kind == llmprotocol.ContentText &&
 			result.Kind != llmprotocol.ToolKindCustom &&
-			isCompleteJSONDocument(block.Text)
+			isStructuredJSONPayload(block.Text)
 		if !structured {
 			if err := applyToBlock(block, a, scan, out, depth+1); err != nil {
 				return err
@@ -170,31 +170,96 @@ func maskToolResult(
 	return nil
 }
 
-// isCompleteJSONDocument reports whether text is exactly one JSON object or
-// array with nothing after it. A tool result is ordinary text, so a payload
-// like `{"a":1} alice@example.com` is mixed text and belongs on the text path:
-// decoding it would scan only the leading value and leave the rest unscanned.
-// Bare scalars stay on the text path too, so a plain result is never
-// reserialised.
-func isCompleteJSONDocument(text string) bool {
+// isStructuredJSONPayload reports whether text is a JSON object or array that
+// decoding represents faithfully. Anything else is ordinary text and belongs
+// on the text path, where the whole string is scanned. Bare scalars stay on
+// the text path too, so a plain result is never reserialised.
+func isStructuredJSONPayload(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
 		return false
 	}
-	decoder := json.NewDecoder(strings.NewReader(trimmed))
-	var probe json.RawMessage
-	if err := decoder.Decode(&probe); err != nil {
-		return false
-	}
-	return isAtEndOfInput(decoder)
+	return validateJSONDocument(trimmed) == nil
 }
 
-// isAtEndOfInput reports whether a decoder that has read one value consumed
-// the whole input. A second value, or trailing bytes that are not JSON at all,
-// both mean the payload holds more than the value already decoded.
-func isAtEndOfInput(decoder *json.Decoder) bool {
-	var trailing json.RawMessage
-	return errors.Is(decoder.Decode(&trailing), io.EOF)
+// jsonFrame tracks one open object or array while walking tokens. Only object
+// frames carry member names, and expectKey marks where a name is due.
+type jsonFrame struct {
+	object    bool
+	seen      map[string]struct{}
+	expectKey bool
+}
+
+// validateJSONDocument reports why document cannot be masked as decoded JSON.
+// It must be one complete value with nothing after it, and no object may
+// repeat a member name: decoding keeps only the last of a repeated name, so an
+// earlier PII value would never be scanned yet would survive in the bytes that
+// are forwarded (D4).
+func validateJSONDocument(document string) error {
+	decoder := json.NewDecoder(strings.NewReader(document))
+	var stack []*jsonFrame
+	complete := false
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if complete {
+			// Another value, or bytes that are not JSON at all: either way
+			// the document holds more than the value already read.
+			return errors.New("trailing content after the first JSON value")
+		}
+		if err != nil {
+			return fmt.Errorf("not valid JSON: %w", err)
+		}
+		if delim, isDelim := token.(json.Delim); isDelim {
+			switch delim {
+			case '{':
+				stack = append(stack, &jsonFrame{object: true, seen: map[string]struct{}{}, expectKey: true})
+			case '[':
+				stack = append(stack, &jsonFrame{})
+			default: // '}' or ']'
+				stack = stack[:len(stack)-1]
+				complete = recordValue(stack)
+			}
+			continue
+		}
+		if top := topFrame(stack); top != nil && top.object && top.expectKey {
+			name, _ := token.(string)
+			if _, duplicate := top.seen[name]; duplicate {
+				return fmt.Errorf("duplicate member %q", name)
+			}
+			top.seen[name] = struct{}{}
+			top.expectKey = false
+			continue
+		}
+		complete = recordValue(stack)
+	}
+	if !complete {
+		return errors.New("not valid JSON: unexpected end of input")
+	}
+	return nil
+}
+
+// recordValue notes that one value finished inside the innermost frame and
+// reports whether that value was the whole document.
+func recordValue(stack []*jsonFrame) bool {
+	top := topFrame(stack)
+	if top == nil {
+		return true
+	}
+	if top.object {
+		top.expectKey = true
+	}
+	return false
+}
+
+// topFrame returns the innermost open frame, or nil at the top level.
+func topFrame(stack []*jsonFrame) *jsonFrame {
+	if len(stack) == 0 {
+		return nil
+	}
+	return stack[len(stack)-1]
 }
 
 // maskToolCallArguments masks string leaves of the arguments JSON. Keys,
@@ -234,20 +299,18 @@ func maskToolCallArguments(call *llmprotocol.ToolCall, a *Allocator, scan ScanFu
 // re-serialised. Decoding first is what keeps object keys intact, keeps the
 // result valid JSON, and sees through escapes such as a.
 func maskJSONDocument(document string, a *Allocator, scan ScanFunc, out *Result) (string, bool, error) {
+	// Content the router cannot mask faithfully must not be dispatched: an
+	// unscanned remainder and a hidden duplicate member are both bypasses (D4).
+	if err := validateJSONDocument(document); err != nil {
+		return "", false, err
+	}
 	// UseNumber preserves numeric literals exactly on re-marshal; decoding
 	// into float64 can lose precision for a large int64 (risk 1).
 	decoder := json.NewDecoder(strings.NewReader(document))
 	decoder.UseNumber()
 	var decoded any
 	if err := decoder.Decode(&decoded); err != nil {
-		// Content the router cannot parse cannot be masked, and dispatching
-		// it unmasked would be a silent bypass (D4).
 		return "", false, fmt.Errorf("not valid JSON: %w", err)
-	}
-	// Re-serialising would drop whatever follows the first value, and only
-	// that value is ever scanned, so a trailing remainder is a bypass (D4).
-	if !isAtEndOfInput(decoder) {
-		return "", false, fmt.Errorf("trailing content after the first JSON value")
 	}
 	masked, changed, err := maskJSONValue(decoded, a, scan, out)
 	if err != nil {

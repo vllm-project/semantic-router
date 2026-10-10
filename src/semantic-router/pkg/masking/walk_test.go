@@ -751,3 +751,103 @@ func toolResultRequest(text string) *llmprotocol.Request {
 		},
 	}
 }
+
+// Decoding keeps only the last of a repeated member name, so the earlier value
+// is never scanned. Such a payload is masked as text instead.
+func TestApply_ToolResultDuplicateMemberIsMasked(t *testing.T) {
+	request := toolResultRequest(`{"value":"alice@example.com","value":"safe"}`)
+
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("result reported no change, so the shadowed member was never scanned")
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"value":"[EMAIL_ADDRESS_0]","value":"safe"}`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// The surviving member is masked without dropping the shadowed one.
+func TestApply_ToolResultDuplicateMemberKeepsBothMembers(t *testing.T) {
+	request := toolResultRequest(`{"value":"safe","value":"alice@example.com"}`)
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"value":"safe","value":"[EMAIL_ADDRESS_0]"}`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A duplicate nested below the root hides a value just as effectively.
+func TestApply_ToolResultNestedDuplicateMemberIsMasked(t *testing.T) {
+	request := toolResultRequest(`{"outer":{"value":"alice@example.com","value":"safe"}}`)
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"outer":{"value":"[EMAIL_ADDRESS_0]","value":"safe"}}`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Function arguments must be one JSON object that decoding represents
+// faithfully, so a repeated member name fails closed rather than being
+// re-serialised with the shadowed value dropped.
+func TestApply_ToolCallArgumentsDuplicateMemberFailsClosed(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_1", Name: "lookup", Arguments: `{"value":"alice@example.com","value":"safe"}`,
+				}},
+			}},
+		},
+	}
+
+	_, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err == nil {
+		t.Fatal("tool call arguments with a duplicate member were accepted")
+	}
+	if !strings.Contains(err.Error(), `duplicate member "value"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// Sibling objects repeating a name are not duplicates, so the structured path
+// stays in force. A PII-shaped key surviving unmasked proves which path ran.
+func TestApply_ToolResultSiblingMembersStayStructured(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "array of objects",
+			input: `[{"alice@example.com":"alice@example.com"},{"alice@example.com":"safe"}]`,
+			want:  `[{"alice@example.com":"[EMAIL_ADDRESS_0]"},{"alice@example.com":"safe"}]`,
+		},
+		{
+			name:  "nested sibling objects",
+			input: `{"a":{"value":"alice@example.com"},"b":{"value":"safe"}}`,
+			want:  `{"a":{"value":"[EMAIL_ADDRESS_0]"},"b":{"value":"safe"}}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := toolResultRequest(tc.input)
+
+			if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
