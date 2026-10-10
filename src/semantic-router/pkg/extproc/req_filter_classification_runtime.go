@@ -347,9 +347,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := r.effectiveReplayConfigForRequest(ctx, result.Decision); pluginCfg != nil {
-		ctx.RouterReplayPluginConfig = pluginCfg
-	}
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, result.Decision)
 	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
 	// Snapshot the retention directive emitted by this decision (deep clone)

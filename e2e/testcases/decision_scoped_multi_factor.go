@@ -82,7 +82,7 @@ func requestDecisionScopedSelection(ctx context.Context, localPort, query string
 
 func requestDecisionScopedHeaders(ctx context.Context, localPort, query string) (http.Header, error) {
 	payload, err := json.Marshal(map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": query},
 		},

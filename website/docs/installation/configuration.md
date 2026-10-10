@@ -29,11 +29,11 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners, timeouts, and optional bearer credentials for CLI-managed Envoy listeners. |
+| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
-| `entrypoints` | Public virtual model aliases mapped to named recipes. |
+| `entrypoints` | Public virtual model aliases mapped to the default or a named recipe. |
 | `recipes` | Additional isolated routing profiles that share providers and global infrastructure. |
 | `global` | Router services, stores, integrations, observability, learning, and router-owned model assets. |
 
@@ -72,17 +72,17 @@ reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
-Built-in category/domain classification uses the local `variant` selector when
-no remote backend is configured. To call a named external classifier, attach a
+Built-in category/domain classification runs Vela Domain in the
+[model runtime](model-runtime/overview.md) when no remote backend is
+configured. To call a named external classifier, attach a
 `backend` under `global.model_catalog.modules.classifier.domain` and resolve
 its `model` from `global.model_catalog.external[]` with
 `model_role: classification`. The shared backend fields are `protocol`,
 `contract`, `model`, and optional `deadline_ms`; category
 currently supports `http_classify` with the full `label_distribution.v1`
-response contract. Omit `backend` to retain local behavior. The deprecated
-`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
-canonical configuration uses `variant: candle`, `variant: modernbert`, or
-`variant: mmbert32k`.
+response contract. Omit `backend` to keep the runtime-served model. The earlier
+`variant`, `use_modernbert` and `use_mmbert_32k` selectors are gone;
+`vllm-sr config migrate` removes them.
 
 Complexity attaches the same block under
 `global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
@@ -108,8 +108,7 @@ result. `on_error` beside the backend selects what such a failure, or a
 provider-declared `truncated_at`, does to the rule that consumed it: `allow`
 (the default) treats the content as not matching, `block` matches it as
 `classification_error`. Spans returned before a declared truncation still
-count under both policies. A backend is mutually exclusive with the local
-`use_mmbert_32k` selector.
+count under both policies.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -181,6 +180,12 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `ratings` — looper algorithm | `ratings` calls every candidate model and returns one OpenAI-compatible choice per successful model. `max_concurrent` limits parallel work; it does not limit the total number of candidates executed. | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [Guide](../tutorials/algorithm/looper/ratings) |
 | `remom` — looper algorithm | `remom` runs several candidate models across bounded rounds and synthesizes their responses into one answer. | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [Guide](../tutorials/algorithm/looper/remom) |
 | `workflows` — looper algorithm | `workflows` runs a bounded, multi-step Router Flow behind one OpenAI-compatible model name. | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [Guide](../tutorials/algorithm/looper/workflows) |
+
+### Native System One algorithms
+
+| Family and type | Use it to | Reusable fragment | Guide |
+| --- | --- | --- | --- |
+| `cascade` — native algorithm | `cascade` tries declared decision models in order and returns a complete System One response when its acceptance rules pass. | [`config/fragments/algorithm/native/cascade.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/cascade.yaml) | [Guide](../tutorials/algorithm/native/cascade) |
 
 ### Plugins and bundles
 
@@ -334,8 +339,13 @@ in Secrets rather than ConfigMaps or Helm values. See
 
 ## Entrypoints and recipes
 
+Without an explicit entrypoint for `recipe: default`, the top-level routing
+recipe is published as `vllm-sr/auto`. To replace that name, declare its
+`model_names` in `entrypoints` with `recipe: default`. Named recipes require
+their own entrypoints. `MoM` has no implicit special meaning.
+
 An entrypoint maps one or more public model aliases to a recipe. A recipe owns
-its signal, projection, decision, algorithm, plugin, cache, replay, learning,
+its signal, projection, decision, algorithm, plugin, cache, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
@@ -345,6 +355,15 @@ classifier module to cap one upstream classifier response.
 In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
+
+`global.router.strategy` and `global.router.fallback` provide shared defaults.
+Top-level `routing` configures the default recipe only; each named
+`recipes[].routing` resolves its own strategy and fallback independently from
+`global.router`. Named recipes never inherit the default recipe's routing
+settings. A decision's fallback overrides its own recipe's effective fallback.
+Sparse overrides such as `fallback: {enabled: false}` preserve the remaining
+shared defaults in both default and named recipes. The runtime strategy default
+is `priority`.
 
 If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
@@ -356,17 +375,15 @@ and migration. See
 [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
 
-### Recipe-wide candidate and replay policies
+### Recipe candidate requirements
 
-Set these independently optional policies inside the default or a named recipe's
+Set optional candidate requirements inside the default or a named recipe's
 `routing` block:
 
 ```yaml
 candidate_requirements:
   capabilities: declared
   context: known_limits
-data_policy:
-  replay: false
 ```
 
 `capabilities: declared` requires the assigned model to declare support for the
@@ -431,23 +448,33 @@ reports `execution_required` because it does not have the complete provider
 request. Automatic budgets currently support text and tool requests, excluding
 multimodal input, provider truncation, LoRA, Looper, and shadow dispatch.
 
-A recipe's `replay: false` prevents router replay capture even if a decision tries
-to enable it, including requests rejected before a decision is available. Absent
-or true adds no restriction to the existing global and decision configuration.
-This field does not control other stores, logs, or backend retention. Operators
-must assign deployments that meet their privacy requirements.
-
 For multi-factor selection, `latency_metric: ttft` compares time to first token;
 `tpot` compares time per output token. Omission preserves the existing TPOT-then-TTFT
 fallback. Pair the metric with explicit quality evidence and a lexicographic
 objective when quality is a floor rather than a score to trade away.
 
 Discover the current contract with
-`vllm-sr config schema --section routing.candidate_requirements` and
-`vllm-sr config schema --section routing.data_policy`.
-DSL `ROUTING` blocks support the same objects. Kubernetes CRD emission preserves
-these policies for the default routing profile; named recipes and entrypoints
+`vllm-sr config schema --section routing.candidate_requirements`.
+DSL `ROUTING` blocks support the same object. Kubernetes CRD emission preserves
+these requirements for the default routing profile; named recipes and entrypoints
 require canonical YAML and are rejected by CRD emission rather than discarded.
+
+### Replay capture defaults and decision overrides
+
+`global.services.router_replay` owns shared storage, retention, enablement and
+capture defaults. A decision's `router_replay` plugin overrides only explicitly
+configured capture fields. Omitted fields inherit; `enabled: false` disables
+capture for that decision, while `enabled: true` can opt in when the global
+default is disabled. There is no `routing.data_policy` or recipe-level Replay
+configuration.
+
+Set `capture_personal_data: false` globally or in the decision plugin to retain
+routing evidence while omitting content when PII is detected or its status is
+unknown. Missing PII detectors suppress content conservatively rather than
+preventing startup. Rejected requests without a selected decision use global
+capture defaults. These controls do not govern other stores or backend retention.
+See [Router Replay](../tutorials/plugin/router-replay) for the complete fields and
+examples, or inspect `vllm-sr config schema --section global.services.router_replay`.
 
 ## Configuration workflows
 
@@ -463,7 +490,9 @@ The canonical document can be authored or applied through several interfaces:
 owns which part of the document and how to avoid competing sources of truth.
 [Configuration Contract](configuration-contract) describes the generated
 machine-readable schema, Router discovery and validation APIs, and the safe
-authoring loop for tools and agents.
+authoring loop for tools and agents. [Configuration Management](configuration-management)
+explains how a change activates on a running Router, how a rejected change is
+reported, and how to list and roll back versions.
 
 ## Reference sources
 

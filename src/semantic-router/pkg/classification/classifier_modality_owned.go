@@ -24,6 +24,12 @@ func (m *ownedModalityClassifier) Close() error {
 	return m.handle.Close()
 }
 
+// readsWholeText reports whether the classifier asks a Vela 2.0 model the
+// modality question, which reads a whole text however long it is.
+func (m *ownedModalityClassifier) readsWholeText() bool {
+	return m != nil && m.handle != nil && m.handle.Capability().Question != ""
+}
+
 func (m *ownedModalityClassifier) Classify(ctx context.Context, text string) (ModalityClassificationResult, error) {
 	if m == nil || m.handle == nil {
 		return ModalityClassificationResult{}, fmt.Errorf("modality classifier was not prepared")
@@ -56,15 +62,19 @@ func buildOwnedModalityOption(
 		return nil, nil
 	}
 	_, explicit := models.plan.Lookup(models.recipe, "modality_detector")
-	if !explicit && (md.Classifier == nil || md.Classifier.ModelPath == "") {
+	path, useCPU, ok := cfg.ModalityClassifierModel()
+	if !explicit && !ok {
 		return nil, nil
 	}
-	path, useCPU, limit := "", true, 0
+	limit := 0
 	if md.Classifier != nil {
-		path, useCPU, limit = md.Classifier.ModelPath, md.Classifier.UseCPU, md.Classifier.MaxSequenceLength
+		limit = md.Classifier.MaxSequenceLength
 	}
-	spec := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
-	handle, err := load(context.Background(), spec)
+	spec, err := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
+	var handle *binding.Resolved[string, tasks.LabelDistribution]
+	if err == nil {
+		handle, err = load(context.Background(), spec)
+	}
 	if err != nil {
 		if md.GetMethod() == config.ModalityDetectionHybrid && !explicit {
 			logging.Warnf("Modality classifier preparation failed; using configured keyword fallback: %v", err)

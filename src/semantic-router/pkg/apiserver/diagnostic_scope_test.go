@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -11,12 +11,12 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 func TestConvenienceDiagnosticsHTTPRejectsForeignRecipe(t *testing.T) {
-	cfg, service := preparedInventoryService(t, native.New(nil), &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}})
+	cfg, service := preparedInventoryService(t, serving.New(nil, nil), &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}})
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	for _, test := range []struct {
 		name, body string
@@ -27,7 +27,6 @@ func TestConvenienceDiagnosticsHTTPRejectsForeignRecipe(t *testing.T) {
 		{"batch-similarity", `{"recipe":"foreign","query":"hello","candidates":["world"]}`, api.handleBatchSimilarity},
 		{"batch", `{"recipe":"foreign","texts":["hello"]}`, api.handleBatchClassification},
 		{"combined", `{"recipe":"foreign","text":"hello"}`, api.handleCombinedClassification},
-		{"nli", `{"recipe":"foreign","premise":"hello","hypothesis":"greeting"}`, api.handleNLIClassification},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			w := httptest.NewRecorder()

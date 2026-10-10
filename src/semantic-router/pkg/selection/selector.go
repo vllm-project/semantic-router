@@ -74,8 +74,7 @@ const (
 	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
 	MethodSVM SelectionMethod = "svm"
 
-	// MethodMLP uses Multi-Layer Perceptron for GPU-accelerated model selection
-	// Neural network classifier using Candle for efficient GPU inference
+	// MethodMLP uses a Multi-Layer Perceptron classifier for model selection
 	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
 	MethodMLP SelectionMethod = "mlp"
 

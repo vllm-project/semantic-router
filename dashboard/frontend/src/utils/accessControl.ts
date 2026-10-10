@@ -16,8 +16,6 @@ const LOGS_READ_PERMISSION = 'logs.read'
 const ML_PIPELINE_MANAGE_PERMISSION = 'mlpipeline.manage'
 const MCP_READ_PERMISSION = 'mcp.read'
 const MCP_MANAGE_PERMISSION = 'mcp.manage'
-const OPENCLAW_READ_PERMISSION = 'openclaw.read'
-const OPENCLAW_MANAGE_PERMISSION = 'openclaw.manage'
 const REPLAY_READ_PERMISSION = 'replay.read'
 const TOPOLOGY_READ_PERMISSION = 'topology.read'
 const USERS_VIEW_PERMISSION = 'users.view'
@@ -75,10 +73,6 @@ export function canManageMCP(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, MCP_MANAGE_PERMISSION)
 }
 
-export function canManageOpenClaw(user?: PermissionUser | null): boolean {
-  return canAccessWithPermission(user, OPENCLAW_MANAGE_PERMISSION)
-}
-
 export function canAccessDashboardPath(
   user: PermissionUser | null | undefined,
   pathname: string,
@@ -106,18 +100,15 @@ export function canAccessDashboardPath(
   if (normalizedPath.startsWith('/evaluation')) {
     return canAccessWithPermission(user, EVALUATION_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
-  if (normalizedPath.startsWith('/openclaw')) {
-    return canAccessWithPermission(user, OPENCLAW_READ_PERMISSION, READ_CAPABLE_ROLES)
-  }
   if (normalizedPath.startsWith('/config/mcp')) {
     return canAccessWithPermission(user, MCP_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
   if (
+    normalizedPath === '/api/router/docs' ||
     normalizedPath.startsWith('/builder') ||
     normalizedPath.startsWith('/models') ||
-    normalizedPath.startsWith('/config') ||
-    normalizedPath.startsWith('/knowledge-bases') ||
-    normalizedPath.startsWith('/taxonomy')
+    normalizedPath.startsWith('/decision-model') ||
+    normalizedPath.startsWith('/config')
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)
   }

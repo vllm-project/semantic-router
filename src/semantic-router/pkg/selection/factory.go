@@ -358,7 +358,7 @@ func (f *Factory) CreateAll() *Registry {
 		registry.Register(MethodSVM, svmAdapter)
 	}
 
-	// Create MLP selector (GPU-accelerated via Candle)
+	// Create MLP selector
 	mlpAdapter, err := CreateMLPSelector(mlCfg, nil)
 	if err != nil {
 		logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)

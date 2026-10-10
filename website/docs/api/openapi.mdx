@@ -29,8 +29,8 @@ curl -sS http://localhost:8080/openapi.json
 The Dashboard is only a human-facing proxy and is not required for Agent or
 Router operation.
 
-This specification describes the Router **management listener**. Routed model
-traffic goes through Envoy and follows the separate
+This specification describes the Router **management listener**. Model traffic uses the standalone frontend by default, or Envoy with
+`--gateway extproc`, and follows the separate
 [inference API contract](./router). Storage routes therefore appear only as
 `/api/v1/storage/files` and `/api/v1/storage/vector-stores`; the Router does not
 publish `/v1/files` or `/v1/vector_stores` aliases.

@@ -1,7 +1,9 @@
 import hashlib
 import importlib
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -74,6 +76,31 @@ def test_cli_help_lists_registered_commands():
     assert " init" not in result.output
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--help"],
+        ["--version"],
+        ["optimize", "recipe-learning", "--help"],
+    ],
+)
+def test_cli_loads_with_malformed_port_offset(args):
+    # A fresh interpreter, because the defect is evaluation at import time.
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(PROJECT_ROOT)
+    environment["VLLM_SR_PORT_OFFSET"] = "x9"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cli.main", *args],
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_cli_version_matches_project_metadata():
     runner = CliRunner()
 
@@ -93,7 +120,7 @@ def test_registered_serve_command_comes_from_cli_commands_runtime():
 
 
 def test_serve_materializes_active_config_under_custom_host_state_root(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
@@ -299,8 +326,8 @@ def test_k8s_serve_rejects_replace_active_config(tmp_path: Path, caplog):
         ],
     )
 
-    assert result.exit_code != 0
-    assert "supported only for local Docker deployments" in caplog.text
+    assert result.exit_code == 2
+    assert "--replace-active-config applies to the docker target" in result.output
 
 
 def test_serve_help_describes_docker_only_runtime():
@@ -324,7 +351,7 @@ def test_serve_help_describes_docker_only_runtime():
 
 
 def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowlist(
-    monkeypatch, tmp_path: Path, caplog
+    monkeypatch, tmp_path: Path, caplog, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -335,7 +362,17 @@ def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowli
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
                 "providers": {
-                    "models": [{"name": "custom", "api_key_env": "CUSTOM_API_KEY"}]
+                    "models": [
+                        {
+                            "name": "custom",
+                            "backend_refs": [
+                                {
+                                    "endpoint": "127.0.0.1:8000",
+                                    "api_key_env": "CUSTOM_API_KEY",
+                                }
+                            ],
+                        }
+                    ]
                 },
             },
             sort_keys=False,
@@ -421,7 +458,7 @@ def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowli
 
 
 def test_active_package_is_validated_before_source_materialization(
-    monkeypatch, tmp_path: Path, caplog
+    monkeypatch, tmp_path: Path, caplog, no_running_containers
 ):
     initial = yaml.safe_dump(
         {
@@ -504,7 +541,10 @@ def test_active_package_is_validated_before_source_materialization(
     assert "cannot replace an active Recipe package" in caplog.text
 
 
-def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
+def test_serve_passes_host_runtime_controls_to_backend_env(
+    monkeypatch, tmp_path: Path, no_running_containers
+):
+    monkeypatch.setenv("VLLM_SRUN_CPU_THREADS", "8")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -552,9 +592,12 @@ def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
 
     assert result.exit_code == 0
     assert captured["env_vars"]["SR_LOG_LEVEL"] == "debug"
+    assert captured["env_vars"]["VLLM_SRUN_CPU_THREADS"] == "8"
 
 
-def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: Path):
+def test_serve_keeps_observability_enabled_in_setup_mode(
+    monkeypatch, tmp_path: Path, no_running_containers
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -677,7 +720,7 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
 
 
 def test_serve_recovers_pending_config_before_choosing_setup_mode(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

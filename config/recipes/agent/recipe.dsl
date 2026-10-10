@@ -286,7 +286,7 @@ SIGNAL complexity evidence_synthesis {
 }
 
 SIGNAL pii pii_strict {
-  threshold: 0.9
+  threshold: 0.01
   pii_types_allowed: ["GPE"]
 }
 
@@ -520,7 +520,7 @@ ROUTE domain_business (description = "Non-private business and product-analysis 
 ROUTE complex_general (description = "Non-private complex or reasoning-heavy work routes to stronger aliases.") {
   PRIORITY 190
   TIER 4
-  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (projection("balance_complex") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR keyword("agentic_request_markers") OR projection("agentic_workflow")) AND NOT (keyword("code_request_markers") OR domain("math") OR domain("physics") OR keyword("research_request_markers") OR domain("computer science") AND embedding("coding_workflows"))
+  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (projection("balance_complex") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR keyword("agentic_request_markers") OR projection("agentic_workflow")) AND (NOT keyword("comparison_request") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR keyword("agentic_request_markers") OR projection("agentic_workflow") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("constraint_dense")) AND NOT (keyword("code_request_markers") OR domain("math") OR domain("physics") OR keyword("research_request_markers") OR domain("computer science") AND embedding("coding_workflows"))
   MODEL "google/gemini-3.1-pro" (reasoning = false),
         "openai/gpt5.4" (reasoning = false)
   PLUGIN router_replay {
@@ -541,4 +541,13 @@ ROUTE simple_general (description = "Simple or otherwise unmatched traffic uses 
   PRIORITY 80
   TIER 6
   MODEL "qwen/qwen3.6-rocm" (reasoning = false)
+}
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
 }

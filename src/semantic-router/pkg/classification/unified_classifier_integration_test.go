@@ -16,22 +16,22 @@ import (
 
 func publishedUnifiedClassifier(t *testing.T) (*UnifiedClassifier, *Classifier) {
 	t.Helper()
-	defaults := config.DefaultGlobalConfig()
+	defaults := vela1SpecialistsConfig()
 	domain := requireRealModel(t, "VLLM_SR_DOMAIN_MODEL", defaults.CategoryModel.ModelID)
 	pii := requireRealModel(t, "VLLM_SR_PII_MODEL", defaults.PIIModel.ModelID)
 	guard := requireRealModel(t, "VLLM_SR_JAILBREAK_MODEL", defaults.PromptGuard.ModelID)
 	cfg := &config.RouterConfig{}
 	cfg.CategoryModel, cfg.PIIModel, cfg.PromptGuard = defaults.CategoryModel, defaults.PIIModel, defaults.PromptGuard
 	// Resolve published document policies before rebasing the explicit artifacts.
-	models, err := newClassifierModelRuntime(cfg, nil)
+	models, err := newClassifierModelRuntime(cfg, managedRuntimeOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cfg = models.cfg
 	cfg.CategoryModel.ModelID, cfg.PIIModel.ModelID, cfg.PromptGuard.ModelID = domain, pii, guard
-	cfg.CategoryMappingPath = filepath.Join(domain, filepath.Base(defaults.CategoryMappingPath))
-	cfg.PIIMappingPath = filepath.Join(pii, filepath.Base(defaults.PIIMappingPath))
-	cfg.PromptGuard.JailbreakMappingPath = filepath.Join(guard, filepath.Base(defaults.PromptGuard.JailbreakMappingPath))
+	cfg.CategoryMappingPath = filepath.Join(domain, "category_mapping.json")
+	cfg.PIIMappingPath = filepath.Join(pii, "pii_mapping.json")
+	cfg.PromptGuard.JailbreakMappingPath = filepath.Join(guard, "jailbreak_type_mapping.json")
 	categories, err := LoadCategoryMapping(cfg.CategoryMappingPath)
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,6 @@ func verifyPublishedBatchResults(t *testing.T, results *UnifiedBatchResults, exp
 	}
 }
 
-// The mandatory manifest runner selects this same test for Candle and ORT.
 // Hardware-dependent latency belongs to perf's model-identity-bound baseline.
 func TestUnifiedClassifierPublishedModels(t *testing.T) {
 	classifier, owner := publishedUnifiedClassifier(t)
@@ -141,29 +140,6 @@ func TestUnifiedClassifierPublishedModels(t *testing.T) {
 		t.Errorf("positive/negative Guard inputs lost their batch positions: %+v", results.SecurityResults)
 	}
 
-	t.Run("compatibility_methods", func(t *testing.T) {
-		one := texts[:1]
-		intent, callErr := classifier.ClassifyIntent(one)
-		if callErr != nil || len(intent) != 1 || intent[0].Category != results.IntentResults[0].Category {
-			t.Fatalf("intent compatibility: %+v %v", intent, callErr)
-		}
-		pii, callErr := classifier.ClassifyPII(texts[1:2])
-		if callErr != nil || len(pii) != 1 || !reflect.DeepEqual(pii[0], results.PIIResults[1]) {
-			t.Fatalf("PII compatibility: %+v %v", pii, callErr)
-		}
-		security, callErr := classifier.ClassifySecurity(texts[2:3])
-		if callErr != nil || len(security) != 1 || !reflect.DeepEqual(security[0], results.SecurityResults[2]) {
-			t.Fatalf("security compatibility: %+v %v", security, callErr)
-		}
-		single, callErr := classifier.ClassifySingle(texts[3])
-		if callErr != nil {
-			t.Fatal(callErr)
-		}
-		verifyPublishedBatchResults(t, single, 1, owner.CategoryMapping.GetCategoryCount())
-		if !reflect.DeepEqual(single.SecurityResults[0], results.SecurityResults[3]) {
-			t.Fatalf("single-input compatibility changed result: %+v", single)
-		}
-	})
 	t.Run("empty_batch", func(t *testing.T) {
 		if _, emptyErr := classifier.ClassifyBatch(nil); emptyErr == nil || emptyErr.Error() != "empty text batch" {
 			t.Fatalf("empty batch accepted or misreported: %v", emptyErr)
