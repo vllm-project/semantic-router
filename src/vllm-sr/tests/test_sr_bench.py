@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 import requests
 from cli.sr_bench import adapters
-from cli.sr_bench.contracts import catalog, digest, plan
+from cli.sr_bench.contracts import SESSION_AWARE, STATELESS, catalog, digest, plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.grading import basic_grade
 from cli.sr_bench.offline import export_training, regrade, replay
@@ -24,6 +24,9 @@ from cli.sr_bench.transport import (
     final_content,
     mom_usage,
     normalize_usage,
+    request_phase,
+    session_phase,
+    usage_presence,
 )
 
 
@@ -34,11 +37,36 @@ class Target(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         self.server.requests.append(body)
+        headers = {key.lower(): value for key, value in self.headers.items()}
+        self.server.request_headers.append(headers)
+        self.server.observations.append((body, headers))
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
+        phase = self.server.session_phase
+        if phase is None and self.headers.get("X-Session-Id"):
+            latest = body.get("messages", [])[-1:]
+            phase = (
+                "tool_loop"
+                if latest and latest[0].get("role") in {"tool", "function"}
+                else "user_turn"
+            )
+        if phase:
+            self.send_header("X-VSR-Session-Phase", phase)
         if self.server.ack:
             self.send_header("X-SR-Bench-Config-Hash", self.server.ack)
         self.end_headers()
+        usage_events = self.server.usage_events
+        if usage_events is None:
+            usage_events = [
+                {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 3,
+                    "prompt_tokens_details": {
+                        "cached_tokens": 2,
+                        self.server.cache_write_field: 1,
+                    },
+                }
+            ]
         events = [
             {
                 "model": "model",
@@ -59,18 +87,10 @@ class Target(BaseHTTPRequestHandler):
                     }
                 ],
             },
-            {
-                "model": "model",
-                "choices": [],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 3,
-                    "prompt_tokens_details": {
-                        "cached_tokens": 2,
-                        self.server.cache_write_field: 1,
-                    },
-                },
-            },
+            *[
+                {"model": "model", "choices": [], "usage": usage}
+                for usage in usage_events
+            ],
         ]
         try:
             for event in events:
@@ -88,10 +108,14 @@ class Target(BaseHTTPRequestHandler):
 def target():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Target)
     server.requests = []
+    server.request_headers = []
+    server.observations = []
     server.answer = "A"
     server.truncated = False
     server.delay = 0
     server.ack = None
+    server.session_phase = None
+    server.usage_events = None
     server.cache_write_field = "cache_creation_tokens"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -150,6 +174,7 @@ def wait_run(store, run_id):
 def test_live_http_usage_final_channel_and_idempotency(
     tmp_path, target, cache_write_field
 ):
+    target.session_phase = "tool_loop"
     target.cache_write_field = cache_write_field
     store = Store(tmp_path)
     engine = Engine(store)
@@ -167,10 +192,261 @@ def test_live_http_usage_final_channel_and_idempotency(
         "cache_write_tokens": 1,
         "output_tokens": 3,
     }
+    assert score["continuity"]["model_switches_by_phase"] == {}
+    assert score["cache_read_call_count"] == 1
+    assert score["cache_read_tokens"] == 2
+    assert score["cache_read_prompt_tokens"] == 10
+    assert score["cache_read_ratio"] == 0.2
+    assert store.calls(run["id"], summary=True)[0]["phase"] == "tool_loop"
+    assert store.calls(run["id"], summary=True)[0]["phase_source"] == "router"
     assert score["cost_usd"] == pytest.approx(18.2 / 1_000_000)
     assert score["accuracy"] == 1 and score["total"] == 1
     assert list((tmp_path / "runs" / run["id"]).glob("*/*.sse"))
     assert store.calls(run["id"])[0]["reasoning"] == "The answer might be B."
+
+
+def test_streaming_cache_presence_accumulates_across_usage_events(tmp_path, target):
+    target.usage_events = [
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 3,
+            "prompt_tokens_details": {
+                "cached_tokens": 2,
+                "cache_creation_tokens": 1,
+            },
+        },
+        {"prompt_tokens": 10, "completion_tokens": 3},
+    ]
+    store = Store(tmp_path)
+    run = Engine(store).start(manifest(target))
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    call = store.calls(run["id"])[0]
+    assert call["cache_read_reported"] is True
+    assert call["cache_write_reported"] is True
+    assert call["cache_read_usage"] == {
+        "input_tokens": 7,
+        "cached_input_tokens": 2,
+        "cache_write_tokens": 1,
+        "output_tokens": 3,
+    }
+    assert call["usage"] == {
+        "input_tokens": 10,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 3,
+    }
+    assert call["cost_usd"] == pytest.approx(19 / 1_000_000)
+    report = make_report(store, run["id"])["summary"]["targets"][0]
+    assert report["cache_read_call_count"] == 1
+    assert report["cache_read_tokens"] == 2
+    assert report["cache_read_prompt_tokens"] == 10
+    assert report["cache_read_ratio"] == 0.2
+    assert report["cost_usd"] == pytest.approx(19 / 1_000_000)
+
+
+def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):
+    store = Store(tmp_path)
+    document = manifest(target)
+    document["cases"][0]["messages"] = [
+        {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+        {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+    ]
+    run = Engine(store).start(document)
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    call = store.calls(run["id"], summary=True)[0]
+    assert call["phase"] == "tool_loop"
+    assert call["phase_source"] == "request"
+
+
+def test_session_aware_target_sends_case_stable_session_ids(
+    tmp_path, target, monkeypatch
+):
+    target.ack = "fixed"
+    document = manifest(target)
+    document["cost_policy"] = "capability_only"
+    document["targets"][0].update(
+        kind="mom",
+        config_hash="fixed",
+        max_inference_calls=1,
+        session_mode=SESSION_AWARE,
+    )
+    document["cases"].append({**document["cases"][0], "id": "q2"})
+
+    class AgentAdapter:
+        def execute(self, case, context):
+            context.call([{"role": "user", "content": case["id"]}])
+            context.call(
+                [
+                    {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+                    {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+                ]
+            )
+            return {"answer": "A", "correct": True, "score": 1}
+
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: AgentAdapter())
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    session_ids = [headers.get("x-session-id") for headers in target.request_headers]
+    assert len(session_ids) == 4
+    assert all(session_ids)
+    assert all(
+        headers.get("x-vsr-debug") == "true" for headers in target.request_headers
+    )
+    assert session_ids[0] == session_ids[1]
+    assert session_ids[2] == session_ids[3]
+    assert session_ids[0] != session_ids[2]
+    calls = store.calls(run["id"], summary=True)
+    assert all(call.get("session_id") for call in calls)
+    assert [call["phase_source"] for call in calls] == ["router"] * 4
+    assert [call["phase"] for call in calls] == [
+        "user_turn",
+        "tool_loop",
+        "user_turn",
+        "tool_loop",
+    ]
+    assert run["manifest"]["targets"][0]["session_mode"] == "session_aware"
+    assert {call["session_id"] for call in calls} == set(session_ids)
+    assert (
+        make_report(store, run["id"])["summary"]["targets"][0]["continuity"][
+            "session_mode"
+        ]
+        == SESSION_AWARE
+    )
+
+
+def test_run_compares_session_modes_without_leaking_to_auxiliary_calls(
+    tmp_path, target, monkeypatch
+):
+    target.ack = "fixed"
+    document = manifest(target)
+    document["cost_policy"] = "capability_only"
+    document["targets"] = [
+        {
+            **document["targets"][0],
+            "id": "aware",
+            "kind": "mom",
+            "model": "aware-model",
+            "config_hash": "fixed",
+            "max_inference_calls": 1,
+            "session_mode": SESSION_AWARE,
+        },
+        {
+            **document["targets"][0],
+            "id": "plain",
+            "kind": "mom",
+            "model": "plain-model",
+            "config_hash": "fixed",
+            "max_inference_calls": 1,
+        },
+    ]
+    url = f"http://127.0.0.1:{target.server_port}/v1"
+    document["auxiliary_targets"] = {
+        role: {"id": role, "kind": "single", "model": role, "base_url": url}
+        for role in ("judge", "simulator")
+    }
+    document["cases"].append({**document["cases"][0], "id": "q2"})
+
+    class AgentAdapter:
+        def execute(self, case, context):
+            context.call([{"role": "user", "content": case["id"]}])
+            context.call([{"role": "user", "content": case["id"]}])
+            context.call(
+                [{"role": "user", "content": case["id"]}], role="judge", target="judge"
+            )
+            context.call(
+                [{"role": "user", "content": case["id"]}],
+                role="simulator",
+                target="simulator",
+            )
+            return {"answer": "A", "correct": True, "score": 1}
+
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: AgentAdapter())
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+    assert wait_run(store, run["id"])["status"] == "completed"
+
+    sent = target.observations
+    aware = [
+        (body, headers) for body, headers in sent if body["model"] == "aware-model"
+    ]
+    plain = [
+        (body, headers) for body, headers in sent if body["model"] == "plain-model"
+    ]
+    auxiliary = [
+        headers for body, headers in sent if body["model"] in {"judge", "simulator"}
+    ]
+    assert len(aware) == len(plain) == 4
+    assert len(auxiliary) == 8
+    assert all("x-session-id" not in headers for _, headers in plain)
+    assert all("x-session-id" not in headers for headers in auxiliary)
+    aware_ids_by_case = {}
+    for body, headers in aware:
+        case_id = body["messages"][0]["content"]
+        aware_ids_by_case.setdefault(case_id, set()).add(headers["x-session-id"])
+    assert set(aware_ids_by_case) == {"q1", "q2"}
+    assert all(len(session_ids) == 1 for session_ids in aware_ids_by_case.values())
+    assert len({next(iter(ids)) for ids in aware_ids_by_case.values()}) == 2
+
+    calls = store.calls(run["id"], summary=True)
+    assert all(
+        "session_id" not in call
+        for call in calls
+        if call["role"] != "subject" or call["target_id"] == "plain"
+    )
+    report = make_report(store, run["id"])
+    modes = {
+        item["id"]: item["continuity"]["session_mode"]
+        for item in report["summary"]["targets"]
+    }
+    assert modes == {"aware": SESSION_AWARE, "plain": STATELESS}
+    benchmark_modes = {
+        item["target_id"]: item["continuity"]["session_mode"]
+        for item in report["benchmarks"]
+    }
+    assert benchmark_modes == modes
+
+
+@pytest.mark.parametrize("session_mode", [7, None, [], {}, "per_request"])
+def test_target_rejects_unsupported_session_mode(target, session_mode):
+    document = manifest(target)
+    document["targets"][0]["session_mode"] = session_mode
+
+    with pytest.raises(ValueError, match="session_mode must be"):
+        plan(document)
+
+
+def test_session_mode_defaults_to_stateless_requests(tmp_path, target, monkeypatch):
+    target.ack = "fixed"
+    document = manifest(target)
+    document["cost_policy"] = "capability_only"
+    document["targets"][0].update(
+        kind="mom", config_hash="fixed", max_inference_calls=1
+    )
+
+    class AgentAdapter:
+        def execute(self, case, context):
+            context.call([{"role": "user", "content": case["id"]}])
+            return {"answer": "A", "correct": True, "score": 1}
+
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: AgentAdapter())
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    assert "x-session-id" not in target.request_headers[0]
+    assert target.request_headers[0]["x-vsr-debug"] == "true"
+    call = store.calls(run["id"], summary=True)[0]
+    assert call["phase_source"] == "request"
+    assert (
+        make_report(store, run["id"])["summary"]["targets"][0]["continuity"][
+            "session_mode"
+        ]
+        == STATELESS
+    )
 
 
 @pytest.mark.parametrize("field", ["sampling", "benchmark_options", "plan_sha256"])
@@ -221,7 +497,9 @@ def test_truncated_final_counts_incorrect_and_continues(tmp_path, target):
 def test_http_reviewed_plan_rejects_new_operator_options_without_dispatch(
     tmp_path, target, monkeypatch
 ):
-    (tmp_path / "targets.json").write_text(json.dumps(manifest(target)["targets"]))
+    registered = manifest(target)["targets"]
+    registered[0]["session_mode"] = SESSION_AWARE
+    (tmp_path / "targets.json").write_text(json.dumps(registered))
     service = Server(("127.0.0.1", 0), Store(tmp_path), "fixture-token")
     thread = threading.Thread(target=service.serve_forever, daemon=True)
     thread.start()
@@ -240,6 +518,7 @@ def test_http_reviewed_plan_rejects_new_operator_options_without_dispatch(
         )
         assert review.status_code == 200
         frozen = review.json()["manifest"]
+        assert frozen["targets"][0]["session_mode"] == SESSION_AWARE
         (tmp_path / "benchmark-options.json").write_text(
             json.dumps({"mmlu-pro": {"protocol_note": "changed after review"}})
         )
@@ -518,6 +797,110 @@ def test_final_only_and_bucket_validation():
         )
 
 
+def test_cache_usage_presence_distinguishes_missing_and_explicit_zero():
+    missing = {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+    }
+    reported = {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+        "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_creation_tokens": 0,
+        },
+    }
+    assert usage_presence(missing) == (False, False)
+    assert usage_presence(reported) == (True, True)
+    assert normalize_usage(missing) == {
+        "input_tokens": 4,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 1,
+    }
+    aliased = {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+        "input_tokens_details": {"cached_tokens": 0, "created_cache_tokens": 0},
+    }
+    assert usage_presence(aliased) == (True, True)
+    assert normalize_usage(aliased) == normalize_usage(reported)
+    provider_alias = {
+        "prompt_tokens": 10,
+        "completion_tokens": 1,
+        "prompt_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 3},
+    }
+    assert usage_presence(provider_alias) == (True, True)
+    assert normalize_usage(provider_alias) == {
+        "input_tokens": 5,
+        "cached_input_tokens": 2,
+        "cache_write_tokens": 3,
+        "output_tokens": 1,
+    }
+    conflicting_writes = {
+        "prompt_tokens": 10,
+        "completion_tokens": 1,
+        "prompt_tokens_details": {
+            "cache_creation_tokens": 1,
+            "created_cache_tokens": 2,
+        },
+        "cache_creation_input_tokens": 3,
+    }
+    assert usage_presence(conflicting_writes) == (False, True)
+    with pytest.raises(CallFailure, match="Conflicting cache-write token usage"):
+        normalize_usage(conflicting_writes)
+
+
+def test_session_phase_prefers_router_header_and_derives_router_phase_names():
+    turn = [{"role": "user", "content": "hello"}]
+    tool_result = [
+        {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+        {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+    ]
+    adjacent_user_after_tool = [
+        *tool_result,
+        {"role": "user", "content": "continue"},
+    ]
+    non_adjacent_user_after_tool = [
+        *tool_result,
+        {"role": "assistant", "content": "Here is the result."},
+        {"role": "user", "content": "continue"},
+    ]
+    structured_tool_result = [
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_result", "tool_call_id": "call-1"}],
+        }
+    ]
+    user_after_structured_tool_result = [
+        *structured_tool_result,
+        {"role": "user", "content": "continue"},
+    ]
+    assert request_phase(turn) == "user_turn"
+    assert request_phase(tool_result) == "tool_loop"
+    assert request_phase(adjacent_user_after_tool) == "tool_loop"
+    assert request_phase(non_adjacent_user_after_tool) == "user_turn"
+    assert request_phase(structured_tool_result) == "tool_loop"
+    assert request_phase(user_after_structured_tool_result) == "tool_loop"
+    assert session_phase(turn, {"x-vsr-session-phase": "provider_state"}) == (
+        "provider_state",
+        "router",
+    )
+    assert session_phase(turn, {"x-vsr-session-phase": "tool_loop"}) == (
+        "tool_loop",
+        "router",
+    )
+    assert session_phase(turn, {"x-vsr-session-phase": " future_phase "}) == (
+        "unknown",
+        "router",
+    )
+    assert session_phase(turn, {"x-vsr-session-phase": "  "}) == (
+        "user_turn",
+        "request",
+    )
+    assert session_phase(turn) == ("user_turn", "request")
+
+
 def test_cancellation_retains_evidence_and_does_not_dispatch_rest(tmp_path, target):
     target.delay = 0.2
     store = Store(tmp_path)
@@ -574,6 +957,10 @@ def test_multimodel_four_bucket_cost_receipt():
     assert result["cost_usd"] == pytest.approx(54.6 / 1_000_000)
     assert result["usage"]["input_tokens"] == 14
     assert result["inference_call_count"] == 2
+    assert result["cache_read_reported"] is None
+    assert result["cache_write_reported"] is None
+    assert all(call["cache_read_reported"] is None for call in result["model_usage"])
+    assert all(call["cache_write_reported"] is None for call in result["model_usage"])
     receipt["complete"] = False
     assert (
         mom_usage({"x-vsr-model-usage": json.dumps(receipt)}, None, prices)["cost_usd"]
@@ -582,6 +969,7 @@ def test_multimodel_four_bucket_cost_receipt():
 
 
 def test_arc_multiple_test_grids_are_atomic():
+
     case = {
         "benchmark": "arc-agi-2",
         "answer": [[[1, 2]], [[3]]],
