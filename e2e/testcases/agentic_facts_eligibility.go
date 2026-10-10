@@ -20,11 +20,17 @@ func init() {
 	})
 }
 
+// The recipe opts into strict candidate requirements, and its model cards
+// declare real protocol capabilities: the preferred model [text], the
+// alternate [text, tools]. No model declares reasoning.
 const (
 	agenticPreferredModel      = "agentic-preferred-model"
 	agenticAlternateModel      = "agentic-alternate-model"
-	agenticNoModelCapability   = "e2e_nobody_has_this"
-	agenticAlternateCapability = "e2e_alternate_only"
+	agenticNoModelCapability   = "reasoning"
+	agenticAlternateCapability = "tools"
+	// agenticNoEligibleModelMessage is the router's fixed client message when
+	// strict candidate requirements leave no model.
+	agenticNoEligibleModelMessage = "no model is eligible to serve the request"
 )
 
 type agenticFactsEligibilityCase struct {
@@ -54,7 +60,7 @@ func agenticFactsEligibilityCases() []agenticFactsEligibilityCase {
 		{
 			name:       "capability no model has fails closed",
 			requires:   []string{agenticNoModelCapability},
-			wantStatus: http.StatusUnprocessableEntity,
+			wantStatus: http.StatusServiceUnavailable,
 		},
 	}
 }
@@ -126,17 +132,18 @@ func checkAgenticFactsEligibility(tc agenticFactsEligibilityCase, route agenticF
 	return ""
 }
 
-// checkAgenticFactsFailClosedBody checks the 422 body names the reason and
-// nothing else. The body goes back to the caller, so it must not reveal the
-// operator's model names, and it carries no value the caller sent.
+// checkAgenticFactsFailClosedBody checks the 503 body carries the router's
+// fixed message and nothing else. The body goes back to the caller, so it must
+// not reveal the operator's model names, and it carries no value the caller
+// sent.
 func checkAgenticFactsFailClosedBody(body []byte) string {
 	text := string(body)
-	if !strings.Contains(text, "missing a required capability") {
-		return fmt.Sprintf("422 body does not name the capability reason: %s", text)
+	if !strings.Contains(text, agenticNoEligibleModelMessage) {
+		return fmt.Sprintf("503 body does not carry the no-eligible-model message: %s", text)
 	}
 	for _, private := range []string{agenticPreferredModel, agenticAlternateModel, agenticNoModelCapability} {
 		if strings.Contains(text, private) {
-			return fmt.Sprintf("422 body contains %q: %s", private, text)
+			return fmt.Sprintf("503 body contains %q: %s", private, text)
 		}
 	}
 	return ""
