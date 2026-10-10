@@ -371,8 +371,9 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 }
 
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved
-// memory in the background. The read-modify-write runs under the store mutex so
-// concurrent retrievals of the same memory cannot lose an increment.
+// memory in the background. The mutex only serializes this store's own
+// reinforcements; the per-memory compare-and-set in recordRetrieval keeps the
+// increment safe against other Router processes sharing the collection.
 func (s *QdrantStore) recordRetrievalBatch(ids []string) {
 	s.retrievalUpdateMu.Lock()
 	defer s.retrievalUpdateMu.Unlock()
@@ -386,44 +387,124 @@ func (s *QdrantStore) recordRetrievalBatch(ids []string) {
 	}
 }
 
+// reinforcementRetryBudget bounds how long one reinforcement keeps retrying its
+// compare-and-set under cross-client contention before reporting the increment
+// as possibly lost.
+const reinforcementRetryBudget = 10 * time.Second
+
 // recordRetrieval performs the reinforcement for a single memory
-// (S += 1, t = now). It writes only the access fields through SetPayload:
-// payloads do not carry vectors, so routing this through Update would
-// re-embed the content on every reinforcement.
+// (S += 1, t = now). Qdrant has no server-side counter, so the increment is an
+// atomic compare-and-set: SetPayload applies only while access_count still
+// holds the observed value. Without this, two Router processes sharing the
+// collection could each report a reinforcement while only one access persisted.
+//
+// The compare-and-set carries a unique per-attempt claim field. SetPayload
+// merges payload fields, so once the write applies, the claim survives every
+// later write; its presence proves this store's own write applied even when
+// competing clients obscured the count or token afterwards. It writes only the
+// access fields: payloads do not carry vectors, so routing this through Update
+// would re-embed the content on every reinforcement.
 func (s *QdrantStore) recordRetrieval(ctx context.Context, id string) error {
+	pointID := arbitraryIDToUUID(id)
+	started := time.Now()
+	for attempt := 1; ; attempt++ {
+		current, found, err := s.readAccessCount(ctx, pointID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("memory %q not found", id)
+		}
+
+		claim := "access_claim_" + uuid.NewString()
+		now := time.Now()
+		wait := true
+		_, err = s.client.SetPayload(ctx, &qdrant.SetPayloadPoints{
+			CollectionName: s.collectionName,
+			Payload: qdrant.NewValueMap(map[string]any{
+				"access_count":  int64(current + 1),
+				"updated_at":    now.Unix(),
+				"last_accessed": now.Unix(),
+				claim:           true,
+			}),
+			PointsSelector: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
+				Must: []*qdrant.Condition{
+					qdrant.NewHasID(pointID),
+					qdrant.NewMatchInt("access_count", int64(current)),
+				},
+			}),
+			Wait: &wait,
+		})
+		if err != nil {
+			return fmt.Errorf("qdrant reinforcement update failed: %w", err)
+		}
+
+		claimed, err := s.hasPayloadField(ctx, pointID, claim)
+		if err != nil {
+			return err
+		}
+		if claimed {
+			s.dropClaimField(ctx, pointID, claim)
+			return nil
+		}
+		// The compare-and-set was no-op'd by a competing reinforcement from the
+		// same observed count: this store's increment is not persisted yet.
+		// Retry with a fresh read.
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("qdrant reinforcement for memory %q interrupted while retrying: %w", id, err)
+		}
+		if time.Since(started) > reinforcementRetryBudget {
+			return fmt.Errorf("qdrant reinforcement compare-and-set kept losing races for memory %q for %s across %d attempts",
+				id, reinforcementRetryBudget, attempt)
+		}
+	}
+}
+
+// readAccessCount reads the access_count value the compare-and-set anchors on.
+func (s *QdrantStore) readAccessCount(ctx context.Context, pointID *qdrant.PointId) (int, bool, error) {
 	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: s.collectionName,
-		Ids:            []*qdrant.PointId{arbitraryIDToUUID(id)},
+		Ids:            []*qdrant.PointId{pointID},
 		WithPayload:    qdrant.NewWithPayloadInclude("access_count"),
 	})
 	if err != nil {
-		return fmt.Errorf("qdrant get failed: %w", err)
+		return 0, false, fmt.Errorf("qdrant get failed: %w", err)
 	}
 	if len(pts) == 0 {
-		return fmt.Errorf("memory %q not found", id)
+		return 0, false, nil
 	}
-
 	var accessCount int
 	if v, ok := pts[0].Payload["access_count"]; ok {
 		accessCount = int(v.GetIntegerValue())
 	}
+	return accessCount, true, nil
+}
 
-	now := time.Now()
-	wait := true
-	_, err = s.client.SetPayload(ctx, &qdrant.SetPayloadPoints{
+// hasPayloadField reports whether the point carries the given payload field.
+func (s *QdrantStore) hasPayloadField(ctx context.Context, pointID *qdrant.PointId, field string) (bool, error) {
+	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: s.collectionName,
-		Payload: qdrant.NewValueMap(map[string]any{
-			"access_count":  int64(accessCount + 1),
-			"updated_at":    now.Unix(),
-			"last_accessed": now.Unix(),
-		}),
-		PointsSelector: qdrant.NewPointsSelector(arbitraryIDToUUID(id)),
-		Wait:           &wait,
+		Ids:            []*qdrant.PointId{pointID},
+		WithPayload:    qdrant.NewWithPayloadInclude(field),
 	})
 	if err != nil {
-		return fmt.Errorf("qdrant reinforcement update failed: %w", err)
+		return false, fmt.Errorf("qdrant get failed: %w", err)
 	}
-	return nil
+	return len(pts) > 0 && pts[0].Payload[field] != nil, nil
+}
+
+// dropClaimField removes the spent claim field; a leftover is inert, so the
+// cleanup is best-effort.
+func (s *QdrantStore) dropClaimField(ctx context.Context, pointID *qdrant.PointId, claim string) {
+	wait := true
+	if _, err := s.client.DeletePayload(ctx, &qdrant.DeletePayloadPoints{
+		CollectionName: s.collectionName,
+		Keys:           []string{claim},
+		PointsSelector: qdrant.NewPointsSelector(pointID),
+		Wait:           &wait,
+	}); err != nil {
+		logging.Warnf("QdrantStore.recordRetrieval: claim cleanup failed: %v", err)
+	}
 }
 
 func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
