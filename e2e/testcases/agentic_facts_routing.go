@@ -97,6 +97,17 @@ func agenticFactsRoutingCases() []agenticFactsRoutingCase {
 			wantDecision: agenticDefaultDecision,
 		},
 		{
+			// Only canonical capability names are accepted. A model card
+			// alias rejects the whole envelope, so it never reaches the
+			// reviewer decision or narrows anything.
+			name: "capability alias rejects the envelope",
+			carrier: agenticFactsCarrierWith(func(envelope map[string]any) {
+				envelope["required_capabilities"] = []string{"vision"}
+			}),
+			trusted:      true,
+			wantDecision: agenticDefaultDecision,
+		},
+		{
 			name: "conflicting lineage",
 			carrier: agenticFactsCarrierWith(func(envelope map[string]any) {
 				envelope["lineage"] = map[string]any{
