@@ -101,7 +101,8 @@ func TestSystemOneForwardUsesActiveListenerAndRetainsGeneration(t *testing.T) {
 			invoke := func(key, model, listener string, discovery bool) *httptest.ResponseRecorder {
 				request := systemone.ForwardRequest{
 					Listener: listener, Method: http.MethodPost, Path: "/v1/systemone", Authorization: "Bearer " + key,
-					Request: json.RawMessage(`{"model":"` + model + `","state":"text","questions":{"z":{"type":"noul"},"a":{"type":"choice"}}}`),
+					BackendRequest: true,
+					Request:        json.RawMessage(`{"model":"` + model + `","state":"text","questions":{"z":{"type":"noul"},"a":{"type":"choice"}}}`),
 				}
 				if discovery {
 					request.Method, request.Path, request.Request = http.MethodGet, "/v1/systemone/models", nil

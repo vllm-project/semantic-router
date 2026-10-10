@@ -55,6 +55,9 @@ func applyEffectiveModelRegistry(
 	for _, model := range models {
 		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex, defaults.ReasoningEffort)
 		params.AuthoredModel = authoredByAlias[model.Alias]
+		if params.AuthoredModel != nil {
+			params.Deployment = params.AuthoredModel.Deployment
+		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
 			if err != nil {
@@ -384,6 +387,8 @@ func resolveProviderCredential(credentials modelcatalog.CredentialsRef) string {
 
 func apiFormatForProtocol(protocol string) (string, error) {
 	switch protocol {
+	case "vllm-sr/systemone@1":
+		return APIFormatSystemOne, nil
 	case "openai/chat-completions@1":
 		return APIFormatOpenAI, nil
 	case "openai/responses@1":

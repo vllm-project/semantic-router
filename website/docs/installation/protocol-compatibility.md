@@ -40,8 +40,10 @@ Responses object operations, and request examples.
 System One is a separate typed API, available in either startup mode when
 `listeners[].systemone.models` publishes a concrete model. It uses
 `POST /v1/systemone` (alias `/v1/decisions`) and
-`GET /v1/systemone/models`; it does not use this Chat protocol-translation
-matrix or the Chat model allowlist. See the
+`GET /v1/systemone/models`. Router mode can also publish an explicit native
+recipe through an `api: systemone` entrypoint and matching listener grant.
+These typed requests do not use the Chat protocol-translation matrix or the
+Chat model allowlist. See the
 [System One quickstart](../model-runtime/quickstart.md).
 
 ## Backend model protocols
