@@ -4,7 +4,7 @@ description: 提出网关级框架，用于检测和缓解无依据的模型响�
 created: 2025-12-02
 status: 提案
 translation:
-  source_commit: "56547832d4a4094c8ddaa58ca3f4121769e6d712"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/hallucination-mitigation-milestone.md"
   outdated: false
 ---
@@ -74,7 +74,7 @@ flowchart LR
 
 TruthLens 面向可对照所提供证据检查的响应，尤其是检索和工具辅助工作流。它不是通用事实数据库、领域审阅的替代，也不保证受支持上下文本身为真。
 
-当前路由本地插件从其下方的规范模块路径读取模型依赖。详尽参考配置拥有检测器和解释器细节：
+当前路由本地插件从其下方的规范模块路径读取模型依赖。详尽参考配置拥有检测器（旧 NLI 解释器已退役）细节：
 
 ```yaml
 global:

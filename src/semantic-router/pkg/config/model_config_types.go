@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
@@ -27,16 +25,10 @@ type CategoryModel struct {
 	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
-	Enabled       *bool   `yaml:"enabled,omitempty"`
-	ModelID       string  `yaml:"model_id"`
-	Threshold     float32 `yaml:"threshold"`
-	UseCPU        bool    `yaml:"use_cpu"`
-	UseModernBERT bool    `yaml:"use_modernbert,omitempty"`
-	UseMmBERT32K  bool    `yaml:"use_mmbert_32k,omitempty"`
-	// Variant selects the local category model. Empty preserves the historical
-	// auto-detecting local path; candle, modernbert, and mmbert32k are the
-	// canonical local selectors.
-	Variant string `yaml:"variant,omitempty"`
+	Enabled   *bool   `yaml:"enabled,omitempty"`
+	ModelID   string  `yaml:"model_id"`
+	Threshold float32 `yaml:"threshold"`
+	UseCPU    bool    `yaml:"use_cpu"`
 	// Backend attaches a named remote classifier. Its absence preserves local
 	// category inference exactly as before.
 	Backend             *RemoteClassifierBackend `yaml:"backend,omitempty"`
@@ -56,7 +48,6 @@ type PIIModel struct {
 	ModelID        string  `yaml:"model_id"`
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
-	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 	// Backend attaches a named remote token classifier speaking token_spans.v1.
 	// Its absence preserves local PII inference exactly as before.
@@ -67,14 +58,15 @@ type PIIModel struct {
 	// provider that declared truncated_at) matches as classification_error
 	// instead of reading as clean.
 	ClassifierOnErrorConfig `yaml:",inline"`
+	// UnscannedConfig contributes OnUnscanned (block|allow): content the model
+	// did not read in full matches as unscanned unless it is allow.
+	UnscannedConfig `yaml:",inline"`
 }
 
 type EmbeddingModels struct {
 	Qwen3ModelPath      string                  `yaml:"qwen3_model_path"`
-	GemmaModelPath      string                  `yaml:"gemma_model_path"`
 	MmBertModelPath     string                  `yaml:"mmbert_model_path"`
 	MultiModalModelPath string                  `yaml:"multimodal_model_path,omitempty"`
-	BertModelPath       string                  `yaml:"bert_model_path"`
 	UseCPU              bool                    `yaml:"use_cpu"`
 	EmbeddingConfig     HNSWConfig              `yaml:"embedding_config,omitempty"`
 	Endpoint            EmbeddingEndpointConfig `yaml:"endpoint,omitempty"`
@@ -108,7 +100,7 @@ type HNSWConfig struct {
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
 	if result.Backend == "" {
-		result.Backend = EmbeddingBackendCandle
+		result.Backend = EmbeddingBackendModelRuntime
 	}
 	if result.ModelType == "" {
 		if normalizeEmbeddingBackend(result.Backend) == EmbeddingBackendOpenAICompatible {
@@ -189,15 +181,13 @@ type PromptGuardConfig struct {
 	JailbreakMappingPath string                    `yaml:"jailbreak_mapping_path"`
 	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
 
-	// Variant selects a local Candle-backed model variant. Mutually
-	// exclusive with Backend. Defaults to PromptGuardVariantMmBERT32K when
-	// unset.
-	Variant string `yaml:"variant,omitempty"`
-
 	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
 	// every other pluggable classifier backend instead of being redeclared
 	// per struct.
 	ClassifierOnErrorConfig `yaml:",inline"`
+	// UnscannedConfig contributes OnUnscanned (block|allow): content the guard
+	// did not read in full matches as unscanned unless it is allow.
+	UnscannedConfig `yaml:",inline"`
 }
 
 type FeedbackDetectorConfig struct {
@@ -209,8 +199,6 @@ type FeedbackDetectorConfig struct {
 	ModelID             string  `yaml:"model_id"`
 	Threshold           float32 `yaml:"threshold"`
 	UseCPU              bool    `yaml:"use_cpu"`
-	UseModernBERT       bool    `yaml:"use_modernbert"`
-	UseMmBERT32K        bool    `yaml:"use_mmbert_32k"`
 	FeedbackMappingPath string  `yaml:"feedback_mapping_path"`
 }
 
@@ -222,16 +210,12 @@ type PreferenceModelConfig struct {
 
 func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
 	result := c
-	if result.UseContrastive == nil {
-		defaultEnabled := true
-		result.UseContrastive = &defaultEnabled
-	}
 	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
 	return result
 }
 
 func (c PreferenceModelConfig) ContrastiveEnabled() bool {
-	return *c.WithDefaults().UseContrastive
+	return c.UseContrastive != nil && *c.UseContrastive
 }
 
 type ComplexityModelConfig struct {
@@ -287,36 +271,36 @@ type AdmissionConfig struct {
 }
 
 type ToolFilteringWeights struct {
-	Embed    *float32 `yaml:"embed,omitempty"`
-	Lexical  *float32 `yaml:"lexical,omitempty"`
-	Tag      *float32 `yaml:"tag,omitempty"`
-	Name     *float32 `yaml:"name,omitempty"`
-	Category *float32 `yaml:"category,omitempty"`
+	Embed    *float32 `json:"embed,omitempty" yaml:"embed,omitempty"`
+	Lexical  *float32 `json:"lexical,omitempty" yaml:"lexical,omitempty"`
+	Tag      *float32 `json:"tag,omitempty" yaml:"tag,omitempty"`
+	Name     *float32 `json:"name,omitempty" yaml:"name,omitempty"`
+	Category *float32 `json:"category,omitempty" yaml:"category,omitempty"`
 }
 
 type AdvancedToolFilteringConfig struct {
-	Enabled                     bool                              `yaml:"enabled"`
-	RetrievalStrategy           string                            `yaml:"retrieval_strategy,omitempty"`
-	CandidatePoolSize           *int                              `yaml:"candidate_pool_size,omitempty"`
-	MinLexicalOverlap           *int                              `yaml:"min_lexical_overlap,omitempty"`
-	MinCombinedScore            *float32                          `yaml:"min_combined_score,omitempty"`
-	Weights                     ToolFilteringWeights              `yaml:"weights,omitempty"`
-	UseCategoryFilter           *bool                             `yaml:"use_category_filter,omitempty"`
-	CategoryConfidenceThreshold *float32                          `yaml:"category_confidence_threshold,omitempty"`
-	AllowTools                  []string                          `yaml:"allow_tools,omitempty"`
-	BlockTools                  []string                          `yaml:"block_tools,omitempty"`
-	HybridHistory               *HybridHistoryToolRetrievalConfig `yaml:"hybrid_history,omitempty"`
+	Enabled                     bool                              `json:"enabled" yaml:"enabled"`
+	RetrievalStrategy           string                            `json:"retrieval_strategy,omitempty" yaml:"retrieval_strategy,omitempty"`
+	CandidatePoolSize           *int                              `json:"candidate_pool_size,omitempty" yaml:"candidate_pool_size,omitempty"`
+	MinLexicalOverlap           *int                              `json:"min_lexical_overlap,omitempty" yaml:"min_lexical_overlap,omitempty"`
+	MinCombinedScore            *float32                          `json:"min_combined_score,omitempty" yaml:"min_combined_score,omitempty"`
+	Weights                     ToolFilteringWeights              `json:"weights,omitempty" yaml:"weights,omitempty"`
+	UseCategoryFilter           *bool                             `json:"use_category_filter,omitempty" yaml:"use_category_filter,omitempty"`
+	CategoryConfidenceThreshold *float32                          `json:"category_confidence_threshold,omitempty" yaml:"category_confidence_threshold,omitempty"`
+	AllowTools                  []string                          `json:"allow_tools,omitempty" yaml:"allow_tools,omitempty"`
+	BlockTools                  []string                          `json:"block_tools,omitempty" yaml:"block_tools,omitempty"`
+	HybridHistory               *HybridHistoryToolRetrievalConfig `json:"hybrid_history,omitempty" yaml:"hybrid_history,omitempty"`
 }
 
 // HybridHistoryToolRetrievalConfig tunes hybrid_history retrieval (semantic + short history + priors + repetition).
 type HybridHistoryToolRetrievalConfig struct {
-	HistoryHorizon             *int     `yaml:"history_horizon,omitempty"`
-	MinHistorySteps            *int     `yaml:"min_history_steps,omitempty"`
-	HistoryConfidenceThreshold *float32 `yaml:"history_confidence_threshold,omitempty"`
-	WeightSemantic             *float32 `yaml:"weight_semantic,omitempty"`
-	WeightHistoryTransition    *float32 `yaml:"weight_history_transition,omitempty"`
-	WeightDecisionPrior        *float32 `yaml:"weight_decision_prior,omitempty"`
-	RepetitionPenaltyStrength  *float32 `yaml:"repetition_penalty_strength,omitempty"`
+	HistoryHorizon             *int     `json:"history_horizon,omitempty" yaml:"history_horizon,omitempty"`
+	MinHistorySteps            *int     `json:"min_history_steps,omitempty" yaml:"min_history_steps,omitempty"`
+	HistoryConfidenceThreshold *float32 `json:"history_confidence_threshold,omitempty" yaml:"history_confidence_threshold,omitempty"`
+	WeightSemantic             *float32 `json:"weight_semantic,omitempty" yaml:"weight_semantic,omitempty"`
+	WeightHistoryTransition    *float32 `json:"weight_history_transition,omitempty" yaml:"weight_history_transition,omitempty"`
+	WeightDecisionPrior        *float32 `json:"weight_decision_prior,omitempty" yaml:"weight_decision_prior,omitempty"`
+	RepetitionPenaltyStrength  *float32 `json:"repetition_penalty_strength,omitempty" yaml:"repetition_penalty_strength,omitempty"`
 }
 
 type ToolsConfig struct {
@@ -332,7 +316,6 @@ type HallucinationMitigationConfig struct {
 	Enabled            bool                     `yaml:"enabled"`
 	FactCheckModel     FactCheckModelConfig     `yaml:"fact_check_model"`
 	HallucinationModel HallucinationModelConfig `yaml:"hallucination_model"`
-	NLIModel           NLIModelConfig           `yaml:"nli_model"`
 }
 
 type FactCheckModelConfig struct {
@@ -343,27 +326,20 @@ type FactCheckModelConfig struct {
 	ModelID           string  `yaml:"model_id"`
 	Threshold         float32 `yaml:"threshold"`
 	UseCPU            bool    `yaml:"use_cpu"`
-	UseMmBERT32K      bool    `yaml:"use_mmbert_32k"`
 }
 
 type HallucinationModelConfig struct {
-	Backend                string  `yaml:"backend,omitempty"`
-	Endpoint               string  `yaml:"endpoint,omitempty"`
-	IncludeExplanation     bool    `yaml:"include_explanation,omitempty"`
-	ModelID                string  `yaml:"model_id"`
-	Threshold              float32 `yaml:"threshold"`
-	UseCPU                 bool    `yaml:"use_cpu"`
-	MinSpanLength          int     `yaml:"min_span_length,omitempty"`
-	MinSpanConfidence      float32 `yaml:"min_span_confidence,omitempty"`
-	ContextWindowSize      int     `yaml:"context_window_size,omitempty"`
-	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering"`
-	NLIEntailmentThreshold float32 `yaml:"nli_entailment_threshold,omitempty"`
-}
-
-type NLIModelConfig struct {
-	ModelID   string  `yaml:"model_id"`
-	Threshold float32 `yaml:"threshold"`
-	UseCPU    bool    `yaml:"use_cpu"`
+	Backend string `yaml:"backend,omitempty"`
+	// Endpoint is the remote detector's base URL, which the endpoint detector
+	// derives from its binding's external model; it is not configurable.
+	Endpoint           string  `yaml:"-"`
+	IncludeExplanation bool    `yaml:"include_explanation,omitempty"`
+	ModelID            string  `yaml:"model_id"`
+	Threshold          float32 `yaml:"threshold"`
+	UseCPU             bool    `yaml:"use_cpu"`
+	MinSpanLength      int     `yaml:"min_span_length,omitempty"`
+	MinSpanConfidence  float32 `yaml:"min_span_confidence,omitempty"`
+	ContextWindowSize  int     `yaml:"context_window_size,omitempty"`
 }
 
 type ClassifierVLLMEndpoint struct {
@@ -415,6 +391,7 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
+	Deployment         string              `yaml:"deployment,omitempty"`
 	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
@@ -562,58 +539,6 @@ func moduleActive(enabled *bool) bool { return enabled == nil || *enabled }
 
 // Active reports whether category classification was explicitly disabled.
 func (m CategoryModel) Active() bool { return moduleActive(m.Enabled) }
-
-const (
-	CategoryVariantCandle     = "candle"
-	CategoryVariantModernBERT = "modernbert"
-	CategoryVariantMmBERT32K  = "mmbert32k"
-)
-
-// ValidateLocalVariant rejects ambiguous legacy combinations and validates the
-// canonical variant spelling. Legacy true values remain readable and are
-// interpreted deterministically when Variant is omitted.
-func (m CategoryModel) ValidateLocalVariant() error {
-	if m.UseModernBERT && m.UseMmBERT32K {
-		return fmt.Errorf("classifier.domain: use_modernbert and use_mmbert_32k cannot both be true")
-	}
-	switch m.Variant {
-	case "":
-		return nil
-	case CategoryVariantCandle:
-		if m.UseModernBERT || m.UseMmBERT32K {
-			return fmt.Errorf("classifier.domain: variant %q conflicts with a legacy local selector", m.Variant)
-		}
-	case CategoryVariantModernBERT:
-		if m.UseMmBERT32K {
-			return fmt.Errorf("classifier.domain: variant %q conflicts with use_mmbert_32k=true", m.Variant)
-		}
-	case CategoryVariantMmBERT32K:
-		if m.UseModernBERT {
-			return fmt.Errorf("classifier.domain: variant %q conflicts with use_modernbert=true", m.Variant)
-		}
-	default:
-		return fmt.Errorf("classifier.domain.variant: unsupported value %q", m.Variant)
-	}
-	return nil
-}
-
-// EffectiveVariant maps readable legacy configurations to the canonical local
-// selector used by construction. Empty means the historical auto-detect path.
-func (m CategoryModel) EffectiveVariant() (string, error) {
-	if err := m.ValidateLocalVariant(); err != nil {
-		return "", err
-	}
-	if m.Variant != "" {
-		return m.Variant, nil
-	}
-	if m.UseModernBERT {
-		return CategoryVariantModernBERT, nil
-	}
-	if m.UseMmBERT32K {
-		return CategoryVariantMmBERT32K, nil
-	}
-	return "", nil
-}
 
 // Active reports whether PII classification was explicitly disabled.
 func (m PIIModel) Active() bool { return moduleActive(m.Enabled) }

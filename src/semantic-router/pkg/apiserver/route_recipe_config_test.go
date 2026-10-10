@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -241,4 +241,31 @@ func mustReadFile(t *testing.T, path string) []byte {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return data
+}
+
+func TestDefaultRecipeEntrypointsOverrideAndReset(t *testing.T) {
+	doc := map[string]any{"routing": managedTestRouting("default-route")}
+	original := collectManagedRecipes(doc)[0]
+	if original.EntrypointSource != config.EntrypointBuiltin || len(original.Entrypoints) != 1 || original.Entrypoints[0] != config.DefaultEntrypointModel {
+		t.Fatalf("builtin default=%+v", original)
+	}
+	_, err := applyRecipeMutation(doc, "default", recipeMutationRequest{Routing: managedTestRouting("default-route"), Entrypoints: stringSlicePointer([]string{"our/route", "MoM"})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := collectManagedRecipes(doc)[0]
+	if changed.EntrypointSource != config.EntrypointExplicit || len(changed.Entrypoints) != 2 || changed.Entrypoints[0] != "our/route" {
+		t.Fatalf("override=%+v", changed)
+	}
+	_, err = applyRecipeMutation(doc, "default", recipeMutationRequest{Routing: managedTestRouting("default-route"), Entrypoints: stringSlicePointer([]string{})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := collectManagedRecipes(doc)[0]
+	if restored.EntrypointSource != config.EntrypointBuiltin || len(restored.Entrypoints) != 1 || restored.Entrypoints[0] != config.DefaultEntrypointModel {
+		t.Fatalf("reset=%+v", restored)
+	}
+	if len(sequenceValue(doc["entrypoints"])) != 0 {
+		t.Fatal("reset persisted the builtin mapping as user configuration")
+	}
 }

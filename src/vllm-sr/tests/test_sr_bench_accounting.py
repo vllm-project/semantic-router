@@ -17,7 +17,9 @@ from cli.sr_bench.store import Store
 from cli.sr_bench.transport import CallFailure, cost_for, normalize_usage
 
 
-@pytest.mark.parametrize("field", ["created_cache_tokens", "cache_creation_tokens"])
+@pytest.mark.parametrize(
+    "field", ["created_cache_tokens", "cache_creation_tokens", "cache_write_tokens"]
+)
 def test_four_exclusive_buckets_include_provider_cache_writes(field):
     raw = {
         "prompt_tokens": 100,
@@ -60,6 +62,13 @@ def test_actual_provider_usage_receipt_is_not_priced_as_fresh_input():
         {"created_cache_tokens": True},
         {"created_cache_tokens": -1},
         {"created_cache_tokens": 90, "cached_tokens": 20},
+        {"cache_write_tokens": 30, "cache_creation_tokens": 31},
+        {"cache_write_tokens": 30, "created_cache_tokens": 31},
+        {"cache_write_tokens": True},
+        {"cache_write_tokens": -1},
+        {"cache_write_tokens": 90, "cached_tokens": 20},
+        {"cache_write_tokens": "30"},
+        {"cache_write_tokens": 1.5},
     ],
 )
 def test_invalid_or_conflicting_cache_writes_fail_closed(details):

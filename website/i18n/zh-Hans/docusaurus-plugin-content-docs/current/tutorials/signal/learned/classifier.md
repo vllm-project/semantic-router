@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e500b0a1ff80177b9f0baa8979970ec1e6877338"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/classifier.md"
   outdated: false
 ---
@@ -57,7 +57,7 @@ routing:
           use_reasoning: false
 ```
 
-LLM 分类器引用命名的 `global.model_catalog.external` 条目，并添加 `instructions`。运行时固定温度、输出 schema、精确标签校验，以及默认 1 MiB 的响应上限。在外部模型条目上设置 `max_response_bytes` 可覆盖该上限。因为运行时拥有输出 schema，该条目上的 `parser_type` 必须是 `json` 或未设置；其他值会在配置加载时被拒绝。模型必须为每个已声明标签报告分数；每个分数必须在 `0` 与 `1` 之间，完整分布必须大约合计为 `1.0`。这些是模型报告的置信度分数，不是校准过的分类器概率。Classifier 叶是唯一接受 `on_error` 的决策谓词；失败会在 eval/回放诊断中暴露有界的 `classifier_evaluation_failed` 代码。
+LLM 分类器引用命名的 `global.model_catalog.external` 条目，并添加 `instructions`。运行时固定温度、输出 schema、精确标签校验，以及默认 1 MiB 的响应上限。在外部模型条目上设置 `max_response_bytes` 可覆盖该上限。因为运行时拥有输出 schema，该条目上的 `parser_type` 必须是 `json` 或未设置；其他值会在配置加载时被拒绝。模型必须为每个已声明标签报告分数；每个分数必须在 `0` 与 `1` 之间，完整分布必须大约合计为 `1.0`。这些是模型报告的置信度分数，不是校准过的分类器概率。`classifier` 和 `decision` 叶均接受条件级 `on_error`；分类器失败会在 eval/回放诊断中暴露有界的 `classifier_evaluation_failed` 代码。
 
 LLM 分类器也可以在外部模型上声明 reasoning 请求偏好：
 
@@ -83,13 +83,13 @@ global:
 
 Reasoning 控制目前只支持使用 `llm_provider: vllm` 的外部分类器。mode 与普通 effort 控制会投影到 `chat_template_kwargs`；声明为 `top_level_reasoning_effort` 的 family 则使用类型化的顶层 `reasoning_effort` 字段。该控制只作用于 `type: llm` 的分类器请求，不影响 `sequence_classifier`、其他 Router 模型调用或响应解析。它只是请求偏好：上游模型仍可能忽略它，或无法生成要求的 JSON 契约；这类失败继续遵循现有分类器错误策略。如果模型仍然进行了推理，但返回了有效的分类 JSON，Router 会像以前一样使用该 JSON；解析或暴露独立 reasoning trace 不在本次改动范围内。
 
-失败时，决策树将该叶评估为 `Unknown`，直到完整 AND/OR/NOT 表达式已知。根级 `rules.on_unknown` 再选择 `no_match`、`match` 或 `fail_request`。`no_match` 与 `match` 只解析自身决策；`fail_request` 是全局失败即拒绝：即使另一条决策干净匹配，也会以 503 拒绝整个请求，与优先级无关。省略 `rules.on_unknown` 时，条件级 `on_error`（`no_match` 或 `match`）保留先前通用分类器结果。设置 `rules.on_unknown` 会禁用该树中所有条件级 `on_error`，因此 Router 会拒绝同时设置两者的配置。`prompt_guard.on_error`（`allow` 或 `block`）仍是 jailbreak 规则的兼容默认。诊断同时包含信号错误与已应用的任何终端策略。见[安全模型](../../../installation/runtime/safety)。
+失败时，决策树将该叶评估为 `Unknown`，直到完整 AND/OR/NOT 表达式已知。根级 `rules.on_unknown` 再选择 `no_match`、`match` 或 `fail_request`。`no_match` 与 `match` 只解析自身决策；`fail_request` 是全局失败即拒绝：即使另一条决策干净匹配，也会以 503 拒绝整个请求，与优先级无关。省略 `rules.on_unknown` 时，条件级 `on_error`（`no_match` 或 `match`）保留先前通用分类器结果。设置 `rules.on_unknown` 会禁用该树中所有条件级 `on_error`，因此 Router 会拒绝同时设置两者的配置。`prompt_guard.on_error`（`allow` 或 `block`）仍是 jailbreak 规则的兼容默认。诊断同时包含信号错误与已应用的任何终端策略。见[安全模型](../../../model-runtime/guides/safety)。
 
 `sequence_classifier` 分类器也引用命名外部模型，但使用共享的 `http_classify` 约定，并保留其完整标签分布。响应必须恰好包含已声明标签，分数合计大约为 `1.0`；sigmoid 多标签输出与标签子集会被拒绝。它们至少需要两个标签，并且不接受 `instructions`、`model_path` 或 `use_cpu`。
 
 本地分类器使用 `model_path`，并支持两个或更多已声明标签。每条规则拥有一个已准备的模型句柄，因此一个配方可以声明多个本地分类器。本地决策谓词保留 `gte: 0.5` 或更高。模型或标签变更会在激活前准备候选代；失败的候选会留下当前代可用。
 
-配方可以用 `model_bindings` 中的 `classifier.<rule name>` 条目显式选择执行；这会替换规则的 `model` 或 `model_path` 选择器。本地与序列规则支持本地序列部署或 HTTP `http_classify`，而 LLM 规则保留其计分提取指令并要求 HTTP `http_chat`。这些类型使用 `label_distribution.v1`，以规则的有序 `labels` 作为映射。见[进程内模型](../../../installation/runtime/in-process)。
+配方可以用 `model_bindings` 中的 `classifier.<rule name>` 条目显式选择执行；这会替换规则的 `model` 或 `model_path` 选择器。本地与序列规则支持本地序列部署或 HTTP `http_classify`，而 LLM 规则保留其计分提取指令并要求 HTTP `http_chat`。这些类型使用 `label_distribution.v1`，以规则的有序 `labels` 作为映射。见[进程内模型](../../../model-runtime/deploy)。
 
 ## 使用固定工作点的独立标签
 
@@ -128,10 +128,9 @@ global:
   model_catalog:
     deployments:
       content-risk-cpu:
-        provider: candle
-        artifact: models/content-risk
+        provider: model_runtime
+        artifact: /models/content-risk
         device: cpu
-        precision: fp32
         input:
           max_tokens: 32768
           overflow: reject
@@ -139,7 +138,7 @@ global:
 
 替换 SHA256 占位符，并使用产物声明的完整有序标签。文档 token 预算必须与工作点文件一致。省略 `predicate` 时，使用该标签的固定阈值（`score >= threshold`）；可同时匹配多个标签，也可全部不匹配。显式谓词查询原始独立分数，分数不要求合计为一。单标签分类器和未绑定工作点的分类器仍要求数值谓词。
 
-支持 Candle float32 或已明确验证的 ORT 原生图。工作点文件以 SHA256 绑定图及全部外部张量文件，并声明执行提供方与物理窗口容量。更换图、转换精度或使用未声明的提供方会被拒绝。文档总预算与每个窗口的执行预算相互独立。
+模型运行时以精确的 FP32 `exact` 配置执行该策略。工作点文件以 SHA256 绑定权重、tokenizer 和窗口几何；产物变化会被拒绝。文档总预算与每个窗口的执行预算相互独立。
 
 模型只分词一次，按声明的重叠窗口覆盖原始内容 token，恢复特殊 token 并重置位置，然后对每个标签取各窗口 sigmoid 分数的最大值。文档超长、扫描不完整、产物变化或执行方式不受支持时会报错。版本 1 缺少必要的身份信息，因此不能直接使用；现有 Safety/Hazard 组合方式不变。
 
@@ -154,7 +153,7 @@ go run ../../tools/models/classifier-operating-point/main.go \
   --output /path/to/new-operating-point.json
 ```
 
-工具输出工作点文件的 SHA256，保留评分和窗口设置，并核验已有权重身份。它为版本 1 补齐最终配置、分词器哈希与 Candle 执行身份；对于版本 2，则保留执行声明并核验所引用的文件。工具不选择阈值、不验证模型能力，且拒绝覆盖已有文件。请将工作点与对应的原生文件一起发布，不要跨 checkpoint 复制阈值。
+工具输出工作点文件的 SHA256，保留评分和窗口设置，并核验已有权重身份。它补齐最终配置与分词器哈希；对于版本 2，则保留执行声明并核验所引用的文件。工具不选择阈值、不验证模型能力，且拒绝覆盖已有文件。请将工作点与对应的原生文件一起发布，不要跨 checkpoint 复制阈值。
 
 本地路径在 Router 内处理请求文本。`llm` 与 `sequence_classifier` 都会把该文本发给已配置的外部模型，因此请相应选择提供方与保留策略。标签与阈值必须作为同一版本化约定一起评估。完整示例见
 [`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)

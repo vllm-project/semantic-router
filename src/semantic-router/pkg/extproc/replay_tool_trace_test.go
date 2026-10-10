@@ -16,7 +16,7 @@ func TestBuildReplayRoutingRecordUsesNeutralRequestToolTrace(t *testing.T) {
 		RequestID:    "req-tool-1",
 		SourceFormat: llmprotocol.OpenAIResponsesV1,
 		SemanticRequest: &llmprotocol.Request{
-			Model: "auto",
+			Model: "vllm-sr/auto",
 			Messages: []llmprotocol.Message{
 				{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Find the weather in San Francisco."}}},
 				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
@@ -31,7 +31,7 @@ func TestBuildReplayRoutingRecordUsesNeutralRequestToolTrace(t *testing.T) {
 		},
 	}
 
-	record := buildReplayRoutingRecord(ctx, "MoM", "model-a", "default_route")
+	record := buildReplayRoutingRecord(ctx, "vllm-sr/auto", "model-a", "default_route")
 	require.NotNil(t, record.ToolTrace)
 	require.Equal(t, "User Query -> LLM Tool Call -> Client Tool Result", record.ToolTrace.Flow)
 	require.Equal(t, "Client Tool Result", record.ToolTrace.Stage)

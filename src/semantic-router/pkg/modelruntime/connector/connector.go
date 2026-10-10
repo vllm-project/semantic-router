@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // Operation describes one static operation in a remote model protocol. An
@@ -263,6 +264,16 @@ func (c *Client) doAttempt(
 	httpRequest, connectorErr := c.newRequest(attemptCtx, operation, request, attempt)
 	if connectorErr != nil {
 		return Result{}, connectorErr
+	}
+	// Every inference exchange, including retries, shares the caller's ledger.
+	// This transport is separate from modelservice clients and upstream.Set.
+	if operation.Method == http.MethodPost {
+		if err := budget.Consume(attemptCtx); err != nil {
+			if httpRequest.Body != nil {
+				_ = httpRequest.Body.Close()
+			}
+			return Result{}, &Error{Kind: KindBudget, Operation: operation.Name, Attempt: attempt, Cause: err}
+		}
 	}
 	response, err := c.http.Do(httpRequest)
 	if err != nil {

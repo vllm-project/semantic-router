@@ -69,7 +69,7 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return compilePluginFields(c, fields, cfg)
 	},
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileRouterReplayPluginConfig(fields), true
+		return c.compileRouterReplayPluginConfig(fields)
 	},
 	"shadow_dispatch": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileShadowDispatchPluginConfig(fields), true
@@ -230,8 +230,8 @@ func (c *Compiler) compileHallucinationPluginConfig(fields map[string]Value) con
 	if v, ok := getBoolField(fields, "enabled"); ok {
 		cfg.Enabled = v
 	}
-	if v, ok := getBoolField(fields, "use_nli"); ok {
-		cfg.UseNLI = v
+	if _, ok := fields["use_nli"]; ok {
+		c.addError(Position{}, "hallucination plugin: use_nli is retired with the NLI explainer; remove it")
 	}
 	if v, ok := getStringField(fields, "hallucination_action"); ok {
 		cfg.HallucinationAction = v
@@ -307,30 +307,19 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 	return cfg
 }
 
-func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) config.RouterReplayPluginConfig {
-	cfg := config.RouterReplayPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
+func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) (interface{}, bool) {
+	// Preserve omission and explicit false/zero overrides. Serializing the
+	// effective capture config here would replace inherited global defaults.
+	raw := fieldsToMap(fields)
+	payload, err := config.NewStructuredPayload(raw)
+	if err == nil {
+		err = payload.DecodeIntoStrict(&config.RouterReplayPluginConfig{})
 	}
-	if v, ok := getIntField(fields, "max_records"); ok {
-		cfg.MaxRecords = v
+	if err != nil {
+		c.addError(Position{}, "invalid router_replay configuration: %v", err)
+		return nil, false
 	}
-	if v, ok := getBoolField(fields, "capture_request_body"); ok {
-		cfg.CaptureRequestBody = v
-	}
-	if v, ok := getBoolField(fields, "capture_response_body"); ok {
-		cfg.CaptureResponseBody = v
-	}
-	if v, ok := getIntField(fields, "max_body_bytes"); ok {
-		cfg.MaxBodyBytes = v
-	}
-	if v, ok := getIntField(fields, "max_tool_trace_bytes"); ok {
-		cfg.MaxToolTraceBytes = v
-	}
-	if v, ok := getIntField(fields, "max_tool_trace_steps"); ok {
-		cfg.MaxToolTraceSteps = v
-	}
-	return cfg
+	return raw, true
 }
 
 func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) config.FastResponsePluginConfig {

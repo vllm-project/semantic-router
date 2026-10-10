@@ -21,7 +21,7 @@ func TestCalibratedTokenCounterFallsBackBeforeCalibration(t *testing.T) {
 func TestCalibratedTokenCounterLearnsObservedRatio(t *testing.T) {
 	counter := NewCalibratedTokenCounter(WithDecay(0.9))
 	for i := 0; i < 20; i++ {
-		counter.Observe("code", 2000, 1000)
+		counter.Observe("code", 8000, 4000)
 	}
 
 	estimate := counter.Estimate("code", 4000)
@@ -48,11 +48,11 @@ func TestCalibratedTokenCounterConservativeEstimateAvoidsUnderCount(t *testing.T
 		bytes  int
 		tokens int
 	}{
-		{4000, 1000},
-		{3000, 1000},
-		{5000, 1000},
-		{2800, 1000},
-		{4200, 1000},
+		{8000, 2000},
+		{6000, 2000},
+		{10000, 2000},
+		{5600, 2000},
+		{8400, 2000},
 	}
 	for i := 0; i < 4; i++ {
 		for _, obs := range observations {
@@ -85,7 +85,7 @@ func TestBuildClassifierUsesCalibratedContextCounter(t *testing.T) {
 	}
 
 	for i := 0; i < 20; i++ {
-		classifier.ObserveTokenUsage("", 2000, 1000)
+		classifier.ObserveTokenUsage("", 8000, 4000)
 	}
 
 	_, _, _, calibrated := classifier.TokenCalibrationRatio("")
@@ -99,5 +99,40 @@ func TestBuildClassifierUsesCalibratedContextCounter(t *testing.T) {
 	}
 	if tokenCount < 1900 || tokenCount > 2100 {
 		t.Fatalf("expected calibrated context token count near 2000, got %d", tokenCount)
+	}
+}
+
+func TestCalibratedTokenCounterIgnoresTemplateDominatedShortSamples(t *testing.T) {
+	counter := NewCalibratedTokenCounter(WithConservativeEstimate())
+	// A one-line chat prompt: 30 content bytes, but the provider reports the
+	// chat template and role tokens too.
+	for i := 0; i < 50; i++ {
+		counter.Observe("", len("What is the capital of France?"), 25)
+	}
+	if _, _, samples, calibrated := counter.GetRatio(""); samples != 0 || calibrated {
+		t.Fatalf("short samples must not calibrate, got samples=%d calibrated=%v", samples, calibrated)
+	}
+
+	const proseBytes = 204_643
+	if estimate := counter.Estimate("", proseBytes); estimate != (proseBytes+3)/4 {
+		t.Fatalf("expected the 4 bytes/token default for long prose, got %d", estimate)
+	}
+}
+
+func TestCalibratedTokenCounterLongProseStaysBelowLongContextBand(t *testing.T) {
+	counter := NewCalibratedTokenCounter(WithConservativeEstimate())
+	for i := 0; i < 50; i++ {
+		counter.Observe("", 30, 25)
+	}
+	// Long English prose measured on a production backend: 204,643 bytes
+	// were 41,827 prompt tokens.
+	for i := 0; i < minCalibrationSamplesForUse; i++ {
+		counter.Observe("", 204_643, 41_827)
+	}
+
+	// About 55K real tokens of the same prose.
+	estimate := counter.Estimate("", 55_000*204_643/41_827)
+	if estimate < 50_000 || estimate > 60_000 {
+		t.Fatalf("expected a realistic estimate near 55K tokens, got %d", estimate)
 	}
 }

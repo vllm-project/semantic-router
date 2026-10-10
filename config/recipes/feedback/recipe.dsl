@@ -101,7 +101,7 @@ PROJECTION mapping feedback_recovery_band {
 PROJECTION mapping verification_band {
   source: "verification_pressure"
   method: "threshold_bands"
-  outputs: [{ name: "feedback_needs_evidence", gte: 0.42 }]
+  outputs: [{ name: "feedback_needs_evidence", gte: 0.45 }]
 }
 
 # =============================================================================
@@ -218,4 +218,13 @@ ROUTE feedback_need_clarification (description = "Keep explicit clarification fo
 ROUTE feedback_default (description = "Explicit cheap fallback for ordinary traffic that carries no recovery signal.") {
   PRIORITY 10
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
+}
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
 }

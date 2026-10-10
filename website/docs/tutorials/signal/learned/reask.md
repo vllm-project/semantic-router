@@ -48,10 +48,22 @@ routing:
 
 Each rule compares the current user turn to the latest `lookback_turns` prior user turns. A rule matches only when every turn in that recent streak stays above the configured similarity threshold.
 
+The default score is cosine similarity, including when a default decision model
+is configured. An explicit `routing.model_bindings.reask` binding with
+`contract: decision.v1` selects a native repeated-intent judgment instead. Its
+score is the probability that the requests seek the same information or action.
+Calibrate that probability threshold for the selected model; a cosine threshold
+does not transfer to it. Both modes count consecutive turns in the router and
+recognize identical, nonempty complete turns without a model call.
+
 ## Dependencies and Limitations
 
 Reask uses the shared embedding path and sends recent user turns to a remote
-embedding provider when one is configured. Repetition can be intentional rather
+embedding provider when one is configured. Nonidentical turns require complete
+input coverage: a truncating model or an endpoint that cannot establish its input
+coverage produces an unknown signal, rather than a negative match. An
+OpenAI-compatible embedding endpoint must reject inputs beyond its limit instead
+of truncating them. Repetition can be intentional rather
 than dissatisfaction, so use the signal for escalation rather than punishment.
 See a complete example:
 [`config/fragments/signal/reask/dissatisfaction.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/reask/dissatisfaction.yaml).

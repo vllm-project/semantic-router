@@ -76,6 +76,39 @@ spec:
                         of this decision
                       maxLength: 500
                       type: string
+                    fallback:
+                      description: |-
+                        Fallback overrides the cross-model fallback policy for this decision's
+                        requests, over the route's and the router's
+                      properties:
+                        enabled:
+                          description: Enabled turns cross-model fallback on or off
+                            for this decision
+                          type: boolean
+                        max_attempts:
+                          description: MaxAttempts bounds the candidates tried, the
+                            first one included
+                          format: int32
+                          minimum: 0
+                          type: integer
+                        per_attempt_timeout:
+                          description: PerAttemptTimeout bounds each candidate's attempt
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        retryable_status_codes:
+                          description: RetryableStatusCodes are the statuses that
+                            move on to the next candidate
+                          items:
+                            format: int32
+                            maximum: 599
+                            minimum: 100
+                            type: integer
+                          type: array
+                        total_timeout:
+                          description: TotalTimeout bounds the whole fallback chain
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                      type: object
                     modelRefs:
                       description: ModelRefs defines the model references for this
                         decision (currently only one model is supported)
@@ -174,6 +207,71 @@ spec:
                       maximum: 1000
                       minimum: 0
                       type: integer
+                    reliability:
+                      description: |-
+                        Reliability overrides the timeouts and retries of the provider model
+                        that serves this decision's requests
+                      properties:
+                        first_byte_timeout:
+                          description: |-
+                            FirstByteTimeout bounds the wait for the first response byte
+                            (standalone mode only)
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        idle_timeout:
+                          description: |-
+                            IdleTimeout bounds the wait for more of a streamed response
+                            (standalone mode only)
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        per_try_timeout:
+                          description: PerTryTimeout bounds each attempt until its
+                            response starts
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        retriable_status_codes:
+                          description: RetriableStatusCodes adds statuses retried
+                            under retriable-status-codes
+                          items:
+                            format: int32
+                            maximum: 599
+                            minimum: 100
+                            type: integer
+                          type: array
+                        retry_after_max:
+                          description: |-
+                            RetryAfterMax honors a response's Retry-After up to this bound
+                            (standalone mode only)
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        retry_back_off_base:
+                          description: |-
+                            RetryBackOffBase is the base of the randomized exponential wait between
+                            retries (standalone mode only)
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        retry_back_off_max:
+                          description: RetryBackOffMax caps that wait (standalone
+                            mode only)
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                        retry_count:
+                          description: RetryCount is the number of retries after the
+                            first attempt
+                          format: int32
+                          maximum: 5
+                          minimum: 0
+                          type: integer
+                        retry_on:
+                          description: RetryOn adds retry conditions, with Envoy's
+                            names (5xx, reset, ...)
+                          type: string
+                        total_timeout:
+                          description: 'TotalTimeout bounds the whole call: every
+                            attempt and the response'
+                          pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                          type: string
+                      type: object
                     signals:
                       description: Signals defines the signal combination logic
                       properties:

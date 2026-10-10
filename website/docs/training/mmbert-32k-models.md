@@ -11,7 +11,7 @@ to improve the order of a smaller candidate set. Both adapt the shared
 and support a choice of encoder depth and output dimension.
 
 To use the published models without training, follow
-[Embeddings and reranking](../installation/runtime/embeddings.md).
+[Embeddings and reranking](../model-runtime/guides/embeddings.md).
 
 ## Embedding model: bi-encoder
 
@@ -117,9 +117,9 @@ overall benchmark score or leaderboard rank.
 
 ## Deploy the result
 
-Use [local model bindings](../installation/runtime/in-process.md) to select the
+Use [local model bindings](../model-runtime/deploy.md) to select the
 checkpoint and serving engine. Test the selected depth, dimension, and input
-limit through [route preview](../installation/runtime/lifecycle-diagnostics.md).
+limit through [route preview](../model-runtime/troubleshooting.md).
 An ONNX deployment needs graphs exported from the same trained weights.
 
 ## Earlier mmBERT workflows

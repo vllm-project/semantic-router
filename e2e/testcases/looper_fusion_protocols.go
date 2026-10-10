@@ -51,7 +51,7 @@ func testLooperFusionQuorumFallbackAnthropic(ctx context.Context, client *kubern
 	defer counters.close()
 
 	response, err := sendAnthropicMessagesRequest(ctx, anthropicMessagesRequestBody{
-		Model:     "MoM",
+		Model:     "vllm-sr/auto",
 		MaxTokens: 64,
 		Messages: []anthropicMessage{
 			{Role: "user", Content: looperFusionProtocolProbeKeyword},
@@ -101,7 +101,7 @@ func testLooperFusionQuorumFallbackResponses(ctx context.Context, client *kubern
 	defer counters.close()
 
 	payload, err := json.Marshal(map[string]any{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"input": looperFusionProtocolProbeKeyword,
 	})
 	if err != nil {

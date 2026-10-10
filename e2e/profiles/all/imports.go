@@ -9,7 +9,6 @@ import (
 	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
 	complexityremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/complexity-remote-backend"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
-	decisionruntime "github.com/vllm-project/semantic-router/e2e/profiles/decision-runtime"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	externalgatewayresponses "github.com/vllm-project/semantic-router/e2e/profiles/external-gateway-responses"
@@ -22,6 +21,8 @@ import (
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	masking "github.com/vllm-project/semantic-router/e2e/profiles/masking"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
+	modelruntime "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime"
+	modelruntimereal "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-real"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
@@ -37,7 +38,9 @@ import (
 	responsejailbreak "github.com/vllm-project/semantic-router/e2e/profiles/response-jailbreak"
 	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
+	routingerrors "github.com/vllm-project/semantic-router/e2e/profiles/routing-errors"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	standalone "github.com/vllm-project/semantic-router/e2e/profiles/standalone"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
@@ -61,14 +64,15 @@ var providerMockerLocalImages = []framework.LocalImageBuild{
 }
 
 // modelRuntimeLocalImages adds the CPU model runtime image to the provider
-// fixtures; the runtime writes its tiny fixture model at start-up.
+// fixtures for profiles that run a runtime outside the Router; it writes its
+// tiny fixture models at start-up.
 var modelRuntimeLocalImages = append(append([]framework.LocalImageBuild(nil), providerMockerLocalImages...),
 	framework.LocalImageBuild{
 		Dockerfile:   "src/model-runtime/Dockerfile",
 		Tag:          "semantic-router-ci/model-runtime:e2e-test",
 		BuildContext: "src/model-runtime",
 		RolloutRestarts: []framework.RolloutRestartTarget{
-			{Namespace: "default", Deployment: "decision-runtime"},
+			{Namespace: "vllm-semantic-router-system", Deployment: "model-runtime-attached"},
 		},
 	},
 )
@@ -100,9 +104,11 @@ func init() {
 	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("complexity-remote-backend", func() framework.Profile { return complexityremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("decision-runtime", func() framework.Profile { return decisionruntime.NewProfile() }, framework.ProfileCapabilities{LocalImages: modelRuntimeLocalImages})
+	register("model-runtime", func() framework.Profile { return modelruntime.NewProfile() }, framework.ProfileCapabilities{LocalImages: modelRuntimeLocalImages})
+	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("routing-errors", func() framework.Profile { return routingerrors.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
@@ -143,8 +149,7 @@ func init() {
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
 	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
-		LocalImages:     providerMockerLocalImages,
-		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
+		LocalImages: providerMockerLocalImages,
 	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
@@ -181,6 +186,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})
+	register("standalone", func() framework.Profile { return standalone.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"vectorstore-registry",

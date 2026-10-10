@@ -63,10 +63,6 @@ func TestConvenienceDiagnosticsRecipeSelectionNeverFallsBack(t *testing.T) {
 			_, err := service.ClassifyUserFeedback(context.Background(), UserFeedbackRequest{Recipe: recipe, Text: "hello"})
 			return err
 		},
-		"nli": func(recipe string) error {
-			_, err := service.ClassifyNLI(context.Background(), NLIRequest{Recipe: recipe, Premise: "hello", Hypothesis: "a greeting"})
-			return err
-		},
 	}
 	for name, check := range checks {
 		t.Run(name, func(t *testing.T) {

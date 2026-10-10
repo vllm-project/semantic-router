@@ -107,8 +107,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 	// Initialize request context
 	ctx = &RequestContext{
-		Headers:      make(map[string]string),
-		TraceContext: stream.Context(),
+		Headers:       make(map[string]string),
+		TraceContext:  stream.Context(),
+		ConfigVersion: r.configVersion.Load(),
 	}
 
 	for {
@@ -262,13 +263,10 @@ func (r *OpenAIRouter) processRequestHeaders(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleRequestHeaders(v, ctx)
+	response, err := r.requestHeadersReply(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestHeaders failed: %v", err)
 		return err
 	}
-	response = r.encodeImmediateResponseForClient(response, ctx)
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if r.holdFullDuplexHeaderReply(v, response, ctx) {
 		return nil
 	}
@@ -299,16 +297,11 @@ func (r *OpenAIRouter) sendRequestBodyResult(
 	err error,
 	ctx *RequestContext,
 ) (bool, error) {
+	response, err = r.requestBodyReply(response, err, ctx)
 	if err != nil {
-		var ok bool
-		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
-			logging.Errorf("handleRequestBody failed: %v", err)
-			return false, err
-		}
+		return false, err
 	}
-	response = r.encodeImmediateResponseForClient(response, ctx)
-	r.bindBenchmarkConfigResponse(response, ctx)
-	r.persistImmediateResponseObject(response, ctx)
+	r.addEnvoyReliabilityHeaders(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.
@@ -362,18 +355,14 @@ func (r *OpenAIRouter) processResponseHeaders(
 	v *ext_proc.ProcessingRequest_ResponseHeaders,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleResponseHeaders(v, ctx)
+	response, err := r.responseHeadersReply(v, ctx)
 	if err != nil {
 		return err
 	}
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "response header"); err != nil {
 		return err
 	}
-	finishImmediateResponseTrace(ctx, response)
-	if v.ResponseHeaders.GetEndOfStream() {
-		finishRequestTrace(ctx, nil)
-	}
+	responseHeadersReplySent(ctx, response, v.ResponseHeaders.GetEndOfStream())
 	return nil
 }
 
@@ -382,18 +371,14 @@ func (r *OpenAIRouter) processResponseBody(
 	v *ext_proc.ProcessingRequest_ResponseBody,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleResponseBody(v, ctx)
+	response, err := r.responseBodyReply(v, ctx)
 	if err != nil {
 		return err
 	}
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "response body"); err != nil {
 		return err
 	}
-	finishImmediateResponseTrace(ctx, response)
-	if v.ResponseBody.GetEndOfStream() || ctx.StreamingComplete {
-		finishRequestTrace(ctx, nil)
-	}
+	responseBodyReplySent(ctx, response, v.ResponseBody.GetEndOfStream())
 	return nil
 }
 

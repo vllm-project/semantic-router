@@ -9,6 +9,7 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
+	"cascade":       "native",
 	"automix":       "selection",
 	"confidence":    "looper",
 	"fusion":        "looper",

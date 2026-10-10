@@ -1,0 +1,485 @@
+{
+ "record": "router-latency-cpu",
+ "date": "2026-10-05",
+ "machine": "AMD EPYC 9575F, CPU only; each router and its runtime processes in a systemd scope with AllowedCPUs=32-43 (12 vCPUs), the driver pinned to 4 other vCPUs",
+ "legacy": {
+  "commit": "61aa7eb2d",
+  "backend": "candle CPU bindings",
+  "config": "router-latency-cpu-legacy.yaml"
+ },
+ "runtime": {
+  "commit": "7409aaac7",
+  "backend": "built-in model runtime, PyTorch 2.10.0 CPU, ONNX Runtime 1.30.0, Python 3.12",
+  "config": "router-latency-cpu.yaml",
+  "result_caches": "off (router and runtime)"
+ },
+ "method": "POST /api/v1/routing/preview; per pass 20 warm-up requests, then the corpus three times sequentially, at concurrency 4 and at 16; five rounds, legacy and runtime alternating with the order rotated each round; per metric the median of the rounds and the paired difference runtime - legacy with a 95% t interval",
+ "corpus_sha256": "dc81026ad0c9731ba7c10a36cd64a7fb2fe1434c94ba815a7f91e07380359def",
+ "inputs": 539,
+ "rounds": [
+  {
+   "round": 1,
+   "order": [
+    "legacy",
+    "runtime"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "legacy_sequential": 0,
+    "legacy_concurrency_4": 0,
+    "legacy_concurrency_16": 0,
+    "runtime_sequential": 0,
+    "runtime_concurrency_4": 0,
+    "runtime_concurrency_16": 0
+   },
+   "legacy": {
+    "sequential": {
+     "p50_ms": 67.04,
+     "p95_ms": 282.47,
+     "p99_ms": 502.05,
+     "throughput_rps": 8.87
+    },
+    "concurrency_4": {
+     "p50_ms": 241.93,
+     "p95_ms": 831.44,
+     "p99_ms": 1234.56,
+     "throughput_rps": 12.29
+    },
+    "concurrency_16": {
+     "p50_ms": 947.85,
+     "p95_ms": 2948.9,
+     "p99_ms": 4446.2,
+     "throughput_rps": 13.05
+    },
+    "load_1m_before_after": [
+     47.72,
+     46.4
+    ],
+    "effective_cpuset": "32-43"
+   },
+   "runtime": {
+    "sequential": {
+     "p50_ms": 23.46,
+     "p95_ms": 66.17,
+     "p99_ms": 122.77,
+     "throughput_rps": 29.68
+    },
+    "concurrency_4": {
+     "p50_ms": 76.11,
+     "p95_ms": 276.55,
+     "p99_ms": 353.79,
+     "throughput_rps": 39.27
+    },
+    "concurrency_16": {
+     "p50_ms": 343.85,
+     "p95_ms": 762.97,
+     "p99_ms": 1267.86,
+     "throughput_rps": 41.11
+    },
+    "load_1m_before_after": [
+     47.16,
+     55.51
+    ],
+    "effective_cpuset": "32-43"
+   }
+  },
+  {
+   "round": 2,
+   "order": [
+    "runtime",
+    "legacy"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "legacy_sequential": 0,
+    "legacy_concurrency_4": 0,
+    "legacy_concurrency_16": 0,
+    "runtime_sequential": 0,
+    "runtime_concurrency_4": 0,
+    "runtime_concurrency_16": 0
+   },
+   "legacy": {
+    "sequential": {
+     "p50_ms": 53.37,
+     "p95_ms": 245.14,
+     "p99_ms": 490.06,
+     "throughput_rps": 10.55
+    },
+    "concurrency_4": {
+     "p50_ms": 194.12,
+     "p95_ms": 707.08,
+     "p99_ms": 1104.62,
+     "throughput_rps": 14.71
+    },
+    "concurrency_16": {
+     "p50_ms": 815.52,
+     "p95_ms": 2530.31,
+     "p99_ms": 4850.35,
+     "throughput_rps": 14.85
+    },
+    "load_1m_before_after": [
+     74.65,
+     73.47
+    ],
+    "effective_cpuset": "32-43"
+   },
+   "runtime": {
+    "sequential": {
+     "p50_ms": 15.51,
+     "p95_ms": 55.19,
+     "p99_ms": 107.46,
+     "throughput_rps": 40.06
+    },
+    "concurrency_4": {
+     "p50_ms": 60.15,
+     "p95_ms": 231.07,
+     "p99_ms": 302.03,
+     "throughput_rps": 48.64
+    },
+    "concurrency_16": {
+     "p50_ms": 291.51,
+     "p95_ms": 700.71,
+     "p99_ms": 1090.87,
+     "throughput_rps": 51.15
+    },
+    "load_1m_before_after": [
+     52.77,
+     86.28
+    ],
+    "effective_cpuset": "32-43"
+   }
+  },
+  {
+   "round": 3,
+   "order": [
+    "legacy",
+    "runtime"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "legacy_sequential": 0,
+    "legacy_concurrency_4": 0,
+    "legacy_concurrency_16": 0,
+    "runtime_sequential": 0,
+    "runtime_concurrency_4": 0,
+    "runtime_concurrency_16": 0
+   },
+   "legacy": {
+    "sequential": {
+     "p50_ms": 53.43,
+     "p95_ms": 243.88,
+     "p99_ms": 491.12,
+     "throughput_rps": 10.55
+    },
+    "concurrency_4": {
+     "p50_ms": 194.58,
+     "p95_ms": 709.21,
+     "p99_ms": 1091.32,
+     "throughput_rps": 14.71
+    },
+    "concurrency_16": {
+     "p50_ms": 809.82,
+     "p95_ms": 2710.47,
+     "p99_ms": 4328.78,
+     "throughput_rps": 14.83
+    },
+    "load_1m_before_after": [
+     64.15,
+     55.32
+    ],
+    "effective_cpuset": "32-43"
+   },
+   "runtime": {
+    "sequential": {
+     "p50_ms": 15.52,
+     "p95_ms": 54.93,
+     "p99_ms": 105.85,
+     "throughput_rps": 40.16
+    },
+    "concurrency_4": {
+     "p50_ms": 59.15,
+     "p95_ms": 228.43,
+     "p99_ms": 318.12,
+     "throughput_rps": 48.57
+    },
+    "concurrency_16": {
+     "p50_ms": 289.11,
+     "p95_ms": 688.53,
+     "p99_ms": 1105.7,
+     "throughput_rps": 50.11
+    },
+    "load_1m_before_after": [
+     53.56,
+     57.74
+    ],
+    "effective_cpuset": "32-43"
+   }
+  },
+  {
+   "round": 4,
+   "order": [
+    "runtime",
+    "legacy"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "legacy_sequential": 0,
+    "legacy_concurrency_4": 0,
+    "legacy_concurrency_16": 0,
+    "runtime_sequential": 0,
+    "runtime_concurrency_4": 0,
+    "runtime_concurrency_16": 0
+   },
+   "legacy": {
+    "sequential": {
+     "p50_ms": 52.71,
+     "p95_ms": 241.17,
+     "p99_ms": 495.49,
+     "throughput_rps": 10.64
+    },
+    "concurrency_4": {
+     "p50_ms": 193.1,
+     "p95_ms": 711.14,
+     "p99_ms": 1091.41,
+     "throughput_rps": 14.68
+    },
+    "concurrency_16": {
+     "p50_ms": 820.2,
+     "p95_ms": 2648.51,
+     "p99_ms": 4290.05,
+     "throughput_rps": 14.86
+    },
+    "load_1m_before_after": [
+     41.16,
+     51.56
+    ],
+    "effective_cpuset": "32-43"
+   },
+   "runtime": {
+    "sequential": {
+     "p50_ms": 15.53,
+     "p95_ms": 55.02,
+     "p99_ms": 105.8,
+     "throughput_rps": 40.19
+    },
+    "concurrency_4": {
+     "p50_ms": 62.67,
+     "p95_ms": 229.61,
+     "p99_ms": 303.71,
+     "throughput_rps": 47.91
+    },
+    "concurrency_16": {
+     "p50_ms": 295.89,
+     "p95_ms": 640.04,
+     "p99_ms": 1090.04,
+     "throughput_rps": 50.51
+    },
+    "load_1m_before_after": [
+     55.47,
+     40.88
+    ],
+    "effective_cpuset": "32-43"
+   }
+  },
+  {
+   "round": 5,
+   "order": [
+    "legacy",
+    "runtime"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "legacy_sequential": 0,
+    "legacy_concurrency_4": 0,
+    "legacy_concurrency_16": 0,
+    "runtime_sequential": 0,
+    "runtime_concurrency_4": 0,
+    "runtime_concurrency_16": 0
+   },
+   "legacy": {
+    "sequential": {
+     "p50_ms": 52.71,
+     "p95_ms": 246.82,
+     "p99_ms": 500.06,
+     "throughput_rps": 10.65
+    },
+    "concurrency_4": {
+     "p50_ms": 192.18,
+     "p95_ms": 701.5,
+     "p99_ms": 1061.4,
+     "throughput_rps": 14.8
+    },
+    "concurrency_16": {
+     "p50_ms": 799.07,
+     "p95_ms": 2691.46,
+     "p99_ms": 4279.25,
+     "throughput_rps": 15.01
+    },
+    "load_1m_before_after": [
+     45.0,
+     69.22
+    ],
+    "effective_cpuset": "32-43"
+   },
+   "runtime": {
+    "sequential": {
+     "p50_ms": 15.62,
+     "p95_ms": 55.18,
+     "p99_ms": 105.65,
+     "throughput_rps": 40.04
+    },
+    "concurrency_4": {
+     "p50_ms": 60.37,
+     "p95_ms": 232.82,
+     "p99_ms": 294.84,
+     "throughput_rps": 48.09
+    },
+    "concurrency_16": {
+     "p50_ms": 290.42,
+     "p95_ms": 601.64,
+     "p99_ms": 1055.85,
+     "throughput_rps": 51.16
+    },
+    "load_1m_before_after": [
+     65.4,
+     59.83
+    ],
+    "effective_cpuset": "32-43"
+   }
+  }
+ ],
+ "median": {
+  "legacy": {
+   "sequential": {
+    "p50_ms": 53.37,
+    "p95_ms": 245.14,
+    "p99_ms": 495.49,
+    "throughput_rps": 10.55
+   },
+   "concurrency_4": {
+    "p50_ms": 194.12,
+    "p95_ms": 709.21,
+    "p99_ms": 1091.41,
+    "throughput_rps": 14.71
+   },
+   "concurrency_16": {
+    "p50_ms": 815.52,
+    "p95_ms": 2691.46,
+    "p99_ms": 4328.78,
+    "throughput_rps": 14.85
+   }
+  },
+  "runtime": {
+   "sequential": {
+    "p50_ms": 15.53,
+    "p95_ms": 55.18,
+    "p99_ms": 105.85,
+    "throughput_rps": 40.06
+   },
+   "concurrency_4": {
+    "p50_ms": 60.37,
+    "p95_ms": 231.07,
+    "p99_ms": 303.71,
+    "throughput_rps": 48.09
+   },
+   "concurrency_16": {
+    "p50_ms": 291.51,
+    "p95_ms": 688.53,
+    "p99_ms": 1090.87,
+    "throughput_rps": 50.51
+   }
+  }
+ },
+ "difference_runtime_minus_legacy": {
+  "sequential": {
+   "p50_ms": {
+    "mean": -38.72,
+    "ci95": [
+     -42.13,
+     -35.32
+    ]
+   },
+   "p95_ms": {
+    "mean": -194.6,
+    "ci95": [
+     -209.86,
+     -179.34
+    ]
+   },
+   "p99_ms": {
+    "mean": -386.25,
+    "ci95": [
+     -393.63,
+     -378.87
+    ]
+   },
+   "throughput_rps": {
+    "mean": 27.77,
+    "ci95": [
+     22.94,
+     32.61
+    ]
+   }
+  },
+  "concurrency_4": {
+   "p50_ms": {
+    "mean": -139.49,
+    "ci95": [
+     -157.91,
+     -121.06
+    ]
+   },
+   "p95_ms": {
+    "mean": -492.38,
+    "ci95": [
+     -536.23,
+     -448.53
+    ]
+   },
+   "p99_ms": {
+    "mean": -802.16,
+    "ci95": [
+     -859.37,
+     -744.95
+    ]
+   },
+   "throughput_rps": {
+    "mean": 32.26,
+    "ci95": [
+     28.57,
+     35.94
+    ]
+   }
+  },
+  "concurrency_16": {
+   "p50_ms": {
+    "mean": -536.34,
+    "ci95": [
+     -583.96,
+     -488.71
+    ]
+   },
+   "p95_ms": {
+    "mean": -2027.15,
+    "ci95": [
+     -2189.66,
+     -1864.64
+    ]
+   },
+   "p99_ms": {
+    "mean": -3316.86,
+    "ci95": [
+     -3624.92,
+     -3008.81
+    ]
+   },
+   "throughput_rps": {
+    "mean": 34.29,
+    "ci95": [
+     29.94,
+     38.64
+    ]
+   }
+  }
+ }
+}

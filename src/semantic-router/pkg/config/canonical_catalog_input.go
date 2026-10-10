@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -81,7 +82,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, or anthropic",
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, or systemone",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -279,6 +280,8 @@ func canonicalBackendURL(backend CanonicalBackendRef) string {
 
 func catalogProtocolForAPIFormat(apiFormat string) string {
 	switch apiFormat {
+	case APIFormatSystemOne:
+		return "vllm-sr/systemone@1"
 	case APIFormatResponses:
 		return "openai/responses@1"
 	case APIFormatAnthropic:
@@ -298,13 +301,12 @@ func catalogPricing(value ModelPricing) modelcatalog.Pricing {
 	}
 }
 
+// catalogReliability converts directly: the two types declare the same
+// fields, so adding one to only one of them fails to compile.
 func catalogReliability(value ProviderReliability) modelcatalog.Reliability {
-	return modelcatalog.Reliability{
-		LBPolicy: value.LBPolicy, RetryCount: value.RetryCount, RetryOn: value.RetryOn,
-		Consecutive5xx: value.Consecutive5xx, BaseEjectionTime: value.BaseEjectionTime,
-		MaxEjectionPercent: value.MaxEjectionPercent, HealthCheckPath: value.HealthCheckPath,
-		HealthCheckInterval: value.HealthCheckInterval, HealthCheckTimeout: value.HealthCheckTimeout,
-	}
+	converted := modelcatalog.Reliability(value)
+	converted.RetriableStatusCodes = slices.Clone(value.RetriableStatusCodes)
+	return converted
 }
 
 func catalogCardOverlay(

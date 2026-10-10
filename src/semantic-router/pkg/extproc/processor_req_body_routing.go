@@ -513,6 +513,9 @@ func (r *OpenAIRouter) appendProviderCredential(
 ) *ext_proc.ProcessingResponse {
 	provider, providerAuth, err := resolveProviderAuth(state.profile)
 	if err != nil {
+		logging.ComponentErrorEvent("extproc", "provider_auth_resolution_failed", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName, "error": err.Error(),
+		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	if providerAuth.Strategy == "none" {
@@ -597,6 +600,7 @@ func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx
 	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
 	state.setHeaders = append(state.setHeaders, setHeaders...)
 	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
+	r.runRequestExtensions(state, ctx)
 }
 
 func buildRequestBodyContinueResponse(

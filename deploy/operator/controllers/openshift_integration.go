@@ -39,12 +39,17 @@ func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme
 
 	// Check if Route creation enabled
 	if sr.Spec.OpenShift == nil || sr.Spec.OpenShift.Routes == nil || !sr.Spec.OpenShift.Routes.Enabled {
-		if !isOpenShift {
-			return nil
+		if isOpenShift {
+			// Delete Route if exists
+			if err := deleteRouteIfExists(ctx, c, sr); err != nil {
+				return err
+			}
 		}
-
-		// Delete Route if exists
-		return deleteRouteIfExists(ctx, c, sr)
+		// No Route is live under this spec, so stop reporting one: the
+		// status field is part of the published CRD surface and must not
+		// outlive the deleted Route.
+		sr.Status.OpenShiftFeatures = nil
+		return nil
 	}
 
 	// Only create on OpenShift

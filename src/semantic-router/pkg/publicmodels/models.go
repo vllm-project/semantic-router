@@ -6,10 +6,8 @@ package publicmodels
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
 const (
-	routerOwner                  = "vllm-semantic-router"
-	upstreamEndpointOwner        = "upstream-endpoint"
-	autoModelDescription         = "Intelligent Router for Mixture-of-Models"
-	orchestratedModelDescription = "Router-orchestrated model"
+	routerOwner           = "vllm-semantic-router"
+	upstreamEndpointOwner = "upstream-endpoint"
 )
 
 // ResolutionKind describes the stable request-handling boundary exposed to
@@ -26,10 +24,12 @@ const (
 // discovery. Display metadata and internal execution modes are not control
 // signals.
 type RoutingMetadata struct {
-	Resolution   ResolutionKind    `json:"resolution"`
-	Selectable   bool              `json:"selectable"`
-	DefaultRoute bool              `json:"default_route,omitempty"`
-	Recipe       config.RecipeName `json:"recipe,omitempty"`
+	API          config.InferenceAPI     `json:"api"`
+	Source       config.EntrypointSource `json:"source,omitempty"`
+	Resolution   ResolutionKind          `json:"resolution"`
+	Selectable   bool                    `json:"selectable"`
+	DefaultRoute bool                    `json:"default_route,omitempty"`
+	Recipe       config.RecipeName       `json:"recipe,omitempty"`
 }
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
@@ -56,9 +56,7 @@ func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList
 		created: created,
 		seen:    map[string]struct{}{},
 	}
-	builder.appendAutoAliases(cfg)
 	builder.appendEntrypointAliases(cfg)
-	builder.appendOrchestratedModels(cfg)
 	builder.appendBackendModels(cfg)
 
 	return OpenAIModelList{
@@ -73,52 +71,27 @@ type modelListBuilder struct {
 	seen    map[string]struct{}
 }
 
-func (b *modelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
-	autoModelNames := config.DefaultAutoModelNames()
-	if cfg != nil {
-		autoModelNames = cfg.EffectiveAutoModelNames()
-	}
-	b.appendAll(
-		autoModelNames,
-		routerOwner,
-		autoModelDescription,
-		selectableVirtualRoute(config.DefaultRecipeName, true),
-	)
-}
-
 func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
-	if cfg == nil {
-		return
-	}
-	for _, entrypoint := range cfg.Entrypoints {
-		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
-		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(entrypoint.Recipe, false))
-	}
-}
-
-func (b *modelListBuilder) appendOrchestratedModels(cfg *config.RouterConfig) {
-	if cfg == nil || !cfg.Looper.IsEnabled() {
-		return
-	}
-	for _, models := range [][]string{
-		cfg.ExposedReMoMModelNames(),
-		cfg.ExposedFusionModelNames(),
-		cfg.ExposedFlowModelNames(),
-	} {
-		b.appendAll(
-			models,
-			routerOwner,
-			orchestratedModelDescription,
-			selectableVirtualRoute("", false),
-		)
+	for _, entrypoint := range cfg.EffectiveEntrypoints(config.ChatAPI) {
+		description := "Entrypoint for the default routing recipe"
+		if cfg != nil {
+			description = cfg.EntrypointRecipeDescription(entrypoint.Recipe)
+		}
+		metadata := selectableVirtualRoute(entrypoint.Recipe, entrypoint.Recipe == config.DefaultRecipeName)
+		metadata.API, metadata.Source = entrypoint.API, entrypoint.Source
+		b.appendAll(entrypoint.ModelNames, routerOwner, description, metadata)
 	}
 }
 
 func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
-	if cfg == nil || !cfg.IncludeConfigModelsInList {
+	if cfg == nil || !cfg.ListBackendModels {
 		return
 	}
-	b.appendAll(cfg.GetAllModels(), upstreamEndpointOwner, "", passthroughRoute())
+	for _, model := range cfg.GetAllModels() {
+		if !cfg.IsSystemOneBackend(model) {
+			b.append(model, upstreamEndpointOwner, "", passthroughRoute())
+		}
+	}
 }
 
 func (b *modelListBuilder) appendAll(
@@ -162,5 +135,5 @@ func selectableVirtualRoute(recipe config.RecipeName, defaultRoute bool) Routing
 }
 
 func passthroughRoute() RoutingMetadata {
-	return RoutingMetadata{Resolution: ResolutionPassthrough}
+	return RoutingMetadata{API: config.ChatAPI, Resolution: ResolutionPassthrough, Selectable: true}
 }

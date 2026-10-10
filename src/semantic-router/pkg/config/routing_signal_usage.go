@@ -27,14 +27,14 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 
 	if len(c.Recipes) > 0 {
 		for i := range c.Recipes {
-			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+			if c.ConfigForRecipe(&c.Recipes[i]).profileUsesSignalType(normalizedType) {
 				return true
 			}
 		}
 		return false
 	}
 
-	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+	return c.profileUsesSignalType(normalizedType)
 }
 
 // UsesSignalTypeInReachableRouting reports whether a request-reachable routing
@@ -51,27 +51,20 @@ func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool 
 		return false
 	}
 	if c.RoutingScope != "" {
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	if len(c.Recipes) == 0 {
 		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
 			return false
 		}
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	for _, recipe := range c.ReachableRoutingRecipes() {
-		if recipeUsesSignalType(recipe, normalizedType) {
+		if c.ConfigForRecipe(recipe).profileUsesSignalType(normalizedType) {
 			return true
 		}
 	}
 	return false
-}
-
-func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
-	if recipe == nil {
-		return false
-	}
-	return decisionsUseSignalType(recipe.Profile.Decisions, recipe.Profile.Projections, signalType)
 }
 
 func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
@@ -224,16 +217,6 @@ func (c *RouterConfig) NeedsHallucinationDetectorForDefaultRuntime() bool {
 		c.HallucinationMitigation.HallucinationModel.ModelID != ""
 }
 
-// NeedsLocalHallucinationNLIForAPI reports whether the default public NLI API
-// has a local detector and explainer configured. Endpoint-backed hallucination
-// detection does not implement the local NLI classification API.
-func (c *RouterConfig) NeedsLocalHallucinationNLIForAPI() bool {
-	return c.ownsDefaultAPIConsumer() &&
-		c.NeedsHallucinationDetectorForDefaultRuntime() &&
-		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle &&
-		c.HallucinationMitigation.NLIModel.ModelID != ""
-}
-
 func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
 	return c != nil &&
 		(c.RoutingScope == "" || c.RoutingScope == DefaultRecipeName)
@@ -288,43 +271,7 @@ func (c *RouterConfig) NeedsHallucinationDetectorForRouting() bool {
 func (c *RouterConfig) NeedsLocalHallucinationModelsForRouting() bool {
 	return c != nil &&
 		c.NeedsHallucinationDetectorForRouting() &&
-		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle
-}
-
-// NeedsLocalHallucinationNLIForRouting reports whether a declared
-// hallucination rule, or an enabled local hallucination plugin that still
-// owns detection, requests NLI explanations.
-func (c *RouterConfig) NeedsLocalHallucinationNLIForRouting() bool {
-	if c == nil ||
-		!c.NeedsLocalHallucinationModelsForRouting() ||
-		c.HallucinationMitigation.NLIModel.ModelID == "" {
-		return false
-	}
-	for _, signals := range c.reachableRoutingSignals() {
-		for _, rule := range signals.HallucinationRules {
-			if rule.UseNLI {
-				return true
-			}
-		}
-	}
-	decisions := c.routingConsumerDecisions()
-	for i := range decisions {
-		plugin := decisions[i].GetHallucinationConfig()
-		if plugin != nil && plugin.Enabled && plugin.UseNLI {
-			return true
-		}
-	}
-	return false
-}
-
-// NeedsLocalNLIForSemanticCache reports actual demand for the global cache's
-// NLI polarity tier. Recipe overrides never supply this service-owned model.
-func (c *RouterConfig) NeedsLocalNLIForSemanticCache() bool {
-	return c != nil &&
-		c.NeedsSemanticResponseCache() &&
-		(c.SemanticCache.BackendType == "" || c.SemanticCache.BackendType == "memory") &&
-		c.SemanticCache.PolarityGuard.UsesNLI() &&
-		(c.GlobalModelBindings["hallucination_explainer"].Deployment != "" || c.HallucinationMitigation.NLIModel.ModelID != "")
+		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendLocal
 }
 
 func (c *RouterConfig) routingConsumerDecisions() []Decision {
@@ -468,4 +415,13 @@ func collectSignalNames(node *RuleNode, signalType string) []string {
 		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
 	}
 	return names
+}
+
+// profileUsesSignalType includes Replay's evidence dependency in addition to
+// decision and projection inputs.
+func (c *RouterConfig) profileUsesSignalType(signalType string) bool {
+	if signalType == SignalTypePII && c.ReplayNeedsPIIEvidence() {
+		return true
+	}
+	return decisionsUseSignalType(c.Decisions, c.Projections, signalType)
 }

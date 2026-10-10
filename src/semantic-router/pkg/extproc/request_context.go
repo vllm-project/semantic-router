@@ -19,28 +19,27 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
-// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
+// EnhancedHallucinationSpan is one unsupported span with its offsets, score,
+// severity and explanation.
 type EnhancedHallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
 // ResponseHallucinationEvidence is the detector output behind the
 // hallucination signal: the verdict, its confidence, and the spans it rests
-// on, with NLI explanations when the rule asked for them.
+// on, with span details when the detector explains them.
 type ResponseHallucinationEvidence struct {
 	Detected       bool
 	Confidence     float32
@@ -100,8 +99,11 @@ type RequestContext struct {
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
 	RAGRerankerIdentity string
-	Headers             map[string]string
-	RequestID           string
+	// ConfigVersion is the version of the configuration snapshot that serves
+	// the request; 0 when the router serves without the lifecycle.
+	ConfigVersion uint64
+	Headers       map[string]string
+	RequestID     string
 	// IngressBodyBytes records only transport size. Source bytes live in the
 	// bounded, ephemeral protocol envelope and are never general-purpose state.
 	IngressBodyBytes  int
@@ -272,6 +274,9 @@ type RequestContext struct {
 	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
 	FallbackRecord        *fallback.ExecutionRecord
 	FallbackAuditRecorded bool
+	// fallbackExecutedByCaller is set when the native gateway runs the
+	// request's fallback chain; the response phases then never fall back.
+	fallbackExecutedByCaller bool
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -376,9 +381,12 @@ type RequestContext struct {
 	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
-	PIIDetected bool     // True if PII was detected
-	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
-	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+	// PIIContentVerified means the classifier fully scanned the available text without PII.
+	PIIContentVerified bool
+	PIIEvidence        []classification.PrivacyEvidence
+	PIIDetected        bool     // True if PII was detected
+	PIIEntities        []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
@@ -400,15 +408,23 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
+	// RouterReplayContentOmitted records prompt omission. Response/tool capture
+	// separately checks stage-specific evidence and the resolved capture policy.
+	RouterReplayContentOmitted bool
 
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
 
 	// Looper context
-	LooperRequest   bool                  // True only for token-authenticated in-process looper requests
+	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
+	Hop             *routing.Hop          // The routing context of a hop served in process
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+
+	// ListenerModels, when set, are the only request models the listener the
+	// client request arrived on accepts.
+	ListenerModels routing.ListenerModels
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.

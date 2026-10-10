@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-a864060ae993372d","object":"chat.completion.chunk","created":1791048029,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}],"prompt_token_ids":null,"prompt_text":null}
+
+data: {"id":"chatcmpl-a864060ae993372d","object":"chat.completion.chunk","created":1791048029,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"content":"BE"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-a864060ae993372d","object":"chat.completion.chunk","created":1791048029,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"content":"GIN "},"logprobs":null,"finish_reason":"stop","stop_reason":"alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima mike november oscar papa quebec romeo sierra tango unif","token_ids":null}],"system_fingerprint":"vllm-0.30.0-9a28a237"}
+
+data: [DONE]
+
