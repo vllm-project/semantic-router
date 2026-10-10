@@ -30,7 +30,28 @@ func (f *firstCopyPIIInference) ClassifyTokens(_ context.Context, text string) (
 	return tasks.TokenClassificationResult{Entities: entities, ScoresAvailable: &available}, nil
 }
 
+// fixedSpanPIIInference returns the PERSON spans it is given.
+type fixedSpanPIIInference struct {
+	spans [][2]int
+}
+
+func (f *fixedSpanPIIInference) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
+	var entities []tasks.TokenEntity
+	for _, span := range f.spans {
+		entities = append(entities, tasks.TokenEntity{
+			EntityType: "PERSON", Text: text[span[0]:span[1]], Start: span[0], End: span[1], Confidence: 0.95,
+		})
+	}
+	available := true
+	return tasks.TokenClassificationResult{Entities: entities, ScoresAvailable: &available}, nil
+}
+
 func detectFirstCopies(t *testing.T, text string, values map[string]string) []PIIDetection {
+	t.Helper()
+	return detectWith(t, text, &firstCopyPIIInference{values: values})
+}
+
+func detectWith(t *testing.T, text string, inference PIIInference) []PIIDetection {
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	cfg.PIIModel.ModelID = "test-pii-model"
@@ -39,7 +60,7 @@ func detectFirstCopies(t *testing.T, text string, values map[string]string) []PI
 	classifier, err := newClassifierWithOptions(cfg, withPII(&PIIMapping{
 		LabelToIdx: map[string]int{"O": 0, "PERSON": 1, "PHONE_NUMBER": 2},
 		IdxToLabel: map[string]string{"0": "O", "1": "PERSON", "2": "PHONE_NUMBER"},
-	}, &MockPIIInitializer{}, &firstCopyPIIInference{values: values}))
+	}, &MockPIIInitializer{}, inference))
 	if err != nil {
 		t.Fatalf("newClassifierWithOptions: %v", err)
 	}
@@ -109,6 +130,17 @@ func TestClassifyPIIWithDetails_CopiesMustBeWholeWordsWithTheSameCase(t *testing
 	}
 }
 
+// A model span over part of a copy is not coverage of the copy: masking only
+// "John" of the second "John Smith" would send "Smith" in clear text.
+func TestClassifyPIIWithDetails_CoversTheRestOfAPartlyDetectedCopy(t *testing.T) {
+	text := "John Smith met John Smith"
+	detections := detectWith(t, text, &fixedSpanPIIInference{spans: [][2]int{{0, 10}, {15, 19}}})
+
+	if masked := buildMaskedText(text, detections); masked != "[PERSON] met [PERSON]" {
+		t.Fatalf("got %q from %v", masked, spanTexts(text, detections))
+	}
+}
+
 func TestClassifyPIIWithDetails_SingleCharacterValuesAreNotCopied(t *testing.T) {
 	text := "A said hello. Later A left."
 	detections := detectFirstCopies(t, text, map[string]string{"A": "PERSON"})
@@ -118,12 +150,13 @@ func TestClassifyPIIWithDetails_SingleCharacterValuesAreNotCopied(t *testing.T) 
 }
 
 // buildMaskedText replaces each detection's bytes the way the PII API's
-// masked_text does, without the placeholder numbering.
+// masked_text does, merging overlaps, without the placeholder numbering.
 func buildMaskedText(text string, detections []PIIDetection) string {
 	var builder strings.Builder
 	last := 0
 	for _, detection := range detections {
 		if detection.Start < last {
+			last = max(last, detection.End)
 			continue
 		}
 		builder.WriteString(text[last:detection.Start])

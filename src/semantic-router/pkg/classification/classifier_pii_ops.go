@@ -221,8 +221,9 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 // scores the second "John Smith" of a request far below the first), and
 // masking works from positions, so a missed copy would reach the provider in
 // clear text. Only exact, word-aligned copies of at least two characters
-// count, and a copy that overlaps any detection is left to that detection.
-// Each distinct value is searched once, and overlap is a binary search over
+// count, and only a copy that a detection already covers whole is skipped:
+// a model span over part of a copy still leaves the rest in clear text.
+// Each distinct value is searched once, and coverage is a binary search over
 // the covered spans, so the work stays linear in the text per value.
 func coverRepeatedValues(ctx context.Context, text string, detections []PIIDetection) ([]PIIDetection, error) {
 	covered := coveredSpans(detections)
@@ -250,7 +251,7 @@ func coverRepeatedValues(ctx context.Context, text string, detections []PIIDetec
 			start := from + index
 			end := start + len(value)
 			from = end
-			if wordAligned(text, start, end) && !overlapsSpan(covered, start, end) {
+			if wordAligned(text, start, end) && !containsSpan(covered, start, end) {
 				added = append(added, piiSpan{start, end})
 				detections = append(detections, PIIDetection{
 					EntityType: source.EntityType,
@@ -261,10 +262,7 @@ func coverRepeatedValues(ctx context.Context, text string, detections []PIIDetec
 				})
 			}
 		}
-		// Copies of one value never overlap each other, so they join the
-		// covered spans together.
-		covered = append(covered, added...)
-		sort.Slice(covered, func(a, b int) bool { return covered[a].start < covered[b].start })
+		covered = mergeSpans(append(covered, added...))
 	}
 	return detections, nil
 }
@@ -277,6 +275,11 @@ func coveredSpans(detections []PIIDetection) []piiSpan {
 	for _, detection := range detections {
 		spans = append(spans, piiSpan{detection.Start, detection.End})
 	}
+	return mergeSpans(spans)
+}
+
+// mergeSpans sorts spans and joins the ones that overlap or touch.
+func mergeSpans(spans []piiSpan) []piiSpan {
 	sort.Slice(spans, func(a, b int) bool { return spans[a].start < spans[b].start })
 	merged := spans[:0]
 	for _, span := range spans {
@@ -289,10 +292,11 @@ func coveredSpans(detections []PIIDetection) []piiSpan {
 	return merged
 }
 
-// overlapsSpan reports whether [start, end) overlaps a sorted, disjoint span.
-func overlapsSpan(spans []piiSpan, start, end int) bool {
+// containsSpan reports whether one of the sorted, disjoint spans contains
+// [start, end).
+func containsSpan(spans []piiSpan, start, end int) bool {
 	i := sort.Search(len(spans), func(i int) bool { return spans[i].end > start })
-	return i < len(spans) && spans[i].start < end
+	return i < len(spans) && spans[i].start <= start && spans[i].end >= end
 }
 
 // wordAligned reports whether text[start:end] is not part of a longer word.
