@@ -210,6 +210,44 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-11 06:55 — **`d30-film` → parent: MILESTONE 1 delivered to `Downloads/decision3-launch-film/preview/`: `decision3-launch-m1-social-1080p60.mp4` (45.0 s, 1080p60, 16:9, 50.1 MB, sha256 `70abeef7…` checked after the pull), three contact sheets, `beat-map.md`, `facts.md` and `poster.jpg`. Every motion target, the overlap audit and QA pass. It follows the user's 05:45 direction and your 05:5x answers.**
+  - **Story (120 BPM, 22.5 bars):**
+    - **0–6.5 s:** the poster, then the ring bursts and the five sizes land (0.8B → 27B), with "Open. Multimodal." and Apache-2.0.
+    - **6.5–14 s:** "Decision 2.0 reads text." gives way to "Decision 3.0 reads text and images." The receipt gets d3's real answers (returns 0.9997, yes 0.9997, card 0.9999), and under each answer all five sizes light up, each filled to its own real probability: "Three answers. One call. Every size."
+    - **14–20 s:** "Every size, a generation ahead." with Index gains of +10.1, +10.7, +9.2, +10.8 and +8.4.
+    - **20–30.5 s:** the text climb from #118. Logo callouts land as d3 passes Cloudflare Clef 53.1, Microsoft-Decision-1 53.2 (closed weights), Decision 2.0 (with the live +0.0 … +8.4 gap), Jev 60.1 (TypeSafe) and Perplexity Decider 62.8 ("previous #1"). #1 at 64.3 is the biggest hit, at 30 s.
+    - **30.5–33 s:** the vision climb to #1 at 71.6.
+    - **33–35 s:** "#1 in text and vision."
+    - **35–40.5 s:** the 9B face-off. Both counters roll up together; Microsoft-Decision-1 stops at 53.2, d3-flash slams 59.0 on the hit, then "BEST AT 9B" and "The best 9B is open."
+    - **40.5–45 s:** the end card, with "Trained on AMD Instinct MI325X".
+  - **Cut, per your direction:** the size-frontier chart, all counts, decimal parameter counts and speed numbers. No size or board where Decision 3.0 isn't first.
+  - **Two choices to confirm:**
+    - The tiles land small to large, building to the 27B; I can flip them to 27B first.
+    - Microsoft-Decision-1 is inserted as the board's 19th row at 53.2, so d3 starts at #118. Its source (the maintainer's post) goes into `SOURCES.json`.
+  - **Receipt demo, re-run on the current revisions:**
+    - **When and where:** 2026-10-10T22:00–22:03Z, on one AMD Instinct MI325X.
+    - **Models:** d3 `dc6c41cb`, d3-flash `581c9953`, d3-mini `61dbd3a3`, d3-nano `6601b4d1` and d3-lite `b731454b`.
+    - **Hash checks:** each loaded with `verify="full"`; every manifest file also passed my own sha256 and size check.
+    - **Software:** torch 2.11.0+rocm7.2, transformers 5.17.0, flash-linear-attention 0.5.2.
+    - **Result:** all five give the same three answers. d3-lite is the least sure: returns 0.7878.
+  - **Motion (`motion_table.py` on the render):**
+
+    | Measure | m1 | v6.2 | Target |
+    | --- | --- | --- | --- |
+    | Moves per minute | 85.3 | 58.4 | ≥ 55 |
+    | Moving share | 0.739 | 0.631 | ≥ 0.60 |
+    | Ease-out share | 0.80 | 0.68 | ≥ 0.60 |
+    | Median move | 0.367 s | 0.516 s | 0.35–0.6 s |
+    | Time-to-peak median | 0 | 0.14 | ≤ 0.2 |
+    | Frame difference | 4.50 | 4.49 | ≥ 4 |
+
+  - **QA:** 2,700 of 2,700 frames, with no black or flash frames and no music gaps. −14.2 LUFS, true peak −1.9 dBTP, A/V offset 0 ms. `overlap_check.mjs` reports PASS (no overlaps). The social file is BT.709 limited range (High, yuv420p) and passes `qa_check.py --wav`; `web_encode.sh` printed "clean".
+  - **Music:** original ACE-Step 1.5 (`cA_s7503`, ranked 1st of 16 by fit; vocals −38.7 dB against the mix). Its Demucs stems are sculpted on the film's bars (every joint ≥ 0.86 chroma continuity), with 88 synthesized hits: the biggest on the text #1 and a strong one on d3-flash's win.
+  - **Compute:** both GPU leases are released (GPU7 at 22:04Z, GPU5 at 22:19Z). The node B CPU claim (cores 64–159) stays until v1. The d3-film dirs were only read; nothing in them changed.
+  - **Timing:** I picked up your 05:5x items at 06:31 and rebuilt the climb and the end of the film from there.
+  - **Next:** I re-read `PARENT.md` every 10 minutes and polish without changing the story; v1 on your word.
+  — `d30-film`
+
 - 2026-10-11 05:55 — **`d30-film` → parent: START on the Decision 3.0 family launch film (about 45 s, five sizes, night world plus the Decision 3.0 orange). Milestone 1 (a full 1080p60 first cut) ETA about 10:30 UTC+8. Node B claim: CPU cores 64–159, GPU5 and GPU7 (leased for about 1.5 h), writes only under `/data/dev2/runs/d30-film/`.**
   - **Checked at 05:46 (live probe of node B):** all 8 GPUs at 0% use with no memory held and no process but the system's `gpuagent`; every 32-core range 0–2% busy; `/data` 99% used, 525 GB free.
     - My peak footprint is about 140 GB: the five model snapshots (about 85 GB) are deleted as soon as the receipt runs finish.
