@@ -230,6 +230,23 @@ export interface InputModalitySignal {
   modality: 'text' | 'image' | 'audio' | 'video'
 }
 
+// TopicContinuitySignal is context-policy evidence, not a decision condition.
+// Every field except name is optional; the Router applies documented defaults.
+export interface TopicContinuitySignal {
+  name: string
+  description?: string
+  include_assistant?: boolean
+  thresholds?: {
+    continuation?: number
+    change?: number
+  }
+  limits?: {
+    max_prior_turns?: number
+    max_turn_bytes?: number
+    max_input_bytes?: number
+  }
+}
+
 export interface DecisionModelChoice {
   key: string
   description?: string
@@ -347,6 +364,7 @@ export interface Signals {
   classifiers?: ClassifierSignal[]
   input_modality?: InputModalitySignal[]
   decision?: DecisionModelSignal[]
+  topic_continuity?: TopicContinuitySignal[]
 }
 
 // =============================================================================

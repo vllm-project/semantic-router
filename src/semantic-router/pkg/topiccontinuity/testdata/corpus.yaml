@@ -1,0 +1,630 @@
+# Hand-labeled synthetic regression corpus for the topic-continuity evaluator.
+#
+# This is a regression suite, not calibration and not representative traffic.
+# It never sets the confidence scale. Labels describe the intended meaning of
+# the final user turn:
+#   continuation - the live turn depends on retained history
+#   change       - the live turn starts unrelated work
+#   ambiguous    - a careful reader could not tell
+# Subsets:
+#   general      - ordinary chat and coding sessions
+#   adversarial  - marker phrases in quotes, code, negations, or late positions
+#   metamorphic  - one meaning, with the surface wording replaced, reordered,
+#                  quoted, negated, or moved into tool output
+# Turn roles: user, assistant, call (assistant tool call: id, name), result
+# (tool result: id).
+conversations:
+  # ---------------------------------------------------------------- general
+  - id: g01-parser-followup
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "The JSON parser in config_loader.go fails on trailing commas"}
+      - {role: assistant, text: "config_loader.go uses a strict decoder; enable lenient parsing in parseConfig."}
+      - {role: user, text: "Show me how to enable lenient parsing in parseConfig"}
+  - id: g02-capital-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Refactor the routing module so plugins load lazily"}
+      - {role: assistant, text: "Done. The loader now defers plugin initialization."}
+      - {role: user, text: "What is the capital city of Peru and its current population?"}
+  - id: g03-explicit-new-topic
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Help me tune the Redis cache eviction policy"}
+      - {role: assistant, text: "Use allkeys-lru with a maxmemory limit."}
+      - {role: user, text: "New topic: suggest a weekend hiking trail near Seattle"}
+  - id: g04-thanks
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Explain the difference between TCP and UDP"}
+      - {role: assistant, text: "TCP is connection oriented and reliable; UDP is connectionless."}
+      - {role: user, text: "thanks!"}
+  - id: g05-above-reference
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Write a function that deduplicates a slice of strings in Go"}
+      - {role: assistant, text: "func dedupe(items []string) []string { seen := map[string]bool{}; ... }"}
+      - {role: user, text: "Can you make the function above preserve the original order?"}
+  - id: g06-entity-carry
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Our nginx.conf returns 502 for /api/v2/users"}
+      - {role: assistant, text: "Check the upstream block in nginx.conf for /api/v2/users."}
+      - {role: user, text: "The upstream for /api/v2/users points at port 8081, is that wrong?"}
+  - id: g07-recipe-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Debug the flaky integration test in payment_service_test.go"}
+      - {role: assistant, text: "The test races on a shared clock; inject a fake clock."}
+      - {role: user, text: "Give me a vegetarian lasagna recipe with spinach and ricotta"}
+  - id: g08-unrelated-question
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "How do Kubernetes readiness probes differ from liveness probes?"}
+      - {role: assistant, text: "Readiness gates traffic; liveness restarts unhealthy containers."}
+      - {role: user, text: "Unrelated question: what is a good beginner chess opening?"}
+  - id: g09-same-topic-deeper
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "How do Kubernetes readiness probes differ from liveness probes?"}
+      - {role: assistant, text: "Readiness gates traffic; liveness restarts unhealthy containers."}
+      - {role: user, text: "What timeout should a readiness probe use for a slow startup container?"}
+  - id: g10-ok-short
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Summarize the meeting notes"}
+      - {role: assistant, text: "The team agreed to ship on Friday."}
+      - {role: user, text: "ok"}
+  - id: g11-why-short
+    label: ambiguous
+    subset: general
+    turns:
+      - {role: user, text: "Should I use Postgres or MySQL for analytics?"}
+      - {role: assistant, text: "Postgres has better analytical extensions."}
+      - {role: user, text: "why?"}
+  - id: g12-travel-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Translate this paragraph about quantum computing into French"}
+      - {role: assistant, text: "Voici la traduction du paragraphe sur l'informatique quantique."}
+      - {role: user, text: "Recommend three affordable hotels in Lisbon close to the river"}
+  - id: g13-instead
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Plot monthly revenue as a bar chart in matplotlib"}
+      - {role: assistant, text: "plt.bar(months, revenue); plt.show()"}
+      - {role: user, text: "Use a line chart instead with markers on each point"}
+  - id: g14-different-topic
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Why does my React component re-render twice in development?"}
+      - {role: assistant, text: "StrictMode intentionally double-invokes renders in development."}
+      - {role: user, text: "Different topic: how do I file taxes as a freelancer in Germany?"}
+  - id: g15-pronoun-followup
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Explain how a bloom filter works"}
+      - {role: assistant, text: "A bloom filter uses several hash functions over a bit array."}
+      - {role: user, text: "It sounds lossy, what is the false positive rate formula?"}
+  - id: g16-math-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Write a SQL query that finds duplicate customer emails"}
+      - {role: assistant, text: "SELECT email, COUNT(*) FROM customers GROUP BY email HAVING COUNT(*) > 1;"}
+      - {role: user, text: "Prove that the square root of two is irrational using contradiction"}
+  - id: g17-file-carry
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Add retries to http_client.py around the fetch call"}
+      - {role: assistant, text: "Wrap fetch in a loop with exponential backoff inside http_client.py."}
+      - {role: user, text: "Also log each retry attempt in http_client.py with the delay"}
+  - id: g18-separate-question
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Optimize the Dockerfile layer caching for our Node app"}
+      - {role: assistant, text: "Copy package.json first and run npm ci before copying sources."}
+      - {role: user, text: "Separate question: what are the symptoms of iron deficiency?"}
+  - id: g19-multi-turn-return
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Set up eslint for the dashboard frontend"}
+      - {role: assistant, text: "Install eslint and add an eslint.config.js file."}
+      - {role: user, text: "Which eslint rules catch unused imports in the dashboard frontend?"}
+      - {role: assistant, text: "no-unused-vars with the imports option handles it."}
+      - {role: user, text: "Run eslint on the dashboard frontend and fix the unused imports"}
+  - id: g20-weather-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Compare gRPC and REST for internal microservices"}
+      - {role: assistant, text: "gRPC is faster with typed contracts; REST is simpler to debug."}
+      - {role: user, text: "Will it snow in Denver during the second week of December?"}
+  - id: g21-same-as-before
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Format these dates as ISO 8601: 3/4/2024, 12/25/2023"}
+      - {role: assistant, text: "2024-03-04 and 2023-12-25."}
+      - {role: user, text: "Same as before for 7/1/2022 and 11/30/2021"}
+  - id: g22-book-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "How do I rotate TLS certificates in the envoy gateway?"}
+      - {role: assistant, text: "Update the secret and envoy hot-reloads the listener."}
+      - {role: user, text: "Recommend a mystery novel with an unreliable narrator"}
+  # ------------------------------------------------------------------- code
+  - id: c01-long-code-followup
+    label: continuation
+    subset: general
+    long_assistant_code: true
+    turns:
+      - {role: user, text: "Write HTTP handlers for the user service"}
+      - {role: assistant, text: "LONG_CODE"}
+      - {role: user, text: "Add structured logging to handleUser3 and handleUser7"}
+  - id: c02-long-code-switch
+    label: change
+    subset: general
+    long_assistant_code: true
+    turns:
+      - {role: user, text: "Write HTTP handlers for the user service"}
+      - {role: assistant, text: "LONG_CODE"}
+      - {role: user, text: "What vaccinations does a puppy need before visiting a dog park?"}
+  - id: c03-stacktrace-carry
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "panic: runtime error: index out of range in scheduler.go:142"}
+      - {role: assistant, text: "scheduler.go:142 indexes workers without checking the length."}
+      - {role: user, text: "Patch scheduler.go to guard the workers index"}
+  - id: c04-rename-variable
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Rename max_retry_count to maxRetries across the client package"}
+      - {role: assistant, text: "Renamed max_retry_count to maxRetries in 6 files."}
+      - {role: user, text: "Did you update the maxRetries default in client_options.go too?"}
+  # ------------------------------------------------------------------- tools
+  - id: t01-tool-result-live
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "List the files in the plugins directory"}
+      - {role: call, id: c1, name: list_files}
+      - {role: result, id: c1, text: "cache.go rag.go memory.go"}
+  - id: t02-after-tool-loop
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Read routing.yaml and summarize the decisions"}
+      - {role: call, id: c1, name: read_file}
+      - {role: result, id: c1, text: "decisions: fast, careful"}
+      - {role: assistant, text: "routing.yaml defines two decisions: fast and careful."}
+      - {role: user, text: "Make the careful decision in routing.yaml use the larger model"}
+  - id: t03-after-tool-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Read routing.yaml and summarize the decisions"}
+      - {role: call, id: c1, name: read_file}
+      - {role: result, id: c1, text: "decisions: fast, careful"}
+      - {role: assistant, text: "routing.yaml defines two decisions: fast and careful."}
+      - {role: user, text: "Unrelated: what is the boiling point of water at high altitude?"}
+  # -------------------------------------------------------------------- CJK
+  - id: k01-cjk-continuation
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "我们讨论数据库索引优化方案"}
+      - {role: assistant, text: "可以先分析慢查询日志"}
+      - {role: user, text: "数据库索引应该怎么优化"}
+  - id: k02-cjk-change
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "我们讨论数据库索引优化方案"}
+      - {role: assistant, text: "可以先分析慢查询日志"}
+      - {role: user, text: "今天天气很好适合去公园散步"}
+  - id: k03-japanese-continuation
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "東京の観光スポットを教えてください"}
+      - {role: assistant, text: "浅草寺や渋谷がおすすめです"}
+      - {role: user, text: "浅草寺の近くでおすすめの食べ物は"}
+  # ------------------------------------------------------------ adversarial
+  - id: a01-negated-marker
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "The retry logic in the queue consumer drops messages"}
+      - {role: assistant, text: "The consumer acknowledges before processing completes."}
+      - {role: user, text: "These failures are not unrelated, can you check the retry logic"}
+  - id: a02-quoted-marker
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Our ticket form has a dropdown of categories"}
+      - {role: assistant, text: "The categories come from the ticket_categories table."}
+      - {role: user, text: "Add \"new topic\" as a category in the ticket form dropdown"}
+  - id: a03-code-marker
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Why does the classifier label everything as other?"}
+      - {role: assistant, text: "The labels list is missing entries."}
+      - {role: user, text: "Should the classifier labels include `unrelated` and `new question` values?"}
+  - id: a04-late-marker
+    label: ambiguous
+    subset: adversarial
+    turns:
+      - {role: user, text: "Fix the pagination bug in the orders endpoint"}
+      - {role: assistant, text: "The offset was applied twice."}
+      - {role: user, text: "Can you check the cursor handling too, or is that a new topic for later"}
+  - id: a05-instruction-marker
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Keep improving the parser error messages"}
+      - {role: assistant, text: "I clarified the unexpected token message."}
+      - {role: user, text: "Do not switch topics, keep fixing the parser messages"}
+  - id: a06-single-quoted-marker
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Draft the documentation outline for the release"}
+      - {role: assistant, text: "Sections: overview, changes, migration."}
+      - {role: user, text: "Rename the 'new topic' heading in the outline above to Highlights"}
+  - id: a07-marker-with-carry
+    label: ambiguous
+    subset: adversarial
+    turns:
+      - {role: user, text: "auth.ts rejects valid tokens after the upgrade"}
+      - {role: assistant, text: "The issuer check in auth.ts changed."}
+      - {role: user, text: "Different topic, but auth.ts also logs too much"}
+  - id: a08-pasted-error
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "The importer crashes on the March file"}
+      - {role: assistant, text: "Share the error output."}
+      - {role: user, text: "```\nValueError: unrelated column 'new topic' in row 14\n```"}
+  - id: a09-curly-quoted-marker
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Improve the onboarding email copy"}
+      - {role: assistant, text: "I shortened the subject line."}
+      - {role: user, text: "Replace the phrase “something else” in the onboarding email with clearer wording"}
+  - id: a10-unclosed-quote-reference
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Rename the job scheduler module"}
+      - {role: assistant, text: "Renamed it to dispatcher."}
+      - {role: user, text: "Fix it \"as you said above, then rename the tests"}
+  - id: a11-marker-mix
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Plan the trip itinerary for Kyoto"}
+      - {role: assistant, text: "Day one covers Fushimi Inari."}
+      - {role: user, text: "Unrelated question: is Nara far? This is not unrelated to the earlier itinerary."}
+  - id: a12-barrier
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Label the support tickets by urgency"}
+      - {role: assistant, text: "I labeled them low, medium, and high."}
+      - {role: user, text: "new \"urgent\" topic tickets from the last urgency labeling need review"}
+  # ------------------------------------------------------------ metamorphic
+  # Base meaning: continue the cache eviction discussion.
+  - id: m01-base
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Tune the Redis cache eviction policy for the session store"}
+      - {role: assistant, text: "Use allkeys-lru with a maxmemory limit for the session store."}
+      - {role: user, text: "What maxmemory limit should the session store Redis cache use?"}
+  - id: m02-reordered
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Tune the Redis cache eviction policy for the session store"}
+      - {role: assistant, text: "Use allkeys-lru with a maxmemory limit for the session store."}
+      - {role: user, text: "For the session store Redis cache, what maxmemory limit should I use?"}
+  - id: m03-quoted
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Tune the Redis cache eviction policy for the session store"}
+      - {role: assistant, text: "Use allkeys-lru with a maxmemory limit for the session store."}
+      - {role: user, text: "What \"maxmemory\" limit should the session store Redis cache use?"}
+  - id: m04-negated
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Tune the Redis cache eviction policy for the session store"}
+      - {role: assistant, text: "Use allkeys-lru with a maxmemory limit for the session store."}
+      - {role: user, text: "The session store Redis cache should not exceed which maxmemory limit?"}
+  - id: m05-synonyms
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Tune the Redis cache eviction policy for the session store"}
+      - {role: assistant, text: "Use allkeys-lru with a maxmemory limit for the session store."}
+      - {role: user, text: "How much RAM ceiling suits that login data keystore?"}
+  - id: m06-in-tool-output
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Inspect the cache configuration"}
+      - {role: call, id: c1, name: read_config}
+      - {role: result, id: c1, text: "redis session store eviction allkeys-lru maxmemory unset"}
+      - {role: assistant, text: "I read the configuration."}
+      - {role: user, text: "What maxmemory limit should the session store use?"}
+  # Base meaning: continue the CSV import discussion.
+  - id: m07-base
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "The CSV importer skips rows with quoted commas"}
+      - {role: assistant, text: "The importer splits on commas without honoring quotes."}
+      - {role: user, text: "Update the CSV importer to honor quoted commas"}
+  - id: m08-reordered
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "The CSV importer skips rows with quoted commas"}
+      - {role: assistant, text: "The importer splits on commas without honoring quotes."}
+      - {role: user, text: "Quoted commas should be honored, update the CSV importer"}
+  - id: m09-pronoun
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "The CSV importer skips rows with quoted commas"}
+      - {role: assistant, text: "The importer splits on commas without honoring quotes."}
+      - {role: user, text: "Then fix that splitting so quoted values stay intact"}
+  - id: m10-synonyms
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "The CSV importer skips rows with quoted commas"}
+      - {role: assistant, text: "The importer splits on commas without honoring quotes."}
+      - {role: user, text: "Make the spreadsheet loader respect delimiters inside string literals"}
+  # Base meaning: start unrelated work after a coding session.
+  - id: m11-base-change
+    label: change
+    subset: metamorphic
+    turns:
+      - {role: user, text: "The CSV importer skips rows with quoted commas"}
+      - {role: assistant, text: "The importer splits on commas without honoring quotes."}
+      - {role: user, text: "Suggest a gift for my grandmother's eightieth birthday party"}
+  - id: m12-change-reordered
+    label: change
+    subset: metamorphic
+    turns:
+      - {role: user, text: "The CSV importer skips rows with quoted commas"}
+      - {role: assistant, text: "The importer splits on commas without honoring quotes."}
+      - {role: user, text: "For my grandmother's eightieth birthday party, suggest a gift"}
+  # ---------------------------------------------------------- more general
+  - id: g23-csv-to-pets
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Export the analytics dashboard data to CSV every night"}
+      - {role: assistant, text: "Add a cron job that calls the export endpoint at midnight."}
+      - {role: user, text: "Which houseplants are safe for cats and need little sunlight?"}
+  - id: g24-cron-followup
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Export the analytics dashboard data to CSV every night"}
+      - {role: assistant, text: "Add a cron job that calls the export endpoint at midnight."}
+      - {role: user, text: "Should the export cron job retry when the endpoint times out?"}
+  - id: g25-your-answer
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Estimate the monthly cost of three m5.large instances"}
+      - {role: assistant, text: "Roughly 210 dollars per month on demand."}
+      - {role: user, text: "Does your answer include storage and data transfer?"}
+  - id: g26-something-else
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Explain eventual consistency in DynamoDB"}
+      - {role: assistant, text: "Reads may briefly return stale data after writes."}
+      - {role: user, text: "Something else: draft a polite email declining a meeting"}
+  - id: g27-next-step
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Create a migration that adds an index on orders.created_at"}
+      - {role: assistant, text: "CREATE INDEX idx_orders_created_at ON orders (created_at);"}
+      - {role: user, text: "Next, add a down migration that drops idx_orders_created_at"}
+  - id: g28-sports-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Create a migration that adds an index on orders.created_at"}
+      - {role: assistant, text: "CREATE INDEX idx_orders_created_at ON orders (created_at);"}
+      - {role: user, text: "Who won the most recent Tour de France cycling race overall?"}
+  - id: g29-previous-version
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Write a regex that matches US phone numbers"}
+      - {role: assistant, text: "^\\(?\\d{3}\\)?[-. ]?\\d{3}[-. ]?\\d{4}$"}
+      - {role: user, text: "Go back to the previous version without the optional parentheses"}
+  - id: g30-long-history-window
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Profile the image resizing service"}
+      - {role: assistant, text: "Resizing spends most time in JPEG decoding."}
+      - {role: user, text: "Switch the decoder to libjpeg-turbo"}
+      - {role: assistant, text: "Switched; decoding is twice as fast."}
+      - {role: user, text: "Cache resized thumbnails in the CDN"}
+      - {role: assistant, text: "Thumbnails now carry a one day cache header."}
+      - {role: user, text: "Add metrics for cache hit rate"}
+      - {role: assistant, text: "Added a cache_hit_ratio gauge."}
+      - {role: user, text: "Alert when the hit rate drops below 80 percent"}
+      - {role: assistant, text: "Alert rule added."}
+      - {role: user, text: "Document the thumbnail pipeline"}
+      - {role: assistant, text: "Wrote docs/thumbnails.md."}
+      - {role: user, text: "Review the thumbnail pipeline docs for typos"}
+      - {role: assistant, text: "Fixed four typos."}
+      - {role: user, text: "Deploy the thumbnail changes to staging"}
+      - {role: assistant, text: "Staging deploy finished."}
+      - {role: user, text: "Promote the staging build to production"}
+      - {role: assistant, text: "Production rollout complete."}
+      - {role: user, text: "Plan a three day family itinerary for Rome in April"}
+  - id: g31-short-ack-done
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Rotate the database credentials"}
+      - {role: assistant, text: "Rotated; services picked up the new secret."}
+      - {role: user, text: "perfect, thank you"}
+  - id: g32-question-about-same-api
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Paginate the /v1/invoices endpoint with cursors"}
+      - {role: assistant, text: "Return next_cursor and accept cursor in the query string."}
+      - {role: user, text: "How should /v1/invoices encode next_cursor for clients?"}
+  - id: g33-music-switch
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Paginate the /v1/invoices endpoint with cursors"}
+      - {role: assistant, text: "Return next_cursor and accept cursor in the query string."}
+      - {role: user, text: "Recommend jazz albums for someone who enjoys classical piano"}
+  - id: g34-like-before
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "Summarize chapter one in three bullet points"}
+      - {role: assistant, text: "Introduces the hero, the village, and the drought."}
+      - {role: user, text: "Do chapter two like before"}
+  - id: g35-completely-different
+    label: change
+    subset: general
+    turns:
+      - {role: user, text: "Summarize chapter one in three bullet points"}
+      - {role: assistant, text: "Introduces the hero, the village, and the drought."}
+      - {role: user, text: "Completely different: how long should I boil an egg for a soft yolk?"}
+  - id: g36-long-user-message
+    label: change
+    subset: general
+    long_user_prior: true
+    turns:
+      - {role: user, text: "LONG_USER"}
+      - {role: assistant, text: "Thanks for the detailed report; I filed it."}
+      - {role: user, text: "What is the tallest mountain in South America and how high is it?"}
+  - id: k04-korean-continuation
+    label: continuation
+    subset: general
+    turns:
+      - {role: user, text: "서울 맛집 추천해 주세요"}
+      - {role: assistant, text: "광장시장 빈대떡이 유명합니다"}
+      - {role: user, text: "광장시장 가는 방법 알려주세요"}
+  - id: t04-tool-orphan
+    label: ambiguous
+    subset: general
+    turns:
+      - {role: user, text: "Fetch the latest build status"}
+      - {role: call, id: c1, name: build_status}
+      - {role: result, id: c9, text: "passing"}
+  # -------------------------------------------------------- more adversarial
+  - id: a13-marker-in-path
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Move the docs into the right folder"}
+      - {role: assistant, text: "Which folder should hold them?"}
+      - {role: user, text: "Put them in `docs/new_topic/` next to the other guides"}
+  - id: a14-reported-speech
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Reply to the customer complaint about late delivery"}
+      - {role: assistant, text: "Drafted an apology with a discount code."}
+      - {role: user, text: "The customer wrote \"unrelated question\" at the end, should the reply address it?"}
+  - id: a15-negated-switch
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Tighten the lint rules for the backend service"}
+      - {role: assistant, text: "Enabled errcheck and staticcheck."}
+      - {role: user, text: "We are not switching topics yet, enable gosec for the backend service too"}
+  - id: a16-heading-quoted
+    label: continuation
+    subset: adversarial
+    turns:
+      - {role: user, text: "Organize the FAQ page sections"}
+      - {role: assistant, text: "Grouped questions into billing, account, and misc."}
+      - {role: user, text: "Rename the ‘something else’ section of the FAQ page to Other"}
+  # -------------------------------------------------------- more metamorphic
+  # Base meaning: continue the TLS rotation discussion.
+  - id: m13-base
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Rotate the TLS certificates on the envoy gateway"}
+      - {role: assistant, text: "Update the gateway secret; envoy reloads the listener."}
+      - {role: user, text: "How often should the envoy gateway TLS certificates rotate?"}
+  - id: m14-reordered
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Rotate the TLS certificates on the envoy gateway"}
+      - {role: assistant, text: "Update the gateway secret; envoy reloads the listener."}
+      - {role: user, text: "TLS certificates on the envoy gateway: how often should they rotate?"}
+  - id: m15-quoted
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Rotate the TLS certificates on the envoy gateway"}
+      - {role: assistant, text: "Update the gateway secret; envoy reloads the listener."}
+      - {role: user, text: "How often should the \"envoy gateway\" TLS certificates rotate?"}
+  - id: m16-negated
+    label: continuation
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Rotate the TLS certificates on the envoy gateway"}
+      - {role: assistant, text: "Update the gateway secret; envoy reloads the listener."}
+      - {role: user, text: "The envoy gateway TLS certificates should never go how long without rotation?"}
+  - id: m17-change-base
+    label: change
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Rotate the TLS certificates on the envoy gateway"}
+      - {role: assistant, text: "Update the gateway secret; envoy reloads the listener."}
+      - {role: user, text: "Teach me three easy watercolor techniques for painting skies"}
+  - id: m18-change-reordered
+    label: change
+    subset: metamorphic
+    turns:
+      - {role: user, text: "Rotate the TLS certificates on the envoy gateway"}
+      - {role: assistant, text: "Update the gateway secret; envoy reloads the listener."}
+      - {role: user, text: "For painting skies, teach me three easy watercolor techniques"}

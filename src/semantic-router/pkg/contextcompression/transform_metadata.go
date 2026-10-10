@@ -63,12 +63,7 @@ func (request *RequestIR) messageStartsTurn(message *MessageIR) bool {
 	// Anthropic represents tool results as user messages; these continue the
 	// existing turn rather than opening a new one.
 	if request.Semantic != nil {
-		for _, content := range request.Semantic.Messages[message.Index].Content {
-			if content.Kind != llmprotocol.ContentToolResult {
-				return true
-			}
-		}
-		return false
+		return llmprotocol.StartsConversationTurn(request.Semantic.Messages[message.Index])
 	}
 	content, array := message.Raw["content"].([]interface{})
 	if !array {

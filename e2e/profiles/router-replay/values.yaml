@@ -71,6 +71,8 @@ config:
   entrypoints:
     - model_names: ["vllm-sr/replay-first"]
       recipe: replay-first
+    - model_names: ["vllm-sr/topic-continuity"]
+      recipe: topic-continuity
     - model_names: ["vllm-sr/replay-second"]
       recipe: replay-second
     - model_names: ["vllm-sr/shadow-ok"]
@@ -105,6 +107,34 @@ config:
                   capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
+    # Declares a topic-continuity rule. It is context-policy evidence only:
+    # routing must stay on the catch-all decision, and Replay records the
+    # receipt.
+    - name: topic-continuity
+      routing:
+        strategy: priority
+        signals:
+          topic_continuity:
+            - name: topic_boundary
+              description: Whether the live turn still depends on retained history.
+              limits:
+                max_prior_turns: 2
+        decisions:
+          - name: topic_continuity_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: false
+                  capture_response_body: false
     - name: replay-second
       routing:
         strategy: priority

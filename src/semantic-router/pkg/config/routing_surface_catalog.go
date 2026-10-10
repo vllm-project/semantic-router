@@ -95,6 +95,7 @@ var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
 	{Type: SignalTypeAction, DisplayName: "Action", Collection: "actions", ObservationKey: "action", DecisionReferenceable: true},
 	{Type: SignalTypeDecision, DisplayName: "Decision Model", Collection: "decision", ObservationKey: "decision", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
+	{Type: SignalTypeTopicContinuity, DisplayName: "Topic Continuity", Collection: "topic_continuity", DecisionReferenceable: false},
 }
 
 // DecisionPluginCatalogEntry describes one route-local plugin family. Its
