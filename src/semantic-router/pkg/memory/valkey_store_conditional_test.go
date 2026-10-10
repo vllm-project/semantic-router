@@ -22,8 +22,9 @@ func TestValkeyReplaceCurrentGroupScriptReplayReportsCommittedMerge(t *testing.T
 	}
 	keys := []string{"mem:a", "mem:b", "mem:summary"}
 	summary := map[string]string{
-		"id":      "summary",
-		"content": "  merged  ",
+		"id":                    "summary",
+		"content":               "  merged  ",
+		"consolidation_receipt": valkeyConsolidationReceipt(versions, "summary"),
 	}
 	ctx := context.Background()
 	for i, want := range versions {
@@ -33,6 +34,14 @@ func TestValkeyReplaceCurrentGroupScriptReplayReportsCommittedMerge(t *testing.T
 	require.Equal(t, int64(2), evalReplaceScript(t, client, keys, versions, summary))
 	require.Equal(t, int64(0), client.Exists(ctx, "mem:a", "mem:b").Val())
 	require.Equal(t, "  merged  ", client.HGet(ctx, "mem:summary", "content").Val())
+
+	// A retrieval may track access before the lost reply is retried. Those
+	// fields are mutable and must not make an already committed merge appear
+	// uncommitted.
+	trackingResult, err := client.Eval(ctx, valkeyTrackRetrievalScriptSource,
+		[]string{"mem:summary"}, "summary", "1700000001000").Result()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), trackingResult)
 
 	// The first reply was lost. The retry must still report the committed merge.
 	require.Equal(t, int64(2), evalReplaceScript(t, client, keys, versions, summary))
@@ -46,7 +55,11 @@ func TestValkeyReplaceCurrentGroupScriptRejectsStaleAndCollidingWrites(t *testin
 		versionFixture("b", "beta", createdAt.Add(time.Second)),
 	}
 	keys := []string{"mem:a", "mem:b", "mem:summary"}
-	summary := map[string]string{"id": "summary", "content": "merged"}
+	summary := map[string]string{
+		"id":                    "summary",
+		"content":               "merged",
+		"consolidation_receipt": valkeyConsolidationReceipt(versions, "summary"),
+	}
 
 	t.Run("stale source", func(t *testing.T) {
 		mr := miniredis.RunT(t)
@@ -83,6 +96,19 @@ func TestValkeyReplaceCurrentGroupScriptRejectsStaleAndCollidingWrites(t *testin
 
 		require.Equal(t, int64(0), evalReplaceScript(t, client, keys, versions, summary))
 		require.Equal(t, int64(0), client.Exists(context.Background(), "mem:summary").Val())
+	})
+
+	t.Run("deleted sources with an unrelated summary", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		t.Cleanup(func() { _ = client.Close() })
+
+		require.NoError(t, client.HSet(context.Background(), "mem:summary",
+			"id", "summary",
+			"consolidation_receipt", "unrelated-merge",
+		).Err())
+
+		require.Equal(t, int64(0), evalReplaceScript(t, client, keys, versions, summary))
 	})
 }
 

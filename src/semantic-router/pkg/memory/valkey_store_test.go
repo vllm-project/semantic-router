@@ -48,14 +48,20 @@ func TestValkeyReplaceCurrentGroupArgs(t *testing.T) {
 		importance: 0.5,
 	}}
 	args := valkeyReplaceCurrentGroupArgs(versions, map[string]string{
-		"content": "summary",
-		"id":      "summary-id",
+		"content":               "summary",
+		"id":                    "summary-id",
+		"consolidation_receipt": "receipt",
 	})
 
 	require.Equal(t, "1", args[0])
 	require.Equal(t, valkeySourceVersionArgs(versions[0]), args[1:9])
-	require.Equal(t, "2", args[9])
-	require.Equal(t, []string{"content", "summary", "id", "summary-id"}, args[10:])
+	require.Equal(t, "receipt", args[9])
+	require.Equal(t, "3", args[10])
+	require.Equal(t, []string{
+		"consolidation_receipt", "receipt",
+		"content", "summary",
+		"id", "summary-id",
+	}, args[11:])
 }
 
 func TestValkeySearchProjectionsIncludeAccessFields(t *testing.T) {

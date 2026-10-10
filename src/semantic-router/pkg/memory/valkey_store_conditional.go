@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strconv"
@@ -27,7 +29,9 @@ var (
 //
 // The script is safe to retry. If Valkey commits the merge and the client
 // loses the reply, a replay sees every source gone and the same summary
-// already stored, and it returns the committed delete count instead of 0.
+// already stored with its immutable consolidation receipt, and it returns the
+// committed delete count instead of 0. Retrieval tracking changes summary
+// access fields, so replay detection must not compare every summary field.
 // Callers treat that count as success and invalidate cached retrievals.
 const valkeyReplaceCurrentGroupScriptSource = `
 local source_count = tonumber(ARGV[1])
@@ -50,20 +54,9 @@ end
 
 local summary_key = KEYS[source_count + 1]
 if missing > 0 then
-  if missing == source_count and redis.call('EXISTS', summary_key) == 1 then
-    local field_count = tonumber(ARGV[arg])
-    local field_arg = arg + 1
-    local matches = 1
-    for i = 1, field_count do
-      if redis.call('HGET', summary_key, ARGV[field_arg]) ~= ARGV[field_arg + 1] then
-        matches = 0
-        break
-      end
-      field_arg = field_arg + 2
-    end
-    if matches == 1 then
-      return source_count
-    end
+  if missing == source_count and
+      redis.call('HGET', summary_key, 'consolidation_receipt') == ARGV[arg] then
+    return source_count
   end
   return 0
 end
@@ -72,6 +65,7 @@ if redis.call('EXISTS', summary_key) == 1 then
   return -1
 end
 
+arg = arg + 1
 local field_count = tonumber(ARGV[arg])
 arg = arg + 1
 local hset_args = { summary_key }
@@ -208,6 +202,7 @@ func (v *ValkeyStore) replaceCurrentGroup(ctx context.Context, versions []memory
 		status = "error"
 		return false, 0, fmt.Errorf("failed to build summary fields: %w", err)
 	}
+	fields["consolidation_receipt"] = valkeyConsolidationReceipt(versions, summary.ID)
 
 	keys := make([]string, 0, len(versions)+1)
 	for _, want := range versions {
@@ -261,15 +256,38 @@ func valkeySourceVersionArgs(want memoryVersion) []string {
 }
 
 func valkeyReplaceCurrentGroupArgs(versions []memoryVersion, fields map[string]string) []string {
-	args := make([]string, 0, 1+len(versions)*8+1+len(fields)*2)
+	args := make([]string, 0, 1+len(versions)*8+2+len(fields)*2)
 	args = append(args, strconv.Itoa(len(versions)))
 	for _, want := range versions {
 		args = append(args, valkeySourceVersionArgs(want)...)
 	}
+	args = append(args, fields["consolidation_receipt"])
 	fieldArgs := valkeyHashFieldArgs(fields)
 	args = append(args, strconv.Itoa(len(fieldArgs)/2))
 	args = append(args, fieldArgs...)
 	return args
+}
+
+// valkeyConsolidationReceipt is the durable identity of one atomic
+// consolidation. It includes the new summary ID and every source snapshot,
+// which lets a retry distinguish its committed merge from separately deleted
+// sources or an unrelated summary with the same key. It intentionally omits
+// summary access fields because reads update those after the merge commits.
+func valkeyConsolidationReceipt(versions []memoryVersion, summaryID string) string {
+	hash := sha256.New()
+	write := func(value string) {
+		// The length prefix makes the encoded field sequence unambiguous.
+		_, _ = fmt.Fprintf(hash, "%d:%s", len(value), value)
+	}
+
+	write(summaryID)
+	write(strconv.Itoa(len(versions)))
+	for _, version := range versions {
+		for _, value := range valkeySourceVersionArgs(version) {
+			write(value)
+		}
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func valkeyHashFieldArgs(fields map[string]string) []string {
