@@ -4,7 +4,13 @@ from http import HTTPStatus
 import httpx
 import pytest
 from provider_mocker.app import create_app
-from provider_mocker.fault_schedule import FAULT_INJECTED_HEADER, FaultScheduleTracker
+from provider_mocker.fault_schedule import (
+    FAULT_INJECTED_HEADER,
+    FAULT_SCHEDULE_ID_HEADER,
+    FAULT_SESSION_ID_HEADER,
+    FaultScheduleTracker,
+    get_fault_keys,
+)
 from provider_mocker.settings import Settings
 
 
@@ -343,3 +349,250 @@ async def test_dynamic_fault_schedule_endpoint():
         )
         assert chat_res_reset.status_code == 504
         assert chat_res_reset.headers.get(FAULT_INJECTED_HEADER) == "true"
+
+
+def test_get_fault_keys_header_order_precedence():
+    # Explicit fault-session header must have precedence regardless of dict order
+    keys1 = get_fault_keys(
+        {"x-session-id": "common", FAULT_SESSION_ID_HEADER: "explicit"}
+    )
+    assert keys1 == ("explicit", "explicit")
+
+    keys2 = get_fault_keys(
+        {FAULT_SESSION_ID_HEADER: "explicit", "x-session-id": "common"}
+    )
+    assert keys2 == ("explicit", "explicit")
+
+    # With schedule ID present:
+    keys3 = get_fault_keys(
+        {
+            FAULT_SCHEDULE_ID_HEADER: "sched",
+            "x-session-id": "common",
+            FAULT_SESSION_ID_HEADER: "explicit",
+        }
+    )
+    assert keys3 == ("sched", "explicit")
+
+    keys4 = get_fault_keys(
+        {
+            FAULT_SCHEDULE_ID_HEADER: "sched",
+            FAULT_SESSION_ID_HEADER: "explicit",
+            "x-session-id": "common",
+        }
+    )
+    assert keys4 == ("sched", "explicit")
+
+    # Fallback to legacy x-vsr-test-session-id when explicit is absent
+    keys5 = get_fault_keys(
+        {"x-session-id": "common", "x-vsr-test-session-id": "legacy"}
+    )
+    assert keys5 == ("legacy", "legacy")
+
+    keys6 = get_fault_keys(
+        {"x-vsr-test-session-id": "legacy", "x-session-id": "common"}
+    )
+    assert keys6 == ("legacy", "legacy")
+
+    # Fallback to ordinary x-session-id when both are absent
+    keys7 = get_fault_keys({"x-session-id": "common"})
+    assert keys7 == ("common", "common")
+
+
+@pytest.mark.asyncio
+async def test_asgi_header_order_precedence_with_shared_session():
+    # Schedule has status 503 at call_index=0 for schedule "case-alpha"
+    schedule = {"case-alpha": [{"call_index": 0, "status": 503}]}
+    app = create_app(Settings(fault_schedule=schedule))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = {
+            "model": "openai/gpt-oss-20b",
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+
+        # Target 1: x-session-id comes after x-vsr-fault-session-id
+        headers_target1 = [
+            ("x-vsr-fault-schedule-id", "case-alpha"),
+            ("x-vsr-fault-session-id", "run-1:target-1:case-alpha"),
+            ("x-session-id", "shared-session"),
+        ]
+        res1 = await client.post(
+            "/v1/chat/completions", json=body, headers=headers_target1
+        )
+        assert res1.status_code == 503
+        assert res1.headers.get(FAULT_INJECTED_HEADER) == "true"
+
+        # Target 2: x-vsr-fault-session-id comes after x-session-id
+        headers_target2 = [
+            ("x-vsr-fault-schedule-id", "case-alpha"),
+            ("x-session-id", "shared-session"),
+            ("x-vsr-fault-session-id", "run-1:target-2:case-alpha"),
+        ]
+        res2 = await client.post(
+            "/v1/chat/completions", json=body, headers=headers_target2
+        )
+        # Target 2 has its own explicit fault session ID, so its call index is 0 and it receives 503
+        assert res2.status_code == 503
+        assert res2.headers.get(FAULT_INJECTED_HEADER) == "true"
+
+        # Subsequent call on target 1 (call index 1): 200 OK
+        res1_next = await client.post(
+            "/v1/chat/completions", json=body, headers=headers_target1
+        )
+        assert res1_next.status_code == HTTPStatus.OK
+        assert FAULT_INJECTED_HEADER not in res1_next.headers
+
+        # Subsequent call on target 2 (call index 1): 200 OK
+        res2_next = await client.post(
+            "/v1/chat/completions", json=body, headers=headers_target2
+        )
+        assert res2_next.status_code == HTTPStatus.OK
+        assert FAULT_INJECTED_HEADER not in res2_next.headers
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_tool_stream_cut_short_and_receipt():
+    schedule = {"task-tool-stream": [{"call_index": 0, "stream_cut_short": True}]}
+    app = create_app(Settings(fault_schedule=schedule))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = {"x-vsr-test-session-id": "task-tool-stream"}
+        body = {
+            "model": "openai/gpt-oss-20b",
+            "messages": [{"role": "user", "content": "__mock_tool_call__"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {"name": "lookup", "parameters": {}},
+                }
+            ],
+            "stream": True,
+        }
+
+        # Call 0: tool stream cut short, receipt present, no [DONE]
+        async with client.stream(
+            "POST", "/v1/chat/completions", json=body, headers=headers
+        ) as resp:
+            assert resp.status_code == HTTPStatus.OK
+            assert resp.headers.get(FAULT_INJECTED_HEADER) == "true"
+            chunks = "".join([c async for c in resp.aiter_text()])
+            assert "call_mock_lookup" in chunks
+            assert "[DONE]" not in chunks
+
+        # Call 1: clean tool stream with [DONE], no receipt
+        async with client.stream(
+            "POST", "/v1/chat/completions", json=body, headers=headers
+        ) as resp:
+            assert resp.status_code == HTTPStatus.OK
+            assert FAULT_INJECTED_HEADER not in resp.headers
+            chunks = "".join([c async for c in resp.aiter_text()])
+            assert "call_mock_lookup" in chunks
+            assert "[DONE]" in chunks
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_tool_delay_and_receipt():
+    schedule = {"task-tool-delay": [{"call_index": 0, "delay": 0.2}]}
+    app = create_app(Settings(fault_schedule=schedule))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = {"x-vsr-test-session-id": "task-tool-delay"}
+        body = {
+            "model": "openai/gpt-oss-20b",
+            "messages": [{"role": "user", "content": "__mock_tool_call__"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {"name": "lookup", "parameters": {}},
+                }
+            ],
+            "stream": False,
+        }
+
+        start = time.time()
+        resp = await client.post("/v1/chat/completions", json=body, headers=headers)
+        elapsed = time.time() - start
+        assert resp.status_code == HTTPStatus.OK
+        assert elapsed >= 0.18
+        assert resp.headers.get(FAULT_INJECTED_HEADER) == "true"
+        data = resp.json()
+        assert (
+            data["choices"][0]["message"]["tool_calls"][0]["function"]["name"]
+            == "lookup"
+        )
+
+        # Call 1: clean, no receipt, fast
+        start = time.time()
+        resp1 = await client.post("/v1/chat/completions", json=body, headers=headers)
+        elapsed1 = time.time() - start
+        assert resp1.status_code == HTTPStatus.OK
+        assert elapsed1 < 0.15
+        assert FAULT_INJECTED_HEADER not in resp1.headers
+
+
+@pytest.mark.asyncio
+async def test_responses_tool_stream_cut_short_and_receipt():
+    schedule = {"resp-tool-stream": [{"call_index": 0, "stream_cut_short": True}]}
+    app = create_app(Settings(fault_schedule=schedule))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = {"x-vsr-test-session-id": "resp-tool-stream"}
+        body = {
+            "model": "native-test",
+            "input": "__mock_tool_call__",
+            "tools": [{"type": "function", "name": "lookup"}],
+            "stream": True,
+        }
+
+        # Call 0: tool stream cut short, receipt present, no response.completed
+        async with client.stream(
+            "POST", "/v1/responses", json=body, headers=headers
+        ) as resp:
+            assert resp.status_code == HTTPStatus.OK
+            assert resp.headers.get(FAULT_INJECTED_HEADER) == "true"
+            chunks = "".join([c async for c in resp.aiter_text()])
+            assert "function_call" in chunks
+            assert "response.completed" not in chunks
+
+        # Call 1: clean tool stream with response.completed, no receipt
+        async with client.stream(
+            "POST", "/v1/responses", json=body, headers=headers
+        ) as resp:
+            assert resp.status_code == HTTPStatus.OK
+            assert FAULT_INJECTED_HEADER not in resp.headers
+            chunks = "".join([c async for c in resp.aiter_text()])
+            assert "function_call" in chunks
+            assert "response.completed" in chunks
+
+
+@pytest.mark.asyncio
+async def test_responses_tool_delay_and_receipt():
+    schedule = {"resp-tool-delay": [{"call_index": 0, "delay": 0.2}]}
+    app = create_app(Settings(fault_schedule=schedule))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = {"x-vsr-test-session-id": "resp-tool-delay"}
+        body = {
+            "model": "native-test",
+            "input": "__mock_tool_call__",
+            "tools": [{"type": "function", "name": "lookup"}],
+            "stream": False,
+        }
+
+        start = time.time()
+        resp = await client.post("/v1/responses", json=body, headers=headers)
+        elapsed = time.time() - start
+        assert resp.status_code == HTTPStatus.OK
+        assert elapsed >= 0.18
+        assert resp.headers.get(FAULT_INJECTED_HEADER) == "true"
+        data = resp.json()
+        assert data["output"][0]["type"] == "function_call"
+        assert data["output"][0]["name"] == "lookup"
+
+        # Call 1: clean, fast, no receipt
+        start = time.time()
+        resp1 = await client.post("/v1/responses", json=body, headers=headers)
+        elapsed1 = time.time() - start
+        assert resp1.status_code == HTTPStatus.OK
+        assert elapsed1 < 0.15
+        assert FAULT_INJECTED_HEADER not in resp1.headers

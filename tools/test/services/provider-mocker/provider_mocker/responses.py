@@ -61,6 +61,12 @@ async def responses(request: Request):
                         },
                         headers={FAULT_INJECTED_HEADER: "true"},
                     )
+
+    fault_headers = {FAULT_INJECTED_HEADER: "true"} if fault is not None else {}
+    is_complete = not response_input_contains(body, "__mock_incomplete_stream__")
+    if fault is not None and fault.stream_cut_short:
+        is_complete = False
+
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
@@ -72,37 +78,58 @@ async def responses(request: Request):
                     "code": "rate_limit_exceeded",
                 }
             },
+            headers=fault_headers if fault_headers else None,
         )
     if response_input_contains(body, "__mock_responses_custom_tool__") and body.get(
         "tools"
     ):
         if body.get("stream"):
             return StreamingResponse(
-                generate_responses_custom_tool_stream(body),
+                generate_responses_custom_tool_stream(body, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    **fault_headers,
+                },
             )
-        return build_responses_custom_tool_response(body)
+        custom_res = build_responses_custom_tool_response(body)
+        if fault_headers:
+            return JSONResponse(content=custom_res, headers=fault_headers)
+        return custom_res
     if response_has_tool_result(body):
         body = {**body, "input": "tool result accepted"}
     elif response_input_contains(body, "__mock_tool_call__") and body.get("tools"):
         if body.get("stream"):
             return StreamingResponse(
-                generate_responses_tool_stream(body),
+                generate_responses_tool_stream(body, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    **fault_headers,
+                },
             )
-        return build_responses_tool_response(body)
+        tool_res = build_responses_tool_response(body)
+        if fault_headers:
+            return JSONResponse(content=tool_res, headers=fault_headers)
+        return tool_res
     if response_requests_image_generation(body):
         if body.get("stream"):
             return StreamingResponse(
-                generate_responses_image_generation_stream(body),
+                generate_responses_image_generation_stream(body, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    **fault_headers,
+                },
             )
-        return build_responses_image_generation_response(body)
+        img_res = build_responses_image_generation_response(body)
+        if fault_headers:
+            return JSONResponse(content=img_res, headers=fault_headers)
+        return img_res
     response, item_id = build_responses_response(body)
-    fault_headers = {FAULT_INJECTED_HEADER: "true"} if fault is not None else {}
     if not body.get("stream"):
         if fault is not None:
             return JSONResponse(content=response, headers=fault_headers)
@@ -117,9 +144,6 @@ async def responses(request: Request):
                 **fault_headers,
             },
         )
-    is_complete = not response_input_contains(body, "__mock_incomplete_stream__")
-    if fault is not None and fault.stream_cut_short:
-        is_complete = False
     return StreamingResponse(
         generate_responses_stream(
             response,

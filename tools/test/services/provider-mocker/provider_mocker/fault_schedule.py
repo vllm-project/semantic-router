@@ -27,24 +27,18 @@ class FaultEntry:
 
 
 def get_fault_keys(headers: Mapping[str, str] | None) -> tuple[str, str]:
-    """Extract (schedule_key, counter_key) from incoming HTTP headers."""
+    """Extract (schedule_key, counter_key) from incoming HTTP headers with fixed precedence."""
     if not headers:
         return "", ""
-    schedule_key = ""
-    counter_key = ""
-    for name, value in headers.items():
-        norm = name.lower()
-        val = value.strip()
-        if not val:
-            continue
-        if norm == FAULT_SCHEDULE_ID_HEADER:
-            schedule_key = val
-        elif norm in (
-            FAULT_SESSION_ID_HEADER,
-            SESSION_HEADER,
-            "x-session-id",
-        ):
-            counter_key = val
+    norm_headers = {k.lower(): v.strip() for k, v in headers.items() if v and v.strip()}
+    schedule_key = norm_headers.get(FAULT_SCHEDULE_ID_HEADER, "")
+    # Explicit fault-session header has fixed precedence over session fallbacks
+    counter_key = (
+        norm_headers.get(FAULT_SESSION_ID_HEADER)
+        or norm_headers.get(SESSION_HEADER)
+        or norm_headers.get("x-session-id")
+        or ""
+    )
     if not schedule_key and counter_key:
         schedule_key = counter_key
     if not counter_key and schedule_key:
