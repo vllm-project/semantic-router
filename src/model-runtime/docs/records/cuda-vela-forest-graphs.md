@@ -56,9 +56,14 @@ the next synchronize or replay, sometimes a hang. It happened with FLA,
 causal-conv1d and the fused kernels replaced by the reference kernels, with
 MIOpen off, with rocBLAS instead of hipBLASLt, and with math SDPA, and the HIP
 switches `DEBUG_CLR_GRAPH_PACKET_CAPTURE=0`, `HIP_FORCE_DEV_KERNARG` and
-`AMD_SERIALIZE_KERNEL=3` did not change it. Dropping the graph before the eager
-forward avoided it, and a random-weight backbone of the same configuration did
-not reproduce it, so the cause is still open. The same sequences pass on CUDA.
+`AMD_SERIALIZE_KERNEL=3` did not change it. Random weights in place of the
+released ones, fresh allocations and a private graph pool faulted the same way.
+The fault is in the ROCm 7.2.3 runtime of that image: under rocgdb, a thread
+of `libhsa-runtime64` calls an invalid address while the main thread waits in
+`device_synchronize`. `AMD_DIRECT_DISPATCH=0` or `HIP_LAUNCH_BLOCKING=1` avoid
+it. The same sequences pass on CUDA and on `rocm/pytorch` with ROCm 10.1.0 and
+the same PyTorch 2.12, so ROCm forests can replay once the release image moves
+to that ROCm.
 
 ## Reproduce
 
