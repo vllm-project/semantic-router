@@ -54,8 +54,8 @@ func TestBuildSnapshotDecisionRuleLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	var plugins pluginsProjection
-	if err := json.Unmarshal(snapshot.Plugins, &plugins); err != nil {
-		t.Fatal(err)
+	if unmarshalErr := json.Unmarshal(snapshot.Plugins, &plugins); unmarshalErr != nil {
+		t.Fatal(unmarshalErr)
 	}
 	depth, nodes, err := plugins.Global.Router.DecisionRuleLimits.Effective()
 	if err != nil || depth != 32 || nodes != 512 {
