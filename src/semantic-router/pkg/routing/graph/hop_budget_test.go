@@ -48,3 +48,23 @@ func TestNestedStepsShareTheRunHopBudget(t *testing.T) {
 		t.Fatalf("hops %d", outcome.Hops)
 	}
 }
+
+// A parallel step may skip ordinary branch failures, but exhausting the
+// request-wide hop budget must still fail the whole run.
+func TestParallelSkipCannotHideHopBudgetExhaustion(t *testing.T) {
+	program := &Program{
+		Steps: Sequence{
+			parallel("panel", &Parallel{Branches: branchesOf("a", "b"), MaxConcurrency: 1, OnError: OnErrorSkip}),
+			aggregate("join", Concat{Separator: ","}),
+			respond(),
+		},
+		Limits: Limits{MaxHops: 1},
+	}
+	outcome, err := run(t, program, &fakeCaller{})
+	if !errors.Is(err, ErrHopLimit) {
+		t.Fatalf("err %v, want ErrHopLimit", err)
+	}
+	if outcome.Hops != 1 {
+		t.Fatalf("hops %d, want 1", outcome.Hops)
+	}
+}

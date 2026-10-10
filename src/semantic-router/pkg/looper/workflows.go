@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 )
 
 type WorkflowsLooper struct {
@@ -209,6 +210,9 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
 	if err != nil {
+		if errors.Is(err, graph.ErrHopLimit) {
+			return nil, err
+		}
 		if cfg.OnError != config.WorkflowOnErrorSkip {
 			return nil, err
 		}
@@ -346,7 +350,11 @@ func (l *WorkflowsLooper) executeWorkflowStep(
 				return responses, collector.failed, nil, err
 			}
 		case <-stepCtx.Done():
-			responses, err := collector.handleTimeout(stepCtx.Err())
+			cause := context.Cause(stepCtx)
+			if cause == nil {
+				cause = stepCtx.Err()
+			}
+			responses, err := collector.handleTimeout(cause)
 			return responses, collector.failed, nil, err
 		}
 	}
@@ -411,6 +419,9 @@ func newWorkflowStepCollector(
 func (c *workflowStepCollector) handleResult(result workflowModelResult) ([]*ModelResponse, error, bool) {
 	if result.err != nil {
 		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: modelFailureReason(result.err)})
+		if errors.Is(result.err, graph.ErrHopLimit) {
+			return nil, fmt.Errorf("workflow step %q exhausted the hop budget: %w", c.step.ID, result.err), true
+		}
 		if c.cfg.OnError == config.WorkflowOnErrorFail {
 			return nil, fmt.Errorf("workflow step %q failed for model %q: %w", c.step.ID, result.model, result.err), true
 		}
@@ -427,6 +438,9 @@ func (c *workflowStepCollector) handleResult(result workflowModelResult) ([]*Mod
 
 func (c *workflowStepCollector) handleTimeout(err error) ([]*ModelResponse, error) {
 	responses := c.responses()
+	if errors.Is(err, graph.ErrHopLimit) {
+		return nil, err
+	}
 	if len(responses) > 0 && c.cfg.OnError != config.WorkflowOnErrorFail {
 		logging.Warnf("[Workflows] Step %q timed out with %d partial responses; continuing because on_error=skip", c.step.ID, len(responses))
 		return responses, nil
@@ -466,6 +480,9 @@ func (l *WorkflowsLooper) executeWorkflowStepSequential(
 		resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, true, iterationStart+(modelIndex-modelStartIndex), req)
 		if err != nil {
 			failed = append(failed, FusionFailedModel{Model: modelName, Error: modelFailureReason(err)})
+			if errors.Is(err, graph.ErrHopLimit) {
+				return nil, failed, nil, err
+			}
 			if stepCtx.Err() != nil && len(responses) > 0 && cfg.OnError != config.WorkflowOnErrorFail {
 				return responses, failed, nil, nil
 			}
