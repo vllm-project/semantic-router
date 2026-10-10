@@ -10,10 +10,10 @@ import styles from './RuntimeModes.module.css'
 
 export default function RuntimeModes(): React.JSX.Element {
   return (
-    <section id="runtime-modes" className={shared.bandSection} aria-labelledby="runtime-modes-title">
+    <section id="runtime-modes" className={styles.compactSection} aria-labelledby="runtime-modes-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={`site-section-intro ${shared.sectionHeader}`}>
+          <header className={`site-section-intro ${shared.sectionHeader} ${styles.compactHeader}`}>
             <SectionLabel>
               <Translate id="homepage.runtimeModes.label">Where it fits</Translate>
             </SectionLabel>
@@ -48,21 +48,21 @@ export default function RuntimeModes(): React.JSX.Element {
               </header>
               <p className={styles.modeDescription}>
                 <Translate id="homepage.runtimeModes.router.description">
-                  Route Chat and Responses to your model backends. Keep native decisions available alongside routing.
+                  Route Chat, Messages, and Responses to your model backends. Keep native decisions available alongside routing.
                 </Translate>
               </p>
-              <pre className={styles.command}><code>vllm-sr serve --gateway standalone</code></pre>
+              <pre className={styles.command}><code>vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B</code></pre>
               <p className={styles.modeDetails}>
-                <Translate id="homepage.runtimeModes.router.extproc" values={{ flag: <code>--gateway extproc</code> }}>
-                  {'Native HTTP gateway. Add Envoy with {flag}.'}
+                <Translate id="homepage.runtimeModes.router.endpoint" values={{ chatEndpoint: <code>/v1/chat/completions</code>, messagesEndpoint: <code>/v1/messages</code> }}>
+                  {'Call {chatEndpoint} or {messagesEndpoint}.'}
                 </Translate>
               </p>
               <footer className={styles.modeFooter}>
-                <Link to="/docs/installation">
+                <Link to="/docs/next/installation">
                   <Translate id="homepage.runtimeModes.router.cta">Run the Router</Translate>
                   <FiArrowRight aria-hidden="true" />
                 </Link>
-                <Link to="/docs/installation/gateway-modes">
+                <Link to="/docs/next/installation/gateway-modes">
                   <Translate id="homepage.runtimeModes.router.gatewayCta">Compare gateway modes</Translate>
                 </Link>
               </footer>
@@ -87,18 +87,18 @@ export default function RuntimeModes(): React.JSX.Element {
                   Start the same frontend and model workers with routing disabled. Your application owns the next step.
                 </Translate>
               </p>
-              <pre className={styles.command}><code>vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu</code></pre>
+              <pre className={styles.command}><code>vllm-sr serve -e vllm-sr/Decision-2.0-Kai-0.6B</code></pre>
               <p className={styles.modeDetails}>
                 <Translate id="homepage.runtimeModes.engine.endpoint" values={{ endpoint: <code>/v1/systemone</code> }}>
                   {'Call {endpoint} with an explicit published model.'}
                 </Translate>
               </p>
               <footer className={styles.modeFooter}>
-                <Link to="/docs/model-runtime/quickstart">
+                <Link to="/docs/next/model-runtime/quickstart">
                   <Translate id="homepage.runtimeModes.engine.cta">Run the Engine</Translate>
                   <FiArrowRight aria-hidden="true" />
                 </Link>
-                <Link to="/docs/model-runtime/overview">
+                <Link to="/docs/next/model-runtime/overview">
                   <Translate id="homepage.runtimeModes.engine.modelsCta">Explore the model runtime</Translate>
                 </Link>
               </footer>
@@ -106,7 +106,7 @@ export default function RuntimeModes(): React.JSX.Element {
           </ScrollReveal>
         </div>
         <p className={styles.startupNote}>
-          <Link to="/docs/installation">
+          <Link to="/docs/next/installation">
             <Translate id="homepage.runtimeModes.devChannel">Development channel</Translate>
           </Link>
           <span aria-hidden="true"> · </span>
