@@ -11,8 +11,8 @@ import { ArticleChartGallery, ArticleFigure } from '@site/src/components/Article
 
 <ArticleFigure
   src="/img/blog/system-one-auto/hero.jpg"
-  width={1920} height={1080}
-  alt="Decision models. One auto router. System One Auto routes from Decision 2.0 Kai to Vega, with the white vLLM Semantic Router logo."
+  width={1672} height={941}
+  alt="System One Auto: Decision Models Need a Router, Too. The white vLLM Semantic Router logo above a golden horizon and star-filled sky."
 />
 
 **Which model should make this decision?**

@@ -1,10 +1,9 @@
-"""Render the frozen System One Auto article assets; no model or network calls.
+"""Render the frozen System One Auto charts and request-flow diagrams.
 
 Charts: matplotlib, editable SVG + embedded-font vector PDF + 300-DPI PNG.
-Cover/call flow: repository-native SVG, rendered by a local Chromium binary.
-The cover raster is a high-quality JPEG; scientific chart rasters remain PNG.
-The cover uses the original logo's alpha geometry with a white SVG filter;
-the source logo file is never modified and no logo is redrawn.
+Diagrams: repository-native SVG, rendered by a local Chromium binary.
+The separately authored marketing cover is never read or written here.
+This generator makes no model or network calls.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from diagram_assets import banner, cascade, ecosystem
+from diagram_assets import cascade, ecosystem
 from matplotlib.patches import FancyBboxPatch
 from PIL import Image
 
@@ -30,7 +29,6 @@ INK, MUTED, GRID = "#172430", "#5f6b76", "#e7ebef"
 AUTO, VEGA, KAI = "#D55E00", "#0072B2", "#63798b"
 SIZE = (12.24, 7.48)
 TEXT_OVERLAP_TOLERANCE_PX = 2
-MAX_COVER_BYTES = 500 * 1024
 plt.rcParams.update(
     {
         "font.family": "DejaVu Sans",
@@ -281,7 +279,7 @@ def paths(data, out, reports):
         ax.text(
             center,
             -0.20,
-            f"{label} · {outcomes[model]/231:.2%}",
+            f"{label} · {outcomes[model] / 231:.2%}",
             ha="center",
             va="center",
             color="white",
@@ -414,7 +412,6 @@ document.fonts.ready.then(() => {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, required=True)
-    parser.add_argument("--logo", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--chromium", type=Path, required=True)
     args = parser.parse_args()
@@ -427,50 +424,32 @@ def main():
     for draw in (quality, latency, paths):
         draw(data, args.output, reports)
     for name, source, size in (
-        ("hero", banner(args.logo), (1920, 1080)),
         ("cascade", cascade(), (1800, 1010)),
         ("ecosystem", ecosystem(), (1800, 1160)),
     ):
         svg = args.output / f"{name}.svg"
         svg.write_text(source)
         diagram_reports[name] = render_svg(svg, args.chromium, *size)
-        if name == "hero":
-            with Image.open(svg.with_suffix(".png")) as raster:
-                raster.convert("RGB").save(
-                    svg.with_suffix(".jpg"),
-                    quality=98,
-                    subsampling=0,
-                    optimize=True,
-                    progressive=True,
-                )
-            if svg.with_suffix(".jpg").stat().st_size >= MAX_COVER_BYTES:
-                raise ValueError("cover JPEG exceeds the repository asset limit")
-            svg.with_suffix(".png").unlink()
     files = {
         path.name: {
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "bytes": path.stat().st_size,
         }
-        for path in sorted(args.output.iterdir())
-        if path.suffix in {".svg", ".pdf", ".png", ".jpg"}
+        for path in sorted(
+            args.output / f"{name}.{extension}"
+            for name in ("quality", "latency", "paths", "cascade", "ecosystem")
+            for extension in ("svg", "pdf", "png")
+        )
     }
     for name, record in files.items():
-        if name.endswith((".png", ".jpg")):
+        if name.endswith(".png"):
             record["pixels"] = list(Image.open(args.output / name).size)
     report = {
         "data_sha256": DATA_SHA,
-        "logo_sha256": hashlib.sha256(args.logo.read_bytes()).hexdigest(),
         "generator_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "diagram_source_sha256": hashlib.sha256(
             Path(__file__).with_name("diagram_assets.py").read_bytes()
         ).hexdigest(),
-        "logo_treatment": "Original alpha geometry rendered in white by SVG filter; source PNG unchanged; no KR Labs mark",
-        "cover_raster": {
-            "format": "JPEG",
-            "quality": 98,
-            "chroma_subsampling": "4:4:4",
-            "progressive": True,
-        },
         "matplotlib_text_checks": reports,
         "diagram_text_checks": diagram_reports,
         "files": files,

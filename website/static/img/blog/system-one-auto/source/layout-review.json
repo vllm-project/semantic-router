@@ -1,9 +1,9 @@
 {
-  "scope": "Three system diagrams; not neural architecture or new measurement",
+  "scope": "Cascade and ecosystem system diagrams; not the marketing cover, neural architecture or new measurement",
   "visual_review": {
     "status": "passed",
     "formats": [
-      "Chromium-rendered PNG/JPEG",
+      "Chromium-rendered PNG",
       "PDFium-rendered vector PDF preview"
     ],
     "checked": [
@@ -16,12 +16,6 @@
     ]
   },
   "geometry": {
-    "hero": {
-      "text_objects": 15,
-      "outside_canvas": [],
-      "text_overlaps": [],
-      "outside_declared_container": []
-    },
     "cascade": {
       "text_objects": 30,
       "outside_canvas": [],
@@ -36,16 +30,6 @@
     }
   },
   "pdf_exports": {
-    "hero": {
-      "pages": 1,
-      "points": [
-        1440.0,
-        810.0
-      ],
-      "extractable_text_characters": 253,
-      "raster_images": 1,
-      "raster_note": "Original vLLM-SR logo only"
-    },
     "cascade": {
       "pages": 1,
       "points": [
@@ -67,8 +51,6 @@
       "raster_note": "None; text and shapes remain vector"
     }
   },
-  "cover_bytes": 417343,
-  "cover_limit_bytes": 512000,
   "unchanged_measured_charts": {
     "quality.svg": "4204af50cba6971609e8f33a43d4371c1d6c4ca46a0c7d2f9a696b2ae2d3d2cf",
     "quality.pdf": "598286e9d7003449f7f222fe6a769b1c8fb37d45c65dc925ac3e2b632f28a5a4",

@@ -1,8 +1,8 @@
-# System One Auto — editable figure sources
+# System One Auto — figure sources
 
 These figures use the frozen public evidence accompanying the article. The
-charts are data-driven Matplotlib output; the cover, cascade call-flow and
-routing comparison are repository-native SVG. These system diagrams depict
+charts are data-driven Matplotlib output; the cascade call-flow and routing
+comparison are repository-native SVG. These system diagrams depict
 request flow, not neural model internals. `diagram_assets.py` owns their
 editable shapes, typography and connections; `generate_blog_assets.py` owns
 the measured charts and shared export checks.
@@ -14,7 +14,6 @@ python3 -m venv .venv-figures
 .venv-figures/bin/pip install matplotlib==3.11.2 Pillow==11.3.0
 .venv-figures/bin/python website/static/img/blog/system-one-auto/source/generate_blog_assets.py \
   --data website/static/img/blog/system-one-auto/source/figure-data.json \
-  --logo website/static/img/vllm-sr-logo.white.png \
   --output /tmp/system-one-auto-figures \
   --chromium /path/to/chrome-headless-shell
 ```
@@ -24,13 +23,13 @@ its usual platform libraries installed. The generator is offline: it makes no
 model or network requests. Data hash verification prevents accidental use of a
 different experimental result. The numerical charts export editable SVG,
 embedded-font PDF and 300-DPI PNG; the SVG diagrams export vector PDF
-at their declared canvas size. The call-flow and comparison rasters are PNG; the cover raster
-is a progressive JPEG at quality 98 with 4:4:4 chroma sampling, below 500 KiB.
-The original cover SVG remains editable. DejaVu Sans is used throughout.
+at their declared canvas size. The call-flow and comparison rasters are PNG.
+DejaVu Sans is used throughout these generated figures.
 
-The banner preserves the original vLLM-SR logo's alpha geometry and uses an SVG
-color filter to render it in pure white. The source logo PNG is unchanged. It
-contains no KR Labs mark and makes no novel-algorithm claim.
+The article's `hero.jpg` is a separate ImageGen marketing cover, visually
+reviewed as a raster asset. It has no editable vector equivalent and is not
+an experimental figure. This offline generator neither regenerates nor
+overwrites the cover; its receipt includes only the charts and system diagrams.
 
 Outputs:
 
@@ -41,7 +40,6 @@ Outputs:
 - `cascade`: one original Kai answer, an explicit gate, optional Vega.
 - `ecosystem`: LLM routing and decision-model routing side by side. Messages
   produce generated text; System One questions produce typed answers.
-- `hero`: the article's brand cover.
 
 `generation-receipt.json` records file hashes, image dimensions and automated
 text-boundary checks. The renderer checks real browser text bounds,

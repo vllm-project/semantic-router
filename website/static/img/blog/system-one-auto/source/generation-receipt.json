@@ -1,15 +1,7 @@
 {
   "data_sha256": "b099ef540ab140c87ad50596cd3bd5d321941d623aeac4244b2bdcc84324d5be",
-  "logo_sha256": "e77dce4b858781b8b6c52e9f3c74bdf24375f87577cefa7a505b149c925d04f2",
-  "generator_sha256": "483070b32527e84524420eec21cd4de7980d79259e1dc46db1ad4918d4c0d6d8",
-  "diagram_source_sha256": "2754b818b23149e12cc5e388aca1fc1f4c2c796b73857bd3eedcfffc7ed498f7",
-  "logo_treatment": "Original alpha geometry rendered in white by SVG filter; source PNG unchanged; no KR Labs mark",
-  "cover_raster": {
-    "format": "JPEG",
-    "quality": 98,
-    "chroma_subsampling": "4:4:4",
-    "progressive": true
-  },
+  "generator_sha256": "5318c316cf7128d565b25af554c2a742f2c8be466f961dcd4df4f6cb027c352c",
+  "diagram_source_sha256": "d81a9af1e1db57dc8c5ad362346280fd232ef2af59b89b746dff138680126886",
   "matplotlib_text_checks": {
     "quality": {
       "text_objects": 22,
@@ -28,12 +20,6 @@
     }
   },
   "diagram_text_checks": {
-    "hero": {
-      "text_objects": 15,
-      "outside_canvas": [],
-      "text_overlaps": [],
-      "outside_declared_container": []
-    },
     "cascade": {
       "text_objects": 30,
       "outside_canvas": [],
@@ -79,22 +65,6 @@
     "ecosystem.svg": {
       "sha256": "273b25c057887d7f20fea9fd9c955593caedc314e601445ce37ae90899b991a0",
       "bytes": 8604
-    },
-    "hero.jpg": {
-      "sha256": "55a494682ffd9ae1c1970f87b4c2422f62620e8c5e5e06234d61b6a8b20362f9",
-      "bytes": 417343,
-      "pixels": [
-        1920,
-        1080
-      ]
-    },
-    "hero.pdf": {
-      "sha256": "880931689178cb3f850055e35d7d035f395e357e746e143eb13efd88fb89b733",
-      "bytes": 66768
-    },
-    "hero.svg": {
-      "sha256": "8c112fe77a10940027ef75f64594ea87da15f8d454fd901896c05c96469e3e1a",
-      "bytes": 78426
     },
     "latency.pdf": {
       "sha256": "010e41c2d0e63843f5ba5be7074e6b14a7ebf9453cb17f200fc0a7f953055e47",
