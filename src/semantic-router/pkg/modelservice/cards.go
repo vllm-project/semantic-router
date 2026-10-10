@@ -7,8 +7,11 @@ import (
 )
 
 // ModelCard is a served model's description from /v1/models: identity,
-// surfaces, heads, embedding and rerank exits, limits and placement.
-// Preparation checks every task binding against it.
+// surfaces, the question types and presets a decision model answers, heads,
+// embedding and rerank exits, limits and placement. Preparation checks every
+// task binding against it. MaxScanTokens is the scan budget of a decision
+// model that reads a long state part in windows (Vela 2.0), zero for one that
+// reads one bounded input.
 type ModelCard struct {
 	ID             string
 	Family         string
@@ -17,10 +20,13 @@ type ModelCard struct {
 	ModelSHA256    string
 	ManifestSHA256 string
 	Surfaces       []string
+	QuestionTypes  []string
+	Presets        []string
 	Heads          []HeadCard
 	Embedding      *EmbeddingCard
 	Rerank         *RerankCard
 	MaxInputTokens int
+	MaxScanTokens  int
 	MaxInputs      int
 	Profile        string
 	Engine         string
@@ -63,6 +69,24 @@ func (c ModelCard) Serves(surface string) bool {
 	return slices.Contains(c.Surfaces, surface)
 }
 
+// Answers reports whether the model answers a question type on /v1/decisions.
+// A card that lists no question types answers the System One types (choice,
+// noul and score).
+func (c ModelCard) Answers(questionType string) bool {
+	if !c.Serves("decisions") {
+		return false
+	}
+	if len(c.QuestionTypes) == 0 {
+		return questionType == "choice" || questionType == "noul" || questionType == "score"
+	}
+	return slices.Contains(c.QuestionTypes, questionType)
+}
+
+// HasPreset reports whether the model defines the named question.
+func (c ModelCard) HasPreset(name string) bool {
+	return c.Serves("decisions") && slices.Contains(c.Presets, name)
+}
+
 // Head returns the named head, or the primary (first) head when name is empty.
 func (c ModelCard) Head(name string) (HeadCard, bool) {
 	if name == "" {
@@ -91,6 +115,7 @@ func (h HeadCard) Accepts(input string) bool {
 func decodeCard(card api.ModelCard) ModelCard {
 	decoded := ModelCard{
 		ID: card.Id, Family: card.Family, Surfaces: append([]string(nil), card.Surfaces...), Ready: card.Ready,
+		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets),
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
 		ManifestSHA256: deref(card.ManifestSha256), Profile: deref(card.Profile), Engine: deref(card.Engine),
 		Accelerator: deref(card.Accelerator), Device: deref(card.Device), Dtype: deref(card.Dtype),
@@ -98,6 +123,7 @@ func decodeCard(card api.ModelCard) ModelCard {
 	}
 	if card.Limits != nil {
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)
+		decoded.MaxScanTokens = deref(card.Limits.MaxScanTokens)
 		decoded.MaxInputs = deref(card.Limits.MaxInputs)
 	}
 	if card.Heads != nil {
@@ -108,6 +134,10 @@ func decodeCard(card api.ModelCard) ModelCard {
 	decoded.Embedding, decoded.Rerank = card.Embedding, card.Rerank
 	return decoded
 }
+
+// ModelCardFromAPI adapts canonical runtime observations for persistent
+// control-plane consumers, including limits, heads, presets and question types.
+func ModelCardFromAPI(card api.ModelCard) ModelCard { return decodeCard(card) }
 
 func decodeHead(head api.HeadCard) HeadCard {
 	return HeadCard{

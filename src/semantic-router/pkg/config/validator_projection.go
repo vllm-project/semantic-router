@@ -311,6 +311,12 @@ func validateProjectionScoreInput(
 	if strings.EqualFold(input.Type, SignalTypeProjection) {
 		return validateProjectionInputProjectionRef(scoreName, input, outputToSource)
 	}
+	if strings.EqualFold(input.Type, SignalTypeDecision) {
+		if err := validateDecisionProjectionInput(cfg, scoreName, input); err != nil {
+			return err
+		}
+		return validateProjectionInputValueSource(scoreName, input)
+	}
 	if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
 		return fmt.Errorf(
 			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
@@ -320,6 +326,34 @@ func validateProjectionScoreInput(
 		)
 	}
 	return validateProjectionInputValueSource(scoreName, input)
+}
+
+// validateDecisionProjectionInput checks a decision input: a declared question,
+// or "<question>:<option>" for one option of a choice, set or span question,
+// whose value is that option's probability.
+func validateDecisionProjectionInput(cfg *RouterConfig, scoreName string, input ProjectionScoreInput) error {
+	name, option, labelled := strings.Cut(input.Name, ":")
+	rule := decisionSignalRuleByName(cfg.DecisionRules, name)
+	if rule == nil {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
+			scoreName,
+			input.Type,
+			input.Name,
+		)
+	}
+	if labelled && (!rule.Question.Labelled() || !stringSliceContains(rule.Question.OptionKeys(), option)) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) names %q, which is not an option of the %s question %q",
+			scoreName,
+			input.Type,
+			input.Name,
+			option,
+			rule.Question.Type,
+			rule.Name,
+		)
+	}
+	return nil
 }
 
 func validateProjectionInputProjectionRef(scoreName string, input ProjectionScoreInput, outputToSource map[string]string) error {
@@ -390,6 +424,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeMetadata:      collectMetadataRuleNames(cfg.MetadataRules),
 		SignalTypeClassifier:    collectClassifierRuleNames(cfg.ClassifierRules),
 		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
+		SignalTypeAction:        collectActionRuleNames(cfg.ActionRules),
 		SignalTypeDecision:      collectDecisionSignalRuleNames(cfg.DecisionRules),
 	}
 	return declared

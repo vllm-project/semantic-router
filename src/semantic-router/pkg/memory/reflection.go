@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -160,9 +162,12 @@ func (g *ReflectionGate) applyRecencyDecay(memories []*RetrieveResult, now time.
 }
 
 // dedup removes memories that are near-duplicates of a higher-scored memory.
-// Uses simple content similarity (Jaccard on word sets) as a proxy for
-// cosine similarity -- avoids needing embeddings at this stage. A correction
-// is never dropped as a duplicate of the memory it corrects.
+// Uses text-unit Jaccard as a proxy for cosine similarity, so it does not
+// need embeddings. Latin words stay one unit; each CJK character is its own.
+// The Jaccard bag ignores order, so the same numerals swapped across entities
+// score 1. A memory is dropped only when the overlap is high and those
+// numeric values stay bound to the same preceding text. A correction is never
+// dropped as a duplicate of the memory it corrects.
 func (g *ReflectionGate) dedup(
 	memories []*RetrieveResult,
 	corrects func(newer *RetrieveResult, older *RetrieveResult) bool,
@@ -178,12 +183,16 @@ func (g *ReflectionGate) dedup(
 			if corrects != nil && corrects(candidate, existing) {
 				continue
 			}
-			if wordJaccard(candidate.Memory.Content, existing.Memory.Content) >= g.dedupThreshold {
-				logging.Debugf("ReflectionGate: dedup memory id=%s (similar to id=%s)",
-					candidate.Memory.ID, existing.Memory.ID)
-				isDup = true
-				break
+			if wordJaccard(candidate.Memory.Content, existing.Memory.Content) < g.dedupThreshold {
+				continue
 			}
+			if numericBindingsDiffer(candidate.Memory.Content, existing.Memory.Content) {
+				continue
+			}
+			logging.Debugf("ReflectionGate: dedup memory id=%s (similar to id=%s)",
+				candidate.Memory.ID, existing.Memory.ID)
+			isDup = true
+			break
 		}
 		if !isDup {
 			kept = append(kept, memories[i])
@@ -207,7 +216,7 @@ func (g *ReflectionGate) enforceTokenBudget(memories []*RetrieveResult) []*Retri
 	return memories
 }
 
-// wordJaccard computes Jaccard similarity on lowercased word sets.
+// wordJaccard computes Jaccard similarity on lowercased text units.
 func wordJaccard(a, b string) float32 {
 	setA := wordSet(a)
 	setB := wordSet(b)
@@ -230,19 +239,134 @@ func wordJaccard(a, b string) float32 {
 }
 
 func wordSet(s string) map[string]bool {
-	words := strings.Fields(strings.ToLower(s))
-	set := make(map[string]bool, len(words))
-	for _, w := range words {
-		set[w] = true
+	units := textUnits(s)
+	set := make(map[string]bool, len(units))
+	for _, unit := range units {
+		set[unit] = true
 	}
 	return set
 }
 
-// estimateTokens gives a rough token count (words * 1.3, the common
-// English approximation). Good enough for budget enforcement.
+// cjkNumericRunes are Han and Hangul numeral characters. Magnitude words
+// (十百千万, 십백천만) stay here so "一万" and "两万" are numeric bindings,
+// not just shared context around 一 and 两.
+const cjkNumericRunes = "零〇一二三四五六七八九十百千万亿两兩壹贰貳叁參肆伍陆陸柒捌玖拾佰仟萬億" +
+	"영일이삼사오육륙칠팔구십백천만억조"
+
+// numericBindingsDiffer reports whether numeric units are attached to
+// different preceding text. Character-set Jaccard is 1 for
+// "旅行预算一万美元，机票预算两万美元" and the amounts swapped, because 一 and
+// 两 both occur once. The spans before each numeral differ, so the facts stay
+// distinct. Texts with no numerals compare equal.
+func numericBindingsDiffer(a, b string) bool {
+	left := numericBindings(a)
+	right := numericBindings(b)
+	if len(left) != len(right) {
+		return true
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func numericBindings(s string) []string {
+	units := textUnits(s)
+	bindings := make([]string, 0)
+	ctx := make([]string, 0)
+	for _, unit := range units {
+		if !isNumericUnit(unit) {
+			ctx = append(ctx, unit)
+			continue
+		}
+		bindings = append(bindings, strings.Join(ctx, "\x1f")+"\x00"+unit)
+		ctx = ctx[:0]
+	}
+	sort.Strings(bindings)
+	return bindings
+}
+
+func isNumericUnit(unit string) bool {
+	r, size := utf8.DecodeRuneInString(unit)
+	if size == 0 {
+		return false
+	}
+	if size == len(unit) && strings.ContainsRune(cjkNumericRunes, r) {
+		return true
+	}
+	for _, digit := range unit {
+		if !unicode.IsDigit(digit) {
+			return false
+		}
+	}
+	return true
+}
+
+// textUnits splits text the same way multilingual signals do. Each Han,
+// Hiragana, Katakana, or Hangul character is one unit. A contiguous run of
+// other letters or digits is one unit. Punctuation and whitespace separate
+// units and are not counted.
+func textUnits(s string) []string {
+	var units []string
+	var latin strings.Builder
+	flush := func() {
+		if latin.Len() == 0 {
+			return
+		}
+		units = append(units, latin.String())
+		latin.Reset()
+	}
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case isCJK(r):
+			flush()
+			units = append(units, string(r))
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			latin.WriteRune(r)
+		default:
+			flush()
+		}
+	}
+	flush()
+	return units
+}
+
+func isCJK(r rune) bool {
+	return unicode.Is(unicode.Han, r) ||
+		unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Hangul, r)
+}
+
+const (
+	// latinTokensPerUnit is the English word approximation (words * 1.3).
+	latinTokensPerUnit = 1.3
+	// cjkTokensPerRune uses the same 1.5 CJK multiplier as
+	// promptcompression.CountTokensApprox (conservative vs real tokenizers).
+	cjkTokensPerRune = 1.5
+)
+
+// estimateTokens estimates injected size for the reflection token budget.
+// Latin word units use 1.3 tokens; each Han, Hiragana, Katakana, or Hangul
+// character uses 1.5. The total is Ceil'd; CountTokensApprox truncates instead.
+// This is a heuristic, not a model tokenizer. Thai is not segmented here.
 func estimateTokens(s string) int {
-	words := len(strings.Fields(s))
-	return int(math.Ceil(float64(words) * 1.3))
+	cjk := 0
+	latin := 0
+	for _, unit := range textUnits(s) {
+		r, size := utf8.DecodeRuneInString(unit)
+		if size == len(unit) && isCJK(r) {
+			cjk++
+			continue
+		}
+		latin++
+	}
+	if cjk == 0 && latin == 0 {
+		return 0
+	}
+	return int(math.Ceil(float64(cjk)*cjkTokensPerRune + float64(latin)*latinTokensPerUnit))
 }
 
 // resolveReflectionConfig merges per-decision overrides into global config.

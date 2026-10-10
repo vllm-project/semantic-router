@@ -54,7 +54,6 @@ export default tseslint.config(
     files: [
       "src/components/ChatComposerAddMenu.tsx",
       "src/components/ChatTaskQueue.tsx",
-      "src/components/ClawRoomTeamDetailsModal.tsx",
       "src/components/ExpressionBuilderCanvasEmptyState.tsx",
       "src/components/ExpressionBuilderInner.tsx",
       "src/components/ExpressionBuilderNodes.tsx",

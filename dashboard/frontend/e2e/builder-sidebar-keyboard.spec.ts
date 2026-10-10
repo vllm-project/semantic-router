@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { mockAuthenticatedAppShell, test } from './support/compiler'
 
-// Uses the real Go WASM compiler built by dashboard-build-wasm; only server data is a fixture.
+// Uses the production Go compiler through its HTTP handler; only server data is a fixture.
 const config = `version: v0.3
 providers:
   models:

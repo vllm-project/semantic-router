@@ -4,16 +4,13 @@
 The Quickstart's step 4: a decision signal on a `provider: model_runtime`
 deployment, which the Router starts and asks inside its container. The test
 takes the signal, its route and the deployment from the page and serves a tiny
-random-weight decision package that `vllm-srun fixture` writes into the
-models directory, so nothing is downloaded. The host needs the model runtime
-installed (`make model-runtime-install`), as the engine-mode tests do.
+random-weight decision package that the router image's `vllm-srun fixture`
+writes into the models directory, so nothing is downloaded.
 """
 
 import copy
 import os
 import re
-import shutil
-import subprocess
 import time
 import unittest
 from pathlib import Path
@@ -21,6 +18,7 @@ from pathlib import Path
 import yaml
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
+from runtime_http import write_fixture
 from serve_session import ServeSessionMixin
 
 QUICKSTART = (
@@ -82,28 +80,7 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         self.print_test_result(True, f"{signal} answered; {selected} selected")
 
     def _write_decision_package(self) -> None:
-        runtime = shutil.which("vllm-srun")
-        self.assertIsNotNone(runtime, "the model runtime is not installed")
-        models = Path(self.test_dir) / "models"
-        models.mkdir(exist_ok=True)
-        result = subprocess.run(
-            [
-                runtime,
-                "fixture",
-                str(models / PACKAGE),
-                "--family",
-                "decision2",
-                "--variant",
-                "qwen3",
-                "--seed",
-                "0",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=300,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        write_fixture(Path(self.test_dir) / "models" / PACKAGE, "decision2", "qwen3")
 
     def _write_quickstart_config(self, mock_container: str) -> dict:
         """The test stack's config plus the Quickstart's signal, route and
@@ -140,8 +117,6 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         config["routing"]["signals"] = {"decision": [signal]}
         config["routing"]["decisions"].insert(0, route)
         config["global"]["model_catalog"]["deployments"] = deployments
-        # The page names no auto model names, so its request's "auto" routes.
-        config["global"].get("router", {}).pop("auto_model_names", None)
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
         )
@@ -152,12 +127,12 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         deadline = time.time() + ANSWER_TIMEOUT_SECONDS
         selected = matched = ""
         while time.time() < deadline:
-            # As on the page: "auto" lets the Router choose, a named model
+            # As on the page: "vllm-sr/auto" lets the Router choose; a named model
             # would skip the decisions.
             headers = self._send_mock_chat_completion(
                 mock_container,
                 request_headers={"x-vsr-debug": "true"},
-                model="auto",
+                model="vllm-sr/auto",
                 content="Plan a three-step proof that there are infinitely many primes.",
             )
             selected = headers.get("x-vsr-selected-decision", "")

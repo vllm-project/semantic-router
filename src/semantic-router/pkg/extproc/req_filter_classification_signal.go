@@ -129,6 +129,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedReask = signals.MatchedReaskRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
+	ctx.VSRMatchedAction = signals.MatchedActionRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedStructure = signals.MatchedStructureRules
@@ -160,6 +161,8 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 		ctx.JailbreakScoreAvailable = signals.JailbreakScoreAvailable
 		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
+	ctx.PIIContentVerified = signals.PIIContentVerified
+	ctx.PIIEvidence = append([]classification.PrivacyEvidence(nil), signals.PIIEvidence...)
 	if signals.PIIDetected {
 		ctx.PIIDetected = signals.PIIDetected
 		ctx.PIIEntities = signals.PIIEntities

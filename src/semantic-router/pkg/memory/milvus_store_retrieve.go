@@ -136,7 +136,7 @@ func (m *MilvusStore) searchMemoryVectors(ctx context.Context, embedding []float
 func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts RetrieveOptions, limit int, threshold float32) []*RetrieveResult {
 	candidates := m.parseCandidates(sr, opts.UserID)
 	if opts.HybridSearch && len(candidates) > 1 {
-		candidates = m.hybridRerank(candidates, opts)
+		candidates = hybridRerankCandidates(candidates, opts)
 	}
 	if opts.AdaptiveThreshold && len(candidates) > 1 {
 		threshold = adaptiveThresholdElbow(candidates, threshold)
@@ -151,6 +151,31 @@ func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts Retri
 		go m.recordRetrievalBatch(ids)
 	}
 	return results
+}
+
+// qdrantRetrieveQuery widens the candidate window when hybrid fusion or
+// adaptive thresholding must run after the vector query. Both policies need
+// neighbors below the similarity floor: fusion can raise their scores, and
+// the elbow is the largest gap in the full window. The floor is applied
+// afterward by finalizePolicyRetrieve. Vector-only retrieval keeps the
+// server-side threshold.
+func qdrantRetrieveQuery(limit int, threshold float32, opts RetrieveOptions) (uint64, *float32) {
+	if opts.HybridSearch || opts.AdaptiveThreshold {
+		topK := retrieveSearchTopK(limit, opts.HybridSearch)
+		return uint64(topK), nil //nolint:gosec // topK is a small positive candidate window
+	}
+	floor := threshold
+	return uint64(limit), &floor //nolint:gosec // limit is a positive retrieval cap
+}
+
+func finalizePolicyRetrieve(candidates []*RetrieveResult, opts RetrieveOptions, threshold float32, limit int) []*RetrieveResult {
+	if opts.HybridSearch && len(candidates) > 1 {
+		candidates = hybridRerankCandidates(candidates, opts)
+	}
+	if opts.AdaptiveThreshold && len(candidates) > 1 {
+		threshold = adaptiveThresholdElbow(candidates, threshold)
+	}
+	return applyRetrieveThreshold(candidates, limit, threshold)
 }
 
 func applyRetrieveThreshold(candidates []*RetrieveResult, limit int, threshold float32) []*RetrieveResult {
@@ -310,7 +335,7 @@ func populateMemoryFromRetrieveMetadata(mem *Memory, metadata map[string]interfa
 	}
 }
 
-func (m *MilvusStore) hybridRerank(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {
+func hybridRerankCandidates(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {
 	pseudoChunks := make(map[string]vectorstore.EmbeddedChunk, len(candidates))
 	vectorScores := make(map[string]float64, len(candidates))
 	keyToCandidate := make(map[string]*RetrieveResult, len(candidates))

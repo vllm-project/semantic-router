@@ -1,0 +1,152 @@
+{
+  "calls": [
+    {
+      "route": "judge",
+      "model": "judge",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          },
+          {
+            "content": "You are the Fusion analysis judge. Compare the panel responses and return only valid JSON with these keys: consensus, contradictions, partial_coverage, unique_insights, blind_spots. Return compact JSON only: no markdown, no code fences, no prose before or after the JSON. Each value must be an array with at most two concise strings.\n\nOriginal prompt:\nWhat is the capital of France?\n\nPanel responses:\nResponse 1 (model-a):\nmodel-a says Paris (1b997d5a)\n\nResponse 2 (model-b):\nmodel-b says Paris in detail (1b997d5a)",
+            "role": "user"
+          }
+        ],
+        "model": "judge",
+        "stream": false
+      }
+    },
+    {
+      "route": "judge",
+      "model": "judge",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          },
+          {
+            "content": "You are the Fusion calling model. Produce the final answer for the user using the panel responses and structured analysis. Resolve contradictions explicitly and do not mention internal model names unless the user asks.\n\nRules:\n- Preserve the original output contract exactly.\n- Do not reveal hidden reasoning, scratch work, panel reasoning, tool traces, or internal deliberation.\n- Provide a concise explanation only when the original output contract asks for one.\n\nOriginal prompt:\nWhat is the capital of France?\n\nStructured analysis:\n{\n  \"consensus\": [\n    \"Paris is the capital\"\n  ],\n  \"unique_insights\": [\n    \"history\"\n  ]\n}\n\nPanel responses:\nResponse 1 (model-a):\nmodel-a says Paris (1b997d5a)\n\nResponse 2 (model-b):\nmodel-b says Paris in detail (1b997d5a)\n\nFinal answer:",
+            "role": "user"
+          }
+        ],
+        "model": "judge",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-a",
+      "model": "model-a",
+      "body": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-a",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-b",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-c",
+      "model": "model-c",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-c",
+        "stream": false
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "application/json",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "looper",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "judge",
+      "x-vsr-selected-recipe": "default"
+    },
+    "body": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "{\"consensus\":[\"Paris is the capital\"],\"contradictions\":[],\"unique_insights\":[\"history\"]}",
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": "\u003cvolatile\u003e",
+      "fusion": {
+        "analysis": {
+          "consensus": [
+            "Paris is the capital"
+          ],
+          "unique_insights": [
+            "history"
+          ]
+        },
+        "analysis_models": [
+          "model-a",
+          "model-b",
+          "model-c"
+        ],
+        "failed_models": [
+          {
+            "error": "answered 503",
+            "model": "model-c"
+          }
+        ],
+        "judge_model": "judge",
+        "prompt_version": "fusion-v1",
+        "responses": [
+          {
+            "content": "model-a says Paris (1b997d5a)",
+            "model": "model-a"
+          },
+          {
+            "content": "model-b says Paris in detail (1b997d5a)",
+            "model": "model-b"
+          }
+        ]
+      },
+      "id": "\u003cvolatile\u003e",
+      "model": "judge",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 20,
+        "prompt_tokens": 60,
+        "total_tokens": 80
+      }
+    }
+  }
+}

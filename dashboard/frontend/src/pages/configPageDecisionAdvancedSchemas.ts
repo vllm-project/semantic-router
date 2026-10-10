@@ -47,6 +47,117 @@ export const DECISION_ADAPTATIONS_SCHEMA = mergeRouterFieldSchemas(
   DECISION_ADAPTATIONS_OVERRIDES,
 )
 
+const NATIVE_ONLY = 'Honored in standalone mode only; Envoy cannot apply it to one request.'
+const DECISION_RELIABILITY_OVERRIDES: FieldSchema[] = [
+  {
+    key: 'total_timeout',
+    label: 'Total Timeout',
+    type: 'string',
+    placeholder: '600s',
+    description: "Replaces the provider model's route timeout; 0s disables it.",
+  },
+  {
+    key: 'per_try_timeout',
+    label: 'Per-Try Timeout',
+    type: 'string',
+    placeholder: '300s',
+    description: 'Bounds each attempt until its response starts; 0s disables it.',
+  },
+  {
+    key: 'idle_timeout',
+    label: 'Idle Timeout',
+    type: 'string',
+    placeholder: '60s',
+    description: NATIVE_ONLY,
+  },
+  {
+    key: 'first_byte_timeout',
+    label: 'First-Byte Timeout',
+    type: 'string',
+    placeholder: '30s',
+    description: NATIVE_ONLY,
+  },
+  { key: 'retry_count', label: 'Retry Count', type: 'number', min: 0, max: 5 },
+  {
+    key: 'retry_on',
+    label: 'Retry On',
+    type: 'string',
+    placeholder: 'reset,connect-failure',
+    description: "Envoy retry_on conditions, added to the provider model's.",
+  },
+  {
+    key: 'retriable_status_codes',
+    label: 'Retriable Status Codes',
+    type: 'number[]',
+    description: "Added to the provider model's; retried under retriable-status-codes.",
+  },
+  {
+    key: 'retry_back_off_base',
+    label: 'Retry Back-off Base',
+    type: 'string',
+    placeholder: '25ms',
+    description: NATIVE_ONLY,
+  },
+  {
+    key: 'retry_back_off_max',
+    label: 'Retry Back-off Max',
+    type: 'string',
+    placeholder: '250ms',
+    description: NATIVE_ONLY,
+  },
+  {
+    key: 'retry_after_max',
+    label: 'Retry-After Max',
+    type: 'string',
+    placeholder: '30s',
+    description: NATIVE_ONLY,
+  },
+]
+export const DECISION_RELIABILITY_SCHEMA = mergeRouterFieldSchemas(
+  routerConfigFieldsForRef('#/$defs/DecisionReliability'),
+  DECISION_RELIABILITY_OVERRIDES,
+)
+
+const DECISION_FALLBACK_OVERRIDES: FieldSchema[] = [
+  {
+    key: 'enabled',
+    label: 'Enabled',
+    type: 'boolean',
+    description: "Turns cross-model fallback on or off for this decision; unset keeps the recipe's.",
+  },
+  {
+    key: 'max_attempts',
+    label: 'Max Attempts',
+    type: 'number',
+    min: 0,
+    description: 'Attempts across candidates, the first included.',
+  },
+  {
+    key: 'total_timeout',
+    label: 'Total Timeout',
+    type: 'string',
+    placeholder: '30s',
+    description: 'Bounds the whole fallback chain.',
+  },
+  {
+    key: 'per_attempt_timeout',
+    label: 'Per-Attempt Timeout',
+    type: 'string',
+    placeholder: '10s',
+    description: 'Bounds each candidate; it cannot exceed the total timeout.',
+  },
+  {
+    key: 'retryable_status_codes',
+    label: 'Retryable Status Codes',
+    type: 'number[]',
+    description: "Statuses that move on to the next candidate; replaces the recipe's list.",
+  },
+]
+export const DECISION_FALLBACK_SCHEMA = mergeRouterFieldSchemas(
+  routerConfigFieldsForRef('#/$defs/FallbackOverride'),
+  DECISION_FALLBACK_OVERRIDES,
+)
+
 const DECISION_OUTPUT_CONTRACT_OVERRIDES: FieldSchema[] = [
   {
     key: 'type',

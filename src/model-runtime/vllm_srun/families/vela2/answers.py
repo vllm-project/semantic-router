@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -23,6 +23,9 @@ from .calibration import Calibration, sigmoid, softmax
 from .raw import RawRow
 from .request import Question, State
 from .words import decode_spans, trim
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 @dataclass(frozen=True)
@@ -52,7 +55,9 @@ class Answerer:
                 "error": INVALID_MODEL_OUTPUT,
             }
 
-    def _single(self, question: Question, values: np.ndarray) -> dict[str, Any]:
+    def _single(
+        self, question: Question, values: NDArray[np.float32]
+    ) -> dict[str, Any]:
         logits = np.asarray(values, np.float64)
         names = question.names
         count = len(names)
@@ -100,7 +105,7 @@ class Answerer:
         }
 
     def _set(
-        self, question: Question, values: np.ndarray, response: dict[str, Any]
+        self, question: Question, values: NDArray[np.float32], response: dict[str, Any]
     ) -> None:
         logits = np.asarray(values, np.float64)
         names = question.names
@@ -125,7 +130,8 @@ class Answerer:
         self, question: Question, raw: RawRow, state: State, response: dict[str, Any]
     ) -> None:
         span = raw.span
-        role = question.over
+        assert span is not None
+        role = cast(str, question.over)
         text = state.text(role)
         calibration = self.calibration
         if question.threshold is not None:
@@ -164,7 +170,9 @@ class Answerer:
                     "probability": float(entry["probability"]),
                 }
             )
-        best = probabilities.max(1) if len(span.offsets) else np.zeros(0)
+        best: NDArray[np.float64] = (
+            probabilities.max(1) if len(span.offsets) else np.zeros(0)
+        )
         if question.span_range is not None and len(best):
             inside = (span.offsets[:, 0] >= low) & (span.offsets[:, 1] <= high)
             best = best[inside]
@@ -174,5 +182,5 @@ class Answerer:
             response.setdefault("span_heads", {})[question.id] = span.head
         response["answers"][question.id] = {
             "type": "noul",
-            "noul": float(best.max()) if len(best) else 0.0,
+            "noul": float(np.max(best)) if len(best) else 0.0,
         }

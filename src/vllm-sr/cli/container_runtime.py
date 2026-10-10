@@ -46,22 +46,6 @@ def resolve_runtime_cli_path(runtime: str) -> str | None:
     return shutil.which(runtime)
 
 
-def resolve_container_cli_path(preferred_path: str | None = None) -> str | None:
-    """Resolve the docker-compatible CLI used for OpenClaw provisioning.
-
-    When the active runtime is Podman, this still has to return a usable
-    *Docker* binary because the dashboard's OpenClaw subsystem talks to a real
-    Docker daemon. Returns ``None`` if no Docker CLI is found.
-    """
-    docker_path = preferred_path or shutil.which("docker")
-    if not docker_path:
-        return None
-    if _docker_path_looks_like_podman(docker_path):
-        # Real docker is required for OpenClaw — a Podman shim cannot satisfy it.
-        return None
-    return docker_path
-
-
 def _persisted_runtime_env_path() -> str:
     """Return the runtime.env location written by ``install.sh``.
 

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/k8s/streamed-extproc.md"
   outdated: false
 ---
@@ -47,6 +47,8 @@ global:
 将 `max_bytes` 保持得足够大，以容纳最大提示词或多模态载荷。将 `timeout_sec` 设为大于第一个 body 分片到流结束之间的预期上传时间。
 
 上面的 10 MiB 和 30 秒值是与 `e2e/profiles/streaming/values.yaml` 中流式 e2e profile 匹配的示例护栏；它们不是运行时默认值，也不是经过实验校准的限制。省略任一值或将其设为 0 会禁用该护栏。参考 `config/config.yaml` 演示了更小的 1 MiB 和 15 秒策略。
+
+Operator 默认使用 standalone HTTP 前端，不创建 Envoy sidecar。这里的 ExtProc body 设置仅适用于使用 `spec.gateway.existingRef` 的外部网关路径。
 
 ## Agent Router / Envoy Gateway
 
@@ -168,7 +170,7 @@ routing:
 curl -N -i http://localhost:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "stream": true,
     "messages": [
       {"role": "user", "content": "Write and explain a Python debounce decorator."}
@@ -231,7 +233,7 @@ routing:
    kubectl logs deploy/semantic-router -n vllm-semantic-router-system | grep -i streamed
    ```
 
-3. 发送带 `"model": "auto"` 的大型或分片请求，并验证其正常路由。
+3. 发送带 `"model": "vllm-sr/auto"` 的大型或分片请求，并验证其正常路由。
 
 4. 发送匹配 looper 决策且带 `"stream": true` 的流式 Chat Completions 请求，并验证 SSE 输出以及 `x-vsr-looper-*` 头。
 
