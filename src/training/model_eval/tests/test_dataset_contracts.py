@@ -188,7 +188,9 @@ class DatasetContractTest(unittest.TestCase):
         self.assertEqual(spec.split_rule, "by_source")
         self.assertRegex(spec.revision, r"^[0-9a-f]{40}$")
         self.assertEqual(spec.dataset_repo, "vllm-sr/router-signal-suite")
-        self.assertFalse([name for name in spec.data_files if "feedback-detector" in name])
+        self.assertFalse(
+            [name for name in spec.data_files if "feedback-detector" in name]
+        )
         for repo in (
             LEGACY_MODEL_REGISTRY["feedback"]["id"],
             LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
