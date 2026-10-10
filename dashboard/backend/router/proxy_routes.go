@@ -153,6 +153,10 @@ func serveRouterAPIProxy(
 		http.Error(w, "dashboard is read-only", http.StatusForbidden)
 		return
 	}
+	if (cfg.ReadonlyMode || !cfg.RuntimeConfigWritable) && r.URL.Path == classifierInventoryGatewayPath {
+		http.Error(w, "dashboard is read-only", http.StatusForbidden)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
 		http.NotFound(w, r)
 		return
@@ -186,6 +190,8 @@ func serveRouterAPIProxy(
 	}
 	routerAPIProxy.ServeHTTP(w, r)
 }
+
+const classifierInventoryGatewayPath = routercontract.GatewayPrefix + "/api/v1/inventory/classifier"
 
 func isReadonlyRouterMutation(r *http.Request) bool {
 	policy, ok := routercontract.LookupManagement(r.Method, r.URL.Path)
