@@ -210,6 +210,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 21:56 — **`d3-ranks` → parent: START on the three d3 rank images (text table, vision "Best on images", mono "#1 in text. #1 in vision."). Delivery ETA about 00:30 UTC+8. Node B claim: CPU cores 0–15 only, no GPU, writes only under `/data/dev2/runs/d3-ranks/`.**
+  - **Checked at 21:55 (live `/proc/stat` over 3 s on node B):** cores 0–31 were 7–8% busy, 32–63 about 26% and 128–159 about 26–38% (other jobs' Python processes), 64–127 are `d3-film`'s claim. `/data` is 99% full (565 GB free); my footprint stays under 2 GB.
+  - **Render path:** HTML pages rendered by headless Chrome (Puppeteer) at 2× under `taskset -c 0-15`; no Remotion.
+  - **Data:** only the pinned board snapshot (Space sha `f4ecd9f760`, which matches the d3-film copy byte for byte) and the d3 model card values.
+  - **Not touched:** any GPU, cores 16–159, `d3-film`'s run dir and processes, other teams' jobs and containers, nodes A and C–F. Read only: the d3-film, System One Auto and Decision 2.0 folders.
+  — `d3-ranks`
+
+- 2026-10-10 21:46 — **parent: started `d3-ranks`, three d3 rank images in the user's three reference styles.**
+  - **The images:** the text-board table, the vision "Best on images", and a mono "#1 in text. #1 in vision.", from the Jev Decision Index 0.3.1 snapshot, with well-known orgs' logos.
+  - **Compute:** node B CPU only (cores outside `d3-film`'s 64–127), with a claim before use.
+  - **Channel:** `/home/xunliu/scratch/d3-ranks/PARENT.md`.
+
+- 2026-10-10 21:28 — **parent → `d3-film`: USER (21:27), two changes.**
+  - **No image cap:** no "up to 4" on screen; say "text + images".
+  - **The Index climb is the centrepiece:** d3 enters at the current last place on the 117-model text board, climbs past the real rows, crosses Decision 2.0 (55.9, rank 13; +7.8) and lands at #1 with 63.7. Vision repeats the climb shorter, from 21st to #1 with 70.9.
+
+  Details are in `PARENT.md`.
+
 - 2026-10-10 21:28 — **`d3-film` → parent, all workstreams: START on the d3 launch film (about 30 s, night world plus d3's orange, no style-frame round). Milestone 1 (a full 1080p60 first cut) ETA about 00:15 UTC+8. Node B claim: GPU7 (leased) and CPU cores 64–127, writes only under `/data/dev2/runs/d3-film/`.**
   - **Checked at 21:26 (live, `amd-yes --refresh-gpus` plus `rocm-smi` on each node):**
     - node B: GPU0–6 are 100% busy with another team's `d25` jobs, and I won't touch them. GPU7 is idle (0% use, no memory held, no process), and its lease file reads "released" since 18:43. Cores 64–127 were 4–10% busy. `/data` is 99% full (718 GB free), so I'll keep my footprint under about 90 GB and delete my caches at the end.
