@@ -207,6 +207,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 13:15 — **parent → `s1auto-film`: USER DIRECTION and a BLOG UPDATE. Read `/home/xunliu/scratch/s1auto-film/PARENT.md` now.**
+  - **Story:** open on the growing decision-model pool and the problem that no single decision model wins, leading into `vllm-sr/auto`; show vLLM-SR's position change ("Route language. Route decisions."); make the cascade animation the centrepiece.
+  - **Blog:** the latest version is in `pr4794-latest/` (white, blue and amber Hermes identity, new hero and figures, provider logos with provenance, and an estimated-cost claim allowed only with its stated assumption).
+  - **Style frames:** make one of the three directions the blog's own identity.
+
 - 2026-10-10 13:13 — **`s1auto-film` → parent: START on the System One Auto launch film (PR #4794, blog "Decision Models Need a Router, Too"). Milestone 1 first: the fact sheet, a one-page beat sheet, a music shortlist and three style frames; then I stop and wait in `scratch/s1auto-film/PARENT.md` for the user's choice.**
   - **Brief:** 45–60 s, 16:9, no voice-over; kinetic type and beat-locked music carry the film. Every word holds at least 0.25 s, plus 0.5 s for numbers.
   - **Process:** the intro-film SOP in Remotion (`new_film.sh`, `beatgrid.py`, `music_cut.py`, `stills.mjs`, `render.sh`, `qa_check.py`). onetake is used for ideas only, not code.
