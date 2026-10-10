@@ -21,7 +21,7 @@ Phase 3 (#3380 handoff envelopes) stays out of scope.
   stripping the carrier before the request leaves the Router.
 - A typed signal family projected only from accepted facts.
 - Hard eligibility narrowing applied at every seam that produces candidate models,
-  including Eval and Router Learning.
+  including Router Learning. Eval is recorded under `CONFIRM-06`.
 - Content-minimized Replay provenance for accepted and rejected facts, plus
   configuration, protocol, security, reload, and E2E coverage.
 
@@ -71,20 +71,41 @@ must be confirmed with maintainers before the PR that depends on it merges.
   ordinary routing with diagnostics, while valid facts that leave no eligible
   candidate fail closed rather than silently ignoring the facts. `CONFIRM-08`
   records the envelope-level detail.
-- [ ] `CONFIRM-06` Relationship to
-  [TD-054](../tech-debt/td-054-typed-request-capability-eligibility-gap.md).
-  Default: this plan applies capability narrowing through one shared eligibility
-  function and records the remaining TD-054 surface as still open, rather than
-  adding a second parallel filter.
+- [ ] `CONFIRM-06` Where caller-declared capabilities are enforced. Default: in
+  the strict candidate requirements that `main` already owns
+  (`candidate_requirements.capabilities: declared`), rather than in a second,
+  parallel filter. The caller's `required_capabilities` join the capabilities
+  derived from the request in `validateModelDemand`, which every strict seam
+  calls, so caller and request capabilities share one function and one
+  vocabulary.
+
+  An earlier version of this branch had its own filter in the legacy path. It
+  was replaced after rebasing onto `main`, which had meanwhile added the strict
+  path. Keeping both would have meant two filters with opposite rules for a
+  model that declares no capabilities (legacy keeps it, strict excludes it),
+  and a strict recipe would have silently ignored caller capabilities. The
+  cost of this choice: caller capabilities have no effect unless the recipe
+  opts in, and an opted-in recipe must declare capabilities on every model it
+  can route to.
+
+  A route action's destination is filtered like any other candidate. `main`'s
+  strict path already checks the destination first and then the decision's
+  `modelRefs`, so a destination that lacks a required capability falls back to
+  a capable `modelRefs` entry, and with none the request fails closed. Neither
+  outcome reaches a model the operator did not configure for that decision.
+  The alternative was to exempt the destination, so that a caller could not
+  turn an operator's explicit route, typically a prompt-attack route, into a
+  refusal. That was rejected in favour of one consistent rule: facts narrow
+  every candidate set, and an empty set fails closed. The cost is that a caller
+  can make a route action refuse instead of answer; it still cannot make it
+  answer from a different, unconfigured model.
 
   Eval is deliberately left fact-free. `SelectModelForEval` has no request
   context, and the eval API never reads the carrier header, so no envelope
-  reaches it and there are no facts to apply. The subset rule still holds at
-  this seam: Eval calls the same shared function, which only removes
-  candidates, so a preview can never report a wider set than the operator
-  configured. What Eval loses is accuracy, not safety: it previews every
-  request as if no agent facts were presented, so an operator cannot preview
-  the effect of capability rules.
+  reaches it and there are no facts to apply. It passes an empty caller set
+  explicitly, so the subset rule still holds at this seam. What Eval loses is
+  accuracy, not safety: it previews every request as if no agent facts were
+  presented, so an operator cannot preview the effect of capability rules.
 
   Closing that gap means letting the eval API accept an envelope in the request
   body, the way `IntentRequest.Metadata` already lets operators test metadata
@@ -203,6 +224,21 @@ must be confirmed with maintainers before the PR that depends on it merges.
   phases cover, and this plan implements only what `TASK-05` and `TASK-06`
   need.
 
+- [ ] `CONFIRM-10` Capability vocabulary. Default: `required_capabilities`
+  accepts only canonical `llmprotocol` capability names (`text`, `tools`,
+  `reasoning`, `structured_json`, `image_input`, and so on), the vocabulary
+  strict candidate requirements match model cards against. An unknown name
+  rejects the envelope as `required_capabilities:malformed` rather than being
+  ignored, because ignoring it would tell the caller its request was narrowed
+  when it was not. Model card aliases (`vision`, `tool_use`) and `chat` are
+  refused too, so each capability has one spelling.
+
+  This conflicts with the merged proposal's example envelope, which lists
+  `required_capabilities: [code_review, structured_output]`. Neither name is in
+  the vocabulary, so that envelope is rejected. The proposal was not edited
+  here; a maintainer should decide whether to update its example or ask for a
+  wider, operator-defined vocabulary.
+
 ## Exit Criteria
 
 - Schema, trust, bounds, expiry, conflict, and fail/degrade behavior are versioned
@@ -254,25 +290,28 @@ must be confirmed with maintainers before the PR that depends on it merges.
   produces candidates, with a subset property test and explicit empty-set
   behavior. Landed in `pkg/extproc`, pending review.
 
-  `filterEligibleModelRefs` is the single function every candidate-producing
-  seam routes through, per `CONFIRM-06`. It only copies entries out of its
-  input, so the subset rule holds by construction rather than by assertion, and
-  `eligibilityExclusions` carries per-reason counts that are content-free by
-  design. `TASK-07` chose not to store these counts in Replay; they stay in the
-  `decision_models_filtered` log event.
+  Capabilities are enforced through `main`'s strict candidate requirements,
+  per `CONFIRM-06`. `validateModelDemand` takes the caller's capability set as
+  a parameter, so the compiler makes every call site state it, and adds it to
+  the capabilities the request itself needs. The check only removes
+  candidates; a property test confirms over 500 random pools and capability
+  lists that the result is a subset of the configured `modelRefs` and of what
+  the request alone allows. With no capable model the request fails closed with
+  `main`'s `503` `no_eligible_model`, whose fixed message names no model and no
+  capability.
 
-  Applied at three seams: the live decision path, the route-action fallback,
-  and the learning candidate pool. Learning mattered most: two of its candidate
-  sets draw from a wider pool than the matched decision, up to every model in
-  the deployment, so it was the only place those models met the request's
-  contracts at all. Eval is deliberately excluded, recorded under `CONFIRM-06`.
+  Applied at every strict seam: the decision prefilter, the selection context,
+  the route-action destination and its `modelRefs` fallback, the learning
+  candidate pool, the dispatch recheck, context overflow, and automatic output
+  admission. Learning mattered most: two of its candidate sets draw from a
+  wider pool than the matched decision, up to every model in the deployment, so
+  it must apply caller capabilities itself. Each of the first five seams has its
+  own test on a fresh context, because later stages narrow again and would
+  otherwise hide a broken seam; passing an empty set at any one of them fails
+  exactly that test. Eval is excluded, recorded under `CONFIRM-06`.
 
-  A route action's destination is exempt on purpose. It is the operator naming
-  one model, so a caller-declared capability must not be able to disqualify it;
-  otherwise a caller could escape a safety route by requiring something the
-  chosen model lacks. Its fallback list is ordinary candidate production and is
-  narrowed normally. A test pins this, and a mutation that added capability
-  checking to the destination failed that test and only that test.
+  The validator accepts only canonical capability names, recorded under
+  `CONFIRM-10`.
 
   `context_portability: sticky` now reaches `nonPortableContextBinding` with
   its own reason, `agentic_facts_sticky`, so Replay can tell an agent's
@@ -310,11 +349,10 @@ must be confirmed with maintainers before the PR that depends on it merges.
     rules fired. If they are added later, learning's counts must stay separate
     from the decision's counts: learning can filter a much larger list, up to
     every model in the deployment, so one shared number would be misleading.
-  - **A request refused with `422` writes no Replay record.** This was already
-    true for context-window refusals before this plan, and `TASK-07` keeps that
-    behavior rather than changing a path shared by four other refusal reasons.
-    The facts that cause a refusal are therefore visible only in the log and in
-    the `422` response body.
+  - **A capability refusal is recorded by `main`'s existing path.** It writes a
+    record with lifecycle `failed`, terminal reason `selection_rejected`, and
+    `agentic_facts_status: accepted`. No agentic-specific refusal field was
+    added.
 
   Found and fixed while doing this task, in its own commit: `ingestAgenticFacts`
   checked the trust marker before checking whether an envelope was sent, so
@@ -331,19 +369,24 @@ must be confirmed with maintainers before the PR that depends on it merges.
 
   - `agentic-facts-routing` sends a reviewer envelope and checks the selected
     decision: no envelope, authenticated, untrusted, malformed, stale, nested
-    within the depth bound, nested past it, and conflicting lineage. Only the
-    trusted and valid cases may reach the reviewer decision; every other case
-    must still return 200 on the default decision, because a rejected
-    envelope is ignored, not fatal.
+    within the depth bound, nested past it, a capability alias (`vision`), and
+    conflicting lineage. Only the trusted and valid cases may reach the
+    reviewer decision; every other case must still return 200 on the default
+    decision, because a rejected envelope is ignored, not fatal.
   - `agentic-facts-eligibility` checks capability narrowing. A control case
-    with no requirement selects the higher-quality model; requiring the other
-    model's capability selects that model instead; requiring a capability no
-    model has returns 422, and the 422 body names the reason without any model
-    name or caller value.
+    with no requirement selects the higher-quality model; requiring `tools`,
+    which only the other model declares, selects that model instead; requiring
+    `reasoning`, which no model declares, returns 503 with the fixed
+    no-eligible-model message and no model name or caller value.
 
   The profile gains one recipe, `agentic-facts-policy`, reached through its own
-  entrypoint, and two models used only by that recipe. Shared model cards are
-  untouched, so no other recipe or test in the profile sees a change.
+  entrypoint and opted into `candidate_requirements.capabilities: declared`,
+  and three models used only by that recipe: preferred `[text]`, alternate
+  `[text, tools]`, and a default `[text]`. Strict mode excludes models that
+  declare nothing, so the default decision cannot use the shared `base-model`.
+  Shared model cards are untouched, so no other recipe or test in the profile
+  sees a change. `context: known_limits` is not enabled, because it would
+  require every request to send `max_tokens`.
   `agentic_facts` is enabled for the whole profile; the other tests send no
   envelope, so they are unaffected.
 
@@ -359,9 +402,10 @@ must be confirmed with maintainers before the PR that depends on it merges.
   strips a client-supplied trust marker (a deployment responsibility under
   `CONFIRM-03`; the test plays the trusted gateway itself).
 
-  Checked without a cluster: the profile config parses with `config.Parse`, and
-  every test envelope is accepted or rejected by `agenticfacts.Validate` for the
-  intended reason. A full local run did not complete: the router downloads about
+  Checked without a cluster: the profile config parses with `config.Parse`;
+  loaded into a router, the reviewer decision selects the preferred model with
+  no capability, the alternate with `tools`, and no model with `reasoning`, and
+  the default decision selects the default model. A full local run did not complete: the router downloads about
   3 GB of embedding models at startup, and on the development machine the Kind
   cluster reached only about 0.1 MB/s, so the router could not become ready
   within its 60-minute startup limit. This is a local network limit, not a test
@@ -397,10 +441,12 @@ maintainers.
 
 Every `CONFIRM` item except `CONFIRM-01` is now implemented and externally
 visible in code rather than recorded as a default, so all of them need a
-maintainer ruling before the branch is complete. Two carry more weight than the
-rest because they were decided here rather than by the proposal: `CONFIRM-06`,
-which exempts a route action's destination from caller-declared capability
-filtering, and `CONFIRM-09`, which removed two envelope fields.
+maintainer ruling before the branch is complete. Three carry more weight than
+the rest because they were decided here rather than by the proposal:
+`CONFIRM-06`, which moves capability enforcement onto the strict path and
+applies it to a route action's destination; `CONFIRM-09`, which removed two
+envelope fields; and `CONFIRM-10`, whose vocabulary rejects the proposal's own
+example capability names.
 
 `TASK-08` checks routing through response headers rather than Replay; the
 reason is recorded in its task entry.
@@ -425,9 +471,7 @@ reason is recorded in its task entry.
 
 - [Agent-Aware Router Contracts proposal](../../../../website/docs/proposals/agent-based-routing.md)
 - [PL-0041: Agent-Aware Router Contracts (Epic #2994)](pl-0041-agent-aware-router-contracts.md)
-- [TD-054: Typed request capability eligibility gap](../tech-debt/td-054-typed-request-capability-eligibility-gap.md)
 - [Change surfaces](../change-surfaces.md)
-- [Feature-complete checklist](../feature-complete-checklist.md)
 - [Testing strategy](../testing-strategy.md)
 - [Feature #3379](https://github.com/vllm-project/semantic-router/issues/3379)
 - [Epic #2994](https://github.com/vllm-project/semantic-router/issues/2994)
