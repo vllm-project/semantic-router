@@ -29,6 +29,7 @@ _API_FORMAT_TO_PROTOCOL = {
     "openai": "openai/chat-completions@1",
     "responses": "openai/responses@1",
     "anthropic": "anthropic/messages@1",
+    "systemone": "vllm-sr/systemone@1",
 }
 _PROTOCOL_TO_API_FORMAT = {
     protocol: api_format for api_format, protocol in _API_FORMAT_TO_PROTOCOL.items()
@@ -83,9 +84,13 @@ def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, .
     snapshot consumed by the Router and Dashboard.
     """
 
-    return _project_provider_models(
-        user_config,
-        allow_backendless_physical=False,
+    return tuple(
+        model
+        for model in _project_provider_models(
+            user_config,
+            allow_backendless_physical=False,
+        )
+        if model.api_format != "systemone"
     )
 
 
@@ -194,6 +199,7 @@ def _validate_physical_backend_requirement(
 
     if (
         model.backend_refs
+        or model.deployment
         or card.get("kind") == "virtual"
         or allow_backendless_physical
     ):
@@ -507,7 +513,7 @@ def _protocol_for_api_format(api_format: str, path: str) -> str:
     if protocol is None:
         raise CatalogProviderProjectionError(
             f"{path}.api_format {api_format!r} is unsupported; use openai, "
-            "responses, or anthropic"
+            "responses, anthropic, or systemone"
         )
     return protocol
 

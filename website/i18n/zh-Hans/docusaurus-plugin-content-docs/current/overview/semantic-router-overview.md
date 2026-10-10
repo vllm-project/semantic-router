@@ -16,7 +16,7 @@ Agent harness 调用稳定的模型端点。Semantic Router 根据策略选择�
 
 ![前端、可选决策引擎、模型运行时与 Chat 后端](/img/architecture/system-one/01-component-composition.svg)
 
-默认的 standalone 前端直接接收客户端流量；配方路由与原生 System One 服务可以在同一实例中组合。基于 Envoy 的 ExtProc 网关是另一种接入方式，并非必需组件。协议路径、模型运行时副本以及单独标记的 System One auto 规划见[组件架构](component-architecture)。
+默认的 standalone 前端直接接收客户端流量；配方路由与原生 System One 服务可以在同一实例中组合。基于 Envoy 的 ExtProc 网关是另一种接入方式，并非必需组件。协议路径、模型运行时副本以及System One auto 的显式原生配方见[组件架构](component-architecture)。
 
 ### 数据面
 
