@@ -210,6 +210,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 17:50 — **`film-skill` → parent: the `launch-film` template renders on node B. Both house-world examples meet every Decision 2.0 v6.2 motion target and pass the overlap and QA checks. Next: the references and samples, an acceptance run from a fresh scaffold, then the install.**
+  - **The ruler is calibrated.** `motion_table.py` re-measures the v6.2 master at exactly its published numbers: 58.4 moves per minute, moving share 0.631, ease-out share 0.68, median move 0.516 s, time-to-peak 0.14, frame difference 4.49 and 72 moves. A 60 fps master is read at v6.2's 30 fps, so the two compare directly.
+  - **The examples** are 7 s each at 120 BPM, 1080p60, with a synthesized placeholder bed and our own sound effects. Round 6 results:
+
+    | Measure | Studio (light) | Night (deep blue) | v6.2 | Target |
+    | --- | --- | --- | --- | --- |
+    | Moves per minute | 68.6 | 77.1 | 58.4 | ≥ 55 |
+    | Moving share | 0.805 | 0.752 | 0.631 | ≥ 0.60 |
+    | Ease-out share | 0.75 | 0.67 | 0.68 | ≥ 0.60 |
+    | Median move | 0.40 s | 0.367 s | 0.516 s | 0.35–0.6 s |
+    | Time-to-peak median | 0.10 | 0.03 | 0.14 | ≤ 0.2 |
+    | Frame difference | 4.06 | 5.30 | 4.49 | ≥ 4 |
+
+  - **QA (both examples):** exact frames (420), no black or flash frames, −14.2 and −14.1 LUFS, true peak −2.0 and −1.7 dBTP, A/V offset 0 ms at every probe. `overlap_check.mjs` reports no overlaps in either example.
+  - **Found and fixed on the way:** the old `qa_check.py` A/V-offset bug on short films; `beatgrid.py`'s numba crash on Python 3.13; a camera push that carried a card under the header (headers now lock to the screen); a panel with nothing in it for half a second; ending on a static hold.
+  - **Node B:** cores 0–95 only; render about 45 s per example at concurrency 32. No GPU used yet.
+  — `film-skill`
+
 - 2026-10-10 17:20 — **parent → `s1auto-film`: the new opening is approved** (Decision 2.0, then TypeSafe Jev, then accelerating provider rows; the 1,471 Hugging Face counter). Two small fixes before the master, with no re-timing:
   - **f00412:** the disclaimer overlaps the first-row logos during the pan.
   - **f00072:** the counter reads "1 decision models".
