@@ -11,7 +11,7 @@ import (
 // BuildJudgeTasks emits or to how it derives opaque identities changes this
 // string, because judgments collected under one shape cannot be read under
 // another.
-const JudgeTasksVersion = "shadow-judge-tasks.v1"
+const JudgeTasksVersion = "shadow-judge-tasks.v2"
 
 // Reasons a pair is left out of the judge tasks. A judge reads text while a
 // manifest holds digests, so a pair is judged only when the request and both
@@ -86,6 +86,9 @@ func BuildJudgeTasks(m Manifest, texts map[string]ExampleText, key string) (Judg
 	if key == m.Policy.Seed {
 		return JudgeTaskSet{}, fmt.Errorf("the blinding key must differ from the manifest seed, which is published")
 	}
+	if m.Version != ManifestVersion {
+		return JudgeTaskSet{}, fmt.Errorf("manifest version %q, want %q", m.Version, ManifestVersion)
+	}
 
 	set := JudgeTaskSet{
 		Version:        JudgeTasksVersion,
@@ -154,14 +157,15 @@ func pairTextFault(example Example, text ExampleText, found bool, shadow int) st
 }
 
 // judgeInput is the request a judge reads, and the text an input digest covers.
-// A stored request body names the model the router sent it to, so its
-// top-level model field is removed. Any other input is read as it is, which
-// leaves an input without that field unchanged.
+// A stored request names the model the router sent it to, as `Model` in the
+// recorder's semantic request and as `model` in a client body, so both
+// top-level fields are removed. Any other input is read as it is.
 func judgeInput(input string) string {
 	var body map[string]json.RawMessage
-	if json.Unmarshal([]byte(input), &body) != nil || body["model"] == nil {
+	if json.Unmarshal([]byte(input), &body) != nil || (body["Model"] == nil && body["model"] == nil) {
 		return input
 	}
+	delete(body, "Model")
 	delete(body, "model")
 	neutral, err := json.Marshal(body)
 	if err != nil {
