@@ -660,7 +660,9 @@ class Holdouts:
                     rule["name"], meta.get("source_key"), rule["mod"], rule["keep"]
                 ):
                     return "holdout_rows"
-        if str(meta.get("source_id")) in self.item_ids:
+        if str(meta.get("source_id")) in self.item_ids or any(
+            str(ref) in self.item_ids for ref in meta.get("source_ids") or []
+        ):
             return "holdout_item"
         digests = set(meta.get("image_sha256") or []) | set(
             meta.get("image_orig_sha256") or []
@@ -675,7 +677,7 @@ class Holdouts:
 
 @dataclass
 class Decontaminator:
-    text: TextIndex
+    text: TextIndex | None
     text_threshold: float
     images: ImageIndex
     rule: Rule
@@ -691,13 +693,14 @@ class Decontaminator:
         reason = self.holdouts.row_dropped(row, identities or [row["source"]])
         if reason:
             return reason, {}
-        exact, coverage = self.text.score(
-            training_units(row), option_key(row.get("question"))
-        )
-        if exact:
-            return "text_exact", {"coverage": coverage}
-        if coverage >= self.text_threshold:
-            return "text_13gram", {"coverage": round(coverage, 4)}
+        if self.text is not None:
+            exact, coverage = self.text.score(
+                training_units(row), option_key(row.get("question"))
+            )
+            if exact:
+                return "text_exact", {"coverage": coverage}
+            if coverage >= self.text_threshold:
+                return "text_13gram", {"coverage": round(coverage, 4)}
         meta = row.get("meta") or {}
         digests = list(meta.get("image_sha256") or []) + [
             d for d in meta.get("image_orig_sha256") or [] if d

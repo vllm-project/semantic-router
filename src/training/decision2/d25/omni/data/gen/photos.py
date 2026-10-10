@@ -42,12 +42,23 @@ NUMBER_WORDS = (
 
 
 @lru_cache(maxsize=None)
+def blacklist(name: str) -> frozenset:
+    """Ids reserved by proxies (``protected/<name>-blacklist-*.json``)."""
+    ids: set = set()
+    for path in (RAW.parent / "protected").glob(f"{name}-blacklist-*.json"):
+        ids.update(json.loads(path.read_text()))
+    return frozenset(ids)
+
+
+@lru_cache(maxsize=None)
 def pool(name: str) -> list[dict]:
     path = RAW / name / "index.jsonl.gz"
     if not path.exists():
         return []
+    banned = blacklist(name)
     with gzip.open(path, "rt", encoding="utf-8") as stream:
-        return [json.loads(line) for line in stream if line.strip()]
+        rows = (json.loads(line) for line in stream if line.strip())
+        return [row for row in rows if row["id"] not in banned]
 
 
 @lru_cache(maxsize=None)

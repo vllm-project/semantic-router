@@ -829,6 +829,90 @@ def step_bench(names: list[str]) -> None:
     write_jsonl(root / "text.jsonl.gz", texts)
 
 
+VEGA_ROWS = Path("/data/d25/shared/data/v1/M2T-v5")
+PERMISSIVE_PART = re.compile(
+    r"^(apache[- ]?2\.0|apache license 2\.0|mit( license)?|bsd(-[23]-clause)?|cc0([- ]1\.0)?|cc[- ]by[- ][234]\.0|"
+    r"odc[- ]by|cdla[- ]permissive(-[12]\.0)?|public[- ]domain|d20-permissive)( \(.*\))?$",
+    re.I,
+)
+
+
+def permissive(licence: str | None) -> bool:
+    parts = [p.strip() for p in re.split(r",(?![^()]*\))", licence or "") if p.strip()]
+    return bool(parts) and all(PERMISSIVE_PART.match(p) for p in parts)
+
+
+def step_vega(limit: int) -> None:
+    """Vega M2T-v5 choice rows (permissive licence, 3-10 options, page-sized text) to render with options in the image."""
+    from d25.vega.common import decision_format as df
+
+    root = RAW / "vega"
+    caps = {"knowledge": 0.45, "tasksource": 0.40, "d20": 0.10, "indist": 0.05}
+    pools: dict[str, list[dict]] = {k: [] for k in caps}
+    for path in sorted(VEGA_ROWS.glob("train-*.jsonl.gz")):
+        for row in read_jsonl(path):
+            q, meta = row["question"], row.get("meta") or {}
+            part = row["source"].split(":")[0]
+            if (
+                part not in pools
+                or q["type"] != "choice"
+                or not permissive(meta.get("licence"))
+            ):
+                continue
+            keys, texts = df.options(q)
+            gold = meta.get("gold_target") or row["target"]
+            if not 3 <= len(keys) <= 10 or max(gold) < 0.999:
+                continue
+            state = (
+                df.describe(row.get("state"))
+                if row.get("state") not in (None, "")
+                else ""
+            )
+            if (
+                len(state) > 900
+                or any(len(t) > 160 for t in texts)
+                or len(q.get("instructions") or "") > 300
+            ):
+                continue
+            if state.startswith(("{", "[")) and len(state) > 300:
+                continue
+            pools[part].append(
+                {
+                    "id": row["id"],
+                    "source": row["source"],
+                    "family": row["family"],
+                    "state": state,
+                    "instructions": q.get("instructions") or "",
+                    "options": texts,
+                    "gold": int(max(range(len(gold)), key=gold.__getitem__)),
+                    "teacher": (meta.get("teachers") or {}).get("pplx11"),
+                    "licence": meta.get("licence"),
+                    "dataset": meta.get("dataset"),
+                }
+            )
+    chosen: list[dict] = []
+    for part, share in caps.items():
+        rows = sorted(pools[part], key=lambda r: sha256(f"vega:{r['id']}".encode()))
+        per_family: dict[str, int] = {}
+        cap_family = max(50, int(limit * share) // 40)
+        taken = 0
+        for r in rows:
+            if per_family.get(r["family"], 0) >= cap_family:
+                continue
+            per_family[r["family"]] = per_family.get(r["family"], 0) + 1
+            chosen.append(r)
+            taken += 1
+            if taken >= int(limit * share):
+                break
+    log(
+        f"vega: candidates { {k: len(v) for k, v in pools.items()} }, chosen {len(chosen)}"
+    )
+    write_jsonl(
+        root / "pool.jsonl.gz",
+        sorted(chosen, key=lambda r: sha256(f"order:{r['id']}".encode())),
+    )
+
+
 def step_sscd() -> None:
     download(
         "https://dl.fbaipublicfiles.com/sscd-copy-detection/sscd_disc_mixup.torchscript.pt",
@@ -844,6 +928,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--openimages", type=int, default=24000)
     parser.add_argument("--sat-per-type", type=int, default=3000)
     parser.add_argument("--diffusiondb-parts", type=int, default=12)
+    parser.add_argument("--vega", type=int, default=30000)
     parser.add_argument(
         "--bench",
         default="cv-bench,blink,realworldqa,charxiv,mmmu-pro,r-bench,cord-v2,funsd,"
@@ -871,6 +956,8 @@ def main(argv: list[str] | None = None) -> None:
             step_bench(args.bench.split(","))
         elif step == "sscd":
             step_sscd()
+        elif step == "vega":
+            step_vega(args.vega)
         else:
             raise SystemExit(f"unknown step {step}")
         done.parent.mkdir(parents=True, exist_ok=True)

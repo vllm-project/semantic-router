@@ -1,112 +1,40 @@
 """Questions whose text and options live only inside the image (MMMU-Pro vision and R-Bench-M style).
 
-Sources: AQuA-RAT train (expanded to 10 numeric options), MedMCQA train (6 options with 'All other answers
-are incorrect', gold on it one time in six), QASC train (8 options) and synthetic geometry, graph and
-arithmetic problems with exact answers and a diagram. Layouts: exam sheet, quiz screenshot, slide, and a
+``vega_render``: Vega M2T-v5 text decision rows (permissive licences, selected by ``fetch vega``) rendered
+with state, question and options inside the image; five-option rows sometimes gain R-Bench-M's sixth
+option "All other answers are incorrect". ``generate``: synthetic geometry and graph problems with an
+exact answer and a diagram, 4-10 numeric options. Layouts: exam sheet, quiz screenshot, slide, and a
 phone photo of a printed sheet.
 """
 
 from __future__ import annotations
 
+import gzip
 import io
+import json
 import math
 import random
-import re
+from functools import lru_cache
 
 from PIL import Image, ImageDraw
 
 from d25.omni.data import render
-from d25.omni.data.gen.photos import text_pool
-from d25.omni.data.rows import Item, fmt_number, numeric_distractors, rng_for
+from d25.omni.data.gen.photos import RAW
+from d25.omni.data.rows import Item, numeric_distractors, rng_for
 
 LETTERS = "ABCDEFGHIJ"
 NONE_CORRECT = "All other answers are incorrect"
-
-
-def _number(text: str) -> float | None:
-    m = re.fullmatch(
-        r"\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*(%|[a-zA-Z/. ]{0,12})?\s*", text
-    )
-    return float(m.group(1).replace(",", "")) if m else None
-
-
-def _expand_numeric(
-    options: list[str], gold: int, n: int, rng
-) -> tuple[list[str], int] | None:
-    value = _number(options[gold])
-    if value is None:
-        return None
-    suffix = re.sub(r"^[\s$\-\d,.]+", "", options[gold]).strip()
-    decimals = (
-        len(options[gold].split(".")[1].split()[0]) if "." in options[gold] else 0
-    )
-    seen = {o.strip() for o in options}
-    out = list(options)
-    for v in numeric_distractors(value, rng, 3 * n, integer=decimals == 0, spread=0.6):
-        text = f"{v:.{decimals}f}" + (f" {suffix}" if suffix else "")
-        if text not in seen:
-            seen.add(text)
-            out.append(text)
-        if len(out) == n:
-            break
-    return (out, gold) if len(out) == n else None
-
-
-def from_mcq(
-    index: int, rng: random.Random
-) -> tuple[str, list[str], int, str, Image.Image | None] | None:
-    pool = text_pool("mcq")
-    entry = pool[rng.randrange(len(pool))]
-    options, gold = list(entry["options"]), entry["gold"]
-    if entry["source"] == "aqua-rat":
-        if rng.random() < 0.65:
-            expanded = _expand_numeric(options, gold, 10, rng)
-            if expanded is None:
-                return None
-            options, gold = expanded
-        elif rng.random() < 1 / 6:
-            expanded = _expand_numeric(options, gold, 6, rng)
-            if expanded is None:
-                return None
-            options = [o for i, o in enumerate(expanded[0]) if i != gold] + [
-                NONE_CORRECT
-            ]
-            gold = 5
-        else:
-            options = options + [NONE_CORRECT]
-    elif entry["source"] == "medmcqa":
-        same = [
-            e
-            for e in rng.sample(pool, 60)
-            if e["source"] == "medmcqa" and e["id"] != entry["id"]
-        ]
-        extras = list(
-            dict.fromkeys(o for e in same for o in e["options"] if o not in options)
-        )
-        if len(extras) < 2:
-            return None
-        options = options + [extras[0]]
-        if rng.random() < 1 / 6:
-            options = [o for i, o in enumerate(options) if i != gold] + [extras[1]]
-            gold = 5
-        options.append(NONE_CORRECT)
-    order = list(range(len(options)))
-    if options[-1] == NONE_CORRECT:
-        head = order[:-1]
-        rng.shuffle(head)
-        order = head + [order[-1]]
-    else:
-        rng.shuffle(order)
-    options = [options[i] for i in order]
-    gold = order.index(gold)
-    return entry["question"], options, gold, entry["source"], None
+INSTRUCTIONS = (
+    "Answer the multiple-choice question shown in the image.",
+    "Read the question and the options in the picture and choose the correct option.",
+    "Which option is correct for the question in the image?",
+)
 
 
 def _triangle(rng):
     a, b = rng.randint(25, 95), rng.randint(25, 95)
     if a + b >= 165:
         return None
-    c = 180 - a - b
     size = 520
     image = Image.new("RGB", (size, int(size * 0.75)), "white")
     draw = ImageDraw.Draw(image)
@@ -114,8 +42,7 @@ def _triangle(rng):
     ta, tb = math.radians(a), math.radians(b)
     width = base[1][0] - base[0][0]
     x = width * math.tan(tb) / (math.tan(ta) + math.tan(tb))
-    y = x * math.tan(ta)
-    top = (base[0][0] + x, base[0][1] - min(y, size * 0.6))
+    top = (base[0][0] + x, base[0][1] - min(x * math.tan(ta), size * 0.6))
     draw.polygon([base[0], base[1], top], outline="black", width=3)
     face = render.font("serif", 26, rng)
     draw.text((base[0][0] + 28, base[0][1] - 40), f"{a}°", font=face, fill="black")
@@ -124,7 +51,7 @@ def _triangle(rng):
     return (
         image,
         "In the triangle shown, what is the value of x (in degrees)?",
-        float(c),
+        float(180 - a - b),
         "°",
     )
 
@@ -167,8 +94,7 @@ def _line_graph(rng):
     slope = rng.choice([-3, -2, -1, -0.5, 0.5, 1, 2, 3])
     icpt = rng.randint(-4, 4)
     fig, ax = plt.subplots(figsize=(5, 4))
-    xs = [-5, 5]
-    ax.plot(xs, [slope * x + icpt for x in xs], linewidth=2)
+    ax.plot([-5, 5], [slope * -5 + icpt, slope * 5 + icpt], linewidth=2)
     ax.axhline(0, color="black", linewidth=0.8)
     ax.axvline(0, color="black", linewidth=0.8)
     ax.set_xticks(range(-5, 6))
@@ -196,8 +122,7 @@ def _line_graph(rng):
 
 
 def synthetic(rng: random.Random):
-    builder = rng.choice([_triangle, _rectangle, _line_graph])
-    made = builder(rng)
+    made = rng.choice([_triangle, _rectangle, _line_graph])(rng)
     if made is None:
         return None
     diagram, question, value, unit = made
@@ -208,15 +133,13 @@ def synthetic(rng: random.Random):
     )
     if len(values) < n:
         return None
-    options = [
-        f"{v:.{decimals}f}{(' ' + unit) if unit and unit != '°' else unit}"
-        for v in values
-    ]
+    suffix = unit if unit == "°" else (f" {unit}" if unit else "")
+    options = [f"{v:.{decimals}f}{suffix}" for v in values]
     if len(set(options)) != n:
         return None
     order = list(range(n))
     rng.shuffle(order)
-    return question, [options[i] for i in order], order.index(0), "synthetic", diagram
+    return question, [options[i] for i in order], order.index(0), diagram
 
 
 def _layout(
@@ -229,7 +152,7 @@ def _layout(
     serif = rng.random() < 0.5 and style == "sheet"
     face = render.font("serif" if serif else "sans", rng.randint(22, 28), rng)
     bold = render.font("serif_bold" if serif else "sans_bold", rng.randint(24, 30), rng)
-    bg, ink = "white", "black"
+    ink = "black"
     if style == "slide":
         bg = rng.choice(["#1f3b57", "#f3efe6", "#e8f1f8", "#2b2d42"])
         ink = "white" if bg in ("#1f3b57", "#2b2d42") else "black"
@@ -246,13 +169,10 @@ def _layout(
         y = 110
     else:
         draw.text((50, y), f"{rng.randint(1, 60)}.", font=bold, fill=ink)
+    lines = render.wrap(draw, question, face, width - 160)
     y = (
         render.draw_lines(
-            draw,
-            (100 if style != "quiz" else 40, y),
-            render.wrap(draw, question, face, width - 160),
-            face,
-            fill=ink,
+            draw, (100 if style != "quiz" else 40, y), lines, face, fill=ink
         )
         + 20
     )
@@ -276,64 +196,105 @@ def _layout(
             y = start
         label = marker.format(LETTERS[i])
         if style == "quiz":
-            lines = render.wrap(draw, option, face, width - 220)
-            box_h = render.line_height(face) * len(lines) + 16
+            wrapped = render.wrap(draw, option, face, width - 220)
+            box_h = render.line_height(face) * len(wrapped) + 16
+            right = (width // 2 if two_col else width) - 40 + (width // 2 - 40) * c
             draw.rounded_rectangle(
-                (
-                    col_x[c] - 20,
-                    y,
-                    (width // 2 if two_col else width) - 40 + (width // 2 - 40) * c,
-                    y + box_h,
-                ),
+                (col_x[c] - 20, y, right, y + box_h),
                 radius=10,
                 outline="#999999",
                 width=2,
             )
             draw.text((col_x[c], y + 8), label, font=bold, fill=ink)
             render.draw_lines(
-                draw, (col_x[c] + 60, y + 8), lines, face, fill=ink, spacing=1.0
+                draw, (col_x[c] + 60, y + 8), wrapped, face, fill=ink, spacing=1.0
             )
             y += box_h + 12
         else:
             draw.text((col_x[c], y), label, font=bold, fill=ink)
-            lines = render.wrap(
+            wrapped = render.wrap(
                 draw, option, face, (width // 2 - 200) if two_col else width - 260
             )
-            y = render.draw_lines(draw, (col_x[c] + 60, y), lines, face, fill=ink) + 8
-    bottom = max(y, start) + 40
-    image = canvas.crop((0, 0, width, min(2600, bottom)))
+            y = render.draw_lines(draw, (col_x[c] + 60, y), wrapped, face, fill=ink) + 8
+    image = canvas.crop((0, 0, width, min(2600, max(y, start) + 40)))
     if style == "sheet" and rng.random() < 0.35:
         image = render.photograph(image, rng)
     return image
 
 
-def generate(index: int, ctx=None) -> Item | None:
-    rng = rng_for("gen-stem", index)
-    made = synthetic(rng) if rng.random() < 0.3 else from_mcq(index, rng)
-    if made is None:
-        return None
-    question, options, gold, source, diagram = made
-    image = _layout(question, options, diagram, rng)
-    instruction = rng.choice(
-        [
-            "Answer the multiple-choice question shown in the image.",
-            "Read the question and the options in the picture and choose the correct option.",
-            "Which option is correct for the question in the image?",
-        ]
+@lru_cache(maxsize=None)
+def vega_pool() -> list[dict]:
+    with gzip.open(RAW / "vega" / "pool.jsonl.gz", "rt", encoding="utf-8") as stream:
+        return [json.loads(line) for line in stream if line.strip()]
+
+
+def vega_render(index: int, ctx=None) -> Item | None:
+    """A Vega M2T-v5 text decision row rendered with its state, question and options inside the image.
+
+    The text-side teacher distribution (pplx-decider-v1.1 on the text row) is kept, permuted with the
+    options, as ``meta.teachers.pplx11_text``; the target is the gold answer.
+    """
+    pool = vega_pool()
+    rng = rng_for("gen-stem-vega", index)
+    row = (
+        pool[index % len(pool)] if index < len(pool) else pool[rng.randrange(len(pool))]
     )
-    licences = {
-        "aqua-rat": "Apache-2.0",
-        "medmcqa": "Apache-2.0",
-        "qasc": "CC-BY-4.0",
-        "synthetic": "Apache-2.0",
+    n = len(row["options"])
+    order = list(range(n))
+    rng.shuffle(order)
+    options = [row["options"][i] for i in order]
+    gold = order.index(row["gold"])
+    teacher = (
+        [row["teacher"][i] for i in order]
+        if row.get("teacher") and len(row["teacher"]) == n
+        else None
+    )
+    if n == 5 and rng.random() < 0.4:
+        options.append(NONE_CORRECT)
+        teacher = teacher + [0.0] if teacher else None
+    text = "\n\n".join(part for part in (row["state"], row["instructions"]) if part)
+    image = _layout(text, options, None, rng)
+    meta = {
+        "benchmark_target": "MMMU-Pro" if len(options) >= 8 else "R-Bench-M",
+        "text_source": "vega-m2t-v5",
+        "vega_id": row["id"],
+        "vega_source": row["source"],
+        "licences": [row["licence"] or "unknown"],
+        "source_ids": [f"vega:{row['id']}"],
     }
+    if teacher:
+        meta["teachers"] = {"pplx11_text": teacher}
     return Item(
         source="gen-stem",
-        family=f"stem-{source}",
+        family="stem-vega",
         skill="stem_in_image",
         images=[image],
         image_kinds=["png"],
-        question=instruction,
+        question=rng.choice(INSTRUCTIONS),
+        options=options,
+        gold=gold,
+        keys=list(LETTERS[: len(options)]),
+        fixed_order=True,
+        describe_keys=False,
+        meta=meta,
+        image_text=[text + " " + " ".join(options)],
+    )
+
+
+def generate(index: int, ctx=None) -> Item | None:
+    rng = rng_for("gen-stem", index)
+    made = synthetic(rng)
+    if made is None:
+        return None
+    question, options, gold, diagram = made
+    image = _layout(question, options, diagram, rng)
+    return Item(
+        source="gen-stem",
+        family="stem-synthetic",
+        skill="stem_in_image",
+        images=[image],
+        image_kinds=["png"],
+        question=rng.choice(INSTRUCTIONS),
         options=options,
         gold=gold,
         keys=list(LETTERS[: len(options)]),
@@ -341,11 +302,8 @@ def generate(index: int, ctx=None) -> Item | None:
         describe_keys=False,
         meta={
             "benchmark_target": "MMMU-Pro" if len(options) == 10 else "R-Bench-M",
-            "text_source": source,
-            "licences": [licences[source]],
+            "text_source": "synthetic",
+            "licences": ["Apache-2.0"],
         },
         image_text=[question + " " + " ".join(options)],
     )
-
-
-__all__ = ["generate", "fmt_number"]
