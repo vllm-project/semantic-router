@@ -89,7 +89,17 @@ def run_all(args) -> None:
     codes = [p.wait() for p in procs]
     if any(codes):
         raise SystemExit(f"workers failed with exit codes {codes}")
+    score(args)
+
+
+def score(args) -> None:
+    from d25.vega.eval import ckpt_eval
+
+    if ckpt_eval.KIT not in sys.path:
+        sys.path.insert(0, ckpt_eval.KIT)
     from d25.vega.eval.proxy.score import load_results, score_all
+
+    out = Path(args.out)
 
     results = load_results([str(p) for p in sorted(out.glob("results.shard*.jsonl"))])
     scores = score_all(args.proxy, results)
@@ -108,11 +118,12 @@ def run_all(args) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run")
-    r.add_argument("--name", required=True, choices=sorted(EXTRA))
-    r.add_argument("--proxy", required=True)
-    r.add_argument("--out", required=True)
-    r.add_argument("--gpus", type=int, default=1)
+    for name in ("run", "score"):
+        r = sub.add_parser(name)
+        r.add_argument("--name", required=True, choices=sorted(EXTRA))
+        r.add_argument("--proxy", required=True)
+        r.add_argument("--out", required=True)
+        r.add_argument("--gpus", type=int, default=1)
     w = sub.add_parser("worker")
     w.add_argument("--name", required=True, choices=sorted(EXTRA))
     w.add_argument("--rows", nargs="+", required=True)
@@ -121,7 +132,7 @@ def main() -> None:
     w.add_argument("--shards", type=int, default=1)
     w.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
-    (run_all if args.cmd == "run" else worker)(args)
+    {"run": run_all, "score": score, "worker": worker}[args.cmd](args)
 
 
 if __name__ == "__main__":
