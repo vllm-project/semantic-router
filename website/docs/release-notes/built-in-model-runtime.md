@@ -52,7 +52,7 @@ Managed CPU workers now default to half the router's available CPU budget,
 rounded down, with a minimum of one thread and a maximum of 16. The thread count
 stays independent of the number of active models; attached runtimes keep their
 own settings. See
-[CPU threads](../model-runtime/deploy.md#cpu-threads) before choosing an override.
+[CPU threads](model-runtime/deploy.md) before choosing an override.
 
 ## Breaking changes
 
@@ -103,7 +103,7 @@ own settings. See
   CPU. Contract 2.1.0 adds `scan_budget_exceeded`, the usage flag
   `tokens_lower_bound`, the model limits `max_scan_tokens` and
   `truncate_tokens`, the decisions option `max_tokens` and the question field
-  `overflow` ([Long inputs](../model-runtime/reference.md#long-inputs)).
+  `overflow` ([Long inputs](model-runtime/reference.md#long-inputs)).
 - **Routing reads a long request's beginning, safety reads it whole.** Through
   Vela 2.0, routing questions truncate. Safety questions (prompt guard,
   safety, PII, hallucination) read a long request whole up to the scan budget,

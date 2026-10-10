@@ -246,7 +246,7 @@ global:
 内存取决于模型家族和 profile，而不只是设备。FP32 权重约占每参数 4 字节，低精度模型可能约占 2 字节；
 还需要为输入、激活和并发请求留出余量。307M FP32 任务模型仅权重就约需 1.3 GB。
 请查看模型记录并测量实际工作负载的峰值。每个副本有独立进程和权重副本，通过 `replicas` 配置设备位置
-（见[放置和扩展副本](model-runtime/deploy.md#place-and-scale-replicas)）。
+（见[放置和扩展副本](model-runtime/deploy.md#group-models-into-processes)）。
 
 ## 你自己的模型 {#your-own-models}
 
