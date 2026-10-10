@@ -35,7 +35,7 @@ MoM 可以组合稠密模型、MoE 模型、托管 API 和本地模型。它们�
 | **虚拟模型** | `vllm-sr/mom-v1-flash` | 为客户端给出稳定目标，并选择配方。 |
 | **Router 系统模型** | 嵌入或分类器资产 | 帮助检测意图、风险、相似度或其他路由信号。 |
 
-Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 System One 直接发布。在多个判断模型间路由 System One 属于[规划中的扩展](component-architecture#roadmap-route-system-one-across-decision-models)，与当前 Chat Mixture of Models 分开。
+Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 System One 直接发布。在多个判断模型间路由 System One 使用显式声明的[原生配方](component-architecture#route-system-one-across-decision-models)，与 Chat Mixture of Models 分开。
 
 ## 执行模式
 
