@@ -17,6 +17,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from urllib import request as urllib_request
 
 from same_run_harness import (
     host_identity,
@@ -421,6 +422,61 @@ class ModelRuntimeAdapterTests(unittest.TestCase):
             self.assertTrue(meta["includes_helper_resources"])
             self.assertGreater(meta["cpu_s"], 0.0)
             self.assertGreater(meta["peak_rss_mb"], 0.0)
+        finally:
+            classify.close()
+
+    def test_repeated_rows_do_not_hit_result_cache(self) -> None:
+        """Regression (Xunzhuo round 5): the fixed QSL repeats every row
+        across warmup and later measurement passes. With model-runtime's
+        default 16,384-entry result cache left enabled, the second and
+        third requests for the same text are cache hits -- measuring "how
+        fast the cache answers," not a real forward pass. serve must be
+        launched with --result-cache-entries 0, so the real
+        vllm_srun_result_cache{...,outcome="hit"} series on the server's
+        own /metrics endpoint stays absent (or zero) even after sending the
+        exact same text three times in a row.
+        """
+        classify = load_model_runtime_adapter(self.fixture_dir, max_length=256)
+        try:
+            same_text = "a short prompt"
+            for _ in range(3):
+                result = classify(same_text)
+                self.assertIn(result["output"], ("AR", "DIFFUSION", "BOTH"))
+
+            request = urllib_request.Request(classify.base_url + "/metrics")
+            with urllib_request.urlopen(request, timeout=5) as response:
+                metrics_text = response.read().decode("utf-8")
+
+            hit_lines = [
+                line
+                for line in metrics_text.splitlines()
+                if line.startswith("vllm_srun_result_cache")
+                and 'outcome="hit"' in line
+            ]
+            for line in hit_lines:
+                value = float(line.rsplit(" ", 1)[-1])
+                self.assertEqual(
+                    value,
+                    0.0,
+                    f"result cache recorded a hit despite --result-cache-entries 0: {line!r}",
+                )
+        finally:
+            classify.close()
+
+    def test_zero_warmup_baseline_reflects_real_load_cost(self) -> None:
+        """Regression (Xunzhuo round 5): with the supported --warmup 0,
+        run_single_stream snapshots classify.helper_stats["cpu_s"] as its
+        baseline before sending a single request. Before this fix that
+        baseline was a hardcoded 0.0, so the ready child's already-spent
+        model-load CPU (the real fixture showed 6.48s of child CPU before
+        measurement) leaked into the very first measured request's delta.
+        Asserting the baseline is already > 0 immediately after the
+        adapter is constructed -- before classify() is ever called --
+        proves it is seeded from a real reading, not a stale zero.
+        """
+        classify = load_model_runtime_adapter(self.fixture_dir, max_length=256)
+        try:
+            self.assertGreater(classify.helper_stats["cpu_s"], 0.0)
         finally:
             classify.close()
 

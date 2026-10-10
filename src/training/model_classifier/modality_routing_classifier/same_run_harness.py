@@ -296,7 +296,24 @@ def load_model_runtime_adapter(model_id: str, max_length: int):
     # to download the model on first run (unlike the test fixture, which has
     # no network access at all and should fail fast instead of hanging).
     proc = subprocess.Popen(
-        [srun, "serve", model_id, "--device", "cpu", "--port", str(port)],
+        [
+            srun,
+            "serve",
+            model_id,
+            "--device",
+            "cpu",
+            "--port",
+            str(port),
+            # The fixed QSL repeats every row across warmup and every later
+            # measurement pass, which is a guaranteed cache hit on the
+            # content-hash-keyed result cache model-runtime enables by
+            # default (16,384 entries) -- measuring cached answers instead
+            # of real forward passes after the first pass. 0 genuinely
+            # disables it (ResultCache.put() no-ops, and the lookup path
+            # skips hashing entirely), not a weak sentinel.
+            "--result-cache-entries",
+            "0",
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -367,11 +384,24 @@ def load_model_runtime_adapter(model_id: str, max_length: int):
         }
 
     classify.close = _terminate  # type: ignore[attr-defined]
+    classify.base_url = base_url  # type: ignore[attr-defined]
     if _PROC_FS_AVAILABLE:
-        # Cumulative /proc readings for the model-runtime subprocess, updated
-        # after every response. run_single_stream reads this to fold the
-        # subprocess's real CPU/RSS cost into the reported run metrics.
-        classify.helper_stats = {"cpu_s": 0.0, "peak_rss_mb": 0.0}  # type: ignore[attr-defined]
+        # Seed from a real reading taken now (server already confirmed ready
+        # by _wait_model_runtime_ready above, no classify() call has run
+        # yet), not hardcoded zeros. With --warmup 0, run_single_stream
+        # snapshots this as helper_cpu_before immediately -- a stale 0.0
+        # there would make the model's own load-time CPU (which the ready
+        # child has already spent) leak into the first *measured* request's
+        # delta, exactly the gap a real fixture run reproduced: 6.48s of
+        # child CPU already spent before measurement, 6.511s reported on
+        # the very first measured request. run_single_stream reads this to
+        # fold the subprocess's real CPU/RSS cost into the reported run
+        # metrics.
+        initial_cpu_s, initial_peak_rss_mb = _proc_cpu_and_rss(proc.pid)
+        classify.helper_stats = {  # type: ignore[attr-defined]
+            "cpu_s": initial_cpu_s,
+            "peak_rss_mb": initial_peak_rss_mb,
+        }
     # Else: leave helper_stats unset. run_single_stream already treats a
     # missing helper_stats attribute as "no subprocess resource folding" --
     # the same path --binding hf takes, since it has no child process either.
