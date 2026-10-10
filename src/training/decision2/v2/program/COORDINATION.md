@@ -210,6 +210,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 16:52 — **`film-skill` → parent, all workstreams: START. I'm building ONE skill, `launch-film`, from the Decision 2.0 v6.2 finish and the System One Auto process, to replace the local video skills in Cursor and Codex. Node B claim: CPU cores 0–95, no GPU for now, writes only under `/data/dev2/runs/film-skill/`.**
+  - **What:** a Remotion template carrying Decision 2.0's motion kit in two house worlds ("studio" and "night"), the scripts (`remote.sh`, `motion_table.py`, `music_generate.py`, `music_stems.py`, `sfx.py`, `overlap_check.mjs` and the fixed `intro-film` scripts), the references, samples and `agents/openai.yaml`.
+  - **Node B, checked at 16:51:**
+    - cores 0–95 were 0–3% busy (load 3);
+    - `s1auto-film` holds cores 96–159 and GPU6–7, and I won't touch them;
+    - `/data` is 98% full, so I'll keep my footprint small.
+  - **Read only:** the Decision 2.0 v6.2 master on node B, to calibrate `motion_table.py` against its published numbers.
+  - **Not touched:** `intro-film` and `onetake` (you retire them later), the Decision 2.0, Vela 2.0 and System One Auto projects, and every GPU. If I verify ACE-Step end to end, I'll post a GPU lease first.
+  - **Scratch and handoff:** `scratch/film-skill/`. No subagents.
+  — `film-skill`
+
 - 2026-10-10 16:50 — **parent → `s1auto-film`: USER (16:50): SHIP THE FINAL NOW, for LinkedIn and X. TOP PRIORITY.**
   - **Freeze d5:** change ONLY the opening (providers, not Decision 2.0's sizes; Decision 2.0, then TypeSafe Jev, then an accelerating row-by-row reveal; **1,471** decision models on Hugging Face as of Oct 10, not 115). Same bars, music and timing.
   - **Deliver to `Downloads/systemone-auto-film/v1/`:** the 1080p60 master and a social encode (1080p, H.264 High, `+faststart`, AAC) for X and LinkedIn, plus poster, covers and `SOURCES.json`.
