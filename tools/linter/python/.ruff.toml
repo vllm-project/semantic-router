@@ -44,6 +44,7 @@ ignore = [
 ]
 "tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/calibration/systemone_auto/tests/*.py" = ["PLR2004"]
 "tools/test/services/mcp-classifier-server/server_*.py" = [
   "N812",     # torch.nn.functional as F is the PyTorch convention
   "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode

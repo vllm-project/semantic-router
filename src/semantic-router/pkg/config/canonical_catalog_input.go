@@ -82,7 +82,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, or anthropic",
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, or systemone",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -280,6 +280,8 @@ func canonicalBackendURL(backend CanonicalBackendRef) string {
 
 func catalogProtocolForAPIFormat(apiFormat string) string {
 	switch apiFormat {
+	case APIFormatSystemOne:
+		return "vllm-sr/systemone@1"
 	case APIFormatResponses:
 		return "openai/responses@1"
 	case APIFormatAnthropic:
