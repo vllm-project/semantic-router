@@ -971,7 +971,10 @@ type ResponseMeta struct {
 	Engine      *string  `json:"engine,omitempty"`
 
 	// Head The head that produced a classify result.
-	Head        *string  `json:"head,omitempty"`
+	Head *string `json:"head,omitempty"`
+
+	// ModelId The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
+	ModelId     *string  `json:"model_id,omitempty"`
 	ModelSha256 *string  `json:"model_sha256,omitempty"`
 	Numerics    *string  `json:"numerics,omitempty"`
 	Profile     *string  `json:"profile,omitempty"`

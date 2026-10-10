@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from .models_decision import DecisionSignalRule
+from .models_native import CalibrationArtifact
 from .models_predicates import NumericPredicate
 from .models_safety import SafetyRule
 
@@ -92,7 +93,7 @@ class Listener(BaseModel):
     """Network listener configuration."""
 
     name: str
-    address: str
+    address: str = "0.0.0.0"
     port: int
     timeout: Optional[str] = "300s"
     api_keys: Optional[List[str]] = Field(
@@ -1913,7 +1914,7 @@ class Decision(BaseModel):
 
     name: str
     description: Optional[str] = None
-    priority: int
+    priority: int = 0
     tier: int = Field(default=0, ge=0)
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
@@ -1928,6 +1929,24 @@ class Decision(BaseModel):
     fallback: Optional[FallbackOverride] = None
     plugins: Optional[List[PluginConfig]] = []
     annotations: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_native_chat_directives(cls, data):
+        if not isinstance(data, dict):
+            return data
+        algorithm = data.get("algorithm")
+        # These Chat directives have no native owner; reject before Pydantic
+        # can discard fields outside its typed view.
+        if (
+            isinstance(algorithm, dict)
+            and algorithm.get("type") == "cascade"
+            and (data.get("candidateIterations") or data.get("emits"))
+        ):
+            raise ValueError(
+                "candidateIterations and emits are unsupported for native execution"
+            )
+        return data
 
     @model_validator(mode="after")
     def validate_action(self):
@@ -2219,6 +2238,7 @@ class Model(BaseModel):
     catalog: Optional[str] = None
     reasoning: Optional[Reasoning] = None
     provider_model_id: Optional[str] = None
+    deployment: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
     reliability: Optional[ProviderReliability] = None
@@ -2408,6 +2428,7 @@ class Evaluation(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    calibrations: List[CalibrationArtifact] = Field(default_factory=list)
     benchmarks: List[EvaluationBenchmarkDefinition] = Field(default_factory=list)
     indices: List[EvaluationIndexDefinition] = Field(default_factory=list)
     records: List[EvaluationRecord] = Field(default_factory=list)
@@ -2619,6 +2640,7 @@ class Entrypoint(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    api: Literal["chat", "systemone"] | None = None
     model_names: List[str] = Field(min_length=1)
     recipe: str = Field(min_length=1)
 
