@@ -9,8 +9,13 @@
         --out /data/d25/vega/train/mix/M3Ta-cont --keep-new-parts-vs /data/d25/shared/data/v1/M2T-v5 \
         --others-ratio 3 --seed 20261019 --wait-h 30
 
-Rows keep the source's (already shuffled) order; sampling of the other rows is a deterministic hash
-of (seed, row id). The output has the source ``dev.jsonl.gz`` (unchanged unless ``--filter-dev``),
+    # continuation mix from a separate set: every SK1 row + 3x as many M2T-v5 replay rows
+    python -m d25.vega.train.mixtool --src /data/d25/shared/data/v1/M2T-v5 \
+        --add /data/d25/vega/sk1/data/SK1 --others-ratio 3 --seed 20261011 --out /data/d25/vega/sk1/mix/SK1-cont
+
+Rows keep the source's (already shuffled) order, ``--add`` rows follow (the trainer shuffles every epoch);
+sampling of the other rows is a deterministic hash of (seed, row id). The output has the source
+``dev.jsonl.gz`` (unchanged unless ``--filter-dev``; the dev files of ``--add`` sets are appended),
 train shards of 50,000 rows, ``manifest.json`` (source manifest sha256, selection, counts by part,
 output sha256s) and ``VERIFIED`` written last (built in ``<out>.partial`` and renamed), so a runner
 arm can point ``train`` at it and wait. Re-running with the same arguments is a no-op.
@@ -106,9 +111,15 @@ def main() -> int:
         help="Also keep every part that this base mixture does not have",
     )
     parser.add_argument(
+        "--add",
+        action="append",
+        default=[],
+        help="Also keep every train row of this VERIFIED mixture (repeatable)",
+    )
+    parser.add_argument(
         "--others-ratio",
         type=float,
-        help="With keep parts: sample other rows to this x kept count",
+        help="With keep parts or --add: sample other rows to this x kept count",
     )
     parser.add_argument("--seed", type=int, default=20261019)
     parser.add_argument(
@@ -122,11 +133,13 @@ def main() -> int:
     )
     args = parser.parse_args()
     src, out = Path(args.src), Path(args.out)
+    added = [Path(p) for p in args.add]
     deadline = time.time() + args.wait_h * 3600
-    while not (src / "VERIFIED").exists():
-        if time.time() > deadline:
-            raise SystemExit(f"{src}/VERIFIED not present")
-        time.sleep(60)
+    for path in [src, *added]:
+        while not (path / "VERIFIED").exists():
+            if time.time() > deadline:
+                raise SystemExit(f"{path}/VERIFIED not present")
+            time.sleep(60)
     selection = {
         "drop_parts": sorted(args.drop_part),
         "keep_parts": sorted(args.keep_part),
@@ -135,12 +148,20 @@ def main() -> int:
         "seed": args.seed,
         "filter_dev": args.filter_dev,
     }
-    src_manifest = src / "manifest.json"
-    src_id = {
-        "path": str(src),
-        "verified": (src / "VERIFIED").read_text().strip(),
-        "manifest_sha256": sha256(src_manifest) if src_manifest.exists() else None,
-    }
+    if added:
+        selection["add"] = [str(p) for p in added]
+
+    def identity(path: Path) -> dict:
+        manifest = path / "manifest.json"
+        return {
+            "path": str(path),
+            "verified": (path / "VERIFIED").read_text().strip(),
+            "manifest_sha256": sha256(manifest) if manifest.exists() else None,
+        }
+
+    src_id = identity(src)
+    if added:
+        src_id["added"] = [identity(p) for p in added]
     if (out / "VERIFIED").exists():
         done = json.loads((out / "manifest.json").read_text())
         if done.get("selection") == selection and done.get("source") == src_id:
@@ -162,9 +183,10 @@ def main() -> int:
     drop = set(args.drop_part)
     if keep & drop:
         raise SystemExit(f"parts both kept and dropped: {sorted(keep & drop)}")
+    added_rows = sum(1 for _ in rows([f for p in added for f in train_files(p)]))
     probability = 1.0
-    if keep and args.others_ratio is not None:
-        kept = sum(v for p, v in counts.items() if p in keep)
+    if (keep or added) and args.others_ratio is not None:
+        kept = sum(v for p, v in counts.items() if p in keep) + added_rows
         others = sum(v for p, v in counts.items() if p not in keep and p not in drop)
         probability = min(1.0, args.others_ratio * kept / max(1, others))
     partial = out.with_name(out.name + ".partial")
@@ -182,18 +204,8 @@ def main() -> int:
         files.append(path)
         return gzip.open(path, "wt", encoding="utf-8", compresslevel=6)
 
-    for line in rows(train_files(src)):
-        row = json.loads(line)
-        part = part_of(row)
-        seen[part] += 1
-        if part in drop:
-            continue
-        if (
-            keep
-            and part not in keep
-            and keep_fraction(args.seed, str(row["id"])) >= probability
-        ):
-            continue
+    def emit(line: str, part: str) -> None:
+        nonlocal shard, shard_rows
         if shard is None or shard_rows >= SHARD_ROWS:
             if shard is not None:
                 shard.close()
@@ -201,6 +213,22 @@ def main() -> int:
         shard.write(line if line.endswith("\n") else line + "\n")
         shard_rows += 1
         written[part] += 1
+
+    for line in rows(train_files(src)):
+        row = json.loads(line)
+        part = part_of(row)
+        seen[part] += 1
+        if part in drop:
+            continue
+        if (
+            (keep or added)
+            and part not in keep
+            and keep_fraction(args.seed, str(row["id"])) >= probability
+        ):
+            continue
+        emit(line, part)
+    for line in rows([f for p in added for f in train_files(p)]):
+        emit(line, part_of(json.loads(line)))
     if shard is not None:
         shard.close()
     total = sum(written.values())
@@ -225,6 +253,23 @@ def main() -> int:
                         dev_rows += 1
         else:
             shutil.copyfile(dev_src, partial / "dev.jsonl.gz")
+    added_dev = [p / "dev.jsonl.gz" for p in added if (p / "dev.jsonl.gz").exists()]
+    if added_dev:
+        with gzip.open(partial / "dev.jsonl.gz", "at", encoding="utf-8") as fout:
+            for path in added_dev:
+                with gzip.open(path, "rt", encoding="utf-8") as fin:
+                    for line in fin:
+                        if line.strip():
+                            fout.write(line if line.endswith("\n") else line + "\n")
+        with gzip.open(partial / "dev.jsonl.gz", "rt", encoding="utf-8") as fin:
+            dev_rows = sum(1 for line in fin if line.strip())
+    dev_kind = (
+        "filtered"
+        if dev_src.exists() and args.filter_dev and drop
+        else ("source copy" if dev_src.exists() else None)
+    )
+    if added_dev:
+        dev_kind = f"{dev_kind or 'none'} + added"
     manifest = {
         "name": out.name,
         "kind": "d25-vega derived mixture (ws-train mixtool)",
@@ -236,11 +281,7 @@ def main() -> int:
         "rows": total,
         "rows_by_part": dict(sorted(written.items())),
         "source_rows_by_part": dict(sorted(seen.items())),
-        "dev": (
-            "filtered"
-            if dev_rows is not None
-            else ("source copy" if dev_src.exists() else None)
-        ),
+        "dev": dev_kind,
         "dev_rows": dev_rows,
         "files": {
             name: {"sha256": sha256(path), "bytes": path.stat().st_size}
