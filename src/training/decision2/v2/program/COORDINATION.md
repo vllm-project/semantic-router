@@ -210,6 +210,48 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 15:34 — **`s1auto-film` → parent: milestone 2 draft d2 is ready for review: `/mnt/c/Users/xunliu/Downloads/systemone-auto-film/preview/systemone-auto-d2-720p.mp4` (57.6 s, 720p60, Hermes, original score), with `systemone-auto-d2-contact.jpg`, `beat-map.md`, `README.md` and `facts.md`. Everything was rendered on node B. One known issue is being fixed in d3 now: a few frames of overlapping layouts at four act boundaries.**
+  - **Story, the user's of 13:15, in 29.75 bars at 124 BPM:**
+    1. the decision-model pool grows on the beat: the six blog providers, the Decision 2.0 family, and 22 more public decision models with official org marks ("115 entries on the public Decision Index, as of 2026-10-09"), with the disclaimer under the marks;
+    2. "Which model should handle each request?" → "Small: fast. Large: accurate." → "No single decision model wins." on a near-silent drop → "Save your largest decision model for the requests that need it." → one beat of silence;
+    3. `vllm-sr/auto` on the big hit (17.9 s): the AUTO hub fans out to the six providers, with Select · Cascade · Judge;
+    4. "Route language. Now, route decisions.": language APIs and the System One API, one serving layer, Open and Closed for both;
+    5. the cascade, both paths, real requests;
+    6. the results, a hit per number;
+    7. the cascade YAML (literal) with its bindings and dashboard;
+    8. "Small first. Bigger when needed." and the logo.
+  - **The user's three fixes:**
+    1. **Clear examples, both paths, from the evidence (JevBench public, MIT):**
+       - Accept Kai: "Set an alarm for 7 am." (Kai set_alarm 0.999, passes the gate);
+       - Upgrade: "Courier booked for Tuesday. The customer asked about pickup but did not change the booking." (Kai pickup 0.419, below 0.606 → Vega courier 0.847).
+
+       IDs and values are in `facts.md`.
+    2. **"Closed model"** replaces "Hosted API" everywhere (GLiDE keeps "no-thinking"), with Open / Closed column headers.
+    3. **Polish:** an 8-px grid, overlaps removed on every key frame, premium ease-outs and springs, paths drawing on, carries across boundaries.
+  - **Truth:**
+    - "54.11% estimated inference-cost savings" always sits with "equal cost per Vega call, Kai cost ≈ 0";
+    - ~20% lower mean latency always sits next to +8.5% p95;
+    - accuracy is labelled "231 public JevBench requests · exact-label accuracy", with "not the official v1.6.1 leaderboard";
+    - "5.63 points below Vega" is on screen.
+  - **Music (original):**
+    - **Bed:** ACE-Step 1.5, a second round of 48 generations shaped to the bar plan, pick **s2B_s7214**: 124.03 BPM, grid pulse 5.0, vocal-like energy −38 dB under Demucs.
+    - **Cut:** on its own bar lines, with per-bar stem gains. The pool builds from the groove, the near-silent drop keeps a low pad and a heartbeat, and the `vllm-sr/auto` hit is the generation's own drop (+16.4 dB).
+    - **Sound design:** the film's own synthesis on 78 picture hits.
+  - **QA on node B (`qa_check.py`):**
+
+    | Check | Result |
+    | --- | --- |
+    | Frames | 3,455 vs 3,455 |
+    | Black frames / flashes | none / none |
+    | Loudness | −14.8 LUFS |
+    | True peak | −1.4 dBTP |
+    | Music gaps | none |
+    | A/V offset | 0 ms |
+
+  - **Next, without waiting:** d3 sequences the four boundary overlaps (0.8 s, 22 s, 25.6 s, 37.3 s) so each exit finishes before the next entrance. I'll post d3 in about 20 minutes, then wait for review before the 1080p60 master.
+  - **Node B:** GPU6–7 leased (idle now) and cores 96–159; nothing else touched.
+  — `s1auto-film`
+
 - 2026-10-10 14:51 — **`s1auto-film` → parent: milestone 1 is delivered to `/mnt/c/Users/xunliu/Downloads/systemone-auto-film/style-frames/` (`README.md`, `overview.png`, three folders, docs, music). I've read the user's 14:4x choice and am starting milestone 2 in HERMES with all three fixes. From now on, everything heavy runs on node B. Node B claim extended to cores 96–159.**
   - **Delivered:** for Hermes, Departures and Signal Night:
     - a title card and a gate moment at 1920×1080;
