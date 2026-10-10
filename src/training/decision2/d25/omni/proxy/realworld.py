@@ -153,13 +153,14 @@ def _av2_frames(
     import pyarrow.feather as feather
 
     from d25.omni.proxy import sources as src
+    from d25.omni.proxy.rows import item_seed
 
     root = work / "av2"
     index = root / "frames.json"
     if index.exists():
         return json.loads(index.read_text())
     _, logs = _list(AV2["prefix"])
-    logs = sorted(logs, key=lambda p: src.item_seed(seed, p))[:n_logs]
+    logs = sorted(logs, key=lambda p: item_seed(seed, p))[:n_logs]
     out = []
     for log_prefix in logs:
         log = log_prefix.rstrip("/").rsplit("/", 1)[1]

@@ -5,8 +5,11 @@ The board's chance sum is 967.75, which with 2- and 4-option rows means exactly 
 four-way rows; the board text pairs "receipt fields" (multiple choice) with "form-field presence".
 CORD test receipts: one question per annotated field (summary amounts, item prices, unit prices
 and counts) with three distractors of the same kind from the same receipt, padded with same-format
-values of the same field from other test receipts; 1,059 questions are taken round-robin over
-receipts (summary fields first). FUNSD test forms: a present field is a QUESTION entity label; an
+values of the same field from other test receipts. These field questions give only 894 rows, so a
+second tier asks for the item at a given price (items whose name and price are both unique on the
+receipt; distractors are the receipt's other item names, padded with item names from other test
+receipts). 1,059 questions are taken round-robin over receipts, the field tier first (summary fields
+first), then the item-name tier. FUNSD test forms: a present field is a QUESTION entity label; an
 absent field is a label from another test form whose words never occur on this form; 703 present
 labels are taken round-robin over forms, each form gets as many absent labels as present ones.
 All candidates are kept in the ``kie-cord-all`` and ``kie-funsd-all`` variants.
@@ -63,6 +66,7 @@ ITEM = (
     ("unitprice", "money", "What is the unit price of “{nm}” on this receipt?"),
     ("cnt", "count", "How many “{nm}” were bought?"),
 )
+ITEM_NAME = "Which item on this receipt has the price {price}?"
 FUNSD_TAGS = [
     "O",
     "B-HEADER",
@@ -132,22 +136,98 @@ def cord_fields(gt: dict):
     return out
 
 
+def cord_items(gt: dict) -> tuple[list[str], list[tuple[str, str]]]:
+    """The receipt's distinct item names and its (name, price) pairs with a unique name and price."""
+    menu = gt.get("menu") or []
+    menu = menu if isinstance(menu, list) else [menu]
+    items = [
+        (_first(m.get("nm")), _first(m.get("price")))
+        for m in menu
+        if isinstance(m, dict)
+    ]
+    names = Counter(n for n, _ in items if n)
+    prices = Counter(digits(p) for _, p in items if p and digits(p))
+    priced = [
+        (n, p)
+        for n, p in items
+        if n and names[n] == 1 and p and digits(p) and prices[digits(p)] == 1
+    ]
+    return sorted(names), priced
+
+
+def cord_name_questions(rec, all_names: dict[str, str]):
+    """Queue entries of the item-name tier: which item has this price (numbered after the fields)."""
+    own = {norm_words(n): n for n in rec["names"] if norm_words(n)}
+    out = []
+    for j, (nm, price) in enumerate(rec["priced"]):
+        gold_key = norm_words(nm)
+        if not gold_key:
+            continue
+        rng = R.stable_rng("cord-name", rec["index"], nm, price)
+        pool = [n for k, n in sorted(own.items()) if k != gold_key]
+        rng.shuffle(pool)
+        distractors = pool[:3]
+        n_own = len(distractors)
+        if n_own < 3:
+            others = [n for k, n in sorted(all_names.items()) if k not in own]
+            rng.shuffle(others)
+            distractors += others[: 3 - n_own]
+        if len(distractors) < 3:
+            continue
+        options = [nm] + distractors
+        rng.shuffle(options)
+        out.append(
+            (
+                len(rec["fields"]) + j,
+                "menu.nm",
+                "name",
+                ITEM_NAME.format(price=price),
+                options,
+                R.LETTERS[options.index(nm)],
+                n_own,
+            )
+        )
+    return out
+
+
+def round_robin(rows: list[dict], limit: int) -> list[dict]:
+    """Up to ``limit`` rows, one per receipt per pass (receipts in seeded order, rows in queue order)."""
+    by_receipt = defaultdict(list)
+    for row in rows:
+        by_receipt[row["metadata"]["receipt_index"]].append(row)
+    order = sorted(by_receipt, key=lambda i: R.stable_rng("cord-receipt", i).random())
+    chosen, depth = [], 0
+    while len(chosen) < limit and any(depth < len(by_receipt[i]) for i in order):
+        for i in order:
+            if depth < len(by_receipt[i]) and len(chosen) < limit:
+                chosen.append(by_receipt[i][depth])
+        depth += 1
+    return chosen
+
+
 def cord_build(ctx):
     receipts = []
     for name, index, r in cord_receipts(ctx):
         gt = json.loads(r["ground_truth"])["gt_parse"]
+        names, priced = cord_items(gt)
         receipts.append(
             {
                 "file": name,
                 "index": index,
                 "image": r["image"]["bytes"],
                 "fields": cord_fields(gt),
+                "names": names,
+                "priced": priced,
             }
         )
     by_field = defaultdict(list)
+    all_names: dict[str, str] = {}
     for rec in receipts:
         for field, kind, _, value in rec["fields"]:
             by_field[field].append((rec["index"], value))
+        for n in rec["names"]:
+            if norm_words(n):
+                all_names.setdefault(norm_words(n), n)
     candidates = []
     for rec in receipts:
         same = defaultdict(dict)
@@ -199,6 +279,7 @@ def cord_build(ctx):
                     sum(1 for d in distractors if d in pool),
                 )
             )
+        queue += cord_name_questions(rec, all_names)
         candidates.append((rec, queue))
     rows_all = []
     for rec, queue in candidates:
@@ -227,16 +308,13 @@ def cord_build(ctx):
                     },
                 )
             )
-    by_receipt = defaultdict(list)
-    for row in rows_all:
-        by_receipt[row["metadata"]["receipt_index"]].append(row)
-    order = sorted(by_receipt, key=lambda i: R.stable_rng("cord-receipt", i).random())
-    chosen, depth = [], 0
-    while len(chosen) < CORD_ROWS and any(depth < len(by_receipt[i]) for i in order):
-        for i in order:
-            if depth < len(by_receipt[i]) and len(chosen) < CORD_ROWS:
-                chosen.append(by_receipt[i][depth])
-        depth += 1
+    chosen = round_robin(
+        [r for r in rows_all if r["metadata"]["field"] != "menu.nm"], CORD_ROWS
+    )
+    chosen += round_robin(
+        [r for r in rows_all if r["metadata"]["field"] == "menu.nm"],
+        CORD_ROWS - len(chosen),
+    )
     keep = {r["id"] for r in chosen}
     return [r for r in rows_all if r["id"] in keep], rows_all
 
