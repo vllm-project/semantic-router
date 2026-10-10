@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -246,39 +247,123 @@ func independentAssistantAnswer(turn string, corrections []wordPair) string {
 
 	var independent []string
 	for _, sentence := range statementSentences(answer) {
-		clauses, _ := sentenceClauses(sentence.text)
-		repeatsOriginal := slices.ContainsFunc(clauses, func(clause []string) bool {
-			return restatesOriginal(clause, originalContentWords, originalPairs)
-		})
-		if repeatsOriginal {
+		if text := filterAssistantSentence(sentence, originalContentWords, originalPairs, corrections); text != "" {
+			independent = append(independent, text)
+		}
+	}
+	return strings.Join(independent, " ")
+}
+
+var assistantClauseSeparator = regexp.MustCompile(`(?i)\s*,\s*(?:(?:and|but)\s+)?|\s+(?:and|but)\s+`)
+
+type assistantClause struct {
+	text      string
+	words     []string
+	separator string
+}
+
+func filterAssistantSentence(
+	sentence statementSentence,
+	originalContentWords map[string]bool,
+	originalPairs map[wordPair]bool,
+	corrections []wordPair,
+) string {
+	clauses := splitAssistantClauses(sentence.text)
+	keep := make([]bool, len(clauses))
+	kept := 0
+	for i, clause := range clauses {
+		if restatesOriginal(clause.text, clause.words, originalContentWords, originalPairs) {
 			continue
 		}
-		words := statementWords(sentence.text)
-		for i, word := range words {
+		words := slices.Clone(clause.words)
+		for wi, word := range words {
 			switch word {
 			case "you":
-				words[i] = "i"
+				words[wi] = "i"
 			case "your":
-				words[i] = "my"
+				words[wi] = "my"
 			}
 		}
 		answerPairs := anchorPairs(words)
 		if len(answerPairs) == 0 {
 			continue
 		}
-		corrected := slices.ContainsFunc(corrections, func(correction wordPair) bool {
+		if slices.ContainsFunc(corrections, func(correction wordPair) bool {
 			return slices.Contains(answerPairs, correction)
-		})
-		if corrected {
+		}) {
 			continue
 		}
+		keep[i] = true
+		kept++
+	}
+	if kept == 0 {
+		return ""
+	}
+	if kept == len(clauses) {
 		text := strings.TrimSpace(sentence.text)
 		if sentence.ending != 0 {
 			text += string(sentence.ending)
 		}
-		independent = append(independent, text)
+		return text
 	}
-	return strings.Join(independent, " ")
+
+	var filtered strings.Builder
+	filtered.Grow(len(sentence.text) + utf8.RuneLen(sentence.ending))
+	first := true
+	for i, clause := range clauses {
+		if !keep[i] {
+			continue
+		}
+		text := clause.text
+		if first {
+			if i > 0 {
+				text = capitalizeFirstLetter(text)
+			}
+			first = false
+		} else {
+			filtered.WriteString(clause.separator)
+		}
+		filtered.WriteString(text)
+	}
+	if sentence.ending != 0 {
+		filtered.WriteRune(sentence.ending)
+	}
+	return filtered.String()
+}
+
+func splitAssistantClauses(sentence string) []assistantClause {
+	matches := assistantClauseSeparator.FindAllStringIndex(sentence, -1)
+	clauses := make([]assistantClause, 0, len(matches)+1)
+	start := 0
+	separator := ""
+	appendClause := func(end int) {
+		text := strings.TrimSpace(sentence[start:end])
+		words := statementWords(text)
+		if len(words) > 0 {
+			clauses = append(clauses, assistantClause{text: text, words: words, separator: separator})
+		}
+	}
+	for _, match := range matches {
+		appendClause(match[0])
+		separator = sentence[match[0]:match[1]]
+		start = match[1]
+	}
+	appendClause(len(sentence))
+	return clauses
+}
+
+func capitalizeFirstLetter(text string) string {
+	for i, r := range text {
+		if !unicode.IsLetter(r) {
+			continue
+		}
+		upper := unicode.ToUpper(r)
+		if upper == r {
+			return text
+		}
+		return text[:i] + string(upper) + text[i+utf8.RuneLen(r):]
+	}
+	return text
 }
 
 var secondPersonWords = vocabulary("you you're you've you'd you'll your yours yourself")
@@ -288,8 +373,13 @@ var secondPersonWords = vocabulary("you you're you've you'd you'll your yours yo
 // "you live in Boston", or repeats one of its word pairs, as "welcome to
 // Chicago" repeats "moved to Chicago". A clause such as "Biscuit is a Boston
 // terrier" may state a separate fact, so it is kept.
-func restatesOriginal(clause []string, originalContentWords map[string]bool, originalPairs map[wordPair]bool) bool {
-	if namesAnotherSubject(clause, originalContentWords) {
+func restatesOriginal(
+	clauseText string,
+	clause []string,
+	originalContentWords map[string]bool,
+	originalPairs map[wordPair]bool,
+) bool {
+	if namesAnotherSubject(clauseText, clause, originalContentWords) {
 		return false
 	}
 	sharesWord := slices.ContainsFunc(clause, func(word string) bool {
@@ -304,10 +394,37 @@ func restatesOriginal(clause []string, originalContentWords map[string]bool, ori
 	return slices.ContainsFunc(anchorPairs(clause), func(pair wordPair) bool { return originalPairs[pair] })
 }
 
-// namesAnotherSubject accepts "your <subject>" only when that subject is absent
-// from the corrected statement. A pronoun alone can't establish another subject.
-func namesAnotherSubject(clause []string, originalContentWords map[string]bool) bool {
-	return len(clause) > 1 && clause[0] == "your" && !originalContentWords[clause[1]]
+// namesAnotherSubject accepts an explicit name or "your <subject>" only when
+// that subject is absent from the corrected statement. A pronoun alone can't
+// establish another subject.
+func namesAnotherSubject(clauseText string, clause []string, originalContentWords map[string]bool) bool {
+	if len(clause) < 2 {
+		return false
+	}
+	if clause[0] == "your" {
+		return !originalContentWords[clause[1]]
+	}
+	return !originalContentWords[clause[0]] && startsWithNamedSubject(clauseText, clause)
+}
+
+func startsWithNamedSubject(clauseText string, clause []string) bool {
+	if isFunctionSubject(clause[0]) || (!auxiliaries[clause[1]] && !isContentWord(clause[1])) {
+		return false
+	}
+	for _, r := range clauseText {
+		if unicode.IsLetter(r) {
+			return unicode.IsUpper(r)
+		}
+	}
+	return false
+}
+
+func isFunctionSubject(word string) bool {
+	if functionWords[word] {
+		return true
+	}
+	base, _, contracted := strings.Cut(word, "'")
+	return contracted && functionWords[base]
 }
 
 func (s *supersession) correctsAll(corrector turnRef, turns []turnRef) bool {

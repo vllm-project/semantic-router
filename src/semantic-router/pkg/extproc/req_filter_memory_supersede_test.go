@@ -42,6 +42,18 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 		user:      "I live in Boston.",
 		assistant: "Your dog Biscuit is a beagle.",
 	}
+	bostonBeforeDog := storedMemoryTurn{
+		user:      "I live in Boston.",
+		assistant: "You live in Boston, and your dog Biscuit is a beagle.",
+	}
+	dogBeforeBoston := storedMemoryTurn{
+		user:      "I live in Boston.",
+		assistant: "Your dog Biscuit is a beagle, and you live in Boston.",
+	}
+	bostonWithAlice := storedMemoryTurn{
+		user:      "I live in Boston.",
+		assistant: "Alice lives in Boston.",
+	}
 	cityAndDog := storedMemoryTurn{user: "I live in Boston, my dog is Biscuit.", assistant: "Noted."}
 	bostonWithTerrier := storedMemoryTurn{user: "I live in Boston.", assistant: "Your dog Biscuit is a Boston terrier."}
 	nurseWithSister := storedMemoryTurn{
@@ -118,6 +130,27 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			turns:      []storedMemoryTurn{bostonWithAssistantFact, denver},
 			query:      "Where do I live now, and what do you know about my dog?",
 			injected:   []string{"Denver", "Your dog Biscuit is a beagle"},
+			superseded: []string{"I live in Boston"},
+		},
+		{
+			name:       "a corrected residence keeps a dog clause after the stale clause",
+			turns:      []storedMemoryTurn{bostonBeforeDog, denver},
+			query:      "Where do I live now, and what kind of dog is Biscuit?",
+			injected:   []string{"Denver", "Your dog Biscuit is a beagle."},
+			superseded: []string{"I live in Boston", "You live in Boston"},
+		},
+		{
+			name:       "a corrected residence keeps a dog clause before the stale clause",
+			turns:      []storedMemoryTurn{dogBeforeBoston, denver},
+			query:      "Where do I live now, and what kind of dog is Biscuit?",
+			injected:   []string{"Denver", "Your dog Biscuit is a beagle."},
+			superseded: []string{"I live in Boston", "you live in Boston"},
+		},
+		{
+			name:       "a corrected residence keeps an explicit named subject",
+			turns:      []storedMemoryTurn{bostonWithAlice, denver},
+			query:      "Where do I live now, and where does Alice live?",
+			injected:   []string{"Denver", "Alice lives in Boston."},
 			superseded: []string{"I live in Boston"},
 		},
 		{
