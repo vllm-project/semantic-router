@@ -79,6 +79,13 @@ except ImportError:
         to_answer,
         user_prompt,
     )
+try:
+    from . import d3_fast
+except ImportError:
+    try:
+        import d3_fast
+    except ImportError:
+        d3_fast = None
 
 RUNTIME = "d3-runtime/1"
 FORMAT_VERSION = 1
@@ -104,6 +111,14 @@ IMAGE_FORMATS = ("PNG", "JPEG", "WEBP")
 DOWNLOAD_TIMEOUT_SECONDS = 30
 MAX_DOWNLOAD_BYTES = 64 << 20
 MERGE_TOKENS = 8192
+# What the processor returns for an image batch; the fast path runs exactly these through the fused layers.
+IMAGE_INPUTS = (
+    "input_ids",
+    "attention_mask",
+    "mm_token_type_ids",
+    "pixel_values",
+    "image_grid_thw",
+)
 
 
 class MaxLengthExceeded(ValueError):
@@ -753,6 +768,8 @@ class D3:
                 self.image_unavailable = (
                     f"the image processor failed to load ({type(exc).__name__}: {exc})"
                 )
+        self.fast_skipped = None if d3_fast else "d3_fast.py is not present"
+        self.fast = d3_fast.install(self) if d3_fast else None
         self.loaded_seconds = time.perf_counter() - started
 
     @classmethod
@@ -1012,6 +1029,8 @@ class D3:
         self, sequences: Sequence[Sequence[int]], counts: Sequence[int]
     ) -> list[list[float]]:
         """Softmax over each prompt's own codes, in option order."""
+        if self.fast is not None:
+            return self.fast.probabilities(sequences, counts)
         probs = (
             (self.logits(sequences, counts) / self.temperature)
             .softmax(-1)
@@ -1044,8 +1063,15 @@ class D3:
                 f"planned {width} input tokens, the processor produced {encoded['input_ids'].shape[1]}"
             )
         inputs = {name: value.to(self.device) for name, value in encoded.items()}
+        fused = self.fast is not None and self.fast.fused is not None
         with torch.inference_mode(), sdpa_backends(self.device):
-            hidden = self.backbone(**inputs, use_cache=False).last_hidden_state[:, -1]
+            if fused and set(inputs) == set(IMAGE_INPUTS):
+                padded = not bool(encoded["attention_mask"].all())
+                hidden = self.fast.image_hidden(inputs, padded)[:, -1]
+            else:
+                hidden = self.backbone(**inputs, use_cache=False).last_hidden_state[
+                    :, -1
+                ]
             if self.readout_dtype == "float32":
                 logits = hidden.float() @ self.readout.T
             else:
@@ -1186,6 +1212,8 @@ class D3:
         four 1.6 MP images) also warm the vision tower. Answers are unchanged.
         """
         started = time.perf_counter()
+        if self.fast is not None:
+            self.fast.capture_all()
         widest = self.batch_size * (2 if self.permutation_average else 1)
         for size in range(1, widest + 1):
             for length in lengths:
@@ -1220,6 +1248,8 @@ class D3:
         self.backbone.to(target)
         self.readout = self.readout.to(target)
         self.device = target
+        if self.fast is not None:
+            self.fast, self.fast_skipped = None, "moved after loading"
         return self
 
     def parameter_count(self) -> int:
@@ -1303,4 +1333,11 @@ class D3:
         }
         if self.device.type == "cuda":
             info["gpu"] = torch.cuda.get_device_name(self.device)
+        info["fast_path"] = self.fast_report()
         return info
+
+    def fast_report(self) -> dict[str, Any]:
+        """What the ROCm fast path (``d3_fast.py``) does in this process, or why it is off."""
+        if self.fast is None:
+            return {"active": False, "reason": self.fast_skipped}
+        return {"active": True, **self.fast.report()}
