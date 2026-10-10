@@ -36,6 +36,48 @@ Render the final resources first:
 kubectl kustomize deploy/kubernetes/observability/
 ```
 
+## Grafana Live origins
+
+An external proxy that forwards an internal `Host` can cause Grafana to reject
+Live WebSockets even when panels load. Set `GF_LIVE_ALLOWED_ORIGINS` on the
+**Grafana** container to the browser-facing Dashboard origin. The base manifest
+leaves it empty, preserving Grafana's default origin checks.
+
+For example, add this entry to your overlay's `patches` list (whose `resources`
+includes this observability package):
+
+```yaml
+patches:
+  - target:
+      kind: Deployment
+      name: grafana
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: grafana
+      spec:
+        template:
+          spec:
+            containers:
+              - name: grafana
+                env:
+                  - name: GF_LIVE_ALLOWED_ORIGINS
+                    value: "https://dashboard.example.com,https://dashboard.example.net:8443"
+```
+
+Use comma-separated trusted origins with a scheme, hostname, and optional port;
+do not include `/embedded/grafana`, a trailing slash, or the internal Grafana
+service URL. Update this value when changing the Dashboard Ingress host. For
+local access, use the browser's actual origin, such as `http://127.0.0.1:8700`,
+if an explicit allowance is needed. Never use `*` to disable origin validation.
+
+Render the overlay with `kubectl kustomize <overlay-directory>` and inspect the
+Grafana environment before applying it. After rollout, check that
+`/embedded/grafana/api/live/ws` connects for an allowed origin and rejects an
+unrelated origin. The ingress must still support WebSocket upgrades, and the
+normal authentication requirements still apply.
+
 ## Deploy
 
 The Router metrics Service must exist in the same namespace and expose a port
