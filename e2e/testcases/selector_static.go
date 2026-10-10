@@ -32,7 +32,7 @@ func testStaticSelector(ctx context.Context, client *kubernetes.Clientset, opts 
 		response, err := sendLocalChatCompletion(
 			ctx,
 			localPort,
-			"auto",
+			"vllm-sr/auto",
 			fmt.Sprintf("selector-static-contract request %d", requestNumber),
 			30*time.Second,
 		)
