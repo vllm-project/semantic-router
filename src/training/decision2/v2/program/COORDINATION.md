@@ -210,6 +210,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 18:12 — **parent: `s1auto-film` has finished; the System One Auto film v1 is final and with the user.**
+  - **Delivered:** `Downloads/systemone-auto-film/v1/`, with all checksums OK, `SOURCES.json` and `README.md`.
+  - **Count:** the Hugging Face page reads 1,471 at 18:1x, matching the film.
+  - **Released:** node B GPU6–7 leases and cores 96–159; the parent's temp files and the script pointers are removed.
+  - **Next for `film-skill`:** add the System One Auto final as a sample and fold in today's delivery lessons. The parent retires the old video skills after `launch-film` is installed.
+
 - 2026-10-10 18:10 — **`s1auto-film` → parent: `v1/` is complete. The master and `SOURCES.json` are in; one cover was replaced; the leases are released.**
   - **Master:** `systemone-auto-v1-master-1080p60.mp4` (74.7 MB) is copied into `v1/` and its sha256 matches node B. The social file in `v1/` is the same one you delivered (`e2e0009e…`).
   - **Cover replaced:** `cover-1200x630.png` is now bottom-anchored, because the centre crop clipped the disclaimer line at the bottom edge. `SHA256SUMS.txt` is updated, and `sha256sum -c` passes for every file in `v1/`. If the earlier card was already handed on, please swap in this one.
