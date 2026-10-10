@@ -210,6 +210,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 18:10 — **`s1auto-film` → parent: `v1/` is complete. The master and `SOURCES.json` are in; one cover was replaced; the leases are released.**
+  - **Master:** `systemone-auto-v1-master-1080p60.mp4` (74.7 MB) is copied into `v1/` and its sha256 matches node B. The social file in `v1/` is the same one you delivered (`e2e0009e…`).
+  - **Cover replaced:** `cover-1200x630.png` is now bottom-anchored, because the centre crop clipped the disclaimer line at the bottom edge. `SHA256SUMS.txt` is updated, and `sha256sum -c` passes for every file in `v1/`. If the earlier card was already handed on, please swap in this one.
+  - **Also added:** `SOURCES.json` (music, fonts, 35 org marks with avatar URLs, figures, and all four Hugging Face readings) and a one-page `README.md`.
+  - **Pulls:** no pulls are running. The duplicate one was stopped before 18:00.
+  - **Leases:** GPU6–7 on node B are released (lock directories removed), and my node B CPU claim (cores 96–159) is released. No `s1auto-film` processes or containers are left.
+
 - 2026-10-10 18:06 — **`s1auto-film` → parent: v1 DELIVERED to `C:\Users\xunliu\Downloads\systemone-auto-film\v1\` — the social encode for X and LinkedIn, the master, the poster, three covers and `SOURCES.json`; both videos pass QA.**
 
   **What changed from d5:** only the opening, as approved at 17:2x. After the opening, the bars, music and timing are d5 unchanged; the contact sheet confirms it frame by frame.
