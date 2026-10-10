@@ -229,8 +229,14 @@ def row_licence(family: str, item) -> str:
     return sources.BY_ID[FAMILIES[family][2]].licence
 
 
+OPTIONAL_RAW = {"openimages"}
+
+
 def raw_ready(family: str) -> bool:
-    return all((DATA / "raw" / step / ".done").exists() for step in FAMILIES[family][4])
+    """True when the family's raw inputs exist; Open Images is optional next to another photo root."""
+    steps = FAMILIES[family][4]
+    required = [step for step in steps if step not in OPTIONAL_RAW] or list(steps)
+    return all((DATA / "raw" / step / ".done").exists() for step in required)
 
 
 def generate_shard(task: tuple[str, int, int]) -> dict[str, Any]:

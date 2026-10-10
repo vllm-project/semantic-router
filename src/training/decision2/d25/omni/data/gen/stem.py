@@ -252,7 +252,15 @@ def vega_render(index: int, ctx=None) -> Item | None:
     if n == 5 and rng.random() < 0.4:
         options.append(NONE_CORRECT)
         teacher = teacher + [0.0] if teacher else None
-    text = "\n\n".join(part for part in (row["state"], row["instructions"]) if part)
+    text = "\n\n".join(
+        (
+            part
+            if isinstance(part, str)
+            else json.dumps(part, ensure_ascii=False, indent=1)
+        )
+        for part in (row["state"], row["instructions"])
+        if part
+    )
     image = _layout(text, options, None, rng)
     meta = {
         "benchmark_target": "MMMU-Pro" if len(options) >= 8 else "R-Bench-M",
