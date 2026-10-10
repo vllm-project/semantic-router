@@ -82,6 +82,11 @@ ANCHOR_BOARD = {
     "nox2": "decision-2.0-nox-4b",
     "kev9": "kev-9b-v2",
     "jade": "jade",
+    "blink": "blink-v0.3-26b-a4b-nvfp4",
+    "rune": "rune-26b-a4b-v3",
+    "deck31b": "deck31b",
+    "decider-gemma4-31b": "decider-chat-gemma4-31b",
+    "decider-qwen36-27b": "decider-chat-qwen3.6-27b",
 }
 FAMILY = {
     "pplx": "qwen3.8 full FT",
@@ -95,6 +100,11 @@ FAMILY = {
     "nox2": "decision 2.0",
     "quyet": "gemma-4",
     "kev9": "qwen3.5-9B full FT",
+    "blink": "gemma-4 MoE full FT",
+    "rune": "gemma-4 MoE full FT",
+    "deck31b": "gemma-4 stock + readout",
+    "decider-gemma4-31b": "gemma-4 stock + readout",
+    "decider-qwen36-27b": "qwen3.6 stock + readout",
 }
 PRIVATE = sorted(s_weights())
 INDEX_IDS = sorted({n for ids in AREAS.values() for n in ids})

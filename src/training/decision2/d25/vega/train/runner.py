@@ -27,6 +27,11 @@ evals {"intermediate": [...], "final": [...]}, wait_for, wait_timeout_h, prepare
 ready, ``wait_for`` paths absent) later pending items run first; without it an item waits in place
 (up to ``wait_timeout_h``) and blocks the queue. Tool items (``"kind": "tool"``, ``"steps": [{"run":
 cmd, "timeout_h": h}]``) also honour ``wait_for``.
+
+Drain: ``touch /data/d25/vega/queue/<NN>/DRAIN``. The runner finishes the item it is working on
+(training and evals), starts nothing new from ``pending/``, puts an item that is still waiting for
+its inputs back into ``pending/``, then exits 0 so the Job completes and the GPUs are released.
+Remove the marker before re-applying the runner Job.
 """
 
 from __future__ import annotations
@@ -79,6 +84,10 @@ DEFAULTS = {
     "eval_timeout_h": {"proxy": 3, "full": 10},
 }
 STOPPING = {"flag": False}
+
+
+class Drained(Exception):
+    """The node drains and the current item has not started work yet: requeue it, then exit."""
 
 
 def now() -> str:
@@ -150,6 +159,25 @@ class Runner:
             time.sleep(60)
 
     # -- queue ---------------------------------------------------------------------------------
+    def draining(self) -> bool:
+        return (self.queue / "DRAIN").exists()
+
+    def drain_exit(self) -> None:
+        self.status.update(item=None, phase="drained")
+        try:
+            info = {"time": now(), "node": self.node, "pid": os.getpid(), **self.status}
+            (self.queue / "heartbeat.json").write_text(json.dumps(info, indent=1))
+        except OSError:
+            pass
+        self.event(
+            kind="runner_drained",
+            pending=sorted(p.name for p in self.queue.glob("pending/*.json")),
+        )
+        self.log(
+            "DRAIN: nothing running; exiting 0 so the Job completes and the GPUs are released"
+        )
+        raise SystemExit(0)
+
     def spec_ready(self, spec: dict) -> bool:
         """Whether an item could start now: ``wait_for`` paths exist and (arms) a train candidate is ready."""
         if not all(Path(p).exists() for p in spec.get("wait_for") or []):
@@ -166,6 +194,8 @@ class Runner:
         running = sorted(self.queue.glob("running/*.json"))
         if running:
             return running[0]
+        if self.draining():
+            return None
         deferred = []
         for path in sorted(self.queue.glob("pending/*.json")):
             try:
@@ -336,6 +366,8 @@ class Runner:
                 )
             if STOPPING["flag"]:
                 raise SystemExit(143)
+            if self.draining():
+                raise Drained()
             self.status["phase"] = (
                 f"tool waiting for {next(p for p in waits if not Path(p).exists())}"
             )
@@ -352,6 +384,8 @@ class Runner:
                 state_dir / f"step-{i}.log",
                 timeout=float(step.get("timeout_h", 4)) * 3600,
             )
+            if STOPPING["flag"]:
+                raise SystemExit(143)
             if rc != 0:
                 return (
                     "failed",
@@ -394,6 +428,8 @@ class Runner:
             export.parent / "logs" / f"parity-{export.name}.log",
             timeout=3600,
         )
+        if STOPPING["flag"]:
+            raise SystemExit(143)
         summary = {}
         if rc == 0 and out.exists():
             data = json.loads(out.read_text())
@@ -458,6 +494,8 @@ class Runner:
                     )
                 if STOPPING["flag"]:
                     raise SystemExit(143)
+                if self.draining():
+                    raise Drained()
                 self.status["phase"] = f"waiting-for-data {candidates[0]}"
                 time.sleep(POLL_DATA_S)
             state["train"] = chosen
@@ -492,6 +530,8 @@ class Runner:
                 logs / f"prepare-{i}.log",
                 timeout=float(step.get("timeout_h", 4)) * 3600,
             )
+            if STOPPING["flag"]:
+                raise SystemExit(143)
             if rc != 0:
                 return (
                     "failed",
@@ -690,6 +730,8 @@ class Runner:
             what,
         ]
         rc = self.run(cmd, code, result_dir / f"ckpt_eval-{what}.log", timeout=timeout)
+        if STOPPING["flag"]:
+            raise SystemExit(143)
         wall = time.time() - began
         result = result_dir / "result.json"
         if rc != 0 or not result.exists():
@@ -737,6 +779,8 @@ class Runner:
         self.log(f"runner up (gpus {self.gpus}, code {self.code_dir()})")
         while not STOPPING["flag"]:
             item = self.next_item()
+            if item is None and self.draining():
+                self.drain_exit()
             if item is None:
                 self.status.update(
                     item=None,
@@ -753,6 +797,10 @@ class Runner:
                 outcome, reason = self.run_item(item)
             except SystemExit:
                 raise
+            except Drained:
+                os.replace(item, self.queue / "pending" / item.name)
+                self.log(f"{item.name}: back to pending (DRAIN before it started work)")
+                self.drain_exit()
             except Exception:  # noqa: BLE001
                 detail = traceback.format_exc()
                 self.log(f"{item.name}: runner error\n{detail}")

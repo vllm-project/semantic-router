@@ -139,8 +139,21 @@ Direct use: `python -m d25.vega.train.soup --ckpt A --ckpt B [--weights 0.7,0.3]
    `done/` or `failed/` (+ `.reason.txt`).
 
 Runner restarts are safe at any time: the pod restarts in place (`restartPolicy: OnFailure`,
-`backoffLimit: 6`) and resumes the spec in `running/`. Between phases the runner re-execs itself
-when `src/current` carries a new `runner.py` that imports cleanly.
+`backoffLimit: 6`) and resumes the spec in `running/` (a stopped trainer, tool step, prepare step or
+eval is redone, not marked failed). Between phases the runner re-execs itself when `src/current`
+carries a new `runner.py` that imports cleanly.
+
+### Draining a node
+
+```bash
+touch /data/d25/vega/queue/<NN>/DRAIN
+```
+
+The runner finishes the item it is working on (training and its evals), starts nothing new, puts an
+item that is still waiting for its inputs back into `pending/`, then exits 0: the Job completes and
+the GPUs are released. Move the node's `pending/` specs to other queues (or leave them for later),
+and remove `DRAIN` before re-applying `runner-<NN>.yaml`. A runner older than this feature drains the
+same way once its queue is empty: it idles, re-execs into `current`, sees `DRAIN` and exits.
 
 ## Launching runners and staging code (from the worktree, `src/training/decision2`)
 
@@ -185,4 +198,9 @@ python -m d25.vega.train.soup --ckpt A --ckpt B --weights 0.5,0.5 --out /data/d2
 # DCP checkpoint -> export, and export parity
 python -m d25.vega.train.export dcp --run-dir /data/d25/vega/ckpt/<arm> --step <N>
 python -m d25.vega.train.export parity --ckpt <export> --dev <dev.jsonl.gz> --engine
+# derived mixtures by meta.part (ablations, continuation mixes); VERIFIED written last, so an arm
+# can point `train` at the output and use "defer": "skip" until it exists
+python -m d25.vega.train.mixtool --src /data/d25/shared/data/v1/M2T-v5 --out /data/d25/vega/train/mix/M2T-v5-noindist --drop-part indist
+python -m d25.vega.train.mixtool --src /data/d25/shared/data/v1/M3T-a --out /data/d25/vega/train/mix/M3Ta-cont \
+  --keep-new-parts-vs /data/d25/shared/data/v1/M2T-v5 --others-ratio 3 --seed 20261019 --wait-h 30
 ```
