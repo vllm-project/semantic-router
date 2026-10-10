@@ -35,6 +35,8 @@ const (
 	KindClosed Kind = "closed"
 	// KindInvalidRequest: the request cannot be sent as given.
 	KindInvalidRequest Kind = "invalid_request"
+	// KindBudgetExhausted: the shared request-wide model call limit was reached.
+	KindBudgetExhausted Kind = "budget_exhausted"
 )
 
 // TimeoutStage names the timeout behind a KindTimeout error.

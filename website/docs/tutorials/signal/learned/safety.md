@@ -89,7 +89,7 @@ returns HTTP 503 when the decision remains unknown. A scored unsafe request
 selects the configured handling route. Diagnostics expose matched rule names in
 `x-vsr-matched-safety`, the classification result, dashboard and replay record.
 
-See [shared model configuration](/docs/model-runtime/guides/safety)
+See [shared model configuration](../../../model-runtime/guides/safety)
 for native context budgets, external endpoints and failure policies, and the
 [complete HTTP example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 for a category-specific policy.
