@@ -1,34 +1,34 @@
 ---
 translation:
-  source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
+  source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/signal/learned/decision.md"
   outdated: false
 ---
 
-# 决策信号
+# Decision 信号
 
-## 概览 {#overview}
+## 概述 {#overview}
 
-`decision` 就请求问决策模型一个带类型的问题，把答案变成一个路由事实。问题用大白话写：几个选项里挑一个（`choice`）、是或否（`noul`）、或刻度上的某一级（`score`）。能答这些问题的模型——比如 Vela 2.0——还收 `set` 问题（这些标签里哪些适用？）和 `span` 问题（每个标签在文本的哪里？）。模型跑在[内置模型运行时](../../../model-runtime/overview.md)里，runtime 由 router 替你拉起来。
+`decision` 向判断模型提出一个关于请求的类型化问题，再把答案转换成路由事实。你可以用自然语言描述问题：从几个选项中选一个（`choice`）、回答是或否（`noul`），或在一组等级上评分（`score`）。Vela 2.0 等支持更多题型的模型还能回答 `set`（哪些标签适用？）和 `span`（各标签出现在文本的什么位置？）问题。模型运行在 Router 自动启动的[内置模型运行时](/model-runtime/overview.md)中。
 
-## 关键优势 {#key-advantages}
+## 主要优势 {#key-advantages}
 
-- 新问题写下来就能用，没有分类器要训。
-- 答案带概率，路由可以要求一个够有把握的答复。
-- 一个请求问同一个模型的所有问题——[`pii` 信号](../../../tutorials/signal/learned/pii.md)用那个模型时的 PII 问题也算——都在一次调用里送去。
-- 答迟了或答挂了，信号未知；请求照常走完。
+- 写好问题即可使用，无需训练新的分类器。
+- 答案带有概率，可以要求达到指定置信程度后再匹配路由。
+- 使用同一部署且输入兼容的问题可以合并为一次请求阶段调用，包括 [`pii` 信号](pii.md#vela-20)。
+- 超时或失败的答案会使信号变为未知；decision 的失败策略决定继续路由还是拒绝请求。
 
-## 解决什么问题 {#what-problem-does-it-solve}
+## 解决什么问题？ {#what-problem-does-it-solve}
 
-固定标签的分类器只会答它训过的问题。决策模型凭问题文本就能答这一步需不需要多步推理、这段是不是在说我们的产品。
+固定标签的分类器只能回答训练时定义的问题。判断模型则可以直接根据问题描述，回答“是否需要逐步推理？”或“是否与我们的产品有关？”。
 
-## 什么时候用 {#when-to-use}
+## 何时使用 {#when-to-use}
 
-需要对整个请求做判断的问题，用它。结构性事实（长度、关键词、模态）用启发式信号；领域、PII、越狱这些已有专门学习信号能答的，用它们。
+当问题需要理解整个请求时，使用 Decision 信号。长度、关键词和模态等结构性事实优先使用启发式信号；领域、PII、越狱等已有专用学习信号能够解决的问题，也优先使用对应信号。
 
 ## 配置 {#configuration}
 
-没写 `deployment` 的问题，问的是 router 的决策模型 `global.model_catalog.system.decision_model`（不[选大小](../../../model-runtime/choose-a-model.md)的话是 Vela 2.0 0.3B）。它加入回答内置信号的那次调用，于是一个模型在一次调用里答完 router 对请求问的每个问题：
+未指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 2.0 0.3B，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。它会与输入兼容的内置问题一起加入请求阶段的批处理。复用部署可以避免重复加载模型，但不保证完整路由请求只执行一次前向计算：
 
 ```yaml
 routing:
@@ -42,9 +42,9 @@ routing:
           gte: 0.7
 ```
 
-用 `decision_model: Vela-1.0` 时，Vela 1.0 的专家们只答内置信号，这样的问题就是一个加载错误，要你给出 `deployment`。
+绑定使用 `{deployment: primary}`，可以选择 Vela 或 Decision 1.0/2.0。所选模型必须支持所有请求的题型。[`decision` 选模算法](../../algorithm/selection/decision.md)使用相同的默认绑定，因此这份模型资源也可以选择后端。
 
-要问别的模型——比如一个 Decision 2.0 模型——把它声明成 `model_runtime` 部署，并给每个问题写上它的 `deployment`：
+要使用另一个模型，例如 Decision 2.0，先声明一个 `model_runtime` 部署，再为每个问题指定 `deployment`：
 
 ```yaml
 global:
@@ -103,19 +103,73 @@ routing:
         - model: large-coder
 ```
 
-| 问题类型 | 何时命中 | 路由可读的值 |
+| 题型 | 匹配条件 | 路由可读取的值 |
 | --- | --- | --- |
-| `noul` | 为是的概率满足 `predicate`（默认 `gte: 0.5`） | `decision:<name>` = P(yes) |
-| `score` | 期望级位满足 `predicate`（必填；级位从 0 数起） | `decision:<name>` = 期望级位 |
-| `choice` | 条件的 `label` 是被选中的选项，设了 `predicate` 时其概率也要满足 | `decision:<name>:<key>` = P(key)，`decision:<name>` = P(chosen) |
-| `set` | 条件的 `label` 的概率满足 `predicate`；没设时，模型选中了该标签 | `decision:<name>:<key>` = P(key)，`decision:<name>` = 最高的 P |
-| `span` | 一个带条件 `label` 的片段，其概率满足 `predicate`；没设时，模型找到了带该标签的片段 | `decision:<name>:<key>` = 该标签最可能的片段（没有时为 0），`decision:<name>` = 任何词达到的最高概率 |
+| `noul` | 回答“是”的概率满足 `predicate`，默认 `gte: 0.5` | `decision:<name>` = P(yes) |
+| `score` | 期望等级满足必填的 `predicate`；等级从 0 开始计数 | `decision:<name>` = 期望等级 |
+| `choice` | 条件的 `label` 是选中的选项，且该选项的概率满足已配置的 `predicate` | `decision:<name>:<key>` = P(key)，`decision:<name>` = P(chosen) |
+| `set` | 条件的 `label` 概率满足 `predicate`；未配置时，以模型是否选中该标签为准 | `decision:<name>:<key>` = P(key)，`decision:<name>` = 最高概率 |
+| `span` | 存在一个带有条件 `label` 的片段，其概率满足 `predicate`；未配置时，以模型是否找到带有该标签的片段为准 | `decision:<name>:<key>` = 该标签最高概率片段的概率（未找到时为 0），`decision:<name>` = 所有词中的最高概率 |
 
-条件可以自带 `predicate`；带 `label` 的 `choice`、`set` 或 `span` 条件，读的是那个标签的值。
+条件可以配置自己的 `predicate`。对于指定了 `label` 的 `choice`、`set` 或 `span` 条件，它读取该标签的值。
 
-### Set 和 span 问题 {#set-and-span-questions}
+[投影分数](../../projection/scores.md)通过 `value_source: raw` 读取同样的值：`name: <question>` 读取 `decision:<name>`，`name: <question>:<key>` 读取 `choice`、`set` 或 `span` 问题的一个选项或标签。只要启用的投影读取某个问题，就会执行该问题：
 
-`set` 问题列一批标签，问哪些适用；`span` 问题问每个标签在请求的哪里出现。两者都用 `labels` 而不是 `choices`，每项带 `key` 和可选的 `description`，条件则指名一个标签：
+```yaml
+routing:
+  signals:
+    decision:
+      - name: difficulty
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer well?
+          levels: [none, a little, multi-step, expert]
+        predicate:
+          gte: 2
+      - name: needs
+        question:
+          type: set
+          instructions: What does a good answer need?
+          labels:
+            - key: deliberation
+              description: a derivation, proof or careful step-by-step check
+            - key: tools
+              description: calling external tools or functions
+  projections:
+    scores:
+      - name: effort
+        method: weighted_sum
+        inputs:
+          - type: decision
+            name: difficulty
+            weight: 0.3
+            value_source: raw
+          - type: decision
+            name: needs:deliberation
+            weight: 0.4
+            value_source: raw
+    mappings:
+      - name: effort_band
+        source: effort
+        method: threshold_bands
+        outputs:
+          - name: effort_high
+            gte: 0.9
+  decisions:
+    - name: deliberate
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: effort_high
+      modelRefs:
+        - model: large-reasoner
+```
+
+### Set 和 Span 问题 {#set-and-span-questions}
+
+`set` 问题列出标签并询问哪些适用；`span` 问题询问请求中每个标签出现的位置。两者都使用 `labels` 而非 `choices`，每个标签包含 `key` 和可选的 `description`；规则条件通过标签名引用它们：
 
 ```yaml
 global:
@@ -165,13 +219,15 @@ routing:
         - model: support-model
 ```
 
-- `threshold`（0 到 1）替换模型自己的判定阈值，只作用于这个问题。不设的话用模型校准过的阈值——`selected` 出哪些标签、找到哪些片段，由它决定。
-- `head`（仅 `span`）在有两个 span 头的模型上指定用哪个：`router`（在 PII、无依据论断和有害片段上训的）或 `broad`（开放抽取）。不指定时模型按自己的规则选。
-- 规则的 `predicate` 替换模型的选择：`set` 规则上的 `gte: 0.8` 匹配概率不低于 0.8 的标签。
-- 模型在同一次调用里把每个 `set` 标签答在 `<name>.<label>` 下，所以该部署上别的决策信号不能用这个名字。
+- `threshold`（0 到 1）替换模型对该问题使用的判断阈值。未设置时，模型使用自己的校准阈值，决定哪些标签被标记为 `selected`，以及哪些片段被找到。
+- `head`（仅适用于 `span`）为具有两个片段检测头的模型选择任务头：`router` 用于 PII、无依据声明和有害文本片段，`broad` 用于开放式提取。未设置时，模型按自身规则选择。
+- 规则的 `predicate` 替换模型的选择结果。例如，`set` 规则上的 `gte: 0.8` 会匹配概率至少为 0.8 的标签。
+- 模型支持原生 `set` 时，Router 使用原生题型。否则，Router 可以为每个标签提出一个 `noul` 问题，再组合成集合结果。任务目录将这种能力标记为 `composed_noul`，不会标成原生 Set 支持。
 
-只有声明了这些问题类型的模型才答它们。router 准备配置时——启动时或重载时——会把每个用到的 `set` 或 `span` 问题对着它部署的模型检查；模型只答 `choice`、`noul` 和 `score`（Decision 1.0 和 2.0）时，就带着规则名失败。
+准备阶段会检查模型的实际能力。因此，Decision 1.0/2.0 可以通过 Noul 能力完成路由中的 `set` 任务，但没有 Span 能力的模型无法生成片段位置。不支持的任务会导致准备失败。具备题型能力并不代表任务准确率达标：请使用选定模型评估问题和阈值。公开的原生 System One API 仍只接受该模型原生提供的题型。
 
-模型加载中、过载、或比 `timeout_ms` 还慢，信号都是未知的。决策的 `rules.on_unknown`，或条件的 `on_error: match | no_match`，决定未知答案意味着什么。一个请求问一个部署的所有问题——内置信号的也算——都在一次调用里发出；调用一旦发出，每个问题等它等到其中最晚的那个，毕竟请求本来就在等这次调用。命中的决策信号列在 `x-vsr-matched-decision-model` 响应头里。
+模型加载中、过载或响应超过 `timeout_ms` 时，信号为未知。decision 的 `rules.on_unknown` 或条件的 `on_error: match | no_match` 决定如何处理未知答案。输入兼容的问题可以共享批处理；不同输入状态、后续选模阶段或响应阶段可能需要额外的调用和前向计算。当其他调用方仍需要结果时，共享调用可以继续执行。截止时间会结束当前调用方的等待，但不保证立即停止已经开始的模型前向计算。
 
-选模型、定大小和硬件，或把模型跑在自己的 GPU 服务器上，见[决策模型](../../../model-runtime/guides/decisions.md)。
+Decision 信号可能按部署的扫描预算截取用于路由判断的输入。这不会缩短发送给所选 Chat 后端的请求；需要完整输入覆盖时，请使用专用的 PII 或 Reask 任务。匹配的 Decision 信号会列在 `x-vsr-matched-decision-model` 响应头中。
+
+关于模型、规模、硬件的选择，以及如何在自己的 GPU 服务器上运行模型，请参阅 [Decision 模型指南](/model-runtime/guides/decisions.md)。

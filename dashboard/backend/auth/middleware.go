@@ -23,6 +23,9 @@ const (
 	maxAccessTokenBytes   = 8192
 )
 
+// SessionCookieName is the browser session cookie, exported for the OpenAPI document.
+const SessionCookieName = authSessionCookieName
+
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
 	UserID    string

@@ -391,6 +391,7 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
+	Deployment         string              `yaml:"deployment,omitempty"`
 	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
