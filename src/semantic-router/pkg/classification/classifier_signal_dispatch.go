@@ -80,6 +80,10 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 			config.SignalTypeLanguage, "Language",
 			func(context.Context) { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
 		},
+		{
+			config.SignalTypeAction, "Action",
+			func(context.Context) { c.evaluateActionSignal(results, mu, input.CurrentUserText) },
+		},
 	}
 }
 
