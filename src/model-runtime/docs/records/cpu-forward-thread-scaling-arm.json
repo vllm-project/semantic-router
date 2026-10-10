@@ -1,0 +1,76 @@
+{
+  "record": "cpu-forward-thread-scaling-arm",
+  "date": "2026-10-10",
+  "runtime_commit": "738bf4839",
+  "hosts": {
+    "kunpeng950": {
+      "cpu": "Kunpeng 950 7590, 2 sockets, 384 cores @ 2.3GHz, 4 NUMA nodes, bf16/i8mm/sve/sve2",
+      "load_1m_range": [45, 200],
+      "shared": true
+    },
+    "kunpeng920": {
+      "cpu": "Kunpeng 920, 192 cores, 8 NUMA nodes",
+      "load_1m_range": [11, 15],
+      "shared": true
+    }
+  },
+  "stack": {
+    "torch": "2.10.0+cpu (oneDNN/ACL)",
+    "python": "3.11",
+    "cpuset": "0-31",
+    "profile": "exact",
+    "device": "cpu"
+  },
+  "models": {
+    "vela1_domain": "Vela-1.0-Encoder-307M-Domain (local package)",
+    "vela2": "Vela-2.0-0.3B, four built-in signal questions (schema 473 tokens)"
+  },
+  "phases_29token_classify_kunpeng950": {
+    "note": "medians, Server-Timing; forward ~99% of total",
+    "parse_ms": 0.1,
+    "tokenize_ms": 0.2,
+    "queue_ms": 0.1,
+    "forward_ms": 123.5,
+    "post_ms": 0.1,
+    "serialize_ms": 0.1,
+    "isolated_gemm_sum_ms": 14.6
+  },
+  "thread_scaling": {
+    "vela1_29tok": {
+      "kunpeng950": {"threads": {"1": 87.7, "4": 195.2, "8": 191.0, "16": 157.4}, "n": 6, "t16_samples_ms": [202.8, 200.3, 114.4, 86.7, 76.1, 203.0]},
+      "kunpeng920": {"threads": {"16": 199.2, "1": 250.6}, "n": 8}
+    },
+    "vela1_1200tok": {
+      "kunpeng950": {"threads": {"1": 1852.3, "16": 783.4}, "n": 6}
+    },
+    "vela2_662tok_4signal": {
+      "kunpeng950": {"threads": {"4": 1106.1, "8": 870.5, "16": 1359.2}, "n": 30}
+    }
+  },
+  "bit_invariance": {
+    "method": "byte-compare response bodies of the same input across thread counts",
+    "cells": {
+      "vela1_123chars": {"threads": [1, 4, 8, 16], "max_float_diff": 0.0},
+      "vela1_4876chars": {"threads": [1, 4, 8, 16], "max_float_diff": 0.0},
+      "vela2_4signal": {"threads": [4, 8, 16], "max_float_diff": 0.0}
+    }
+  },
+  "omp_wait_policy": {
+    "host": "kunpeng920",
+    "passive": {"threads_16_ms": 189.8, "threads_8_ms": 234.5},
+    "active": {"threads_16_ms": 4976.9, "threads_8_ms": 5092.6}
+  },
+  "packed_linear_on_aarch64": {
+    "bit_identical_cells": 28,
+    "thread_cells": [1, 4, 8, 16],
+    "end_to_end_ratio_vs_reference": {"123chars": 1.03, "4876chars": 0.92, "9752chars": 1.00}
+  },
+  "pyspy_leaf_top": {
+    "note": "no GEMM kernel in top leaves; allocator/syscall/atomics/dispatch dominate",
+    "examples": ["malloc", "madvise", "mi_page_free_list_extend", "syscall",
+                 "__aarch64_ldadd4_acq_rel", "__aarch64_ldadd8_relax",
+                 "pthread_create", "clone", "__lll_lock_wait_private",
+                 "torch::FunctionSignature::parse", "THPVariable_WrapWithType",
+                 "Module._call_impl", "OperatorEntry::lookup"]
+  }
+}
