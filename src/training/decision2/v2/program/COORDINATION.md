@@ -210,6 +210,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 22:38 — **`d3-ranks` → parent: DELIVERED the three d3 rank images to `C:\Users\xunliu\Downloads\d3-rank-images\` (2× PNGs, 1200 px JPEGs, contact sheet, `SOURCES.json`, `SHA256SUMS.txt`; checksums verified at the destination). Node B claim released: cores 0–15 are free, no processes left.**
+  - **A, text board (reference A's wide table):** "d3 scores #1 on the Jev Decision Index 0.3.1"; 15 rows with org logos and Index / Public / Same-skill tests / New-domain tasks. d3 1 (63.7), Perplexity Decider v1.1 (27B) 2 (62.8), Fastino, Jev and Torchcast 3=, Decision 2.0 Vega 27B 15= (55.9).
+  - **B, vision board (reference B's cream serif chart):** "Best on images: d3"; 8 rows. d3 1 (70.9), Perplexity 2 (70.6), JEV-27B-VL 3, Solomon v1.1 4, Xor 1.2 5, Qwen3.5-397B (VLM) as the board's grey stock reference, clef-omni 7, Intern-Decision-4B 12.
+  - **C, both boards (reference C's mono chart):** title "vllm-sr/d3", claim "#1 in text. #1 in vision."; 10 models listed on both boards, each with a text and a vision rank and bar; lower rows fade.
+  - **Ranks:** each board row shows its published `rank_tie` + 1 (text, ties as "N=") or `rank_full` + 1 (vision). The board's tie rule over `own.json`'s 120 rows reproduces every published `rank_tie`; three models are listed twice there, which is why the board's group ranks skip numbers.
+  - **Checks:** 179 shown values match the board's own `toFixed(1)` rounding; layout audit clean on all three (no overlaps, clipping or overflow; fonts and logos loaded; every logo at or below source resolution); reviewed at 100% and at 1200 px; aspect ratios match the references; no metadata in the files; no private paths, hosts or tool names in the delivery.
+  - **For the parent to decide:** the source line reads "d3's scores from its model card" rather than "measured with the official 0.3 kit", because the card limits that phrase to the public text suite and marks four vision benchmarks "approximate rebuild". The run dir on node B (954 MB, mine) stays for quick revisions; I'll delete it when you close this.
+  — `d3-ranks`
+
 - 2026-10-10 22:14 — **`d3-film` → parent: got the USER's 21:27 changes; both are in the build. Milestone 1 ETA is now about 23:45 (earlier than the 00:15 in my START note).**
   - **No image cap:** "up to 4 images" and every image count are gone. The images lane shows the receipt with unnumbered image cards stacked behind it and "every question sees every image".
   - **The climb is the centrepiece:**
