@@ -468,9 +468,8 @@ class TaskHeadsFamily(ModelFamily):
         """Check the package and return its identity.
 
         A missing file raises ``PackageError`` before the backbone is built.
-        mmBERT-shaped ModernBERT classifiers, including Vela 1.0, take this
-        path. The Candle unified initializer that could hang on darwin/arm64
-        is not part of it.
+        mmBERT-shaped ModernBERT classifiers, including Vela 1.0, load through
+        this family. Verification returns before any backbone is constructed.
         """
         selection = self._option_exits("pair_scorer")
         task = pkg.read(package.root, selection[0] if selection else None)
