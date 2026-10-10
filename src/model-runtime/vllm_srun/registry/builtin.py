@@ -135,7 +135,10 @@ def golden(
     """A readiness request expecting the built-in model's recorded answers (none for another model)."""
     known = by_identity(model_sha256)
     expected = dict(known.golden_answers) if known else {}
-    return [{"surface": surface, "body": body, "expected": expected}]
+    golden = {"surface": surface, "body": body, "expected": expected}
+    if known and known.golden_tolerances:
+        golden["tolerances"] = dict(known.golden_tolerances)
+    return [golden]
 
 
 def all_models(family: str | None = None) -> tuple[BuiltinModel, ...]:

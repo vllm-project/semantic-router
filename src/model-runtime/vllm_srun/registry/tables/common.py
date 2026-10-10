@@ -42,6 +42,7 @@ class BuiltinModel:
     access: str = "public"
     engines: Mapping[str, str] = field(default_factory=dict)
     golden_answers: dict[str, Any] = field(default_factory=dict)
+    golden_tolerances: Mapping[str, float] = field(default_factory=dict)
     kernel_choices: dict[str, Any] = field(default_factory=dict)
     reduced: Mapping[str, str] = field(default_factory=dict)
 
@@ -58,7 +59,10 @@ def with_recorded(
     for model in models:
         entry = recorded.get(model.repo_id)
         if entry and entry.get("revision") == model.revision:
-            result.append(replace(model, **{model_field: entry[entry_field]}))
+            changes = {model_field: entry[entry_field]}
+            if model_field == "golden_answers" and entry.get("tolerances"):
+                changes["golden_tolerances"] = entry["tolerances"]
+            result.append(replace(model, **changes))
         else:
             result.append(model)
     return tuple(result)

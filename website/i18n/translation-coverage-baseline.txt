@@ -27,6 +27,7 @@ zh-Hans	faq.md
 zh-Hans	installation/agent-harness.md
 zh-Hans	installation/agent.md
 zh-Hans	installation/amd-rocm.md
+zh-Hans	installation/apple-mps.md
 zh-Hans	installation/backend-target-compatibility.md
 zh-Hans	installation/catalog-backed-models.md
 zh-Hans	installation/configuration-contract.md

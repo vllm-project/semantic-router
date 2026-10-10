@@ -9,6 +9,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from cli.apple_runtime import ENDPOINT_ENV, TOKEN_ENV
 from cli.commands.runtime_paths import (
     _create_or_harden_private_directory,
     private_runtime_state_nested_directory,
@@ -82,6 +83,11 @@ def router_runtime_env(
     """Return router-only env with optional AMD device isolation."""
 
     router_env = dict(common_env)
+    if platform == "apple":
+        router_env[ENDPOINT_ENV] = os.environ[ENDPOINT_ENV]
+        router_env[TOKEN_ENV] = (
+            ""  # inherit by name; never put the token in Docker argv
+        )
     if platform != "rocm":
         return router_env
 
