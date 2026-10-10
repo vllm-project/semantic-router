@@ -9,7 +9,7 @@ import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
 from cli.config_schema import routing_surface_catalog
-from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
+from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -90,7 +90,7 @@ TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
 # Platforms with GPU defaults for router internal models. AMD semantic
 # embeddings retain their authored use_cpu setting.
-GPU_DEFAULT_PLATFORMS = (PLATFORM_AMD, PLATFORM_NVIDIA)
+GPU_DEFAULT_PLATFORMS = (PLATFORM_ROCM, PLATFORM_CUDA)
 SEMANTIC_EMBEDDING_USE_CPU_PATH = (
     "global",
     "model_catalog",
@@ -128,6 +128,9 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "classifier",
         "use_cpu",
     ),
+    # Safety runs the decision model too: on a GPU it shares the other
+    # signals' deployment instead of loading a CPU copy.
+    ("global", "model_catalog", "modules", "safety", "safety", "use_cpu"),
 )
 
 
@@ -138,7 +141,7 @@ def _normalize_platform(value: str | None) -> str:
 
 
 def _preserve_use_cpu_setting(path: str, platform: str) -> bool:
-    return platform == PLATFORM_AMD and path == ".".join(
+    return platform == PLATFORM_ROCM and path == ".".join(
         SEMANTIC_EMBEDDING_USE_CPU_PATH
     )
 

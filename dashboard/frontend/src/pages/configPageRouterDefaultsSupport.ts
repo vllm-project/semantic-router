@@ -20,6 +20,7 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
+import { configuredDecisionModel } from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -64,7 +65,8 @@ interface RouterSectionContext {
 export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
   router: {
     title: 'Router',
-    description: 'Core router-engine controls, startup behavior, and model-selection strategy.',
+    description:
+      'Router controls and shared routing defaults. Each recipe can override its own strategy and fallback.',
   },
   services: {
     title: 'Services',
@@ -244,13 +246,10 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
     case 'router_core':
       return [
         { label: 'Config source', value: stringOrFallback(section?.config_source, 'file') },
-        { label: 'Strategy', value: stringOrFallback(section?.strategy) },
-        { label: 'Auto model name', value: stringOrFallback(section?.auto_model_name) },
+        { label: 'Default strategy', value: stringOrFallback(section?.strategy, 'priority') },
         {
-          label: 'Auto model aliases',
-          value: Array.isArray(section?.auto_model_names)
-            ? section.auto_model_names.join(', ')
-            : 'Not set',
+          label: 'List backend models',
+          value: section?.list_backend_models ? 'Enabled' : 'Disabled',
         },
       ]
     case 'learning':
@@ -412,8 +411,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         },
       ]
     }
-    case 'knowledge_bases':
-      return [{ label: 'Knowledge bases', value: `${Array.isArray(data) ? data.length : 0}` }]
     case 'admission':
       return [{ label: 'Policies', value: `${section ? Object.keys(section).length : 0}` }]
     case 'complexity':
@@ -424,12 +421,27 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         },
         { label: 'Backend', value: asObject(section?.backend) ? 'Configured' : 'Local' },
       ]
-    case 'system_models':
+    case 'system_models': {
+      const decisionModel = configuredDecisionModel({
+        global: { model_catalog: { system: section } },
+      })
+      const inheritedBinding = `Follows ${decisionModel}`
       return [
-        { label: 'Prompt Guard', value: compactPathLikeString(section?.prompt_guard) },
-        { label: 'Domain', value: compactPathLikeString(section?.domain_classifier) },
-        { label: 'PII', value: compactPathLikeString(section?.pii_classifier) },
+        {
+          label: 'Decision Model',
+          value: section?.decision_model ? decisionModel : `${decisionModel} (default)`,
+        },
+        {
+          label: 'Prompt Guard',
+          value: compactPathLikeString(section?.prompt_guard, inheritedBinding),
+        },
+        {
+          label: 'Domain',
+          value: compactPathLikeString(section?.domain_classifier, inheritedBinding),
+        },
+        { label: 'PII', value: compactPathLikeString(section?.pii_classifier, inheritedBinding) },
       ]
+    }
     case 'embedding_models':
       return embeddingModelsSummary(data)
     case 'prompt_compression':
@@ -526,11 +538,11 @@ function badgesForKey(
   }
 
   if (key === 'system_models') {
-    const configuredRefs = Object.values(section || {}).filter(
-      (value) => typeof value === 'string' && value.trim(),
+    const configuredRefs = Object.entries(section || {}).filter(
+      ([name, value]) => name !== 'decision_model' && typeof value === 'string' && value.trim(),
     ).length
     badges.push({
-      label: `${configuredRefs} bindings`,
+      label: `${configuredRefs} explicit ${configuredRefs === 1 ? 'binding' : 'bindings'}`,
       tone: configuredRefs > 0 ? 'active' : 'inactive',
     })
   }
@@ -574,20 +586,14 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         },
         {
           name: 'strategy',
-          label: 'Routing Strategy',
-          type: 'text',
-          placeholder: 'static, router_dc, automix...',
+          label: 'Default Decision Strategy',
+          type: 'select',
+          options: ['priority', 'confidence'],
+          description: 'Used when a recipe omits strategy. Priority is the built-in default.',
         },
         {
-          name: 'auto_model_name',
-          label: 'Auto Model Name',
-          type: 'text',
-          placeholder: 'vllm-sr/auto',
-        },
-        routerStructuredField(key, 'auto_model_names'),
-        {
-          name: 'include_config_models_in_list',
-          label: 'Include Config Models In List',
+          name: 'list_backend_models',
+          label: 'List Backend Models',
           type: 'boolean',
         },
         routerStructuredField(key, 'streamed_body'),
@@ -616,6 +622,15 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'router_replay':
       return [
         { name: 'enabled', label: 'Enable Router Replay', type: 'boolean' },
+        { name: 'capture_request_body', label: 'Capture request bodies', type: 'boolean' },
+        { name: 'capture_response_body', label: 'Capture response bodies', type: 'boolean' },
+        {
+          name: 'capture_personal_data',
+          label: 'Capture personal data',
+          type: 'boolean',
+          description:
+            'When off, Replay keeps route metadata but omits content when PII is detected or detection is unavailable. A decision can override this default.',
+        },
         {
           name: 'store_backend',
           label: 'Store Backend',
@@ -766,7 +781,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Guard',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -798,7 +813,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -807,41 +822,42 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
       return [routerStructuredField(key, 'items')]
     case 'system_models':
       return [
+        routerStructuredField(key, 'decision_model'),
         {
           name: 'prompt_guard',
           label: 'Prompt Guard Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Guard',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'domain_classifier',
           label: 'Domain Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Domain',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'pii_classifier',
           label: 'PII Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-PII',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'fact_check_classifier',
           label: 'Fact Check Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-FactCheck',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'hallucination_detector',
           label: 'Hallucination Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Halu',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'feedback_detector',
           label: 'Feedback Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
       ]
     case 'embedding_models':
@@ -987,15 +1003,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   if (key === 'external_models') {
     return curated
   }
-  if (key === 'knowledge_bases') {
-    return [
-      generatedRouterValueField(
-        ['global', ...CURATED_ROUTER_SECTIONS[key].path],
-        'items',
-        'Knowledge Bases',
-      ),
-    ]
-  }
   if (key === 'admission') {
     return [
       generatedRouterValueField(
@@ -1024,7 +1031,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'clear_route_cache') {
     return { value: Boolean(data) }
   }
-  if (key === 'external_models' || key === 'knowledge_bases') {
+  if (key === 'external_models') {
     return { items: Array.isArray(data) ? data : cloneDefaultSection(key) }
   }
   if (key === 'admission') {
@@ -1036,12 +1043,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       ...(router || {}),
       config_source: router?.config_source,
       strategy: router?.strategy,
-      auto_model_name: router?.auto_model_name,
-      auto_model_names: Array.isArray(router?.auto_model_names) ? router.auto_model_names : [],
-      auto_model_names_configured: Boolean(
-        router && Object.prototype.hasOwnProperty.call(router, 'auto_model_names'),
-      ),
-      include_config_models_in_list: router?.include_config_models_in_list,
+      list_backend_models: router?.list_backend_models,
       streamed_body: asObject(router?.streamed_body) || {},
     }
   }
@@ -1086,6 +1088,12 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     }
   }
   const objectData = asObject(data)
+  if (key === 'system_models') {
+    return {
+      ...objectData,
+      decision_model: asObject(objectData?.decision_model) || { deployment: 'primary' },
+    }
+  }
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
 }
 
@@ -1103,7 +1111,7 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
       Boolean(data.value),
     ) as Partial<ConfigData>
   }
-  if (key === 'external_models' || key === 'knowledge_bases') {
+  if (key === 'external_models') {
     return buildNestedPatch(
       CURATED_ROUTER_SECTIONS[key].path,
       Array.isArray(data.items) ? data.items : [],
@@ -1116,20 +1124,12 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     ) as Partial<ConfigData>
   }
   if (key === 'router_core') {
-    const autoModelNames = Array.isArray(data.auto_model_names) ? data.auto_model_names : []
     const routerCore: Record<string, unknown> = {
       ...data,
       config_source: data.config_source,
       strategy: data.strategy,
-      auto_model_name: data.auto_model_name,
-      include_config_models_in_list: Boolean(data.include_config_models_in_list),
+      list_backend_models: Boolean(data.list_backend_models),
       streamed_body: asObject(data.streamed_body) || {},
-    }
-    delete routerCore.auto_model_names_configured
-    if (data.auto_model_names_configured === true || autoModelNames.length > 0) {
-      routerCore.auto_model_names = autoModelNames
-    } else {
-      delete routerCore.auto_model_names
     }
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, routerCore) as Partial<ConfigData>
   }
@@ -1215,6 +1215,8 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     Object.values(CURATED_ROUTER_SECTIONS).map(({ path }) => path.join('.')),
   )
   const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
+    // KB management is not a Dashboard surface; the canonical schema and raw editor retain it.
+    .filter((surface) => surface.path.join('.') !== 'model_catalog.kbs')
     .filter((surface) => !curatedPaths.has(surface.path.join('.')))
     .map((surface) => {
       const schemaPath = ['global', ...surface.path]

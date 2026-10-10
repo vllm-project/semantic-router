@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gpu_bench import percentile
 from gpu_parity import canonical, load, system_one
-from vllm_sr_runtime.profiles.exact import ExactProfile
+from vllm_srun.profiles.exact import ExactProfile
 
 
 def stream(specs: list[str], sizes: list[int]) -> list[dict]:

@@ -31,6 +31,8 @@ type target struct {
 	card       modelservice.ModelCard
 	head       modelservice.HeadCard
 	resource   *binding.Resource
+	// scan is a question deployment's scan budget (0: the model's own).
+	scan int
 }
 
 // deploymentPlanner is implemented by services that can start a deployment
@@ -73,7 +75,9 @@ func (r *Runtime) prepareHead(ctx context.Context, spec config.ResolvedModelBind
 
 // Labels returns the label vocabulary, in output order, of the classify head
 // the binding runs; consumers without a mapping file take their labels from
-// the served model.
+// the served model. A binding that asks a decision model's ready-made span
+// question has none: its spans name their own labels. A binding that asks a
+// Vela 2.0 model its signal's question has the question's options.
 func (r *Runtime) Labels(ctx context.Context, spec config.ResolvedModelBinding) ([]string, error) {
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
@@ -81,11 +85,35 @@ func (r *Runtime) Labels(ctx context.Context, spec config.ResolvedModelBinding) 
 	if err != nil {
 		return nil, err
 	}
+	if _, ok := spanPreset(spec, card); ok {
+		return nil, nil
+	}
+	if question, ok := questionFor(spec, card); ok {
+		return question.labels(), nil
+	}
 	head, ok := card.Head(spec.Binding.Head)
 	if !ok || len(head.Labels) == 0 {
 		return nil, fmt.Errorf("%w: deployment %q has no labeled head %q", binding.ErrCapability, spec.Binding.Deployment, spec.Binding.Head)
 	}
 	return slices.Clone(head.Labels), nil
+}
+
+// DeploymentCard waits until a deployment is ready and returns its card, so
+// preparation can check what its consumers ask of the model.
+func (r *Runtime) DeploymentCard(ctx context.Context, name string, deployment config.ModelDeployment) (modelservice.ModelCard, error) {
+	ctx, cancel := preparationContext(ctx)
+	defer cancel()
+	return r.card(ctx, config.ResolvedModelBinding{Name: name, Binding: config.ModelBinding{Deployment: name}, Deployment: deployment.WithDefaults()})
+}
+
+// CurrentDeploymentCard reads this generation's observed ready metadata.
+// Attached services may recover independently of Router startup; consumers
+// can check their capabilities without waiting or discovering at request time.
+func (r *Runtime) CurrentDeploymentCard(name string) (modelservice.ModelCard, bool) {
+	if r.services == nil {
+		return modelservice.ModelCard{}, false
+	}
+	return r.services.CurrentCard(name)
 }
 
 // preparationContext bounds a preparation whose caller set no deadline, so a

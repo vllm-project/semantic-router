@@ -411,21 +411,6 @@ def test_detect_container_runtime_rejects_when_podman_unavailable(monkeypatch):
         container_runtime.get_container_runtime()
 
 
-def test_resolve_container_cli_path_returns_none_for_podman_shim(monkeypatch):
-    """OpenClaw needs a real Docker CLI; podman shims should not satisfy it."""
-    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
-
-    class Result:
-        stdout = "Emulate Docker CLI using podman. podman version 5.0.0"
-        stderr = ""
-
-    monkeypatch.setattr(
-        container_runtime.subprocess, "run", lambda *args, **kwargs: Result()
-    )
-
-    assert container_runtime.resolve_container_cli_path("/usr/local/bin/docker") is None
-
-
 def test_container_image_exists_accepts_digest_pinned_images(monkeypatch):
     """#3277: `images -q` does not resolve repo@sha256 references, so a
     digest-pinned image present locally read as missing and

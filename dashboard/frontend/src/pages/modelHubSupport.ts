@@ -99,7 +99,7 @@ export function modelHubPageForModel<T extends { model: { id: string } }>(
   pageSize: number,
 ): number {
   const index = rows.findIndex((row) => row.model.id === modelID)
-  return index < 0 ? 1 : Math.floor(index / Math.max(1, Math.floor(pageSize))) + 1
+  return index < 0 ? 1 : Math.floor(index / Math.min(6, Math.max(1, Math.floor(pageSize)))) + 1
 }
 
 const modelHubPublishedConditionLabels: Record<string, string> = {
@@ -291,7 +291,7 @@ export function paginateModelHubRows<T>(
   requestedPage: number,
   requestedPageSize: number,
 ): ModelHubPagination<T> {
-  const pageSize = Math.max(1, Math.floor(requestedPageSize))
+  const pageSize = Math.min(6, Math.max(1, Math.floor(requestedPageSize)))
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const page = Math.min(Math.max(1, Math.floor(requestedPage)), totalPages)
   const startIndex = (page - 1) * pageSize

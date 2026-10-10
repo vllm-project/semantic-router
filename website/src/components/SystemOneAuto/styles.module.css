@@ -1,0 +1,102 @@
+.figure {
+  --blog-media-max: 100%;
+
+  margin: 2rem 0;
+}
+
+.preview {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #d8e5ef;
+  border-radius: 6px;
+  background: #fff;
+  cursor: zoom-in;
+}
+
+.preview > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.zoomCanvas > svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+}
+
+.preview:focus-visible,
+.caption button:focus-visible,
+.dialogHeader button:focus-visible {
+  outline: 3px solid #1598f2;
+  outline-offset: 3px;
+}
+
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-top: 0.6rem;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.caption button,
+.dialogHeader button {
+  flex-shrink: 0;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--ifm-link-color);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dialog {
+  width: min(1840px, calc(100vw - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #d8e5ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #10273b;
+}
+
+.dialog::backdrop {
+  background: rgb(4 18 35 / 75%);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #d8e5ef;
+  font-size: 0.9rem;
+}
+
+.dialogHeader button {
+  color: #087cc5;
+}
+
+.zoomViewport {
+  max-height: calc(100dvh - 100px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.zoomCanvas {
+  width: max-content;
+  margin: 0 auto;
+}

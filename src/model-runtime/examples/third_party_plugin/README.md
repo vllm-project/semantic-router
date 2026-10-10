@@ -6,10 +6,10 @@ same way the built-in families, engines, accelerators and profiles register:
 
 | Entry point | Name | What it does |
 | --- | --- | --- |
-| `vllm_sr_runtime.families` | `example_keywords` | Reads a keyword package, renders text into keyword IDs, and reads label distributions, embeddings and relevance scores out of the engine's hidden states |
-| `vllm_sr_runtime.engines` | `example_counts` | Turns keyword IDs into one-hot label vectors on the CPU |
-| `vllm_sr_runtime.accelerators` | `example_host` | Offers the host CPU as its own device (`--device example_host`); `--device auto` never picks it |
-| `vllm_sr_runtime.profiles` | `example_one_by_one` | Runs every job alone, in arrival order (`--profile example_one_by_one`) |
+| `vllm_srun.families` | `example_keywords` | Reads a keyword package, renders text into keyword IDs, and reads label distributions, embeddings and relevance scores out of the engine's hidden states |
+| `vllm_srun.engines` | `example_counts` | Turns keyword IDs into one-hot label vectors on the CPU |
+| `vllm_srun.accelerators` | `example_host` | Offers the host CPU as its own device (`--device example_host`); `--device auto` never picks it |
+| `vllm_srun.profiles` | `example_one_by_one` | Runs every job alone, in arrival order (`--profile example_one_by_one`) |
 
 The family never runs the backbone and the engine never reads the package:
 that split is what lets a third-party family reuse a built-in engine, or a
@@ -23,7 +23,7 @@ mkdir -p /tmp/keywords && cat > /tmp/keywords/example_model.json <<'JSON'
 {"format": "vllm-sr-example/1", "labels": ["billing", "shipping", "other"],
  "keywords": {"billing": ["refund", "invoice", "charge"], "shipping": ["parcel", "delivery"]}}
 JSON
-vllm-sr-runtime serve /tmp/keywords --engine example_counts --device cpu --port 8100
+vllm-srun serve /tmp/keywords --engine example_counts --device cpu --port 8100
 ```
 
 ```bash
@@ -36,7 +36,7 @@ curl -s localhost:8100/v1/models | jq '.data[0].plugins[] | select(.name | start
 the same model on the example accelerator and profile:
 
 ```bash
-vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_host \
+vllm-srun serve /tmp/keywords --engine example_counts --device example_host \
   --profile example_one_by_one --port 8100
 ```
 
@@ -44,14 +44,15 @@ vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_hos
 
 1. Subclass `ModelFamily` (`detect`, `verify`, `describe`, `load`) and
    `LoadedModel` (`plan_surface`, `run`, `finish_surface`) from
-   `vllm_sr_runtime.plugins.base`, or `DecisionModel` (`plan`, `run`,
-   `answer`) from `vllm_sr_runtime.plugins.decisions` for `/v1/decisions`.
+   `vllm_srun.plugins.base`, or `DecisionModel` (`plan`, `run`,
+   `answer`) from `vllm_srun.plugins.decisions` for `/v1/decisions`.
    Declare the surfaces you serve and a `descriptor()`; name a table of pinned
    models in `builtin_table` and a test-package writer in `fixture_writer` if
    you ship them.
 2. Reuse a built-in engine through `ModelSpec`, or subclass `Engine` and
    `EngineModel` (`supports`, `load`, `forward` or `encode`); set
-   `auto_priority` if `--engine auto` may try it before the others.
+   `auto_priority` if `--engine auto` may try it before the others, and build
+   `descriptor()` on `super().descriptor()`, which lists it.
 3. For new hardware, subclass `Accelerator` (`available`, `devices`,
    `torch_device`, `kernels`); set `auto_priority` if `--device auto` may pick
    it. For a new batching policy, subclass `Profile` (`plan`, and `bind` for
