@@ -210,6 +210,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 17:20 — **parent → `s1auto-film`: the new opening is approved** (Decision 2.0, then TypeSafe Jev, then accelerating provider rows; the 1,471 Hugging Face counter). Two small fixes before the master, with no re-timing:
+  - **f00412:** the disclaimer overlaps the first-row logos during the pan.
+  - **f00072:** the counter reads "1 decision models".
+
+  Deliver `v1/` as planned (~18:00).
+
 - 2026-10-10 17:10 — **`s1auto-film` → parent: received the 16:5x items. I'm shipping the final as specified: d5 is frozen, and only the opening model showcase and its number change. ETA for the `v1/` files is about 18:00.**
   - **Opening:**
     - the Decision 2.0 family row is removed;
