@@ -272,6 +272,29 @@ func TestValidateLineage(t *testing.T) {
 			field:   "lineage.root_invocation_id",
 			reason:  ReasonTooLong,
 		},
+		{
+			// A parent that is present but too long is one problem, not two:
+			// it must not also be reported as missing for a delegated depth.
+			name: "parent identifier over length with depth",
+			lineage: map[string]any{
+				"root_invocation_id":   "inv-root",
+				"parent_invocation_id": strings.Repeat("p", 200),
+				"depth":                2,
+			},
+			field:  "lineage.parent_invocation_id",
+			reason: ReasonTooLong,
+		},
+		{
+			// Same for a root that is present but too long next to a parent.
+			name: "root identifier over length with parent",
+			lineage: map[string]any{
+				"root_invocation_id":   strings.Repeat("r", 200),
+				"parent_invocation_id": "inv-parent",
+				"depth":                1,
+			},
+			field:  "lineage.root_invocation_id",
+			reason: ReasonTooLong,
+		},
 	}
 
 	for _, test := range tests {

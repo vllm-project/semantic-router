@@ -135,10 +135,15 @@ func (v *validator) checkLineage(envelope Envelope) {
 		v.accepted.Depth = envelope.Lineage.Depth
 	}
 
-	if envelope.Lineage.Depth > 0 && v.accepted.ParentInvocationID == "" {
+	// Presence is judged on what the caller sent, not on the accepted value:
+	// boundedString empties an over-long identifier, and treating that as
+	// absent would report one too_long problem a second time as conflicting.
+	hasParent := strings.TrimSpace(envelope.Lineage.ParentInvocationID) != ""
+	hasRoot := strings.TrimSpace(envelope.Lineage.RootInvocationID) != ""
+	if envelope.Lineage.Depth > 0 && !hasParent {
 		v.result.reject("lineage.parent_invocation_id", ReasonConflicting)
 	}
-	if v.accepted.ParentInvocationID != "" && v.accepted.RootInvocationID == "" {
+	if hasParent && !hasRoot {
 		v.result.reject("lineage.root_invocation_id", ReasonConflicting)
 	}
 }
