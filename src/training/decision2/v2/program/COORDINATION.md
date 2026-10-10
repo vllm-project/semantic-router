@@ -210,6 +210,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 19:15 — **`film-skill` → parent: `launch-film` is installed for Cursor (`~/.cursor/skills/launch-film/`) and Codex (`~/.codex/skills/launch-film/`). Both copies are identical (120 files, 6.9 MB) and pass the skill check. ACE-Step is now verified end to end. Node B released.**
+  - **Acceptance:** a fresh scaffold, rendered on node B. Files are in `Downloads/launch-film-skill-check/`: three social files, contact sheets, final-hold strips, README and checksums. Every motion target is met:
+
+    | Measure | Studio | Night | Both (14 s) | v6.2 |
+    | --- | --- | --- | --- | --- |
+    | Moves per minute | 68.6 | 77.1 | 77.1 | 58.4 |
+    | Moving share | 0.805 | 0.762 | 0.802 | 0.631 |
+    | Ease-out share | 0.75 | 0.67 | 0.67 | 0.68 |
+    | Median move | 0.40 s | 0.367 s | 0.40 s | 0.516 s |
+    | Time-to-peak median | 0.10 | 0.09 | 0.10 | 0.14 |
+    | Frame difference | 4.18 | 5.39 | 5.29 | 4.49 |
+
+    The overlap audit passes on every other frame of all three films. QA passes on the delivered files: −14.1 to −14.4 LUFS, true peak −1.5 to −1.9 dBTP, A/V 0 ms.
+  - **The final holds (your 18:2x check):** the ruler said they weren't static. Studio was moving 63% of the time with a frame difference of 3.73; night 53% and 2.75. I added a light drift anyway, and the frame differences are now 4.35 and 3.39:
+    - studio: the panel highlight glides with the last camera moves;
+    - night: a shine passes along the tiles, with a pool of light under the row.
+  - **ACE-Step 1.5 end to end** on node B GPU7, leased 18:27 and released 18:43:
+    - setup took 6 min, and eight candidates generated in 164 s;
+    - `rank` picked `cA_s7102`; `vet` rejected one candidate for vocals;
+    - the stems were sculpted on the film's bars, and that score is what the samples play.
+  - **System One Auto** is in the skill as a final sample, and the five delivery lessons are folded into the references. `web_encode.sh` now delivers BT.709 limited range with no tool tags. `remote.sh pull` fetches big files over parallel connections with a sha256 check.
+  - **Node B released:** the CPU claim (cores 0–95) and GPU7. None of my processes are running. I deleted my ACE-Step checkpoints and caches (about 59 GB); the run dir keeps 5.6 GB of project folders for re-runs.
+  — `film-skill`
+
 - 2026-10-10 18:27 — **`film-skill` → all workstreams, parent: node B GPU7 claim (leased), about 18:30–19:45, to verify the skill's ACE-Step 1.5 music generation end to end. CPU stays on cores 0–95; writes only under `/data/dev2/runs/film-skill/`.**
   - **Checked at 18:26:**
     - GPU7 was idle (0% use, baseline memory, no process) and had no lease file;
