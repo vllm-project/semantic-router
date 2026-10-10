@@ -98,25 +98,105 @@ func configBaseDir(defaultDir string) (string, error) {
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, "", true)
+	return parseYAMLBytesWithOptions(data, "", &processEnv)
 }
 
 func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, baseDir, true)
+	return parseYAMLBytesWithOptions(data, baseDir, &processEnv)
 }
 
 // ParseYAMLBytesWithoutEnvExpansion validates in-memory YAML while preserving
 // ${VAR} references verbatim. It is intended for read-only validation APIs
 // that must not expose process environment values in normalized output.
 func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, "", false)
+	return parseYAMLBytesWithOptions(data, "", nil)
 }
 
+// ValidateYAMLBytesDeferringEnv validates a config that another process will
+// load with its own environment, so it resolves no reference from this one:
+// references take their defaults, and the config passes if it is valid with
+// the other references either kept as written or empty. External assets are
+// checked as in ParseYAMLBytes.
+func ValidateYAMLBytesDeferringEnv(data []byte) error {
+	_, err := deferredEnvExpander(data)
+	return err
+}
+
+// ParseYAMLBytesDeferringEnv parses a config for an editor of its routing,
+// entrypoints and recipes, such as the DSL, when another process loads the
+// config with its own environment. It checks the config as
+// ValidateYAMLBytesDeferringEnv does. Those three sections keep ${VAR}
+// references and $$ escapes as written, so the editor can write them back;
+// the other sections resolve references as that check did.
+func ParseYAMLBytesDeferringEnv(data []byte) (*RouterConfig, error) {
+	env, err := deferredEnvExpander(data)
+	if err != nil {
+		return nil, err
+	}
+	// Only the resolved form is checked; references kept as written fail typed checks, such as a token count.
+	cfg, err := decodeYAMLBytes(data, func(raw map[string]interface{}) {
+		for key, value := range raw {
+			if !routingSections[key] {
+				raw[key] = env.expandValue(value)
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	applyParsedConfigDefaults(cfg)
+	return cfg, nil
+}
+
+// routingSections are the top-level sections that hold routing state.
+var routingSections = map[string]bool{"routing": true, "entrypoints": true, "recipes": true}
+
+// deferredEnvExpander returns the expander with which data passes
+// ValidateYAMLBytesDeferringEnv.
+func deferredEnvExpander(data []byte) (*envExpander, error) {
+	keep := &envExpander{lookup: noEnv, keepUnset: true}
+	_, err := parseYAMLBytesWithOptions(data, "", keep)
+	if err == nil {
+		return keep, nil
+	}
+	empty := &envExpander{lookup: noEnv}
+	if _, emptyErr := parseYAMLBytesWithOptions(data, "", empty); emptyErr == nil {
+		return empty, nil
+	}
+	return nil, err
+}
+
+// parseYAMLBytesWithOptions keeps references as written and skips external
+// assets when env is nil.
 func parseYAMLBytesWithOptions(
 	data []byte,
 	baseDir string,
-	expandEnvironment bool,
+	env *envExpander,
 ) (*RouterConfig, error) {
+	var expand func(map[string]interface{})
+	if env != nil {
+		expand = env.expandMap
+	}
+	cfg, err := decodeYAMLBytes(data, expand)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ConfigBaseDir = baseDir
+	cfg.SkipExternalAssetValidation = env == nil
+	if err := finalizeParsedConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	logging.ComponentDebugEvent("config", "config_parse_complete", map[string]interface{}{
+		"decision_count": len(cfg.Decisions),
+		"base_dir":       baseDir,
+	})
+	return cfg, nil
+}
+
+// decodeYAMLBytes builds a config without the checks of finalizeParsedConfig.
+// A non-nil expand rewrites the raw document before it is decoded.
+func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, err
@@ -125,8 +205,8 @@ func parseYAMLBytesWithOptions(
 		return nil, normalizeErr
 	}
 
-	if expandEnvironment {
-		expandEnvSubstitutionsInMap(raw)
+	if expand != nil {
+		expand(raw)
 	}
 	expandedData, marshalErr := yaml.Marshal(raw)
 	if marshalErr != nil {
@@ -143,18 +223,8 @@ func parseYAMLBytesWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	cfg.ConfigBaseDir = baseDir
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
-	cfg.SkipExternalAssetValidation = !expandEnvironment
-	if err := finalizeParsedConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	logging.ComponentDebugEvent("config", "config_parse_complete", map[string]interface{}{
-		"decision_count": len(cfg.Decisions),
-		"base_dir":       baseDir,
-	})
 	return cfg, nil
 }
 
@@ -162,12 +232,14 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
+		rejectRemovedEntrypointFields,
 		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,
 		rejectUnsupportedRouterLearningFields,
+		rejectRemovedModelExecutionFields,
 	}
 	for _, validate := range validators {
 		if err := validate(raw); err != nil {
@@ -478,13 +550,35 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
+		tuningMap := nestedStringMap(tuning)
+		if err := rejectUnknownMapFields(prefix+".tuning", tuningMap, []string{
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
 			"stability_weight",
+			"progress_gate",
 		}); err != nil {
 			return err
+		}
+		if gate, ok := tuningMap["progress_gate"]; ok {
+			if err := rejectUnknownMapFields(
+				prefix+".tuning.progress_gate",
+				nestedStringMap(gate),
+				[]string{
+					"enabled",
+					"mode",
+					"calibration_id",
+					"window_size",
+					"window_ttl_seconds",
+					"min_window_outcomes",
+					"min_consecutive_regressions",
+					"min_consecutive_recoveries",
+					"cooldown_seconds",
+					"max_switches_per_window",
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -557,6 +651,17 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 }
 
 func finalizeParsedConfig(cfg *RouterConfig) error {
+	applyParsedConfigDefaults(cfg)
+	if err := validateConfigStructure(cfg); err != nil {
+		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+	return nil
+}
+
+func applyParsedConfigDefaults(cfg *RouterConfig) {
 	logParsedDecisions(cfg)
 
 	// Apply default model registry if not specified in config.
@@ -568,13 +673,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 		cfg.VectorStore.ApplyDefaults()
 	}
 	applyBatchConcurrencyMigration(cfg)
-	if err := validateConfigStructure(cfg); err != nil {
-		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return err
-	}
-	return nil
+	dropReliabilityHeaderMutations(cfg)
 }
 
 func logParsedDecisions(cfg *RouterConfig) {
@@ -774,4 +873,24 @@ func nestedStringMap(raw interface{}) map[string]interface{} {
 	default:
 		return map[string]interface{}{}
 	}
+}
+
+func rejectRemovedEntrypointFields(raw map[string]interface{}) error {
+	global := nestedStringMap(raw["global"])
+	router := nestedStringMap(global["router"])
+	for _, name := range []string{"auto_model_name", "auto_model_names"} {
+		if _, exists := router[name]; exists {
+			return fmt.Errorf("global.router.%s was removed; configure entrypoints with recipe: default and model_names", name)
+		}
+	}
+	if _, exists := router["include_config_models_in_list"]; exists {
+		return fmt.Errorf("global.router.include_config_models_in_list was renamed to global.router.list_backend_models")
+	}
+	looper := nestedStringMap(nestedStringMap(global["integrations"])["looper"])
+	for _, algorithm := range []string{"remom", "fusion", "flow"} {
+		if _, exists := nestedStringMap(looper[algorithm])["model_names"]; exists {
+			return fmt.Errorf("global.integrations.looper.%s.model_names was removed; expose the algorithm through an explicit entrypoint and recipe", algorithm)
+		}
+	}
+	return nil
 }

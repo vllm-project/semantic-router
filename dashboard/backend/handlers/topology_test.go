@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -196,7 +198,7 @@ func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := callRouterAPI(TestQueryRequest{
+	result := callRouterAPI(context.Background(), TestQueryRequest{
 		Query: "hello",
 		Mode:  TestQueryModeDryRun,
 		Model: "vllm-sr/mom-v1-blend",
@@ -225,13 +227,69 @@ func TestCallRouterAPIUsesServerCredential(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := callRouterAPI(TestQueryRequest{
+	result := callRouterAPI(context.Background(), TestQueryRequest{
 		Query: "hello",
 		Mode:  TestQueryModeDryRun,
 	}, server.URL, configPath, topologyCredentialProvider{token: "topology-service-token"})
 
 	require.Empty(t, result.Warning)
 	require.Equal(t, "balanced-route", result.MatchedDecision)
+}
+
+func TestTopologyPreviewUsesCanonicalTimeout(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
+	require.Equal(t, 605*time.Second, topologyPreviewTimeout(configPath))
+}
+
+func TestTopologyPreviewPreservesTimeoutAndOverloadStatus(t *testing.T) {
+	for _, status := range []int{http.StatusGatewayTimeout, http.StatusTooManyRequests} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer upstream.Close()
+			handler := TopologyTestQueryHandler("", upstream.URL)
+			recorder := httptest.NewRecorder()
+			handler(recorder, httptest.NewRequest(http.MethodPost, "/api/topology/test-query", strings.NewReader(`{"query":"hello"}`)))
+			require.Equal(t, status, recorder.Code)
+		})
+	}
+}
+
+func TestTopologyPreviewPropagatesClientCancellation(t *testing.T) {
+	started, canceled := make(chan struct{}), make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		var request RouterIntentRequest
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	}))
+	defer upstream.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		callRouterAPI(ctx, TestQueryRequest{Query: "hello", Mode: TestQueryModeDryRun}, upstream.URL, "")
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("Topology did not invoke Preview")
+	}
+	cancel()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Topology did not cancel upstream Preview")
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Topology caller did not return after cancellation")
+	}
 }
 
 func TestTopologyConfigForRequestModelSelectsRecipeDecisions(t *testing.T) {
@@ -404,7 +462,7 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 	assert.Contains(t, result.HighlightedPath, "signal-structure-many_questions")
 }
 
-func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
+func TestTopologyTestQueryHandler_MissingRouterAPI(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
@@ -422,8 +480,8 @@ func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected status 503, got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	var result TestQueryResult
@@ -511,41 +569,6 @@ func TestTopologyTestQueryHandler_EvaluatedRules(t *testing.T) {
 	// Basic validation - routing latency should be >= 0 (can be 0 for very fast execution)
 	if result.RoutingLatency < 0 {
 		t.Errorf("Expected non-negative routing latency, got %d", result.RoutingLatency)
-	}
-}
-
-func TestBuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray(t *testing.T) {
-	rule := buildEvaluatedRule(
-		routerconfig.Decision{
-			Name:     "casual_chat",
-			Priority: 10,
-		},
-		map[string]bool{},
-	)
-
-	if rule.Conditions == nil {
-		t.Fatal("expected empty Conditions slice, got nil")
-	}
-	if len(rule.Conditions) != 0 {
-		t.Fatalf("expected no conditions, got %v", rule.Conditions)
-	}
-
-	payload, err := json.Marshal(rule)
-	if err != nil {
-		t.Fatalf("failed to marshal rule: %v", err)
-	}
-
-	var parsed map[string]any
-	if err := json.Unmarshal(payload, &parsed); err != nil {
-		t.Fatalf("failed to unmarshal rule JSON: %v", err)
-	}
-
-	conditions, ok := parsed["conditions"].([]any)
-	if !ok {
-		t.Fatalf("expected conditions to serialize as JSON array, got %T (%v)", parsed["conditions"], parsed["conditions"])
-	}
-	if len(conditions) != 0 {
-		t.Fatalf("expected empty conditions array, got %v", conditions)
 	}
 }
 

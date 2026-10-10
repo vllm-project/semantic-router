@@ -34,7 +34,11 @@ type scoredChunk struct {
 // a target token budget. JSON objects and arrays are compressed through string
 // leaves so the resulting payload remains valid JSON with the same structure.
 func CompressToolOutput(content string, query string, minTokens int, targetTokens int) Result {
-	originalTokens := estimateTokens(content)
+	return compressToolOutput(content, query, estimateTokens(content), minTokens, targetTokens)
+}
+
+// compressToolOutput takes a precomputed engine estimate so callers count each text once.
+func compressToolOutput(content string, query string, originalTokens int, minTokens int, targetTokens int) Result {
 	minTokens, targetTokens = normalizeTokenBudget(minTokens, targetTokens)
 	if originalTokens < minTokens || targetTokens <= 0 || targetTokens >= originalTokens {
 		return unchangedResult(content, originalTokens)
@@ -47,7 +51,64 @@ func CompressToolOutput(content string, query string, minTokens int, targetToken
 		return unchangedResult(content, originalTokens)
 	}
 
+	if decoded, ok := jsonStringScalar(content); ok {
+		return compressJSONString(content, decoded, query, originalTokens, targetTokens)
+	}
+	if isJSONScalar(content) {
+		// A number, boolean or null carries no chunk structure to drop, and
+		// chunking one would emit a document that no longer parses.
+		return unchangedResult(content, originalTokens)
+	}
+
 	return compressText(content, query, originalTokens, targetTokens)
+}
+
+// jsonStringScalar reports whether content is a JSON string document and
+// returns its decoded value.
+func jsonStringScalar(content string) (string, bool) {
+	if !strings.HasPrefix(strings.TrimSpace(content), "\"") {
+		return "", false
+	}
+	var decoded string
+	if err := json.Unmarshal([]byte(content), &decoded); err != nil {
+		return "", false
+	}
+	return decoded, true
+}
+
+// isJSONScalar reports whether content is a valid JSON document that is
+// neither an object nor an array.
+func isJSONScalar(content string) bool {
+	if isJSONObjectOrArray(content) {
+		return false
+	}
+	return json.Valid([]byte(content))
+}
+
+// compressJSONString compresses the decoded text of a JSON string document and
+// re-encodes the survivor, so a valid JSON input stays valid JSON.
+func compressJSONString(content string, decoded string, query string, originalTokens int, targetTokens int) Result {
+	inner := compressText(decoded, query, estimateTokens(decoded), targetTokens)
+	if !inner.Applied {
+		return unchangedResult(content, originalTokens)
+	}
+	encoded, err := json.Marshal(inner.Content)
+	if err != nil {
+		return unchangedResult(content, originalTokens)
+	}
+	compressed := string(encoded)
+	compressedTokens := estimateTokens(compressed)
+	if compressedTokens > targetTokens || compressedTokens >= originalTokens {
+		return unchangedResult(content, originalTokens)
+	}
+	return Result{
+		Content:          compressed,
+		OriginalTokens:   originalTokens,
+		CompressedTokens: compressedTokens,
+		Applied:          true,
+		Format:           "json",
+		OmittedChunks:    inner.OmittedChunks,
+	}
 }
 
 func compressText(content string, query string, originalTokens int, targetTokens int) Result {

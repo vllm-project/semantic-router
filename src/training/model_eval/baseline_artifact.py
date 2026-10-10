@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from artifact_inventory import ServedArtifact
+from constants import VELA_RELEASE_REVISIONS
 from provenance.crossref import verify_artifact_bytes
 from provenance.emit import ARTIFACT_INCLUDE_GLOBS, resolve_hf_revision
 from provenance.manifest import load_manifest
@@ -58,14 +60,17 @@ def referenced_artifact(path: Path | None) -> dict[str, Any] | None:
 
 
 def resolve_measured_artifact(
-    args: argparse.Namespace, served: ServedArtifact
+    args: argparse.Namespace,
+    served: ServedArtifact,
+    validate_repo: Callable[[str], None],
 ) -> MeasuredArtifact:
     """Decide which bytes this run scores, and warn when they are not the served ones.
 
     A referenced manifest lends its identity to every number this run reports,
     so it also decides which bytes are fetched, and the bytes are re-hashed
     against it before anything is scored. Otherwise a run could measure one
-    artifact and publish another's digest beside the result.
+    artifact and publish another's digest beside the result. ``validate_repo``
+    refuses an artifact the task cannot score before its bytes are read.
     """
     referenced = referenced_artifact(args.artifact_manifest)
 
@@ -81,6 +86,7 @@ def resolve_measured_artifact(
             revision=referenced["identity"]["revision"],
             referenced=referenced,
         )
+        validate_repo(measured.repo)
         logger.warning(
             "measuring local artifact %s, which is NOT the artifact %s serves (%s)",
             measured.model_dir,
@@ -103,7 +109,8 @@ def resolve_measured_artifact(
         revision = identity["revision"]
         patterns = [entry["path"] for entry in referenced["files"]]
     else:
-        revision = resolve_hf_revision(repo)
+        revision = VELA_RELEASE_REVISIONS.get(repo) or resolve_hf_revision(repo)
+    validate_repo(repo)
     if repo != served.hf_repo:
         logger.warning(
             "measuring %s, which is NOT the artifact %s serves (%s)",

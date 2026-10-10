@@ -9,16 +9,20 @@ import React, {
 import {
   installAuthenticatedFetch,
   normalizeAuthToken,
-  notifyUnauthorized,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
+import {
+  clearDashboardObservations,
+  invalidateDashboardObservations,
+} from '../utils/dashboardObservationCache'
 
 interface AuthContextValue {
   token: string | null
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
+  sessionError: string | null
   login: (email: string, password: string) => Promise<void>
   setSession: (token: string, user?: AuthUser | null) => void
   logout: () => void
@@ -50,30 +54,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
   // The server's clearAuthSessionCookie on logout is what actually ends the session.
   const clearSession = useCallback(() => {
+    clearDashboardObservations()
     setToken(null)
     setUser(null)
+    setSessionError(null)
   }, [])
 
   const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
+    clearDashboardObservations()
     const validToken = normalizeAuthToken(nextToken)
+    if (validToken) invalidateDashboardObservations()
     setToken(validToken)
     setUser(validToken ? (nextUser ?? null) : null)
+    setSessionError(null)
   }, [])
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await fetchCurrentAuthUser()
-      if (result.clearLocalToken) {
+      if (result.status === 'unauthenticated') {
         clearSession()
         return
       }
+      if (result.status === 'unavailable') {
+        setSessionError(result.message)
+        return
+      }
+      clearDashboardObservations()
+      invalidateDashboardObservations()
       setUser(result.user)
-    } catch {
-      notifyUnauthorized()
+      setSessionError(null)
     } finally {
       setIsLoading(false)
     }
@@ -84,6 +99,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     void refreshSession()
   }, [refreshSession])
+
+  useEffect(() => {
+    const changed = () => invalidateDashboardObservations()
+    window.addEventListener('config-deployed', changed)
+    window.addEventListener('instance-deployed', changed)
+    return () => {
+      window.removeEventListener('config-deployed', changed)
+      window.removeEventListener('instance-deployed', changed)
+    }
+  }, [])
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -133,6 +158,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         isLoading,
         isAuthenticated: hasAuthenticatedSession(token, user),
+        sessionError,
         login,
         setSession,
         logout,

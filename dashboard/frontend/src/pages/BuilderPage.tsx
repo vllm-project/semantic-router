@@ -1,10 +1,10 @@
 import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 
-import { useDSLStore } from '@/stores/dslStore'
+import { selectHasUnsavedChanges, useDSLStore } from '@/stores/dslStore'
 import type { EditorMode } from '@/types/dsl'
 
 import styles from './BuilderPage.module.css'
-import DslEditorPage from './DslEditorPage'
+const DslEditorPage = React.lazy(() => import('./DslEditorPage'))
 import {
   BuilderDeployConfirmModal,
   BuilderDeployToast,
@@ -37,16 +37,16 @@ const BuilderPage: React.FC = () => {
     diagnostics,
     symbols,
     ast,
-    wasmReady,
-    wasmError,
+    compilerReady,
+    compilerError,
     loading,
     mode,
-    dirty,
     renderedYamlOutput,
     yamlOutput,
     crdOutput,
     compileError,
-    initWasm,
+    initCompiler,
+    pauseEditorWork,
     compile,
     validate,
     parseAST,
@@ -67,6 +67,11 @@ const BuilderPage: React.FC = () => {
     deployPreviewLoading,
     deployPreviewError,
   } = useDSLStore()
+
+  // Derived from the store: the source differs from the last load, import, reset, or
+  // successful deploy snapshot. The reload guard and the (unsaved) label read this.
+  const unsaved = useDSLStore(selectHasUnsavedChanges)
+
   const { serverReadonly, runtimeConfigWritable, isLoading: readonlyLoading } = useReadonly()
   const { user } = useAuth()
   const hasDeployPermission = canDeployConfig(user)
@@ -109,6 +114,7 @@ const BuilderPage: React.FC = () => {
   })
   const [importText, setImportText] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
+  const [configLoadError, setConfigLoadError] = useState<string | null>(null)
   const [importUrl, setImportUrl] = useState('')
   const [importUrlLoading, setImportUrlLoading] = useState(false)
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -134,10 +140,11 @@ const BuilderPage: React.FC = () => {
     }
   }, [activeRoutingScopeId, ast, routingScopes])
 
-  // Initialize WASM on mount
+  // Check compiler availability on mount
   useEffect(() => {
-    initWasm()
-  }, [initWasm])
+    initCompiler()
+    return () => pauseEditorWork()
+  }, [initCompiler, pauseEditorWork])
 
   // The visual workspace is the primary authoring entrypoint. DSL remains one
   // click away for precision edits and round-trip inspection.
@@ -145,12 +152,12 @@ const BuilderPage: React.FC = () => {
     setMode('visual')
   }, [setMode])
 
-  // Parse AST when entering visual mode or when dslSource changes in visual mode
+  // Refresh when entering visual mode; edits are analyzed by the store.
   useEffect(() => {
-    if (mode === 'visual' && wasmReady && dslSource.trim()) {
+    if (mode === 'visual' && compilerReady && useDSLStore.getState().dslSource.trim()) {
       parseAST()
     }
-  }, [mode, wasmReady, dslSource, parseAST])
+  }, [mode, compilerReady, parseAST])
 
   const toggleSection = useCallback((key: keyof SectionState) => {
     setSections((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -160,12 +167,8 @@ const BuilderPage: React.FC = () => {
     (newMode: EditorMode) => {
       setMode(newMode)
       setOutputPanelOpen(true)
-      // When switching to visual, parse AST
-      if (newMode === 'visual' && wasmReady && dslSource.trim()) {
-        parseAST()
-      }
     },
-    [setMode, wasmReady, dslSource, parseAST],
+    [setMode],
   )
   const deployDisabled =
     readonlyLoading || serverReadonly || !runtimeConfigWritable || !hasDeployPermission
@@ -203,22 +206,22 @@ const BuilderPage: React.FC = () => {
     setTimeout(() => importTextareaRef.current?.focus(), 50)
   }, [])
 
-  const handleImportConfirm = useCallback(() => {
+  const handleImportConfirm = useCallback(async () => {
     const yaml = importText.trim()
     if (!yaml) {
       setImportError('Please paste YAML content')
       return
     }
     try {
-      importYaml(yaml)
-      compile()
+      await importYaml(yaml)
+      await compile()
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+      setConfigLoadError(null)
+      autoLoadedDefaultConfigRef.current = true
+    } catch (err) {
+      setImportError(`Failed to import YAML: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [importText, importYaml, compile])
 
@@ -279,9 +282,11 @@ const BuilderPage: React.FC = () => {
     setImportError(null)
     try {
       await loadFromRouter()
-      compile()
+      await compile()
       setShowImportModal(false)
       setImportText('')
+      setConfigLoadError(null)
+      autoLoadedDefaultConfigRef.current = true
     } catch (err) {
       setImportError(
         `Failed to load from router: ${err instanceof Error ? err.message : String(err)}`,
@@ -301,7 +306,7 @@ const BuilderPage: React.FC = () => {
   // On first entry, load current router config and compile it by default.
   useEffect(() => {
     if (
-      !wasmReady ||
+      !compilerReady ||
       readonlyLoading ||
       dslSource.trim() ||
       autoLoadedDefaultConfigRef.current ||
@@ -314,15 +319,19 @@ const BuilderPage: React.FC = () => {
     let cancelled = false
     const loadDefaultConfig = async () => {
       setLoadingFromRouter(true)
-      setImportError(null)
+      setConfigLoadError(null)
       try {
         await loadFromRouter()
         if (!cancelled) {
-          compile()
+          await compile()
           autoLoadedDefaultConfigRef.current = true
         }
       } catch (err) {
-        console.error('[BuilderPage] Failed to load default router config:', err)
+        if (!cancelled) {
+          setConfigLoadError(
+            `Failed to load router config: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
       } finally {
         autoLoadingDefaultConfigRef.current = false
         if (!cancelled) {
@@ -334,11 +343,11 @@ const BuilderPage: React.FC = () => {
     return () => {
       cancelled = true
     }
-  }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile])
+  }, [compilerReady, readonlyLoading, dslSource, loadFromRouter, compile])
 
   // Diagnostic counts
   const validationErrorCount = diagnostics.filter((d) => d.level === 'error').length
-  const errorCount = validationErrorCount + (compileError ? 1 : 0)
+  const errorCount = validationErrorCount + (compileError ? 1 : 0) + (configLoadError ? 1 : 0)
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0
   const totalRoutingSummary = useMemo(
     () => summarizeBuilderRoutingScopes(ast, symbols, dslSource),
@@ -353,7 +362,7 @@ const BuilderPage: React.FC = () => {
     pluginCount,
   } = useMemo(() => summarizeBuilderRoutingScopes(visualAst, null), [visualAst])
   const { recipeCount, entrypointCount } = totalRoutingSummary
-  const isValid = errorCount === 0 && wasmReady
+  const isValid = errorCount === 0 && compilerReady
   const lineCount = dslSource.split('\n').length
 
   // Memoize selected entity from AST
@@ -387,10 +396,10 @@ const BuilderPage: React.FC = () => {
   return (
     <div className={styles.page}>
       <BuilderToolbar
-        dirty={dirty}
+        unsaved={unsaved}
         mode={mode}
-        wasmReady={wasmReady}
-        wasmError={wasmError}
+        compilerReady={compilerReady}
+        compilerError={compilerError}
         dslSource={dslSource}
         loading={loading}
         deploying={deploying}
@@ -417,8 +426,23 @@ const BuilderPage: React.FC = () => {
         onValidate={validate}
         onToggleGuide={() => setGuideOpen(!guideOpen)}
         onToggleOutput={() => setOutputPanelOpen(!outputPanelOpen)}
-        onReset={reset}
+        onReset={() => {
+          setConfigLoadError(null)
+          autoLoadedDefaultConfigRef.current = true
+          reset()
+        }}
       />
+
+      {configLoadError && (
+        <div className={styles.workspaceError} role="alert">
+          {configLoadError} Use Import to retry loading or choose a corrected config.
+        </div>
+      )}
+      {compileError && (
+        <div className={styles.workspaceError} role="alert">
+          {compileError}
+        </div>
+      )}
 
       {/* Main Content — editor + output panel */}
       <div className={styles.content} ref={contentRef}>
@@ -441,8 +465,8 @@ const BuilderPage: React.FC = () => {
               projectionMappingCount={projectionMappingCount}
               routeCount={routeCount}
               pluginCount={pluginCount}
-              wasmReady={wasmReady}
-              wasmError={wasmError}
+              compilerReady={compilerReady}
+              compilerError={compilerError}
               addingEntity={addingEntity}
               onSetAddingEntity={setAddingEntity}
               onDeleteEntity={handleDeleteEntity}
@@ -474,7 +498,9 @@ const BuilderPage: React.FC = () => {
           )}
           {mode === 'dsl' && (
             <div className={styles.dslModeContainer}>
-              <DslEditorPage embedded hideOutput />
+              <React.Suspense fallback={<div role="status">Loading DSL editor…</div>}>
+                <DslEditorPage embedded hideOutput />
+              </React.Suspense>
             </div>
           )}
         </div>

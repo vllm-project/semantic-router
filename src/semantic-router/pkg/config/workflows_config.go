@@ -26,8 +26,7 @@ const (
 // FlowRuntimeConfig registers direct Router Flow model slugs. Workflow policy
 // lives on routing decisions, not in global runtime config.
 type FlowRuntimeConfig struct {
-	ModelNames []string                   `yaml:"model_names,omitempty" json:"model_names,omitempty"`
-	State      WorkflowStateRuntimeConfig `yaml:"state,omitempty" json:"state,omitempty"`
+	State WorkflowStateRuntimeConfig `yaml:"state,omitempty" json:"state,omitempty"`
 }
 
 // WorkflowsAlgorithmConfig configures Router Flow execution for
@@ -63,6 +62,8 @@ type WorkflowFinalConfig struct {
 }
 
 type WorkflowPlannerConfig struct {
+	// Model overrides the planner; when absent, the first assigned worker
+	// eligible for the actual planner-stage request is used.
 	Model               string `yaml:"model,omitempty" json:"model,omitempty"`
 	MaxCompletionTokens int    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
 }
@@ -103,62 +104,11 @@ func (c WorkflowStateRuntimeConfig) TTL() time.Duration {
 	return time.Duration(c.WithDefaults().TTLSeconds) * time.Second
 }
 
-func DefaultFlowModelNames() []string {
-	return []string{DefaultFlowModelName}
-}
-
-func (c FlowRuntimeConfig) EffectiveModelNames() []string {
-	if len(c.ModelNames) > 0 {
-		return normalizeFlowModelNames(c.ModelNames)
-	}
-	return DefaultFlowModelNames()
-}
-
-func (c *RouterConfig) ExposedFlowModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasFlowDecision() {
-		return nil
-	}
-	return c.Looper.Flow.EffectiveModelNames()
-}
-
-func normalizeFlowModelNames(names []string) []string {
-	seen := make(map[string]bool, len(names))
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		normalized := strings.TrimSpace(name)
-		if normalized == "" || seen[normalized] {
-			continue
-		}
-		seen[normalized] = true
-		result = append(result, normalized)
-	}
-	return result
-}
-
-func (c *RouterConfig) IsFlowModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.Flow.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *RouterConfig) HasFlowDecision() bool {
 	if c == nil {
 		return false
 	}
-	for _, decision := range c.Decisions {
+	for _, decision := range c.AllRoutingDecisions() {
 		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmWorkflows {
 			return true
 		}
@@ -167,11 +117,6 @@ func (c *RouterConfig) HasFlowDecision() bool {
 }
 
 func ValidateFlowRuntimeConfig(cfg FlowRuntimeConfig) error {
-	for i, name := range cfg.ModelNames {
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("model_names[%d] cannot be empty", i)
-		}
-	}
 	return ValidateWorkflowStateRuntimeConfig(cfg.State)
 }
 
@@ -219,9 +164,6 @@ func validateWorkflowModeAndPlan(cfg *WorkflowsAlgorithmConfig) error {
 	case "", WorkflowModeStatic, WorkflowModeDynamic:
 	default:
 		return fmt.Errorf("mode must be %q or %q, got %q", WorkflowModeStatic, WorkflowModeDynamic, cfg.Mode)
-	}
-	if mode == WorkflowModeDynamic && strings.TrimSpace(cfg.Planner.Model) == "" {
-		return fmt.Errorf("planner.model is required when mode=dynamic")
 	}
 	return validateWorkflowStaticPlanConfig(mode, cfg)
 }

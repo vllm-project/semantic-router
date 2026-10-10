@@ -29,11 +29,14 @@ run the local container stack.
 ## Start a local stack
 
 ```bash
-# Start Router, Envoy, Dashboard, and observability.
+# Start the standalone Router, Dashboard, and observability.
 vllm-sr serve
 
 # Use Podman.
-vllm-sr serve --runtime podman
+vllm-sr serve --container-runtime podman
+
+# Put Envoy in front of the Router when you need an ext_proc gateway.
+vllm-sr serve --gateway extproc
 
 # Check the stack and open the Dashboard.
 vllm-sr status
@@ -45,10 +48,12 @@ OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
 For local `serve`, `listeners[].address` controls the host port publication.
-Use `127.0.0.1` or `::1` for host-only access. Envoy listens on the container
-bridge interface so both the published port and Dashboard can reach it; this
-keeps the host loopback restriction, including after Dashboard config saves.
-Standalone `config envoy` generation retains the configured listener address.
+Use `127.0.0.1` or `::1` for host-only access. The standalone Router serves
+these listeners directly. With `--gateway extproc`, Envoy listens on the
+container bridge interface so both the published port and Dashboard can reach
+it; the host publication keeps the configured loopback restriction, including
+after Dashboard config saves. `config envoy` generation retains the configured
+listener address.
 
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
 backends referenced by `providers.models`; those endpoints must already be
@@ -58,13 +63,22 @@ Useful lifecycle commands:
 
 ```bash
 vllm-sr logs router
-vllm-sr logs envoy
 vllm-sr logs dashboard
 vllm-sr stop
 ```
 
-Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
-`--readonly` to keep Dashboard available without config editing.
+Use `vllm-sr logs envoy` for an instance started with `--gateway extproc`.
+Add `--minimal` to run without Dashboard or observability. Add `--readonly` to
+keep Dashboard available without config editing.
+
+Local startup waits up to 1800 seconds for readiness after containers start.
+Use `--startup-timeout SECONDS` with a positive integer when model loading or
+GPU compilation needs a different budget, for example
+`vllm-sr serve --startup-timeout 7200`. This Docker-only option also covers
+Dashboard readiness during first-run setup. If the wait expires, the CLI exits
+with an error and leaves containers running for `vllm-sr status` and
+`vllm-sr logs router`; use `vllm-sr stop` to stop them. Request inference
+deadlines are configured separately.
 
 ## Test routing
 
@@ -133,15 +147,11 @@ routing:
         type: static
 ```
 
-`vllm-sr init` was removed in v0.3. For older files or supported external
-provider configs, use the explicit conversion commands:
+`vllm-sr init` was removed in v0.3. For older files, use the explicit
+migration command:
 
 ```bash
 vllm-sr config migrate --config old-config.yaml
-vllm-sr config import \
-  --from openclaw \
-  --source openclaw.json \
-  --target config.yaml
 ```
 
 The current field reference is generated in the
@@ -173,13 +183,54 @@ vllm-sr config validate --config my-models.yaml
 vllm-sr serve --config my-models.yaml
 ```
 
-To evaluate concurrently running baseline and candidate deployments from one
-Dashboard, point `EVALUATION_DEPLOYMENTS_DIR` at the strict, read-only
-`evaluation-deployments.v1` registry described in the
-[Evaluation Plane guide](../../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together),
-then use the same `vllm-sr serve` command. The CLI mounts that directory into
-Dashboard only; Router and Envoy do not inherit it. Leaving the variable unset
-preserves the current single-runtime behavior.
+## Evaluate single models and MoM
+
+`vllm-sr benchmark` and Dashboard **Evaluation** use sr-bench 1.0. Both clients
+share a durable worker, frozen datasets, run IDs, per-benchmark quality, token
+buckets, costs, latency and wall time. The old evaluation command/API is removed.
+
+```bash
+vllm-sr benchmark catalog
+vllm-sr benchmark setup --benchmark all
+vllm-sr benchmark dataset prepare --benchmark mmlu-pro --profile quick
+vllm-sr benchmark dataset preparations
+vllm-sr benchmark plan --manifest candidate.json --output frozen.json
+vllm-sr benchmark run --manifest frozen.json --detach
+vllm-sr benchmark report RUN_ID
+vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
+```
+
+Dataset preparation uses the shared service by default, matching **Evaluation →
+Datasets → Prepare dataset** in Dashboard. The worker installs missing data
+preparation dependencies, downloads the pinned source and publishes a frozen
+dataset. It does not start a model, build a grading sandbox or run an evaluation.
+Gated sources need their access approval and credentials in the worker environment.
+The CLI waits and prints the manifest; `dataset prepare --no-wait` returns a job
+for `dataset preparations PREPARATION_ID`. Closing either client leaves the job
+running. `dataset options` lists sources, profiles and access requirements.
+
+With `--url`, preparation writes to the selected worker's store. Local source
+files and history options require explicit `dataset prepare --local`; this mode
+cannot be combined with `--url` or `SR_BENCH_URL` and does not upload files.
+
+The managed core worker survives Dashboard/config reloads. An image-only upgrade
+replaces an idle worker while preserving its journal; active runs must finish or
+be cancelled, and dataset preparations must finish first. Set `VLLM_SR_BENCH_PORT`
+for both `serve` and `benchmark` when the default `8090 + stack port offset` host
+port is occupied. The override is an
+absolute loopback host port and does not change Dashboard's internal connection.
+For optional code and
+agent harnesses, prepare a dedicated worker and select it with `SR_BENCH_URL`;
+this suppresses managed worker creation. Keep service/model credential values
+in the worker environment. Register targets on its host with
+`benchmark target register --file targets.json` for Dashboard selection.
+
+Quick/dev sets enable bounded tuning; standard is disjoint holdout. Preview has
+no capability score, and replay is a saved-answer estimate. Priced live runs are
+required for a measured savings claim. Unknown usage is not zero, and spend
+reservations are not a universal provider-enforced hard USD cap. See the
+[sr-bench guide](../../website/docs/benchmarking/sr-bench/index.md) for setup, manifests,
+all nine adapters, failure recovery, regrading and dev-only training export.
 
 ## Deploy to Kubernetes
 
@@ -202,9 +253,12 @@ Docker defaults or sample routes into it. Credential references are stored in
 a release-scoped Secret, and literal credentials or credential-bearing URLs
 are rejected.
 
-`--platform amd` and `--platform nvidia` are local-container shortcuts. On
-Kubernetes, select GPU images, resources, and device plugins through Helm
-values, a deployment profile, or the operator.
+`--platform auto` detects the execution target, including allocatable GPUs in
+the selected Kubernetes context. Choose `cpu`, `rocm` or `cuda` explicitly to
+select that backend. Kubernetes requires its device plugin and schedules GPU
+resources from canonical placement ordinals; physical `--device-ids` belongs
+to the Docker target. Deployment `--profile` and model `--runtime-profile`
+control different settings.
 
 See [Kubernetes installation](https://vllm-sr.ai/docs/installation/k8s/) for
 gateway, profile, and production guidance.
@@ -256,8 +310,8 @@ vllm-sr stop
   normally port `8080`.
 - `request chat` uses the routed inference listener from `config.yaml`, normally
   port `8899`.
-- A healthy Router and Envoy do not prove that an external model backend can
-  generate. Use Dashboard **Verify** or `chat` to test the backend path.
+- A healthy Router does not prove that an external model backend can generate.
+  Use Dashboard **Verify** or `vllm-sr request chat` to test the backend path.
 - If a lifecycle command reports that the stack is busy, let the active
   `serve` or `stop` finish and retry.
 - Set `NO_COLOR=1` for plain CLI output. JSON modes keep stdout free of status

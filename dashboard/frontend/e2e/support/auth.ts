@@ -42,8 +42,6 @@ const defaultUser: SessionUser = {
     'mcp.manage',
     'mcp.read',
     'mlpipeline.manage',
-    'openclaw.manage',
-    'openclaw.read',
     'replay.read',
     'tools.use',
     'topology.read',
@@ -71,8 +69,10 @@ const defaultSettings = {
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
-  evaluationAvailable: true,
-  evaluationUnavailableReason: '',
+  srBenchAvailable: true,
+  srBenchUnavailableReason: '',
+  mlPipelineAvailable: true,
+  mlPipelineUnavailableReason: '',
 }
 
 export const dashboardSettingsResponse = (

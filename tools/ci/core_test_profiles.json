@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "excluded": [
+    {
+      "package": "./pkg/cache",
+      "test": "TestNegationFalseHitRegressionInMemory",
+      "source": "src/semantic-router/pkg/cache/negation_regression_test.go",
+      "profile": "model-runtime",
+      "reason": "Embeds through a managed model_runtime deployment of the mmBERT embedding package (VLLM_SR_MMBERT_TEST_MODEL); model-free polarity lookup contracts remain mandatory in core."
+    },
+    {
+      "package": "./pkg/cache",
+      "test": "TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",
+      "source": "src/semantic-router/pkg/cache/omni_storage_integration_test.go",
+      "profile": "model-runtime",
+      "reason": "Embeds through a managed model_runtime deployment of the pinned Omni package (VELA_OMNI_ARTIFACT); each owned integration must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow",
+      "source": "src/semantic-router/pkg/classification/classifier_pii_long_text_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela PII package through a managed model_runtime deployment (VLLM_SR_PII_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
+      "source": "src/semantic-router/pkg/classification/embedding_classifier_integration_test.go",
+      "profile": "model-runtime",
+      "reason": "Embeds through a managed model_runtime deployment of the pinned Omni package (VELA_OMNI_ARTIFACT); each owned integration must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
+      "source": "src/semantic-router/pkg/classification/embedding_classifier_integration_test.go",
+      "profile": "model-runtime",
+      "reason": "Embeds through a managed model_runtime deployment of the pinned Omni package (VELA_OMNI_ARTIFACT); each owned integration must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFactCheckEmptyInputRealModel",
+      "source": "src/semantic-router/pkg/classification/fact_check_classifier_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela FactCheck package through a managed model_runtime deployment (VLLM_SR_FACTCHECK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFactCheckPolicyRealModel",
+      "source": "src/semantic-router/pkg/classification/fact_check_classifier_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela FactCheck package through a managed model_runtime deployment (VLLM_SR_FACTCHECK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFeedbackForcedAbstentionPreservesPredictionRealModel",
+      "source": "src/semantic-router/pkg/classification/feedback_detector_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Feedback package through a managed model_runtime deployment (VLLM_SR_FEEDBACK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFeedbackPredictionAndAbstentionRealModel",
+      "source": "src/semantic-router/pkg/classification/feedback_detector_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Feedback package through a managed model_runtime deployment (VLLM_SR_FEEDBACK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestJailbreakDistributionRealModel",
+      "source": "src/semantic-router/pkg/classification/classifier_jailbreak_risk_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Guard package through a managed model_runtime deployment (VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestJailbreakRiskRealModelContract",
+      "source": "src/semantic-router/pkg/classification/classifier_jailbreak_risk_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Guard package through a managed model_runtime deployment (VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestLocalClassifierMaintainedCPU",
+      "source": "src/semantic-router/pkg/classification/generic_classifier_local_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Domain package through a managed model_runtime deployment (VLLM_SR_DOMAIN_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestUnifiedClassifierPublishedModels",
+      "source": "src/semantic-router/pkg/classification/unified_classifier_integration_test.go",
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Domain, PII and Guard package through a managed model_runtime deployment (VLLM_SR_DOMAIN_MODEL, VLLM_SR_PII_MODEL, VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestVela2PublishedAnswers03BRealModel",
+      "source": "src/semantic-router/pkg/classification/vela2_published_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Asks the pinned Vela 2.0 0.3B, served on CPU by the published-model runner (VLLM_SRUN_VELA2_ENDPOINT), every built-in signal and decision question through the Router and checks the fused decisions call against its recorded answers; each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestVela2PublishedAnswers08BRealModel",
+      "source": "src/semantic-router/pkg/classification/vela2_published_realmodel_test.go",
+      "profile": "model-runtime",
+      "reason": "Asks the pinned Vela 2.0 0.8B, served on CPU by the published-model runner (VLLM_SRUN_VELA2_08B_ENDPOINT), the same questions on a shorter corpus; each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestVela2RouterMatchesSystemOne",
+      "source": "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
+      "profile": "model-runtime",
+      "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on the pinned Vela 2.0 0.3B the published-model runner serves on CPU (VLLM_SRUN_VELA2_ENDPOINT); each published-model test must pass without skipping."
+    },
+    {
+      "package": "./pkg/extproc",
+      "test": "TestMemoryEmbeddingIdentityPersistent",
+      "source": "src/semantic-router/pkg/extproc/router_memory_identity_integration_test.go",
+      "profile": "local.memory",
+      "reason": "Live model and persistent-store identity chain is qualified by the local memory suite."
+    },
+    {
+      "package": "./pkg/looper",
+      "test": "TestFusionWeightPolicy_LiveOllama",
+      "source": "src/semantic-router/pkg/looper/grounding_live_test.go",
+      "profile": "external-ollama",
+      "reason": "Requires separately provisioned panel/judge LLM endpoints; production grounding orchestration has deterministic core tests."
+    },
+    {
+      "package": "./pkg/modelselection",
+      "test": "TestPublishedSelectionsMatchBindingFixtures",
+      "source": "src/semantic-router/pkg/modelselection/parity_test.go",
+      "profile": "external-selector-checkpoints",
+      "reason": "Compares the published selector artifacts (VLLM_SR_TEST_ML_MODELS_DIR) with the selections recorded from the retired bindings; parity on the checked-in artifacts runs in core."
+    }
+  ],
+  "ginkgo_excluded_labels": {
+    "model-artifacts": "Optional checkpoint-specific compatibility probes; selected model integrations run in the explicit published-model/local-stack profiles."
+  },
+  "race": []
+}

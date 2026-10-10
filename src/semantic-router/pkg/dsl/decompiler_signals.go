@@ -16,6 +16,7 @@ func (d *decompiler) decompileSignals() {
 	d.decompileModalitySignals()
 	d.decompileAuthzSignals()
 	d.decompileJailbreakSignals()
+	d.decompileSafetySignals()
 	d.decompileHallucinationSignals()
 	d.decompilePIISignals()
 	d.decompileKBSignals()
@@ -23,5 +24,6 @@ func (d *decompiler) decompileSignals() {
 	d.decompileMetadataSignals()
 	d.decompileClassifierSignals()
 	d.decompileInputModalitySignals()
+	d.decompileDecisionModelSignals()
 	d.decompileProjectionSignals()
 }

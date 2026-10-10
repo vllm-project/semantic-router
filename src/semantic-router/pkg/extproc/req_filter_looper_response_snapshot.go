@@ -21,9 +21,14 @@ func prepareNativeLooperStream(
 		semantic.Model = response.Model
 		semantic.Generation++
 	}
-	body := response.Body
+	body := response.ProtocolBody()
+	diagnostics, err := engine.ValidateNativeChatStream(body)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	if !streamUsageRequestedByClient(ctx) {
-		filter := protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+		filter := engine.NewChatUsageStreamFilter()
 		body, err = filter.Push(body)
 		if err != nil {
 			return nil, nil, err

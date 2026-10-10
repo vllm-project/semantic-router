@@ -10,14 +10,14 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
-  = 'Mixture-of-Models is a serving-system architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
+  = 'An open, programmable decision layer for models and compute.'
 const siteSocialTitle
-  = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
+  = 'Intelligence Beyond Any One Model | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Building a Mixture-of-Models Serving Architecture for Heterogeneous LLM Inference',
+  tagline: 'An open, programmable decision layer for models and compute.',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -68,14 +68,15 @@ const config: Config = {
         // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
         // native module that ships prebuilt binaries.
         language: ['en', 'zh'],
-        // v1 scope: index the current docs version only, per the decision on #2737.
+        // v1 scope: index the default docs version only (v0.4, the stable
+        // release), per the decision on #2737.
         // To make archived versions searchable later, drop this and add
-        // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // searchContextByPaths: ['docs', 'docs/next', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
         // so results stay scoped to the version the reader is on.
         // NOTE: ignoreFiles matches the route *without* a leading slash (the
         // plugin strips baseUrl, which is "/" here, off the front) and without
         // the base URL itself, so the pattern must not anchor on "/".
-        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        ignoreFiles: [/^docs\/(v\d+\.\d+|next)\//],
         // styling is handled in a later phase
       },
     ],
@@ -89,10 +90,15 @@ const config: Config = {
           beforeDefaultRemarkPlugins: [[remarkMath, {}]],
           beforeDefaultRehypePlugins: [[rehypeKatex, {}]],
           sidebarPath: './sidebars.ts',
-          lastVersion: 'current',
+          lastVersion: 'v0.4',
           versions: {
             'current': {
-              label: 'Latest',
+              label: 'Latest (unreleased)',
+              path: 'next',
+              badge: true,
+            },
+            'v0.4': {
+              label: 'v0.4',
               path: '',
               badge: true,
             },
@@ -157,20 +163,48 @@ const config: Config = {
       {
         redirects: [
           {
-            from: '/docs/installation/runtime/engines-and-hardware',
-            to: '/docs/installation/runtime/in-process',
+            from: '/blog/introduce-vela',
+            to: '/blog/vela-models',
+          },
+          // The model-runtime section exists only in the unreleased (next)
+          // docs, and several of these source paths are live v0.4 pages at
+          // the root, so these redirects are scoped to /docs/next instead of
+          // shadowing the stable pages or pointing at a missing root target.
+          {
+            from: [
+              '/docs/next/installation/native-backends',
+              '/docs/next/installation/runtime/engines-and-hardware',
+            ],
+            to: '/docs/next/model-runtime/overview',
           },
           {
-            from: '/docs/installation/runtime/models-and-bindings',
-            to: '/docs/installation/runtime/in-process',
+            from: [
+              '/docs/next/installation/runtime/in-process',
+              '/docs/next/installation/runtime/models-and-bindings',
+            ],
+            to: '/docs/next/model-runtime/deploy',
           },
           {
-            from: '/docs/tutorials/global/safety-models-and-policy',
-            to: '/docs/installation/runtime/safety',
+            from: '/docs/next/installation/runtime/openvino',
+            to: '/docs/next/model-runtime/migrate',
           },
           {
-            from: '/docs/tutorials/global/remote-embeddings',
-            to: '/docs/installation/runtime/embeddings',
+            from: [
+              '/docs/next/installation/runtime/safety',
+              '/docs/next/tutorials/global/safety-models-and-policy',
+            ],
+            to: '/docs/next/model-runtime/guides/safety',
+          },
+          {
+            from: [
+              '/docs/next/installation/runtime/embeddings',
+              '/docs/next/tutorials/global/remote-embeddings',
+            ],
+            to: '/docs/next/model-runtime/guides/embeddings',
+          },
+          {
+            from: '/docs/next/installation/runtime/lifecycle-diagnostics',
+            to: '/docs/next/model-runtime/troubleshooting',
           },
           {
             from: '/docs/installation/kubernetes',
@@ -228,7 +262,7 @@ const config: Config = {
       {
         name: 'keywords',
         content:
-          'Mixture-of-Models, heterogeneous LLM inference, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, semantic router, vLLM',
+          'programmable decision layer, agent harness, models and compute, Mixture-of-Models, open-source LLM router, multi-model routing, model selection, bounded model collaboration, semantic router, vLLM',
       },
       { name: 'author', content: 'vLLM Semantic Router Team' },
       { name: 'application-name', content: 'vLLM Semantic Router' },
@@ -257,11 +291,9 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      // No `style` — the navbar follows the reader's color mode. The homepage
-      // opts back into dark chrome in shell.css, where its palette is pinned.
+      // Navbar and logo follow the reader's color mode on every page.
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        // Logo follows color mode; homepage keeps dark chrome via theme/Navbar/Logo swizzle.
         src: 'img/vllm-sr-logo.light.png',
         srcDark: 'img/vllm-sr-logo.white.png',
       },
@@ -314,20 +346,20 @@ const config: Config = {
               to: '/models',
             },
             {
+              label: 'Leaderboard',
+              to: '/community/contributors',
+            },
+            {
               label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',
             },
             {
               label: 'Hugging Face',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
+              href: 'https://huggingface.co/vllm-sr',
             },
             {
               label: 'Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
-            },
-            {
-              label: 'Leaderboard',
-              to: '/community/contributors',
             },
           ],
         },
@@ -372,7 +404,7 @@ const config: Config = {
             },
             {
               label: 'Hugging Face',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
+              href: 'https://huggingface.co/vllm-sr',
             },
             {
               label: 'GitHub Discussions',
@@ -381,6 +413,10 @@ const config: Config = {
             {
               label: 'Leaderboard',
               to: '/community/contributors',
+            },
+            {
+              label: 'Ecosystem & Partnerships',
+              to: '/community/ecosystem',
             },
           ],
         },
@@ -402,6 +438,10 @@ const config: Config = {
             {
               label: 'Vision Paper',
               to: '/vision-paper',
+            },
+            {
+              label: 'Decision Paper',
+              to: '/decision-paper',
             },
 
             {

@@ -138,7 +138,7 @@ services:
 
 对于可选的测试配置文件，创建覆盖 Dockerfile 以配置 pip 镜像。
 
-1) 创建 `tools/mock-vllm/Dockerfile.cn`：
+1) 创建 `tools/test/services/mock-vllm/Dockerfile.cn`：
 
 ```Dockerfile
 FROM python:3.11-slim

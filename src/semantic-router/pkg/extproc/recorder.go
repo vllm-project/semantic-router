@@ -1,16 +1,20 @@
 package extproc
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -40,9 +44,6 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-	// Start decision evaluation span
-	routingCtx, routingSpan := tracing.StartDecisionSpan(ctx.TraceContext, decisionName)
-
 	useReasoning := reasoningDecision.UseReasoning
 	logging.ComponentDebugEvent("extproc", "reasoning_decision_applied", map[string]interface{}{
 		"request_id":        ctx.RequestID,
@@ -57,19 +58,15 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
 	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
-	// Keep legacy attributes for backward compatibility
-	tracing.SetSpanAttributes(routingSpan,
-		attribute.String(tracing.AttrRoutingStrategy, "auto"),
+	// Resolution is a point-in-time event; it does not pretend to measure backend execution.
+	trace.SpanFromContext(ctx.TraceContext).AddEvent("routing.backend.resolved", trace.WithAttributes(
+		attribute.String(tracing.AttrDecisionName, decisionName),
+		attribute.String(tracing.AttrAlgorithm, ctx.VSRSelectionMethod),
 		attribute.String(tracing.AttrRoutingReason, reasoningDecision.DecisionReason),
 		attribute.String(tracing.AttrOriginalModel, originalModel),
 		attribute.String(tracing.AttrSelectedModel, matchedModel),
 		attribute.Bool(tracing.AttrReasoningEnabled, useReasoning),
-		attribute.String(tracing.AttrReasoningEffort, effortForMetrics))
-
-	// End decision span with evaluation results
-	// matchedRules would come from signal evaluation, using empty slice for now
-	tracing.EndDecisionSpan(routingSpan, float64(reasoningDecision.Confidence), []string{}, "auto")
-	ctx.TraceContext = routingCtx
+		attribute.String(tracing.AttrReasoningEffort, effortForMetrics)))
 }
 
 // trackVSRDecision tracks VSR decision information in context
@@ -83,16 +80,6 @@ func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string
 		ctx.VSRReasoningMode = "on"
 	} else {
 		ctx.VSRReasoningMode = "off"
-	}
-}
-
-// setClearRouteCache sets the ClearRouteCache flag on the response
-func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse) {
-	if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
-		response.GetRequestBody().GetResponse().ClearRouteCache = true
-		logging.ComponentDebugEvent("extproc", "route_cache_clear_enabled", map[string]interface{}{
-			"feature": "clear_route_cache",
-		})
 	}
 }
 
@@ -111,6 +98,9 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
+	if ctx != nil && ctx.RouterReplayPluginConfig == nil && r != nil && r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
+	}
 	if !shouldStartRouterReplay(ctx) {
 		return
 	}
@@ -122,10 +112,46 @@ func (r *OpenAIRouter) startRouterReplay(
 		return
 	}
 
-	configureReplayRecorder(recorder, ctx.RouterReplayPluginConfig)
+	policy := ctx.RouterReplayPluginConfig
+	recorder = recorder.WithCapturePolicy(routerreplay.CapturePolicy{
+		CaptureRequestBody:  policy.CaptureRequestBody,
+		CaptureResponseBody: policy.CaptureResponseBody,
+		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
+		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
+		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
+	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
+	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
+	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
+	}
+}
+
+// populateReplayIdentity records the same explicit identity used by protection,
+// including custom header names, without enabling protection or changing request
+// state. Optional Responses lineage remains the fallback for older clients.
+func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) {
+	if r == nil || ctx == nil || record == nil {
+		return
+	}
+	cfg := config.RouterLearningProtectionConfig{}
+	if r.Config != nil {
+		cfg = r.Config.RouterLearning.Protection
+	}
+	identity, ok := r.protectionIdentity(ctx, cfg)
+	if !ok {
+		return
+	}
+	record.SessionID = identity.sessionID
+	if identity.conversationID != "" {
+		record.ConversationID = identity.conversationID
+	}
+	// Persist the key the gate resolved, so outcome ingest can land feedback
+	// in the same window even when the session id alone keys it wider.
+	if record.Learning != nil {
+		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
 	}
 }
 
@@ -157,17 +183,29 @@ func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName s
 	return r.ReplayRecorder
 }
 
-func configureReplayRecorder(
-	recorder *routerreplay.Recorder,
-	cfg *config.RouterReplayPluginConfig,
-) {
-	recorder.SetCapturePolicy(
-		cfg.CaptureRequestBody,
-		cfg.CaptureResponseBody,
-		resolveReplayMaxBodyBytes(cfg.MaxBodyBytes),
-	)
-	recorder.SetMaxToolTraceBytes(cfg.MaxToolTraceBytes)
-	recorder.SetMaxToolTraceSteps(cfg.MaxToolTraceSteps)
+// replayUserTurnIndex groups tool continuations with the user message that
+// started them. Protocol normalization represents tool results as RoleTool,
+// including Anthropic tool_result blocks and retained Responses history.
+// Prefer the original snapshot so context trimming or Memory cannot renumber
+// turns. This history contains only messages actually available to the router.
+// Keep the invocation index as a fallback when no user history is visible.
+func replayUserTurnIndex(ctx *RequestContext) int {
+	var messages []llmprotocol.Message
+	if ctx.OriginalContextHistory != nil {
+		messages = ctx.OriginalContextHistory.Conversation().Messages
+	} else if ctx.SemanticRequest != nil {
+		messages = ctx.SemanticRequest.Messages
+	}
+	userMessages := 0
+	for _, message := range messages {
+		if message.Role == llmprotocol.RoleUser {
+			userMessages++
+		}
+	}
+	if userMessages > 0 {
+		return userMessages - 1
+	}
+	return ctx.TurnIndex
 }
 
 func buildReplayRoutingRecord(
@@ -181,7 +219,7 @@ func buildReplayRoutingRecord(
 	record := routerreplay.RoutingRecord{
 		RequestID:                ctx.RequestID,
 		SessionID:                ctx.SessionID,
-		TurnIndex:                ctx.TurnIndex,
+		TurnIndex:                replayUserTurnIndex(ctx),
 		Decision:                 decisionName,
 		Recipe:                   string(ctx.Routing.RecipeName()),
 		DecisionTier:             decisionTier,
@@ -289,6 +327,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Modality:      ctx.VSRMatchedModality,
 		Authz:         ctx.VSRMatchedAuthz,
 		Jailbreak:     ctx.VSRMatchedJailbreak,
+		Safety:        ctx.VSRMatchedSafety,
 		PII:           ctx.VSRMatchedPII,
 		KB:            ctx.VSRMatchedKB,
 		Conversation:  ctx.VSRMatchedConversation,
@@ -296,6 +335,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Metadata:      ctx.VSRMatchedMetadata,
 		Classifier:    ctx.VSRMatchedClassifier,
 		InputModality: ctx.VSRMatchedInputModality,
+		Decision:      ctx.VSRMatchedDecisionModel,
 	}
 }
 
@@ -426,10 +466,13 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
-	if len(responseBody) > 0 {
+	if len(responseBody) > 0 && replayResponseContentAllowed(ctx) {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
-	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
+	if isFinal {
+		attachPrimaryOutputDigest(ctx, recorder)
+	}
+	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); replayResponseContentAllowed(ctx) && responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
 		}
@@ -456,9 +499,8 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	}
 }
 
-// hallucinationSpanDetailsForReplay converts NLI span analysis into the
-// replay store's shape. Returns nil when NLI detection did not run for this
-// request, so basic (non-NLI) detection continues to persist plain spans only.
+// hallucinationSpanDetailsForReplay converts span details into the replay
+// store's shape. Returns nil when the detector returned plain spans only.
 func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []routerreplay.HallucinationSpan {
 	if info == nil {
 		return nil
@@ -471,9 +513,6 @@ func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []router
 			End:                     span.End,
 			HallucinationConfidence: span.HallucinationConfidence,
 			ScoreAvailable:          span.ScoreAvailable,
-			NLILabel:                span.NLILabel,
-			NLIConfidence:           span.NLIConfidence,
-			NLIScoreAvailable:       span.NLIScoreAvailable,
 			Severity:                span.Severity,
 			Explanation:             span.Explanation,
 		}
@@ -504,12 +543,18 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		return
 	}
 
+	spans := ctx.HallucinationSpans
+	details := hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo)
+	if !replayResponseContentAllowed(ctx) {
+		// Detector excerpts and explanations are response content too.
+		spans, details = nil, nil
+	}
 	err := recorder.UpdateHallucinationStatus(
 		ctx.RouterReplayID,
 		ctx.HallucinationDetected,
 		ctx.HallucinationConfidence,
-		ctx.HallucinationSpans,
-		hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo),
+		spans,
+		details,
 		routerreplay.HallucinationScore{Available: ctx.HallucinationScoreAvailable, Kind: ctx.HallucinationScoreKind},
 	)
 	if err != nil {
@@ -602,7 +647,7 @@ func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRu
 		outcome.Verdict = "unavailable"
 		outcome.Reason = code
 		outcome.Metadata["score_available"] = "false"
-		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
+		if t := ctx.ResponseJailbreakType; t == classification.JailbreakClassificationErrorType || t == classification.JailbreakUnscannedType {
 			outcome.Metadata["policy_match"] = "true"
 		}
 		return outcome
@@ -679,7 +724,6 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 		Metadata: map[string]string{
 			"signal":    config.SignalTypeHallucination,
 			"direction": config.SignalDirectionResponse,
-			"use_nli":   strconv.FormatBool(rule.UseNLI),
 		},
 	}
 	if ctx.VSRSelectedDecisionName != "" {
@@ -730,6 +774,59 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
+	}
+}
+
+// primaryResponseOutcomeSource marks the outcome that carries the digest of
+// what the selected model answered. Shadow dispatch writes its arms the same
+// way, so an offline comparison reads both sides through one path instead of
+// hashing a stored body on one side and a decoded answer on the other.
+const primaryResponseOutcomeSource = "primary_response"
+
+// recordPrimaryOutputDigest hashes what the selected model answered, using the
+// same contract a shadow arm is hashed under: the assistant text of the decoded
+// response, never the encoded protocol body, which carries a JSON envelope, a
+// response id and a usage block that a shadow digest never sees.
+//
+// It runs before any response-stage plugin, because a body warning prepends
+// router text to the same response in place. Hashing after that would credit
+// the warning to the model and the two arms would stop comparing.
+func recordPrimaryOutputDigest(ctx *RequestContext, response *llmprotocol.Response) {
+	if ctx == nil || response == nil || ctx.PrimaryOutputDigest != "" {
+		return
+	}
+	text := semanticResponseText(*response)
+	if text == "" {
+		return
+	}
+	sum := sha256.Sum256([]byte(text))
+	ctx.PrimaryOutputDigest = hex.EncodeToString(sum[:])
+	ctx.PrimaryOutputChars = utf8.RuneCountInString(text)
+}
+
+// attachPrimaryOutputDigest persists the digest captured before the response
+// was rewritten, so an offline comparison reads both arms through one contract.
+func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recorder) {
+	if ctx.PrimaryOutputDigest == "" {
+		return
+	}
+	outcome := routerreplay.Outcome{
+		Timestamp: time.Now().UTC(),
+		Source:    primaryResponseOutcomeSource,
+		Target:    "model",
+		TargetRef: ctx.VSRSelectedModel,
+		Verdict:   "completed",
+		Metadata: map[string]string{
+			"response_sha256": ctx.PrimaryOutputDigest,
+			"response_chars":  strconv.Itoa(ctx.PrimaryOutputChars),
+		},
+	}
+	if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+		logging.ComponentErrorEvent("extproc", "primary_output_digest_persist_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
 			"error":      err.Error(),

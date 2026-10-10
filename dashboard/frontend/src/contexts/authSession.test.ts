@@ -1,9 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+import { describe, expect, it, vi } from 'vitest'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 function response(status: number, body?: unknown): Response {
   return {
@@ -45,22 +41,81 @@ describe('authSession', () => {
         email: 'user@example.test',
         name: 'User One',
       },
-      clearLocalToken: false,
+      status: 'authenticated',
     })
     expect(calls).toEqual([
       {
         input: '/api/auth/me',
-        init: { credentials: 'same-origin' },
+        init: { credentials: 'same-origin', signal: expect.any(AbortSignal) },
       },
     ])
   })
 
-  it('marks local token state stale when the server session is unauthorized', async () => {
+  it('bounds stalled session verification without treating it as a revoked session', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementationOnce(
+          (_url, init) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+            }),
+        )
+        .mockResolvedValueOnce(
+          response(200, { user: { id: 'user-1', name: 'User', email: 'user@example.test' } }),
+        )
+      const pending = fetchCurrentAuthUser(fetcher)
+      await vi.advanceTimersByTimeAsync(15_000)
+      await expect(pending).resolves.toMatchObject({ status: 'unavailable' })
+      await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({
+        status: 'authenticated',
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports only a definitive unauthorized response as unauthenticated', async () => {
     const fetcher: typeof fetch = async () => response(401)
 
     await expect(fetchCurrentAuthUser(fetcher)).resolves.toEqual({
-      user: null,
-      clearLocalToken: true,
+      status: 'unauthenticated',
     })
+  })
+
+  it.each([403, 429, 500, 503])(
+    'keeps HTTP %i separate from an invalid session',
+    async (status) => {
+      const fetcher: typeof fetch = async () => response(status)
+      await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
+    },
+  )
+
+  it('reports network failures without invalidating the session', async () => {
+    const fetcher: typeof fetch = async () => {
+      throw new TypeError('Failed to fetch')
+    }
+    await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
+  })
+
+  it.each([null, {}, { user: null }])(
+    'does not accept an incomplete successful response',
+    async (body) => {
+      const fetcher: typeof fetch = async () => response(200, body)
+      await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
+    },
+  )
+
+  it('treats an unreadable response as unavailable rather than signed out', async () => {
+    const fetcher: typeof fetch = async () =>
+      ({
+        ...response(200),
+        json: async () => {
+          throw new SyntaxError('Invalid JSON')
+        },
+      }) as Response
+    await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
   })
 })

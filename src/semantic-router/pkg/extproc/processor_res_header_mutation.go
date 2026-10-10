@@ -76,6 +76,13 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	builder.addString(headers.VSRResponsePath, path)
 }
 
+// addConfigVersion names the configuration snapshot version that served.
+func (builder *responseHeaderMutationBuilder) addConfigVersion(ctx *RequestContext) {
+	if ctx.ConfigVersion > 0 {
+		builder.addString(headers.VSRConfigVersion, strconv.FormatUint(ctx.ConfigVersion, 10))
+	}
+}
+
 // addProtocolMarkers emits the client/upstream protocol markers
 // (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
 // (#2206) they ride on cross-protocol responses — when the inbound client
@@ -150,7 +157,44 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 
 	inbound := normalizeProtocol(string(ctx.SourceFormat))
 	outbound := normalizeProtocol(string(ctx.TargetFormat))
+	value, included := formatProtocolDiagnostics(diagnostics)
+	for _, diagnostic := range diagnostics[:included] {
+		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+	}
+	builder.addString(headers.VSRProtocolWarnings, value)
+}
 
+// recordBufferedProtocolDiagnostics reports only diagnostics discovered after
+// response headers. The body phase replaces the bounded header with the full
+// list, but diagnostics already reported in the header phase must not be
+// counted again. Diagnostics omitted by truncation follow the same accounting
+// rule as addProtocolDiagnostics.
+func recordBufferedProtocolDiagnostics(ctx *RequestContext, before int) (string, bool) {
+	if ctx.VSRCacheHit || len(ctx.ProtocolDiagnostics) <= before {
+		return "", false
+	}
+	value, included := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
+	if included > before {
+		inbound := normalizeProtocol(string(ctx.SourceFormat))
+		outbound := normalizeProtocol(string(ctx.TargetFormat))
+		for _, diagnostic := range ctx.ProtocolDiagnostics[before:included] {
+			recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+		}
+	}
+	return value, true
+}
+
+// formatProtocolDiagnostics is shared by the early header phase and the
+// buffered body phase. The latter can discover diagnostics after Envoy has
+// already asked for response headers, so it must replace the warning header
+// with the full bounded list without counting early diagnostics twice.
+func formatProtocolDiagnostics(diagnostics llmprotocol.Diagnostics) (string, int) {
+	if len(diagnostics) == 0 {
+		return "", 0
+	}
+	// Reserve the largest possible truncation trailer before appending entries.
+	// A single diagnostic obeys the same bound as a longer warning list.
+	trailerBudget := len(fmt.Sprintf("%s;%s;count=%d", llmprotocol.DiagnosticTruncated, "diagnostics_truncated", len(diagnostics))) + 1
 	var sb strings.Builder
 	truncatedAt := -1
 	for i, diagnostic := range diagnostics {
@@ -159,7 +203,7 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		if sb.Len() > 0 {
 			separatorLen = 1
 		}
-		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit && sb.Len() > 0 {
+		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit-trailerBudget {
 			truncatedAt = i
 			break
 		}
@@ -167,7 +211,6 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 			sb.WriteByte(',')
 		}
 		sb.WriteString(entry)
-		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
 	}
 
 	if truncatedAt >= 0 {
@@ -182,7 +225,11 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		sb.WriteString(trailer)
 	}
 
-	builder.addString(headers.VSRProtocolWarnings, sb.String())
+	included := len(diagnostics)
+	if truncatedAt >= 0 {
+		included = truncatedAt
+	}
+	return sb.String(), included
 }
 
 func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
@@ -193,29 +240,21 @@ func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
 	)
 }
 
-// sanitizeWarningField percent-encodes the format separators ',' and
-// ';' so a pathological JSON-path field name cannot break the
-// single-line encoding, and strips CR/LF so a hostile value cannot
-// inject a new header line. PR2's parser never produces such paths;
-// this is belt-and-suspenders.
+// sanitizeWarningField percent-encodes the format separators, percent signs,
+// and ASCII control bytes so a JSON field name cannot break the warning list
+// or produce a header value rejected by Envoy.
 func sanitizeWarningField(field string) string {
-	if !strings.ContainsAny(field, ",;\r\n") {
-		return field
-	}
+	const hex = "0123456789ABCDEF"
 	var sb strings.Builder
 	sb.Grow(len(field))
-	for _, r := range field {
-		switch r {
-		case ',':
-			sb.WriteString("%2C")
-		case ';':
-			sb.WriteString("%3B")
-		case '\r':
-			sb.WriteString("%0D")
-		case '\n':
-			sb.WriteString("%0A")
-		default:
-			sb.WriteRune(r)
+	for i := 0; i < len(field); i++ {
+		b := field[i]
+		if b == ',' || b == ';' || b == '%' || b < 0x20 || b == 0x7f {
+			sb.WriteByte('%')
+			sb.WriteByte(hex[b>>4])
+			sb.WriteByte(hex[b&0x0f])
+		} else {
+			sb.WriteByte(b)
 		}
 	}
 	return sb.String()
@@ -277,6 +316,7 @@ func buildResponseHeaderMutation(
 		// non-cache-hit response. This function only handles upstream responses,
 		// so the path defaults to "upstream".
 		builder.addKeystone(ctx)
+		builder.addConfigVersion(ctx)
 		// Client/upstream protocol markers ride only on cross-protocol responses
 		// (#2206); same-protocol calls omit them.
 		builder.addProtocolMarkers(ctx)
@@ -345,6 +385,10 @@ func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	if record := ctx.FallbackRecord; record != nil && record.FinalStatus == "succeeded" && len(record.Attempts) > 1 {
+		// A fallback candidate served this response, in either gateway mode.
+		builder.addString(headers.VSRFallbackAttempts, strconv.Itoa(len(record.Attempts)))
+	}
 	if ctx.RoutingLatency > 0 {
 		builder.addString(headers.VSRRoutingLatencyMs, formatMilliseconds(ctx.RoutingLatency))
 	}
@@ -370,12 +414,26 @@ func appliedUnknownPolicyHeader(ctx *RequestContext) string {
 	return strings.Join(pairs, ",")
 }
 
+// decisionRankingHeader explains the served decision against its runner-up.
+// It stays silent when the context no longer serves the ranked winner.
+func decisionRankingHeader(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	ranking := ctx.VSRDecisionDiagnostics.Ranking
+	if ranking == nil || ranking.RunnerUp == "" || ranking.Winner != ctx.VSRSelectedDecisionName {
+		return ""
+	}
+	return sanitizeWarningField(ranking.Winner) + " over " + sanitizeWarningField(ranking.RunnerUp) + ": " + ranking.Reason
+}
+
 // addDecisionDetailHeaders adds the intermediate decision/classification details
 // (category, modality, reasoning, session phase, injected-system-prompt, cache
 // similarity). Per the v0.4 contract (#2205) these are demoted off the default
 // surface and emitted only under x-vsr-debug; they remain in the replay record.
 func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
+	builder.addString(headers.VSRDecisionRanking, decisionRankingHeader(ctx))
 	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
 		modalityValue := ctx.ModalityClassification.Modality
 		if ctx.ModalityClassification.Method != "" {
@@ -390,9 +448,20 @@ func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *Reque
 	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, learningPolicyFieldScope))
 	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, learningPolicyFieldReason))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
+	addPromptCacheReceiptHeaders(builder, ctx)
 	if ctx.VSRCacheSimilarity > 0 {
 		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
 	}
+}
+
+func addPromptCacheReceiptHeaders(
+	builder *responseHeaderMutationBuilder,
+	ctx *RequestContext,
+) {
+	builder.addString(headers.VSRPromptCacheAction, ctx.PromptCacheAction)
+	builder.addString(headers.VSRPromptCacheReason, ctx.PromptCacheReason)
+	builder.addInt(headers.VSRPromptCacheInserted, ctx.PromptCacheInserted)
+	builder.addInt(headers.VSRPromptCachePreserved, ctx.PromptCachePreserved)
 }
 
 // addMatchedSignalHeaders adds the signal-evaluation headers (matched
@@ -414,11 +483,13 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
+	builder.addJoined(headers.VSRMatchedSafety, ctx.VSRMatchedSafety)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
 	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
 	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)
 	builder.addJoined(headers.VSRMatchedEvent, ctx.VSRMatchedEvent)
 	builder.addJoined(headers.VSRMatchedInputModality, ctx.VSRMatchedInputModality)
+	builder.addJoined(headers.VSRMatchedDecisionModel, ctx.VSRMatchedDecisionModel)
 	builder.addJoined(headers.VSRMatchedProjection, ctx.VSRMatchedProjection)
 }
 

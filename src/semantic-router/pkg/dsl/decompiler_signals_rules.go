@@ -55,6 +55,9 @@ func (d *decompiler) decompileKeywordSignals() {
 func (d *decompiler) decompileEmbeddingSignals() {
 	for _, emb := range d.cfg.EmbeddingRules {
 		d.write("SIGNAL embedding %s {\n", quoteName(emb.Name))
+		if emb.PrototypeScoring != nil {
+			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(emb.PrototypeScoring))))
+		}
 		if emb.SimilarityThreshold != 0 {
 			d.write("  threshold: %v\n", emb.SimilarityThreshold)
 		}
@@ -63,6 +66,16 @@ func (d *decompiler) decompileEmbeddingSignals() {
 		}
 		if emb.AggregationMethodConfiged != "" {
 			d.write("  aggregation_method: %q\n", string(emb.AggregationMethodConfiged))
+		}
+		for _, list := range []struct {
+			name   string
+			values []string
+		}{
+			{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
+		} {
+			if len(list.values) > 0 {
+				d.write("  %s: %s\n", list.name, formatStringArray(list.values))
+			}
 		}
 		if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
 			d.write("  query_modality: %q\n", string(emb.QueryModality))
@@ -215,6 +228,75 @@ func (d *decompiler) decompileInputModalitySignals() {
 	}
 }
 
+func (d *decompiler) decompileDecisionModelSignals() {
+	for _, rule := range d.cfg.DecisionRules {
+		d.write("SIGNAL decision %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.Deployment != "" {
+			d.write("  deployment: %q\n", rule.Deployment)
+		}
+		d.write("  question: %s\n", formatPluginConfigValue(decisionQuestionValue(rule.Question)))
+		if predicate := numericPredicateValue(rule.Predicate); predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(predicate))
+		}
+		if rule.TimeoutMs > 0 {
+			d.write("  timeout_ms: %d\n", rule.TimeoutMs)
+		}
+		d.write("}\n\n")
+	}
+}
+
+func decisionQuestionValue(question config.DecisionQuestion) map[string]interface{} {
+	value := map[string]interface{}{"type": question.Type, "instructions": question.Instructions}
+	if len(question.Choices) > 0 {
+		value["choices"] = decisionChoicesValue(question.Choices)
+	}
+	if len(question.Levels) > 0 {
+		levels := make([]interface{}, 0, len(question.Levels))
+		for _, level := range question.Levels {
+			levels = append(levels, level)
+		}
+		value["levels"] = levels
+	}
+	if len(question.Labels) > 0 {
+		value["labels"] = decisionChoicesValue(question.Labels)
+	}
+	if question.Threshold != nil {
+		value["threshold"] = *question.Threshold
+	}
+	if question.Head != "" {
+		value["head"] = question.Head
+	}
+	return value
+}
+
+func decisionChoicesValue(choices []config.DecisionChoice) []interface{} {
+	entries := make([]interface{}, 0, len(choices))
+	for _, choice := range choices {
+		entry := map[string]interface{}{"key": choice.Key}
+		if choice.Description != "" {
+			entry["description"] = choice.Description
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func numericPredicateValue(predicate *config.NumericPredicate) map[string]interface{} {
+	if predicate == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	for key, bound := range map[string]*float64{"gt": predicate.GT, "gte": predicate.GTE, "lt": predicate.LT, "lte": predicate.LTE} {
+		if bound != nil {
+			value[key] = *bound
+		}
+	}
+	return value
+}
+
 func (d *decompiler) decompileClassifierSignals() {
 	for _, rule := range d.cfg.ClassifierRules {
 		d.write("SIGNAL classifier %s {\n", quoteName(rule.Name))
@@ -232,6 +314,9 @@ func (d *decompiler) decompileClassifierSignals() {
 		if rule.Instructions != "" {
 			d.write("  instructions: %q\n", rule.Instructions)
 		}
+		if rule.DisableRationale {
+			d.write("  disable_rationale: true\n")
+		}
 		if rule.UseCPU {
 			d.write("  use_cpu: true\n")
 		}
@@ -242,6 +327,9 @@ func (d *decompiler) decompileClassifierSignals() {
 func (d *decompiler) decompileComplexitySignals() {
 	for _, comp := range d.cfg.ComplexityRules {
 		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
+		if comp.PrototypeScoring != nil {
+			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
+		}
 		if comp.Threshold != 0 {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}
@@ -340,9 +428,6 @@ func (d *decompiler) decompileJailbreakSignals() {
 func (d *decompiler) decompileHallucinationSignals() {
 	for _, rule := range d.cfg.HallucinationRules {
 		d.write("SIGNAL hallucination %s {\n", quoteName(rule.Name))
-		if rule.UseNLI {
-			d.write("  use_nli: true\n")
-		}
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}

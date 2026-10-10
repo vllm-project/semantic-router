@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -26,6 +26,7 @@ type MemoryListResponse struct {
 	Memories []MemoryResponse `json:"memories"`
 	Total    int              `json:"total"`
 	Limit    int              `json:"limit"`
+	Offset   int              `json:"offset"`
 }
 
 // MemoryDeleteResponse represents the response from a delete operation.

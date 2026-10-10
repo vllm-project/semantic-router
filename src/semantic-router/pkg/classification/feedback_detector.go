@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,11 +21,13 @@ const (
 	FeedbackLabelNeedClarification = "need_clarification"
 	FeedbackLabelWrongAnswer       = "wrong_answer"
 	FeedbackLabelWantDifferent     = "want_different"
+	FeedbackLabelNoFeedback        = "no_feedback"
 )
 
 // FeedbackResult represents the result of user feedback classification
 type FeedbackResult struct {
-	FeedbackType        string  `json:"feedback_type"` // feedback type label from model's id2label
+	Abstained           bool    `json:"abstained,omitempty"` // The model prediction did not reach the configured threshold.
+	FeedbackType        string  `json:"feedback_type"`       // feedback type label from model's id2label
 	Confidence          float32 `json:"confidence"`
 	ConfidenceAvailable bool    `json:"confidence_available"`
 	PolicyDefault       string  `json:"policy_default,omitempty"`
@@ -63,13 +64,9 @@ func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig, models ...*classifi
 	}
 
 	runtime := consumerModelRuntime(models)
-	adapter := "modernbert"
-	if cfg.UseMmBERT32K {
-		adapter = "mmbert32k"
-	}
-	spec := runtime.localSpec("feedback_detector", cfg.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.UseCPU)
+	spec, err := runtime.localSpec("feedback_detector", cfg.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
 	detector := &FeedbackDetector{
-		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec},
+		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, err: err},
 		config:  cfg,
 	}
 
@@ -81,6 +78,27 @@ type feedbackMappingFile struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	ID2Label   map[string]string `json:"id2label"`
 	Label2ID   map[string]int    `json:"label2id"`
+}
+
+// useServedLabels takes the feedback classes from the served model.
+func (d *FeedbackDetector) useServedLabels() error {
+	if d.backend.err != nil {
+		return d.backend.err
+	}
+	labels, err := d.backend.runtime.Labels(context.Background(), d.backend.spec)
+	if err != nil {
+		return fmt.Errorf("feedback_detector labels: %w", err)
+	}
+	d.mapping = &FeedbackMapping{LabelToIdx: make(map[string]int, len(labels)), IdxToLabel: make(map[string]string, len(labels))}
+	for index, label := range labels {
+		label = normalizeFeedbackLabel(label)
+		d.mapping.LabelToIdx[label] = index
+		d.mapping.IdxToLabel[strconv.Itoa(index)] = label
+	}
+	if len(d.mapping.LabelToIdx) != len(labels) {
+		return fmt.Errorf("feedback %s repeat a label", servedLabelsSource)
+	}
+	return nil
 }
 
 func (d *FeedbackDetector) loadMapping(path string) error {
@@ -149,11 +167,11 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("feedback detector requires ModelID to be configured")
 	}
 
-	mappingPath := d.config.FeedbackMappingPath
-	if mappingPath == "" {
-		mappingPath = filepath.Join(d.config.ModelID, "config.json")
-	}
-	if err := d.loadMapping(mappingPath); err != nil {
+	if d.config.FeedbackMappingPath != "" {
+		if err := d.loadMapping(d.config.FeedbackMappingPath); err != nil {
+			return err
+		}
+	} else if err := d.useServedLabels(); err != nil {
 		return err
 	}
 
@@ -181,12 +199,8 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 		return nil, fmt.Errorf("feedback detector not initialized")
 	}
 
-	if text == "" {
-		return &FeedbackResult{
-			FeedbackType:  FeedbackLabelSatisfied,
-			PolicyDefault: "empty_text",
-			Class:         0,
-		}, nil
+	if strings.TrimSpace(text) == "" {
+		return nil, fmt.Errorf("feedback classification requires non-empty input")
 	}
 
 	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (tasks.ClassResultWithProbs, error) {
@@ -201,28 +215,38 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
 	}
 
-	// Get feedback type from mapping loaded from config.json
-	feedbackType := d.mapping.IdxToLabel[fmt.Sprintf("%d", result.Class)]
-	if feedbackType == "" {
-		feedbackType = FeedbackLabelSatisfied // Default fallback
-	}
-
-	// Apply threshold check
 	threshold := d.config.Threshold
 	if threshold <= 0 {
-		threshold = 0.5 // Default threshold
+		threshold = 0.5
 	}
+	prediction, err := d.resultForPrediction(result, threshold)
+	if err != nil {
+		return nil, err
+	}
+	logging.Debugf("Feedback detection: text_len=%d, feedback_type=%s, confidence=%.3f, abstained=%t",
+		len(text), prediction.FeedbackType, prediction.Confidence, prediction.Abstained)
+	return prediction, nil
+}
+
+func (d *FeedbackDetector) resultForPrediction(result tasks.ClassResultWithProbs, threshold float32) (*FeedbackResult, error) {
+	feedbackType := d.mapping.IdxToLabel[strconv.Itoa(result.Class)]
+	if feedbackType == "" {
+		return nil, fmt.Errorf("feedback classifier returned unmapped class %d", result.Class)
+	}
+	// Vela's explicit negative class removes the closed-set assumption that
+	// every follow-up must be feedback. Keep the model's real label/probability
+	// even when abstaining; uncertainty is not evidence of satisfaction.
+	for _, label := range d.mapping.IdxToLabel {
+		if label == FeedbackLabelNoFeedback {
+			return &FeedbackResult{
+				FeedbackType: feedbackType, Confidence: result.Confidence,
+				Class: result.Class, ConfidenceAvailable: true, Abstained: result.Confidence < threshold,
+			}, nil
+		}
+	}
+	// Preserve the established threshold contract of older four-class models.
 	feedbackType, confidence := d.applyThreshold(feedbackType, result, threshold)
-
-	logging.Debugf("Feedback detection: text_len=%d, feedback_type=%s, confidence=%.3f",
-		len(text), feedbackType, confidence)
-
-	return &FeedbackResult{
-		FeedbackType:        feedbackType,
-		Confidence:          confidence,
-		ConfidenceAvailable: true,
-		Class:               result.Class,
-	}, nil
+	return &FeedbackResult{FeedbackType: feedbackType, Confidence: confidence, ConfidenceAvailable: true, Class: result.Class}, nil
 }
 
 // applyThreshold decides what a prediction below the configured threshold is

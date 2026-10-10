@@ -49,6 +49,9 @@ func normalizeFusionExecutionConfig(cfg fusionExecutionConfig) fusionExecutionCo
 	if cfg.OnError == "" {
 		cfg.OnError = config.FusionOnErrorSkip
 	}
+	if cfg.QuorumFailurePolicy == "" {
+		cfg.QuorumFailurePolicy = config.FusionQuorumFailurePolicyFail
+	}
 	if cfg.JudgePromptVersion == "" {
 		cfg.JudgePromptVersion = config.DefaultFusionJudgePromptVersion
 	}
@@ -82,8 +85,8 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 	if cfg.GroundingMinKeep <= 0 {
 		cfg.GroundingMinKeep = 1
 	}
-	if cfg.GroundingNLIContradictionPenalty <= 0 {
-		cfg.GroundingNLIContradictionPenalty = 1.0
+	if cfg.GroundingContradictionPenalty <= 0 {
+		cfg.GroundingContradictionPenalty = 1.0
 	}
 	if strings.TrimSpace(cfg.GroundingOnError) == "" {
 		cfg.GroundingOnError = cfg.OnError
@@ -129,7 +132,24 @@ func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAl
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
 	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
+	mergeFusionQuorumFailure(dst, src.QuorumFailurePolicy, src.QuorumFallbackTarget)
 	mergeFusionGroundingConfig(dst, src.Grounding)
+}
+
+// mergeFusionQuorumFailure copies the recipe-owned below-quorum policy. There is
+// deliberately no request-level counterpart: request input must not weaken the
+// operator's configured quality boundary.
+func mergeFusionQuorumFailure(
+	dst *fusionExecutionConfig,
+	policy config.FusionQuorumFailurePolicy,
+	fallbackTarget string,
+) {
+	if policy != "" {
+		dst.QuorumFailurePolicy = policy
+	}
+	if trimmed := strings.TrimSpace(fallbackTarget); trimmed != "" {
+		dst.QuorumFallbackTarget = trimmed
+	}
 }
 
 func mergeFusionModels(dst *fusionExecutionConfig, judgeModel string, analysisModels []string) {
@@ -217,7 +237,7 @@ func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGr
 	dst.GroundingPolicy = src.Policy
 	dst.GroundingMinScore = src.MinScore
 	dst.GroundingMinKeep = src.MinKeep
-	dst.GroundingNLIContradictionPenalty = src.NLIContradictionPenalty
+	dst.GroundingContradictionPenalty = src.ContradictionPenalty
 	dst.GroundingOnError = src.OnError
 }
 

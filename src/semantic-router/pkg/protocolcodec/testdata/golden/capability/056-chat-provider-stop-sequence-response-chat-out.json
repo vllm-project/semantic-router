@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "name": "vllm_matched_stop_string",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "ALPHA BRAVO ",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 2,
+            "prompt_tokens": 3,
+            "total_tokens": 5
+          }
+        }
+      }
+    }
+  ]
+}

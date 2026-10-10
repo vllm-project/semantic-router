@@ -3,7 +3,8 @@
 ## Overview
 
 An algorithm runs after a decision matches. It either selects one model from
-the decision's `modelRefs` or coordinates several of them through the Looper.
+the decision's `modelRefs`, coordinates Chat models through the Looper, or
+executes a native System One cascade.
 It does not decide whether the route is eligible; signals and decisions do
 that first.
 
@@ -63,17 +64,35 @@ declares.
 
 ### Selection Algorithms
 
-Selection algorithms return one candidate model.
+Selection algorithms return one candidate model. For a full inference request,
+the Router filters exact candidate references by context, backend wire support,
+and declared model task capabilities **before** scoring. The configured
+algorithm compares the surviving pool; it does not choose an incapable winner
+and then replace it with the first compatible sibling.
+
+Capability checks include Router-retained conversation content and preview the
+decision's request-parameter and no-tools policies without executing those
+plugins twice. Unannotated models retain wire-only compatibility checks. Hard
+quality/SLO constraints still apply, and Router Learning checks the same
+capabilities when considering additional candidates.
+
+An empty pool or a violated `minimum_candidates` requirement fails closed.
+Dispatch validates the final request again after mutations: a late capability
+mismatch returns an error rather than restarting decision evaluation, rescoring,
+or silently changing the selected candidate. Explicitly pinned models use the
+same final validation but are not replaced by another model.
 
 | Type | Status | Goal | Main dependency | Guide |
 |---|---|---|---|---|
+| `decision` | supported | Ask a typed choice question over the matched candidates | Decision deployment with Choice support | [Decision](./selection/decision) |
 | `static` | supported | Use declared order or fixed domain scores | None | [Static](./selection/static) |
 | `router_dc` | supported | Match request semantics to model descriptions | Embedding runtime and useful model cards | [Router DC](./selection/router-dc) |
 | `latency_aware` | supported | Prefer the candidate with the best observed TTFT/TPOT | Per-process latency observations | [Latency Aware](./selection/latency-aware) |
 | `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor) |
 | `hybrid` | supported | Blend several selector scores | Component selector inputs | [Hybrid](./selection/hybrid) |
 | `automix` | experimental | Optimize an estimated cost-quality value | Candidate pricing and quality metadata | [AutoMix](./selection/automix) |
-| `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model and Looper endpoint | [Prompt](./selection/prompt) |
+| `gmtrouter` | experimental | Personalize an intelligence-seeded model rank | Model evidence and user feedback | [GMT Router](./selection/gmtrouter) |
+| `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model | [Prompt](./selection/prompt) |
 | `knn` | experimental | Follow similar labeled examples | Trained selector artifact and embeddings | [KNN](./selection/knn) |
 | `kmeans` | experimental | Route through learned traffic clusters | Trained selector artifact and embeddings | [KMeans](./selection/kmeans) |
 | `svm` | experimental | Apply a learned decision boundary | Trained selector artifact and embeddings | [SVM](./selection/svm) |
@@ -81,10 +100,15 @@ Selection algorithms return one candidate model.
 
 ### Looper Algorithms
 
-Looper algorithms make additional model calls through
-`global.integrations.looper.endpoint`. They increase latency and token usage,
-and intermediate content is sent to every configured worker involved in the
-run.
+Looper algorithms make additional model calls. The Router makes each call in
+process: the call runs the matched decision's plugins and goes to the called
+model's `providers.models[].backend_refs`, so every model a Looper calls needs
+a backend. The calls increase latency and token usage, and intermediate content
+is sent to every configured worker involved in the run.
+
+`global.integrations.looper.endpoint` is deprecated and ignored, because Looper
+calls no longer loop back through the gateway. Remove it, or run
+`vllm-sr config migrate`.
 
 | Type | Status | Goal | Guide |
 |---|---|---|---|
@@ -99,6 +123,19 @@ traffic before using them for production routing.
 
 ## Operational Boundaries
 
+- Where an algorithm accepts repeated model references, the candidate includes
+  its LoRA and reasoning controls, not just its model name. Scoring, composition,
+  and dispatch retain the exact winning reference. A legacy model-only result
+  that matches multiple different candidates is rejected rather than resolved
+  to the first reference. For a LoRA candidate, the serving frontend routes by the selected
+  base model while the provider request names the adapter.
+- Router Learning session memory retains the selected candidate's controls.
+  Protection can hold that exact choice across tool-loop continuations even
+  when a later base selection prefers another effort of the same model. If that
+  exact owner is excluded during an active tool loop or nonportable continuation,
+  routing rejects the request rather than restoring the owner or falling back
+  to a different effort. Portable turns may select a new eligible candidate;
+  observe and bypass modes do not enforce the protection decision.
 - Candidate model names must resolve through `routing.modelCards` and
   `providers.models` in a complete config.
 - Learned selectors need artifacts produced for the same embedding dimension
@@ -111,3 +148,19 @@ traffic before using them for production routing.
   checked against each target Model's known context window before dispatch.
   Missing context metadata remains eligible for compatibility.
 - Validate a complete config with `vllm-sr config validate --config config.yaml`.
+
+### Native System One Algorithms
+
+A recipe published with `api: systemone` uses native execution. Its matched
+decision runs a `cascade`, preserving complete typed responses. Each cascade
+has its own `algorithm.budget` for its stages and transport retries. Signals
+run first with their own timeouts and request cancellation.
+
+| Type | Status | Goal | Guide |
+| --- | --- | --- | --- |
+| `cascade` | experimental | Try declared native models in authored order until acceptance passes | [Cascade](./native/cascade.md) |
+
+A one-stage cascade can target one model; a longer cascade can try a small model
+before a stronger one. Several decisions can choose different cascades within
+one recipe. Native execution uses an explicit candidate roster and quality
+contract; it does not run Chat plugins or silently fall back to a Chat model.

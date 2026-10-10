@@ -12,20 +12,27 @@ SERVER_READONLY=${DASHBOARD_READONLY:-false}
 RUNTIME_CONFIG_WRITABLE=${DASHBOARD_RUNTIME_CONFIG_WRITABLE:-true}
 RECIPE_STORE_WRITABLE=${DASHBOARD_RECIPE_STORE_WRITABLE:-true}
 LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
-EVALUATION_DATA_DIR=${EVALUATION_DATA_DIR:-/app/data/evaluation}
-EVALUATION_ENABLED=${EVALUATION_ENABLED:-true}
-export EVALUATION_DATA_DIR EVALUATION_ENABLED
+RECIPE_STORE_GID=${VLLM_SR_RECIPE_STORE_GID:-65532}
+K8S_CONFIGMAP_TARGET=
+if [ -n "${VLLM_SR_K8S_CONFIGMAP_NAME:-}" ] &&
+   [ -n "${VLLM_SR_K8S_CONFIGMAP_NAMESPACE:-}" ]; then
+    K8S_CONFIGMAP_TARGET=true
+fi
 
 # OpenShift restricted SCCs run images with an arbitrary non-root UID that is
 # a member of the root group. Such a process cannot prepare users or bind
-# mounts, so keep runtime mutations fail-closed and start directly. The image
-# grants group 0 write access only to /app/data for Dashboard-owned state.
+# mounts, so keep local-file mutations fail-closed and start directly. The
+# image grants group 0 write access only to /app/data for Dashboard-owned
+# state. Runtime config writes are the one exception: when a Kubernetes
+# ConfigMap target is configured (issue #3688), that write goes through the
+# Kubernetes API instead of the local filesystem, so it does not need the
+# permission preparation this branch skips.
 if [ "$(id -u)" -ne 0 ]; then
-    DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
+    if [ -z "$K8S_CONFIGMAP_TARGET" ]; then
+        DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
+    fi
     DASHBOARD_RECIPE_STORE_WRITABLE=false
-    OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
-    export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE \
-        OPENCLAW_CONTAINER_RUNTIME_DISABLED
+    export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE
     exec "$@"
 fi
 
@@ -52,6 +59,9 @@ if [ -n "$LOG_SPOOL_GID" ]; then
     esac
     add_nonroot_group_gid "$LOG_SPOOL_GID"
 fi
+case "$RECIPE_STORE_GID" in
+    ""|*[!0-9]*|0) echo "Invalid Recipe store group" >&2; exit 1 ;;
+esac
 
 # Atomic runtime-config replacement needs group write access to the containing
 # state directory, not only to the current file. Preserve the host owner's UID
@@ -60,7 +70,8 @@ fi
 # mutations. Config mount availability is intentionally independent from the
 # managed Recipe package store: an admin may still import packages for later
 # activation when only the runtime config mount is read-only.
-if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; then
+if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ] &&
+   [ -z "$K8S_CONFIGMAP_TARGET" ]; then
     if [ ! -f "$CONFIG_FILE_PATH" ] || [ ! -d "$STATE_DIR" ] ||
        ! python3 "$PERMISSION_HELPER" probe-config "$STATE_DIR" "$CONFIG_FILE_PATH"; then
         echo "Dashboard runtime config is read-only; runtime mutation is disabled while Recipe package storage remains independent" >&2
@@ -79,7 +90,8 @@ DASHBOARD_RUNTIME_CONFIG_WRITABLE=$RUNTIME_CONFIG_WRITABLE
 DASHBOARD_RECIPE_STORE_WRITABLE=$RECIPE_STORE_WRITABLE
 export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE
 
-if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; then
+if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ] &&
+   [ -z "$K8S_CONFIGMAP_TARGET" ]; then
     STATE_GID=65532
     if [ -d "$STATE_DIR" ]; then
         add_nonroot_group_gid "$STATE_GID"
@@ -99,45 +111,29 @@ if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; 
         python3 "$PERMISSION_HELPER" prepare-file "$VLLM_SR_ENVOY_CONFIG_PATH" "$ENVOY_STATE_GID"
     fi
 fi
+# `vllm-sr serve` reads the Recipe store before it starts the stack and
+# recovers interrupted activations, as the user who runs it: the CLI passes
+# that user's group, and the store is shared with it. `.vllm-sr` around it
+# stays open only to its owner and the Dashboard. The CLI owns the Router
+# management credential and passes it in the environment, so the copy an
+# earlier Dashboard kept in the store goes first.
 if [ "$SERVER_READONLY" != "true" ] && [ "$RECIPE_STORE_WRITABLE" = "true" ] &&
    [ -d "$RECIPE_STORE_DIR" ]; then
-    RECIPE_STORE_GID=65532
     add_nonroot_group_gid "$RECIPE_STORE_GID"
-    python3 "$PERMISSION_HELPER" prepare-tree \
-        "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID" \
-        --credential-relative-path credentials/router-management.token
+    python3 "$PERMISSION_HELPER" remove-stale-file \
+        "$RECIPE_STORE_DIR/credentials/router-management.token"
+    python3 "$PERMISSION_HELPER" prepare-tree "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID"
 fi
 if [ -d /app/data ]; then
     DATA_GID=65532
     add_nonroot_group_gid "$DATA_GID"
     python3 "$PERMISSION_HELPER" prepare-tree /app/data "$DATA_GID" \
-        --exclude-path "$EVALUATION_DATA_DIR"
-fi
-if ! python3 "$PERMISSION_HELPER" prepare-private-tree \
-    "$EVALUATION_DATA_DIR" 65532 65532; then
-    EVALUATION_ENABLED=false
-    export EVALUATION_ENABLED
-    echo "Warning: Evaluation Plane is disabled because its private data store could not be prepared safely" >&2
+        --exclude-path /app/data/evaluation
 fi
 
-# The dashboard is deliberately nonroot, but managed Recipe topology and
-# OpenClaw operations use the mounted container-runtime socket. Map the
-# socket's numeric group inside the image before gosu rebuilds supplementary
-# groups for the nonroot account. Never broaden the socket's host permissions.
-CONTAINER_SOCKET_PATH=${VLLM_SR_CONTAINER_SOCKET_PATH:-/var/run/docker.sock}
-if [ -e "$CONTAINER_SOCKET_PATH" ] || [ -L "$CONTAINER_SOCKET_PATH" ]; then
-    if CONTAINER_SOCKET_GID=$(python3 "$PERMISSION_HELPER" socket-gid "$CONTAINER_SOCKET_PATH" 2>/dev/null); then
-        add_nonroot_group_gid "$CONTAINER_SOCKET_GID"
-        export OPENCLAW_CONTAINER_RUNTIME_DISABLED=false
-    else
-        export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
-        echo "Warning: Dashboard container management is unavailable because the runtime socket cannot be shared safely; continuing without socket access" >&2
-    fi
-else
-    export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
-fi
-
-# Switch to nonroot user and execute the dashboard backend.
+# The dashboard is deliberately nonroot and holds no container runtime: it
+# reads status from HTTP probes and the stack's files, and logs from the
+# spool. Switch to nonroot user and execute the dashboard backend.
 if ! command -v gosu >/dev/null 2>&1; then
     echo "gosu is required to initialize Dashboard supplementary groups" >&2
     exit 1

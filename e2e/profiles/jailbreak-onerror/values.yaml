@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -12,9 +12,9 @@ config:
     models:
       - name: openai/mock-model
         backend_refs:
-          - name: mock-vllm
+          - name: provider-mocker
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:
@@ -32,7 +32,7 @@ config:
             configuration:
               message: This response must not be selected.
       # #2918: PromptGuardOnErrorBlock forces every request to match this
-      # rule, because prompt_guard.protocol points at an endpoint nothing
+      # rule, because prompt_guard.backend points at an endpoint nothing
       # listens on (127.0.0.1:1 inside the router pod) - the classify call
       # always errors, and on_error: block treats that as a positive
       # detection instead of silently letting the request through.
@@ -120,7 +120,6 @@ config:
           enabled: true
           model_ref: ""
           model_id: ""
-          variant: ""
           backend:
             protocol: http_classify
             contract: label_distribution.v1
@@ -134,18 +133,16 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
         hallucination_mitigation:
           enabled: false
 # The router requires a jailbreak_type_mapping.json on disk even for
 # protocol: http_classify (IsJailbreakEnabled/LoadJailbreakMapping don't
 # special-case the external-classifier path) - this profile deliberately
-# never calls into local candle inference, so a minimal stand-in mapping
+# never runs a local model, so a minimal stand-in mapping
 # (from the ConfigMap in jailbreak-mapping-configmap.yaml, applied as a
 # prerequisite) is enough; no need to bake/download the real model.
 extraVolumes:

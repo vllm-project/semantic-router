@@ -8,21 +8,28 @@ import {
   normalizeModelBackendRefs,
   normalizeEvaluationRecords,
   normalizeModelPricing,
+  normalizeModelReliability,
 } from './configPageModelFormSupport'
 import { newModelFormData } from './configPageModelsSectionSupport'
 
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
     expectTypeOf<NonNullable<ProviderModel['api_format']>>().toEqualTypeOf<
-      'openai' | 'responses' | 'anthropic'
+      'openai' | 'responses' | 'anthropic' | 'systemone'
     >()
 
     const models = [
       { name: 'chat', api_format: 'openai' },
       { name: 'responses', api_format: 'responses' },
       { name: 'messages', api_format: 'anthropic' },
+      { name: 'decision', api_format: 'systemone' },
     ] satisfies ProviderModel[]
-    expect(models.map((model) => model.api_format)).toEqual(['openai', 'responses', 'anthropic'])
+    expect(models.map((model) => model.api_format)).toEqual([
+      'openai',
+      'responses',
+      'anthropic',
+      'systemone',
+    ])
   })
 
   it('preserves every canonical backend target field', () => {
@@ -181,5 +188,34 @@ describe('evaluation records', () => {
         metadata: { runtime: 'vllm', tensor_parallel: 2 },
       },
     ])
+  })
+})
+
+describe('model form reliability', () => {
+  it('preserves every canonical reliability field', () => {
+    const reliability = {
+      lb_policy: 'least_request',
+      retry_count: 2,
+      retry_on: '5xx,retriable-status-codes',
+      consecutive_5xx: 3,
+      base_ejection_time: '45s',
+      max_ejection_percent: 25,
+      health_check_path: '/health',
+      health_check_interval: '15s',
+      health_check_timeout: '3s',
+      connect_timeout: '3s',
+      total_timeout: '0s',
+      idle_timeout: '45s',
+      per_try_timeout: '20s',
+      first_byte_timeout: '5s',
+      retriable_status_codes: [429, 503],
+      retry_back_off_base: '50ms',
+      retry_back_off_max: '1s',
+      retry_after_max: '30s',
+      retry_budget_percent: 25,
+      retry_budget_min_concurrency: 4,
+    }
+
+    expect(normalizeModelReliability(reliability)).toEqual(reliability)
   })
 })

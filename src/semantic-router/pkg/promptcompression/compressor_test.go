@@ -1786,7 +1786,7 @@ func TestCompressReducesToMaxTokensRange(t *testing.T) {
 	}
 	// Repeat paragraphs to bulk up the text.
 	var sb strings.Builder
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 4*len(paragraphs); i++ {
 		sb.WriteString(paragraphs[i%len(paragraphs)])
 	}
 	longPrompt := sb.String()
@@ -1804,7 +1804,7 @@ func TestCompressReducesToMaxTokensRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			origTokens := CountTokensApprox(longPrompt)
 			if origTokens <= tt.maxTokens {
-				t.Skipf("prompt only %d tokens, need > %d to test compression", origTokens, tt.maxTokens)
+				t.Fatalf("fixture has only %d tokens, need > %d to test compression", origTokens, tt.maxTokens)
 			}
 
 			cfg := DefaultConfig(tt.maxTokens)

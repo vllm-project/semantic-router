@@ -9,12 +9,30 @@ Nothing here loads weights. It walks the config for every declared artifact
 path, groups the load sites by task, and checks that each site agrees with the
 ``system:`` reference table. That is enough to tell an evaluation run which
 artifact it must measure, and to show when two sites disagree.
+
+Since #4721 a module load site usually names no artifact path at all: it
+declares only a ``model_ref``, and the router resolves the reference in two
+steps this module mirrors (``resolveSystemModelRef`` and
+``applyDecisionModel`` in the Router's config package). An explicit
+``model_id``/``model_path`` on the module wins; otherwise the ``system:``
+table entry for the reference decides, and every system line the
+configuration leaves unset is filled from the table of the decision model
+``system.decision_model`` names (the default is Vela-2.0-0.3B). The
+modality classifier names no model either: an empty ``model_path`` runs the
+decision model's modality model. A module that sets no threshold likewise
+runs at the threshold of the model it runs, so a resolved site reports the
+model's published module thresholds from
+``src/model-runtime/docs/records/vela2-decision-model-sizes.json`` — the
+same published record the e2e guard check reads — or, for any other model,
+the Vela 1.0 specialists' thresholds the Router falls back to.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +40,15 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "config.yaml"
-HF_ORG = "llm-semantic-router"
+DECISION_MODEL_RECORD = (
+    REPO_ROOT
+    / "src"
+    / "model-runtime"
+    / "docs"
+    / "records"
+    / "vela2-decision-model-sizes.json"
+)
+HF_ORG = "vllm-sr"
 MODEL_PREFIX = "models/"
 MODEL_PATH_KEYS = ("model_id", "model_path")
 
@@ -36,10 +62,7 @@ REF_TASKS = {
 }
 
 # Load sites that declare no model_ref are classified by their config location.
-LOCATION_TASKS = (
-    ("modality_detector", "modality"),
-    ("signals.classifiers", "jailbreak"),
-)
+LOCATION_TASKS = (("modality_detector", "modality"),)
 
 MAPPING_KEYS = (
     "jailbreak_mapping_path",
@@ -51,6 +74,93 @@ MAPPING_KEYS = (
 
 # Evaluation-registry keys that name the same task under a different word.
 REGISTRY_ALIASES = {"domain": "intent"}
+
+# The ``system:`` table's model lines, in the Router's field order
+# (CanonicalSystemModels). ``decision_model`` is the remaining key.
+SYSTEM_KEYS = (
+    "safety",
+    "hazard",
+    "prompt_guard",
+    "domain_classifier",
+    "pii_classifier",
+    "fact_check_classifier",
+    "hallucination_detector",
+    "feedback_detector",
+)
+
+VELA1_HAZARD_MODEL = "models/Vela-1.0-Encoder-307M-Hazard"
+
+# The Vela 1.0 specialists, mirroring Vela1SystemModels in the Router's
+# canonical defaults: the system table of the ``Vela-1.0`` decision model.
+VELA1_SYSTEM_MODELS = {
+    "safety": "models/Vela-1.0-Encoder-307M-Safety",
+    "hazard": VELA1_HAZARD_MODEL,
+    "prompt_guard": "models/Vela-1.0-Encoder-307M-Guard",
+    "domain_classifier": "models/Vela-1.0-Encoder-307M-Domain",
+    "pii_classifier": "models/Vela-1.0-Encoder-307M-PII",
+    "fact_check_classifier": "models/Vela-1.0-Encoder-307M-FactCheck",
+    "hallucination_detector": "models/Vela-1.0-Encoder-307M-Halu",
+    "feedback_detector": "models/Vela-1.0-Encoder-307M-Feedback",
+}
+
+# Module thresholds of a model that is not a Vela 2.0 size, mirroring
+# vela1ModuleThresholds in the Router's canonical operating points. Vela 2.0
+# thresholds are not copied here; they are read from the published record.
+VELA1_MODULE_THRESHOLDS = {
+    "jailbreak": 0.5,
+    "domain": 0.5,
+    "pii": 0.9,
+    "fact_check": 0.95,
+    "feedback": 0.7,
+}
+
+# ``system:`` reference name -> the record's module-threshold key. Only these
+# five modules take a model threshold when they set none.
+THRESHOLD_KEYS = {
+    "prompt_guard": "jailbreak",
+    "domain_classifier": "domain",
+    "pii_classifier": "pii",
+    "fact_check_classifier": "fact_check",
+    "feedback_detector": "feedback",
+}
+
+
+@dataclass(frozen=True)
+class DecisionModel:
+    """What a decision model binds, mirroring DecisionModelSpec in Go."""
+
+    name: str
+    # The one model that answers every built-in signal; None for Vela 1.0,
+    # whose specialists answer them instead.
+    model: str | None
+    # The modality classifier's model when it names none.
+    modality: str
+    # The system table this decision model fills unset lines from.
+    system: dict[str, str]
+
+
+def _vela2_decision_model(name: str, model: str) -> DecisionModel:
+    # A Vela 2.0 size answers every built-in signal itself; Hazard has no
+    # trained question and stays on the Vela 1.0 Hazard model.
+    system = dict.fromkeys(SYSTEM_KEYS, model)
+    system["hazard"] = VELA1_HAZARD_MODEL
+    return DecisionModel(name=name, model=model, modality=model, system=system)
+
+
+# Decision models in size order, mirroring decisionModels in decision_model.go.
+DECISION_MODELS = (
+    _vela2_decision_model("Vela-2.0-0.3B", "models/Vela-2.0-0.3B"),
+    _vela2_decision_model("Vela-2.0-0.8B", "models/Vela-2.0-0.8B"),
+    _vela2_decision_model("Vela-2.0-4B", "models/Vela-2.0-4B"),
+    _vela2_decision_model("Vela-2.0-9B", "models/Vela-2.0-9B"),
+    DecisionModel(
+        name="Vela-1.0",
+        model=None,
+        modality="models/Vela-1.0-Encoder-307M-Modality",
+        system=dict(VELA1_SYSTEM_MODELS),
+    ),
+)
+DEFAULT_DECISION_MODEL = DECISION_MODELS[0]
 
 
 @dataclass(frozen=True)
@@ -117,37 +227,102 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     return config
 
 
-def system_refs(config: dict[str, Any]) -> dict[str, str]:
-    """Read the ``system:`` table that names one artifact per model reference."""
+def _system_block(config: dict[str, Any]) -> dict[str, Any]:
+    """The raw ``system:`` table of ``global.model_catalog``, or an empty one."""
     for _, block in _walk_mappings(config):
         system = block.get("system")
         if not isinstance(system, dict):
             continue
-        refs = {
-            key: value
-            for key, value in system.items()
-            if isinstance(value, str) and value.startswith(MODEL_PREFIX)
-        }
-        if refs:
-            return refs
+        if "decision_model" in system or any(key in system for key in SYSTEM_KEYS):
+            return system
     return {}
 
 
+def _decision_model(system: dict[str, Any]) -> DecisionModel:
+    """Resolve ``system.decision_model``; an unset name is the default."""
+    raw = system.get("decision_model")
+    name = raw.strip() if isinstance(raw, str) and raw.strip() else ""
+    if not name:
+        return DEFAULT_DECISION_MODEL
+    for spec in DECISION_MODELS:
+        if spec.name.lower() == name.lower():
+            return spec
+    choices = ", ".join(spec.name for spec in DECISION_MODELS)
+    raise ValueError(
+        f"decision_model {raw!r} is not a decision model; choose {choices}"
+    )
+
+
+def system_refs(config: dict[str, Any]) -> dict[str, str]:
+    """The resolved ``system:`` table: one artifact per model reference.
+
+    Lines the configuration sets win; every line it leaves unset takes the
+    decision model's binding, exactly as the Router's ``applyDecisionModel``
+    fills them at load.
+    """
+    system = _system_block(config)
+    refs = dict(_decision_model(system).system)
+    for key, value in system.items():
+        if key in refs and isinstance(value, str) and value.startswith(MODEL_PREFIX):
+            refs[key] = value
+    return refs
+
+
 def load_sites(config: dict[str, Any]) -> list[LoadSite]:
-    """Every config mapping that names a ``models/`` artifact path."""
+    """Every config mapping that loads an artifact, after reference resolution.
+
+    A mapping loads an artifact when it names a ``models/`` path in
+    ``model_id``/``model_path``, or when it names only a ``model_ref`` the
+    resolved system table binds to a path. The modality classifier's empty
+    ``model_path`` loads the decision model's modality model.
+    """
+    system = _system_block(config)
+    decision = _decision_model(system)
+    refs = system_refs(config)
     sites: list[LoadSite] = []
     for location, block in _walk_mappings(config):
         if block.get("enabled") is False:
             continue
+        model_ref = _optional_str(block.get("model_ref"))
+        explicit = False
         for key in MODEL_PATH_KEYS:
             value = block.get(key)
             if not isinstance(value, str) or not value.startswith(MODEL_PREFIX):
                 continue
+            explicit = True
             sites.append(
                 LoadSite(
                     location=f"{location}.{key}" if location else key,
                     model_path=value,
-                    model_ref=_optional_str(block.get("model_ref")),
+                    model_ref=model_ref,
+                    threshold=_effective_threshold(block, value, model_ref),
+                    mapping_path=_mapping_path(block),
+                    positive_labels=_positive_labels(block),
+                )
+            )
+        if explicit:
+            continue
+        if model_ref is not None:
+            resolved = refs.get(model_ref)
+            if resolved is None:
+                # ref_mismatches reports the undefined reference.
+                continue
+            sites.append(
+                LoadSite(
+                    location=f"{location}.model_ref" if location else "model_ref",
+                    model_path=resolved,
+                    model_ref=model_ref,
+                    threshold=_effective_threshold(block, resolved, model_ref),
+                    mapping_path=_mapping_path(block),
+                    positive_labels=_positive_labels(block),
+                )
+            )
+        elif "modality_detector" in location and block.get("model_path") == "":
+            sites.append(
+                LoadSite(
+                    location=f"{location}.model_path" if location else "model_path",
+                    model_path=decision.modality,
+                    model_ref=None,
                     threshold=_as_float(block.get("threshold")),
                     mapping_path=_mapping_path(block),
                     positive_labels=_positive_labels(block),
@@ -183,20 +358,31 @@ def ref_mismatches(config: dict[str, Any]) -> list[str]:
     """Load sites whose ``model_id`` disagrees with the ``system:`` table."""
     refs = system_refs(config)
     findings: list[str] = []
-    for site in load_sites(config):
-        if site.model_ref is None:
+    for location, block in _walk_mappings(config):
+        if block.get("enabled") is False:
             continue
-        declared = refs.get(site.model_ref)
+        model_ref = _optional_str(block.get("model_ref"))
+        if model_ref is None:
+            continue
+        declared = refs.get(model_ref)
         if declared is None:
             findings.append(
-                f"{site.location} references {site.model_ref!r}, which the system "
+                f"{location}.model_ref references {model_ref!r}, which the system "
                 "table does not define"
             )
-        elif declared != site.model_path:
-            findings.append(
-                f"{site.location} loads {site.model_path} but the system table maps "
-                f"{site.model_ref!r} to {declared}"
-            )
+            continue
+        for key in MODEL_PATH_KEYS:
+            value = block.get(key)
+            if (
+                isinstance(value, str)
+                and value.startswith(MODEL_PREFIX)
+                and value != declared
+            ):
+                site_location = f"{location}.{key}" if location else key
+                findings.append(
+                    f"{site_location} loads {value} but the system table maps "
+                    f"{model_ref!r} to {declared}"
+                )
     return findings
 
 
@@ -256,6 +442,48 @@ def _site_task(site: LoadSite) -> str | None:
         if marker in site.location:
             return task
     return None
+
+
+def _effective_threshold(
+    block: dict[str, Any], model_path: str, model_ref: str | None
+) -> float | None:
+    """The threshold a load site runs at: its own, or its model's.
+
+    A module that sets no threshold takes the one calibrated for the model it
+    runs (the Router's ``normalizeModuleOperatingPoints``), so a resolved
+    site reports the model's threshold rather than none.
+    """
+    declared = _as_float(block.get("threshold"))
+    if declared is not None:
+        return declared
+    key = THRESHOLD_KEYS.get(model_ref or "")
+    if key is None:
+        return None
+    return _module_thresholds(model_path).get(key)
+
+
+def _module_thresholds(model_path: str) -> dict[str, float]:
+    """The published module thresholds of one model."""
+    name = model_path.removeprefix(MODEL_PREFIX)
+    if name.startswith("Vela-2.0-"):
+        size = name.removeprefix("Vela-2.0-")
+        thresholds = _published_module_thresholds().get(size)
+        if thresholds is None:
+            raise ValueError(
+                f"the published decision-model record has no module thresholds "
+                f"for {name}"
+            )
+        return thresholds
+    return VELA1_MODULE_THRESHOLDS
+
+
+@lru_cache(maxsize=1)
+def _published_module_thresholds() -> dict[str, dict[str, float]]:
+    record = json.loads(DECISION_MODEL_RECORD.read_text(encoding="utf-8"))
+    return {
+        size: {task: float(value) for task, value in tasks.items()}
+        for size, tasks in record["module_thresholds"].items()
+    }
 
 
 def _walk_mappings(

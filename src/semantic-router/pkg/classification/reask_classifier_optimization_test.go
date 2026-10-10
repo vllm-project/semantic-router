@@ -5,26 +5,24 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestReaskClassifier_ClassifyStopsEmbeddingAfterAllRulesFail(t *testing.T) {
 	embeddingCalls := 0
-	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		embeddingCalls++
 		if text == "current" {
-			return &tasks.EmbeddingResult{Embedding: makeEmbedding(1, 0)}, nil
+			return makeEmbedding(1, 0), nil
 		}
-		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0, 1)}, nil
+		return makeEmbedding(0, 1), nil
 	})
-	t.Cleanup(restore)
 
 	priorUserTurns := make([]string, 50)
 	for index := range priorUserTurns {
 		priorUserTurns[index] = fmt.Sprintf("unrelated earlier question %d", index)
 	}
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{
 		{
 			Name:          "likely_dissatisfied",
 			Threshold:     0.9,
@@ -34,9 +32,9 @@ func TestReaskClassifier_ClassifyStopsEmbeddingAfterAllRulesFail(t *testing.T) {
 			Name:          "default_threshold",
 			LookbackTurns: 1,
 		},
-	}, "test-model")
+	}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", priorUserTurns)
@@ -59,13 +57,12 @@ func TestReaskClassifier_ClassifyContinuesUntilLowestThresholdFails(t *testing.T
 		"older all-rules failure":       makeEmbedding(0, 1),
 		"oldest should not be embedded": makeEmbedding(1, 0),
 	}
-	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		embeddingCalls[text]++
-		return &tasks.EmbeddingResult{Embedding: embeddings[text]}, nil
+		return embeddings[text], nil
 	})
-	t.Cleanup(restore)
 
-	classifier, err := NewReaskClassifier([]config.ReaskRule{
+	classifier, err := NewReaskClassifierWithProvider([]config.ReaskRule{
 		{
 			Name:          "strict",
 			Threshold:     0.9,
@@ -76,9 +73,9 @@ func TestReaskClassifier_ClassifyContinuesUntilLowestThresholdFails(t *testing.T
 			Threshold:     0.7,
 			LookbackTurns: 1,
 		},
-	}, "test-model")
+	}, "test-model", provider)
 	if err != nil {
-		t.Fatalf("NewReaskClassifier() error = %v", err)
+		t.Fatalf("NewReaskClassifierWithProvider(, provider) error = %v", err)
 	}
 
 	matches, err := classifier.Classify("current", []string{

@@ -86,7 +86,7 @@ func (endpoint *VLLMEndpoint) ResolveAddress(profiles map[string]ProviderProfile
 // ProviderType validates the catalog provider identity carried by a compiled
 // profile. There is no separately maintained enum.
 func (profile *ProviderProfile) ProviderType() (string, error) {
-	definition, err := profile.catalogDefinition()
+	definition, err := profile.catalogIdentity()
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +96,7 @@ func (profile *ProviderProfile) ProviderType() (string, error) {
 // ResolveAuth combines catalog auth defaults with explicit profile overrides.
 // AuthPrefixSet makes an authored empty prefix distinct from omission.
 func (profile *ProviderProfile) ResolveAuth() (modelcatalog.ProviderAuth, error) {
-	definition, err := profile.catalogDefinition()
+	definition, err := profile.catalogIdentity()
 	if err != nil {
 		return modelcatalog.ProviderAuth{}, err
 	}
@@ -129,7 +129,7 @@ func (profile *ProviderProfile) ResolveReasoningTransport() (modelcatalog.Reason
 		}
 		return profile.ReasoningTransport, nil
 	}
-	definition, err := profile.catalogDefinition()
+	definition, err := profile.catalogIdentity()
 	if err != nil {
 		return "", err
 	}
@@ -162,7 +162,7 @@ func validReasoningTransport(transport modelcatalog.ReasoningTransport) bool {
 // prefix. The selected protocol owns the operation path for Chat Completions,
 // Responses, and Messages alike.
 func (profile *ProviderProfile) ResolveCreatePath(protocolID string) (string, error) {
-	definition, err := profile.catalogDefinition()
+	definition, err := profile.catalogIdentity()
 	if err != nil {
 		return "", err
 	}
@@ -175,14 +175,14 @@ func (profile *ProviderProfile) ResolveCreatePath(protocolID string) (string, er
 	if err != nil {
 		return "", err
 	}
-	path, err := registry.ResolveOperationPath(definition.ID, protocolID, "create", basePath)
+	operation, err := registry.ResolveOperation(definition.ID, protocolID, "create", basePath)
 	if err != nil {
 		return "", err
 	}
 	if profile.hasCustomChatPath(protocolID) {
-		path = profile.ChatPath
+		operation.Path = profile.ChatPath
 	}
-	return profile.appendAPIVersion(path, definition.APIVersionQuery), nil
+	return profile.appendAPIVersion(operation.Path, operation.UseAPIVersionQuery), nil
 }
 
 func (profile *ProviderProfile) resolveProtocolID(requested, defaultProtocol string) string {
@@ -221,20 +221,20 @@ func (profile *ProviderProfile) appendAPIVersion(path string, supported bool) st
 	return path + separator + "api-version=" + url.QueryEscape(profile.APIVersion)
 }
 
-func (profile *ProviderProfile) catalogDefinition() (modelcatalog.ProviderDefinition, error) {
+func (profile *ProviderProfile) catalogIdentity() (modelcatalog.ProviderIdentity, error) {
 	if profile == nil {
-		return modelcatalog.ProviderDefinition{}, fmt.Errorf("provider profile is nil")
+		return modelcatalog.ProviderIdentity{}, fmt.Errorf("provider profile is nil")
 	}
 	if strings.TrimSpace(profile.Type) == "" {
-		return modelcatalog.ProviderDefinition{}, fmt.Errorf("provider profile has empty type")
+		return modelcatalog.ProviderIdentity{}, fmt.Errorf("provider profile has empty type")
 	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
-		return modelcatalog.ProviderDefinition{}, err
+		return modelcatalog.ProviderIdentity{}, err
 	}
-	definition, ok := registry.Provider(profile.Type)
+	definition, ok := registry.ProviderIdentity(profile.Type)
 	if !ok {
-		return modelcatalog.ProviderDefinition{}, fmt.Errorf("unknown provider ID %q (valid IDs: %v)", profile.Type, registry.ProviderIDs())
+		return modelcatalog.ProviderIdentity{}, fmt.Errorf("unknown provider ID %q (valid IDs: %v)", profile.Type, registry.ProviderIDs())
 	}
 	return definition, nil
 }

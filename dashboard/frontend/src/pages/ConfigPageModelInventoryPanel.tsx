@@ -324,10 +324,11 @@ export default function ConfigPageModelInventoryPanel({
           filtersActive ? 'No models match the current search and filters' : 'No models configured'
         }
         className={configStyles.managerTable}
+        stickyActions={false}
         readonly={isReadonly}
         pagination={{
-          pageSize: 25,
-          pageSizeOptions: [25, 50, 100],
+          pageSize: 5,
+          pageSizeOptions: [5, 10, 25, 50],
           itemLabel: 'models',
           resetKey: `${modelsSearch}|${reasoningFamilyFilter}|${endpointFilter}|${roleFilter}`,
         }}

@@ -238,27 +238,17 @@ In that request, the panel produces independent text analysis, the judge compare
 
 ### Configure Entrypoints and Decisions
 
-The global config registers API entry aliases only:
+Entrypoints map public model names to recipes. For this single Fusion recipe,
+both public names select its top-level routing profile:
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - model_names: [vllm-sr/auto, vllm-sr/fusion]
+    recipe: default
 ```
 
-Fusion slugs are registered under the looper integration:
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-```
+Named Fusion recipes can expose their own model names with the same mapping.
+Algorithms belong to decisions; model-name strings do not select an algorithm.
 
 The per-decision config owns the route semantics, judge, panel, and runtime knobs:
 

@@ -32,19 +32,14 @@ import (
 
 const deploymentConfigChecksumAnnotation = "vllm.ai/config-checksum"
 
-// Envoy reads its static bootstrap at startup. Roll both containers together
-// when their mounted configuration changes so backend discovery and Router
-// model selection continue to use the same configuration revision.
+// Roll the Pod when its mounted configuration changes, so backend discovery
+// reaches the Router's model selection as one configuration revision.
 func (r *SemanticRouterReconciler) annotateDeploymentConfig(
 	ctx context.Context,
 	sr *vllmv1alpha1.SemanticRouter,
-	gatewayMode string,
 	deployment *appsv1.Deployment,
 ) error {
 	names := []string{sr.Name + "-config"}
-	if gatewayMode == "standalone" {
-		names = append(names, sr.Name+"-envoy-config")
-	}
 	hash := sha256.New()
 	encoder := json.NewEncoder(hash)
 	for _, name := range names {

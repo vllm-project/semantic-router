@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -53,9 +54,10 @@ type CanonicalSetup struct {
 // keeps benchmark and index definitions beside model-linked measurement
 // records so user configuration matches the built-in catalog data model.
 type CanonicalEvaluation struct {
-	Benchmarks []modelcatalog.BenchmarkDefinition `yaml:"benchmarks,omitempty"`
-	Indices    []modelcatalog.IndexDefinition     `yaml:"indices,omitempty"`
-	Records    []CanonicalEvaluationRecord        `yaml:"records,omitempty"`
+	Calibrations []CalibrationArtifact              `yaml:"calibrations,omitempty"`
+	Benchmarks   []modelcatalog.BenchmarkDefinition `yaml:"benchmarks,omitempty"`
+	Indices      []modelcatalog.IndexDefinition     `yaml:"indices,omitempty"`
+	Records      []CanonicalEvaluationRecord        `yaml:"records,omitempty"`
 }
 
 // CanonicalEvaluationRecord is a compact operator-authored measurement. Model
@@ -74,12 +76,14 @@ type CanonicalEvaluationRecord struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelBindings map[string]ModelBinding `yaml:"model_bindings,omitempty"`
-	ModelCards    []RoutingModel          `yaml:"modelCards,omitempty"`
-	Signals       CanonicalSignals        `yaml:"signals,omitempty"`
-	Projections   CanonicalProjections    `yaml:"projections,omitempty"`
-	Decisions     []Decision              `yaml:"decisions,omitempty"`
-	Strategy      RoutingStrategy         `yaml:"strategy,omitempty"`
+	CandidateRequirements *CandidateRequirements   `yaml:"candidate_requirements,omitempty"`
+	ModelBindings         map[string]ModelBinding  `yaml:"model_bindings,omitempty"`
+	ModelCards            []RoutingModel           `yaml:"modelCards,omitempty"`
+	Signals               CanonicalSignals         `yaml:"signals,omitempty"`
+	Projections           CanonicalProjections     `yaml:"projections,omitempty"`
+	Decisions             []Decision               `yaml:"decisions,omitempty"`
+	Strategy              RoutingStrategy          `yaml:"strategy,omitempty"`
+	Fallback              *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -98,6 +102,7 @@ type CanonicalSignals struct {
 	Modality      []ModalityRule         `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	Safety        []SafetyRule           `yaml:"safety,omitempty"`
 	Hallucination []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PII           []PIIRule              `yaml:"pii,omitempty"`
 	KB            []KBSignalRule         `yaml:"kb,omitempty"`
@@ -106,6 +111,7 @@ type CanonicalSignals struct {
 	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
 	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
+	Decision      []DecisionSignalRule   `yaml:"decision,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -141,7 +147,9 @@ type RoutingModel struct {
 func isCanonicalConfig(raw map[string]interface{}) bool {
 	_, hasRouting := raw["routing"]
 	_, hasGlobal := raw["global"]
-	return hasRouting || hasGlobal
+	_, hasRecipes := raw["recipes"]
+	_, hasEntrypoints := raw["entrypoints"]
+	return hasRouting || hasGlobal || hasRecipes || hasEntrypoints
 }
 
 func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
@@ -181,6 +189,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
+	if err := validateNativeRoutingConfig(&cfg); err != nil {
+		return nil, err
+	}
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
@@ -191,19 +202,28 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 
 func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.ModelBindings = cloneModelMap(canonical.Routing.ModelBindings)
+	cfg.CandidateRequirements = canonical.Routing.CandidateRequirements.Clone()
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
-	if canonical.Routing.Strategy != "" {
-		cfg.Strategy = canonical.Routing.Strategy
-	}
+	cfg.Strategy = cfg.RoutingDefaults.resolveStrategy(canonical.Routing.Strategy)
+	cfg.Fallback = cfg.RoutingDefaults.resolveFallback(canonical.Routing.Fallback)
 	cfg.ModelConfig = make(map[string]ModelParams)
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalVersion(canonical); err != nil {
+		return err
+	}
+	if err := canonical.Routing.CandidateRequirements.Validate(); err != nil {
+		return err
+	}
+	if err := validateCanonicalNativeResources(canonical); err != nil {
+		return err
+	}
+	if err := validateCanonicalFallback(canonical); err != nil {
 		return err
 	}
 	modelsByName, err := canonicalModelCardIndex(canonical.Routing)
@@ -229,6 +249,62 @@ func validateCanonicalVersion(canonical *CanonicalConfig) error {
 	}
 	if canonical.Version != "" && canonical.Version != CanonicalConfigVersion {
 		return fmt.Errorf("unsupported config version %q: %s is required", canonical.Version, CanonicalConfigVersion)
+	}
+	return nil
+}
+
+func validateCanonicalFallback(canonical *CanonicalConfig) error {
+	if canonical == nil {
+		return nil
+	}
+	defaults := RoutingDefaults{}
+	if canonical.Global != nil {
+		defaults.Strategy = canonical.Global.Router.Strategy
+		defaults.Fallback = canonical.Global.Router.Fallback
+		if err := defaults.Strategy.Validate(); err != nil {
+			return fmt.Errorf("global.router.strategy: %w", err)
+		}
+		if defaults.Fallback != nil {
+			if err := defaults.Fallback.WithDefaults().Validate(); err != nil {
+				return fmt.Errorf("global.router.fallback: %w", err)
+			}
+		}
+	}
+	if err := validateRoutingFallback("routing", canonical.Routing, defaults); err != nil {
+		return err
+	}
+	for _, recipe := range canonical.Recipes {
+		if err := validateRoutingFallback(fmt.Sprintf("recipes[%s].routing", recipe.Name), recipe.Routing, defaults); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateRoutingFallback(path string, routing CanonicalRouting, defaults RoutingDefaults) error {
+	base := fallback.DefaultPolicy()
+	if effective := defaults.resolveFallback(routing.Fallback); effective != nil {
+		base = *effective
+	}
+	if err := base.Validate(); err != nil {
+		return fmt.Errorf("%s.fallback: %w", path, err)
+	}
+	return validateDecisionFallbacks(path, routing.Decisions, base)
+}
+
+// validateDecisionFallbacks checks each decision's fallback override, and the
+// policy it makes over its recipe's, as the recipe block is checked.
+func validateDecisionFallbacks(path string, decisions []Decision, recipe fallback.FallbackPolicy) error {
+	for _, decision := range decisions {
+		if decision.Fallback == nil {
+			continue
+		}
+		if err := decision.Fallback.Validate(); err != nil {
+			return fmt.Errorf("%s.decisions[%s].fallback: %w", path, decision.Name, err)
+		}
+		if err := recipe.WithDefaults().Resolve(decision.Fallback).Validate(); err != nil {
+			return fmt.Errorf("%s.decisions[%s].fallback: %w", path, decision.Name, err)
+		}
 	}
 	return nil
 }
@@ -475,6 +551,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
+		SafetyRules:        append([]SafetyRule(nil), signals.Safety...),
 		HallucinationRules: append([]HallucinationRule(nil), signals.Hallucination...),
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
 		KBRules:            append([]KBSignalRule(nil), signals.KB...),
@@ -483,6 +560,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		ClassifierRules:    append([]ClassifierSignalRule(nil), signals.Classifiers...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		DecisionRules:      append([]DecisionSignalRule(nil), signals.Decision...),
 	}
 
 	if len(result.Categories) == 0 {
@@ -505,11 +583,10 @@ func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
 }
 
 func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
-	if model.Catalog != "" || model.Reasoning != nil || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
+	if model.Deployment != "" || model.Catalog != "" || model.Reasoning != nil || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
-	return model.Pricing != (ModelPricing{}) ||
-		model.Reliability != (ProviderReliability{})
+	return model.Pricing != (ModelPricing{}) || !model.Reliability.IsZero()
 }
 
 func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {
@@ -547,11 +624,17 @@ func autoGenerateCategoriesFromDecisions(decisions []Decision) []Category {
 	}
 	sort.Strings(keys)
 	for _, name := range keys {
+		// A referenced classifier label declares itself; any other name can
+		// only be the fallback for labels no rule lists.
+		label := "other"
+		if IsSupportedRoutingDomainName(name) {
+			label = name
+		}
 		categories = append(categories, Category{
 			CategoryMetadata: CategoryMetadata{
 				Name:           name,
 				Description:    name,
-				MMLUCategories: []string{"other"},
+				MMLUCategories: []string{label},
 			},
 		})
 	}
@@ -569,6 +652,9 @@ func collectRuleNames(node RuleCombination, signalType string, out map[string]bo
 
 func ensureModelRefDefaults(decisions []Decision) {
 	for i := range decisions {
+		if decisions[i].Algorithm.IsNative() {
+			continue
+		}
 		for j := range decisions[i].ModelRefs {
 			if decisions[i].ModelRefs[j].UseReasoning == nil {
 				defaultReasoning := false
@@ -584,6 +670,9 @@ func copyDecisions(input []Decision) []Decision {
 	}
 	output := make([]Decision, len(input))
 	copy(output, input)
+	for index := range output {
+		output[index].Algorithm = cloneNativeAlgorithm(input[index].Algorithm)
+	}
 	return output
 }
 

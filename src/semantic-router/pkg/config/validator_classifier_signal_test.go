@@ -2,6 +2,7 @@ package config
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -121,6 +122,170 @@ func TestValidateClassifierSignalContractsRejectsNonJSONParser(t *testing.T) {
 		if (err != nil) != tc.wantErr {
 			t.Fatalf("parser_type %q: error = %v, wantErr %v", tc.parserType, err, tc.wantErr)
 		}
+	}
+}
+
+func TestValidateLLMClassifierExternalReasoningControl(t *testing.T) {
+	enabled := true
+	disabled := false
+	base := func() *RouterConfig {
+		return &RouterConfig{
+			ExternalModels: []ExternalModelConfig{{
+				Name:          "judge",
+				Provider:      "vllm",
+				ModelRole:     ModelRoleClassification,
+				ModelName:     "judge-model",
+				ModelEndpoint: ClassifierVLLMEndpoint{Address: "judge", Port: 8000},
+			}},
+			IntelligentRouting: IntelligentRouting{
+				ReasoningConfig: ReasoningConfig{ReasoningFamilies: map[string]ReasoningFamilyConfig{
+					"qwen3": {
+						Type:        ReasoningFamilyTypeChatTemplateKwargs,
+						Parameter:   "enable_thinking",
+						Modes:       []string{ReasoningModeEnabled, ReasoningModeDisabled},
+						DefaultMode: ReasoningModeEnabled,
+					},
+					"effort": {
+						Type:        ReasoningFamilyTypeReasoningEffort,
+						Parameter:   "reasoning_effort",
+						Levels:      []string{"low", "high"},
+						Default:     "high",
+						Modes:       []string{ReasoningModeEnabled, ReasoningModeDisabled},
+						DefaultMode: ReasoningModeEnabled,
+					},
+					"always-on": {
+						Type:        ReasoningFamilyTypeReasoningEffort,
+						Parameter:   "reasoning_effort",
+						Levels:      []string{"low", "high"},
+						Default:     "high",
+						Modes:       []string{ReasoningModeEnabled},
+						DefaultMode: ReasoningModeEnabled,
+					},
+				}},
+				Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         ClassifierSignalTypeLLM,
+					Model:        "judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}}},
+			},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		provider  string
+		reasoning *ExternalModelReasoningConfig
+		wantErr   string
+	}{
+		{name: "omitted"},
+		{name: "omitted on non-vllm provider", provider: "openai"},
+		{name: "missing family", reasoning: &ExternalModelReasoningConfig{UseReasoning: &enabled}, wantErr: "reasoning.family is required"},
+		{name: "family whitespace", reasoning: &ExternalModelReasoningConfig{Family: " qwen3 ", UseReasoning: &enabled}, wantErr: "family must not contain surrounding whitespace"},
+		{name: "missing use reasoning", reasoning: &ExternalModelReasoningConfig{Family: "qwen3"}, wantErr: "use_reasoning is required"},
+		{name: "unknown family", reasoning: &ExternalModelReasoningConfig{Family: "missing", UseReasoning: &enabled}, wantErr: `family "missing" is not configured`},
+		{name: "effort whitespace", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled, ReasoningEffort: " high "}, wantErr: "reasoning_effort must not contain surrounding whitespace"},
+		{name: "always-on disabled", reasoning: &ExternalModelReasoningConfig{Family: "always-on", UseReasoning: &disabled}, wantErr: "cannot disable always-on family"},
+		{name: "disabled with effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &disabled, ReasoningEffort: "low"}, wantErr: "cannot be set while reasoning is disabled"},
+		{name: "mode-only with effort", reasoning: &ExternalModelReasoningConfig{Family: "qwen3", UseReasoning: &enabled, ReasoningEffort: "low"}, wantErr: "mode-only family"},
+		{name: "unsupported effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled, ReasoningEffort: "medium"}, wantErr: "is not supported"},
+		{name: "non-vllm provider", provider: "openai", reasoning: &ExternalModelReasoningConfig{Family: "qwen3", UseReasoning: &enabled}, wantErr: `requires llm_provider "vllm"`},
+		{name: "valid disabled", reasoning: &ExternalModelReasoningConfig{Family: "qwen3", UseReasoning: &disabled}},
+		{name: "valid default effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled}},
+		{name: "valid explicit effort", reasoning: &ExternalModelReasoningConfig{Family: "effort", UseReasoning: &enabled, ReasoningEffort: "low"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base()
+			if tt.provider != "" {
+				cfg.ExternalModels[0].Provider = tt.provider
+			}
+			cfg.ExternalModels[0].Reasoning = tt.reasoning
+			err := validateClassifierSignalContracts(cfg)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateClassifierSignalContracts() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validateClassifierSignalContracts() error = %v, want substring %q", err, tt.wantErr)
+			}
+			if strings.Contains(tt.wantErr, "not configured") || strings.Contains(tt.wantErr, "always-on") || strings.Contains(tt.wantErr, "disabled") || strings.Contains(tt.wantErr, "mode-only") || strings.Contains(tt.wantErr, "supported") || strings.Contains(tt.wantErr, "llm_provider") {
+				if !strings.Contains(err.Error(), `classifiers["risk"]`) || !strings.Contains(err.Error(), `external model "judge"`) {
+					t.Fatalf("compatibility error lacks classifier and external-model paths: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestParseYAMLBytesPreservesLLMClassifierReasoningControl(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: risk-judge
+          port: 8000
+        llm_model_name: qwen/qwen3-8b
+        reasoning:
+          family: qwen3
+          use_reasoning: false
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: llm
+        model: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: Classify the request.
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	external := cfg.FindExternalModelByName("risk-judge")
+	if external == nil || external.Reasoning == nil {
+		t.Fatalf("external reasoning control was not materialized: %#v", external)
+	}
+	if external.Reasoning.Family != "qwen3" || external.Reasoning.UseReasoning == nil || *external.Reasoning.UseReasoning {
+		t.Fatalf("external reasoning control = %#v, want qwen3 disabled", external.Reasoning)
+	}
+}
+
+func TestParseYAMLBytesRejectsDisabledAlwaysOnLLMClassifierReasoning(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: risk-judge
+          port: 8000
+        llm_model_name: qwen/qwen3.8
+        reasoning:
+          family: qwen3.8-always-on
+          use_reasoning: false
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: llm
+        model: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: Classify the request.
+`))
+	if err == nil || !strings.Contains(err.Error(), `cannot disable always-on family "qwen3.8-always-on"`) {
+		t.Fatalf("ParseYAMLBytes() error = %v, want always-on family rejection", err)
 	}
 }
 

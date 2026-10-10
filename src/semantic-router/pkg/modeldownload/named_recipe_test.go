@@ -10,10 +10,9 @@ import (
 )
 
 const (
-	testFactCheckModel              = "models/test-fact-check"
-	testFeedbackModel               = "models/test-feedback"
-	testHallucinationDetectorModel  = "models/test-hallucination-detector"
-	testHallucinationExplainerModel = "models/test-hallucination-explainer"
+	testFactCheckModel             = "models/test-fact-check"
+	testFeedbackModel              = "models/test-feedback"
+	testHallucinationDetectorModel = "models/test-hallucination-detector"
 )
 
 func TestBuildModelSpecsCoversNamedRecipeSignalsAndPlugins(t *testing.T) {
@@ -28,7 +27,6 @@ func TestBuildModelSpecsCoversNamedRecipeSignalsAndPlugins(t *testing.T) {
 		testFactCheckModel,
 		testFeedbackModel,
 		testHallucinationDetectorModel,
-		testHallucinationExplainerModel,
 	}
 	assertExactModelSpecs(t, specs, want)
 
@@ -43,7 +41,14 @@ func TestBuildModelSpecsCoversNamedRecipeSignalsAndPlugins(t *testing.T) {
 
 func TestBuildModelSpecsSkipsLocalHallucinationSnapshotsForEndpointBackend(t *testing.T) {
 	cfg := loadGenericMultiRecipeModelNeedsConfig(t)
+	// The legacy endpoint form desugars into a remote binding when compiled, so
+	// it has to be complete: an endpoint backend without an endpoint is a
+	// configuration error, not a local model to download.
 	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
+	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
+	if cfg.HallucinationMitigation.HallucinationModel.ModelID == "" {
+		cfg.HallucinationMitigation.HallucinationModel.ModelID = "remote-detector"
+	}
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -53,46 +58,21 @@ func TestBuildModelSpecsSkipsLocalHallucinationSnapshotsForEndpointBackend(t *te
 	assertExactModelSpecs(t, specs, []string{
 		testFactCheckModel,
 		testFeedbackModel,
-	})
-}
-
-func TestBuildModelSpecsSkipsUnusedHallucinationExplainer(t *testing.T) {
-	cfg := loadGenericMultiRecipeModelNeedsConfig(t)
-	recipe, ok := cfg.RecipeByName("verification")
-	if !ok || len(recipe.Profile.Decisions) != 1 {
-		t.Fatal("verification recipe is unavailable")
-	}
-	recipe.Profile.Decisions[0].Plugins[0].Configuration = config.MustStructuredPayload(map[string]interface{}{
-		"enabled": true,
-		"use_nli": false,
-	})
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-
-	assertExactModelSpecs(t, specs, []string{
-		testFactCheckModel,
-		testFeedbackModel,
-		testHallucinationDetectorModel,
 	})
 }
 
 func TestBuildModelSpecsPreservesDefaultAPIOnlyModels(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			testFactCheckModel:              "test/fact-check",
-			testFeedbackModel:               "test/feedback",
-			testHallucinationDetectorModel:  "test/hallucination-detector",
-			testHallucinationExplainerModel: "test/hallucination-explainer",
+			testFactCheckModel:             "test/fact-check",
+			testFeedbackModel:              "test/feedback",
+			testHallucinationDetectorModel: "test/hallucination-detector",
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
 				Enabled:            true,
 				FactCheckModel:     config.FactCheckModelConfig{ModelID: testFactCheckModel},
 				HallucinationModel: config.HallucinationModelConfig{ModelID: testHallucinationDetectorModel},
-				NLIModel:           config.NLIModelConfig{ModelID: testHallucinationExplainerModel},
 			},
 			FeedbackDetector: config.FeedbackDetectorConfig{
 				Enabled: true,
@@ -116,7 +96,6 @@ func TestBuildModelSpecsPreservesDefaultAPIOnlyModels(t *testing.T) {
 		testFactCheckModel,
 		testFeedbackModel,
 		testHallucinationDetectorModel,
-		testHallucinationExplainerModel,
 	})
 }
 
@@ -183,14 +162,13 @@ func TestBuildModelSpecsAccountsForDefaultAutoReachability(t *testing.T) {
 	}
 	assertExactModelSpecs(t, specs, []string{defaultModel})
 
-	cfg.AutoModelNames = []string{}
+	// Renaming the default public entrypoint preserves its model dependencies.
+	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"special"}, Recipe: config.DefaultRecipeName}}
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
-		t.Fatalf("BuildModelSpecs() with auto aliases disabled error = %v", err)
+		t.Fatalf("BuildModelSpecs() with an explicit default entrypoint: %v", err)
 	}
-	if len(specs) != 0 {
-		t.Fatalf("disabled default aliases produced model specs: %#v", specs)
-	}
+	assertExactModelSpecs(t, specs, []string{defaultModel})
 }
 
 func loadGenericMultiRecipeModelNeedsConfig(t *testing.T) *config.RouterConfig {
@@ -207,10 +185,9 @@ func loadGenericMultiRecipeModelNeedsConfig(t *testing.T) *config.RouterConfig {
 
 	cfg.EmbeddingModels.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
 	cfg.MoMRegistry = map[string]string{
-		testFactCheckModel:              "test/fact-check",
-		testFeedbackModel:               "test/feedback",
-		testHallucinationDetectorModel:  "test/hallucination-detector",
-		testHallucinationExplainerModel: "test/hallucination-explainer",
+		testFactCheckModel:             "test/fact-check",
+		testFeedbackModel:              "test/feedback",
+		testHallucinationDetectorModel: "test/hallucination-detector",
 	}
 	return cfg
 }

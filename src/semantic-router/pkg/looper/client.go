@@ -30,14 +30,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 )
 
-// Client handles HTTP requests to OpenAI-compatible endpoints
+// Client sends a Looper's model calls: over HTTP to the Looper endpoint
+// through its connector, or, for a hop client, as hops of a request-graph run.
 type Client struct {
 	connector modelConnector
+	hops      graph.Caller
 	initErr   error
 	endpoint  string
 	headers   map[string]string
+
+	hopTimeout       time.Duration
+	maxResponseBytes int64
 }
 
 // NewClient creates a connector-backed Looper client. Constructor failures are
@@ -160,10 +166,9 @@ func (c *Client) CallModel(
 		*req,
 		ModelTarget{Name: modelName, AccessKey: accessKey},
 		CallOptions{
-			Iteration:   iteration,
-			FusionDepth: fusionDepthFromContext(ctx),
-			Mode:        responseMode(streaming),
-			Logprobs:    logprobs,
+			Iteration: iteration,
+			Mode:      responseMode(streaming),
+			Logprobs:  logprobs,
 		},
 	)
 }
@@ -174,35 +179,11 @@ func (c *Client) callModel(
 	target ModelTarget,
 	options CallOptions,
 ) (*ModelResponse, error) {
-	// Clone and modify the request with the target model
-	modifiedReq := cloneRequest(req)
-	modifiedReq.Model = target.Name
-
-	// Configure logprobs based on config
-	if options.Logprobs != nil && options.Logprobs.Enabled {
-		modifiedReq.Logprobs = openai.Bool(true)
-		topLogprobs := options.Logprobs.TopLogprobs
-		if topLogprobs < 1 {
-			topLogprobs = 1 // Need at least 1 for margin calculation
-		}
-		if topLogprobs > 5 {
-			topLogprobs = 5 // API limit
-		}
-		modifiedReq.TopLogprobs = openai.Int(int64(topLogprobs))
-	}
-
-	// Marshal request to JSON first
-	body, err := json.Marshal(modifiedReq)
+	body, err := prepareModelCallBody(req, target, options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, err
 	}
-
-	// Add stream parameter via JSON manipulation (SDK doesn't expose Stream field)
 	streaming := options.Mode == ResponseSSE
-	body, err = setStreamParam(body, streaming)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set stream param: %w", err)
-	}
 
 	logprobsEnabled := options.Logprobs != nil && options.Logprobs.Enabled
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
@@ -221,7 +202,12 @@ func (c *Client) callModel(
 	})
 	start := time.Now()
 	headers := c.requestHeaders(ctx, target, options)
-	respBody, err := c.callModelThroughConnector(ctx, body, headers)
+	var respBody []byte
+	if c.hops != nil {
+		respBody, err = c.callModelAsHop(ctx, body, headers, target, options)
+	} else {
+		respBody, err = c.callModelThroughConnector(ctx, body, headers)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -278,11 +264,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		Parsed:      &completion,
 		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
-		Usage: TokenUsage{
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-		},
+		Usage:       parseResponseUsage(body),
 	}
 
 	// Extract content, tool_calls, and logprobs

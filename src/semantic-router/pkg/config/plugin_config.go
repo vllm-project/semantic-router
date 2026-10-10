@@ -185,6 +185,8 @@ type FastResponsePluginConfig struct {
 // RequestParamsPluginConfig represents configuration for request_params plugin.
 // This plugin validates and strips request body parameters per decision.
 type RequestParamsPluginConfig struct {
+	// DefaultMaxTokens supplies an output bound only when the caller omits it.
+	DefaultMaxTokens *OutputTokenDefault `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty"`
 	// BlockedParams is a list of parameters that should be blocked/stripped.
 	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
 	// MaxTokensLimit sets the maximum allowed value for max_tokens.
@@ -200,6 +202,24 @@ type SystemPromptPluginConfig struct {
 	Enabled      *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
 	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
+// IsEnabled preserves the implicit activation of a nonempty system prompt.
+func (c *SystemPromptPluginConfig) IsEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if c.Enabled != nil {
+		return *c.Enabled
+	}
+	return c.SystemPrompt != ""
+}
+
+func (c *SystemPromptPluginConfig) EffectiveMode() string {
+	if c == nil || c.Mode == "" {
+		return "insert"
+	}
+	return c.Mode
 }
 
 // HeaderMutationPluginConfig represents configuration for header_mutation plugin.
@@ -225,7 +245,6 @@ type ResponseJailbreakPluginConfig struct {
 // HallucinationPluginConfig represents configuration for hallucination detection plugin.
 type HallucinationPluginConfig struct {
 	Enabled                     bool   `json:"enabled" yaml:"enabled"`
-	UseNLI                      bool   `json:"use_nli,omitempty" yaml:"use_nli,omitempty"`
 	HallucinationAction         string `json:"hallucination_action,omitempty" yaml:"hallucination_action,omitempty"`
 	UnverifiedFactualAction     string `json:"unverified_factual_action,omitempty" yaml:"unverified_factual_action,omitempty"`
 	IncludeHallucinationDetails bool   `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
@@ -233,11 +252,13 @@ type HallucinationPluginConfig struct {
 
 // RouterReplayPluginConfig represents configuration for router_replay plugin.
 type RouterReplayPluginConfig struct {
-	Enabled             bool `json:"enabled" yaml:"enabled"`
-	MaxRecords          int  `json:"max_records,omitempty" yaml:"max_records,omitempty"`
-	CaptureRequestBody  bool `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
-	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
-	MaxBodyBytes        int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+	// nil permits personal data, matching the built-in capture default.
+	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
+	Enabled             bool  `json:"enabled" yaml:"enabled"`
+	MaxRecords          int   `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+	CaptureRequestBody  bool  `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	MaxBodyBytes        int   `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	// MaxToolTraceBytes caps each structured tool-trace field (Prompt,
 	// ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
@@ -328,6 +349,7 @@ func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 }
 
 // GetSemanticCacheConfig is retained for source compatibility.
+//
 // Deprecated: use GetResponseCacheConfig.
 func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
 	return d.GetResponseCacheConfig()

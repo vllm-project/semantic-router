@@ -9,6 +9,30 @@
       "minimum": 0,
       "description": "Number of Semantic Router pod replicas when autoscaling is disabled."
     },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "standalone",
+            "extproc"
+          ],
+          "description": "standalone: the Router serves config.listeners itself; extproc: the Router serves ext_proc gRPC for a gateway in front of it."
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "secretName": {
+              "type": "string",
+              "description": "Standalone only: a kubernetes.io/tls Secret mounted at /app/config/certs for listener TLS."
+            }
+          }
+        }
+      }
+    },
     "autoscaling": {
       "type": "object",
       "additionalProperties": true,
@@ -88,11 +112,11 @@
                   "type": "number",
                   "minimum": 0
                 },
-                "ttftP95Seconds": {
+                "firstResponseObservationP95Seconds": {
                   "type": "number",
                   "minimum": 0
                 },
-                "tpotP95Seconds": {
+                "responseDurationPerOutputTokenP95Seconds": {
                   "type": "number",
                   "minimum": 0
                 },
@@ -159,6 +183,24 @@
       "additionalProperties": true,
       "minProperties": 1,
       "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
+    },
+    "decisionModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {"type": "string", "minLength": 1, "pattern": "^\\S+$"}
+      },
+      "description": "Optional exact default judgment deployment reference; empty preserves the config's own. The deployment declares its artifact, device and revision."
+    },
+    "configMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applyValuesRevision": {
+          "type": "string",
+          "description": "Change this revision to apply chart config values once on upgrade; the same revision preserves later runtime edits."
+        }
+      }
     },
     "dashboard": {
       "type": "object",

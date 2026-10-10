@@ -496,8 +496,7 @@ func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
-				BertModelPath: "sentence-transformers/all-MiniLM-L6-v2",
-				UseCPU:        true,
+				UseCPU: true,
 				EmbeddingConfig: config.HNSWConfig{
 					ModelType:         "qwen3",
 					TargetDimension:   768,
@@ -508,7 +507,6 @@ func CreateTestConfig() *config.RouterConfig {
 				CategoryModel: config.CategoryModel{
 					ModelID:             categoryModelID,
 					UseCPU:              true,
-					UseModernBERT:       true,
 					CategoryMappingPath: categoryMappingPath,
 				},
 				MCPCategoryModel: config.MCPCategoryModel{
@@ -608,7 +606,7 @@ var _ = Describe("Security Checks", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with PII token classification", func() {
+	Context("with PII token classification", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -639,7 +637,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// If PII classifier is available, should detect entities
-				// If not available (candle-binding issues), should return empty slice gracefully
+				// Without a served PII model it returns an empty slice
 				if len(piiTypes) > 0 {
 					// Check that we get actual PII types (not empty)
 					for _, piiType := range piiTypes {
@@ -648,7 +646,7 @@ var _ = Describe("Security Checks", func() {
 					}
 				} else {
 					// PII classifier not available - this is acceptable in test environment
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 			})
 
@@ -701,7 +699,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				if len(testPII) == 0 {
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 
 				for _, tc := range testCases {
@@ -728,7 +726,7 @@ var _ = Describe("Security Checks", func() {
 				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), contentList)
 
 				// If PII classifier is available, should detect entities
-				// If not available (candle-binding issues), should return empty slice gracefully
+				// Without a served PII model it returns an empty slice
 				if len(detectedPII) > 0 {
 					// Should not contain duplicates
 					seenTypes := make(map[string]bool)
@@ -738,7 +736,7 @@ var _ = Describe("Security Checks", func() {
 					}
 				} else {
 					// PII classifier not available - this is acceptable in test environment
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 			})
 
@@ -861,7 +859,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("PII token classification edge cases", func() {
+	Context("PII token classification edge cases", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -1013,7 +1011,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("with jailbreak detection enabled", func() {
+	Context("with jailbreak detection enabled", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			modelPath := resolveExtprocTestPath("../../../../models/mmbert32k-jailbreak-detector-merged")
 			skipExtprocSpecIfModelArtifactsMissing("Jailbreak model", modelPath)
@@ -1057,7 +1055,7 @@ var _ = Describe("Security Checks", func() {
 			}
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
-			// Should process (jailbreak detection result depends on candle_binding)
+			// Should process (jailbreak detection result depends on a served jailbreak model)
 			Expect(err).To(Or(BeNil(), HaveOccurred()))
 			if err == nil {
 				// Should either continue or return jailbreak violation
@@ -1077,7 +1075,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
+			Expect(cfg.InlineModels.EmbeddingModels.UseCPU).To(BeTrue())
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
@@ -1113,7 +1111,6 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 
 			// Test essential fields are present
-			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-a"))
@@ -1405,7 +1402,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 				}
 			}
 
-			// Some errors might be expected due to candle_binding dependencies
+			// Some errors might be expected without served models
 			// The important thing is that the system doesn't crash
 			Expect(errorCount).To(BeNumerically("<=", numRequests))
 		})
@@ -1610,7 +1607,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should recover from classification errors gracefully", func() {
 			// Create a request that might cause classification issues
 			request := testOpenAIRequest{
-				Model: "auto", // This triggers classification
+				Model: "vllm-sr/auto", // This triggers classification
 				Messages: []testChatMessage{
 					{Role: "user", Content: json.RawMessage(`"Test content that might cause classification issues: \u0000\u0001\u0002"`)}, // Binary content
 				},
@@ -1642,7 +1639,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should handle timeout scenarios gracefully", func() {
 			// Simulate a request that might take a long time to process
 			request := testOpenAIRequest{
-				Model: "auto",
+				Model: "vllm-sr/auto",
 				Messages: []testChatMessage{
 					{Role: "user", Content: json.RawMessage(`"This is a complex request that might take time to classify and process"`)},
 				},
@@ -1730,7 +1727,7 @@ var _ = Describe("Caching Functionality", func() {
 		}
 
 		response, err := router.HandleRequestBody(bodyRequest, ctx)
-		// Even if caching fails due to candle_binding, request should continue
+		// Even if caching fails without a served embedding model, request should continue
 		Expect(err).To(Or(BeNil(), HaveOccurred()))
 		if err == nil {
 			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
@@ -1980,6 +1977,7 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.NotContains(t, headerMap, "x-vsr-selected-category", "category demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "reasoning demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-injected-system-prompt", "injected demoted to debug")
+	assert.NotContains(t, headerMap, "x-vsr-prompt-cache-action", "prompt cache receipt demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-matched-keywords", "matched signals demoted to debug")
 	assert.NotContains(t, headerMap, "x-vsr-client-protocol")
 }
@@ -1996,6 +1994,9 @@ func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
 		VSRReasoningMode:        "on",
 		VSRSelectedModel:        "deepseek-v31",
 		VSRInjectedSystemPrompt: true,
+		PromptCacheAction:       promptCacheActionPreserved,
+		PromptCacheReason:       promptCacheReasonCallerMarkers,
+		PromptCachePreserved:    1,
 		VSRMatchedKeywords:      []string{"prove", "theorem"},
 	}
 
@@ -2028,6 +2029,9 @@ func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
 	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
 	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
+	assert.Equal(t, "preserved", headerMap["x-vsr-prompt-cache-action"])
+	assert.Equal(t, "caller_markers", headerMap["x-vsr-prompt-cache-reason"])
+	assert.Equal(t, "1", headerMap["x-vsr-prompt-cache-preserved"])
 	assert.Equal(t, "prove,theorem", headerMap["x-vsr-matched-keywords"])
 }
 
@@ -2550,7 +2554,7 @@ var _ = Describe("Metrics recording", func() {
 			ProcessingStartTime: time.Now().Add(-75 * time.Millisecond),
 		}
 
-		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		before := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 
 		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{
@@ -2562,7 +2566,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response.GetResponseHeaders()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		after := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 		Expect(after).To(BeNumerically(">", before))
 		Expect(ctx.TTFTRecorded).To(BeTrue())
 		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))
@@ -2575,7 +2579,7 @@ var _ = Describe("Metrics recording", func() {
 			StartTime:    time.Now().Add(-1 * time.Second),
 		}
 
-		beforeTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		beforeTPOT := getHistogramSampleCount("llm_model_response_duration_per_output_token_seconds", ctx.RequestModel)
 
 		beforePrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
 		beforeCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
@@ -2593,7 +2597,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(response.GetImmediateResponse()).To(BeNil(), "unexpected response: %#v", response)
 		Expect(response.GetResponseBody()).NotTo(BeNil(), "unexpected response: %#v", response)
 
-		afterTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		afterTPOT := getHistogramSampleCount("llm_model_response_duration_per_output_token_seconds", ctx.RequestModel)
 		Expect(afterTPOT).To(BeNumerically(">", beforeTPOT))
 
 		// New per-request token histograms should also be recorded
@@ -2620,7 +2624,7 @@ var _ = Describe("Metrics recording", func() {
 			},
 		}
 
-		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		before := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 
 		// Handle response headers (should NOT record TTFT for streaming)
 		response1, err := router.handleResponseHeaders(respHeaders, ctx)
@@ -2638,7 +2642,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response2.GetResponseBody()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		after := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 		Expect(after).To(BeNumerically(">", before))
 		Expect(ctx.TTFTRecorded).To(BeTrue())
 		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))

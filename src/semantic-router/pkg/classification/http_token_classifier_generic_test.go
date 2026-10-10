@@ -86,7 +86,7 @@ func TestHTTPTokenClassifierRejectsInvalidTaskLabels(t *testing.T) {
 
 func TestHTTPTokenClassifierRejectsNonFiniteSpanConfidence(t *testing.T) {
 	for _, score := range []float32{float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1))} {
-		if _, err := spanScore(0, "UNSUPPORTED", tokenSpanWire{Score: &score}); err == nil {
+		if _, err := spanScore(0, "UNSUPPORTED", tokenSpanWire{Score: &score}, true); err == nil {
 			t.Errorf("non-finite confidence accepted: %v", score)
 		}
 	}

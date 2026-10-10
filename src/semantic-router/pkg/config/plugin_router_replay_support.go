@@ -43,7 +43,7 @@ func (c *RouterConfig) EffectiveRouterReplayConfig(decision *Decision) *RouterRe
 	if c == nil {
 		return &base
 	}
-	base.Enabled = c.RouterReplay.Enabled
+	base = c.RouterReplay.captureDefaults()
 
 	if decision == nil {
 		if base.Enabled {
@@ -74,4 +74,64 @@ func (c *RouterConfig) EffectiveRouterReplayConfig(decision *Decision) *RouterRe
 		return nil
 	}
 	return &base
+}
+
+// CapturesPersonalData reports the resolved content policy. An omitted setting
+// preserves the established capture behavior.
+func (p *RouterReplayPluginConfig) CapturesPersonalData() bool {
+	return p == nil || p.CapturePersonalData == nil || *p.CapturePersonalData
+}
+
+func (c RouterReplayConfig) captureDefaults() RouterReplayPluginConfig {
+	base := DefaultRouterReplayPluginConfig()
+	base.Enabled = c.Enabled
+	if c.CaptureRequestBody != nil {
+		base.CaptureRequestBody = *c.CaptureRequestBody
+	}
+	if c.CaptureResponseBody != nil {
+		base.CaptureResponseBody = *c.CaptureResponseBody
+	}
+	if c.CapturePersonalData != nil {
+		value := *c.CapturePersonalData
+		base.CapturePersonalData = &value
+	}
+	if c.MaxRecords != nil {
+		base.MaxRecords = *c.MaxRecords
+	}
+	if c.MaxBodyBytes != nil {
+		base.MaxBodyBytes = *c.MaxBodyBytes
+	}
+	if c.MaxToolTraceBytes != nil {
+		base.MaxToolTraceBytes = *c.MaxToolTraceBytes
+	}
+	if c.MaxToolTraceSteps != nil {
+		base.MaxToolTraceSteps = *c.MaxToolTraceSteps
+	}
+	return base
+}
+
+// ReplayNeedsPIIEvidence marks existing PII rules as consumers whenever an
+// enabled global default or possible selected decision can suppress personal
+// content. No rules means no model dependency: capture will omit unverified
+// content conservatively at runtime.
+func (c *RouterConfig) ReplayNeedsPIIEvidence() bool {
+	if c == nil || len(c.PIIRules) == 0 {
+		return false
+	}
+	return c.replayNeedsPIIEvidenceForDecisions(c.Decisions)
+}
+
+func (c *RouterConfig) replayNeedsPIIEvidenceForDecisions(decisions []Decision) bool {
+	if c == nil || len(c.PIIRules) == 0 {
+		return false
+	}
+	if policy := c.EffectiveRouterReplayConfig(nil); policy != nil && !policy.CapturesPersonalData() {
+		return true
+	}
+	for i := range decisions {
+		if policy := c.EffectiveRouterReplayConfig(&decisions[i]); policy != nil && !policy.CapturesPersonalData() {
+			return true
+		}
+	}
+	return false
 }

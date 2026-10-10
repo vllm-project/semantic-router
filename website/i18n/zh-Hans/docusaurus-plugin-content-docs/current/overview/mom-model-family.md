@@ -3,16 +3,14 @@ sidebar_position: 5
 title: 多模型混合
 description: 虚拟模型如何把共享的独立模型池变成稳定、面向目标的 AI 服务。
 translation:
-  source_commit: "cf0b349428c381888a627a1f79e80012fc28efb7"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/mom-model-family.md"
   outdated: false
 ---
 
 # 多模型混合
 
-**Mixture of Models（MoM）** 是一种服务架构：若干独立部署的模型作为一个系统工作。路由策略决定由哪个模型、级联、评审组或工作流处理每次请求。
-
-客户端不必知道哪个物理后端胜出。它请求的是代表期望行为的稳定虚拟模型。
+**Mixture of Models（MoM）** 将独立部署的模型呈现为一个虚拟模型。配方为每次请求选择模型、级联、评审组或有界工作流。Harness 使用稳定的模型名，保留自己的任务循环与工具。
 
 ```mermaid
 flowchart LR
@@ -33,11 +31,11 @@ MoM 可以组合稠密模型、MoE 模型、托管 API 和本地模型。它们�
 
 | 种类 | 示例 | 角色 |
 | --- | --- | --- |
-| **提供方模型** | vLLM、Ollama 或托管模型端点 | 生成应用响应。 |
+| **提供方模型** | vLLM、Ollama 或托管模型端点 | 生成推理响应。 |
 | **虚拟模型** | `vllm-sr/mom-v1-flash` | 为客户端给出稳定目标，并选择配方。 |
 | **Router 系统模型** | 嵌入或分类器资产 | 帮助检测意图、风险、相似度或其他路由信号。 |
 
-Router 系统模型支撑决策过程；它们本身不是面向客户端的 Mixture of Models 产品。
+Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 System One 直接发布。在多个判断模型间路由 System One 使用显式声明的[原生配方](component-architecture#route-system-one-across-decision-models)，与 Chat Mixture of Models 分开。
 
 ## 执行模式
 
@@ -82,33 +80,39 @@ recipes:
             type: static
 ```
 
-在生产配方中，信号和决策会在选择之前守护模态、上下文、工具、本地性及其他要求。公开模型名不会到达后端；它解析为被选中的提供方模型。
+信号与决策识别任务，候选条件再检查已分配模型的能力和上下文容量。部署位置与数据处理边界由运维人员负责。请求发往后端前，公开模型名会解析为选中的提供方模型。
 
 完整 schema 和隔离规则见[虚拟模型](../tutorials/global/entrypoints-and-recipes)。
 
 ## MoM V1
 
-MoM V1 是内置的 MoM 示例。它在共享的 7 个逻辑提供方别名池上暴露 5 个公开模型：
+MoM V1 提供五个内置配方。连接自己的后端，再选择适合 harness 模型调用的策略：
 
-| 虚拟模型 | 目标 |
-| --- | --- |
-| `vllm-sr/mom-v1-blend` | 在质量、延迟、成本和答案恢复之间取平衡。 |
-| `vllm-sr/mom-v1-lite` | 优先给出经济的直达回答。 |
-| `vllm-sr/mom-v1-flash` | 优先交互延迟，同时保留能力。 |
-| `vllm-sr/mom-v1-ultra` | 优先准确度，并允许有界编排。 |
-| `vllm-sr/mom-v1-vault` | 把流量留在已配置的本地池，并采用更严的隔离。 |
+| 公开模型 | 配方 | 决策 |
+| --- | --- | --- |
+| `vllm-sr/mom-v1-blend` | **Balance**：兼顾日常质量、延迟和成本 | `simple`、`medium`、`reasoning` |
+| `vllm-sr/mom-v1-lite` | **Cost**：经济处理，按需升级 | `economy`、`tools`、`reasoning` |
+| `vllm-sr/mom-v1-flash` | **Speed**：快速对话和流式输出 | `fast`、`tools`、`reasoning` |
+| `vllm-sr/mom-v1-ultra` | **Accuracy**：高质量回答和显式编排 | `simple`、`reasoning`、`review`、`agent` |
+| `vllm-sr/mom-v1-vault` | **Vault**：在指定的私有部署中处理请求 | `private`、`sensitive`、`guard` |
 
-MoM 是路由策略，不是检查点或模型安装器。其参考后端必须已经运行，并在已配置的别名下可用。工具执行仍由客户端负责；“本地”隐私仍取决于部署的网络、后端、日志、缓存和存储。
+Balance 综合任务难度、重要建议和回答纠错信号。Speed 与 Cost 使用更轻量的路由信号。Accuracy 通常选择一个强模型；独立评审和工作流需要明确的执行意图。长输入或领域标签本身不会触发多模型执行。
 
-在控制面板中打开 **Models**，连接并验证物理推理端点。然后选择维护中的 **配方**，为每个决策分配一个或多个已连接模型，并发布 **Mixture-of-Model** 入口。控制面板把后端凭据留在配方之外，并在上线前展示结果拓扑。
+Vault 的每条路径都禁用客户端工具、记忆、响应缓存和新的 Responses 对象写入。回放采集单独配置且默认开启，详见 [Router Replay](../tutorials/plugin/router-replay)。`guard` 会直接拦截检测到的提示攻击。Safety 和 Hazard 将内容风险交给 `sensitive`，让已批准的模型提供负责任的帮助、解释风险材料，或拒绝有害协助。Hazard 使用模型发布的类别阈值。其他决策也需要分配满足隐私要求的后端；配方无法保证后端的物理位置或提供方的数据保留行为。
 
-用一条命令启动或恢复协议栈：
+Vault 的 Guard 和 PII 运行在默认的 Vela 2.0 0.3B 上，它最多读取 8,192 个 token，超出部分截断。Hazard 任务有 32,768 token 的分流输入预算，包含该任务评估的对话文本。此检查先于后端上下文检查；超出预算时会拒绝请求：Preview 返回 HTTP 503、信号错误，且不选择模型。更大的后端上下文窗口不会增加分流预算。Hazard 默认在 CPU 上运行，即使请求未超预算，也应测量长输入分流延迟；加速部署需要单独验证。
+
+启动或恢复服务：
 
 ```bash
 vllm-sr serve
 ```
 
-完整的[MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)说明了预期用途、后端角色、数据处理、评估和限制。
+在 Dashboard 的 **Models** 中连接并验证推理端点。选择 **Recipe**，为调用后端的决策分配模型，再发布 **Mixture-of-Model** 入口。单模型决策至少需要一个合格模型；Accuracy 的 `review` 和 `agent` 需要两个不同的工作模型。Vault 的 `guard` 无需后端分配。
+
+声明模型能力、输入输出限制，并为实际配置的推理强度提供对应质量指标。**Preview** 展示信号、决策和候选选择结果；上线前再发送真实请求，验证执行结果与延迟。
+
+策略版本 3.0 保留上表的决策名称，并将内容风险交给敏感请求模型池。升级前先验证新分配，再发布；已发布的旧版本保持不变。完整要求和数据处理策略见 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)。
 
 ## 何时 MoM 不是合适的抽象
 

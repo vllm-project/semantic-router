@@ -25,7 +25,7 @@ HELM_OCI_CHART    ?= $(HELM_OCI_REGISTRY)/semantic-router
 # CHART_VERSION: pin to an exact chart version for remote install/upgrade.
 #
 # Release channels:
-#   CHART_VERSION=0.3.0              specific release — recommended for production
+#   CHART_VERSION=0.4.0              specific release — recommended for production
 #   CHART_VERSION=0.0.0-latest       latest main-branch build
 #   CHART_VERSION=0.0.0-nightly.YYYYMMDD  specific nightly
 #
@@ -54,8 +54,8 @@ _assert-chart-version:
 	@if [ -z "$(CHART_VERSION)" ]; then \
 		echo "$(RED)[ERROR]$(NC) CHART_VERSION is required for this target."; \
 		echo "$(BLUE)[INFO]$(NC) Set it to a specific release, e.g.:"; \
-		echo "  make helm-install-version  CHART_VERSION=0.3.0"; \
-		echo "  make helm-upgrade-version  CHART_VERSION=0.3.0"; \
+		echo "  make helm-install-version  CHART_VERSION=0.4.0"; \
+		echo "  make helm-upgrade-version  CHART_VERSION=0.4.0"; \
 		echo "  make helm-install-version  CHART_VERSION=0.0.0-nightly.20260115"; \
 		exit 1; \
 	fi
@@ -130,7 +130,16 @@ helm-ci-setup:
 		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
 		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
 		helm repo update; \
-		helm dependency build $(HELM_CHART_PATH); \
+		for attempt in 1 2 3; do \
+			if helm dependency build $(HELM_CHART_PATH); then \
+				break; \
+			fi; \
+			if [ "$$attempt" -eq 3 ]; then \
+				exit 1; \
+			fi; \
+			echo "$(YELLOW)[WARN]$(NC) Helm dependency download failed; retrying ($$((attempt + 1))/3)"; \
+			sleep 5; \
+		done; \
 	else \
 		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
 		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \
@@ -178,6 +187,8 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@"$(AGENT_PYTHON)" deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@echo "Model deployment and recipe binding rendering verified"
+	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
+	@echo "Standalone and extproc gateway modes verified"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards
@@ -468,8 +479,8 @@ _check-k8s:
 		echo "  - For remote clusters: check your kubeconfig and cluster connection"; \
 		echo ""; \
 		echo "$(YELLOW)[TIP]$(NC) You can use the following commands to start a local cluster:"; \
-		echo "  - minikube: make kube-up"; \
-		echo "  - kind: make kind-cluster-create"; \
+		echo "  - minikube: minikube start"; \
+		echo "  - kind: make create-cluster"; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)[✓]$(NC) Kubernetes cluster is accessible"

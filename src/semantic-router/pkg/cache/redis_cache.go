@@ -35,7 +35,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
@@ -80,9 +80,15 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	// would build a COSINE index while similarity scores were read back with
 	// the L2 formula.
 	redisConfig.Index.VectorField.MetricType = strings.ToUpper(redisConfig.Index.VectorField.MetricType)
+	copiedConfig := *redisConfig
+	redisConfig = &copiedConfig
+	redisConfig.Index.VectorField.Dimension, err = resolveCacheDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider)
+	if err != nil {
+		return nil, err
+	}
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=%d",
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name,
-		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingModel))
+		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider))
 
 	// Establish connection to Redis server
 	resolvedHost := normalizeLocalHostForContainerRuntimes(redisConfig.Connection.Host)
@@ -106,7 +112,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider), 0)),
 	}
 
 	releaseClient := func() { _ = redisClient.Close() }
@@ -239,11 +245,13 @@ func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, 
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
+func (c *RedisCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *RedisCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingProvider)
 }
 
 // createIndex builds the Redis index with the appropriate schema

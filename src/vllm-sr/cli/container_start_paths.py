@@ -18,14 +18,20 @@ from cli.commands.runtime_paths import (
     _container_readonly_source_config_path,
     _container_runtime_config_path,
     _runtime_config_output_path,
+    cli_user_share_gid,
     materialize_runtime_config,
 )
 from cli.container_log_spool import prepare_runtime_log_spool
+from cli.instance_paths import prepare_instance_control_directory
 from cli.recipe_directory import resolve_active_recipe_directory
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+# The group the Dashboard's entrypoint gives the Recipe store, so that the
+# CLI's user can read the packages and recover activations the Dashboard wrote.
+RECIPE_STORE_GID_ENV = "VLLM_SR_RECIPE_STORE_GID"
 
 
 def _prepare_runtime_directories(
@@ -34,10 +40,9 @@ def _prepare_runtime_directories(
     stack_layout: RuntimeStackLayout,
     *,
     managed_recipe: bool,
-) -> tuple[str, str, str, str]:
+) -> tuple[str, str, str]:
     """Create mutable runtime roots and return their resolved host paths."""
 
-    evaluation_staging_root = os.path.join(config_dir, ".vllm-sr-evaluation-staging")
     models_dir = (
         os.path.join(vllm_sr_dir, "models")
         if managed_recipe
@@ -50,7 +55,7 @@ def _prepare_runtime_directories(
     for directory in (models_dir, dashboard_data_dir, recipe_store_dir):
         os.makedirs(directory, exist_ok=True)
     log.info("Mounting dashboard data directory: %s", dashboard_data_dir)
-    return evaluation_staging_root, models_dir, dashboard_data_dir, recipe_store_dir
+    return models_dir, dashboard_data_dir, recipe_store_dir
 
 
 def _prepare_runtime_paths(
@@ -71,9 +76,6 @@ def _prepare_runtime_paths(
     vllm_sr_dir = os.path.join(config_dir, ".vllm-sr")
     os.makedirs(vllm_sr_dir, exist_ok=True)
     log.info(f"Mounting .vllm-sr directory: {vllm_sr_dir}")
-    # Keep immutable Evaluation deployment snapshots outside .vllm-sr. The
-    # latter is mounted read-write into Dashboard, which would otherwise give
-    # the container an alias around the snapshot's dedicated read-only mount.
     active_config_path = _runtime_config_output_path(
         Path(source_config_path),
         state_root_dir=config_dir,
@@ -93,7 +95,6 @@ def _prepare_runtime_paths(
     # mutable model/runtime state under its explicitly ignored .vllm-sr area
     # so serving it never changes the package contract.
     (
-        evaluation_deployment_staging_root,
         models_dir,
         dashboard_data_dir,
         recipe_store_dir,
@@ -105,6 +106,9 @@ def _prepare_runtime_paths(
     )
 
     log_spool = prepare_runtime_log_spool(vllm_sr_dir, stack_layout.stack_name)
+    instance_directory = prepare_instance_control_directory(
+        config_dir, stack_layout.stack_name
+    )
 
     effective_config_path = runtime_config_path
     envoy_config_path = os.path.join(vllm_sr_dir, "envoy.yaml")
@@ -129,7 +133,6 @@ def _prepare_runtime_paths(
             "source_config_path": source_config_path,
             "effective_config_path": effective_config_path,
             "vllm_sr_dir": vllm_sr_dir,
-            "evaluation_deployment_staging_root": (evaluation_deployment_staging_root),
             "models_dir": models_dir,
             "dashboard_data_dir": dashboard_data_dir,
             "recipe_store_dir": recipe_store_dir,
@@ -143,6 +146,8 @@ def _prepare_runtime_paths(
             "container_recipe_store_dir": (
                 f"/app/.vllm-sr/recipe-store/{stack_layout.stack_name}"
             ),
+            "recipe_store_gid": str(cli_user_share_gid()),
+            "instance_socket_dir": str(instance_directory / "socket"),
             "envoy_config_path": envoy_config_path,
             "runtime_container_config": runtime_container_config,
             "active_recipe_root": str(active_recipe.root) if active_recipe else "",

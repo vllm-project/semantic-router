@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -13,10 +14,16 @@ import (
 
 // Baseline represents performance baseline data
 type Baseline struct {
-	Version    string                     `json:"version"`
-	GitCommit  string                     `json:"git_commit"`
-	Timestamp  time.Time                  `json:"timestamp"`
-	Benchmarks map[string]BenchmarkMetric `json:"benchmarks"`
+	Version   string    `json:"version"`
+	GitCommit string    `json:"git_commit"`
+	Timestamp time.Time `json:"timestamp"`
+	// ModelBaselineReset says why the base revision has no measured model
+	// numbers: it predates the harness, so model benchmarks are not gated.
+	ModelBaselineReset string `json:"model_baseline_reset,omitempty"`
+	// LegacyComparisonRecords are the records that measured the retired native
+	// bindings against the model runtime; a reset must cite at least one.
+	LegacyComparisonRecords []string                   `json:"legacy_comparison_records,omitempty"`
+	Benchmarks              map[string]BenchmarkMetric `json:"benchmarks"`
 }
 
 // BenchmarkMetric holds metrics for a single benchmark.
@@ -26,13 +33,15 @@ type Baseline struct {
 // update-baseline.sh writes that value verbatim into the baseline JSON. An
 // int64 field made json.Unmarshal reject every such baseline (#2455 rc#4).
 type BenchmarkMetric struct {
-	NsPerOp       float64 `json:"ns_per_op"`
-	P50LatencyMs  float64 `json:"p50_latency_ms,omitempty"`
-	P95LatencyMs  float64 `json:"p95_latency_ms,omitempty"`
-	P99LatencyMs  float64 `json:"p99_latency_ms,omitempty"`
-	ThroughputQPS float64 `json:"throughput_qps,omitempty"`
-	AllocsPerOp   int64   `json:"allocs_per_op,omitempty"`
-	BytesPerOp    int64   `json:"bytes_per_op,omitempty"`
+	SourceCommit  string         `json:"source_commit,omitempty"`
+	ModelIdentity *ModelIdentity `json:"model_identity,omitempty"`
+	NsPerOp       float64        `json:"ns_per_op"`
+	P50LatencyMs  float64        `json:"p50_latency_ms,omitempty"`
+	P95LatencyMs  float64        `json:"p95_latency_ms,omitempty"`
+	P99LatencyMs  float64        `json:"p99_latency_ms,omitempty"`
+	ThroughputQPS float64        `json:"throughput_qps,omitempty"`
+	AllocsPerOp   int64          `json:"allocs_per_op,omitempty"`
+	BytesPerOp    int64          `json:"bytes_per_op,omitempty"`
 }
 
 // ComparisonResult represents the result of comparing current vs baseline.
@@ -75,11 +84,10 @@ func LoadBaseline(path string) (*Baseline, error) {
 
 // LoadBaselineDir loads and merges every *.json baseline file in dir into one
 // Baseline. update-baseline.sh writes a separate file per suite
-// (classification.json, decision.json, cache.json, extproc.json, looper.json)
+// (classification.json, decision.json, cache.json, looper.json)
 // and never the single baseline.json the comparison path used to read, so the
-// consumer must union them (#2455 rc#1). Later files win on name collisions;
-// suites are disjoint by construction, so this only matters if a benchmark is
-// re-categorized.
+// consumer must union them (#2455 rc#1). Duplicate entries are rejected so that
+// one suite cannot silently replace another suite's measured baseline.
 func LoadBaselineDir(dir string) (*Baseline, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -97,6 +105,9 @@ func LoadBaselineDir(dir string) (*Baseline, error) {
 			return nil, fmt.Errorf("failed to load baseline %s: %w", entry.Name(), err)
 		}
 		for name, metric := range b.Benchmarks {
+			if _, exists := merged.Benchmarks[name]; exists {
+				return nil, fmt.Errorf("duplicate baseline benchmark %s in %s", name, entry.Name())
+			}
 			merged.Benchmarks[name] = metric
 		}
 		// Carry the newest file's provenance so the report shows a real commit.
@@ -138,9 +149,20 @@ func CompareWithBaseline(current, baseline *Baseline, thresholds *ThresholdsConf
 
 	for benchName, currentMetric := range current.Benchmarks {
 		baselineMetric, exists := baseline.Benchmarks[benchName]
+		if !exists && currentMetric.ModelIdentity != nil {
+			if baseline.ModelBaselineReset != "" {
+				// A reset baseline measures model benchmarks without gating them.
+				continue
+			}
+			return nil, fmt.Errorf("%s requires a measured same-checkpoint model baseline", benchName)
+		}
 		if !exists {
 			// New benchmark, no baseline to compare
 			continue
+		}
+
+		if !reflect.DeepEqual(currentMetric.ModelIdentity, baselineMetric.ModelIdentity) {
+			return nil, fmt.Errorf("model identity mismatch for %s", benchName)
 		}
 
 		result := ComparisonResult{

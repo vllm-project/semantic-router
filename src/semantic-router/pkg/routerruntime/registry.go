@@ -1,34 +1,49 @@
 package routerruntime
 
 import (
+	"crypto/rand"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
 // Registry is the narrow runtime-owned dependency seam shared by startup,
 // reload, extproc, and the API server.
 type Registry struct {
-	modelPool             *binding.Pool
-	mu                    sync.RWMutex
-	config                *config.RouterConfig
-	classificationService *services.ClassificationService
-	acquireGeneration     AcquireClassification
-	memoryStore           memory.Store
-	vectorStore           *VectorStoreRuntime
-	modelSelector         *selection.Registry
-	learningRuntime       LearningRuntime
-	replayRuntime         ReplayRuntime
-	responseCache         *cache.ResponseCacheService
-	contextCompression    *contextcompression.Service
-	compressionRecovery   contextcompression.RecoveryStore
+	modelPool              *binding.Pool
+	configPublicationMu    sync.Mutex
+	mu                     sync.RWMutex
+	config                 *config.RouterConfig
+	classificationService  *services.ClassificationService
+	acquireGeneration      AcquireClassification
+	memoryStore            memory.Store
+	vectorStore            *VectorStoreRuntime
+	modelSelector          *selection.Registry
+	learningRuntime        LearningRuntime
+	replayRuntime          ReplayRuntime
+	responseCache          *cache.ResponseCacheService
+	contextCompression     *contextcompression.Service
+	compressionRecovery    contextcompression.RecoveryStore
+	plugins                pluginruntime.Capabilities
+	nativeRouter           systemone.Router
+	configActivation       ConfigActivation
+	configRejection        *ConfigActivation
+	configSnapshot         *configsnapshot.Snapshot
+	configLifecycle        *configsnapshot.Manager
+	configAttemptListeners []func(configsnapshot.Attempt)
+	instanceID             string
+	startupStatus          *localStartupSnapshot
+	configListeners        []func(*config.RouterConfig)
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -41,7 +56,9 @@ type Registry struct {
 type AcquireClassification func() (release func(), ok bool)
 
 type RouterRuntimeSnapshot struct {
-	Config                *config.RouterConfig
+	Config *config.RouterConfig
+	// ConfigSnapshot is the configuration snapshot Config was compiled into.
+	ConfigSnapshot        *configsnapshot.Snapshot
 	ClassificationService *services.ClassificationService
 	AcquireClassification AcquireClassification
 	MemoryStore           memory.Store
@@ -51,6 +68,8 @@ type RouterRuntimeSnapshot struct {
 	ResponseCache         *cache.ResponseCacheService
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
+	Plugins               pluginruntime.Capabilities
+	NativeRouter          systemone.Router
 }
 
 func (r *Registry) ContextCompression() (
@@ -138,7 +157,7 @@ type LearningRuntime interface {
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
-	return &Registry{config: cfg, modelPool: binding.NewPool()}
+	return &Registry{config: cfg, modelPool: binding.NewPool(), instanceID: rand.Text()}
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {
@@ -157,6 +176,30 @@ func (r *Registry) UpdateConfig(cfg *config.RouterConfig) {
 	r.mu.Lock()
 	r.config = cfg
 	r.mu.Unlock()
+	r.notifyConfig(cfg)
+}
+
+// OnConfigPublished registers a listener that runs after every config
+// publication (startup, reload, refresh) with the published config.
+func (r *Registry) OnConfigPublished(listener func(*config.RouterConfig)) {
+	if r == nil || listener == nil {
+		return
+	}
+	r.mu.Lock()
+	r.configListeners = append(r.configListeners, listener)
+	r.mu.Unlock()
+}
+
+func (r *Registry) notifyConfig(cfg *config.RouterConfig) {
+	if cfg == nil {
+		return
+	}
+	r.mu.RLock()
+	listeners := append([]func(*config.RouterConfig){}, r.configListeners...)
+	r.mu.RUnlock()
+	for _, listener := range listeners {
+		listener(cfg)
+	}
 }
 
 func (r *Registry) ClassificationService() *services.ClassificationService {
@@ -394,6 +437,7 @@ func (r *Registry) PublishRouterRuntime(
 	r.memoryStore = memoryStore
 	r.acquireGeneration = nil
 	r.mu.Unlock()
+	r.notifyConfig(cfg)
 }
 
 func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) {
@@ -404,6 +448,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	if snapshot.Config != nil {
 		r.config = snapshot.Config
 	}
+	r.configSnapshot = snapshot.ConfigSnapshot
 	r.classificationService = snapshot.ClassificationService
 	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
@@ -413,7 +458,10 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.responseCache = snapshot.ResponseCache
 	r.contextCompression = snapshot.ContextCompression
 	r.compressionRecovery = snapshot.CompressionRecovery
+	r.plugins = snapshot.Plugins
+	r.nativeRouter = snapshot.NativeRouter
 	r.mu.Unlock()
+	r.notifyConfig(snapshot.Config)
 }
 
 func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {

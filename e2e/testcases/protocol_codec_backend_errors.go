@@ -36,7 +36,7 @@ func testProtocolCodecAnthropicBackendToolLifecycle(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecToolLifecycle(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecToolLifecycle(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func testProtocolCodecChatBackendErrorMatrix(
@@ -60,7 +60,7 @@ func testProtocolCodecAnthropicBackendErrorMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecErrorMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecErrorMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func runProtocolCodecErrorMatrix(
@@ -181,6 +181,7 @@ func sendProtocolMatrixRequestWithHeaders(
 type protocolMatrixHTTPResult struct {
 	StatusCode int
 	Body       []byte
+	Headers    http.Header
 }
 
 func sendProtocolMatrixRaw(
@@ -218,7 +219,7 @@ func sendProtocolMatrixRaw(
 	if readErr != nil {
 		return protocolMatrixHTTPResult{}, readErr
 	}
-	return protocolMatrixHTTPResult{StatusCode: resp.StatusCode, Body: responseBody}, nil
+	return protocolMatrixHTTPResult{StatusCode: resp.StatusCode, Body: responseBody, Headers: resp.Header.Clone()}, nil
 }
 
 func assertChatCompletionBody(body []byte, expectedText string) error {

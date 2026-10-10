@@ -22,6 +22,7 @@ func PolicyFromConfig(
 		Memory:      TargetPolicy{Mode: TargetPreserve},
 	}
 	if cfg.Targets != nil {
+		targets.CurrentUser = TargetPolicy{Mode: TargetMode(cfg.Targets.CurrentUser.Mode)}
 		targets.History = targetPolicyFromConfig(cfg.Targets.History)
 		targets.RAG = targetPolicyFromConfig(cfg.Targets.RAG)
 		targets.Memory = targetPolicyFromConfig(cfg.Targets.Memory)

@@ -4,37 +4,93 @@ Both halves of that job live here. The local Docker half takes the runtime
 config lock, finishes any Recipe activation the last run left pending, and
 materializes this stack's active config under its private state root; the
 Kubernetes half deliberately keeps its translation in memory so a target-neutral
-transform never lands in the local active config path. Neither is Click plumbing
-and neither is deployment, so they stay out of `commands.runtime`, which owns
-the command surface and the user-facing serve flow.
+transform never lands in the local active config path. Before replacing an
+existing Docker config, preparation stops its old consumers so the restart
+cannot also trigger a reload in the departing process.
 """
 
 from __future__ import annotations
 
-import os
+import tempfile
 from pathlib import Path
 
+import yaml
+
 from cli.bootstrap import is_setup_mode_config
+from cli.commands.runtime_mode_config import apply_instance_options
+from cli.commands.runtime_observability import (
+    reconcile_runtime_tracing,
+    recover_runtime_tracing_projection,
+    validate_package_tracing_mode,
+)
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
+    _same_document,
     materialize_runtime_config,
+    recover_pending_runtime_config_projection,
+    resolve_state_root_dir,
+    write_journaled_runtime_config_projection,
 )
 from cli.commands.runtime_support import (
     build_effective_config_bytes,
     build_effective_config_document,
     validate_config_recipe_env_bindings,
+    validate_setup_mode_flags,
 )
 from cli.container_services import container_status_strict
+from cli.decision_model import (
+    decision_model_deployment,
+    gpu_requirement_error,
+)
+from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
     active_recipe_package_config_path,
     active_recipe_package_for_stack,
     recover_pending_recipe_activation_for_stack,
 )
 from cli.runtime_config_lock import acquire_runtime_config_lock
-from cli.runtime_stack import resolve_runtime_stack
+from cli.runtime_lifecycle import stop_runtime_before_config_replacement
+from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
+from cli.validator import validate_user_config
 
 log = get_logger(__name__)
+
+
+def _prepare_runtime_config_replacement(
+    effective_data: bytes,
+    stack_layout: RuntimeStackLayout,
+    *,
+    minimal: bool,
+    readonly: bool,
+) -> None:
+    # Validate the candidate without publishing it to the running file watcher.
+    # A restart owns the next generation; the departing process must not build it.
+    with tempfile.TemporaryDirectory(prefix="vllm-sr-config-") as directory:
+        candidate = Path(directory) / "config.yaml"
+        candidate.write_bytes(effective_data)
+        prepared = parse_user_config(str(candidate), log_summary=False)
+        errors = validate_user_config(prepared, log_summary=False)
+        if errors:
+            raise ValueError("Invalid runtime config: " + "; ".join(map(str, errors)))
+        validate_setup_mode_flags(is_setup_mode_config(candidate), minimal, readonly)
+    stop_runtime_before_config_replacement(stack_layout)
+
+
+def _check_served_decision_model(
+    document: dict | None, platform: str | None, *, local_host: bool
+) -> None:
+    """Fail before startup when the config's decision model needs a GPU it lacks."""
+
+    try:
+        deployment = decision_model_deployment(document)
+    except ValueError as error:
+        raise ValueError(f"global.model_catalog.system.{error}") from error
+    error = gpu_requirement_error(
+        deployment, (platform or "").strip().lower(), local_host=local_host
+    )
+    if error:
+        raise ValueError(error)
 
 
 def _prepare_docker_runtime_config(
@@ -44,13 +100,15 @@ def _prepare_docker_runtime_config(
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
     replace_active_config: bool,
+    *,
+    minimal: bool = False,
+    readonly: bool = False,
+    engine: bool = False,
+    available_devices: tuple[int, ...] = (),
+    model_options: dict | None = None,
 ):
     stack_layout = resolve_runtime_stack()
-    state_root_dir = (
-        Path(os.environ["VLLM_SR_STATE_ROOT_DIR"]).expanduser().absolute()
-        if os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
-        else config_path.expanduser().absolute().parent
-    )
+    state_root_dir = Path(resolve_state_root_dir(str(config_path)))
     effective_config_path = _runtime_config_output_path(
         config_path,
         state_root_dir=state_root_dir,
@@ -63,6 +121,7 @@ def _prepare_docker_runtime_config(
         timeout_seconds=0,
     )
     try:
+        recover_pending_runtime_config_projection(effective_config_path)
         recover_pending_recipe_activation_for_stack(
             runtime_config_path=effective_config_path,
             state_root_dir=state_root_dir,
@@ -73,6 +132,7 @@ def _prepare_docker_runtime_config(
         package_active = active_recipe_package_for_stack(
             state_root_dir=state_root_dir, stack_name=stack_layout.stack_name
         )
+        source_candidate_selected = False
         if package_active:
             if replace_active_config:
                 raise ValueError(
@@ -96,7 +156,11 @@ def _prepare_docker_runtime_config(
                 or effective_config_path,
                 recipe_env_bindings,
             )
+            validate_package_tracing_mode(
+                effective_config_path, stack_layout, minimal=minimal
+            )
         else:
+            recover_runtime_tracing_projection(effective_config_path)
             effective_config_bytes = build_effective_config_bytes(
                 config_path, algorithm, source_setup_mode, platform
             )
@@ -106,8 +170,50 @@ def _prepare_docker_runtime_config(
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
                 replace_active=replace_active_config,
+                preserve_unchanged_source=algorithm is None,
+                before_replace=lambda: _prepare_runtime_config_replacement(
+                    effective_config_bytes,
+                    stack_layout,
+                    minimal=minimal,
+                    readonly=readonly,
+                ),
+            )
+            active_bytes = effective_config_path.read_bytes()
+            source_candidate_selected = active_bytes == effective_config_bytes or (
+                _same_document(active_bytes, effective_config_bytes)
+            )
+        candidate = yaml.safe_load(effective_config_path.read_bytes()) or {}
+        if apply_instance_options(
+            candidate,
+            engine=engine,
+            platform=platform or "cpu",
+            available_devices=available_devices,
+            model_options=model_options,
+        ):
+            candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
+            _prepare_runtime_config_replacement(
+                candidate_bytes, stack_layout, minimal=minimal, readonly=readonly
+            )
+            write_journaled_runtime_config_projection(
+                effective_config_path, candidate_bytes
             )
         setup_mode = is_setup_mode_config(effective_config_path)
+        if not setup_mode:
+            _check_served_decision_model(
+                yaml.safe_load(effective_config_path.read_bytes()),
+                platform,
+                local_host=True,
+            )
+        if not setup_mode and not package_active:
+            reconcile_runtime_tracing(
+                effective_config_path,
+                stack_layout,
+                enable_observability=not minimal,
+                reset_projection=source_candidate_selected,
+                before_replace=lambda data: _prepare_runtime_config_replacement(
+                    data, stack_layout, minimal=minimal, readonly=readonly
+                ),
+            )
         return effective_config_path, setup_mode, runtime_lock
     except Exception:
         runtime_lock.close()
@@ -123,6 +229,11 @@ def _prepare_effective_serve_config(
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
     replace_active_config: bool,
+    minimal: bool = False,
+    readonly: bool = False,
+    engine: bool = False,
+    available_devices: tuple[int, ...] = (),
+    model_options: dict | None = None,
 ):
     """Prepare the target-specific active config and its optional runtime lock."""
 
@@ -142,6 +253,11 @@ def _prepare_effective_serve_config(
             platform,
             recipe_env_bindings,
             replace_active_config,
+            minimal=minimal,
+            readonly=readonly,
+            engine=engine,
+            available_devices=available_devices,
+            model_options=model_options,
         )
         return effective_path, setup_mode, runtime_lock, None
 
@@ -154,4 +270,12 @@ def _prepare_effective_serve_config(
         platform,
         materialize_local_runtime=False,
     )
+    apply_instance_options(
+        effective_config_document,
+        engine=engine,
+        platform=platform or "cpu",
+        available_devices=available_devices,
+        model_options=model_options,
+    )
+    _check_served_decision_model(effective_config_document, platform, local_host=False)
     return config_path, source_setup_mode, None, effective_config_document

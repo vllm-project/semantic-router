@@ -120,7 +120,7 @@ func (c *MilvusCache) AddExact(
 	}
 	dimension := semanticCacheEmbeddingDimension(
 		c.config.Collection.VectorField.Dimension,
-		c.embeddingModel,
+		c.embeddingProvider,
 	)
 	_, err := c.client.Upsert(
 		ctx,

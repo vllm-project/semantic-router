@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "4905de382e4434229fe7331e2a3ad45140d54351"
+  source_commit: "aa7b7e7bc1de4d193342e869a952552a4c15552c"
   source_file: "docs/tutorials/plugin/router-replay.md"
   outdated: false
 ---
@@ -10,6 +10,10 @@ translation:
 ## 概览
 
 `router_replay` 是一个路由局部插件，用于覆盖单条路由的回放/调试采集。
+
+`global.services.router_replay` 定义共享存储、保留策略、启用状态和采集默认值。decision 的 `router_replay` 插件只覆盖明确填写的采集字段；省略的字段继承全局默认值。回放不设置配方级默认值。详见[回放 API 和隐私控制](../../api/router#router-replay)。
+
+全部五个内置 MoM 配方（包括 Vault）默认启用 PostgreSQL 回放。`vllm-sr serve` 会管理 PostgreSQL 及持久卷。通用的 `memory` 存储会在配置重载或路由器重启时丢失记录；其他部署方式可在[共享回放服务](../learning/memory-and-replay#configuration)中配置 PostgreSQL 或 Redis。
 
 ## 主要优势
 
@@ -28,6 +32,27 @@ translation:
 - 应在其他地方保持开启的同时，为特定路由禁用回放
 
 ## 配置
+
+### 全局采集默认值
+
+```yaml
+global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      capture_request_body: true
+      capture_response_body: true
+      capture_personal_data: false
+      max_records: 10000
+      max_body_bytes: 4096
+      max_tool_trace_bytes: 0
+      max_tool_trace_steps: 100
+```
+
+未配置服务时回放默认关闭。内置采集默认值为：请求和响应正文开启、个人数据采集开启、最多 10,000 条记录、每个正文 4,096 字节、工具轨迹单字段字节数不限、最多 100 个工具步骤。存储、保留时间和异步写入属于全局服务设置。
+
+### decision 覆盖
 
 要为某条路由禁用回放，添加：
 
@@ -48,8 +73,27 @@ plugins:
       max_records: 10000
       capture_request_body: true
       capture_response_body: true
+      capture_personal_data: false
       max_body_bytes: 4096
       max_tool_trace_steps: 100
+```
+
+插件中明确填写的 `false` 会覆盖全局值；`enabled: true` 可以在全局关闭时单独开启该 decision 的回放，`enabled: false` 则关闭它。被拒绝且尚未选中 decision 的请求使用全局默认值，选中后的请求应用该 decision 的覆盖。配置变更不会删除已有记录，也不控制模型提供方的留存策略。
+
+`max_tool_trace_bytes: 0` 和 `max_tool_trace_steps: 0` 表示移除对应上限。`max_body_bytes: 0` 沿用记录器的 4,096 字节回退值；`max_records: 0` 在内存存储中使用 200 条记录的回退值。这些显式零值不会继承全局配置；需要继承时应省略字段。正文和结构化文本按 UTF-8 字节截断并保持字符完整，截断后的原始正文可能不再是完整 JSON，应检查截断标记。
+
+### 不采集个人数据
+
+在全局或 decision 插件中设置 `capture_personal_data: false`。检测到个人数据时，回放保留路由、模型、信号及检测到的 PII 类型等元数据，但不保存请求和响应正文、提示词、工具定义或工具轨迹。该设置会按需评估配方已有的 PII 信号，即使 decision 未引用它们。
+
+没有配置 PII 检测器、证据不可用或分类失败时，也会保守地省略内容；无需为了此设置强制配置 PII 信号。配置检测器后，确认没有个人数据的请求可以采集内容，例如：
+
+```yaml
+routing:
+  signals:
+    pii:
+      - name: personal_data
+        pii_types_allowed: []
 ```
 
 ## Looper 诊断 {#looper-diagnostics}

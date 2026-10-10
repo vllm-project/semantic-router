@@ -104,9 +104,9 @@ def post_turn(base_url, session_idx, turn, prompt_suffix=""):
     )
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
-            return response.status, dict(response.headers), json.loads(response.read())
+            return response.status, response.headers, json.loads(response.read())
     except urllib.error.HTTPError as exc:
-        return exc.code, dict(exc.headers), json.loads(exc.read())
+        return exc.code, exc.headers, json.loads(exc.read())
 
 
 def post_stream(base_url):
@@ -128,7 +128,7 @@ def post_stream(base_url):
         first_separator = response.readline()
         body = first_line + first_separator + response.read()
         elapsed = time.monotonic() - started
-        return dict(response.headers), body, first_frame_seconds, elapsed
+        return response.headers, body, first_frame_seconds, elapsed
 
 
 def test_fault_proxy_injects_selected_turn_once_then_recovers(tmp_path):

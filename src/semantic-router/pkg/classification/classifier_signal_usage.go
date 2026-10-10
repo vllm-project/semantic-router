@@ -22,6 +22,10 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
+	// Replay uses available PII rules even if a decision does not route on PII.
+	if c.Config.ReplayNeedsPIIEvidence() {
+		collectSignalKeys(usedSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
+	}
 	c.expandTransitiveSignalDependencies(usedSignals)
 
 	return usedSignals
@@ -53,6 +57,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeModality, c.Config.ModalityRules, func(r config.ModalityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
 	collectSignalKeys(allSignals, config.SignalTypeJailbreak, c.Config.JailbreakRules, func(r config.JailbreakRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeSafety, c.Config.SafetyRules, func(r config.SafetyRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
@@ -60,6 +65,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeMetadata, c.Config.MetadataRules, func(r config.MetadataRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeClassifier, c.Config.ClassifierRules, func(r config.ClassifierSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeInputModality, c.Config.InputModalityRules, func(r config.InputModalityRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeDecision, c.Config.DecisionRules, func(r config.DecisionSignalRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -179,6 +185,12 @@ func (c *Classifier) expandScoreInputs(
 			continue
 		}
 		usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
+		if strings.EqualFold(input.Type, config.SignalTypeDecision) {
+			// "<question>:<option>" reads one option's probability; the
+			// question itself must still be asked.
+			question, _, _ := strings.Cut(input.Name, ":")
+			usedSignals[strings.ToLower(config.SignalTypeDecision+":"+question)] = true
+		}
 	}
 }
 

@@ -70,11 +70,13 @@ var supportedProjectionInputTypes = []string{
 	SignalTypeModality,
 	SignalTypeAuthz,
 	SignalTypeJailbreak,
+	SignalTypeSafety,
 	SignalTypePII,
 	SignalTypeKB,
 	SignalTypeConversation,
 	SignalTypeEvent,
 	SignalTypeInputModality,
+	SignalTypeDecision,
 	ProjectionInputKBMetric,
 	SignalTypeProjection,
 }

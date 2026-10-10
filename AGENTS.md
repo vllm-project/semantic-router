@@ -28,13 +28,20 @@ prescribe a work loop, or decide when the task is complete.
 
 - `src/semantic-router/`: Go router, ExtProc runtime, routing, and APIs
 - `src/vllm-sr/`: Python CLI and local stack orchestration
+- `src/model-runtime/`: model runtime that serves every model the router uses
 - `config/`: canonical configuration, fragments, schemas, and recipes
-- `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`: inference bindings
 - `dashboard/`: React frontend and Go management backend
 - `deploy/`: deployment artifacts and operator
 - `e2e/`: end-to-end framework and profiles
 - `tools/`: build, development, release, security, and harness tooling
 - `website/`: public documentation
+
+`src/semantic-router/cmd/` contains only the Router process entrypoint and its
+lifecycle tests. Authoring commands belong in `tools/dev/`, calibration tools
+in `tools/calibration/`, benchmark drivers beside their benchmark, and the
+browser compiler in `dashboard/wasm/`. Keep shared Go contracts in the Router
+module; `tools/make/go-tools.mk` explicitly builds, tests, and lints external
+Go commands against that module's dependencies.
 
 ## Durable constraints
 
@@ -45,6 +52,8 @@ prescribe a work loop, or decide when the task is complete.
 - A behavior-visible routing, startup, config, Docker, CLI, or API change needs
   an appropriate integration or E2E assertion. Pure refactors do not.
 - Generated artifacts and public docs change with their source contract.
+- Downloaded models and run caches are ignored artifacts. Unit tests use small
+  fixtures and temporary directories; model-backed tests take explicit inputs.
 - Numeric file, function, nesting, and interface limits are review signals, not
   architecture. Forbidden dependencies, new cycles, generated invariants, and
   unowned root files remain blocking checks.

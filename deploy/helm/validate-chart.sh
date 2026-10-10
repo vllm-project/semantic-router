@@ -71,6 +71,59 @@ else
 fi
 echo ""
 
+# A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
+# after rollout. The backup history needed for rollback must outlive that pod.
+log_info "Testing default Dashboard backup persistence..."
+helm template decision-release "$CHART_PATH" \
+    --set decisionModel.deployment=judgment \
+    --set config.global.model_catalog.deployments.judgment.provider=model_runtime \
+    --set config.global.model_catalog.deployments.judgment.artifact=vllm-sr/Decision2-Kai-0.5B \
+    > "$TEMP_DIR/decision-template.yaml"
+python3 - "$TEMP_DIR/decision-template.yaml" <<'PY'
+import sys
+import yaml
+
+documents = list(yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")))
+configmap = next(doc for doc in documents if doc and doc.get("kind") == "ConfigMap" and "config.yaml" in doc.get("data", {}))
+catalog = yaml.safe_load(configmap["data"]["config.yaml"])["global"]["model_catalog"]
+assert catalog["system"]["decision_model"] == {"deployment": "judgment"}
+assert catalog["deployments"]["judgment"]["artifact"] == "vllm-sr/Decision2-Kai-0.5B"
+PY
+if helm template old-decision-release "$CHART_PATH" --set-string decisionModel=Vela-2.0-4B \
+    > "$TEMP_DIR/old-decision-output" 2>&1; then
+    log_error "Retired scalar decisionModel was accepted"
+    exit 1
+fi
+helm template dashboard-release "$CHART_PATH" --set dashboard.enabled=true \
+    > "$TEMP_DIR/dashboard-default-template.yaml"
+python3 - "$TEMP_DIR/dashboard-default-template.yaml" <<'PY'
+import sys
+import yaml
+
+documents = [doc for doc in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")) if isinstance(doc, dict)]
+dashboard = next(
+    doc for doc in documents
+    if doc.get("kind") == "Deployment"
+    and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/component") == "dashboard"
+)
+claims = [
+    doc for doc in documents
+    if doc.get("kind") == "PersistentVolumeClaim"
+    and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/component") == "dashboard"
+]
+assert len(claims) == 1, "Dashboard backup PVC must render when Dashboard is enabled"
+pod = dashboard["spec"]["template"]["spec"]
+mounts = pod["containers"][0]["volumeMounts"]
+assert any(mount.get("name") == "dashboard-data" and mount.get("mountPath") == "/app/data" for mount in mounts)
+assert any(
+    volume.get("name") == "dashboard-data"
+    and volume.get("persistentVolumeClaim", {}).get("claimName") == claims[0]["metadata"]["name"]
+    for volume in pod["volumes"]
+)
+PY
+log_success "Dashboard config backups survive a rollout by default"
+echo ""
+
 # Test 3: Canonical config override must be atomic and preserve explicit gates
 log_info "Testing atomic canonical Router config rendering..."
 cp deploy/helm/testdata/backend-target-values.yaml "$TEMP_DIR/canonical-config.yaml"
@@ -144,7 +197,7 @@ if helm template canonical-empty-release "$CHART_PATH" \
     log_error "An empty canonical config silently fell back to chart defaults"
     exit 1
 fi
-if ! grep -q "configOverride must be a non-empty mapping" \
+if ! grep -Eq "configOverride must be a non-empty mapping|configOverride: Must have at least 1 properties|/configOverride': minProperties: got 0, want 1" \
     "$TEMP_DIR/canonical-empty-template.yaml"; then
     log_error "Empty canonical config failed without the expected safety error"
     exit 1
@@ -158,6 +211,90 @@ helm template runtime-release "$CHART_PATH" \
     > "$TEMP_DIR/model-runtime-template.yaml"
 python3 deploy/helm/check-model-runtime.py "$TEMP_DIR/model-runtime-template.yaml"
 log_success "Model deployments, input/admission budgets and isolated bindings are preserved"
+echo ""
+
+log_info "Testing standalone and extproc gateway modes..."
+python3 deploy/helm/check-gateway-mode.py "$CHART_PATH"
+log_success "Both gateway modes render their ports, probes, Services and Dashboard target"
+echo ""
+
+log_info "Testing custom workspace models mount rendering..."
+cat > "$TEMP_DIR/workspace-models-values.yaml" <<'YAML'
+extraVolumes:
+  - name: workspace-models
+    hostPath:
+      path: /opt/semantic-router/workspace-models
+      type: DirectoryOrCreate
+extraVolumeMounts:
+  - name: workspace-models
+    mountPath: /app/models
+YAML
+helm template workspace-release "$CHART_PATH" \
+    -f "$TEMP_DIR/workspace-models-values.yaml" \
+    > "$TEMP_DIR/workspace-models-template.yaml"
+python3 - "$TEMP_DIR/default-template.yaml" "$TEMP_DIR/workspace-models-template.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+
+def router_pod(path):
+    for document in yaml.safe_load_all(Path(path).read_text(encoding="utf-8")):
+        if (
+            document
+            and document.get("kind") == "Deployment"
+            and document["metadata"]["labels"].get("app.kubernetes.io/component") == "router"
+        ):
+            return document["spec"]["template"]["spec"]
+    raise AssertionError(f"Router Deployment missing from {path}")
+
+
+default_pod, workspace_pod = map(router_pod, sys.argv[1:])
+for pod, expected_name in ((default_pod, "models-volume"), (workspace_pod, "workspace-models")):
+    mounts = [mount for mount in pod["containers"][0]["volumeMounts"] if mount["mountPath"] == "/app/models"]
+    assert len(mounts) == 1 and mounts[0]["name"] == expected_name, mounts
+    volumes = [volume for volume in pod["volumes"] if volume["name"] == expected_name]
+    assert len(volumes) == 1, volumes
+    backup_env = [
+        entry for entry in pod["containers"][0]["env"]
+        if entry["name"] == "VLLM_SR_CONFIG_BACKUP_DIR"
+    ]
+    assert len(backup_env) == 1, backup_env
+    assert backup_env[0]["value"] == "/app/models/.vllm-sr/config-backups", backup_env
+default_models = next(volume for volume in default_pod["volumes"] if volume["name"] == "models-volume")
+assert "persistentVolumeClaim" in default_models, default_models
+assert all(volume["name"] != "models-volume" for volume in workspace_pod["volumes"])
+PY
+log_success "Custom /app/models mount replaces the default model volume"
+echo ""
+
+log_info "Testing where Router replicas keep their configuration history..."
+helm template no-persistence-release "$CHART_PATH" \
+    --set persistence.enabled=false \
+    > "$TEMP_DIR/no-persistence-template.yaml"
+python3 - "$TEMP_DIR/canonical-multi-opt-out-template.yaml" "$TEMP_DIR/no-persistence-template.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+for path in sys.argv[1:]:
+    pod = next(
+        document["spec"]["template"]["spec"]
+        for document in yaml.safe_load_all(Path(path).read_text(encoding="utf-8"))
+        if document
+        and document.get("kind") == "Deployment"
+        and document["metadata"]["labels"].get("app.kubernetes.io/component") == "router"
+    )
+    backup_env = [entry for entry in pod["containers"][0]["env"] if entry["name"] == "VLLM_SR_CONFIG_BACKUP_DIR"]
+    assert [entry["value"] for entry in backup_env] == ["/tmp/vllm-sr/config-history"], (path, backup_env)
+    tmp = [mount for mount in pod["containers"][0]["volumeMounts"] if mount["mountPath"] == "/tmp"]
+    assert len(tmp) == 1 and any(
+        volume["name"] == tmp[0]["name"] and "emptyDir" in volume for volume in pod["volumes"]
+    ), (path, tmp)
+PY
+log_success "One persistent replica keeps a durable history; shared or ephemeral replicas keep one per Pod"
 echo ""
 
 

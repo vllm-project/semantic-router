@@ -85,7 +85,7 @@ function isCatalogRole(value: unknown): value is BuiltInModelRole {
     Number.isInteger(value.minimum_candidates) &&
     Number(value.minimum_candidates) >= 1 &&
     isStringArray(value.traits) &&
-    isStringArray(value.recommended_pool)
+    isStringArray(value.recommended_pool, true)
   )
 }
 
@@ -94,7 +94,7 @@ function isVerification(value: unknown, virtual: boolean): boolean {
     !isRecord(value) ||
     !isNonEmptyString(value.authority) ||
     !['claimed', 'imported', 'reproduced'].includes(String(value.status)) ||
-    !isNonEmptyString(value.verified_at)
+    (value.verified_at !== undefined && !isNonEmptyString(value.verified_at))
   ) {
     return false
   }
@@ -586,6 +586,13 @@ function isBuiltInModelCatalog(value: unknown): value is BuiltInModelCatalog {
   )
 }
 
+export function decodeBuiltInModelCatalog(payload: unknown): BuiltInModelCatalog {
+  if (!isBuiltInModelCatalog(payload)) {
+    throw new ModelCatalogApiError('Built-in model catalog returned an invalid contract.', 502)
+  }
+  return payload
+}
+
 export async function getBuiltInModelCatalog(signal?: AbortSignal): Promise<BuiltInModelCatalog> {
   const response = await fetch('/api/models/catalog', { signal })
   if (!response.ok) {
@@ -595,8 +602,5 @@ export async function getBuiltInModelCatalog(signal?: AbortSignal): Promise<Buil
     )
   }
   const payload: unknown = await response.json()
-  if (!isBuiltInModelCatalog(payload)) {
-    throw new ModelCatalogApiError('Built-in model catalog returned an invalid contract.', 502)
-  }
-  return payload
+  return decodeBuiltInModelCatalog(payload)
 }

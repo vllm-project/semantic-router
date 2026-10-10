@@ -3,7 +3,6 @@ package classification
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -43,7 +42,7 @@ func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 		return nil
 	}
 
-	numWorkers := complexityWorkerCount(len(tasks))
+	numWorkers := embeddingWorkers(len(tasks))
 	successCount, firstError := c.collectCandidateEmbeddingResults(c.startCandidateEmbeddingWorkers(tasks, numWorkers))
 
 	elapsed := time.Since(startTime)
@@ -99,21 +98,6 @@ func appendComplexityTasks(
 	return tasks
 }
 
-func complexityWorkerCount(taskCount int) int {
-	if taskCount <= 1 {
-		return 1
-	}
-	backend := embeddingBackendOverride()
-	if backend == "" || backend == "candle" {
-		return 1
-	}
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > taskCount {
-		return taskCount
-	}
-	return numWorkers
-}
-
 func (c *ComplexityClassifier) startCandidateEmbeddingWorkers(
 	tasks []complexityCandidateTask,
 	numWorkers int,
@@ -153,19 +137,9 @@ func (c *ComplexityClassifier) startCandidateEmbeddingWorkers(
 
 func (c *ComplexityClassifier) computeCandidateEmbedding(task complexityCandidateTask) ([]float32, error) {
 	if task.isImage {
-		if c.multiModalProvider != nil {
-			return embedding.Image(context.Background(), c.multiModalProvider, task.candidate, 0)
-		}
-		return getMultiModalImageEmbedding(task.candidate, 0)
+		return embedding.Image(context.Background(), c.multiModalProvider, task.candidate, 0)
 	}
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), task.candidate)
-	}
-	output, err := getEmbeddingWithModelType(task.candidate, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, task.candidate, embedding.Options{})
 }
 
 func (c *ComplexityClassifier) collectCandidateEmbeddingResults(
@@ -231,6 +205,7 @@ func (c *ComplexityClassifier) storeCandidateEmbeddingResult(result complexityCa
 
 func (c *ComplexityClassifier) rebuildPrototypeBanks() {
 	for _, rule := range c.rules {
+		prototypeCfg := rule.PrototypeScoring.Resolve(c.prototypeCfg)
 		hardExamples := make([]prototypeExample, 0, len(c.hardEmbeddings[rule.Name]))
 		for candidate, embedding := range c.hardEmbeddings[rule.Name] {
 			hardExamples = append(hardExamples, prototypeExample{Key: rule.Name + ":hard:" + candidate, Text: candidate, Embedding: embedding})
@@ -247,10 +222,10 @@ func (c *ComplexityClassifier) rebuildPrototypeBanks() {
 		for candidate, embedding := range c.imageEasyEmbeddings[rule.Name] {
 			imageEasyExamples = append(imageEasyExamples, prototypeExample{Key: rule.Name + ":image-easy:" + candidate, Text: candidate, Embedding: embedding})
 		}
-		hardBank := newPrototypeBank(hardExamples, c.prototypeCfg)
-		easyBank := newPrototypeBank(easyExamples, c.prototypeCfg)
-		imageHardBank := newPrototypeBank(imageHardExamples, c.prototypeCfg)
-		imageEasyBank := newPrototypeBank(imageEasyExamples, c.prototypeCfg)
+		hardBank := newPrototypeBank(hardExamples, prototypeCfg)
+		easyBank := newPrototypeBank(easyExamples, prototypeCfg)
+		imageHardBank := newPrototypeBank(imageHardExamples, prototypeCfg)
+		imageEasyBank := newPrototypeBank(imageEasyExamples, prototypeCfg)
 		c.hardPrototypeBanks[rule.Name] = hardBank
 		c.easyPrototypeBanks[rule.Name] = easyBank
 		c.imageHardPrototypeBanks[rule.Name] = imageHardBank

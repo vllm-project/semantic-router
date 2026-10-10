@@ -9,13 +9,41 @@ orchestration instead of restating it.
 Signed-off-by: vLLM-SR Team
 """
 
+import json
 import os
 import subprocess
+import time
 from contextlib import contextmanager
+from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+
+from cli.commands.runtime_support import sensitive_env_names
+
+STARTUP_DIAGNOSTIC_TAIL_CHARS = 4000
+SETUP_TIMEOUT_SECONDS = 600
+
+
+def startup_diagnostics(stdout, stderr, returncode, secret_values=()):
+    """Keep the failure at the end of both streams without exposing credentials."""
+    sections = [f"Serve exit code: {returncode}"]
+    for name, output in (("stdout", stdout), ("stderr", stderr)):
+        text = output or ""
+        for value in sorted(set(secret_values), key=len, reverse=True):
+            if value:
+                text = text.replace(value, "[redacted]")
+        if len(text) > STARTUP_DIAGNOSTIC_TAIL_CHARS:
+            text = "[earlier output omitted]\n" + text[-STARTUP_DIAGNOSTIC_TAIL_CHARS:]
+        sections.append(f"{name}:\n{text or '[empty]'}")
+    return "\n".join(sections)
 
 
 class ServeSessionMixin:
     """Start, await, and stop a background `vllm-sr serve` for one test."""
+
+    # The live-stack modules check the split Envoy stack; a module that checks
+    # standalone mode sets its own.
+    SERVE_GATEWAY = "extproc"
 
     def _start_serve_background(
         self,
@@ -26,11 +54,19 @@ class ServeSessionMixin:
         cmd = [
             "vllm-sr",
             "serve",
+            "--gateway",
+            self.SERVE_GATEWAY,
             *arguments,
             "--image-pull-policy",
             "ifnotpresent",
         ]
         print(f"\nStarting in background: {' '.join(cmd)}")
+
+        environment = os.environ if env is None else env
+        names = sensitive_env_names(Path(self.test_dir) / "config.yaml")
+        self._serve_secret_values = tuple(
+            environment[name] for name in names if environment.get(name)
+        )
 
         process = subprocess.Popen(
             cmd,
@@ -57,8 +93,35 @@ class ServeSessionMixin:
             stdout, stderr = serve_process.communicate(timeout=10)
         return stdout or "", stderr or ""
 
-    def _wait_for_serve_success(self, serve_process: subprocess.Popen) -> None:
-        """Drain the one-shot serve command and require successful startup."""
+    def _wait_for_setup_mode(self, serve_process: subprocess.Popen) -> None:
+        """Wait until the Dashboard of a first-run serve opens setup.
+
+        In setup mode `vllm-sr serve` keeps waiting to start the Router, so it
+        does not exit; stopping it leaves the stack in setup mode.
+        """
+        url = f"{self.runtime_stack.dashboard_url}/api/setup/state"
+        deadline = time.time() + SETUP_TIMEOUT_SECONDS
+        while time.time() < deadline:
+            if serve_process.poll() is not None:
+                stdout, stderr = serve_process.communicate()
+                self.fail(
+                    "Serve exited before setup opened:\n"
+                    + startup_diagnostics(stdout, stderr, serve_process.returncode)
+                )
+            try:
+                with urllib_request.urlopen(url, timeout=10) as response:
+                    if json.loads(response.read()).get("setupMode"):
+                        print("  ✓ The Dashboard opened setup")
+                        return
+            except (urllib_error.URLError, ConnectionError, TimeoutError):
+                pass
+            time.sleep(2)
+        self.fail("The Dashboard did not open setup")
+
+    def _wait_for_serve_success(
+        self, serve_process: subprocess.Popen
+    ) -> tuple[str, str]:
+        """Drain the one-shot serve command, require successful startup, return its output."""
         try:
             stdout, stderr = serve_process.communicate(
                 timeout=self.HEALTH_CHECK_TIMEOUT
@@ -71,15 +134,26 @@ class ServeSessionMixin:
                 serve_process.kill()
                 stdout, stderr = serve_process.communicate(timeout=10)
             self.fail(
-                "Serve did not complete startup before the timeout: "
-                f"{(stderr or stdout or '')[:500]}"
+                "Serve did not complete startup before the timeout:\n"
+                + startup_diagnostics(
+                    stdout,
+                    stderr,
+                    serve_process.returncode,
+                    getattr(self, "_serve_secret_values", ()),
+                )
             )
         if serve_process.returncode != 0:
             self.fail(
-                "Serve failed before completing runtime startup: "
-                f"{(stderr or stdout or '')[:500]}"
+                "Serve failed before completing runtime startup:\n"
+                + startup_diagnostics(
+                    stdout,
+                    stderr,
+                    serve_process.returncode,
+                    getattr(self, "_serve_secret_values", ()),
+                )
             )
         print("  ✓ Serve command completed runtime startup")
+        return stdout or "", stderr or ""
 
     @contextmanager
     def _running_serve(
@@ -93,6 +167,8 @@ class ServeSessionMixin:
         api_only: bool = False,
         managed_storage: bool = False,
         ensure_models_dir: bool = False,
+        skip_processing: bool = False,
+        looper: bool = False,
     ):
         """Start one background serve session and clean it up automatically."""
         self.write_minimal_canonical_config(
@@ -102,6 +178,8 @@ class ServeSessionMixin:
             api_key_env=api_key_env,
             api_only=api_only,
             managed_storage=managed_storage,
+            skip_processing=skip_processing,
+            looper=looper,
         )
         if ensure_models_dir:
             os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)

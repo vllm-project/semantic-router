@@ -2,7 +2,7 @@
 
 This directory builds query-level model selectors from benchmark records. The
 pipeline embeds each query, appends an optional domain-category feature, and
-exports KNN, KMeans, SVM, or MLP models for the native selection bindings.
+exports KNN, KMeans, SVM, or MLP models for the router's model selection.
 
 Use this pipeline when you have measured the same queries against several
 candidate models and want a learned selector. It does not create trustworthy
@@ -13,8 +13,8 @@ labels from model names alone.
 1. Benchmark candidate models with `benchmark.py`, or provide existing JSONL.
 2. Train one or more selectors with `train.py`.
 3. Inspect held-out quality and latency against simple baselines.
-4. Validate the exported artifact through the Go/native path before using it in
-   a router config.
+4. Validate the exported artifact through the router's selectors before using it
+   in a router config.
 
 ## Install
 
@@ -24,8 +24,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Some validation paths also require the repository's compiled Candle and ML
-bindings.
+Validation builds the router's selectors with Go and embeds queries through
+the model runtime (`vllm-sr serve`).
 
 ## Collect Benchmark Records
 
@@ -49,6 +49,16 @@ The benchmarker sends every unique query to every configured model and writes
 the response, measured latency, and its available quality score. Check the
 scoring method in `benchmark.py` against your task before treating
 `performance` as a training label.
+
+If the input has no domain categories, enrich the benchmark records with a
+running router before training:
+
+```bash
+python add_category_to_training_data.py \
+  --vsr-url http://localhost:8080 \
+  --input benchmark_output.jsonl \
+  --output benchmark_with_category.jsonl
+```
 
 ## Train Selectors
 
@@ -92,52 +102,72 @@ dataset licenses before publishing.
 python server.py --host 127.0.0.1 --port 8686
 ```
 
-Do not expose it to an untrusted network; a training request can consume
+The service binds to `127.0.0.1` by default. The shipped Kubernetes and OpenShift
+sidecars keep this address and use in-container health probes, so only the
+co-located Dashboard can reach the API through their shared network namespace.
+For Docker, join the Dashboard container network namespace with
+`--network container:dashboard`; publishing port 8686 does not make a loopback
+listener reachable.
+
+`--host` or `ML_SERVICE_HOST` can override the address for an operator-managed
+remote deployment. Such a deployment requires authenticated workload transport
+and a restrictive network policy. The service itself has no workload
+authentication; do not publish it directly. A training request can consume
 substantial compute and write artifacts.
+
+This loopback boundary does not replace server-owned job/artifact handles,
+private shared storage, or bounded job lifecycle controls. Those remain separate
+requirements before enabling this pipeline for untrusted users.
 
 ## Validate Before Deployment
 
-`validate.go` exercises exported selectors through the native bindings. Its
-downloaded default data is a convenience sample, not a release gate.
+`validate.go` runs the router's own selectors (`pkg/modelselection`) on the
+exported artifacts. Query embeddings come from a model runtime serving the
+embedding model the selectors were trained with. Its downloaded default data is
+a convenience sample, not a release gate.
 
 ```bash
-go run validate.go --help
-go run validate.go \
-  --no-download \
-  --data-file benchmark_output.jsonl \
-  --models-dir models \
-  --algorithm all
+vllm-sr serve Qwen/Qwen3-Embedding-0.6B --device cpu --port 8100
+make run-ml-selection-validate GO_TOOL_ARGS="--help"
+make run-ml-selection-validate GO_TOOL_ARGS="--runtime http://127.0.0.1:8100 \
+  --no-download --data-file benchmark_output.jsonl --models-dir models --algorithm all"
 ```
 
-For a deterministic training/export/native parity check, install `pytest` and
-run from the repository root:
+For a deterministic training/export/router parity check, run from the
+repository root with NumPy, scikit-learn, pytest and Go:
 
 ```bash
-python -m pytest src/training/model_selection/ml_model_selection/tests/test_native_parity.py -q
+make test-model-selection-parity
 ```
 
-This builds the current Rust binding and compares real sklearn predictions
-against the exported artifact through its C ABI. It covers linear/RBF SVM,
-binary/multiclass voting, Python reload, KNN latency weighting and neighbor ties.
-Only NumPy, scikit-learn, pytest, and Cargo are needed; Torch is optional for
-these selectors.
+It trains real sklearn selectors, exports them and replays the same queries
+through the router's selectors (the `selectorparity` helper), with the category
+one-hot appended as in production. It covers linear/RBF SVM, binary and
+multiclass voting, Python reload, unversioned exports, KNN latency weighting and
+neighbor ties. Torch, model downloads and GPUs are not needed.
 
-SVM and KNN exports now declare `format_version: 2`. Deploy a runtime that
-supports this version alongside the training tools. SVM exports preserve the
-original SVC decision functions and input scale. KNN uses normalized feature
-distance and the same fixed 10-second latency scale in Python and Rust. Existing
-Python SVM files can recover their exact top-level parameters; existing KNN files
-adopt the corrected selection rules. See the [native artifact compatibility
-reference](../../../../ml-binding/README.md#artifact-compatibility-and-prediction-rules)
-for migration details and the treatment of native-only legacy SVM classifiers.
+### Artifact compatibility and prediction rules
 
-The small checked-in Rust fixtures can be regenerated after an intentional
-training-contract change with:
+New Python exports use `format_version: 2`; deploy a router that understands it
+together with the training tools.
 
-```bash
-python src/training/model_selection/ml_model_selection/tests/generate_native_fixtures.py
-cargo test --manifest-path ml-binding/Cargo.toml
-```
+- SVM stores the exact fitted SVC support vectors, signed dual coefficients,
+  intercepts and per-class support counts in `svc`. Linear and RBF inference use
+  the training feature scale (`input_normalization: "none"`) and libsvm
+  one-vs-one voting, including binary sign conventions and first-class vote
+  ties; the input is not normalized again.
+- Unversioned Python SVM exports carry those exact parameters at the top level.
+  The loader prefers them to the old approximate per-model classifiers, so these
+  files need no retraining. A file with only the old classifiers cannot recover
+  the fitted SVC; re-export it to adopt version 2.
+- KNN uses Euclidean distance on L2-normalized feature vectors (cosine ordering
+  for nonzero vectors). Neighbors sort by distance and then sample index; equal
+  model totals select the lexicographically first model name. Voting is
+  `0.9 * quality + 0.1 / (1 + latency_ns / 10_000_000_000)`.
+
+The loaders reject malformed feature shapes, nonfinite values and inconsistent
+sample or support counts; a request whose feature dimension does not match the
+artifact fails that selection.
 
 Use a held-out split and report the dataset, candidate models, scoring method,
 embedding model, selector parameters, random seed, and quality/latency tradeoff.

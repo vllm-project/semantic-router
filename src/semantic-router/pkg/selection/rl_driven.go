@@ -606,13 +606,14 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), selectedScore)
 
 	return &SelectionResult{
-		SelectedModel: selectedModel.Model,
-		LoRAName:      selectedModel.LoRAName,
-		Score:         selectedScore,
-		Confidence:    confidence,
-		Method:        MethodRLDriven,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     selectedModel.Model,
+		SelectedCandidate: selectedModel,
+		LoRAName:          selectedModel.LoRAName,
+		Score:             selectedScore,
+		Confidence:        confidence,
+		Method:            MethodRLDriven,
+		Reasoning:         reasoning,
+		AllScores:         allScores,
 	}, nil
 }
 
@@ -680,13 +681,14 @@ func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *Selec
 	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), 1.0)
 
 	return &SelectionResult{
-		SelectedModel: selectedModel.Model,
-		LoRAName:      selectedModel.LoRAName,
-		Score:         1.0, // LLM routing is deterministic
-		Confidence:    0.9, // High confidence in LLM decision
-		Method:        MethodRLDriven,
-		Reasoning:     reasoning,
-		AllScores:     map[string]float64{selectedModel.Model: 1.0},
+		SelectedModel:     selectedModel.Model,
+		SelectedCandidate: selectedModel,
+		LoRAName:          selectedModel.LoRAName,
+		Score:             1.0, // LLM routing is deterministic
+		Confidence:        0.9, // High confidence in LLM decision
+		Method:            MethodRLDriven,
+		Reasoning:         reasoning,
+		AllScores:         map[string]float64{selectedModel.Model: 1.0},
 	}, nil
 }
 

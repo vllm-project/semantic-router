@@ -63,6 +63,31 @@
   font-size: 0.85rem;
 }
 
+.estimateContext {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+}
+
+.estimateDetails {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.estimateDetails summary {
+  cursor: pointer;
+}
+
+.estimateDetails[open] {
+  flex-basis: 100%;
+}
+
+.estimateDetails p {
+  max-width: 80ch;
+  margin: 0.5rem 0 0;
+}
+
 .chartsRow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

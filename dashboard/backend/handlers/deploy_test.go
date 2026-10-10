@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -360,7 +361,7 @@ func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	DeployPreviewHandler(configPath)(w, req)
+	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d. body=%s", w.Code, w.Body.String())
@@ -400,6 +401,27 @@ func TestDeployHandler_MethodValidation(t *testing.T) {
 				t.Errorf("Expected 405, got %d", w.Code)
 			}
 		})
+	}
+}
+
+func TestDeployPreviewHandler_ReadonlyMode(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	body := DeployRequest{YAML: "test: value"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath, true)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected 403, got %d. Body: %s", w.Code, w.Body.String())
+	}
+	if !contains(w.Body.String(), "readonly_mode") {
+		t.Errorf("Expected readonly_mode error, got: %s", w.Body.String())
 	}
 }
 
@@ -549,8 +571,9 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read backup dir: %v", err)
 	}
+	entries = slices.DeleteFunc(entries, func(entry os.DirEntry) bool { return !isConfigBackupEntry(entry) })
 	if len(entries) == 0 {
-		t.Error("No backup was created")
+		t.Fatal("No backup was created")
 	}
 
 	// Verify backup content matches original
@@ -568,6 +591,8 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	if string(dslData) != body.DSL {
 		t.Errorf("Archived DSL content mismatch: %s", dslData)
 	}
+	assertSnapshotPermissions(t, tempDir)
+	assertSnapshotMode(t, dslFile, 0o600)
 }
 
 func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
@@ -762,7 +787,7 @@ routing:
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	DeployPreviewHandler(configPath)(w, req)
+	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
@@ -957,7 +982,7 @@ func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRouting(t *testing.T) 
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	DeployPreviewHandler(configPath)(w, req)
+	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for a partial fragment without routing, got %d: %s", w.Code, w.Body.String())
@@ -1187,6 +1212,7 @@ routing:
 	if len(entries) < 2 {
 		t.Error("Pre-rollback backup should have been created")
 	}
+	assertSnapshotPermissions(t, tempDir)
 }
 
 // ============================================================
@@ -1307,6 +1333,7 @@ func TestCleanupBackups(t *testing.T) {
 		cleanupBackups(tempDir)
 
 		entries, _ := os.ReadDir(tempDir)
+		entries = slices.DeleteFunc(entries, func(entry os.DirEntry) bool { return !isConfigBackupEntry(entry) })
 		if len(entries) != 5 {
 			t.Errorf("Expected 5 files, got %d", len(entries))
 		}
@@ -1326,7 +1353,7 @@ func TestCleanupBackups(t *testing.T) {
 		entries, _ := os.ReadDir(tempDir)
 		count := 0
 		for _, e := range entries {
-			if !e.IsDir() {
+			if isConfigBackupEntry(e) {
 				count++
 			}
 		}

@@ -9,7 +9,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -36,13 +35,11 @@ func buildClassifierWithAdmission(
 	if cfg != nil && cfg.RoutingScope == "" {
 		cfg = cfg.ConfigForRecipe(cfg.DefaultRecipe())
 	}
-	var runtime *native.Runtime
 	var runtimeOption RecipeRuntimeOptions
 	if len(runtimeOptions) > 0 {
 		runtimeOption = runtimeOptions[0]
-		runtime = runtimeOption.Runtime
 	}
-	models, err := newClassifierModelRuntime(cfg, runtime)
+	models, err := newClassifierModelRuntime(cfg, runtimeOption)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +221,6 @@ func (c *Classifier) closeResources() error {
 	if c.ownsEmbeddingSet {
 		closeResource("embeddings", c.embeddingSet)
 	}
-	closeResource("cache NLI", c.polarityNLI)
 	closeResource("modality classifier", c.modalityInference)
 	closeResource("fact-check classifier", c.factCheckClassifier)
 	closeResource("feedback detector", c.feedbackDetector)
@@ -243,6 +239,14 @@ func (c *Classifier) closeResources() error {
 	sort.Strings(genericNames)
 	for _, name := range genericNames {
 		closeResource("generic classifier "+name, c.genericClassifiers[name])
+	}
+	safetyNames := make([]string, 0, len(c.safetyClassifiers))
+	for name := range c.safetyClassifiers {
+		safetyNames = append(safetyNames, name)
+	}
+	sort.Strings(safetyNames)
+	for _, name := range safetyNames {
+		closeResource("safety classifier "+name, c.safetyClassifiers[name])
 	}
 	return errors.Join(closeErrors...)
 }
@@ -265,13 +269,13 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
 	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
+	appendTask("classifier.safety", false, c.usesRoutingSignalType(config.SignalTypeSafety), c.initializeSafetyClassifiers)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", false, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", false, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
-	// Not best-effort: an NLI polarity mode with an unloadable model must fail
-	// startup rather than silently serve unverified cache hits.
-	appendTask("classifier.semantic_cache_nli", false, c.needsSemanticCacheNLIForRuntime(), c.initializeSemanticCacheNLI)
 	appendTask("classifier.feedback", false, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
+	appendTask("classifier.decision", false, len(c.labelledDecisionRules()) > 0, c.prepareDecisionSignals)
+
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 

@@ -11,6 +11,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 import requests
 
 from cli.consts import DEFAULT_API_PORT
+from cli.runtime_stack import PORT_OFFSET_ENV, normalize_port_offset
 
 API_ROOT = "/api/v1"
 CONFIG_PATH = f"{API_ROOT}/config"
@@ -21,7 +22,7 @@ OBSERVABILITY_REPLAYS_PATH = f"{API_ROOT}/observability/replays"
 
 
 def default_management_base_url() -> str:
-    offset = int(os.getenv("VLLM_SR_PORT_OFFSET", "0"))
+    offset = normalize_port_offset(os.getenv(PORT_OFFSET_ENV, "0"))
     return f"http://localhost:{DEFAULT_API_PORT + offset}"
 
 
@@ -29,6 +30,25 @@ def default_management_base_url() -> str:
 class RouterResponse:
     payload: Any
     etag: str = ""
+
+
+class RouterManagementError(ValueError):
+    """A management request that failed, with the Router's status and code."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        code: str = "",
+        detail: str = "",
+        timed_out: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.detail = detail
+        self.timed_out = timed_out
 
 
 class RouterManagementClient:
@@ -76,15 +96,16 @@ class RouterManagementClient:
                 timeout=self.timeout,
             )
         except requests.Timeout as exc:
-            raise ValueError(
-                f"Router management API request timed out after {self.timeout:g}s"
+            raise RouterManagementError(
+                f"Router management API request timed out after {self.timeout:g}s",
+                timed_out=True,
             ) from exc
         except requests.ConnectionError as exc:
-            raise ValueError(
+            raise RouterManagementError(
                 f"Router management API is not reachable at {self.base_url}"
             ) from exc
         except requests.RequestException as exc:
-            raise ValueError("Router management API request failed") from exc
+            raise RouterManagementError("Router management API request failed") from exc
 
         try:
             body = response.json()
@@ -92,8 +113,12 @@ class RouterManagementClient:
             body = response.text
         if not response.ok:
             message = _error_message(body) or str(body)[:1000]
-            raise ValueError(
-                f"Router management API returned HTTP {response.status_code}: {message}"
+            code, detail = _error_code_and_detail(body)
+            raise RouterManagementError(
+                f"Router management API returned HTTP {response.status_code}: {message}",
+                status=response.status_code,
+                code=code,
+                detail=detail,
             )
         return RouterResponse(payload=body, etag=response.headers.get("ETag", ""))
 
@@ -198,6 +223,13 @@ class RouterManagementClient:
         )
 
 
+def _error_code_and_detail(payload: Any) -> tuple[str, str]:
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return "", ""
+    return str(error.get("code") or "").strip(), str(error.get("message") or "").strip()
+
+
 def _error_message(payload: Any) -> str:
     if not isinstance(payload, dict):
         return ""
@@ -206,6 +238,15 @@ def _error_message(payload: Any) -> str:
         code = str(error.get("code") or "").strip()
         message = str(error.get("message") or "").strip()
         return f"{code}: {message}" if code and message else message or code
+    decision_error = str(payload.get("decision_error") or "").strip()
+    if decision_error:
+        policies = payload.get("applied_unknown_policies")
+        if isinstance(policies, dict) and policies:
+            applied = ", ".join(
+                f"{key}={value}" for key, value in sorted(policies.items())
+            )
+            return f"{decision_error} (applied unknown policies: {applied})"
+        return decision_error
     return str(payload.get("message") or "")
 
 

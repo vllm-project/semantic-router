@@ -1,4 +1,5 @@
-# Model files must be provisioned in the router image or its model volume.
+# The built-in model runtime downloads the pinned Vela PII release and serves it;
+# the binding takes its labels from the served model.
 apiVersion: vllm.ai/v1alpha1
 kind: SemanticRouter
 metadata:
@@ -8,10 +9,10 @@ spec:
   config:
     model_deployments:
       local-pii:
-        artifact: models/mmbert32k-pii-detector-merged
-        provider: candle
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
+        revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
+        provider: model_runtime
         device: cpu
-        precision: native
         input:
           max_tokens: 512
           overflow: reject
@@ -26,5 +27,3 @@ spec:
         pii_classifier:
           deployment: local-pii
           contract: token_spans.v1
-          adapter: mmbert32k
-          mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json

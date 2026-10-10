@@ -297,64 +297,6 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   display: initial;
 }
 
-/* Homepage: dark-committed chrome via .site-root--home (server-side). */
-.site-root--home .navbar {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
-  background: rgba(5, 5, 5, 0.82);
-  /* Keep search field on dark chrome. */
-  --search-navbar-surface: #18181b;
-  --search-navbar-surface-hover: #27272a;
-  --search-navbar-border: #3f3f46;
-  --search-navbar-text: #fafafa;
-  --search-navbar-muted: #a1a1aa;
-}
-
-.site-root--home .navbar__title {
-  color: #fafafa;
-}
-
-/* Homepage white mark handled in theme/Navbar/Logo swizzle. */
-
-.site-root--home .navbar__link,
-.site-root--home .navbar__item.navbar__link,
-.site-root--home .navbar__item.dropdown > .navbar__link {
-  color: #a1a1aa;
-}
-
-/* The homepage navbar is committed to dark, so it sets its own colours — but
- * they are the same blues the token ladder uses everywhere else. */
-.site-root--home .navbar__item.navbar__link:hover,
-.site-root--home .navbar__item.dropdown > .navbar__link:hover,
-.site-root--home .navbar__item.navbar__link--active {
-  background: rgba(48, 162, 255, 0.12);
-  color: #fafafa;
-}
-
-.site-root--home .navbar__item.navbar__link.nav-dashboard-cta {
-  border-color: #30a2ff;
-  background: #30a2ff;
-  color: #04121f;
-}
-
-.site-root--home .navbar__item.navbar__link.nav-dashboard-cta:hover,
-.site-root--home .navbar__item.navbar__link.nav-dashboard-cta:focus-visible {
-  border-color: #75c5ff;
-  background: #75c5ff;
-  color: #04121f;
-}
-
-.site-root--home .navbar__toggle {
-  border-color: #3f3f46;
-  background: #18181b;
-  color: #fafafa;
-}
-
-/* Hide color mode toggle on dark-committed page. */
-.site-root--home .navbar .navbar-color-mode-toggle,
-.site-root--home .navbar-sidebar__brand .navbar-color-mode-toggle {
-  display: none;
-}
-
 /* Footer. */
 .footer {
   border-top: 1px solid var(--site-border);
@@ -407,26 +349,6 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   font-size: var(--text-xs);
   letter-spacing: 0.04em;
   text-transform: none;
-}
-
-.site-root--home .footer {
-  border-top-color: rgba(255, 255, 255, 0.1);
-  background: #050505;
-}
-
-.site-root--home .footer__title,
-.site-root--home .footer__bottom {
-  color: #71717a;
-}
-
-.site-root--home .footer__link-item {
-  color: #d4d4d8;
-}
-
-/* Without this the homepage footer has no hover state at all: the rule above
- * outranks the shared `.footer__link-item:hover` on source order. */
-.site-root--home .footer__link-item:hover {
-  color: #75c5ff;
 }
 
 .pagination-nav__link {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 const (
@@ -28,29 +29,15 @@ func (c *Classifier) evaluateGenericClassifierSignals(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var waitGroup sync.WaitGroup
+	var rules []config.ClassifierSignalRule
 	for _, rule := range c.Config.ClassifierRules {
-		if !signalRuleUsed(usedSignals, config.SignalTypeClassifier, rule.Name) {
-			continue
+		if signalRuleUsed(usedSignals, config.SignalTypeClassifier, rule.Name) && c.genericClassifiers[rule.Name] != nil {
+			rules = append(rules, rule)
 		}
-		classifier := c.genericClassifiers[rule.Name]
-		if classifier == nil {
-			continue
-		}
-		waitGroup.Add(1)
-		go func(rule config.ClassifierSignalRule, classifier labelClassifier) {
-			defer waitGroup.Done()
-			c.evaluateGenericClassifierRule(
-				ctx,
-				results,
-				mu,
-				text,
-				rule,
-				classifier,
-			)
-		}(rule, classifier)
 	}
-	waitGroup.Wait()
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		c.evaluateGenericClassifierRule(ctx, results, mu, text, rules[i], c.genericClassifiers[rules[i].Name])
+	})
 	elapsed := time.Since(start)
 	mu.Lock()
 	results.Metrics.Classifier.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -81,7 +68,7 @@ func (c *Classifier) evaluateGenericClassifierRule(
 		mu.Unlock()
 		return
 	}
-	if !classifierScoresFinite(rule.Labels, result.Scores) {
+	if !classifierScoresFinite(rule.Labels, result.Scores) || (result.Thresholds != nil && !classifierScoresFinite(rule.Labels, result.Thresholds)) {
 		mu.Lock()
 		results.SignalErrors[signalConfidenceKey(
 			config.SignalTypeClassifier,
@@ -92,6 +79,13 @@ func (c *Classifier) evaluateGenericClassifierRule(
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	if result.PolicyTrace != nil {
+		result.PolicyTrace.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000
+		if results.Metrics.Classifier.Rules == nil {
+			results.Metrics.Classifier.Rules = make(map[string]*ClassifierRuleMetrics)
+		}
+		results.Metrics.Classifier.Rules[rule.Name] = result.PolicyTrace
+	}
 	bestLabel := ""
 	bestLabelScore := -1.0
 	for _, label := range rule.Labels {
@@ -106,8 +100,13 @@ func (c *Classifier) evaluateGenericClassifierRule(
 			bestLabel = label
 			bestLabelScore = score
 		}
+		if result.Thresholds != nil && score >= result.Thresholds[label] {
+			labelMatch := rule.Name + ":" + label
+			results.MatchedClassifierRules = append(results.MatchedClassifierRules, labelMatch)
+			c.recordSignalMatch(config.SignalTypeClassifier, labelMatch)
+		}
 	}
-	if bestLabel != "" {
+	if result.Thresholds == nil && bestLabel != "" {
 		labelMatch := rule.Name + ":" + bestLabel
 		results.MatchedClassifierRules = append(
 			results.MatchedClassifierRules,
@@ -131,9 +130,12 @@ func classifierScoresFinite(
 	labels []string,
 	scores map[string]float64,
 ) bool {
+	if len(labels) == 0 || len(scores) != len(labels) {
+		return false
+	}
 	for _, label := range labels {
-		score := scores[label]
-		if math.IsNaN(score) || math.IsInf(score, 0) {
+		score, exists := scores[label]
+		if !exists || math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 1 {
 			return false
 		}
 	}

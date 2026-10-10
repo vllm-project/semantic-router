@@ -108,7 +108,7 @@ func (decoder *responsesStreamDecoder) applyResponsesDeltaEvent(
 		setResponsesReasoningDelta(event, wire.Delta, llmprotocol.ReasoningScopeSummary)
 	case "response.output_text.annotation.added":
 		return true, decoder.applyResponseAnnotation(event, wire)
-	case "response.function_call_arguments.delta":
+	case "response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
 		return true, decoder.applyResponsesToolDelta(event, wire)
 	case "response.image_generation_call.in_progress", "response.image_generation_call.generating",
 		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
@@ -464,11 +464,21 @@ func (decoder *responsesStreamDecoder) validateCompletedResponsesItemLifecycle(w
 			return err
 		}
 		return decoder.validateResponsesFinalContent(index, responsesContentReasoningText, item.Content, false)
-	case "function_call":
+	case "function_call", "custom_tool_call":
 		if !decoder.toolArgumentsDone[index] {
 			return invalidProviderResponse(
 				"stream_tool_arguments_incomplete",
-				"Responses function-call item completed before its arguments done event",
+				"Responses tool-call item completed before its input done event",
+			)
+		}
+		complete := item.Arguments
+		if item.Type == "custom_tool_call" {
+			complete = item.Input
+		}
+		if string(decoder.toolArguments[index]) != complete {
+			return invalidProviderResponse(
+				"stream_tool_arguments_mismatch",
+				"Responses completed tool-call input does not match streamed input",
 			)
 		}
 		return nil

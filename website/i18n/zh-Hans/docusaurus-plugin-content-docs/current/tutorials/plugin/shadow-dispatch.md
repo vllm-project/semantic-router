@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "b2db276cf1b5057c31f2ab2bddbd181e5692dbb6"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/shadow-dispatch.md"
   outdated: false
 ---
@@ -70,7 +70,7 @@ plugins:
 | `max_retries` | `0` | 传输错误或可重试状态上的额外尝试。上限为 `3`。 |
 | `capture_response_body` | `false` | 在结果中存储 shadow 文本的有界摘录。默认关闭；只保留大小、token 和 SHA-256。 |
 | `max_capture_bytes` | `4096` | 开启采集时的摘录上限。 |
-| `tls_skip_verify` | `false` | 跳过由内部 CA 签名的 https shadow 后端的证书校验。主路径通过 Envoy 到达后端，Envoy 不校验上游证书。 |
+| `tls_skip_verify` | `false` | 跳过由内部 CA 签名的 https shadow 后端的证书校验。此设置仅作用于 shadow HTTP 客户端，不会配置主请求的后端传输。 |
 | `forward_headers` | `[]` | Shadow 副本可以携带的决策 `header_mutation` 名称，按不区分大小写匹配。决策为主后端设置的其他内容都不会转发，因此像 `X-Internal-Token` 这样的自定义凭据留在主路径。已知凭据载体（`Authorization`、`Proxy-Authorization`、`Cookie`、`x-api-key`、`api-key`、`x-goog-api-key`、`x-user-*-key` 请求头）即使被列出，也会在配置加载时拒绝并在运行时丢弃。 |
 
 当请求被采样排除，或主分发已经选择了 shadow 模型时，会跳过 shadow，只产生指标而不产生结果。通过 looper 执行的决策（ratings、confidence、fusion、ReMoM、workflows）会在配置加载时拒绝该插件，因为 shadow hook 只在单模型提供商分发上运行。
@@ -108,3 +108,20 @@ plugins:
 
 回放脱敏对 shadow 结果的应用方式与记录其余部分相同：没有内容权限的查看者可以看到路由和时序字段，但看不到 `target_ref`、`reason` 或 `metadata`。除非回放存储及其读取者已获准处理提示词级内容，否则请关闭 `capture_response_body`。片段见：
 [`config/fragments/plugin/shadow-dispatch/sampled.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/shadow-dispatch/sampled.yaml)。
+
+### 导出对比数据集 {#export-a-comparison-dataset}
+
+采集到的结果可通过 `GET /api/v1/observability/replays/dataset` 导出为对比数据集。该接口读取常规回放过滤条件选中的记录，返回一份带版本的清单，其中包含每条输入的主模型与影子模型分支。
+
+清单以自身摘要作为标识，因此导出请求需要携带拆分方案：`seed` 固定拆分分配，每个可重复的 `split` 写作 `name:weight`，例如 `?seed=2026-q3&split=train:8&split=eval:2`。相同记录在相同 seed 与拆分下会重建出相同的清单，包括每条样本所属的拆分，因此后续新增的观测不会移动已经放置好的样本。
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset?recipe=vault&seed=2026-q3&split=train:8&split=eval:2"
+```
+
+清单只携带标识、输出摘要与来源信息，不含提示词或响应文本，因此可以与它支撑的数据一同发布。一条观测要么整条进入，要么完全不进入：失败的请求、未结束的请求、输入被截断的请求，以及从未记录摘要的请求都会被排除并按原因计数，`counts` 会报告保留了什么、丢弃了什么。由于清单描述的是构建它的整个选择集，超过 5000 条记录的选择会被拒绝，而不是按页导出。请缩小过滤条件后重新导出。
+
+某一个 recipe 或某一个 decision 通常会主导线上流量，基于它构建的数据集读起来像是关于整个路由器的结论，实际上只是关于那个 decision 的结论。`balance_by` 与 `balance_max` 限制单个分组最多能贡献多少条，分组方式为 `recipe`、`decision` 或 `primary_model`。上限保留哪些行由 seed 决定而非时间先后，因此均衡后的数据集是对流量的采样，而不是对到达时间的采样；因均衡而丢弃的行与其他排除一样计入 `balance_cap`。两个参数必须同时给出，只给其一会被拒绝。
+
+导出需要 `replay.read` 权限，读取的记录与列表 API 相同。被比较的决策必须开启正文采集，否则未采集到请求的观测会以 `request_body_missing` 被排除。

@@ -53,6 +53,7 @@ func TestLLMLabelClassifierMaxTokens(t *testing.T) {
 					ModelName:     "test-model",
 					MaxTokens:     tt.configured,
 				},
+				nil,
 			)
 			if err != nil {
 				t.Fatalf("newLLMLabelClassifier() error = %v", err)

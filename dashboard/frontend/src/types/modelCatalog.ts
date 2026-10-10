@@ -128,7 +128,7 @@ export interface BuiltInModelRole {
 export interface BuiltInModelVerification {
   authority: string
   status: CatalogEvidenceStatus
-  verified_at: string
+  verified_at?: string
   source?: string
   asset_sha256?: string
 }

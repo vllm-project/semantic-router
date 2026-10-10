@@ -39,9 +39,9 @@
   - efficient
   - multimodal
   released_at: '2025-12-02'
-- id: amazon/nova-premier-v1
-  display_name: Amazon Nova Premier
-  description: Amazon's most capable Nova 1 multimodal model for complex tasks.
+- id: amazon/nova-lite-v1
+  display_name: Amazon Nova Lite
+  description: Amazon's low-cost Nova 1 multimodal model for fast image, video, and text processing.
   kind: physical
   publisher: Amazon
   presentation:
@@ -50,12 +50,12 @@
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html
   family: nova-1
   lifecycle: active
   limits:
-    context_window_size: 1000000
-    max_output_tokens: 10000
+    context_window_size: 300000
+    max_output_tokens: 5000
   capabilities:
   - chat
   - tools
@@ -72,8 +72,49 @@
   verification:
     authority: Amazon
     status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    verified_at: 2026-09-24
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html
+  tags:
+  - proprietary
+  - efficient
+  - multimodal
+  released_at: '2024-12-03'
+- id: amazon/nova-premier-v1
+  display_name: Amazon Nova Premier
+  description: Amazon's most capable Nova 1 multimodal model for complex tasks.
+  kind: physical
+  publisher: Amazon
+  presentation:
+    logo: package:nova
+    monogram: AWS
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html
+  family: nova-1
+  # The Bedrock listing is Legacy, but OpenRouter still offers this model.
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 25000
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Amazon
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html
   tags:
   - proprietary
   - frontier
@@ -91,12 +132,12 @@
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
   family: nova-1
   lifecycle: active
   limits:
     context_window_size: 300000
-    max_output_tokens: 10000
+    max_output_tokens: 5000
   capabilities:
   - chat
   - tools
@@ -113,8 +154,8 @@
   verification:
     authority: Amazon
     status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    verified_at: 2026-09-24
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
   tags:
   - proprietary
   - multimodal

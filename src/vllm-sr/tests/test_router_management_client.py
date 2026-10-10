@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+import click
 import pytest
 from cli.router_management_client import (
     CONFIG_SCHEMA_PATH,
     ROUTING_PREVIEW_PATH,
     RouterManagementClient,
+    default_management_base_url,
 )
 
 
@@ -121,3 +123,116 @@ def test_management_client_requests_expanded_section_schema(
         "path": "routing",
         "expanded": "true",
     }
+
+
+class _UnresolvedResponse(_Response):
+    ok = False
+    status_code = 503
+
+    def json(self) -> dict[str, Any]:
+        return {
+            "original_text": "hello",
+            "decision_error": "decision unresolved",
+            "applied_unknown_policies": {"guarded": "fail_request"},
+        }
+
+
+class _LegacyErrorResponse(_Response):
+    ok = False
+    status_code = 503
+
+    def json(self) -> dict[str, Any]:
+        return {"error": {"code": "CLASSIFICATION_ERROR", "message": "classifier down"}}
+
+
+def test_management_client_renders_decision_unresolved_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        lambda *args, **kwargs: _UnresolvedResponse(),
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        RouterManagementClient("http://localhost:8080").preview_route({"text": "hello"})
+
+    message = str(excinfo.value)
+    assert "503" in message
+    assert "decision unresolved" in message
+    assert "guarded=fail_request" in message
+
+
+def test_management_client_keeps_legacy_503_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        lambda *args, **kwargs: _LegacyErrorResponse(),
+    )
+
+    with pytest.raises(ValueError, match="503: CLASSIFICATION_ERROR: classifier down"):
+        RouterManagementClient("http://localhost:8080").preview_route({"text": "hello"})
+
+
+def test_default_management_base_url_applies_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "30")
+
+    assert default_management_base_url() == "http://localhost:8110"
+
+
+def test_default_management_base_url_rejects_non_numeric_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "abc")
+
+    with pytest.raises(
+        click.ClickException,
+        match="must be an integer between 0 and 15484",
+    ):
+        default_management_base_url()
+
+
+def test_default_management_base_url_rejects_negative_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "-1")
+
+    with pytest.raises(
+        click.ClickException,
+        match="must be between 0 and 15484 so derived ports stay within 65535, got -1",
+    ):
+        default_management_base_url()
+
+
+def test_default_management_base_url_accepts_the_largest_useful_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "15484")
+
+    assert default_management_base_url() == "http://localhost:23564"
+
+
+def test_default_management_base_url_rejects_offset_that_overflows_a_derived_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "15485")
+
+    with pytest.raises(
+        click.ClickException,
+        match="must be between 0 and 15484 so derived ports stay within 65535",
+    ):
+        default_management_base_url()
+
+
+def test_default_management_base_url_rejects_offset_above_the_derived_port_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "57456")
+
+    with pytest.raises(
+        click.ClickException,
+        match="must be between 0 and 15484 so derived ports stay within 65535, got 57456",
+    ):
+        default_management_base_url()

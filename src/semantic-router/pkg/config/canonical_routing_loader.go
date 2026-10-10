@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v2"
 )
@@ -22,12 +23,32 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, rejectErr
 	}
 
+	// Fragments share the canonical routing vocabulary while omitting only
+	// infrastructure cross-reference validation.
+	if err := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); err != nil {
+		return nil, err
+	}
+
 	doc := &routingFragmentDocument{}
 	if err := yaml.Unmarshal(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
 
+	if err := doc.Routing.CandidateRequirements.Validate(); err != nil {
+		return nil, err
+	}
+	if doc.Routing.Fallback != nil {
+		if err := doc.Routing.Fallback.Validate(); err != nil {
+			return nil, fmt.Errorf("routing.fallback: %w", err)
+		}
+	}
 	cfg := DefaultGlobalConfig()
+	cfg.RoutingFragmentOnly = true
+	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
+	cfg.Strategy = doc.Routing.Strategy
+	if doc.Routing.Fallback != nil {
+		cfg.Fallback = doc.Routing.Fallback.Clone()
+	}
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)
@@ -38,6 +59,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		cfg.ModelConfig[model.Name] = ModelParams{
 			ParamSize:         model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize,
+			MaxOutputTokens:   model.MaxOutputTokens,
 			Description:       model.Description,
 			Capabilities:      append([]string(nil), model.Capabilities...),
 			LoRAs:             copyLoRAAdapters(model.LoRAs),

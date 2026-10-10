@@ -17,7 +17,6 @@ def run_resolver(**overrides: str) -> str:
         env = os.environ | {
             "GITHUB_OUTPUT": str(output),
             "MATRIX_IMAGE": "dashboard",
-            "CARGO_BUILD_JOBS": "8",
         }
         env.update(overrides)
         subprocess.run(["bash", str(SCRIPT)], cwd=REPO_ROOT, env=env, check=True)
@@ -25,6 +24,16 @@ def run_resolver(**overrides: str) -> str:
 
 
 class DockerBuildArgumentTests(unittest.TestCase):
+    def test_no_image_builds_model_bundles(self) -> None:
+        for image in ("envoy", "vllm-sr", "vllm-sr-rocm"):
+            self.assertNotIn("VELA_OMNI", run_resolver(MATRIX_IMAGE=image))
+
+    def test_router_images_pass_their_runtime_accelerator(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="vllm-sr-rocm", ACCELERATOR="rocm")
+        self.assertIn("ACCELERATOR=rocm\n", output)
+        self.assertNotIn("ACCELERATOR", run_resolver(MATRIX_IMAGE="operator"))
+        self.assertNotIn("CARGO", output)
+
     def test_release_dashboard_uses_stable_tag(self) -> None:
         output = run_resolver(
             DASHBOARD_VERSION_MODE="release",
@@ -34,12 +43,16 @@ class DockerBuildArgumentTests(unittest.TestCase):
         self.assertRegex(output, r"VLLM_SR_SOURCE_REVISION=[0-9a-f]{40}\n")
 
     def test_nightly_dashboard_uses_explicit_date(self) -> None:
-        output = run_resolver(
-            DASHBOARD_VERSION_MODE="publish",
-            IS_NIGHTLY="true",
-            NIGHTLY_DATE="20260806",
-        )
-        self.assertIn("DASHBOARD_VERSION=v0.3.0-nightly.20260806.", output)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "pyproject.toml"
+            version_file.write_text('version = "9.8.7"\n', encoding="utf-8")
+            output = run_resolver(
+                DASHBOARD_VERSION_MODE="publish",
+                IS_NIGHTLY="true",
+                NIGHTLY_DATE="20260806",
+                PROJECT_VERSION_FILE=str(version_file),
+            )
+        self.assertIn("DASHBOARD_VERSION=v9.8.7-nightly.20260806.", output)
 
     def test_dashboard_source_revision_is_the_full_git_commit(self) -> None:
         output = run_resolver(

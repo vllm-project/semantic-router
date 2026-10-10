@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,6 +14,41 @@ type hfFixtureHits struct {
 	config    int
 	tokenizer int
 	readme    int
+}
+
+func TestRegistryMetadataUsesThePinnedArtifactRevision(t *testing.T) {
+	const repo = "example/model"
+	const first = "0123456789abcdef0123456789abcdef01234567"
+	const second = "abcdef0123456789abcdef0123456789abcdef01"
+	seen := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen[r.URL.Path]++
+		if strings.Contains(r.URL.Path, "main") {
+			t.Errorf("pinned metadata read main: %s", r.URL.Path)
+		}
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/models/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": repo})
+		case strings.HasSuffix(r.URL.Path, "config.json"):
+			_ = json.NewEncoder(w).Encode(map[string]int{"max_position_embeddings": 32768})
+		default:
+			_, _ = w.Write([]byte("# Model\n\nPinned model card.\n"))
+		}
+	}))
+	defer server.Close()
+	resolver := newModelRegistryCardResolver()
+	resolver.baseURL, resolver.client = server.URL, server.Client()
+	for _, revision := range []string{first, first, second} {
+		info := resolver.resolve(ModelSpec{RepoID: repo, Revision: revision, MaxContextLength: 512})
+		if info.Revision != revision || info.MaxContextLength != 512 || info.BaseModelMaxContext != 32768 {
+			t.Fatalf("wrong metadata for pinned task: %+v", info)
+		}
+	}
+	for _, revision := range []string{first, second} {
+		if seen["/api/models/"+repo+"/revision/"+revision] != 1 || seen["/"+repo+"/raw/"+revision+"/config.json"] != 1 {
+			t.Fatalf("cache did not separate immutable revisions: %v", seen)
+		}
+	}
 }
 
 func TestGetModelRegistryInfoByPathOverlaysHuggingFaceMetadata(t *testing.T) {
@@ -63,22 +99,22 @@ func newFeedbackDetectorFixtureServer(t *testing.T, hits *hfFixtureHits) *httpte
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/models/llm-semantic-router/mmbert32k-feedback-detector-merged":
+		case "/api/models/vllm-sr/mmbert32k-feedback-detector-merged":
 			hits.api++
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":           "llm-semantic-router/mmbert32k-feedback-detector-merged",
+				"id":           "vllm-sr/mmbert32k-feedback-detector-merged",
 				"pipeline_tag": "text-classification",
 				"tags": []string{
 					"transformers",
 					"text-classification",
 					"feedback-detection",
-					"dataset:llm-semantic-router/feedback-detector-dataset",
+					"dataset:vllm-sr/feedback-detector-dataset",
 				},
 				"cardData": map[string]any{
-					"base_model":   "llm-semantic-router/mmbert-32k-yarn",
+					"base_model":   "vllm-sr/mmbert-32k-yarn",
 					"license":      "apache-2.0",
 					"language":     []string{"en", "zh"},
-					"datasets":     []string{"llm-semantic-router/feedback-detector-dataset"},
+					"datasets":     []string{"vllm-sr/feedback-detector-dataset"},
 					"pipeline_tag": "text-classification",
 					"tags":         []string{"text-classification", "feedback-detection", "multilingual"},
 				},
@@ -86,7 +122,7 @@ func newFeedbackDetectorFixtureServer(t *testing.T, hits *hfFixtureHits) *httpte
 					"total": 307533316,
 				},
 			})
-		case "/llm-semantic-router/mmbert32k-feedback-detector-merged/raw/main/config.json":
+		case "/vllm-sr/mmbert32k-feedback-detector-merged/raw/main/config.json":
 			hits.config++
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"hidden_size":             768,
@@ -98,12 +134,12 @@ func newFeedbackDetectorFixtureServer(t *testing.T, hits *hfFixtureHits) *httpte
 					"3": "WANT_DIFFERENT",
 				},
 			})
-		case "/llm-semantic-router/mmbert32k-feedback-detector-merged/raw/main/tokenizer_config.json":
+		case "/vllm-sr/mmbert32k-feedback-detector-merged/raw/main/tokenizer_config.json":
 			hits.tokenizer++
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"model_max_length": 32768,
 			})
-		case "/llm-semantic-router/mmbert32k-feedback-detector-merged/raw/main/README.md":
+		case "/vllm-sr/mmbert32k-feedback-detector-merged/raw/main/README.md":
 			hits.readme++
 			_, _ = w.Write([]byte(`---
 license: apache-2.0
@@ -149,7 +185,7 @@ func requireFeedbackDetectorOverlay(t *testing.T, info *ModelRegistryInfo) {
 func requireFeedbackDetectorIdentity(t *testing.T, info *ModelRegistryInfo) {
 	t.Helper()
 
-	if info.RepoID != "llm-semantic-router/mmbert32k-feedback-detector-merged" {
+	if info.RepoID != "vllm-sr/mmbert32k-feedback-detector-merged" {
 		t.Fatalf("expected canonical repo id, got %q", info.RepoID)
 	}
 	if info.Description != "A 4-class user feedback classifier based on mmbert-32k-yarn." {
@@ -166,8 +202,8 @@ func requireFeedbackDetectorCapabilities(t *testing.T, info *ModelRegistryInfo) 
 	if info.EmbeddingDim != 768 {
 		t.Fatalf("expected embedding dim 768, got %d", info.EmbeddingDim)
 	}
-	if info.MaxContextLength != 32768 {
-		t.Fatalf("expected max context 32768, got %d", info.MaxContextLength)
+	if info.MaxContextLength != 512 || info.BaseModelMaxContext != 32768 {
+		t.Fatalf("task limit must remain 512 while base capacity is 32768: %+v", info)
 	}
 	if info.NumClasses != 4 {
 		t.Fatalf("expected 4 classes, got %d", info.NumClasses)
@@ -180,7 +216,7 @@ func requireFeedbackDetectorCapabilities(t *testing.T, info *ModelRegistryInfo) 
 func requireFeedbackDetectorCardMetadata(t *testing.T, info *ModelRegistryInfo) {
 	t.Helper()
 
-	if info.BaseModel != "llm-semantic-router/mmbert-32k-yarn" {
+	if info.BaseModel != "vllm-sr/mmbert-32k-yarn" {
 		t.Fatalf("expected base model, got %q", info.BaseModel)
 	}
 	if info.License != "apache-2.0" {

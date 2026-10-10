@@ -7,7 +7,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
-from classify_pr_changes import select_profiles  # noqa: E402
+from classify_pr_changes import classify, select_profiles  # noqa: E402
 from domain_registry import (  # noqa: E402
     commands_for_domains,
     domain_records,
@@ -47,8 +47,26 @@ class DomainRegistryTests(unittest.TestCase):
     def test_domain_matching_can_report_overlapping_owners(self) -> None:
         self.assertEqual(
             matching_domains(("config/recipes/privacy/probes.yaml",)),
-            ("router-core", "maintained-recipes"),
+            ("router-core", "dashboard", "maintained-recipes"),
         )
+
+    def test_memory_implementation_and_split_suite_select_live_integration(
+        self,
+    ) -> None:
+        for path in (
+            "src/semantic-router/pkg/memory/store.go",
+            "src/semantic-router/pkg/memory/retrieval/store.go",
+            "e2e/testing/memory_tests/test_retrieval.py",
+            "e2e/testing/memory_tests/helpers/client.py",
+            "e2e/testing/run_memory_integration.sh",
+            "tools/make/milvus.mk",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("memory", matching_domains((path,)))
+                self.assertIn(
+                    "local.memory",
+                    classify((path,)).selected_jobs,
+                )
 
     def test_domain_commands_are_deduplicated_in_registry_order(self) -> None:
         commands = commands_for_domains(
@@ -68,7 +86,198 @@ class DomainRegistryTests(unittest.TestCase):
         jobs = job_records()
         for name, domain in domain_records().items():
             with self.subTest(domain=name):
-                self.assertTrue(set(domain["ci_jobs"]).issubset(jobs))
+                self.assertTrue(set(domain["verifications"]).issubset(jobs))
+
+    def test_performance_checks_do_not_repeat_the_integration_gate(self) -> None:
+        for path in (
+            "perf/pkg/benchmark/model_identity.go",
+            "perf/benchmarks/cache_bench_test.go",
+            "tools/make/performance.mk",
+            "tools/make/models.mk",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                checks = commands_for_domains(result.domains, "checks")
+                self.assertIn("make perf-test-unit", checks)
+                self.assertNotIn("make perf-check", checks)
+                self.assertIn(
+                    "make perf-check",
+                    commands_for_domains(result.domains, "verify"),
+                )
+                self.assertIn("performance", result.selected_jobs)
+
+    def test_shared_model_inputs_select_every_artifact_consumer(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            "src/semantic-router/pkg/config/canonical_global.go",
+            "src/semantic-router/pkg/modeldownload/downloader.go",
+            "src/semantic-router/pkg/modeldownload/revision_receipt.go",
+            "src/semantic-router/pkg/modeldownload/validator.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("model-artifacts", result.domains)
+                self.assertTrue(
+                    {"local.cli", "performance"} <= set(result.selected_jobs)
+                )
+                self.assertNotIn(
+                    "make perf-check", commands_for_domains(result.domains, "checks")
+                )
+
+    def test_shared_model_inputs_do_not_expand_unrelated_or_unit_only_changes(
+        self,
+    ) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/tool_selection_plugin.go",
+            "src/semantic-router/pkg/config/vela_defaults_test.go",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(
+                    {"local.cli", "performance"} & set(classify([path]).selected_jobs)
+                )
+
+    def test_generated_contract_sources_and_outputs_select_the_drift_gate(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/apiserver/route_config.go",
+            "src/semantic-router/pkg/catalog/catalog.go",
+            "src/semantic-router/pkg/config/canonical.go",
+            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+            "dashboard/frontend/src/generated/routerConfigContract.ts",
+            "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
+            "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/decision1.py",
+            "src/model-runtime/vllm_srun/registry/tables/decision2.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/families/vela2/request.py",
+            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/model-runtime/vllm_srun/registry/tables/common.py",
+            "src/model-runtime/vllm_srun/systemone.py",
+            "src/model-runtime/vllm_srun/families/decision1/family.py",
+            "src/model-runtime/vllm_srun/families/decision1/questions.py",
+            "src/model-runtime/vllm_srun/families/decision2/family.py",
+            "tools/codegen/configschema/main.go",
+            "tools/codegen/openapi/main.go",
+            "tools/codegen/embed_generated_index.py",
+            "tools/make/docs.mk",
+            "tools/make/golang.mk",
+            "website/static/openapi/apiserver/apiserver.openapi.json",
+            "website/docs/api/apiserver.md",
+        ):
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(
+                    "make generated-contract-check",
+                    commands_for_domains(domains, "checks"),
+                )
+                self.assertIn(
+                    "generated-contracts",
+                    commands_for_domains(domains, "verifications"),
+                )
+                self.assertIn("generated-contracts", classify((path,)).selected_jobs)
+
+    def test_router_configs_the_cli_suite_parses_select_it(self) -> None:
+        for path in (
+            "config/config.yaml",
+            "config/recipes/balance/config.yaml",
+            "config/recipes/vela-amd/config.yaml",
+            "config/recipes/built-in/latest/mom-v1/config.yaml",
+            "e2e/config/config.memory-user.yaml",
+            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn(
+                    "make vllm-sr-test", commands_for_domains(result.domains, "checks")
+                )
+                self.assertIn("cli-unit", result.selected_jobs)
+                self.assertNotIn("vllm-sr-cli", result.domains)
+
+    def test_model_resolution_selects_the_published_model_contract(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/config/decision_model.go",
+            "src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go",
+            "src/semantic-router/pkg/classification/classifier_pii_window_default.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("published-model-tests", result.domains)
+                self.assertIn("platform.models-cpu", result.selected_jobs)
+
+    def test_vela2_serving_and_fusion_select_the_published_model_contract(self) -> None:
+        for path in (
+            "src/model-runtime/vllm_srun/families/vela2/encoder_layout.py",
+            "src/model-runtime/vllm_srun/registry/tables/vela2.py",
+            "src/model-runtime/vllm_srun/registry/golden_answers_vela2.json",
+            "src/model-runtime/vllm_srun/plugins/decisions.py",
+            "src/semantic-router/pkg/config/model_runtime_implicit.go",
+            "src/semantic-router/pkg/modelruntime/serving/signal_question.go",
+            "src/semantic-router/pkg/modelservice/bundle.go",
+            "src/semantic-router/pkg/modelservice/fusion_decisions.go",
+            "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
+            "src/semantic-router/pkg/classification/testdata/vela2_published_answers.json",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("published-model-tests", result.domains)
+                self.assertIn("platform.models-cpu", result.selected_jobs)
+
+    def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
+        domains = matching_domains(
+            (
+                "tools/agent/skills/vllm-sr-agent-operations/references/configuration-loop.md",
+                "website/static/install/agent/vllm-sr/references/configuration-loop.md",
+            )
+        )
+        self.assertIn("make harness-check", commands_for_domains(domains, "checks"))
+        self.assertNotIn(
+            "make generated-contract-check", commands_for_domains(domains, "checks")
+        )
+
+    def test_relocated_tools_retain_unit_check_ownership(self) -> None:
+        cases = {
+            "tools/dev/dsl/main.go": "make go-tools-test",
+            "tools/models/classifier-operating-point/main.go": "make go-tools-test",
+            "tools/calibration/image-routing/main.go": "make go-tools-test",
+            "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
+            "tools/calibration/tuning/engine.py": "make test-calibration",
+            "tools/test/services/provider-mocker/provider_mocker/app.py": "make test-provider-mocker",
+        }
+        for path, command in cases.items():
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(command, commands_for_domains(domains, "checks"))
+                verification = {
+                    "make test-calibration": "learning-tools",
+                    "make test-provider-mocker": "mock-provider",
+                }.get(command, "core")
+                self.assertIn(
+                    verification, commands_for_domains(domains, "verifications")
+                )
+
+    def test_reference_sources_select_checks_without_editing_outputs(self) -> None:
+        cases = {
+            "config/recipes/built-in/latest/mom-v1/recipe.dsl": "make model-catalog-generated-check",
+            "config/catalog/resources/models/virtual/vllm-sr.yaml": "make model-catalog-generated-check",
+            "website/static/model-catalog/catalog.json": "make model-catalog-generated-check",
+            "src/vllm-sr/cli/commands/request.py": "make docs-cli-check",
+            "website/docs/api/cli.md": "make docs-cli-check",
+            "config/fragments/signals/heuristic/keyword.yaml": "make docs-config-check",
+            "website/docs/tutorials/signal/heuristic/keyword.md": "make docs-config-check",
+            "deploy/operator/api/v1alpha1/semanticrouter_types.go": "make docs-crd-check",
+            "website/docs/api/crd-reference.md": "make docs-crd-check",
+            "website/scripts/generate-contributor-rank.mjs": "make docs-community-check",
+            "website/src/data/teamMembers.tsx": "make docs-community-check",
+            "website/src/data/committerActivity.generated.ts": "make docs-community-check",
+        }
+        for path, command in cases.items():
+            with self.subTest(path=path):
+                self.assertIn(
+                    command, commands_for_domains(matching_domains((path,)), "checks")
+                )
 
 
 if __name__ == "__main__":

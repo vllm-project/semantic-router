@@ -67,6 +67,14 @@
             "action": "dropped"
           },
           {
+            "field": "stream.x_groq",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.timings",
+            "action": "dropped"
+          },
+          {
             "field": "stream.moderation",
             "action": "dropped"
           }

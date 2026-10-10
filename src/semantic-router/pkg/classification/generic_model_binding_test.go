@@ -26,7 +26,7 @@ func TestGenericBoundRulesUseDistinctEndpointsAndIndependentClose(t *testing.T) 
 		cfg.ModelDeployments[name] = config.ModelDeployment{Provider: "http", ExternalModel: name}
 		cfg.ModelBindings["classifier."+name] = config.ModelBinding{Deployment: name, Adapter: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractLabelDistribution}
 	}
-	models, err := newClassifierModelRuntime(cfg, nil)
+	models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

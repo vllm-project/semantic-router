@@ -1,0 +1,73 @@
+{
+  "calls": [
+    {
+      "route": "model-a",
+      "model": "model-a",
+      "body": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "logprobs": true,
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-a",
+        "stream": false,
+        "top_logprobs": 1
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "body": {
+        "logprobs": true,
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-b",
+        "stream": false,
+        "top_logprobs": 1
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "application/json",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "looper",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "model-b",
+      "x-vsr-selected-recipe": "default"
+    },
+    "body": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "model-b says Paris in detail (1b997d5a)",
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": "\u003cvolatile\u003e",
+      "id": "\u003cvolatile\u003e",
+      "model": "model-b",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 10,
+        "prompt_tokens": 20,
+        "total_tokens": 30
+      }
+    }
+  }
+}

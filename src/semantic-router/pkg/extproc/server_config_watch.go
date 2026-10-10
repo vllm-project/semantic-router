@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,13 +11,13 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
 	configReloadDebounceWindow = 250 * time.Millisecond
 	configReloadSettleDelay    = 300 * time.Millisecond
+	configReloadPollInterval   = time.Second
 )
 
 type configFileReloadLoop struct {
@@ -30,10 +32,9 @@ type configFileReloadLoop struct {
 // watchConfigAndReload watches the active config source and reloads the router on changes.
 func (s *Server) watchConfigAndReload(ctx context.Context) {
 	if s.usesKubernetesConfigSource() {
-		logging.ComponentEvent("extproc", "config_update_watch_started", map[string]interface{}{
-			"source": "kubernetes",
-		})
-		s.watchKubernetesConfigUpdates(ctx)
+		// The controller calls ActivateKubernetesConfig directly and waits for
+		// acknowledgement. A best-effort broadcast cannot establish readiness.
+		<-ctx.Done()
 		return
 	}
 
@@ -43,6 +44,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 func (s *Server) watchFileConfigAndReload(ctx context.Context) {
 	watcher, cfgDir, ok := newConfigFileWatcher(s.configPath)
 	if !ok {
+		s.pollFileConfigAndReload(ctx)
 		return
 	}
 	defer func() {
@@ -56,6 +58,53 @@ func (s *Server) watchFileConfigAndReload(ctx context.Context) {
 		cfgDir:  cfgDir,
 	}
 	loop.run(ctx)
+}
+
+// pollFileConfigAndReload preserves file-backed reloads when the host has
+// exhausted its inotify instances or the watched directory cannot be added.
+func (s *Server) pollFileConfigAndReload(ctx context.Context) {
+	logging.ComponentEvent("extproc", "config_watcher_polling_fallback", map[string]interface{}{
+		"file":        s.configPath,
+		"interval_ms": int(configReloadPollInterval / time.Millisecond),
+	})
+	loop := configFileReloadLoop{server: s, cfgFile: s.configPath}
+	ticker := time.NewTicker(configReloadPollInterval)
+	defer ticker.Stop()
+	pollConfigFileChanges(ctx, s.configPath, ticker.C, func() {
+		loop.scheduleReload(ctx, fsnotify.Event{Name: s.configPath, Op: fsnotify.Write})
+	})
+}
+
+func pollConfigFileChanges(ctx context.Context, cfgFile string, ticks <-chan time.Time, onChange func()) {
+	previous, err := configFileHash(cfgFile)
+	haveBaseline := err == nil
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-ticks:
+			if !ok {
+				return
+			}
+			current, readErr := configFileHash(cfgFile)
+			if readErr != nil {
+				continue
+			}
+			if !haveBaseline || current != previous {
+				previous = current
+				haveBaseline = true
+				onChange()
+			}
+		}
+	}
+}
+
+func configFileHash(path string) ([sha256.Size]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(data), nil
 }
 
 func newConfigFileWatcher(cfgFile string) (*fsnotify.Watcher, string, bool) {
@@ -184,6 +233,10 @@ func (l *configFileReloadLoop) reload() {
 	l.logConfigFileStat()
 
 	if err := l.server.reloadRouterFromFile(l.cfgFile); err != nil {
+		if errors.Is(err, errConfigReloadSuperseded) {
+			logging.ComponentEvent("extproc", "config_reload_superseded", map[string]interface{}{"file": l.cfgFile})
+			return
+		}
 		l.logReloadFailure(err)
 		return
 	}
@@ -227,40 +280,4 @@ func (l *configFileReloadLoop) logReloadSuccess() {
 		event["decision_count"] = len(newRouter.Config.Decisions)
 	}
 	logging.ComponentEvent("extproc", "config_reloaded", event)
-}
-
-// watchKubernetesConfigUpdates watches for config updates from the Kubernetes controller.
-func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
-	subscription := config.SubscribeConfigUpdates(1)
-	defer subscription.Close()
-	updateCh := subscription.Updates()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case newCfg := <-updateCh:
-			s.handleKubernetesConfigUpdate(newCfg)
-		}
-	}
-}
-
-func (s *Server) handleKubernetesConfigUpdate(newCfg *config.RouterConfig) {
-	if newCfg == nil {
-		return
-	}
-
-	err := s.reloadRouterFromConfig("kubernetes", s.configPath, newCfg)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "config_reload_failed", map[string]interface{}{
-			"source": "kubernetes",
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	logging.ComponentEvent("extproc", "config_reloaded", map[string]interface{}{
-		"source":         "kubernetes",
-		"decision_count": len(newCfg.Decisions),
-	})
 }

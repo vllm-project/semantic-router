@@ -5,15 +5,16 @@
 `workflows` runs a bounded, multi-step Router Flow behind one
 OpenAI-compatible model name.
 
-The runtime also supports a direct Flow model slug through
-`global.integrations.looper.flow.model_names`. The built-in default is
-`vllm-sr/flow`. Direct Flow calls evaluate only decisions with
-`algorithm.type=workflows`; they do not silently fall back to normal single-model
-routes.
+Flow coordinates model workers within that configured workflow. The calling
+agent harness owns the outer agent loop, task state, and tool execution
+permissions. When Flow returns a tool call, the harness executes it and sends
+the result back so Flow can resume its pending workflow.
+
+Expose `flow` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=workflows` activates the algorithm. Use a dedicated recipe when this entrypoint should run only flow policies.
 
 ## Key Advantages
 
-- Exposes a multi-step agent workflow as one model name: `vllm-sr/flow`.
+- Exposes a bounded multi-model workflow as one model name: `vllm-sr/flow`.
 - Keeps worker boundaries explicit: dynamic planners may only use the decision's
   `modelRefs`.
 - Supports both static role plans and dynamic planner-generated workflows.
@@ -30,7 +31,7 @@ surface as small as `vllm-sr/flow`.
 
 ## When to Use
 
-- A route should expose a single model name but run a bounded micro-agent flow.
+- A route should expose a single model name but run a bounded multi-model workflow.
 - The worker pool should come from the decision's `modelRefs`.
 - You want static low-latency templates for predictable tasks.
 - You want dynamic planner-generated workflows for harder reasoning, coding, or
@@ -38,17 +39,17 @@ surface as small as `vllm-sr/flow`.
 
 ## Configuration
 
-Register the direct model slug:
+Map the public name to the recipe shown below. Move the `routing` block into a named recipe to isolate it from default routing.
 
 ```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: default
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
+      max_response_bytes_mb: 32
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -92,9 +93,33 @@ normalization, or reference dereferencing. Extraction defaults to exact
 `content` matching; use `extract.sources` or `extract.mode: json_object` only
 when the decision explicitly permits a wider parser.
 
-The planner model is a control-plane model. It does not need to appear in
-`modelRefs`. Worker calls are constrained to `modelRefs`; if the planner names a
-model outside that list, the executor rejects the plan.
+The planner model generates the control plan. Omit `planner.model` to use the
+first assigned worker, in declared order, that is eligible for the complete
+planner request, including JSON output and its output/context budget. This scan
+makes no model calls. An explicit planner override keeps that target and must
+pass the same stage checks; it is not replaced by another model on failure.
+If no eligible planner exists, the request fails closed. An explicit planner
+may be a separately configured helper outside the worker `modelRefs`, but must
+still have an operator-assigned backend in `providers.models[].backend_refs`;
+without one, the configuration fails to load. Worker calls remain constrained to
+`modelRefs`; the executor rejects a plan that names a worker outside that list.
+Planner selection does not reduce a configured minimum of distinct successful
+workers.
+
+Set `final.model` to choose a worker from `modelRefs` for the final answer,
+independently of the planner.
+This works in both modes; configured `final.model` and `final.prompt` override
+the corresponding fields in a generated plan. A fast planner can organize work
+while a stronger model synthesizes the answer. Verify that the planner reliably
+returns valid JSON before relying on this split.
+
+Reasoning controls come from each model's
+[reasoning configuration](../../../installation/model-reasoning.md) and decision
+reference. For a custom model, declare the appropriate reasoning family before
+using `use_reasoning: false`; without a family, backend reasoning behavior passes
+through. Budget for planning, sequential worker steps, and final synthesis within
+the client and gateway timeouts. A per-round timeout does not extend the gateway
+deadline. Check complete output and `finish_reason`, not only HTTP success.
 
 Static mode uses an explicit role plan. Each role model must be in the
 decision's `modelRefs`.
@@ -131,15 +156,14 @@ routing:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |
 | `template` | string | `micro_agent` | Static workflow template name |
 | `roles` | list[object] | required for static | Ordered static roles, each with `name`, `models`, optional `prompt`, and optional `access_list` of earlier role ids or agent ids |
-| `final.model` | string | first worker response | Optional static final synthesis model from `modelRefs` |
-| `final.prompt` | string | built-in synthesis prompt | Optional static final synthesis instruction |
-| `planner.model` | string | required for dynamic | Control-plane model used to generate the workflow plan |
+| `final.model` | string | plan's final model, then planner, then first worker response | Override the final synthesis model in either mode; must belong to `modelRefs` |
+| `final.prompt` | string | plan's final prompt or built-in synthesis prompt | Override the final synthesis instruction in either mode |
+| `planner.model` | string | first eligible assigned worker | Optional explicit model used to generate the workflow plan |
 | `planner.max_completion_tokens` | int | `2048` | Max completion tokens for the planner JSON plan only |
 | `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `max_steps` | int | `3` | Maximum workflow steps accepted from the planner |
@@ -183,6 +207,21 @@ setting it to `[]` isolates the step from prior outputs. Use a role id such as
 same agent id is emitted as `flow.steps[].responses[].agent_id` when
 `include_intermediate_responses` is enabled.
 
+Step IDs must be unique and must not collide with generated agent IDs. The
+router trims step IDs before validation; generated default IDs and normalized
+static role IDs follow the same uniqueness rule. Ambiguous plans are rejected
+before worker execution. In dynamic mode, `on_error: skip` uses the existing
+fallback plan instead of executing the invalid plan.
+
+This validation also applies when resuming a persisted workflow. A paused plan
+with conflicting IDs that an older version accepted is now rejected on resume,
+without dispatching further model calls. Resume validation failures do not start
+a fallback workflow, even with `on_error: skip`. Restart with an unambiguous
+plan rather than relying on the old continuation. Step IDs with surrounding
+whitespace are now trimmed consistently with access-list entries and agent IDs;
+older continuations whose stored step identity no longer matches may also be
+rejected.
+
 For local single-process development, `memory` is enough. For local restarts use
 `file`. For multi-replica deployments, use `redis` so a tool-result turn can be
 claimed by whichever router instance receives it.
@@ -207,3 +246,22 @@ workflow plan. Tool-call state can be persisted in memory, files, or Redis;
 choose a backend, TTL, authentication, and encryption appropriate for that
 content. See a complete example:
 [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml).
+
+## Optional trace transport
+
+Router-generated `flow` evidence is preserved in OpenAI Chat Completions JSON
+and SSE responses, including tool-call responses where the algorithm supports
+them. The trace is optional: if adding it would exceed the complete response
+limit or an individual SSE frame limit, the router omits the whole trace while
+serving the valid answer. It does not truncate trace JSON or answer text.
+
+OpenAI Responses and Anthropic Messages responses omit this Chat-specific
+extension. Both an unsupported target protocol and a size-based omission emit a
+`x-vsr-protocol-warnings` response header with action `dropped`, field `flow`,
+and reason `router_extension_unsupported_protocol` or
+`router_extension_size_limit`. The warning also accompanies immediate Looper
+responses. Required answer content remains subject to the normal protocol
+limits; an answer that cannot fit is rejected.
+
+Provider fields do not acquire router provenance by using the same name. The
+router validates provider content separately from its internal trace data.

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e17d7b480284f6f1685597a696665d0394a83722"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/overview.md"
   outdated: false
 ---
@@ -109,6 +109,8 @@ routing:
 | [Fact Check](./learned/fact-check) | 检测可能需要证据核验的提示 |
 | [Hallucination](./learned/hallucination) | 对照给定依据上下文检查模型回答 |
 | [Jailbreak](./learned/jailbreak) | 检测提示注入或越狱企图 |
+| [Decision](./learned/decision) | 使用判断模型提出 choice、score、noul、set 或 span 问题 |
+| [Safety](./learned/safety) | 检测不安全内容及可选风险类别 |
 | [PII](./learned/pii) | 检测敏感个人数据 |
 | [Preference](./learned/preference) | 推断响应风格偏好 |
 | [Reask](./learned/reask) | 检测近期对话历史中的重复提问 |

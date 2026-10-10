@@ -29,8 +29,10 @@ type SettingsResponse struct {
 	Platform                    string `json:"platform"`
 	EnvoyURL                    string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
 	RouterEvalURL               string `json:"routerEvalEndpoint"`
-	EvaluationAvailable         bool   `json:"evaluationAvailable"`
-	EvaluationUnavailableReason string `json:"evaluationUnavailableReason"`
+	SRBenchAvailable            bool   `json:"srBenchAvailable"`
+	SRBenchUnavailableReason    string `json:"srBenchUnavailableReason"`
+	MLPipelineAvailable         bool   `json:"mlPipelineAvailable"`
+	MLPipelineUnavailableReason string `json:"mlPipelineUnavailableReason"`
 }
 
 // SettingsHandler returns dashboard settings for frontend consumption.
@@ -61,8 +63,10 @@ func SettingsHandler(cfg *config.Config, setupResolver *setupmode.Resolver) http
 			Platform:                    cfg.Platform,
 			EnvoyURL:                    cfg.EnvoyURL,
 			RouterEvalURL:               defaultRouterEvalEndpoint(cfg.RouterAPIURL),
-			EvaluationAvailable:         cfg.EvaluationAvailable,
-			EvaluationUnavailableReason: cfg.EvaluationUnavailableReason,
+			SRBenchAvailable:            cfg.SRBenchAvailable,
+			SRBenchUnavailableReason:    cfg.SRBenchUnavailableReason,
+			MLPipelineAvailable:         cfg.MLPipelineAvailable,
+			MLPipelineUnavailableReason: cfg.MLPipelineUnavailableReason,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

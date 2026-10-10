@@ -31,7 +31,7 @@ func genericBindingConfig(provider, ruleType string) *RouterConfig {
 }
 
 func TestGenericBindingUsesResolvedProviderAndKeepsCanonicalSelectors(t *testing.T) {
-	for _, provider := range []string{"candle", "ort", "http"} {
+	for _, provider := range []string{ModelRuntimeProvider, "http"} {
 		for _, ruleType := range []string{ClassifierSignalTypeLocal, ClassifierSignalTypeSequenceClassifier} {
 			t.Run(provider+"/"+ruleType, func(t *testing.T) {
 				cfg := genericBindingConfig(provider, ruleType)
@@ -76,7 +76,7 @@ func TestGenericBindingRequiresExactPrivateRuleAndSupportedExtraction(t *testing
 			case "chat sequence":
 				decl.Adapter = RemoteClassifierProtocolHTTPChat
 			case "local llm":
-				cfg = genericBindingConfig("candle", ClassifierSignalTypeLLM)
+				cfg = genericBindingConfig(ModelRuntimeProvider, ClassifierSignalTypeLLM)
 				decl = cfg.ModelBindings["classifier.risk.tenant"]
 			case "decision contract":
 				decl.Contract = RemoteClassifierContractLabelDecision
@@ -123,5 +123,65 @@ func TestMultipleLocalClassifierRulesRoundTripIndependently(t *testing.T) {
 	cfg.ClassifierRules[1].Name = "RISK"
 	if err := validateClassifierSignalContracts(cfg); err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("duplicate identity error=%v", err)
+	}
+}
+
+func TestIndependentBindingAndDecisionContract(t *testing.T) {
+	cfg := genericBindingConfig(ModelRuntimeProvider, ClassifierSignalTypeLocal)
+	decl := cfg.ModelBindings["classifier.risk.tenant"]
+	decl.Contract = RemoteClassifierContractLabelScores
+	decl.OperatingPoint = &OperatingPointReference{Path: "point.json", SHA256: strings.Repeat("a", 64)}
+	cfg.ModelBindings["classifier.risk.tenant"] = decl
+	deployment := cfg.ModelDeployments["selected"]
+	deployment.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
+	cfg.ModelDeployments["selected"] = deployment
+	if _, err := CompileModelBindings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	node := RuleNode{Type: SignalTypeClassifier, Name: "risk.tenant", Label: "unsafe"}
+	if err := validateClassifierDecisionLeaf(cfg, "route", &node); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := yaml.Marshal(decl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored ModelBinding
+	if err := yaml.UnmarshalStrict(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(decl, restored) {
+		t.Fatal("policy reference lost in canonical roundtrip")
+	}
+	for _, scenario := range []string{"categorical policy", "HTTP", "bad sha", "escape", "missing budget", "truncate"} {
+		t.Run(scenario, func(t *testing.T) {
+			bad := decl
+			dep := deployment
+			ref := *decl.OperatingPoint
+			bad.OperatingPoint = &ref
+			switch scenario {
+			case "categorical policy":
+				bad.Contract = RemoteClassifierContractLabelDistribution
+			case "HTTP":
+				dep.Provider = "http"
+			case "bad sha":
+				ref.SHA256 = "abc"
+			case "escape":
+				ref.Path = "../policy.json"
+			case "missing budget":
+				dep.Input.MaxTokens = 0
+			case "truncate":
+				dep.Input.Overflow = "truncate"
+			}
+			cfg.ModelBindings["classifier.risk.tenant"] = bad
+			cfg.ModelDeployments["selected"] = dep
+			if _, err := CompileModelBindings(cfg); err == nil {
+				t.Fatal("invalid independent binding accepted")
+			}
+		})
+	}
+	cfg.ModelBindings = nil
+	if validateClassifierDecisionLeaf(cfg, "route", &node) == nil {
+		t.Fatal("unbound classifier omitted predicate")
 	}
 }

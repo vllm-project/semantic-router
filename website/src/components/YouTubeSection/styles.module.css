@@ -69,9 +69,9 @@
 .videoKind {
   display: inline-flex;
   padding: 0.3rem 0.62rem;
-  border: 1px solid rgba(48, 162, 255, 0.32);
+  border: 1px solid var(--site-hover-border);
   border-radius: 999px;
-  background: rgba(48, 162, 255, 0.1);
+  background: var(--site-accent-soft);
   color: var(--site-accent-strong);
   font-size: var(--site-text-caption);
   font-weight: var(--site-font-weight-semibold);
@@ -110,6 +110,56 @@
   border: 0;
 }
 
+.playerPoster {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: #050505;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.playerPoster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.8;
+}
+
+.posterPlay {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(5, 8, 16, 0.82);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.posterPlay span {
+  font-size: 0.75rem;
+}
+
+.playerPoster:hover .posterPlay {
+  background: rgba(5, 8, 16, 0.95);
+}
+
+.playerPoster:focus-visible {
+  outline: 3px solid var(--site-accent-strong);
+  outline-offset: -3px;
+}
+
 .playerControls {
   display: flex;
   grid-column: 1 / -1;
@@ -117,7 +167,7 @@
   justify-content: space-between;
   padding: 0.7rem;
   border-top: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--site-surface-soft);
 }
 
 .directionButton {
@@ -208,8 +258,8 @@
 }
 
 .videoCardActive {
-  border-color: rgba(48, 162, 255, 0.55);
-  background: rgba(48, 162, 255, 0.08);
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-accent-soft);
 }
 
 .thumbnail {

@@ -6,12 +6,11 @@ This test validates the router's ability to classify different types of queries
 and select the appropriate model based on the content.
 """
 
-import json
 import os
 import sys
 import time
 import unittest
-from collections import defaultdict
+from http import HTTPStatus
 
 import requests
 
@@ -87,7 +86,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 timeout=60,
             )
 
-            if response.status_code >= 500:
+            if response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
                 self.skipTest(
                     f"Envoy server returned server error: {response.status_code}"
                 )
@@ -100,7 +99,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
         # Check router metrics endpoint
         try:
             response = requests.get(ROUTER_METRICS_URL, timeout=2)
-            if response.status_code != 200:
+            if response.status_code != HTTPStatus.OK:
                 self.skipTest(
                     "Router metrics server is not responding. Is the router running?"
                 )
@@ -139,7 +138,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
         models = []
         # Send the same request 3 times
         for i in range(3):
-            self.print_subtest_header(f"Request {i+1}")
+            self.print_subtest_header(f"Request {i + 1}")
 
             response = requests.post(
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
@@ -148,7 +147,6 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 timeout=60,
             )
 
-            passed = response.status_code < 400
             response_json = response.json()
             models.append(response_json.get("model", "unknown"))
 
@@ -181,7 +179,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
             self.print_subtest_header(test_case["name"])
 
             payload = {
-                "model": "auto",  # Use "auto" to trigger category-based classification routing
+                "model": "vllm-sr/auto",  # Use the default recipe for category-based routing
                 "messages": [
                     {
                         "role": "assistant",
@@ -210,7 +208,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
             results[test_case["name"]] = actual_model
 
             model_match = actual_model == expected_model
-            passed = response.status_code < 400 and model_match
+            passed = response.status_code < HTTPStatus.BAD_REQUEST and model_match
 
             self.print_response_info(
                 response,

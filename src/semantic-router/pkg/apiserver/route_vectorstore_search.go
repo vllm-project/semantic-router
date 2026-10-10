@@ -1,14 +1,16 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -54,22 +56,33 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	if err = manager.CheckEmbeddingCompatibility(params.storeID); err != nil {
+		if errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+			s.writeErrorResponse(w, http.StatusConflict, "EMBEDDING_REINDEX_REQUIRED", err.Error())
+		} else {
+			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "vector store not found")
+		}
+		return
+	}
 
 	queryEmbedding, err := embedder.Embed(r.Context(), params.request.Query)
 	if err != nil {
+		// The client message stays generic, so the cause is only on the server.
+		logging.Errorf("Vector store search could not embed the query for store %s: %v", params.storeID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_ERROR", "failed to generate query embedding")
 		return
 	}
 
 	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbedding)
 	if err != nil {
+		logging.Errorf("Vector store search failed for store %s: %v", params.storeID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SEARCH_ERROR", "search failed")
 		return
 	}
 
-	response := map[string]interface{}{
-		"object": "vector_store.search_results.page",
-		"data":   results,
+	response := objectListResponse[vectorstore.SearchResult]{
+		Object: "vector_store.search_results.page",
+		Data:   results,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -85,7 +98,9 @@ func (s *ClassificationAPIServer) parseVectorStoreSearchParams(r *http.Request) 
 	if err := s.parseJSONRequestWithLimit(r, &req, maxVectorStoreJSONBodySize); err != nil {
 		return vectorStoreSearchParams{}, err
 	}
-	if req.Query == "" {
+	// The embedder rejects text that is empty once trimmed, so a query of only
+	// whitespace is a client error here rather than an internal failure later.
+	if strings.TrimSpace(req.Query) == "" {
 		return vectorStoreSearchParams{}, fmt.Errorf("query is required")
 	}
 
@@ -133,7 +148,7 @@ func performVectorStoreSearch(
 	queryEmbedding []float32,
 ) ([]vectorstore.SearchResult, error) {
 	if params.request.Hybrid == nil {
-		return manager.Backend().Search(
+		return manager.Search(
 			ctx,
 			params.storeID,
 			queryEmbedding,
@@ -143,23 +158,8 @@ func performVectorStoreSearch(
 		)
 	}
 
-	backend := manager.Backend()
-	if searcher, ok := backend.(vectorstore.HybridSearcher); ok {
-		return searcher.HybridSearch(
-			ctx,
-			params.storeID,
-			params.request.Query,
-			queryEmbedding,
-			params.topK,
-			params.threshold,
-			params.request.Filters,
-			params.request.Hybrid,
-		)
-	}
-
-	return vectorstore.GenericHybridRerank(
+	return manager.HybridSearch(
 		ctx,
-		backend,
 		params.storeID,
 		params.request.Query,
 		queryEmbedding,

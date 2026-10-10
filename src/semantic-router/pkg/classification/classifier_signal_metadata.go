@@ -16,6 +16,10 @@ type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context
 
+	// JailbreakInput, when present, supplies role-scoped Guard content separately
+	// from the general routing text. Nil preserves flat-text classifier callers.
+	JailbreakInput *JailbreakInput
+
 	// ContextTokenFloor and the related scalar fields carry the content-free,
 	// request-envelope estimate used by the context signal. They account for
 	// prompt-bearing request components that are intentionally absent from the

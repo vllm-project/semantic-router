@@ -3,6 +3,7 @@ package extproc
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -21,7 +22,15 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	body []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	engine, err := r.protocolEngine()
+	if r.shouldAttemptFallback(ctx) {
+		if fallbackResp := r.maybeExecuteFallback(body, ctx); fallbackResp != nil {
+			return fallbackResp
+		}
+	}
+
+	// Error envelopes use the selected backend's response policy too.
+	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return r.createErrorResponse(503, "protocol runtime unavailable")
 	}
@@ -42,10 +51,14 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		}
 		translated.Body = encoded
 	}
+	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, translated.Diagnostics...)
 	response := buildResponseBodyContinueResponse(nil, nil)
 	setResponseBodyMutation(response, translated.Body)
 	setResponseContentType(response, "application/json")
+	if warning, ok := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody); ok {
+		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, warning)
+	}
 	r.attachRouterReplayResponse(ctx, translated.Body, true)
 	return response
 }
@@ -68,9 +81,10 @@ func responseWireFormats(ctx *RequestContext) (llmprotocol.WireFormat, llmprotoc
 
 func upstreamTransportFallback(status int, cause error) *llmprotocol.ProtocolError {
 	category, code := llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_error"
-	if status == 429 {
+	switch status {
+	case 429:
 		category, code = llmprotocol.ErrorRateLimited, "rate_limited"
-	} else if status == 408 || status == 504 {
+	case 408, 504:
 		category, code = llmprotocol.ErrorUpstreamTimeout, "upstream_timeout"
 	}
 	return llmprotocol.NewError(category, code, "model service returned an invalid error response", cause)

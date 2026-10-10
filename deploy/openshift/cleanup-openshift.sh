@@ -334,8 +334,6 @@ cleanup_deployment() {
         "route/envoy-admin"
         "configmap/semantic-router-config"
         "configmap/envoy-config"
-        "buildconfig/llm-katan"
-        "imagestream/llm-katan"
         "imagestream/python"
 
         # Observability resources

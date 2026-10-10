@@ -1,12 +1,15 @@
 package k8s
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -142,12 +145,36 @@ func readValuesConfigBlock(t *testing.T, path string) []byte {
 
 func mustUnmarshalDynamicConfigFile(t *testing.T, path string, target interface{}, subject string) {
 	t.Helper()
-	mustUnmarshalDynamicConfigYAML(t, mustReadDynamicConfigTestFile(t, path), target, subject)
+	// API objects carry RawExtension JSON; decode them like the API server.
+	if err := k8syaml.Unmarshal(mustReadDynamicConfigTestFile(t, path), target); err != nil {
+		t.Fatalf("failed to decode %s: %v", subject, err)
+	}
 }
 
 func mustUnmarshalDynamicConfigYAML(t *testing.T, data []byte, target interface{}, subject string) {
 	t.Helper()
 	if err := yaml.Unmarshal(data, target); err != nil {
 		t.Fatalf("failed to decode %s: %v", subject, err)
+	}
+}
+
+func TestDynamicConfigReconcilePreservesBackendNames(t *testing.T) {
+	fixture := mustLoadDynamicConfigProfileFixture(t)
+	fixture.pool.Namespace = "runtime-test"
+	fixture.route.Namespace = "runtime-test"
+	r := buildConflictReconciler(t, fixture.pool.Namespace, &fixture.pool, &fixture.route)
+	r.staticConfig = fixture.baseRouterConfig
+	expected := fixture.baseRouterConfig.GetEndpointsForModel("base-model")
+	if len(expected) == 0 {
+		t.Fatal("fixture has no base-model endpoints")
+	}
+	r.onConfigUpdate = func(_ context.Context, candidate *config.RouterConfig) error {
+		if got := candidate.GetEndpointsForModel("general-expert"); !reflect.DeepEqual(got, expected) {
+			t.Fatalf("reconciler changed backend refs: got %+v, want %+v", got, expected)
+		}
+		return nil
+	}
+	if err := r.reconcile(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "701e3631aa14a840646b8feb78caef3b5d9a91e3"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/complexity.md"
   outdated: false
 ---
@@ -91,6 +91,31 @@ global:
           top_m: 2
 ```
 
+复杂度规则也可在 `hard` 和 `easy` 旁声明 `prototype_scoring`。
+省略时继承上述族级配置。声明的对象会完整覆盖：未填写的字段，包括空对象 `{}`
+中的所有字段，使用内置默认值，不继承族级覆盖值。这样，规则的原始配置会随配方
+导出或初始化一同保留。
+
+如需保留两个候选库中的所有不同候选：
+
+```yaml
+prototype_scoring:
+  enabled: false
+  best_weight: 0.75
+  top_m: 2
+```
+
+此设置关闭聚类和原型数量上限，保留最高相似度与支持分数的聚合。
+文本和图像的 hard/easy 候选库及其评分使用同一份解析后的配置。
+启用压缩时，`max_prototypes: 0` 使用默认上限 8。这些设置影响本地原型评分，
+不影响远程打分器返回的分数；阈值和显式难度边界保持不变。
+
+### 判断模型评分 {#decision-model-scoring}
+
+已有 `hard`/`easy` 样例库默认继续使用嵌入比较。要改为判断任务，设置 `routing.model_bindings.complexity: {deployment: primary, contract: decision.v1}`。没有样例库的规则也可使用默认判断模型部署；部署必须支持 `score` 问题。
+
+任务提出 easy、medium、hard 等级问题，将原生等级分数归一化到 `[0, 1]` 后应用显式边界；仅设置 `threshold` 时先映射到 `[-1, 1]` 再应用对称区间。这是模型判断，不是余弦差值或校准后的正确率；切换任务或模型时应重新评估边界。
+
 ### 本地与远程打分 {#local-and-remote-scoring}
 
 没有 `backend` 时，complexity 保持现有本地行为：`hard` 与 `easy` 候选列表在启动时嵌入一次，每个请求按它更像难示例还是易示例的程度打分。该差值是以零为中心的有符号裕量，因此 `threshold` 是对称的——高于 `+threshold` 为 hard，低于 `-threshold` 为 easy，中间档为 medium。
@@ -134,7 +159,7 @@ routing:
         easy_below: 0.30
 ```
 
-对于分数随难度上升而下降的模型——例如预测正确答案概率的模型——改用 `hard_below` 与 `easy_above`。把方向编码在字段名里，就不必再维护单独的方向设置，也不会意外写出重叠档。这两个字段要求 `score.v1` backend：本地裕量是 hard 减 easy，因此更高值本身就更难；要在本地反转它，交换候选列表即可。
+对于分数随难度上升而下降的模型——例如预测正确答案概率的模型——改用 `hard_below` 与 `easy_above`。把方向编码在字段名里，就不必再维护单独的方向设置，也不会意外写出重叠档。这两个字段适用于评分后端或判断模型评分。本地样例库的裕量是 hard 减 easy，因此更高值本身就更难；要在本地反转它，交换候选列表即可。
 
 想要比三个判定更细的分级？对同一分数写更多规则，各有自己的边界。判定词表仍是 `hard|easy|medium`，因为决策匹配 `<rule>:<verdict>`，规则仍可通过各自的 `composer` 条件区分。
 
@@ -196,7 +221,7 @@ decisions:
           name: needs_reasoning:hard
 ```
 
-`match` 把无法评级的请求送到更强模型，通常是更安全的默认；`fail_request` 直接拒绝。`on_unknown` 属于根 `rules` 节点，并作用于整条决策——逐条件 `on_error` 字段只在 `classifier` 条件上接受，因此把它放在 `complexity` 条件上会在配置加载时被拒绝。
+`match` 把无法评级的请求送到更强模型，通常是更安全的默认；`fail_request` 直接拒绝。`on_unknown` 属于根 `rules` 节点，并作用于整条决策——逐条件 `on_error` 字段只在 `classifier` 和 `decision` 条件上接受，因此把它放在 `complexity` 条件上会在配置加载时被拒绝。
 
 打分器的数字以模型自身单位发布为 `complexity:<rule>:score`，而本地打分发布 `complexity:<rule>:margin` 及其文本/图像分量。这些到达回放记录与可观测性；决策条件匹配判定（`<rule>:<verdict>`），而不是数字，因此对 `:score` 的数值谓词不是路由机制。
 

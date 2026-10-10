@@ -15,13 +15,17 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const { user } = useAuth()
+  const { user, refreshSession } = useAuth()
   const {
     isLoading: settingsLoading,
-    evaluationAvailable,
-    evaluationUnavailableReason,
+    srBenchAvailable,
+    srBenchUnavailableReason,
+    mlPipelineAvailable,
+    mlPipelineUnavailableReason,
+    mlPipelineAvailabilityChecked,
+    settingsError,
+    refreshSettings,
   } = useReadonly()
-  const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
     return <ProductLoadingState label="Opening your workspace" />
@@ -62,12 +66,20 @@ const AppRouter: React.FC = () => {
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              canUseMLSetup,
+              canAccessMLSetup: canAccessMLSetup(user),
+              mlPipelineAvailable,
+              mlPipelineUnavailableReason,
+              mlPipelineAvailabilityChecked,
               user,
               setupMode,
               settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
+              srBenchAvailable,
+              srBenchUnavailableReason,
+              settingsError,
+              onRefreshAccess: () => {
+                refreshSettings()
+                void refreshSession()
+              },
             })}
           </Route>
         </Route>

@@ -13,6 +13,9 @@ import (
 )
 
 type ResponseCacheServiceOptions struct {
+	// EmbeddingIdentity is the verified representation fingerprint of the loaded
+	// embedding consumer. Empty preserves unsupported legacy providers only.
+	EmbeddingIdentity string
 	L1MaxEntries      int
 	L1TTL             time.Duration
 	SingleflightWait  time.Duration
@@ -88,7 +91,12 @@ func NewResponseCacheService(
 
 func (s *ResponseCacheService) ResolveIdentity(identity CacheIdentity) CacheIdentity {
 	if identity.Partition.epochResolved {
-		return identity
+		if identity.Partition.resolvedEmbeddingIdentity == s.options.EmbeddingIdentity {
+			return identity
+		}
+		// A lease/identity from another loaded representation cannot bypass
+		// isolation merely because that other service already resolved it.
+		identity.Partition.Epoch = identity.Partition.configuredEpoch
 	}
 	partitionKey := identity.Partition.Key()
 	s.mu.Lock()
@@ -96,6 +104,11 @@ func (s *ResponseCacheService) ResolveIdentity(identity CacheIdentity) CacheIden
 	partitionEpoch := s.partitionEpochs[partitionKey]
 	s.mu.Unlock()
 	configuredEpoch := identity.Partition.Epoch
+	identity.Partition.configuredEpoch = configuredEpoch
+	identity.Partition.resolvedEmbeddingIdentity = s.options.EmbeddingIdentity
+	if s.options.EmbeddingIdentity != "" {
+		configuredEpoch = CombineFingerprints(configuredEpoch, s.options.EmbeddingIdentity)
+	}
 	identity.Partition.Epoch = fmt.Sprintf(
 		"%s:g%d:p%d",
 		configuredEpoch,
@@ -153,7 +166,8 @@ func (s *ResponseCacheService) LookupExact(
 	if !result.ExpiresAt.IsZero() {
 		ttl = TTL(time.Until(result.ExpiresAt))
 	}
-	s.l1.put(key, result.ResponseBody, ttl)
+	// Promotion retains the backend's age, including unknown age, and expiry.
+	s.l1.put(key, result, ttl)
 	return result, nil
 }
 
@@ -218,7 +232,7 @@ func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite)
 		s.recordOperation("store_exact", write.Identity, CacheResult{}, err, start)
 		return err
 	}
-	s.l1.put(key, write.ResponseBody, write.TTL)
+	s.l1.put(key, CacheResult{ResponseBody: write.ResponseBody, AgeKnown: true}, write.TTL)
 	s.recordOperation("store_exact", write.Identity, CacheResult{}, nil, start)
 	return nil
 }

@@ -2,7 +2,8 @@ package dsl
 
 // preserveBaseDecisionField carries YAML-only decision policy through a DSL
 // routing replacement. The DSL owns the executable routing surface, but fields
-// such as adaptations are intentionally configured only in the base document.
+// such as adaptations, reliability and fallback are intentionally configured
+// only in the base document.
 func preserveBaseDecisionField(compiled, base interface{}, field string) {
 	compiledRouting, ok := compiled.(map[string]interface{})
 	if !ok {
@@ -46,5 +47,36 @@ func preserveBaseDecisionField(compiled, base interface{}, field string) {
 		if exists {
 			decision[field] = value
 		}
+	}
+}
+
+// preserveBaseRecipeDecisionField matches the recipe before matching a decision.
+// Identically named decisions in different recipes never share base policy.
+func preserveBaseRecipeDecisionField(compiled, base interface{}, field string) {
+	compiledRecipes, ok := compiled.([]interface{})
+	if !ok {
+		return
+	}
+	baseRecipes, ok := base.([]interface{})
+	if !ok {
+		return
+	}
+	baseByName := make(map[string]map[string]interface{}, len(baseRecipes))
+	for _, raw := range baseRecipes {
+		recipe, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, _ := recipe["name"].(string); name != "" {
+			baseByName[name] = recipe
+		}
+	}
+	for _, raw := range compiledRecipes {
+		recipe, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := recipe["name"].(string)
+		preserveBaseDecisionField(recipe["routing"], baseByName[name]["routing"], field)
 	}
 }

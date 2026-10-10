@@ -6,7 +6,6 @@ import {
   buildExactChatRequestBody,
   buildPlaygroundRequestHeaders,
   collectResponseHeaders,
-  PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
   PLAYGROUND_MAX_REQUEST_BYTES,
 } from './chatRequestSupport'
 
@@ -15,6 +14,21 @@ function responseWithHeaders(headers: Record<string, string>): Response {
 }
 
 describe('collectResponseHeaders', () => {
+  it('collects actual automatic-output limits without inventing absent evidence', () => {
+    expect(
+      collectResponseHeaders(
+        responseWithHeaders({
+          'x-vsr-effective-input-tokens': '512',
+          'x-vsr-effective-max-output-tokens': '261632',
+        }),
+      ),
+    ).toEqual({
+      'x-vsr-effective-input-tokens': '512',
+      'x-vsr-effective-max-output-tokens': '261632',
+    })
+    expect(collectResponseHeaders(responseWithHeaders({}))).toEqual({})
+  })
+
   it('collects the looper latency and token usage headers (#2694)', () => {
     const response = responseWithHeaders({
       'x-vsr-looper-latency-ms': '74',
@@ -29,6 +43,24 @@ describe('collectResponseHeaders', () => {
     expect(collected['x-vsr-looper-prompt-tokens']).toBe('16')
     expect(collected['x-vsr-looper-completion-tokens']).toBe('101')
     expect(collected['x-vsr-looper-total-tokens']).toBe('117')
+  })
+
+  it('collects the System One answers, recipe, confidence and routing latency', () => {
+    const collected = collectResponseHeaders(
+      responseWithHeaders({
+        'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
+        'x-vsr-selected-recipe': 'default',
+        'x-vsr-selected-confidence': '0.91',
+        'x-vsr-routing-latency-ms': '61',
+      }),
+    )
+
+    expect(collected).toEqual({
+      'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
+      'x-vsr-selected-recipe': 'default',
+      'x-vsr-selected-confidence': '0.91',
+      'x-vsr-routing-latency-ms': '61',
+    })
   })
 
   it('ignores headers outside the allowlist', () => {
@@ -74,7 +106,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'continue',
-      false,
     )
 
     expect(messages.map((message) => message.role)).toEqual([
@@ -114,7 +145,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'continue',
-      false,
     )
 
     expect(messages).toEqual([
@@ -143,7 +173,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'Compare it with this image.',
-      false,
       [{ ...image, id: 'image-2', fileName: 'comparison.png' }],
     )
 
@@ -192,7 +221,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'What changed?',
-      false,
     )
 
     expect(messages).toEqual([
@@ -224,7 +252,6 @@ describe('buildExactChatRequestBody', () => {
       temperature: 0,
       model: 'team/custom-balanced',
       stream: true,
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
     })
   })
 
@@ -255,12 +282,6 @@ describe('buildExactChatRequestBody', () => {
 })
 
 describe('playground request stability', () => {
-  it('sets a bounded completion default for ordinary chat requests', () => {
-    expect(buildChatRequestBody('vllm-sr/auto', [], [])).toMatchObject({
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
-    })
-  })
-
   it('rejects an encoded request larger than the Router request envelope', () => {
     expect(() =>
       buildExactChatRequestBody(
@@ -277,7 +298,6 @@ describe('playground request stability', () => {
       model: 'vllm-sr/test',
       messages: [{ role: 'user', content: '' }],
       stream: true,
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
     }
     const emptyBytes = new TextEncoder().encode(JSON.stringify(emptyRequest)).byteLength
     const exactRequest = {
@@ -305,10 +325,41 @@ describe('playground request stability', () => {
     ).toThrow('exceeds the 10 MB request limit')
   })
 
-  it('pins every turn in one conversation to the same Router session', () => {
-    expect(buildPlaygroundRequestHeaders('conv-demo')).toMatchObject({
-      'x-session-id': 'conv-demo',
-      'x-vsr-debug': 'true',
-    })
+  it('keeps both Router identities stable within a conversation and separate across conversations', () => {
+    for (const conversationId of ['conv-first', 'conv-second']) {
+      const headers = buildPlaygroundRequestHeaders(conversationId)
+      expect(headers).toMatchObject({
+        'x-session-id': conversationId,
+        'x-conversation-id': conversationId,
+        'x-vsr-debug': 'true',
+      })
+      expect(buildPlaygroundRequestHeaders(conversationId)).toEqual(headers)
+    }
+    expect(buildPlaygroundRequestHeaders('conv-first')).not.toEqual(
+      buildPlaygroundRequestHeaders('conv-second'),
+    )
   })
+})
+
+describe('backend generation limits', () => {
+  it('omits both token limit fields for ordinary and unspecified exact requests', () => {
+    for (const result of [
+      buildChatRequestBody('balance', [], []),
+      buildExactChatRequestBody({ messages: [] }, 'balance'),
+    ]) {
+      expect(result).not.toHaveProperty('max_completion_tokens')
+      expect(result).not.toHaveProperty('max_tokens')
+    }
+  })
+
+  it.each(['max_tokens', 'max_completion_tokens'])(
+    'preserves an exact %s without adding another limit',
+    (key) => {
+      const result = buildExactChatRequestBody({ messages: [], [key]: 512 }, 'balance')
+      expect(result[key]).toBe(512)
+      expect(result).not.toHaveProperty(
+        key === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens',
+      )
+    },
+  )
 })

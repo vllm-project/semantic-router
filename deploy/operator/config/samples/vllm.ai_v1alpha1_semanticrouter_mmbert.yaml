@@ -39,8 +39,8 @@ spec:
   config:
     # Embedding models configuration with mmBERT 2D Matryoshka
     embedding_models:
-      # Path to mmBERT model (downloads automatically on startup, or run: make download-models)
-      mmbert_model_path: "models/mom-embedding-ultra"
+      # Path to the mmBERT model (the model runtime downloads it on first start)
+      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
       use_cpu: true
 
       # HNSW configuration for embedding-based classification
@@ -84,7 +84,12 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
-      threshold: "0.7"
+      threshold: "0.75"
+      # Optional token windows on the local model; omission uses whole input.
+      # max_sequence_length: 32768
+      # window:
+      #   size: 128
+      #   overlap: 63
 
     # Tools auto-selection
     tools:

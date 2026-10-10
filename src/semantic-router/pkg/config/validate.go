@@ -35,6 +35,13 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 	if len(known) == 0 {
 		return // opaque/schemaless struct (e.g., StructuredPayload) — skip
 	}
+	// A struct that inlines extension blocks accepts the registered ones;
+	// their own types validate what is inside.
+	if extensible, ok := reflect.New(t).Interface().(interface{ extensionFields() []string }); ok {
+		for _, name := range extensible.extensionFields() {
+			known[name] = fieldEntry{}
+		}
+	}
 	for key := range raw {
 		entry, ok := known[key]
 		if !ok {
@@ -124,7 +131,7 @@ type fieldEntry struct {
 // collectKnownFields builds a map of yaml-tag → field info for a struct type,
 // handling inline fields by promoting their children to the current level.
 func collectKnownFields(t reflect.Type) map[string]fieldEntry {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	known := make(map[string]fieldEntry)
@@ -163,7 +170,7 @@ func splitYAMLTag(tag string) (string, string) {
 }
 
 func derefType(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t

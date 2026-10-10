@@ -16,16 +16,6 @@ import type {
 
 const API_BASE = '/api/mcp'
 
-export const OPENCLAW_MCP_SERVER_ID = '0f9f4c36-7d5b-4f13-9fe8-63f34ad37d9a'
-export const OPENCLAW_MCP_SERVER_NAME = 'OpenClaw Team & Worker MCP'
-export const OPENCLAW_MCP_TOOL_NAMESPACE = 'openclaw'
-const OPENCLAW_MCP_ENDPOINT_PATH = '/api/openclaw/mcp'
-
-function buildOpenClawEndpoint(origin?: string): string {
-  const base = (origin || window.location.origin).replace(/\/$/, '')
-  return `${base}${OPENCLAW_MCP_ENDPOINT_PATH}`
-}
-
 /**
  * 获取所有 MCP 服务器状态
  */
@@ -36,60 +26,6 @@ export async function getServers(signal?: AbortSignal): Promise<MCPServerState[]
   }
   const data: MCPServersResponse = await response.json()
   return data.servers || []
-}
-
-/**
- * Ensure built-in OpenClaw MCP server exists and is connected.
- * This is used by Playground Claw Mode to bootstrap the required MCP tools.
- */
-export async function ensureOpenClawServerConnected(origin?: string): Promise<MCPServerState> {
-  const endpointURL = buildOpenClawEndpoint(origin)
-  const servers = await getServers()
-
-  let server = servers.find(
-    (s) =>
-      s.config.id === OPENCLAW_MCP_SERVER_ID ||
-      s.config.connection?.url === endpointURL ||
-      s.config.name === OPENCLAW_MCP_SERVER_NAME,
-  )
-
-  if (!server) {
-    try {
-      await createServer({
-        id: OPENCLAW_MCP_SERVER_ID,
-        name: OPENCLAW_MCP_SERVER_NAME,
-        description: 'Built-in MCP server for OpenClaw team, worker, and connection management',
-        transport: 'streamable-http',
-        connection: { url: endpointURL },
-        enabled: true,
-        options: { timeout: 30000 },
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const alreadyExists = message.includes('already exists')
-      if (!alreadyExists) {
-        throw error
-      }
-    }
-
-    const refreshedServers = await getServers()
-    server = refreshedServers.find(
-      (s) =>
-        s.config.id === OPENCLAW_MCP_SERVER_ID ||
-        s.config.connection?.url === endpointURL ||
-        s.config.name === OPENCLAW_MCP_SERVER_NAME,
-    )
-  }
-
-  if (!server) {
-    throw new Error('OpenClaw MCP server is not available')
-  }
-
-  if (server.status === 'connected') {
-    return server
-  }
-
-  return connectServer(server.config.id)
 }
 
 /**
@@ -243,8 +179,124 @@ export async function executeTool(
   return response.json()
 }
 
+const MCP_STREAM_TYPES = new Set<MCPStreamChunk['type']>([
+  'progress',
+  'partial',
+  'complete',
+  'error',
+])
+
+interface MCPStreamParseState {
+  eventType: string
+  eventData: string
+  sawComplete: boolean
+  sawError: boolean
+  result: unknown
+  error?: string
+}
+
+function isAbortError(err: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true
+  return err instanceof Error && err.name === 'AbortError'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function mcpStreamChunkFromSSE(eventName: string, rawData: string): MCPStreamChunk {
+  const timestamp = Date.now()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawData)
+  } catch {
+    return { type: 'partial', data: rawData, timestamp }
+  }
+
+  if (
+    isRecord(parsed) &&
+    typeof parsed.type === 'string' &&
+    MCP_STREAM_TYPES.has(parsed.type as MCPStreamChunk['type'])
+  ) {
+    return {
+      type: parsed.type as MCPStreamChunk['type'],
+      data: parsed.data,
+      progress: typeof parsed.progress === 'number' ? parsed.progress : undefined,
+      timestamp,
+    }
+  }
+
+  if (isRecord(parsed) && typeof parsed.error === 'string') {
+    return { type: 'error', data: parsed.error, timestamp }
+  }
+
+  if (MCP_STREAM_TYPES.has(eventName as MCPStreamChunk['type'])) {
+    return { type: eventName as MCPStreamChunk['type'], data: parsed, timestamp }
+  }
+
+  return { type: 'partial', data: parsed, timestamp }
+}
+
+function pushSSELine(state: MCPStreamParseState, line: string): MCPStreamChunk | undefined {
+  const normalized = line.endsWith('\r') ? line.slice(0, -1) : line
+  if (normalized.startsWith(':')) return undefined
+  if (normalized.startsWith('event:')) {
+    state.eventType = normalized.slice(6).trim()
+    return undefined
+  }
+  if (normalized.startsWith('data:')) {
+    let value = normalized.slice(5)
+    if (value.startsWith(' ')) value = value.slice(1)
+    state.eventData = state.eventData ? `${state.eventData}\n${value}` : value
+    return undefined
+  }
+  if (normalized !== '' || !state.eventData) return undefined
+
+  const chunk = mcpStreamChunkFromSSE(state.eventType, state.eventData)
+  state.eventType = ''
+  state.eventData = ''
+  if (chunk.type === 'complete') {
+    state.sawComplete = true
+    state.result = chunk.data
+  } else if (chunk.type === 'error') {
+    state.sawError = true
+    state.result = chunk.data
+    state.error =
+      typeof chunk.data === 'string' && chunk.data ? chunk.data : 'Tool execution failed'
+  }
+  return chunk
+}
+
+function streamTerminalResult(state: MCPStreamParseState): MCPToolResult {
+  if (state.sawError || !state.sawComplete) {
+    return {
+      is_streaming: true,
+      success: false,
+      result: state.sawError ? state.result : undefined,
+      error: state.error ?? 'Stream ended before a complete result',
+    }
+  }
+  return {
+    is_streaming: true,
+    success: true,
+    result: state.result,
+  }
+}
+
+function cancelledStreamResult(): MCPToolResult {
+  return {
+    is_streaming: true,
+    success: false,
+    error: 'Streaming execution cancelled',
+  }
+}
+
 /**
- * 流式执行 MCP 工具
+ * Stream MCP tool execution over SSE.
+ *
+ * Contract: each SSE `event` is progress | partial | complete | error; JSON `data`
+ * is a StreamChunk and `data.type` carries the same meaning. Expect one terminal
+ * complete or error event; EOF without complete is reported as success: false.
  */
 export async function* executeToolStreaming(
   serverId: string,
@@ -252,19 +304,25 @@ export async function* executeToolStreaming(
   args: unknown,
   signal?: AbortSignal,
 ): AsyncGenerator<MCPStreamChunk, MCPToolResult, unknown> {
-  const response = await fetch(`${API_BASE}/tools/execute/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
-    body: JSON.stringify({
-      server_id: serverId,
-      tool_name: toolName,
-      arguments: args,
-    }),
-    signal,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}/tools/execute/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        server_id: serverId,
+        tool_name: toolName,
+        arguments: args,
+      }),
+      signal,
+    })
+  } catch (err) {
+    if (isAbortError(err, signal)) return cancelledStreamResult()
+    throw err
+  }
 
   if (!response.ok) {
     return {
@@ -281,53 +339,38 @@ export async function* executeToolStreaming(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  let finalResult: unknown = null
+  const state: MCPStreamParseState = {
+    eventType: '',
+    eventData: '',
+    sawComplete: false,
+    sawError: false,
+    result: undefined,
+  }
 
   try {
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
+      if (value) buffer += decoder.decode(value, { stream: true })
+      if (done) buffer += decoder.decode()
       const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      let eventType = ''
-      let eventData = ''
+      buffer = done ? '' : lines.pop() || ''
 
       for (const line of lines) {
-        if (line.startsWith('event:')) {
-          eventType = line.slice(6).trim()
-        } else if (line.startsWith('data:')) {
-          eventData = line.slice(5).trim()
-        } else if (line === '' && eventData) {
-          try {
-            const chunk: MCPStreamChunk = {
-              type: eventType as MCPStreamChunk['type'],
-              data: JSON.parse(eventData),
-              timestamp: Date.now(),
-            }
-
-            if (chunk.type === 'complete') {
-              finalResult = chunk.data
-            }
-
-            yield chunk
-          } catch {
-            yield { type: 'partial', data: eventData, timestamp: Date.now() }
-          }
-          eventType = ''
-          eventData = ''
-        }
+        const chunk = pushSSELine(state, line)
+        if (chunk) yield chunk
+      }
+      if (done) {
+        const trailing = pushSSELine(state, '')
+        if (trailing) yield trailing
+        break
       }
     }
+  } catch (err) {
+    if (isAbortError(err, signal)) return cancelledStreamResult()
+    throw err
   } finally {
     reader.releaseLock()
   }
 
-  return {
-    is_streaming: true,
-    success: true,
-    result: finalResult,
-  }
+  return streamTerminalResult(state)
 }

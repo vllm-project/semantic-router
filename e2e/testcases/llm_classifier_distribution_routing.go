@@ -46,11 +46,21 @@ func testLLMClassifierDistributionRouting(
 			prompt:    "__LLM_CLASSIFIER_BENIGN__ verify the LLM classifier path",
 			wantMatch: false,
 		},
+		{
+			name:      "reasoning with high toxic score matches",
+			prompt:    "__LLM_CLASSIFIER_REASONING__ __LLM_CLASSIFIER_TOXIC__ verify reasoning output",
+			wantMatch: true,
+		},
+		{
+			name:      "reasoning with low toxic score does not match",
+			prompt:    "__LLM_CLASSIFIER_REASONING__ __LLM_CLASSIFIER_BENIGN__ verify reasoning output",
+			wantMatch: false,
+		},
 	}
 
 	decisions := make(map[string]string, len(cases))
 	for _, testCase := range cases {
-		response, err := sendLocalChatCompletion(ctx, localPort, "auto", testCase.prompt, 30*time.Second)
+		response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.prompt, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("%s: %w", testCase.name, err)
 		}

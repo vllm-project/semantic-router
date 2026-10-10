@@ -9,21 +9,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestEmptyFactAndFeedbackPolicyDefaultsHaveNoScores(t *testing.T) {
+func TestEmptyFactPolicyDefaultHasNoScores(t *testing.T) {
 	fact := &FactCheckClassifier{initialized: true}
-	feedback := &FeedbackDetector{initialized: true}
 	factResult, err := fact.Classify(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	feedbackResult, err := feedback.Classify(context.Background(), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if factResult.NeedsFactCheck || factResult.Label != FactCheckLabelNotNeeded || feedbackResult.FeedbackType != FeedbackLabelSatisfied {
+	if factResult.NeedsFactCheck || factResult.Label != FactCheckLabelNotNeeded {
 		t.Fatal("empty-input policy changed")
 	}
-	for _, result := range []interface{}{factResult, feedbackResult} {
+	for _, result := range []interface{}{factResult} {
 		raw, marshalErr := json.Marshal(result)
 		if marshalErr != nil {
 			t.Fatal(marshalErr)
@@ -36,11 +31,10 @@ func TestEmptyFactAndFeedbackPolicyDefaultsHaveNoScores(t *testing.T) {
 			t.Fatalf("policy default fabricated confidence: %s", raw)
 		}
 	}
-	classifier := &Classifier{Config: &config.RouterConfig{}, factCheckClassifier: fact, feedbackDetector: feedback}
+	classifier := &Classifier{Config: &config.RouterConfig{}, factCheckClassifier: fact}
 	results := &SignalResults{Metrics: &SignalMetricsCollection{}}
 	classifier.evaluateFactCheckSignal(context.Background(), results, &sync.Mutex{}, "")
-	classifier.evaluateUserFeedbackSignal(context.Background(), results, &sync.Mutex{}, "", true)
-	for _, metric := range []SignalMetrics{results.Metrics.FactCheck, results.Metrics.UserFeedback} {
+	for _, metric := range []SignalMetrics{results.Metrics.FactCheck} {
 		if metric.ConfidenceAvailable == nil || *metric.ConfidenceAvailable || metric.PolicyDefault != "empty_text" {
 			t.Fatalf("metric lost unavailable policy default: %+v", metric)
 		}
@@ -76,5 +70,12 @@ func TestModalityKeywordPolicyDoesNotBecomeModelConfidence(t *testing.T) {
 		if result.Modality != want {
 			t.Fatalf("policy route changed: %+v", result)
 		}
+	}
+}
+
+func TestEmptyFeedbackCannotFabricateSatisfaction(t *testing.T) {
+	feedback := &FeedbackDetector{initialized: true}
+	if result, err := feedback.Classify(context.Background(), ""); err == nil || result != nil {
+		t.Fatalf("empty input fabricated feedback: %+v %v", result, err)
 	}
 }

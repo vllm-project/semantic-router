@@ -85,7 +85,7 @@ RAG 和 memory 证据默认受类型化来源保护。仅当该路由明确接�
 
 若载荷无法在配置预算内安全缩减，则在 `fail_open` 下原样发送，或在显式 `fail_closed` 下让路由失败。
 
-历史压缩保护每条 system 消息、当前用户轮次、最近一条 assistant 轮次以及完整的工具交换。可选的 `recoverable` 目标会把原始内容存入共享 Redis/Valkey 存储，注入保留的 `vsr_context_retrieve` 工具，并使用配置的 Looper 端点进行非流式后续请求。恢复按请求和受信任用户限定范围，并受 TTL、字节和检索次数限制。流式请求会保留可恢复目标，而不是暴露内部工具。
+历史压缩保护每条 system 消息、当前用户轮次、最近一条 assistant 轮次以及完整的工具交换。可选的 `recoverable` 目标会把原始内容存入共享 Redis/Valkey 存储，注入保留的 `vsr_context_retrieve` 工具，并在进程内发起非流式后续调用。恢复按请求和受信任用户限定范围，并受 TTL、字节和检索次数限制。流式请求会保留可恢复目标，而不是暴露内部工具。
 
 ## 请求控制 {#request-controls}
 
@@ -100,11 +100,11 @@ RAG 和 memory 证据默认受类型化来源保护。仅当该路由明确接�
 
 ## 管理与预览 {#management-and-preview}
 
-- `GET /api/v1/context-compression/capabilities`
-- `GET /api/v1/context-compression/health`
-- `GET /api/v1/context-compression/stats`
-- `POST /api/v1/context-compression/preview`
-- `POST /api/v1/context-compression/recovery/invalidate`
+- `GET /api/v1/plugins/context_compression/capabilities`
+- `GET /api/v1/plugins/context_compression/health`
+- `GET /api/v1/observability/plugins/context_compression/stats`
+- `POST /api/v1/plugins/context_compression/preview`
+- `POST /api/v1/storage/context-recovery/invalidate`
 
 预览只返回计划、目标索引、token 计数、分数、警告和跳过原因。它永不返回源内容或被省略内容，并需要 `compression.preview`。限定范围的恢复失效需要 `compression.manage`；它接受受信任的配方、决策、用户和请求坐标，并且永不返回派生范围或恢复键。
 

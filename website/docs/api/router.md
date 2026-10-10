@@ -1,6 +1,8 @@
 # Router API
 
-The router data plane accepts model requests through an Envoy listener. In the
+The router data plane accepts model requests on the configured listeners. The
+Router serves them itself in standalone mode, the default; with
+`--gateway extproc`, Envoy serves them and calls the Router over ext_proc. In the
 standard local stack, the listener is `http://localhost:8899`; a recipe can
 choose a different address or port under `listeners`.
 
@@ -18,13 +20,106 @@ queries. See [Router management API](./apiserver).
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
+| `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
+| `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
+| `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | The model is in the request body |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
+| `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
+| `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
+
+Engine mode serves the native System One paths with recipe routing disabled.
+Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
+allowlist does not grant native access. Both APIs use the listener's API keys.
+See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+
+### Route a System One request
+
+In Router mode, publish an `entrypoints` item with `api: systemone` and grant
+its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
+does not automatically publish a native entrypoint. Follow the
+[System One cascade guide](../tutorials/algorithm/native/cascade.md) to connect
+local deployments or remote Engine and compatible System One services.
+
+```bash
+curl -sS http://localhost:8899/v1/systemone \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "state": "Please explain how to reset my password.",
+    "questions": {
+      "task": {
+        "type": "choice",
+        "instructions": "Which team should handle this request?",
+        "criteria": {
+          "account": "Account access or authentication",
+          "billing": "Payments, invoices or refunds"
+        }
+      }
+    }
+  }'
+```
+
+Auto currently accepts explicit `choice`, `score` and `noul` questions, including
+multiple named states. The selected native response retains its answers,
+probabilities, usage and other fields. `model` stays the public entrypoint;
+the additional `routing` object identifies the execution. Set
+`options.return_meta: true` to include the selected model's runtime metadata.
+Calibrated cascades collect this provenance internally even when
+you leave response metadata disabled.
+
+```json
+{
+  "recipe": "native-cascade",
+  "decision": "classify",
+  "algorithm": "cascade",
+  "stage": "strong",
+  "selected_model": "vega",
+  "quality": "uncalibrated",
+  "model_calls": 2
+}
+```
+
+`model_calls` counts physical inference attempts within the selected algorithm,
+including its transport retries. Signal calls are outside this counter and have
+their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
+belongs to the returned native candidate and is not total cascade billing.
+The `quality` field names the configured acceptance method; it is not an
+accuracy score. Native discovery marks recipe entrypoints with `routing: true`
+and concrete models with `routing: false`.
+
+Malformed or unsupported auto questions return `400`. If no complete answer
+passes the declared acceptance rule within the call budget, the request
+returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
+returns `504` with `systemone_deadline_exceeded`. Failed
+candidates never become empty successful answers. Direct model requests keep
+their existing native API contract and do not run the cascade.
+
+A remote Engine backend must expose a concrete model. Native backend calls
+carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
+(`systemone_nested_routing`) if that request targets another recipe or remote
+forwarding alias. This prevents recursive cascades. The header grants no access:
+the receiving listener still checks its API key and model allowlist. An external
+compatible provider's internal execution remains outside the Router's call
+ledger.
+
+Auto execution exports `sr_systemone_stage_total` and
+`sr_systemone_stage_duration_seconds` by configured algorithm, stage and model,
+plus `sr_systemone_auto_requests_total` and
+`sr_systemone_auto_duration_seconds`. These distinguish accepted, rejected,
+invalid and failed attempts; they measure serving behavior, not label-based
+evaluation quality. The auto duration covers the algorithm; preceding recipe
+signals are outside that metric.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
 `/v1/vector_stores`, and Router Replay paths are not available on a public
 inference listener. Router-owned file and vector-store operations use
 `/api/v1/storage/files` and `/api/v1/storage/vector-stores` on the management
-listener.
+listener. Other `/openai/*` operations, such as embeddings and stored-response
+reads, return `404`.
+
+Every `POST` path above requires a JSON request body. A request with an empty
+body returns `400` from the Router and is never forwarded to a backend.
 
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
@@ -32,7 +127,7 @@ field-level portability boundaries.
 
 ## Send a routed request
 
-Use an auto-model or recipe entrypoint when you want the router to select a
+Use `vllm-sr/auto` or an explicitly declared recipe entrypoint when you want the router to select a
 backend. Use a concrete model name when you want to bypass semantic model
 selection and target that model directly.
 
@@ -40,7 +135,7 @@ selection and target that model directly.
 curl -sS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {
         "role": "user",
@@ -91,13 +186,30 @@ Anthropic Messages. The client may use any supported inference path; the Router
 translates once at the provider boundary and returns the client's original wire
 format.
 
+### vLLM Chat controls
+
+For Chat backends that implement these vLLM extensions, the Router preserves
+these fields through routing and request edits:
+
+| Field | Accepted values |
+| --- | --- |
+| `top_k` | Integer: `-1` or `0` disables filtering; positive values limit candidate tokens. |
+| `min_p` | Number from 0 to 1. |
+| `repetition_penalty` | Finite number greater than 0. |
+| `cache_salt` | String of 1–128 characters, excluding `@`, `/`, `\`, and NUL. |
+
+`cache_salt` selects a backend prefix-cache namespace without changing the
+prompt. Reuse a salt for requests that may share cached prefixes. The Router
+also preserves `chat_template_kwargs`, such as `enable_thinking`. These
+extensions are rejected when the target protocol cannot represent them.
+
 ### Responses API
 
 ```bash
 curl -sS http://localhost:8899/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "input": "Summarize the trade-offs of retrieval-augmented generation."
   }'
 ```
@@ -114,7 +226,7 @@ curl -sS http://localhost:8899/v1/messages \
   -H 'Content-Type: application/json' \
   -H 'anthropic-version: 2023-06-01' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "max_tokens": 256,
     "messages": [
       {
@@ -125,9 +237,89 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
+### Azure OpenAI clients
+
+Clients built for Azure OpenAI can call the Router as if it were an Azure
+resource. The deployment Chat path takes the model name from the URL; the
+Responses and v1 Chat paths take it from the request body. In either form,
+A recipe entrypoint selects a route and a concrete model name targets that model directly.
+The Router checks the client's `api-key` header against the listener's
+`api_keys` when they are set, and removes the header before provider dispatch.
+
+```bash
+curl -sS 'http://localhost:8899/openai/v1/chat/completions' \
+  -H 'Content-Type: application/json' \
+  -H 'api-key: YOUR-LISTENER-KEY' \
+  -d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Explain semantic routing in one paragraph."}]}'
+```
+
+For GitHub Copilot CLI, set `COPILOT_PROVIDER_TYPE=azure`, point
+`COPILOT_PROVIDER_BASE_URL` at the listener, and set
+`COPILOT_PROVIDER_WIRE_MODEL` to the Router model name. With
+`COPILOT_PROVIDER_WIRE_API=responses`, the CLI uses `/openai/v1/responses`, or
+`/openai/responses` when `COPILOT_PROVIDER_AZURE_API_VERSION` is set. The
+supported Chat paths are `/openai/v1/chat/completions` and the deployment
+route. The Router accepts Copilot's `reasoning.summary` on Responses
+turns. It forwards the setting to a Responses backend. With a Chat Completions
+or Messages backend, the turn still runs, but the summary request is dropped
+and reported in `x-vsr-protocol-warnings`.
+
 Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
+
+## Routing errors
+
+When the Router cannot route a request, it answers the request itself and calls
+no backend. The error uses the client's protocol. In OpenAI Chat Completions and
+Responses errors, `error.code` is a stable reason code and `error.message` a
+short message. Apart from the budget errors, the message names no model,
+decision, or request content:
+
+```json
+{"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
+```
+
+| Code | Status | `error.type` | Meaning |
+| --- | --- | --- | --- |
+| `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
+| `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
+| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
+| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
+| `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
+
+The Router logs each of these failures at `WARN`, under the request's
+`x-request-id`, with the code and its own reason: the model the request named,
+the recipe and decision it reached, and the error. Anthropic Messages clients
+get the same status and message in Anthropic's error envelope, which has no
+code field.
+
+## Request budget errors
+
+With `candidate_requirements.context: known_limits`, the Router checks estimated
+input plus the effective output allowance against the candidates' configured
+limits. If all candidates fail only the budget check, it returns HTTP 400:
+
+| Error code | Meaning |
+| --- | --- |
+| `context_length_exceeded` | The prepared input and requested output do not fit. |
+| `max_output_tokens_exceeded` | The requested output exceeds the configured model limit. |
+
+Missing capabilities, unknown limits, unavailable selection evidence, and mixed
+failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
+truncate requests by themselves; opt into
+[context compression](../tutorials/plugin/context-compression.md) when appropriate.
+
+These counts are estimates. A backend can still reject a request; its valid
+HTTP status and meaningful message are retained. vLLM integer codes are exposed
+as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
+becomes `invalid_request_error` with `code: "400"`.
+
+A streaming request rejected before generation receives the same non-2xx JSON
+error, not a successful SSE stream. When Replay is enabled, it records the
+failed status and body; Router budget rejections use
+`terminal_reason: request_budget_exceeded`.
 
 ## Router Replay
 
@@ -161,12 +353,75 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays` | List and filter records |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one record |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate routing and cost metadata |
-| `GET` | `/api/v1/observability/replays/trajectory?session_id=...` | Reconstruct one session trajectory |
+| `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
 `model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
 and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
 fields, so use it only when those fields are needed.
+
+Trajectory queries use the exact recipe name. Omitting `recipe` is supported
+only when the session's records belong to one recipe; an ambiguous session
+returns `400`. An explicit empty `recipe=` selects older, unscoped records.
+The response includes each request's route, latency, and lifecycle, including
+multiple requests at the same turn index.
+
+Records, trajectory routes, and messages include `conversation_id` when an
+explicit conversation identity is available. Messages are grouped by conversation
+and turn, so separate conversations in one session can each start at turn zero.
+Insights shows their boundaries and complete IDs.
+
+Dashboard Insights shows these routes alongside recorded signals, projections,
+candidate scores, and session-switch reasons. In `observe` mode, candidate and
+hold explanations describe what protection would have done; the selected model
+and route history still describe actual dispatch. Protection's `candidate_models`
+lists eligible models independently of their scores; an unrecorded score appears
+as `—`, while a recorded zero remains zero. Missing identity or evidence
+is displayed explicitly. Replay capture uses `global.services.router_replay`
+defaults and the selected decision's `router_replay` plugin overrides. Rejected
+requests without a selected decision use the global defaults.
+`capture_personal_data: false` retains routing evidence but suppresses content
+when personal data is detected or PII evidence is unavailable.
+
+### Configured-rate cost estimates
+
+Insights uses recorded token usage and configured input, cached-input,
+cache-write, and output rates. These are estimates, not invoices or GPU running
+costs; infrastructure charges and billing adjustments are excluded.
+
+| Field | Meaning |
+| --- | --- |
+| `actual_cost` | Estimated cost of the selected model for the recorded usage. |
+| `baseline_cost` | Highest same-currency estimate in the selected recipe's model pool, using that same usage. |
+| `baseline_model` | The model used for that comparison. Equal costs use model-name order. |
+| `cost_savings` | The difference between the baseline and actual estimate. |
+| `currency` | Currency of the recorded estimate; no exchange-rate conversion is applied. |
+
+The baseline covers the recipe's models across all its decisions: model
+references, explicit candidate-iteration models, and route destinations. A
+permitted default-model fallback is included only for decisions that can use it;
+auxiliary planners and judges do not enlarge the pool. Other recipes, unpriced
+models, and different currencies are excluded. Direct requests without a recipe
+compare against themselves. Alternative-model eligibility and tokenization are
+not re-evaluated; this is a rate comparison, not another inference.
+
+Missing usage, price, currency, or baseline stays unknown, with the reason shown
+in Insights. Explicitly configured free rates remain zero. Cache hits have zero
+additional model-inference cost; cache storage and lookup costs are excluded.
+Existing records keep their captured prices and baseline. **Price not recorded**
+means the historical record has no price; configuring rates today does not
+backfill it.
+
+Aggregates use `summary.by_currency`, a sorted array with `currency`,
+`total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each
+currency. With one currency, the flat summary fields mirror that group. With
+multiple currencies, flat `currency` is omitted and flat amounts are zero
+placeholders: use `by_currency`, not those placeholders. There is no combined
+cross-currency total.
+
+`cost_record_count` counts complete estimates. `excluded_record_count` includes
+non-completed requests and records missing the data needed for a complete
+estimate; it does not imply that every excluded request lacks pricing.
 
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the
@@ -188,7 +443,7 @@ An HTTP `200` response header alone does not make a streaming record
 
 | Task | Surface |
 | --- | --- |
-| Send model traffic | Configured Envoy listener; `8899` in the standard local stack |
+| Send model traffic | Standalone frontend, or Envoy with `--gateway extproc`; `8899` in the standard local stack |
 | List public models | `GET /v1/models` on the inference listener |
 | Check health or readiness | Management API on `8080` |
 | Read or change configuration | Management API on `8080` |

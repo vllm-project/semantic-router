@@ -10,9 +10,10 @@ import (
 // so validation and every schema consumer cannot acquire different plugin
 // inventories or payload shapes.
 func DecisionPluginSchemaSamples() map[string]interface{} {
-	samples := make(map[string]interface{}, len(decisionPluginRegistry))
-	for _, entry := range decisionPluginRegistry {
-		samples[entry.Catalog.Type] = entry.NewPayload()
+	entries := DecisionPlugins.Entries()
+	samples := make(map[string]interface{}, len(entries))
+	for _, entry := range entries {
+		samples[entry.Type] = entry.Spec.NewPayload()
 	}
 	return samples
 }
@@ -22,89 +23,8 @@ func validateDecisionPluginPayload(
 	index int,
 	plugin DecisionPlugin,
 ) error {
-	// image_gen was removed when #3076 unified inference protocol translation:
-	// the router no longer executes image-generation backends. Route image
-	// generation through a vllm-omni modality route speaking the Responses-API
-	// hosted image_generation tool instead. See issue #3129.
-	if plugin.Type == "image_gen" {
-		return fmt.Errorf(
-			"decision %q plugins[%d]: plugin %q is unsupported: the image_gen route plugin was removed; use the Responses-API hosted image_generation tool with a vllm-omni modality route",
-			decisionName,
-			index,
-			plugin.Type,
-		)
-	}
-	if !IsSupportedDecisionPluginType(plugin.Type) {
-		return fmt.Errorf(
-			"decision %q plugins[%d]: unsupported plugin type %q",
-			decisionName,
-			index,
-			plugin.Type,
-		)
-	}
-	if plugin.Configuration == nil {
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): configuration is required",
-			decisionName,
-			index,
-			plugin.Type,
-		)
-	}
-	normalizedType := NormalizeDecisionPluginType(plugin.Type)
-	target := newDecisionPluginPayload(normalizedType)
-	if target == nil {
-		return fmt.Errorf(
-			"decision %q plugins[%d]: unsupported plugin type %q",
-			decisionName,
-			index,
-			plugin.Type,
-		)
-	}
-	var err error
-	if normalizedType == DecisionPluginResponseCache ||
-		normalizedType == DecisionPluginResponseJailbreak ||
-		normalizedType == DecisionPluginContextCompression ||
-		normalizedType == DecisionPluginShadowDispatch {
-		err = plugin.Configuration.DecodeIntoStrict(target)
-	} else {
-		err = plugin.Configuration.DecodeInto(target)
-	}
-	if err != nil {
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): %w",
-			decisionName,
-			index,
-			plugin.Type,
-			err,
-		)
-	}
-	return validateDecodedPluginContract(
-		decisionName,
-		index,
-		plugin.Type,
-		target,
-	)
-}
-
-func validateDecodedPluginContract(
-	decisionName string,
-	index int,
-	pluginType string,
-	target interface{},
-) error {
-	switch typed := target.(type) {
-	case *ResponseCachePluginConfig:
-		return validateResponseCachePlugin(decisionName, index, pluginType, typed)
-	case *FastResponsePluginConfig:
-		return validateFastResponsePlugin(decisionName, index, pluginType, typed)
-	case *ResponseJailbreakPluginConfig:
-		return validateResponseJailbreakPlugin(decisionName, index, pluginType, typed)
-	case *ContextCompressionPluginConfig:
-		return validateContextCompressionPlugin(decisionName, index, pluginType, typed)
-	case *ShadowDispatchPluginConfig:
-		return validateShadowDispatchPlugin(decisionName, index, pluginType, typed)
-	}
-	return nil
+	_, err := DecodeDecisionPluginAt(PluginAt{Decision: decisionName, Index: index, Type: plugin.Type}, plugin)
+	return err
 }
 
 func validateResponseCachePlugin(
@@ -309,6 +229,12 @@ func validateContextCompressionTargets(
 	typed *ContextCompressionPluginConfig,
 	scope string,
 ) error {
+	if typed.Targets != nil {
+		mode := strings.TrimSpace(typed.Targets.CurrentUser.Mode)
+		if mode != "" && mode != ContextCompressionTargetPreserve && mode != ContextCompressionTargetTruncate {
+			return fmt.Errorf("%s: current_user.mode must be preserve or truncate", scope)
+		}
+	}
 	targets := []ContextCompressionTargetConfig{typed.EffectiveToolOutputTarget()}
 	if typed.Targets != nil {
 		targets = append(targets, typed.Targets.History, typed.Targets.RAG, typed.Targets.Memory)

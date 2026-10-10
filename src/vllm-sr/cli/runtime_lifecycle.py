@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import os
+import json
+import math
 import time
 from collections.abc import Callable
 
@@ -19,14 +20,16 @@ from cli.container_cli import (
     container_logs_since,
     container_network_connect,
     container_remove_container,
-    container_start_container,
     container_start_grafana,
     container_start_jaeger,
     container_start_prometheus,
     container_status,
+    container_status_strict,
     container_stop_container,
-    load_openclaw_registry,
 )
+from cli.container_runtime import get_container_runtime
+from cli.gateway_mode import GATEWAY_EXTPROC, runs_envoy
+from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import echo, fields, heading, progress, success
 from cli.utils import get_logger
@@ -34,6 +37,9 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 ServiceStarter = Callable[[], tuple[int, str, str]]
+
+# curl -f exits with this code when the server answered with an HTTP error.
+CURL_HTTP_ERROR = 22
 
 
 def log_startup_banner(
@@ -59,14 +65,41 @@ def ensure_clean_runtime_container(container_name: str) -> None:
     if status == "not found":
         return
     log.info(f"Existing container found (status: {status}), cleaning up...")
-    if status in {"running", "paused"}:
-        container_stop_container(container_name)
+    if status in {"running", "paused"} and not container_stop_container(container_name):
+        raise RuntimeError(f"Failed to stop runtime container: {container_name}")
     container_remove_container(container_name)
 
 
+def stop_runtime_before_config_replacement(stack_layout: RuntimeStackLayout) -> None:
+    """Stop old config consumers before a restart publishes their replacement.
+
+    Keep the stopped containers for normal deployment cleanup. A failed stop or
+    uncertain state must leave the old active document and provenance intact.
+    """
+    with acquire_runtime_lifecycle_lock(
+        runtime=get_container_runtime(), stack_name=stack_layout.stack_name
+    ):
+        names = stack_layout.runtime_container_names
+        states = {name: container_status_strict(name) for name in names}
+        for name, state in states.items():
+            if state in {"running", "paused", "restarting"}:
+                if not container_stop_container(name):
+                    raise RuntimeError(f"Failed to stop runtime container: {name}")
+            elif state not in {"not found", "exited", "created", "dead"}:
+                raise RuntimeError(f"Runtime container is not stopped: {name}")
+        for name in names:
+            if container_status_strict(name) not in {
+                "not found",
+                "exited",
+                "created",
+                "dead",
+            }:
+                raise RuntimeError(f"Runtime container is not stopped: {name}")
+
+
 def ensure_shared_network(shared_network_name: str) -> None:
-    """Create the shared OpenClaw bridge network used by local stacks."""
-    _ensure_network(shared_network_name, "shared OpenClaw")
+    """Create the stack's shared bridge network."""
+    _ensure_network(shared_network_name, "shared")
 
 
 def ensure_data_network(data_network_name: str) -> None:
@@ -128,7 +161,7 @@ def start_observability_stack(
 def connect_runtime_container(
     shared_network_name: str, stack_layout: RuntimeStackLayout
 ) -> None:
-    """Attach the runtime container to the shared OpenClaw bridge network."""
+    """Attach the runtime containers to the stack's shared bridge network."""
     connected = []
     for container_name in stack_layout.runtime_container_names:
         if container_status(container_name) == "not found":
@@ -155,6 +188,9 @@ def maybe_finish_setup_mode(
     setup_mode: bool,
     dashboard_disabled: bool,
     stack_layout: RuntimeStackLayout,
+    startup_timeout: int = HEALTH_CHECK_TIMEOUT,
+    *,
+    envoy: bool = True,
 ) -> bool:
     """Wait for dashboard-only setup mode and print next-step guidance."""
     if not setup_mode:
@@ -163,11 +199,14 @@ def maybe_finish_setup_mode(
         log.error("Setup mode started without dashboard enabled")
         raise SystemExit(1)
 
-    log.info("Setup mode detected: skipping Router and Envoy health checks")
+    services = "Router and Envoy" if envoy else "Router"
+    log.info(f"Setup mode detected: skipping {services} health checks")
     log.info("Waiting for Dashboard to become healthy...")
     dashboard_container = _runtime_service_container_name(stack_layout, "dashboard")
-    _wait_for_setup_dashboard(dashboard_container)
-    ensure_runtime_container_not_exited(dashboard_container, phase="during setup mode")
+    _wait_for_setup_dashboard(dashboard_container, startup_timeout)
+    ensure_runtime_container_not_exited(
+        dashboard_container, phase="during setup mode", timeout=5
+    )
 
     success("vLLM Semantic Router setup mode is running")
     echo()
@@ -176,81 +215,214 @@ def maybe_finish_setup_mode(
         (
             ("Dashboard", stack_layout.dashboard_url),
             ("Configure", "Add your first model in the dashboard"),
-            ("Activate", "Activate a runnable config to enable routing"),
+            (
+                "Activate",
+                "Activate a runnable config; this command then starts the Router",
+            ),
         )
     )
-    _log_runtime_commands(dashboard_disabled=False)
+    _log_runtime_commands(dashboard_disabled=False, envoy=envoy)
     return True
+
+
+def validate_startup_timeout(seconds: int) -> None:
+    """Reject invalid host-side budgets before changing runtime state."""
+    try:
+        finite = math.isfinite(seconds)
+    except (TypeError, OverflowError):
+        finite = False
+    if (
+        isinstance(seconds, bool)
+        or not isinstance(seconds, int)
+        or seconds <= 0
+        or not finite
+    ):
+        raise ValueError(
+            "startup timeout must be a finite positive integer number of seconds"
+        )
+
+
+class _StartupDeadline:
+    def __init__(self, seconds: int):
+        validate_startup_timeout(seconds)
+        self.seconds = seconds
+        self.started = time.monotonic()
+
+    def remaining(self) -> float:
+        return max(0.0, self.seconds - (time.monotonic() - self.started))
+
+    def io_timeout(self) -> float:
+        remaining = self.remaining()
+        if remaining <= 0:
+            raise TimeoutError("startup readiness deadline expired")
+        return min(5.0, remaining)
 
 
 def wait_for_router_health(
     stack_layout: RuntimeStackLayout,
     management_port: int = DEFAULT_API_PORT,
     readiness_token_env: str | None = None,
+    startup_timeout: int = HEALTH_CHECK_TIMEOUT,
 ) -> None:
     """Block until the router readiness endpoint responds or the timeout elapses."""
-    log.info("Waiting for Router to become ready...")
-    log.info(f"Health check timeout: {HEALTH_CHECK_TIMEOUT}s")
-    log.info("Showing Router logs during startup:")
-    log.info("-" * 60)
+    _wait_for_readiness(
+        _runtime_service_container_name(stack_layout, "router"),
+        "Router",
+        startup_timeout,
+        lambda timeout: _router_readiness_command(
+            management_port, readiness_token_env, timeout
+        ),
+        show_router_logs=True,
+        startup_status=lambda timeout: _router_management_command(
+            "/startup-status", management_port, readiness_token_env, timeout
+        ),
+    )
 
-    router_container = _runtime_service_container_name(stack_layout, "router")
-    start_time = time.time()
-    last_log_time = start_time
+
+def _wait_for_readiness(
+    container_name: str,
+    service: str,
+    startup_timeout: int,
+    command: Callable[[float], list[str]],
+    *,
+    show_router_logs: bool = False,
+    startup_status: Callable[[float], list[str]] | None = None,
+) -> None:
+    deadline = _StartupDeadline(startup_timeout)
+    log.info(f"Waiting for {service} to become ready...")
+    log.info(f"Startup readiness timeout: {startup_timeout}s")
+    last_log_time = time.time()
     check_count = 0
+    startup_message = None
+    if show_router_logs:
+        log.info("Showing Router logs during startup:")
+        log.info("-" * 60)
 
-    while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
-        check_count += 1
-        _emit_router_startup_logs(router_container, int(last_log_time))
-        last_log_time = time.time()
+    while deadline.remaining() > 0:
+        try:
+            check_count += 1
+            if show_router_logs:
+                _emit_router_startup_logs(
+                    container_name, int(last_log_time), timeout=deadline.io_timeout()
+                )
+                last_log_time = time.time()
+            try:
+                status = container_status_strict(
+                    container_name, timeout=deadline.io_timeout()
+                )
+            except RuntimeError:
+                # A busy or unavailable daemon is not proof that the container
+                # stopped. Retry inspection within the same startup budget.
+                status = None
+                log.debug(f"{service} container inspection unavailable; retrying")
+            if status is not None and status != "running":
+                log.error(
+                    f"{service} container is not running during readiness wait: {status}"
+                )
+                container_logs(container_name, follow=False, tail=120, timeout=5)
+                raise SystemExit(1)
+            return_code = 1
+            if status == "running":
+                probe_timeout = deadline.io_timeout()
+                return_code, _stdout, _stderr = container_exec(
+                    container_name, command(probe_timeout), timeout=probe_timeout
+                )
+            remaining = deadline.remaining()
+            if return_code == 0 and remaining > 0:
+                elapsed = int(time.monotonic() - deadline.started)
+                log.info(f"{service} is ready (after {elapsed}s, {check_count} checks)")
+                return
+            if return_code == CURL_HTTP_ERROR and startup_status is not None:
+                startup_message = _report_startup_status(
+                    container_name, startup_status, deadline, startup_message
+                )
+                remaining = deadline.remaining()
+            if check_count % 10 == 0:
+                elapsed = int(time.monotonic() - deadline.started)
+                log.info(
+                    f"  ... still waiting ({elapsed}s elapsed, {int(remaining)}s remaining)"
+                )
+            if remaining > 0:
+                time.sleep(min(HEALTH_CHECK_INTERVAL, remaining))
+        except TimeoutError:
+            break
 
-        status = container_status(router_container)
-        if status != "running":
-            log.error(
-                f"Router container is not running during readiness wait: {status}"
-            )
-            log.info("Showing Router container logs:")
-            container_logs(router_container, follow=False, tail=120)
-            raise SystemExit(1)
-
-        return_code, _stdout, _stderr = container_exec(
-            router_container,
-            _router_readiness_command(management_port, readiness_token_env),
-        )
-        if return_code == 0:
-            elapsed = int(time.time() - start_time)
-            log.info("-" * 60)
-            log.info(f"Router is ready (after {elapsed}s, {check_count} checks)")
-            return
-
-        if check_count % 10 == 0:
-            elapsed = int(time.time() - start_time)
-            remaining = int(HEALTH_CHECK_TIMEOUT - elapsed)
-            log.info(
-                f"  ... still waiting ({elapsed}s elapsed, {remaining}s remaining)"
-            )
-
-        time.sleep(HEALTH_CHECK_INTERVAL)
-
-    log.info("-" * 60)
-    log.error(f"Router failed to become healthy after {HEALTH_CHECK_TIMEOUT}s")
-    log.info("Showing full container logs:")
-    container_logs(router_container, follow=False, tail=100)
+    log.error(f"{service} did not become ready within {startup_timeout}s")
+    log.info(
+        "Startup wait ended without stopping containers; inspect vllm-sr status and vllm-sr logs."
+    )
+    # Diagnostics have their own small bound after the readiness budget expires.
+    container_logs(container_name, follow=False, tail=100, timeout=5)
     raise SystemExit(1)
 
 
 def _router_readiness_command(
-    management_port: int, readiness_token_env: str | None
+    management_port: int, readiness_token_env: str | None, timeout: float = 5.0
 ) -> list[str]:
-    endpoint = f"http://localhost:{management_port}/ready"
+    return _router_management_command(
+        "/ready", management_port, readiness_token_env, timeout, fail=True
+    )
+
+
+def _router_management_command(
+    path: str,
+    management_port: int,
+    readiness_token_env: str | None,
+    timeout: float = 5.0,
+    *,
+    fail: bool = False,
+) -> list[str]:
+    """Read a management endpoint in the Router container; with fail, an HTTP
+    error status exits non-zero (CURL_HTTP_ERROR) instead of printing the body."""
+    endpoint = f"http://localhost:{management_port}{path}"
+    max_time = f"{max(0.001, timeout):.3f}"
+    flags = ["-f", "-s"] if fail else ["-s"]
     if readiness_token_env is None:
-        return ["curl", "-f", "-s", endpoint]
+        return ["curl", *flags, "--max-time", max_time, endpoint]
     script = (
         'set -eu; token="$(printenv "$1")"; test -n "$token"; '
         "printf 'Authorization: Bearer %s\\n' \"$token\" | "
-        'curl -f -s -H @- "$2"'
+        f'curl {" ".join(flags)} --max-time "$3" -H @- "$2"'
     )
-    return ["sh", "-c", script, "vllm-sr-readiness", readiness_token_env, endpoint]
+    return [
+        "sh",
+        "-c",
+        script,
+        "vllm-sr-readiness",
+        readiness_token_env,
+        endpoint,
+        max_time,
+    ]
+
+
+def _report_startup_status(
+    container_name: str,
+    command: Callable[[float], list[str]],
+    deadline: _StartupDeadline,
+    last_message: str | None,
+) -> str | None:
+    """Print the Router's startup message when it changes, such as the model
+    deployments it still waits for, and end the wait when startup failed."""
+    timeout = deadline.io_timeout()
+    return_code, stdout, _stderr = container_exec(
+        container_name, command(timeout), timeout=timeout
+    )
+    try:
+        state = json.loads(stdout) if return_code == 0 else None
+    except ValueError:
+        state = None
+    if not isinstance(state, dict):
+        return last_message
+    message = state.get("message")
+    if not isinstance(message, str) or not message:
+        return last_message
+    if state.get("phase") == "error":
+        log.error(f"Router startup failed: {message}")
+        container_logs(container_name, follow=False, tail=120, timeout=5)
+        raise SystemExit(1)
+    if message != last_message:
+        progress(f"  {message}")
+    return message
 
 
 def wait_and_verify_runtime(
@@ -258,33 +430,44 @@ def wait_and_verify_runtime(
     dashboard_disabled: bool,
     management_port: int = DEFAULT_API_PORT,
     readiness_token_env: str | None = None,
+    startup_timeout: int = HEALTH_CHECK_TIMEOUT,
+    *,
+    envoy: bool = True,
 ) -> None:
     """Wait for readiness and verify every required runtime container."""
     wait_for_router_health(
         stack_layout,
         management_port=management_port,
         readiness_token_env=readiness_token_env,
+        startup_timeout=startup_timeout,
     )
-    for service in ("router", "envoy"):
+    for service in ("router", "envoy") if envoy else ("router",):
         ensure_runtime_container_not_exited(
-            stack_layout.service_container_name(service)
+            stack_layout.service_container_name(service), timeout=5
         )
     if not dashboard_disabled:
-        ensure_runtime_container_not_exited(stack_layout.dashboard_container_name)
+        ensure_runtime_container_not_exited(
+            stack_layout.dashboard_container_name, timeout=5
+        )
 
 
 def ensure_runtime_container_not_exited(
-    container_name: str, phase: str | None = None
+    container_name: str, phase: str | None = None, *, timeout: float | None = None
 ) -> None:
     """Abort if the runtime container exited unexpectedly."""
-    status = container_status(container_name)
-    if status != "exited":
+    try:
+        status = container_status_strict(
+            container_name, **({"timeout": timeout} if timeout is not None else {})
+        )
+    except RuntimeError:
+        status = "inspection unavailable"
+    if status == "running":
         return
 
     suffix = f" {phase}" if phase else ""
-    log.error(f"Container exited unexpectedly{suffix}")
+    log.error(f"Container is not confirmed running{suffix}: {status}")
     log.info("Showing container logs:")
-    container_logs(container_name, follow=False)
+    container_logs(container_name, follow=False, timeout=timeout)
     raise SystemExit(1)
 
 
@@ -294,61 +477,17 @@ def _runtime_service_container_name(
     return stack_layout.service_container_name(service)
 
 
-def recover_openclaw_containers(
-    config_dir: str, env_vars: dict[str, str], shared_network_name: str
-) -> None:
-    """Reconnect and restart previously stopped OpenClaw containers."""
-    openclaw_data_dir = resolve_openclaw_data_dir(config_dir, env_vars)
-    openclaw_entries = load_openclaw_registry(openclaw_data_dir)
-    if not openclaw_entries:
-        return
-
-    log.info(f"Recovering {len(openclaw_entries)} OpenClaw container(s)...")
-    for entry in openclaw_entries:
-        name = entry.get("name") or entry.get("containerName")
-        if not name:
-            continue
-        status = container_status(name)
-        if status == "not found":
-            log.warning(f"OpenClaw container {name} no longer exists, skipping")
-            continue
-
-        return_code, _stdout, _stderr = container_network_connect(
-            shared_network_name, name
-        )
-        if return_code == 0:
-            log.info(f"Connected {name} to {shared_network_name}")
-        else:
-            log.warning(f"Failed to connect {name} to {shared_network_name}")
-
-        if status != "running":
-            log.info(f"Starting OpenClaw container: {name}")
-            container_start_container(name)
-
-
-def resolve_openclaw_data_dir(
-    config_dir: str, env_vars: dict[str, str] | None = None
-) -> str:
-    """Resolve the persisted OpenClaw data directory for the current workspace."""
-    env_vars = env_vars or {}
-    default_path = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
-    openclaw_data_dir = (
-        env_vars.get("OPENCLAW_DATA_DIR")
-        or os.getenv("OPENCLAW_DATA_DIR")
-        or default_path
-    )
-    return os.path.abspath(openclaw_data_dir)
-
-
 def log_runtime_summary(
     listeners,
     stack_layout: RuntimeStackLayout,
     dashboard_disabled: bool,
     enable_observability: bool,
     started_backends: set[str] | None = None,
+    config: dict | None = None,
+    gateway: str = GATEWAY_EXTPROC,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
-    success("vLLM Semantic Router is running")
+    success(f"vLLM Semantic Router is running ({gateway} gateway)")
     echo()
     heading("Endpoints")
     endpoints = []
@@ -359,7 +498,8 @@ def log_runtime_summary(
         port = listener.get("port", "unknown")
         if isinstance(port, int):
             port += stack_layout.port_offset
-        endpoints.append((name, f"http://localhost:{port}"))
+        scheme = "https" if listener.get("tls") else "http"
+        endpoints.append((name, f"{scheme}://localhost:{port}"))
     endpoints.append(("Metrics", stack_layout.metrics_url))
     fields(endpoints)
 
@@ -385,8 +525,8 @@ def log_runtime_summary(
             )
         )
 
-    _log_runtime_commands(dashboard_disabled)
-    _print_curl_example(listeners, stack_layout)
+    _log_runtime_commands(dashboard_disabled, envoy=runs_envoy(gateway))
+    _print_curl_example(listeners, stack_layout, config)
 
 
 def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
@@ -397,24 +537,30 @@ def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
     log.info(f"{service_name} started successfully")
 
 
-def _wait_for_setup_dashboard(container_name: str) -> None:
-    start_time = time.time()
-    while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
-        return_code, _stdout, _stderr = container_exec(
-            container_name,
-            ["curl", "-f", "-s", "http://localhost:8700/healthz"],
-        )
-        if return_code == 0:
-            return
-        time.sleep(HEALTH_CHECK_INTERVAL)
+def _wait_for_setup_dashboard(
+    container_name: str, startup_timeout: int = HEALTH_CHECK_TIMEOUT
+) -> None:
+    _wait_for_readiness(
+        container_name,
+        "Dashboard",
+        startup_timeout,
+        lambda timeout: [
+            "curl",
+            "-f",
+            "-s",
+            "--max-time",
+            f"{max(0.001, timeout):.3f}",
+            "http://localhost:8700/healthz",
+        ],
+    )
 
-    log.error("Dashboard failed to become healthy in setup mode")
-    container_logs(container_name, follow=False, tail=100)
-    raise SystemExit(1)
 
-
-def _emit_router_startup_logs(container_name: str, since_timestamp: int) -> None:
-    return_code, stdout, stderr = container_logs_since(container_name, since_timestamp)
+def _emit_router_startup_logs(
+    container_name: str, since_timestamp: int, *, timeout: float | None = None
+) -> None:
+    return_code, stdout, stderr = container_logs_since(
+        container_name, since_timestamp, timeout=timeout
+    )
     if return_code != 0:
         return
     _print_matching_lines(stdout)
@@ -429,14 +575,19 @@ def _print_matching_lines(text: str) -> None:
             progress(f"  {line}")
 
 
-def _log_runtime_commands(dashboard_disabled: bool) -> None:
+def _log_runtime_commands(dashboard_disabled: bool, *, envoy: bool = True) -> None:
+    services = ["router"]
+    if envoy:
+        services.insert(0, "envoy")
+    if not dashboard_disabled:
+        services.append("dashboard")
     commands = []
     if not dashboard_disabled:
         commands.append(("Dashboard", "vllm-sr dashboard"))
     commands.extend(
         (
-            ("Logs", "vllm-sr logs <envoy|router|dashboard> [-f]"),
-            ("Status", "vllm-sr status [envoy|router|dashboard|all]"),
+            ("Logs", f"vllm-sr logs <{'|'.join(services)}> [-f]"),
+            ("Status", f"vllm-sr status [{'|'.join([*services, 'all'])}]"),
         )
     )
     commands.append(("Stop", "vllm-sr stop"))
@@ -445,7 +596,20 @@ def _log_runtime_commands(dashboard_disabled: bool) -> None:
     fields(commands)
 
 
-def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
+def _example_model(config: dict | None) -> str:
+    for entrypoint in (config or {}).get("entrypoints") or []:
+        names = entrypoint.get("model_names") or []
+        if names:
+            return names[0]
+    return "vllm-sr/auto"
+
+
+def _print_curl_example(
+    listeners, stack_layout: RuntimeStackLayout, config: dict | None = None
+) -> None:
+    if ((config or {}).get("global") or {}).get("router", {}).get("enabled") is False:
+        _print_native_curl_example(listeners, stack_layout)
+        return
     if not listeners:
         return
     first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
@@ -457,8 +621,50 @@ def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
     echo(f"  curl -v http://localhost:{first_port}/v1/chat/completions \\")
     echo('    -H "Content-Type: application/json" \\')
     echo("    -d '{")
-    echo('      "model": "vllm-sr/auto",')
+    model_json = json.dumps(_example_model(config)).replace("'", "'\"'\"'")
+    echo(f'      "model": {model_json},')
     echo('      "messages": [')
     echo('        {"role": "user", "content": "What is the derivative of x^2?"}')
     echo("      ]")
     echo("    }'")
+
+
+def _print_native_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
+    """Use a listener's published native identity, never an ungranted artifact."""
+    published = next(
+        (
+            (listener, listener["systemone"]["models"][0])
+            for listener in listeners
+            if (listener.get("systemone") or {}).get("models")
+        ),
+        None,
+    )
+    echo()
+    heading("Try System One")
+    if published is None:
+        echo("  No native model is published on a configured listener.")
+        echo("  Configure listeners[].systemone.models before calling /v1/systemone.")
+        return
+    listener, model = published
+    port = listener.get("port", DEFAULT_LISTENER_PORT) + stack_layout.port_offset
+    scheme = "https" if listener.get("tls") else "http"
+    if listener.get("api_keys"):
+        echo("  Set VLLM_SR_API_KEY to a key permitted by this listener.")
+    payload = json.dumps(
+        {
+            "model": model,
+            "state": "Explain why a Python function returns None.",
+            "questions": {
+                "needs_reasoning": {
+                    "type": "noul",
+                    "instructions": "Does this request require reasoning?",
+                }
+            },
+        },
+        indent=2,
+    ).replace("'", "'\"'\"'")
+    echo(f"  curl -v {scheme}://localhost:{port}/v1/systemone \\")
+    echo('    -H "Content-Type: application/json" \\')
+    if listener.get("api_keys"):
+        echo('    -H "Authorization: Bearer $VLLM_SR_API_KEY" \\')
+    echo("    -d '" + payload.replace("\n", "\n    ") + "'")

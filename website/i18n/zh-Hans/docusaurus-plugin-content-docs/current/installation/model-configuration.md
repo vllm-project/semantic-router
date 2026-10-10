@@ -2,7 +2,7 @@
 title: 配置模型
 description: 选择目录支持或自定义模型，将其绑定到 provider，并从路由决策中使用它。
 translation:
-  source_commit: "f8c1197a9ed47f7a265cbab83bf2d84eb5fa505e"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/model-configuration.md"
   outdated: false
 ---
@@ -68,7 +68,7 @@ Model Card 能力元数据接受 `image_input` 和 `image_generation` 等协议�
 
 ## 在控制面板中配置模型
 
-打开 **Build → Models → Add Model**。然后你可以：
+打开 **Build → Routing → Models → Add Model**。然后你可以：
 
 1. 选择 Provider，连接它，并选择已发现或内置的模型 ID。
 2. 当 Provider 无法列出模型时，输入模型 ID。
@@ -88,4 +88,4 @@ vllm-sr serve --config config.yaml
 
 ## 配置 Router 任务使用的模型
 
-对于 Router 内部使用的分类器、安全检查和嵌入，从 [Router Runtime](native-backends) 开始。它覆盖进程内和外部模型、其配置以及运维。
+对于 Router 内部使用的分类器、安全检查和嵌入，从 [Router Runtime](model-runtime/overview.md) 开始。它覆盖进程内和外部模型、其配置以及运维。

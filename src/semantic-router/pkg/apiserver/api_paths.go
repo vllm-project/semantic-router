@@ -1,10 +1,11 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 const (
 	apiRootPath = "/api/v1"
 
+	apiStatusPath         = apiRootPath + "/status"
 	apiConfigPath         = apiRootPath + "/config"
 	apiConfigSchemaPath   = apiConfigPath + "/schema"
 	apiConfigValidatePath = apiConfigPath + "/validate"
@@ -20,6 +21,7 @@ const (
 	apiInventoryModelsPath       = apiInventoryPath + "/models"
 	apiInventoryClassifierPath   = apiInventoryPath + "/classifier"
 	apiInventoryEmbeddingModels  = apiInventoryPath + "/embedding-models"
+	apiInventoryModelRuntime     = apiInventoryPath + "/model-runtime"
 	apiObservabilityPath         = apiRootPath + "/observability"
 	apiObservabilityReplaysPath  = apiObservabilityPath + "/replays"
 	apiObservabilityOutcomesPath = apiObservabilityPath + "/outcomes"
@@ -30,6 +32,6 @@ const (
 	apiStorageMemoriesPath       = apiStoragePath + "/memories"
 	apiStorageVectorStoresPath   = apiStoragePath + "/vector-stores"
 	apiStorageFilesPath          = apiStoragePath + "/files"
-	apiResponseCachePath         = apiRootPath + "/response-cache"
-	apiContextCompressionPath    = apiRootPath + "/context-compression"
+	apiResponseCachePath         = apiStoragePath + "/response-cache"
+	apiContextCompressionPath    = apiRootPath + "/plugins/context_compression"
 )

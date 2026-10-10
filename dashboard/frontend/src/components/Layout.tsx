@@ -56,19 +56,19 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
-  const { evaluationAvailable } = useReadonly()
+  const { srBenchAvailable, mlPipelineAvailable } = useReadonly()
   const location = useLocation()
   const configSection = getConfigSectionFromPathname(location.pathname)
   const navigate = useNavigate()
   const canAccessUsers = canViewUsers(user)
-  const canUseMLSetup = canAccessMLSetup(user)
+  const canUseMLSetup = canAccessMLSetup(user) && mlPipelineAvailable
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(
     BUILD_MENU_CATEGORIES,
     (item) =>
       canAccessMenuItem(item) &&
-      (item.kind !== 'route' || item.to !== '/evaluation' || evaluationAvailable) &&
+      (item.kind !== 'route' || item.to !== '/evaluation' || srBenchAvailable) &&
       (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
   )
   const operateMenuCategories = filterLayoutMenuCategories(
@@ -159,7 +159,7 @@ const Layout: React.FC<LayoutProps> = ({
         isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
       }
       onFocus={() => void preloadDashboardRoute(link.to)}
-      onPointerEnter={() => void preloadDashboardRoute(link.to)}
+      onPointerDown={() => void preloadDashboardRoute(link.to)}
       onClick={closeMenus}
     >
       <ProductIcon name={link.icon} className={styles.navIcon} />

@@ -31,6 +31,34 @@
 {{- if and $rejectMultiReplicaLocalLearningState $routerMultiReplica $localLearningStateEnabled -}}
 {{- fail "multi-replica router deployments cannot use Router Learning local state; disable global.router.learning, use one router replica, or set safetyGuards.rejectMultiReplicaLocalLearningState=false after accepting replica-local learning divergence" -}}
 {{- end }}
+{{- $customModelsMount := false -}}
+{{- $customConfigMount := false -}}
+{{- range .Values.extraVolumeMounts -}}
+{{- if eq (.mountPath | default "") "/app/models" -}}
+{{- $customModelsMount = true -}}
+{{- end -}}
+{{- if hasPrefix "/app/config/" (.mountPath | default "") -}}
+{{- $customConfigMount = true -}}
+{{- end -}}
+{{- end }}
+{{- range .Values.args -}}
+{{- if regexMatch "^--?(gateway|listener-address)(=|$)" (toString .) -}}
+{{- fail (printf "args must not set %s: set gateway.mode instead, from which the chart derives the Router's ports, probes and Service" (toString .)) -}}
+{{- end -}}
+{{- end }}
+{{- $standalone := eq (include "semantic-router.gatewayMode" .) "standalone" -}}
+{{- $tlsSecret := dig "tls" "secretName" "" (.Values.gateway | default (dict)) -}}
+{{- $listeners := list -}}
+{{- $primary := dict -}}
+{{- if $standalone -}}
+{{- $listeners = (include "semantic-router.listeners" . | fromYaml).items -}}
+{{- $primary = include "semantic-router.primaryListener" . | fromYaml -}}
+{{- range $listeners -}}
+{{- if and .tls (not $tlsSecret) (not $customConfigMount) -}}
+{{- fail (printf "listener %s serves TLS; set gateway.tls.secretName to a kubernetes.io/tls Secret (mounted at /app/config/certs) or mount the certificate files under /app/config with extraVolumes and extraVolumeMounts" .name) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -77,30 +105,64 @@ spec:
       - name: {{ .Chart.Name }}
         image: "{{ $prefix }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        {{- with .Values.args }}
         args:
+          - -gateway={{ include "semantic-router.gatewayMode" . }}
+          {{- if $standalone }}
+          # Every listener binds all of the pod's addresses; the Service decides
+          # who reaches it.
+          - -listener-address=0.0.0.0
+          {{- end }}
+          {{- with .Values.args }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
+          {{- end }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
         ports:
+        {{- if $standalone }}
+        {{- range $listeners }}
+        - containerPort: {{ .port }}
+          name: {{ .portName }}
+          protocol: TCP
+        {{- end }}
+        {{- else }}
         - containerPort: {{ .Values.service.grpc.targetPort }}
           name: grpc
           protocol: TCP
+        {{- end }}
         - containerPort: {{ .Values.service.metrics.targetPort }}
           name: metrics
           protocol: TCP
         - containerPort: {{ .Values.service.api.targetPort }}
           name: classify-api
           protocol: TCP
-        {{- if or .Values.env .Values.extraEnv }}
         env:
+          # Persist management API config writes through the Kubernetes API;
+          # the mounted ConfigMap file cannot be replaced in place.
+          - name: VLLM_SR_K8S_CONFIGMAP_NAME
+            value: {{ include "semantic-router.configMapName" . | quote }}
+          - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          # One Router replica keeps its configuration history on the persistent
+          # models volume, where rollback versions survive the rollout a ConfigMap
+          # edit causes. Replicas that would share it, or a Pod without a persistent
+          # volume, keep one per Pod; the ConfigMap is their shared truth.
+          - name: VLLM_SR_CONFIG_BACKUP_DIR
+            {{- if and (not $routerMultiReplica) (or .Values.persistence.enabled $customModelsMount) }}
+            value: /app/models/.vllm-sr/config-backups
+            {{- else }}
+            value: /tmp/vllm-sr/config-history
+            {{- end }}
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
         {{- end }}
         {{- with .Values.envFromSecrets }}
         envFrom:
@@ -128,21 +190,45 @@ spec:
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if not $customModelsMount }}
         - name: models-volume
           mountPath: /app/models
+        {{- end }}
+        {{- if and $standalone $tlsSecret }}
+        # A Secret volume rather than a subPath mount: Kubernetes replaces its
+        # files in place when the Secret changes, and the Router reloads the
+        # certificate for new connections.
+        - name: listener-tls
+          mountPath: /app/config/certs
+          readOnly: true
+        {{- end }}
         {{- if .Values.startupProbe.enabled }}
-        # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
+        # Startup and readiness require an activated serving generation.
         startupProbe:
-          tcpSocket:
+          {{- if $standalone }}
+          httpGet:
+            path: /ready
+            port: {{ $primary.portName }}
+            scheme: {{ upper $primary.scheme }}
+          {{- else }}
+          grpc:
             port: {{ .Values.service.grpc.targetPort }}
+          {{- end }}
           periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
           failureThreshold: {{ .Values.startupProbe.failureThreshold }}
         {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
+          {{- if $standalone }}
+          httpGet:
+            path: /health
+            port: {{ $primary.portName }}
+            scheme: {{ upper $primary.scheme }}
+          {{- else }}
           tcpSocket:
             port: {{ .Values.service.grpc.targetPort }}
+          {{- end }}
           initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
@@ -150,8 +236,15 @@ spec:
         {{- end }}
         {{- if .Values.readinessProbe.enabled }}
         readinessProbe:
-          tcpSocket:
+          {{- if $standalone }}
+          httpGet:
+            path: /ready
+            port: {{ $primary.portName }}
+            scheme: {{ upper $primary.scheme }}
+          {{- else }}
+          grpc:
             port: {{ .Values.service.grpc.targetPort }}
+          {{- end }}
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
@@ -170,6 +263,12 @@ spec:
         configMap:
           name: {{ .Values.knowledgeBases.existingConfigMap | quote }}
       {{- end }}
+      {{- if and $standalone $tlsSecret }}
+      - name: listener-tls
+        secret:
+          secretName: {{ $tlsSecret | quote }}
+      {{- end }}
+      {{- if not $customModelsMount }}
       {{- if .Values.persistence.enabled }}
       - name: models-volume
         persistentVolumeClaim:
@@ -177,6 +276,7 @@ spec:
       {{- else }}
       - name: models-volume
         emptyDir: {}
+      {{- end }}
       {{- end }}
       {{- with .Values.extraVolumes }}
       {{- toYaml . | nindent 6 }}

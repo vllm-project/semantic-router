@@ -263,3 +263,30 @@ def test_mount_destinations_are_unknown_when_the_runtime_cannot_answer(monkeypat
     )
 
     assert container_services.container_mount_destinations("vllm-sr-redis") is None
+
+
+@pytest.mark.parametrize("operation", ["exec", "status", "logs_since", "logs"])
+def test_startup_container_operations_bound_subprocess_wait(monkeypatch, operation):
+    observed = []
+
+    def blocked(command, **kwargs):
+        observed.append(kwargs.get("timeout"))
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services.subprocess, "run", blocked)
+    if operation == "exec":
+        assert (
+            container_services.container_exec("router", ["curl"], timeout=0.25)[0]
+            == 124
+        )
+    elif operation == "status":
+        with pytest.raises(RuntimeError, match="inspection failed"):
+            container_services.container_status_strict("router", timeout=0.25)
+    elif operation == "logs_since":
+        assert (
+            container_services.container_logs_since("router", 0, timeout=0.25)[0] == 124
+        )
+    else:
+        assert container_services.container_logs("router", timeout=0.25) is False
+    assert observed == [0.25]

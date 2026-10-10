@@ -11,6 +11,9 @@ import (
 // Compiler instance, which makes accidental cross-recipe symbol reuse
 // structurally impossible.
 func (c *Compiler) compileScopes() {
+	if err := c.config.CandidateRequirements.Validate(); err != nil {
+		c.errors = append(c.errors, err)
+	}
 	if err := c.config.Strategy.Validate(); err != nil {
 		c.errors = append(c.errors, err)
 	}
@@ -22,11 +25,12 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 	c.config.Recipes = []config.RoutingRecipe{{
 		Name: config.DefaultRecipeName,
 		Profile: config.RoutingProfile{
-			ModelBindings: cloneModelBindings(c.config.ModelBindings),
-			Signals:       c.config.Signals,
-			Projections:   c.config.Projections,
-			Decisions:     c.config.Decisions,
-			Strategy:      c.config.Strategy,
+			ModelBindings:         cloneModelBindings(c.config.ModelBindings),
+			CandidateRequirements: c.config.CandidateRequirements.Clone(),
+			Signals:               c.config.Signals,
+			Projections:           c.config.Projections,
+			Decisions:             c.config.Decisions,
+			Strategy:              c.config.Strategy,
 		},
 	}}
 
@@ -45,6 +49,9 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 
 		child := newScopedCompiler(recipe.Program)
 		child.compile()
+		if err := child.config.CandidateRequirements.Validate(); err != nil {
+			child.errors = append(child.errors, err)
+		}
 		if err := child.config.Strategy.Validate(); err != nil {
 			child.errors = append(child.errors, err)
 		}
@@ -55,11 +62,12 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 			Name:        name,
 			Description: recipe.Description,
 			Profile: config.RoutingProfile{
-				ModelBindings: cloneModelBindings(child.config.ModelBindings),
-				Signals:       child.config.Signals,
-				Projections:   child.config.Projections,
-				Decisions:     child.config.Decisions,
-				Strategy:      child.config.Strategy,
+				ModelBindings:         cloneModelBindings(child.config.ModelBindings),
+				CandidateRequirements: child.config.CandidateRequirements.Clone(),
+				Signals:               child.config.Signals,
+				Projections:           child.config.Projections,
+				Decisions:             child.config.Decisions,
+				Strategy:              child.config.Strategy,
 			},
 		})
 	}
@@ -105,5 +113,6 @@ func newScopedCompiler(prog *Program) *Compiler {
 	}
 	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
 	c.config.ModelBindings = cloneModelBindings(prog.ModelBindings)
+	c.config.CandidateRequirements = prog.CandidateRequirements.Clone()
 	return c
 }

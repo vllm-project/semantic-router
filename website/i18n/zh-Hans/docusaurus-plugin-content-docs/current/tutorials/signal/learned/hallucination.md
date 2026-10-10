@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "485dba984a011cee07ec21e7d6a6d54f69509dae"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/hallucination.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 `hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `routing.signals.hallucination` 下定义其规则。
 
-该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器，以及规则要求解释时的解释器 NLI 模型。
+该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器（默认是 Vela 2.0 0.3B 的片段头，也可以是 Vela Halu），并在[模型运行时](../../../model-runtime/guides/hallucination)中执行。NLI 解释器已退役。
 
 ## 主要优势 {#key-advantages}
 
@@ -42,11 +42,10 @@ routing:
   signals:
     hallucination:
       - name: ungrounded_claims
-        use_nli: true
         description: Detect claims the grounding context does not support.
 ```
 
-规则自身没有阈值：检测器在 `hallucination_model` 上的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。`use_nli` 要求检测器给出片段级 NLI 解释；它是检测设置，因此写在规则上，一旦声明了规则，插件自己的 `use_nli` 会报告为已忽略。
+规则自身没有阈值：检测器在 `hallucination_model` 上的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。早期版本可以用 `use_nli` 请求片段级 NLI 解释；该解释器已退役，`vllm-sr config migrate` 会移除这一设置。
 
 ### 阶段 {#stage}
 
@@ -63,7 +62,36 @@ routing:
 
 流式回答在流结束后检查，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此 `hallucination` 插件不运行，`hallucination_action` 与 `unverified_factual_action` 都不适用。从未到达终端回答的流不检查，也不记录任何内容。
 
-声明规则就足以为本配方供给检测器，`use_nli: true` 则供给解释器，即使没有决策启用插件。决策的 `hallucination` 插件在未声明规则时运行会在加载时报告：插件随后自己对回答分类，这是兼容路径。
+声明规则就足以为本配方供给检测器，即使没有决策启用插件。决策的 `hallucination` 插件在未声明规则时运行会在加载时报告：插件随后自己对回答分类，这是兼容路径。
+
+## Vela 2.0 {#vela-20}
+
+把 `hallucination_detector` 绑定到 Vela 2.0 部署后，检测器会就回答向模型提出它内置的幻觉问题（由其路由片段头回答），
+请求与依据上下文作为该问题状态中的其他部分：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      hallucination_detector:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；
+`min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。
+同一个部署还可以回答请求的 [`decision`](decision.md) 与 [`pii`](pii.md#vela-20) 问题。
+
+## 仅提供整体判断的模型 {#verdict-only-decision-models}
+
+若使用通用判断模型进行整体检查，将 `routing.model_bindings.hallucination_detector` 绑定到该部署，并设置 `contract: decision.v1`。`hallucination` 任务使用 `noul` 问题，将请求、依据上下文和回答作为独立状态部分。结果供响应观察与插件使用，不会虚构主张位置。`threshold` 作用于该概率；片段过滤参数只作用于实际返回的片段。
+
+`token_spans.v1` 绑定要求原生片段能力。两条路径都要求完整的准入输入和依据上下文；失败或未完成的检查是 unavailable，不能证明回答有据可依。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

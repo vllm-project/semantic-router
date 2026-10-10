@@ -17,6 +17,7 @@ var signalCompilerByType = map[string]func(*Compiler, *SignalDecl){
 	"modality":       (*Compiler).compileModalitySignal,
 	"authz":          (*Compiler).compileAuthzSignal,
 	"jailbreak":      (*Compiler).compileJailbreakSignal,
+	"safety":         (*Compiler).compileSafetySignal,
 	"hallucination":  (*Compiler).compileHallucinationSignal,
 	"pii":            (*Compiler).compilePIISignal,
 	"kb":             (*Compiler).compileKBSignal,
@@ -25,4 +26,5 @@ var signalCompilerByType = map[string]func(*Compiler, *SignalDecl){
 	"metadata":       (*Compiler).compileMetadataSignal,
 	"classifier":     (*Compiler).compileClassifierSignal,
 	"input_modality": (*Compiler).compileInputModalitySignal,
+	"decision":       (*Compiler).compileDecisionModelSignal,
 }

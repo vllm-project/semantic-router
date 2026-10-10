@@ -3,8 +3,9 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // RecipeName identifies an isolated routing namespace.
@@ -38,11 +39,13 @@ func (s RoutingStrategy) Validate() error {
 // a recipe. Shared provider bindings, model assets, and runtime services stay
 // on RouterConfig.
 type RoutingProfile struct {
-	ModelBindings map[string]ModelBinding
-	Signals       Signals
-	Projections   Projections
-	Decisions     []Decision
-	Strategy      RoutingStrategy
+	CandidateRequirements *CandidateRequirements
+	ModelBindings         map[string]ModelBinding
+	Signals               Signals
+	Projections           Projections
+	Decisions             []Decision
+	Strategy              RoutingStrategy
+	Fallback              *fallback.FallbackPolicy
 }
 
 // RoutingRecipe gives an isolated routing profile a stable name and optional
@@ -59,6 +62,8 @@ type RoutingRecipe struct {
 type EntrypointMapping struct {
 	ModelNames []string
 	Recipe     RecipeName
+	API        InferenceAPI
+	Source     EntrypointSource
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The
@@ -152,18 +157,20 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	return &RoutingRecipe{
 		Name: DefaultRecipeName,
 		Profile: RoutingProfile{
-			ModelBindings: cloneModelMap(c.ModelBindings),
-			Signals:       c.Signals,
-			Projections:   c.Projections,
-			Decisions:     c.Decisions,
-			Strategy:      c.Strategy,
+			ModelBindings:         cloneModelMap(c.ModelBindings),
+			CandidateRequirements: c.CandidateRequirements.Clone(),
+			Signals:               c.Signals,
+			Projections:           c.Projections,
+			Decisions:             c.Decisions,
+			Strategy:              c.Strategy,
+			Fallback:              c.Fallback.Clone(),
 		},
 	}
 }
 
 // RecipeForRequestModel resolves a request model name through the entrypoint
-// table. It returns false when the name matches no entrypoint; callers fall
-// back to auto-model or specified-model handling.
+// table. It returns false when the name matches no entrypoint; callers then
+// resolve a concrete backend model.
 func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, bool) {
 	if c == nil {
 		return nil, false
@@ -172,33 +179,28 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 	if trimmed == "" {
 		return nil, false
 	}
-	for _, entrypoint := range c.Entrypoints {
-		if slices.Contains(entrypoint.ModelNames, trimmed) {
-			return c.RecipeByName(entrypoint.Recipe)
+	if entrypoint, ok := c.ResolveEntrypoint(ChatAPI, trimmed); ok {
+		if entrypoint.Recipe == DefaultRecipeName {
+			return c.DefaultRecipe(), true
 		}
+		return c.RecipeByName(entrypoint.Recipe)
 	}
 	return nil, false
 }
 
-// RecipeForRoutingModel resolves every request-facing routing model. Built-in
-// auto and direct-looper aliases select the default recipe; named entrypoints
+// RecipeForRoutingModel resolves every request-facing routing model. Effective entrypoints
 // select their mapped recipe. Concrete backend model IDs intentionally do not
 // resolve to a recipe.
 func (c *RouterConfig) RecipeForRoutingModel(modelName string) (*RoutingRecipe, bool) {
 	if c == nil {
 		return nil, false
 	}
-	trimmed := strings.TrimSpace(modelName)
-	if c.IsAutoModelName(trimmed) || c.IsReMoMModelName(trimmed) || c.IsFusionModelName(trimmed) || c.IsFlowModelName(trimmed) {
-		recipe := c.DefaultRecipe()
-		return recipe, recipe != nil
-	}
 	return c.RecipeForRequestModel(modelName)
 }
 
 // ReachableRoutingRecipes returns the profiles that a request-facing routing
-// model can select. The default profile is reachable through configured auto or
-// direct-looper aliases; named profiles are reachable only through entrypoints.
+// model can select through effective entrypoints. The built-in default mapping
+// applies when no explicit default mapping replaces it.
 // Startup resource discovery should use this view instead of treating every
 // declared recipe as request reachable.
 func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
@@ -207,12 +209,20 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 	}
 
 	reachable := make(map[RecipeName]struct{}, len(c.Entrypoints)+1)
-	if c.defaultRecipeHasRoutingEntrypoint() {
-		reachable[DefaultRecipeName] = struct{}{}
-	}
-	for _, entrypoint := range c.Entrypoints {
-		if len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
+	for _, entrypoint := range c.EffectiveEntrypoints(ChatAPI) {
+		if len(normalizeEntrypointNames(entrypoint.ModelNames)) > 0 {
 			reachable[entrypoint.Recipe] = struct{}{}
+		}
+	}
+
+	for _, listener := range c.Listeners {
+		if listener.SystemOne == nil {
+			continue
+		}
+		for _, model := range listener.SystemOne.Models {
+			if entrypoint, ok := c.ResolveEntrypoint(SystemOneAPI, model); ok {
+				reachable[entrypoint.Recipe] = struct{}{}
+			}
 		}
 	}
 
@@ -244,24 +254,6 @@ func (c *RouterConfig) IsRecipeReachableForRouting(name RecipeName) bool {
 	return false
 }
 
-func (c *RouterConfig) defaultRecipeHasRoutingEntrypoint() bool {
-	if len(c.EffectiveAutoModelNames()) > 0 {
-		return true
-	}
-	if len(c.ExposedReMoMModelNames()) > 0 ||
-		len(c.ExposedFusionModelNames()) > 0 ||
-		len(c.ExposedFlowModelNames()) > 0 {
-		return true
-	}
-	for _, entrypoint := range c.Entrypoints {
-		if entrypoint.Recipe == DefaultRecipeName &&
-			len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // ConfigForRecipe returns an immutable routing view over the shared router
 // configuration. The returned value owns recipe-local routing fields while
 // reusing read-only provider, model, and service configuration. Callers must
@@ -274,13 +266,15 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
-		ModelBindings:   cloneModelMap(recipe.Profile.ModelBindings),
-		Signals:         recipe.Profile.Signals,
-		Projections:     recipe.Profile.Projections,
-		Decisions:       recipe.Profile.Decisions,
-		Strategy:        recipe.Profile.Strategy,
-		ModelSelection:  c.ModelSelection,
-		ReasoningConfig: c.ReasoningConfig,
+		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
+		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
+		Signals:               recipe.Profile.Signals,
+		Projections:           recipe.Profile.Projections,
+		Decisions:             recipe.Profile.Decisions,
+		Strategy:              recipe.Profile.Strategy,
+		Fallback:              recipe.Profile.Fallback.Clone(),
+		ModelSelection:        c.ModelSelection,
+		ReasoningConfig:       c.ReasoningConfig,
 	}
 	scoped.KnowledgeBases = knowledgeBasesForRoutingProfile(c.KnowledgeBases, recipe.Profile)
 	// A scoped config represents exactly one routing profile. Keeping the full

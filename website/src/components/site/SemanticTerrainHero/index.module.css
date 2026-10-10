@@ -7,8 +7,104 @@
   min-height: calc(100vh - var(--site-header-height));
   min-height: calc(100svh - var(--site-header-height));
   overflow: hidden;
-  background: #030303;
-  color: #fafafa;
+  background: var(--site-bg);
+  color: var(--site-text);
+}
+
+.heroBackdrop {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.heroGlow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  opacity: 0.9;
+  will-change: transform, opacity;
+  animation: hero-glow-drift 18s var(--site-ease-out) infinite alternate;
+}
+
+.heroGlow[data-glow='a'] {
+  top: -18%;
+  left: calc(50% - min(36vw, 23rem));
+  width: min(72vw, 46rem);
+  height: min(40vw, 22rem);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--site-brand-blue) 14%, transparent) 0%,
+    color-mix(in srgb, var(--site-brand-blue) 5%, transparent) 42%,
+    transparent 72%
+  );
+  animation-duration: 22s;
+}
+
+.heroGlow[data-glow='b'] {
+  top: 28%;
+  left: -8%;
+  width: min(52vw, 30rem);
+  height: min(52vw, 30rem);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--site-brand-blue-deep) 18%, transparent) 0%,
+    transparent 68%
+  );
+  animation-duration: 26s;
+  animation-delay: -4s;
+}
+
+.heroGlow[data-glow='c'] {
+  right: -6%;
+  bottom: 8%;
+  width: min(48vw, 26rem);
+  height: min(48vw, 26rem);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--site-brand-blue-light) 16%, transparent) 0%,
+    transparent 70%
+  );
+  animation-duration: 20s;
+  animation-delay: -9s;
+}
+
+.heroGrid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 4.5rem 4.5rem;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
+}
+
+@keyframes hero-glow-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.78;
+  }
+
+  to {
+    transform: translate3d(1.5%, -2%, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroGlow {
+    animation: none;
+  }
 }
 
 .terrain {
@@ -16,8 +112,8 @@
   z-index: 0;
   inset: 0;
   overflow: hidden;
-  background: #030303;
-  color: #a1a1aa;
+  background: var(--site-bg);
+  color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   pointer-events: none;
   user-select: none;
@@ -52,7 +148,7 @@
   left: 1.5rem;
   display: grid;
   gap: 0.45rem;
-  color: #71717a;
+  color: var(--site-muted);
   font-size: 0.625rem;
   letter-spacing: 0.1em;
 }
@@ -64,7 +160,7 @@
 }
 
 .terrainHud span {
-  color: #fafafa;
+  color: var(--site-text);
 }
 
 .terrainLegend {
@@ -78,7 +174,7 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: #71717a;
+  color: var(--site-muted);
   font-size: 0.56rem;
   letter-spacing: 0.05em;
 }
@@ -89,6 +185,7 @@
 }
 
 .terrainLegendItem strong {
+  color: var(--site-muted-bright);
   font-weight: 500;
 }
 
@@ -99,14 +196,13 @@
   width: 2.5rem;
   height: 2.5rem;
   transform: translate(-50%, -50%);
-  mix-blend-mode: difference;
 }
 
 .terrainCrosshair::before,
 .terrainCrosshair::after {
   content: '';
   position: absolute;
-  background: rgba(255, 255, 255, 0.42);
+  background: var(--site-muted);
 }
 
 .terrainCrosshair::before {
@@ -129,151 +225,204 @@
   display: grid;
   min-height: 0;
   align-items: center;
-  padding: clamp(5rem, 9vh, 7.5rem) 0 clamp(4rem, 7vh, 6rem);
+  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1rem, 2.5vh, 1.75rem);
   pointer-events: none;
 }
 
-.heroScrim {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 52%, rgba(3, 3, 3, 0.95) 0, rgba(3, 3, 3, 0.76) 28%, transparent 61%),
-    linear-gradient(90deg, rgba(3, 3, 3, 0.4), rgba(3, 3, 3, 0.18) 50%, rgba(3, 3, 3, 0.4));
-  pointer-events: none;
-}
-
-.copy {
+.heroInner {
   display: grid;
-  width: min(100%, 54rem);
-  gap: 1.25rem;
-  justify-items: center;
+  width: min(100%, 84rem);
+  gap: clamp(1.5rem, 3.2vh, 2.25rem);
   margin: 0 auto;
-  pointer-events: auto;
-  text-align: center;
 }
 
-.brand {
-  display: block;
-  width: clamp(14rem, 26vw, 20rem);
-  max-width: 72%;
-}
-
-.brand img {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-}
-
-.stage .copy h1 {
+.intro {
+  position: relative;
   display: grid;
-  gap: 0.04em;
-  max-width: 12ch;
+  width: 100%;
+  justify-items: start;
+  gap: 1.3rem;
+  text-align: left;
+  pointer-events: auto;
+}
+
+.introCopy {
+  display: grid;
+  max-width: 62rem;
+  gap: 1.15rem;
+  min-width: 0;
+}
+
+.stage .title {
   margin: 0;
-  justify-items: center;
-  color: #fafafa;
-  font-size: clamp(3.4rem, 7.25vw, 7.25rem);
-  font-weight: 420;
-  letter-spacing: -0.062em;
-  line-height: 0.86;
-}
-
-.stage .copy h1 span {
-  display: block;
-  white-space: nowrap;
-}
-
-.stage .copy h1 .accent {
-  color: #30a2ff;
-  font-weight: 720;
-}
-
-.stage .description {
-  max-width: 36rem;
-  margin: 0.65rem 0 0;
-  color: #b2b2b8;
-  font-size: clamp(1rem, 1.3vw, 1.18rem);
-  font-weight: 480;
-  line-height: 1.6;
-  letter-spacing: -0.01em;
+  color: var(--site-text);
+  font-size: clamp(2.6rem, 5.2vw, 4.75rem);
+  font-weight: 560;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
   text-wrap: balance;
 }
 
+.stage .title .accent {
+  display: block;
+  color: var(--site-accent-strong);
+  font-weight: inherit;
+}
+
+.dek {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(1rem, 1.3vw, 1.125rem);
+  line-height: 1.5;
+}
+
+.dek strong {
+  color: var(--site-text);
+  font-weight: 700;
+}
+
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  width: min(100%, 24.5rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
   gap: 0.75rem;
-  justify-content: center;
-  margin-top: 0.75rem;
 }
 
 .actions .primaryCta,
 .actions .secondaryCta {
-  min-width: 13rem;
-  min-height: 3.15rem;
-  border-radius: 0.25rem;
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  min-height: 3.1rem;
+  gap: 0.55rem;
+  padding-inline: 0.85rem;
+  border-radius: 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
 
-/* The hero is committed to dark regardless of colour mode, so it states the
- * blues literally rather than through the theme-switching tokens. The values
- * are the dark half of the --site-cta-* / hover ladder. */
+/* Match the shared CTA and hover palette in both color modes. */
 .actions .primaryCta {
-  border-color: #30a2ff;
-  background: #30a2ff;
-  color: #04121f;
-  box-shadow: 0 16px 36px rgba(48, 162, 255, 0.22);
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
+  box-shadow: var(--site-cta-shadow);
 }
 
 .actions .primaryCta:hover,
 .actions .primaryCta:focus-visible {
-  border-color: #75c5ff;
-  background: #75c5ff;
-  color: #04121f;
+  border-color: var(--site-cta-border-hover);
+  background: var(--site-cta-bg-hover);
+  color: var(--site-cta-text);
 }
 
-.actions .secondaryCta {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(3, 3, 3, 0.64);
-  color: #fafafa;
-  box-shadow: none;
+.film {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 1.25rem;
+  background: #04060c;
+  box-shadow:
+    var(--site-shadow-raised),
+    0 2.5rem 7rem -2.5rem rgba(48, 162, 255, 0.32);
+  pointer-events: auto;
 }
 
-.actions .secondaryCta:hover,
-.actions .secondaryCta:focus-visible {
-  border-color: rgba(48, 162, 255, 0.52);
-  background: rgba(48, 162, 255, 0.14);
-  color: #ffffff;
+.filmVideo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #04060c;
+}
+
+/* The poster's title sits in the upper half, so the play control stays low. */
+.filmPlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 7%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.filmPlayPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.55rem 1.3rem 0.55rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(8, 12, 22, 0.42);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  font-size: 0.95rem;
+  font-weight: 620;
+  letter-spacing: 0.01em;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.filmPlayIcon {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #04060c;
+}
+
+.filmPlayIcon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-left: 0.12rem;
+  fill: currentColor;
+}
+
+.filmDuration {
+  color: rgba(255, 255, 255, 0.62);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.filmPlay:hover .filmPlayPill,
+.filmPlay:focus-visible .filmPlayPill {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(8, 12, 22, 0.62);
+  transform: scale(1.04);
+}
+
+.filmPlay:focus-visible {
+  outline: 2px solid var(--site-accent-strong);
+  outline-offset: -4px;
 }
 
 .modelBand {
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 0.75rem;
-  padding: 0.9rem 0 1.15rem;
-  background: linear-gradient(180deg, rgba(3, 3, 3, 0.16), rgba(3, 3, 3, 0.94) 38%);
-}
-
-.modelBandLabel {
-  justify-self: center;
-  color: #71717a;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  font-weight: 650;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
+  min-height: 5.75rem;
+  align-items: center;
+  padding: 1.05rem 0 1.2rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--site-bg) 16%, transparent), color-mix(in srgb, var(--site-bg) 94%, transparent) 38%);
 }
 
 .modelViewport {
   overflow: hidden;
   width: 100%;
-  padding: 0 1.5rem;
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
 }
 
 .modelTrack,
@@ -298,21 +447,21 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 0.75rem;
-  color: #a1a1aa;
+  gap: 0.85rem;
+  color: var(--site-muted);
   white-space: nowrap;
 }
 
 .model svg {
-  width: 1.75rem;
-  height: 1.75rem;
-  opacity: 0.82;
+  width: 2.4rem;
+  height: 2.4rem;
+  opacity: 0.9;
 }
 
 .model strong {
-  color: #b8b8be;
-  font-size: 1rem;
-  font-weight: 570;
+  color: var(--site-muted-bright);
+  font-size: 1.1rem;
+  font-weight: 590;
   letter-spacing: -0.01em;
 }
 
@@ -336,18 +485,15 @@
   }
 
   .hero {
-    padding: 5rem 0 3.5rem;
-  }
-
-  .copy {
-    width: min(100%, 46rem);
+    padding: 2.25rem 0 2rem;
   }
 }
 
 @media (max-width: 640px) {
   .stage {
     --terrain-model-gap: 1.6rem;
-    grid-template-rows: minmax(31rem, 1fr) auto;
+    grid-template-rows: auto auto;
+    min-height: 0;
   }
 
   .terrainCanvas {
@@ -372,62 +518,55 @@
   }
 
   .hero {
-    align-items: end;
-    padding: 5.2rem 0 2.4rem;
+    padding: 1.75rem 0 0.75rem;
   }
 
-  .heroScrim {
-    background:
-      linear-gradient(180deg, transparent, rgba(3, 3, 3, 0.64) 28%, rgba(3, 3, 3, 0.96) 68%),
-      radial-gradient(circle at 40% 60%, rgba(3, 3, 3, 0.84), transparent 72%);
-  }
-
-  .copy {
-    gap: 0.9rem;
-  }
-
-  .brand {
-    width: min(16rem, 76vw);
-    max-width: 100%;
-  }
-
-  .stage .copy h1 {
-    font-size: clamp(2.45rem, 10.2vw, 3.2rem);
-    line-height: 0.88;
-  }
-
-  .stage .description {
-    max-width: 29rem;
-    font-size: 0.95rem;
-  }
-
-  .actions {
-    display: grid;
-    width: 100%;
-    grid-template-columns: 1fr;
+  .stage .title {
+    font-size: clamp(2.4rem, 8.8vw, 3.5rem);
   }
 
   .actions .primaryCta,
   .actions .secondaryCta {
-    width: 100%;
-    min-width: 0;
+    font-size: 0.83rem;
+    padding-inline: 0.55rem;
+  }
+
+  .film {
+    border-radius: 0.9rem;
+  }
+
+  .filmPlay {
+    padding-bottom: 5%;
+  }
+
+  .filmPlayPill {
+    gap: 0.6rem;
+    padding: 0.35rem 0.95rem 0.35rem 0.35rem;
+    font-size: 0.82rem;
+  }
+
+  .filmPlayIcon {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .filmPlayIcon svg {
+    width: 0.95rem;
+    height: 0.95rem;
   }
 
   .modelBand {
-    padding-bottom: 0.95rem;
-  }
-
-  .modelViewport {
-    padding: 0 0.75rem;
+    min-height: 5.2rem;
+    padding: 1rem 0 1.1rem;
   }
 
   .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 2.1rem;
+    height: 2.1rem;
   }
 
   .model strong {
-    font-size: 0.86rem;
+    font-size: 0.98rem;
   }
 }
 
@@ -437,36 +576,29 @@
   }
 
   .hero {
-    padding-top: 3rem;
-    padding-bottom: 2rem;
-  }
-
-  .copy {
-    gap: 0.8rem;
-  }
-
-  .stage .copy h1 {
-    font-size: clamp(3.35rem, 6.2vw, 5.25rem);
-  }
-
-  .stage .description,
-  .actions {
-    margin-top: 0.25rem;
+    padding-top: 1.75rem;
+    padding-bottom: 1.5rem;
   }
 
   .modelBand {
-    gap: 0.45rem;
-    padding-top: 0.55rem;
-    padding-bottom: 0.7rem;
+    min-height: 4.8rem;
+    padding: 0.8rem 0;
   }
 
   .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 2rem;
+    height: 2rem;
   }
 
   .model strong {
-    font-size: 0.86rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .actions {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 

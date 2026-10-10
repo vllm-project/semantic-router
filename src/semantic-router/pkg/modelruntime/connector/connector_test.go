@@ -163,7 +163,7 @@ func TestDoRejectsOversizedRequestBeforeSending(t *testing.T) {
 	client := newTestClient(t, server, options)
 
 	_, err := client.Do(context.Background(), testOperation, []byte("four"))
-	assertConnectorError(t, err, KindRequest, 0, false)
+	_ = assertConnectorError(t, err, KindRequest, 0, false)
 }
 
 func TestDoRejectsOversizedResponse(t *testing.T) {
@@ -321,7 +321,7 @@ func TestDoReturnsAuthorizationFailureWithoutSending(t *testing.T) {
 	}
 
 	_, err = client.Do(context.Background(), testOperation, nil)
-	assertConnectorError(t, err, KindAuthorization, 1, false)
+	_ = assertConnectorError(t, err, KindAuthorization, 1, false)
 	if !errors.Is(err, want) {
 		t.Fatalf("Do() error = %v, want wrapped authorization error", err)
 	}

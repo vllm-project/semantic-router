@@ -67,12 +67,16 @@ func requestOrigin(r *http.Request, trustForwardedHost bool) string {
 // allowed covers the origins that legitimately differ from our Host: a reverse proxy, and
 // the Vite dev proxy. Fails closed when neither header is present.
 func originAllowed(r *http.Request, allowed []string) bool {
+	return originAllowedAgainst(r, allowed, requestOrigin(r, len(allowed) == 0))
+}
+
+func originAllowedAgainst(r *http.Request, allowed []string, own string) bool {
 	if r == nil {
 		return false
 	}
 
 	candidates := make([]string, 0, len(allowed)+1)
-	if own := requestOrigin(r, len(allowed) == 0); own != "" {
+	if own != "" {
 		candidates = append(candidates, own)
 	}
 	for _, entry := range allowed {
@@ -108,23 +112,6 @@ func originAllowed(r *http.Request, allowed []string) bool {
 		}
 	}
 	return false
-}
-
-// OriginChecker builds CheckOrigin for the WebSocket upgrader, the only origin control a
-// handshake has: CORS does not apply to it.
-//
-// No Origin means a non-browser client, since RFC 6455 requires browsers to send one, and
-// no hostile page can drive one cross-site. Same reasoning as the Bearer exemption.
-func OriginChecker(allowedOrigins []string) func(*http.Request) bool {
-	return func(r *http.Request) bool {
-		if r == nil {
-			return false
-		}
-		if strings.TrimSpace(r.Header.Get("Origin")) == "" {
-			return true
-		}
-		return originAllowed(r, allowedOrigins)
-	}
 }
 
 // Safe methods per RFC 9110. Holds only while no GET route mutates state.

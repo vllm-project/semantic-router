@@ -57,13 +57,14 @@ func (block *TextBlockIR) SetText(text string) {
 }
 
 type RequestIR struct {
-	Transformations TransformationPlan
-	originalHistory *HistorySnapshot
-	Raw             map[string]interface{}
-	Semantic        *llmprotocol.Request
-	Messages        []*MessageIR
-	ToolIntents     map[string]string
-	LastUser        string
+	allowCurrentUserTruncation bool
+	Transformations            TransformationPlan
+	originalHistory            *HistorySnapshot
+	Raw                        map[string]interface{}
+	Semantic                   *llmprotocol.Request
+	Messages                   []*MessageIR
+	ToolIntents                map[string]string
+	LastUser                   string
 }
 
 // ParseSemanticRequest builds the compression view directly over neutral

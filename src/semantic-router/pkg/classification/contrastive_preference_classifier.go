@@ -48,12 +48,8 @@ type PreferenceClassificationDetails struct {
 	Margin       float32
 }
 
-// NewContrastivePreferenceClassifier builds a contrastive preference classifier.
-// modelType follows GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert").
-func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string) (*ContrastivePreferenceClassifier, error) {
-	return NewContrastivePreferenceClassifierWithProvider(rules, modelType, nil)
-}
-
+// NewContrastivePreferenceClassifierWithProvider builds a contrastive preference
+// classifier. modelType names the prepared embedding model (e.g. "mmbert").
 func NewContrastivePreferenceClassifierWithProvider(rules []config.PreferenceRule, modelType string, provider embedding.Provider) (*ContrastivePreferenceClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("contrastive preference rules cannot be empty")

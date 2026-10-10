@@ -2,7 +2,7 @@
 title: 安全加固
 description: 保护推理监听器、控制面板、凭据、回放数据、存储和容器运行时访问。
 translation:
-  source_commit: "33349fdab9ad294da19ebd11588f8adbe8771b4a"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/security-hardening.md"
   outdated: false
 ---
@@ -17,7 +17,7 @@ Semantic Router 位于客户端和模型 provider 之间的请求路径上。将
 
 ```mermaid
 flowchart LR
-    Client["Client"] --> Listener["Public Envoy listener"]
+    Client["Client"] --> Listener["Standalone frontend / external gateway"]
     Listener --> Router["Semantic Router"]
     Router --> Provider["Model providers"]
     Admin["Authenticated Dashboard / API"] --> Router
@@ -36,14 +36,12 @@ flowchart LR
 
 ## 保护公共监听器
 
-维护中的 Envoy 配置会在客户端请求到达 Router 之前移除内部控制标头。在提供自定义 Envoy 或网关配置时也要这样做。内部示例如下：
+standalone 前端会移除不受信任的身份和代理控制标头。请分别配置 listener API key、Chat 模型允许列表和原生模型访问权限，见 [Gateway 模式](gateway-modes)。Dashboard 登录凭据不能代替公网推理凭据。
+
+维护中的 Envoy 配置也会移除内部控制标头。自定义 Envoy 或网关配置应保持该边界，例如：
 
 ```yaml
 request_headers_to_remove:
-  - x-vsr-looper-request
-  - x-vsr-looper-secret
-  - x-vsr-looper-decision
-  - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
 ```
@@ -72,40 +70,17 @@ api_key: ${MODEL_API_KEY}
 
 不要提交字面 API 密钥、密码、授权标头、凭据查询参数，或包含用户信息的 URL。
 
-对于 `vllm-sr serve --target k8s`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
+对于 `vllm-sr serve --target kubernetes`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
 
 现有的 chart 原生 Secret 引用（例如控制面板 JWT Secret）仍是外部对象，不会被复制到 CLI 管理的 Secret。对每个手动管理的 Secret 使用相同的命名空间和 release 所有权纪律。
 
-### 隔离 Evaluation broker 凭据
+### 隔离 sr-bench 凭据
 
-生产 Evaluation 使用服务器拥有的 HTTP broker。沙箱 Python worker 的环境中既不接收 origin，也不接收凭据值，并且只能请求运行清单允许的操作、冻结的 case 身份、有界超时和已校验载荷。Go broker 选择精确的 Router、Envoy 或 evidence-ledger origin，并附加其 bearer token。
+Dashboard 代理服务器配置的 sr-bench origin，并传递已认证的用户身份。`SR_BENCH_TOKEN_ENV` 指定服务 token 的环境变量名，默认 `SR_BENCH_TOKEN`。服务、模型和 Router 管理凭据应分开。浏览器不能修改已登记目标的地址、价格、凭据引用或执行环境选项。
 
-使用专用的 Router Evaluation token：
+托管核心 worker 通过继承环境变量接收已登记模型的凭据和服务 token，密钥值不进入命令参数。私有 store 与相邻 token 文件位于 Router/Dashboard 共享挂载之外；worker 不挂载 Docker socket 或 GPU。Dashboard 只接收服务 token，不接收模型密钥。
 
-```yaml
-global:
-  services:
-    management_api:
-      auth:
-        mode: bearer
-        tokens:
-          - env: ROUTER_EVAL_TOKEN
-            role: evaluation
-        roles:
-          evaluation:
-            - classify.invoke
-```
-
-然后引用其名称，永远不要引用其值：
-
-```bash
-export ROUTER_EVAL_TOKEN="<secret-manager value>"
-export EVALUATION_ROUTER_API_KEY_ENV=ROUTER_EVAL_TOKEN
-```
-
-Evaluation token 必须与 `VLLM_SR_DASHBOARD_RECIPE_TOKEN` 不同，后者是控制面板控制平面身份。Envoy、故障恢复、硬策略和生产实验 ledger 必须各自使用另一个环境引用。复用引用或 ledger origin 会被拒绝。`vllm-sr serve` 将引用的密钥名称渲染为继承的 `-e NAME` 容器参数，因此值不会进入进程参数、生成的清单、API 响应、报告和日志。已配置但主机值为空的引用会使启动失败；已认证的 Router 如果没有专用 Evaluation 引用，会保持路由 Evaluation 不可用，而不是回退到更广泛的控制面板凭据。
-
-完整的端点和超时表面见 [Evaluation Plane](../benchmarking/evaluation-plane#configure-production-evidence-services)。
+代码和 Agent 任务应使用单独准备的 worker 主机，通过 `SR_BENCH_URL` 连接已认证且容器可达的地址。独立服务默认监听回环，非回环监听必须设置服务 token。参阅 [sr-bench 1.0](../benchmarking/sr-bench) 的前置条件和限额说明。
 
 ## 保护本地栈的存储凭据
 
@@ -135,11 +110,10 @@ Evaluation token 必须与 `VLLM_SR_DASHBOARD_RECIPE_TOKEN` 不同，后者是�
 | Router | 是 | 是 |
 | Envoy、控制面板 | 是 | 否 |
 | Jaeger、Prometheus、Grafana | 是 | 否 |
-| OpenClaw 工作负载 | 是 | 否 |
 
 Router 是唯一同时位于两者上的容器。请求通过应用网络到达它；它通过数据网络到达存储。命名栈会为这两个名称加前缀，因此两个栈互不共享。即使 Milvus 目前还没有自己的凭据，它也会加入数据网络。
 
-这关闭了东西向可达性。应用网络上的容器——sidecar 或为 OpenClaw 工作负载选择的镜像——根本无法打开到 `vllm-sr-redis:6379` 或 `vllm-sr-postgres:5432` 的连接。存储端口仅发布在 `127.0.0.1` 上，从而从主机侧关闭相同暴露。
+这关闭了东西向可达性。应用网络上的容器（例如 sidecar）根本无法打开到 `vllm-sr-redis:6379` 或 `vllm-sr-postgres:5432` 的连接。存储端口仅发布在 `127.0.0.1` 上，从而从主机侧关闭相同暴露。
 
 它不约束能够到达容器运行时的调用者。这样的调用者可以将容器附加到任何网络，因此该拆分是工作负载的边界，而不是运行时套接字的边界。
 
@@ -173,9 +147,23 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 
 然后针对已识别的卷启动容器，或将其内容复制到栈的命名卷（`vllm-sr-postgres-data` / `vllm-sr-redis-data`，命名栈带栈前缀）。CLI 不会猜测哪个孤立卷是你的。
 
-**配方激活报告凭据不可读。** 控制面板可以在激活配方时启动托管存储，但它作为单独、信任度更低的账户运行——它持有容器运行时套接字，而这正是这些凭据要远离的对象——因此它不能读取凭据状态，也不会猜测哪个卷保存数据。从拥有该栈的账户运行 `vllm-sr serve` 以预配存储，然后再次激活配方。
-
 **对已轮换的栈使用较旧的 CLI。** 它将无法认证。这是预期结果。升级 CLI，或通过容器运行时手动重置密码。
+
+## 保护本地栈的管理凭据
+
+控制面板使用一个服务凭据（`dashboard_control_plane` 角色）调用 Router 管理 API。当配方开启 bearer 认证时，Router 只接受持有该凭据的控制面板。两个容器都由 `vllm-sr serve` 创建，因此由它拥有这个值：
+
+- 如果你在它的环境中设置了 `VLLM_SR_DASHBOARD_RECIPE_TOKEN`（64 个小写十六进制字符，例如 `openssl rand -hex 32` 的输出），它就使用该值，并且从不把它写入磁盘。
+- 否则，栈会在首次启动时生成一个，并保存在 `<state-root>/.vllm-sr/management-credential/dashboard[.<stack>].json`，模式 `0600`，位于已验证所有者的 `0700` 目录中。
+- 控制面板总会收到它；当 Router 的运行时配置绑定它时，Router 也会收到。两者都以继承的环境名称接收，它不会出现在 `docker` 命令行、生成的配置文件、配方存储或日志记录中，控制面板也不在磁盘上保留副本。配方不能把这个名称绑定为自己的环境输入。
+
+能读取它的是：运行 `vllm-sr serve` 的用户、Router 和控制面板进程，以及任何能通过容器运行时检查这些容器的人。要轮换它，删除状态文件并运行 `vllm-sr serve`：它会生成新值，并用新值重建 Router 和控制面板。
+
+### 配方存储权限 {#recipe-store-permissions}
+
+`vllm-sr serve` 在启动栈之前读取控制面板的配方存储，并完成中断的激活，使用的是运行它的用户。因此存储 `<state-root>/.vllm-sr/recipe-store/<stack>` 与该用户的组共享：其中的文件组可读，目录组可写。外层的 `.vllm-sr` 只对其所有者和控制面板开放，所以其他主机用户无法到达存储；存储中只有包和配置文档，没有凭据。
+
+较早版本的控制面板写入的存储只对控制面板的账户开放。如果 `vllm-sr serve` 报告无法读取它，请用它打印的命令（`chgrp -R` 到你的组并 `chmod -R g+rwX`）共享一次；此后控制面板会保持共享。无 root 的 Docker 和 Podman 会把容器用户映射到其他主机 ID，因此在那里这种共享到达不了主机用户。
 
 ## 复核已存储的请求数据
 
@@ -194,11 +182,9 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 
 ## 限制容器运行时访问 {#limit-container-runtime-access}
 
-某些控制面板工作流可以管理本地容器。仅当它是具有安全所有者和组模式的 Unix 套接字时，CLI 才会挂载容器运行时套接字；它拒绝符号链接、全局可访问的套接字和不安全的组所有权。控制面板在容器内重复该检查，并以非 root 用户运行。
+`vllm-sr serve` 是本地栈中唯一使用容器运行时的部分。它创建、重建和停止栈的容器，并应用控制面板中保存的、需要重新创建容器的每项更改。没有任何栈容器挂载运行时套接字，控制面板镜像中也没有容器 CLI。控制面板以非 root 用户运行，从 Router 和 Envoy 的 HTTP 探测以及 CLI 在运行时配置旁保存的文件读取服务状态，从有界日志 spool 读取服务日志。
 
-当套接字缺失或被拒绝时，Router 和控制面板仍会启动，但容器管理功能会将运行时报告为不可用。不要将套接字设为全局可写以绕过此保护。对非默认的无 root 运行时套接字使用 `VLLM_SR_CONTAINER_SOCKET`，并验证其用户命名空间和补充组映射。
-
-如果部署不需要控制面板管理的容器，不要挂载运行时套接字。
+请把对运行时的访问视为对栈的管理员访问。能到达运行时的调用者可以读取容器环境（包括管理凭据），也可以绕过存储密码。只把套接字留给运行时的管理员，不要把它挂载进栈容器。
 
 ## 生产检查清单
 
@@ -212,4 +198,4 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 - [ ] 在绕过策略不可接受的地方设置严格的失败行为。
 - [ ] 按与其他凭据相同的计划轮换本地栈的存储凭据。
 - [ ] 测试备份、恢复、凭据轮换、升级和回滚。
-- [ ] 除非工作流需要，否则不要挂载容器运行时套接字。
+- [ ] 不要把容器运行时套接字挂载进任何栈容器；只有 `vllm-sr serve` 使用运行时。

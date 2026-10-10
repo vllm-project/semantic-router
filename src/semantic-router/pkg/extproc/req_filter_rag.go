@@ -47,7 +47,7 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 
 // retrieveContext retrieves context from the configured backend
 func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	if cached, found := r.getCachedRAGContext(ctx.UserContent, ragConfig); found {
+	if cached, found := r.getCachedRAGContext(ctx.Routing.RecipeName(), ctx.UserContent, ragConfig); found {
 		return cached, nil
 	}
 
@@ -60,7 +60,7 @@ func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestCon
 	ctx.RAGBackend = ragConfig.Backend
 
 	r.logEmptyRAGContext(ragConfig.Backend, ctx.UserContent, retrievedContext)
-	r.cacheRetrievedRAGContext(ctx.UserContent, retrievedContext, ragConfig)
+	r.cacheRetrievedRAGContext(ctx.Routing.RecipeName(), ctx.UserContent, retrievedContext, ragConfig)
 
 	return retrievedContext, nil
 }
@@ -89,7 +89,7 @@ func (r *OpenAIRouter) retrieveRAGContext(
 ) (string, float64, error) {
 	start := time.Now()
 	retrievedContext, err := r.retrieveContext(ragCtx, ctx, ragConfig)
-	latency := time.Since(start).Seconds()
+	latency := hybridRetrievalLatency(hybridStrategy(ragConfig), time.Since(start).Seconds(), ctx.RAGRetrievalLatency)
 	ctx.RAGRetrievalLatency = latency
 
 	tracing.SetSpanAttributes(ragSpan,
@@ -100,6 +100,27 @@ func (r *OpenAIRouter) retrieveRAGContext(
 	return retrievedContext, latency, err
 }
 
+// hybridRetrievalLatency keeps the winning backend duration for parallel hybrid
+// only. Sequential hybrid must keep the wrapper elapsed time, including a
+// failed primary that ran before the fallback.
+func hybridRetrievalLatency(strategy string, wrapper, recorded float64) float64 {
+	if strategy == "parallel" && recorded > 0 {
+		return recorded
+	}
+	return wrapper
+}
+
+func hybridStrategy(ragConfig *config.RAGPluginConfig) string {
+	if ragConfig == nil || ragConfig.Backend != "hybrid" {
+		return ""
+	}
+	hybridConfig, err := ragConfig.HybridBackendConfig()
+	if err != nil || hybridConfig == nil {
+		return ""
+	}
+	return hybridConfig.Strategy
+}
+
 func handleRAGRetrievalError(
 	ctx *RequestContext,
 	ragSpan trace.Span,
@@ -108,8 +129,7 @@ func handleRAGRetrievalError(
 	err error,
 	latency float64,
 ) error {
-	tracing.RecordError(ragSpan, err)
-	ragSpan.SetStatus(codes.Error, err.Error())
+	tracing.RecordError(ragSpan, "retrieval_failed")
 	metrics.RecordRAGRetrieval(ragConfig.Backend, requestDecisionStateKey(ctx), "error", latency)
 
 	switch ragFailureMode(ragConfig) {
@@ -166,12 +186,12 @@ func (r *OpenAIRouter) finalizeRAGRetrieval(
 	return nil
 }
 
-func (r *OpenAIRouter) getCachedRAGContext(query string, ragConfig *config.RAGPluginConfig) (string, bool) {
+func (r *OpenAIRouter) getCachedRAGContext(recipe config.RecipeName, query string, ragConfig *config.RAGPluginConfig) (string, bool) {
 	if !ragConfig.CacheResults {
 		return "", false
 	}
 
-	if cached, found := r.getRAGCache(query, ragConfig); found {
+	if cached, found := r.getRAGCache(recipe, query, ragConfig); found {
 		metrics.RecordRAGCacheHit(ragConfig.Backend)
 		logging.Debugf("RAG cache hit for query: %s", logging.ContentDescriptor(query))
 		return cached, true
@@ -225,12 +245,13 @@ func (r *OpenAIRouter) logEmptyRAGContext(backend string, query string, retrieve
 }
 
 func (r *OpenAIRouter) cacheRetrievedRAGContext(
+	recipe config.RecipeName,
 	query string,
 	retrievedContext string,
 	ragConfig *config.RAGPluginConfig,
 ) {
 	if ragConfig.CacheResults && retrievedContext != "" {
-		r.setRAGCache(query, retrievedContext, ragConfig)
+		r.setRAGCache(recipe, query, retrievedContext, ragConfig)
 	}
 }
 
@@ -255,6 +276,9 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	maxLength := 10000 // Default
 	if ragConfig.MaxContextLength != nil {
 		maxLength = *ragConfig.MaxContextLength
+	}
+	if maxLength < 0 {
+		return fmt.Errorf("max_context_length must not be negative, got %d", maxLength)
 	}
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)

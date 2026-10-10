@@ -1,20 +1,50 @@
 """Constants for vLLM Semantic Router CLI."""
 
+import re
+
+from cli import __version__
+from cli.model_catalog import available_catalog_versions
+
+
+def _release_catalog_installed(release: str) -> bool:
+    return release in available_catalog_versions()
+
+
+def image_tag_for_cli_version(
+    cli_version: str, released=_release_catalog_installed
+) -> str:
+    """Keep released CLI installations on their matching release images.
+
+    A release build ships its vMAJOR.MINOR catalog snapshot, which the release
+    contract requires before the tag. `main` already carries the next version
+    without that snapshot, so a source install of it runs the main-channel
+    images, as dev builds do.
+    """
+    match = re.fullmatch(r"(\d+)\.(\d+)\.\d+", cli_version)
+    if match and released(f"v{match.group(1)}.{match.group(2)}"):
+        return f"v{cli_version}"
+    return "latest"
+
+
+_DEFAULT_IMAGE_TAG = image_tag_for_cli_version(__version__)
+
 # Docker image configuration
-VLLM_SR_CONTAINER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+VLLM_SR_CONTAINER_IMAGE_DEFAULT = (
+    f"ghcr.io/vllm-project/semantic-router/vllm-sr:{_DEFAULT_IMAGE_TAG}"
+)
 VLLM_SR_CONTAINER_IMAGE_ROCM = (
-    "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
+    f"ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:{_DEFAULT_IMAGE_TAG}"
 )
 VLLM_SR_CONTAINER_IMAGE_CUDA = (
-    "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest"
+    f"ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:{_DEFAULT_IMAGE_TAG}"
 )
-VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"
+VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.35.3"
 VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
-    "ghcr.io/vllm-project/semantic-router/dashboard:latest"
+    f"ghcr.io/vllm-project/semantic-router/dashboard:{_DEFAULT_IMAGE_TAG}"
 )
 DEFAULT_STACK_NAME = "vllm-sr"
-PLATFORM_AMD = "amd"
-PLATFORM_NVIDIA = "nvidia"
+PLATFORM_ROCM = "rocm"
+PLATFORM_CUDA = "cuda"
 RUNTIME_TOPOLOGY_ENV = "VLLM_SR_TOPOLOGY"
 RUNTIME_TOPOLOGY_SPLIT = "split"
 DEFAULT_RUNTIME_TOPOLOGY = RUNTIME_TOPOLOGY_SPLIT
@@ -35,7 +65,7 @@ DEFAULT_METRICS_PORT = 9190
 DEFAULT_MILVUS_PORT = 19530
 
 # Health check
-HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)
+HEALTH_CHECK_TIMEOUT = 1800  # Default local startup readiness budget: 30 minutes.
 HEALTH_CHECK_INTERVAL = 2
 
 # File descriptor limits

@@ -17,6 +17,12 @@ from contextlib import contextmanager, suppress
 
 import yaml
 
+from cli.consts import (
+    PLATFORM_CUDA,
+    PLATFORM_ROCM,
+    VLLM_SR_CONTAINER_IMAGE_CUDA,
+    VLLM_SR_CONTAINER_IMAGE_ROCM,
+)
 from cli.recipe_package import literal_credential_paths
 from cli.runtime_env_names import runtime_env_name_is_allowed
 from cli.utils import get_logger, load_config
@@ -50,6 +56,8 @@ def translate_config_to_helm_values(
     namespace: str | None = None,
     minimal: bool = False,
     readonly: bool = False,
+    gateway: str | None = None,
+    platform: str | None = None,
 ) -> dict:
     """Build a Helm values dict from the user's ``config.yaml``.
 
@@ -89,6 +97,13 @@ def translate_config_to_helm_values(
         minimal=minimal,
         readonly=readonly,
         image_overridden=image is not None,
+    )
+    _apply_gateway_and_platform(
+        values,
+        gateway=gateway,
+        platform=platform,
+        image_overridden=image is not None,
+        config=user_config,
     )
 
     # The user-selected canonical config is authoritative over chart defaults and
@@ -276,6 +291,59 @@ def _apply_cli_deployment_overrides(
         elif readonly:
             dashboard_values["readonly"] = True
         values["dashboard"] = dashboard_values
+
+
+# The image and the GPU resource each GPU --platform selects on Kubernetes.
+PLATFORM_HELM_VALUES = {
+    PLATFORM_ROCM: (VLLM_SR_CONTAINER_IMAGE_ROCM, "amd.com/gpu"),
+    PLATFORM_CUDA: (VLLM_SR_CONTAINER_IMAGE_CUDA, "nvidia.com/gpu"),
+}
+
+
+def _apply_gateway_and_platform(
+    values: dict,
+    *,
+    gateway: str | None,
+    platform: str | None,
+    image_overridden: bool,
+    config: dict | None = None,
+) -> None:
+    """Bind the chart's gateway mode, and a GPU platform's image and request."""
+
+    if gateway is not None:
+        values["gateway"] = {**_mapping(values, "gateway"), "mode": gateway}
+    selected = PLATFORM_HELM_VALUES.get((platform or "").strip().lower())
+    if selected is None:
+        return
+    image, resource = selected
+    if not image_overridden:
+        repository, _tag = _split_image_reference(image)
+        values["image"] = {**_mapping(values, "image"), "repository": repository}
+    deployments = (((config or {}).get("global") or {}).get("model_catalog") or {}).get(
+        "deployments"
+    ) or {}
+    count = 1
+    for deployment in deployments.values():
+        if deployment.get("provider") != "model_runtime":
+            continue
+        for placement in deployment.get("replicas") or [deployment]:
+            if placement.get("endpoint"):
+                continue
+            device = placement.get("device") or "auto"
+            if device.startswith(platform + ":"):
+                count = max(count, int(device.split(":", 1)[1]) + 1)
+    resources = _mapping(values, "resources")
+    count = max(count, int(_mapping(resources, "limits").get(resource, 0)))
+    resources["limits"] = {**_mapping(resources, "limits"), resource: count}
+    resources["requests"] = {**_mapping(resources, "requests"), resource: count}
+    values["resources"] = resources
+
+
+def _mapping(values: dict, key: str) -> dict:
+    configured = values.get(key, {})
+    if not isinstance(configured, dict):
+        raise ValueError(f"Helm {key} values must be a mapping")
+    return dict(configured)
 
 
 def _split_image_reference(image: str) -> tuple[str, str]:

@@ -83,11 +83,14 @@ routing:
 
         # Run serve without creating config.yaml. Use a fake image and never-pull so the
         # command fails after bootstrap instead of waiting on a real container image.
+        # This CPU contract does not require a Docker daemon for auto detection.
         return_code, stdout, stderr = self.run_cli(
             [
                 "serve",
                 "--image",
                 "nonexistent-image:bootstrap",
+                "--platform",
+                "cpu",
                 "--image-pull-policy",
                 "never",
             ],

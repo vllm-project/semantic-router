@@ -56,7 +56,7 @@ spec:
   # Semantic router configuration
   config:
     embedding_models:
-      mmbert_model_path: models/mom-embedding-ultra
+      mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
       use_cpu: true
 
     # Semantic cache with Hybrid backend (HNSW + Milvus)

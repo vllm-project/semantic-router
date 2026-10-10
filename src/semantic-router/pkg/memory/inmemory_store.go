@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -22,7 +23,7 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new in-memory memory store with default embedding config.
 func NewInMemoryStore() *InMemoryStore {
-	return NewInMemoryStoreWithConfig(EmbeddingConfig{Model: EmbeddingModelBERT})
+	return NewInMemoryStoreWithConfig(EmbeddingConfig{Model: EmbeddingModelMMBERT})
 }
 
 // NewInMemoryStoreWithConfig creates a new in-memory memory store with custom embedding config.
@@ -41,6 +42,9 @@ func (s *InMemoryStore) IsEnabled() bool {
 
 // Store saves a new memory.
 func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !s.enabled {
 		return nil
 	}
@@ -49,8 +53,11 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 	defer s.mu.Unlock()
 
 	// Generate embedding if not already set
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if len(memory.Embedding) == 0 {
-		embedding, err := GenerateEmbeddingWithContext(ctx, memory.Content, s.embeddingConfig)
+		embedding, err := embedForWrite(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}
@@ -176,30 +183,18 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 		matching = append(matching, mem)
 	}
 
-	// Sort by created_at descending (newest first)
-	sort.Slice(matching, func(i, j int) bool {
-		return matching[i].CreatedAt.After(matching[j].CreatedAt)
-	})
-
-	total := len(matching)
-
-	// Apply limit
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	limit, offset, err := normalizeListWindow(opts)
+	if err != nil {
+		return nil, err
 	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	if limit < len(matching) {
-		matching = matching[:limit]
-	}
+	sortMemoriesForList(matching)
+	page := pageMemories(matching, offset, limit)
 
 	return &ListResult{
-		Memories: matching,
-		Total:    total,
+		Memories: page,
+		Total:    len(matching),
 		Limit:    limit,
+		Offset:   offset,
 	}, nil
 }
 
@@ -237,7 +232,7 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 
 	// Regenerate embedding before overwriting Content so the comparison is valid.
 	if existing.Content != memory.Content {
-		embedding, err := GenerateEmbeddingWithContext(ctx, memory.Content, s.embeddingConfig)
+		embedding, err := embedForWrite(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}
@@ -343,24 +338,16 @@ func (s *InMemoryStore) Close() error {
 	return nil
 }
 
-// cosineSimilarity calculates cosine similarity between two vectors
+// cosineSimilarity is the cosine of two vectors, with each inner product on
+// the shared SIMD kernel. Vectors of different lengths, or a zero vector,
+// score 0.
 func cosineSimilarity(a, b []float32) float32 {
 	if len(a) != len(b) {
 		return 0
 	}
-
-	var dotProduct float32
-	var normA, normB float32
-
-	for i := range a {
-		dotProduct += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
-	}
-
+	normA, normB := vecmath.Dot(a, a), vecmath.Dot(b, b)
 	if normA == 0 || normB == 0 {
 		return 0
 	}
-
-	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
+	return vecmath.Dot(a, b) / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
 }

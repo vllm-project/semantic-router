@@ -1,6 +1,10 @@
 package config
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+)
 
 func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface{}) {
 	assertMapCoversStructFields(t, root, reflect.TypeOf(CanonicalConfig{}), "config")
@@ -49,7 +53,16 @@ func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}
 func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{}) {
 	routing := mustMapAt(t, root, "routing")
 
-	assertMapCoversStructFields(t, routing, reflect.TypeOf(CanonicalRouting{}), "routing")
+	// Recipe-wide policies can be demonstrated by a named recipe without
+	// changing the broad default profile's compatibility behavior.
+	profiles := []interface{}{routing}
+	for _, profile := range collectChildMapsFromSlice(t, mustSliceAt(t, root, "recipes"), "routing", "recipes") {
+		profiles = append(profiles, profile)
+	}
+	assertSliceUnionCoversStructFields(t, profiles, reflect.TypeOf(CanonicalRouting{}), "routing profiles")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), reflect.TypeOf(fallback.FallbackPolicy{}), "routing.fallback")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), "circuit_breaker", "routing profiles"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "routing.fallback.circuit_breaker")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "candidate_requirements", "routing profiles"), reflect.TypeOf(CandidateRequirements{}), "routing.candidate_requirements")
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, routing, "modelCards"),
@@ -64,7 +77,7 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 	)
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
-	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
+	assertReferenceConfigDecisionCoverage(t, referenceRecipeDecisions(t, root))
 }
 
 func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {

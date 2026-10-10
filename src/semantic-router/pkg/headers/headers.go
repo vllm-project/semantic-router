@@ -32,7 +32,7 @@ const (
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
 	// This prevents "silent double injection" when applications use SDK-managed memory
-	// systems like Mem0, LangMem, LangGraph, or OpenClaw.
+	// systems like Mem0, LangMem or LangGraph.
 	// Value: "true" to disable router memory, any other value or absence enables it.
 	// Example use case: App with Mem0 sends this header to prevent duplicate memory injection.
 	DisableRouterMemory = "x-disable-router-memory"
@@ -68,7 +68,8 @@ const (
 	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
-	// This is the final routing decision made by the DecisionEngine.
+	// This is the final routing decision made by the DecisionEngine. It is
+	// omitted when no decision matched and the request went to the default model.
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
@@ -76,6 +77,10 @@ const (
 	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
 	// Example value: "guarded=no_match,strict=fail_request"
 	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
+
+	// VSRDecisionRanking names the matched decision the selected one beat and
+	// the comparison that settled it. Debug surface only (#3658).
+	VSRDecisionRanking = "x-vsr-decision-ranking"
 
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
@@ -92,6 +97,14 @@ const (
 	// VSRSelectedModel indicates the model selected by VSR for processing the request.
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
+
+	// VSREffectiveInputTokens is the selected backend's rendered input size for
+	// the finalized automatic-output dispatch, including its chat template.
+	VSREffectiveInputTokens = "x-vsr-effective-input-tokens" // #nosec G101 -- public header name, not a credential
+
+	// VSREffectiveMaxOutputTokens is the resolved output token limit sent to the
+	// selected backend for that automatic-output dispatch, including reasoning.
+	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
 
 	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
 	// the routing decision matched. Example values: "static", "elo", "knn",
@@ -130,9 +143,17 @@ const (
 	// Example: "adaptation=sampled_win,protection=switch_allowed"
 	VSRLearningReasons = "x-vsr-learning-reasons"
 
+	// VSRFallbackAttempts indicates the number of candidate attempts during execution fallback.
+	VSRFallbackAttempts = "x-vsr-fallback-attempts"
+
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
+
+	VSRPromptCacheAction    = "x-vsr-prompt-cache-action"
+	VSRPromptCacheReason    = "x-vsr-prompt-cache-reason"
+	VSRPromptCacheInserted  = "x-vsr-prompt-cache-inserted"
+	VSRPromptCachePreserved = "x-vsr-prompt-cache-preserved"
 
 	// --- v0.4 keystone response-contract headers (issue #2203) ---
 	// These two headers are emitted on every VSR-processed response and form
@@ -157,6 +178,7 @@ const (
 	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
 	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
 	ResponsePathError           = "error"            // router-side error response
+	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
 
 	// SchemaVersionValue is the current response-header contract revision
 	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
@@ -271,6 +293,9 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedSafety contains matched content safety rule names.
+	VSRMatchedSafety = "x-vsr-matched-safety"
+
 	// VSRMatchedHallucination contains comma-separated list of matched
 	// hallucination rule names. Written in the response body phase, once the
 	// model's answer has been checked against its grounding context.
@@ -295,6 +320,12 @@ const (
 	// structural input-modality signal names.
 	// Example: "image_input,audio_input"
 	VSRMatchedInputModality = "x-vsr-matched-input-modality"
+
+	// VSRMatchedDecisionModel contains comma-separated list of matched decision
+	// signals answered by a decision model: noul and score rule names, and
+	// "rule:choice" for choice questions.
+	// Example: "needs_reasoning,request_kind:code"
+	VSRMatchedDecisionModel = "x-vsr-matched-decision-model"
 
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
@@ -372,6 +403,11 @@ const (
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
 
+	// UserCloudflareWorkersAIKey carries the user's Cloudflare Workors AI API token,
+	// injected by the auth backend. The endpoint is account-scoped, so the account
+	// identifier travels in the operator's base URL and only the token is per user.
+	UserCloudflareWorkersAIKey = "x-user-cloudflare-workers-ai-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:
@@ -401,28 +437,25 @@ const (
 	// VSRInternalAuth authenticates in-process request context that must not
 	// be accepted from external callers or forwarded to model backends.
 	VSRInternalAuth = "x-vsr-internal-auth"
+
+	// VSROutcomeSource carries server-attested outcome provenance between a
+	// trusted control plane and the Router management API. External callers
+	// must not be allowed to supply this header through a proxy.
+	VSROutcomeSource = "x-vsr-outcome-source"
+
+	// VSROutcomePrincipal carries an opaque, server-attested identity used to
+	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
+	VSROutcomePrincipal = "x-vsr-outcome-principal"
 )
 
-// Looper Request Headers
-// These headers are added to looper internal requests to identify them
-// and allow the extproc to lookup decision configuration and apply plugins.
+// Retired Looper hop headers. Looper hops run in process with their context
+// typed, so nothing reads these; the Router still drops them from client
+// requests so that no client can pose as a hop.
 const (
-	// VSRLooperRequest indicates this is an internal looper request.
-	// When present, extproc should lookup the decision and execute configured plugins.
-	// Value: "true"
-	VSRLooperRequest = "x-vsr-looper-request"
-
-	// VSRLooperIteration indicates the current iteration number in the looper loop.
-	// Value: "1", "2", "3", etc.
+	VSRLooperRequest   = "x-vsr-looper-request"
 	VSRLooperIteration = "x-vsr-looper-iteration"
-
-	// VSRLooperDecision indicates the decision name for looper internal requests.
-	// Used by extproc to lookup decision configuration and apply plugins.
-	// Value: decision name (e.g., "remom_low_effort")
-	VSRLooperDecision = "x-vsr-looper-decision"
-
-	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
-	VSRFusionDepth = "x-vsr-fusion-depth"
+	VSRLooperDecision  = "x-vsr-looper-decision"
+	VSRFusionDepth     = "x-vsr-fusion-depth"
 )
 
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)

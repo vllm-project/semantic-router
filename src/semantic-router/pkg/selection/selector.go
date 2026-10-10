@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 // SelectionMethod defines the type of model selection algorithm
@@ -73,8 +74,7 @@ const (
 	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
 	MethodSVM SelectionMethod = "svm"
 
-	// MethodMLP uses Multi-Layer Perceptron for GPU-accelerated model selection
-	// Neural network classifier using Candle for efficient GPU inference
+	// MethodMLP uses a Multi-Layer Perceptron classifier for model selection
 	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
 	MethodMLP SelectionMethod = "mlp"
 
@@ -99,6 +99,10 @@ const (
 	// MethodPrompt uses a concrete helper LLM to choose one declared candidate
 	// through a runtime-owned structured output contract.
 	MethodPrompt SelectionMethod = "prompt"
+
+	// MethodDecision asks a decision model served by the built-in model runtime
+	// to choose one declared candidate; its probabilities are the candidate scores.
+	MethodDecision SelectionMethod = "decision"
 
 	// MethodSessionAware wraps a base selector with agentic session policy:
 	// it keeps tool loops and hot multi-turn continuations on the current model
@@ -186,6 +190,8 @@ type SelectionContext struct {
 	// Cost-aware selectors use both to compare request-shaped estimated cost.
 	InputTokens          int
 	ExpectedOutputTokens int
+	// CandidateDemands contains provider-rendered budgets for automatic output.
+	CandidateDemands map[string]CandidateDemand
 
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
@@ -202,6 +208,11 @@ type SelectionContext struct {
 	// SessionID identifies the conversation session for multi-turn context (optional)
 	// Used to track within-session model performance
 	SessionID string
+
+	// SessionStateKey is the canonical recipe-scoped router memory key. It is
+	// separate from SessionID so client identity text cannot be mistaken for an
+	// encoded session/conversation tuple. An empty key uses the raw SessionID.
+	SessionStateKey string
 
 	// AgenticSession carries request-time session facts used by
 	// session_aware selection. The flat SessionID remains the shared
@@ -241,6 +252,10 @@ type SelectionResult struct {
 	// SelectedModel is the name of the selected model
 	SelectedModel string
 
+	// SelectedCandidate preserves the exact winning ModelRef when a model appears
+	// more than once with different candidate-level settings.
+	SelectedCandidate *config.ModelRef
+
 	// LoRAName is the LoRA adapter name to use (if applicable)
 	LoRAName string
 
@@ -265,8 +280,16 @@ type SelectionResult struct {
 	// Later learning and provider rerouting must not expand this set.
 	EligibleModels []config.ModelRef
 
-	// AllScores maps each candidate model to its computed score
-	AllScores map[string]float64
+	// CandidateScores is the typed input for composition and policy. AllScores
+	// is its compatibility/diagnostic projection, never a candidate identity.
+	CandidateScores CandidateScores
+	ScoreDirection  ScoreDirection
+	AllScores       map[string]float64
+
+	// MultiFactor records the base objective stages and their eligible survivors.
+	// Later learning/session policy may choose among them; this is not a final
+	// dispatch trace. Weighted objectives omit it.
+	MultiFactor *selectiontrace.MultiFactorObjective
 
 	// Prompt-helper telemetry is populated only by MethodPrompt.
 	HelperModel            string

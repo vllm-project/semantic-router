@@ -1,4 +1,4 @@
-import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
+import type { Message } from './ChatComponentTypes'
 import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
@@ -17,8 +17,6 @@ export interface OutboundChatMessage {
   tool_call_id?: string
 }
 
-export const PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS = 2048
-export const PLAYGROUND_REQUEST_TIMEOUT_MS = 120_000
 export const PLAYGROUND_MAX_REQUEST_BYTES = 10 * 1024 * 1024
 
 export const assertPlaygroundRequestSize = (request: Record<string, unknown>): void => {
@@ -31,23 +29,21 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
   'Content-Type': 'application/json',
   'x-session-id': conversationId,
+  'x-conversation-id': conversationId,
   'x-vsr-debug': 'true',
 })
-
-const withDefaultCompletionBudget = (request: Record<string, unknown>): Record<string, unknown> => {
-  if (request.max_tokens !== undefined || request.max_completion_tokens !== undefined) {
-    return request
-  }
-  return { ...request, max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS }
-}
 
 const RESPONSE_HEADER_KEYS = [
   // v0.4 keystone headers (#2203)
   'x-vsr-schema-version',
   'x-vsr-response-path',
   'x-vsr-selected-model',
+  'x-vsr-effective-input-tokens',
+  'x-vsr-effective-max-output-tokens',
   'x-vsr-selected-algorithm',
   'x-vsr-selected-decision',
+  'x-vsr-selected-recipe',
+  'x-vsr-selected-confidence',
   'x-vsr-selected-modality',
   'x-vsr-replay-id',
   'x-vsr-cache-hit',
@@ -73,12 +69,14 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-modality',
   'x-vsr-matched-authz',
   'x-vsr-matched-jailbreak',
+  'x-vsr-matched-safety',
   'x-vsr-matched-hallucination',
   'x-vsr-matched-pii',
   'x-vsr-matched-kb',
   'x-vsr-matched-conversation',
   'x-vsr-matched-event',
   'x-vsr-matched-input-modality',
+  'x-vsr-matched-decision-model',
   'x-vsr-matched-projections',
   'x-vsr-looper-model',
   'x-vsr-looper-models-used',
@@ -88,6 +86,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-looper-prompt-tokens',
   'x-vsr-looper-completion-tokens',
   'x-vsr-looper-total-tokens',
+  'x-vsr-routing-latency-ms',
   'x-vsr-latency-ms',
   'x-vsr-ttft-ms',
   'x-vsr-tpot-ms',
@@ -100,7 +99,6 @@ const RESPONSE_HEADER_KEYS = [
 export const buildChatMessages = (
   messages: Message[],
   nextUserMessage: string,
-  enableClawMode: boolean,
   nextUserAttachments: PlaygroundAttachment[] = [],
 ): OutboundChatMessage[] => {
   const chatMessages: OutboundChatMessage[] = []
@@ -173,10 +171,6 @@ export const buildChatMessages = (
     }
   }
 
-  if (enableClawMode) {
-    chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
-  }
-
   chatMessages.push({
     role: 'user',
     content: buildPlaygroundUserContent(nextUserMessage, nextUserAttachments),
@@ -193,7 +187,6 @@ export const buildChatRequestBody = (
     model,
     messages,
     stream: true,
-    max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
   }
 
   if (activeTools.length > 0) {
@@ -212,12 +205,12 @@ export const buildExactChatRequestBody = (
   const messages = Array.isArray(request.messages) ? request.messages : []
   const requestModel = typeof request.model === 'string' ? request.model.trim() : ''
 
-  const result = withDefaultCompletionBudget({
+  const result = {
     ...request,
     model: requestModel || fallbackModel,
     messages,
     stream: true,
-  })
+  }
   assertPlaygroundRequestSize(result)
   return result
 }

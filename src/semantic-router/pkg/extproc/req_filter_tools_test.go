@@ -18,7 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -43,7 +43,7 @@ func toolsBoolPtr(v bool) *bool {
 	return &v
 }
 
-var _ = Describe("Tool Selection Request Filter", func() {
+var _ = Describe("Tool Selection Request Filter", Label("model-artifacts"), func() {
 	var (
 		tempDir     string
 		toolsDBPath string
@@ -76,8 +76,8 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		model := "qwen3"
 		modelPath := resolveExtprocTestPath("../../../../models/mom-embedding-pro")
 		if !extprocTestModelArtifactsAvailable(modelPath) {
-			model = "gemma"
-			modelPath = resolveExtprocTestPath("../../../../models/mom-embedding-flash")
+			model = "mmbert"
+			modelPath = resolveExtprocTestPath("../../../../models/Vela-1.0-Encoder-307M-Embedding")
 			if !extprocTestModelArtifactsAvailable(modelPath) {
 				Skip("Skipping tool selection tests: embedding models are not available")
 			}
@@ -156,12 +156,12 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		prepareCfg.EmbeddingModels = cfg.EmbeddingModels
 		prepareCfg.Tools.Enabled = true
 		prepareCfg.ModelBindings = map[string]config.ModelBinding{
-			"embedding": {Deployment: "tools-test", Contract: "embedding.v1", Adapter: model},
+			"embedding": {Deployment: "tools-test", Contract: "embedding.v1"},
 		}
 		prepareCfg.ModelDeployments = map[string]config.ModelDeployment{
-			"tools-test": {Provider: "candle", Device: "cpu", Precision: "native", Artifact: modelPath},
+			"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Artifact: modelPath},
 		}
-		embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), prepareCfg, native.New(nil))
+		embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), prepareCfg, servingtest.Managed(GinkgoT()))
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoT().Cleanup(func() { Expect(embeddings.Close()).To(Succeed()) })
 	})

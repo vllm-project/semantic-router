@@ -1,0 +1,206 @@
+# Raw Envoy FULL_DUPLEX_STREAMED gateway for envoy-full-duplex-routing.
+#
+# A second Gateway next to the profile's STREAMED one sends request bodies and
+# trailers to the Router in FULL_DUPLEX_STREAMED mode. Its route sends a
+# request to full-duplex-selected only when it carries the x-selected-model
+# header that the Router sets once the body is routed, and every other request
+# to full-duplex-default. Both backends report the path and credential they
+# received.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router-full-duplex
+  namespace: default
+spec:
+  gatewayClassName: semantic-router
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: semantic-router
+---
+# Pass HTTP/1.1 request trailers on to ExtProc and the backend.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: semantic-router-full-duplex
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router-full-duplex
+  http1:
+    enableTrailers: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: semantic-router-full-duplex
+  namespace: default
+spec:
+  parentRefs:
+  - name: semantic-router-full-duplex
+  rules:
+  - matches:
+    - headers:
+      - name: x-selected-model
+        value: full-duplex-provider
+    backendRefs:
+    - name: full-duplex-selected
+      port: 8000
+  - backendRefs:
+    - name: full-duplex-default
+      port: 8000
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: semantic-router-full-duplex-extproc
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router-full-duplex/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          # A decision's reliability block reaches Envoy's router through these
+          # per-request headers; ext_proc may set no other x-envoy-* header.
+          mutation_rules:
+            allow_expression:
+              regex: "^x-envoy-(upstream-rq-timeout-ms|upstream-rq-per-try-timeout-ms|max-retries|retry-on|retriable-status-codes)$"
+          allow_mode_override: true
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:50051
+              clusterName: semantic-router
+            timeout: 60s
+          message_timeout: 60s
+          processing_mode:
+            request_body_mode: FULL_DUPLEX_STREAMED
+            request_header_mode: SEND
+            request_trailer_mode: SEND
+            response_body_mode: BUFFERED
+            response_header_mode: SEND
+            response_trailer_mode: SKIP
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: semantic-router
+    operation:
+      op: add
+      path: ''
+      value:
+        connect_timeout: 60s
+        http2_protocol_options: {}
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic-router
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                    port_value: 50051
+        name: semantic-router
+        type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router-full-duplex
+  type: JSONPatch
+---
+# The cli scenario also serves the provider's prefixed chat path.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: full-duplex-selected
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: full-duplex-selected
+  template:
+    metadata:
+      labels:
+        app: full-duplex-selected
+    spec:
+      containers:
+      - name: backend
+        image: semantic-router-ci/provider-mocker:e2e-test
+        imagePullPolicy: Never
+        env:
+        - name: PROVIDER_MOCKER_SCENARIO
+          value: cli
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: full-duplex-selected
+  namespace: default
+spec:
+  selector:
+    app: full-duplex-selected
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: full-duplex-default
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: full-duplex-default
+  template:
+    metadata:
+      labels:
+        app: full-duplex-default
+    spec:
+      containers:
+      - name: backend
+        image: semantic-router-ci/provider-mocker:e2e-test
+        imagePullPolicy: Never
+        env:
+        - name: PROVIDER_MOCKER_SCENARIO
+          value: cli
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: full-duplex-default
+  namespace: default
+spec:
+  selector:
+    app: full-duplex-default
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http

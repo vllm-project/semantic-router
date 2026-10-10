@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "configuration-workflows.md"),
 		needles: []string{
 			"Choose one primary source of truth",
-			"vllm-sr serve --target k8s --config config.yaml",
+			"vllm-sr serve --target kubernetes --config config.yaml",
 			"`spec.config.routing`",
 			"Routing DSL",
 			"Avoid split ownership",
@@ -149,6 +150,10 @@ var configContractRequiredDocs = []docNeedles{
 		needles: apiserverDocNeedles,
 	},
 	{
+		path:    repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
+		needles: apiserverDocNeedles,
+	},
+	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
 			"backend_refs:",
@@ -162,7 +167,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
 		needles: []string{
-			"Envoy presents the request to the Router.",
+			"The standalone frontend, or an ExtProc gateway, presents it to the Router.",
 			"**Entrypoint**",
 			"**Recipe**",
 			"direct selection",
@@ -194,15 +199,6 @@ var configContractRequiredDocs = []docNeedles{
 			"backend_refs:",
 			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
 			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
-		},
-	},
-	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"`config-bench.yaml`",
-			"`config-bench-candle.yaml`",
-			"`global.router.streamed_body.enabled`",
-			"`bench-3way.sh`",
 		},
 	},
 	{
@@ -242,7 +238,7 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: "tools/mcp-classifier-server/README.md",
+		path: "tools/test/services/mcp-classifier-server/README.md",
 		needles: []string{
 			"providers:\n  defaults:",
 			"routing:\n  modelCards:",
@@ -369,12 +365,6 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"streamed_body_mode",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
 		needles: []string{
 			"\nclassifier:\n",
@@ -396,7 +386,7 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: "tools/mcp-classifier-server/README.md",
+		path: "tools/test/services/mcp-classifier-server/README.md",
 		needles: []string{
 			"\nclassifier:\n",
 			"categories: []",
@@ -575,10 +565,9 @@ var latestTutorialAllowedDirectories = map[string]bool{
 	"projection": true,
 }
 
-// currentTranslationFallbackDocs are deliberately absent from the latest
-// zh-Hans overrides. Docusaurus serves the canonical current English page when
-// an override is missing; historical versioned translations remain untouched.
-var currentTranslationFallbackDocs = []string{
+// Retired cookbook overrides must not shadow the current tutorial hierarchy.
+// Current translated API, training and troubleshooting pages remain supported.
+var retiredCookbookTranslationDocs = []string{
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "classifier-tuning.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "vllm-endpoints.md"),
@@ -610,7 +599,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	assertSignalTutorialDocsMatchConfigHierarchy(t, root)
 	assertAlgorithmTutorialDocsMatchConfigHierarchy(t, root)
 	assertPluginTutorialDocsMatchConfigHierarchy(t, root)
-	assertPathsDoNotExist(t, root, currentTranslationFallbackDocs)
+	assertPathsDoNotExist(t, root, retiredCookbookTranslationDocs)
 }
 
 func TestConfigProposalIsReachableFromSidebar(t *testing.T) {
@@ -649,14 +638,19 @@ func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
 func assertTutorialFilesContainRequiredSections(t *testing.T, root string) {
 	t.Helper()
 	tutorialRoot := filepath.Join(root, repoRel("website", "docs", "tutorials"))
-	err := filepath.Walk(tutorialRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(tutorialRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -696,14 +690,19 @@ func assertMarkdownTreeDoesNotContainAny(t *testing.T, root string, forbidden []
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return
 	}
-	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(root)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}

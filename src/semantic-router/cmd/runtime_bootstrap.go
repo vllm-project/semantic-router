@@ -8,12 +8,15 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/profiling"
@@ -38,6 +41,10 @@ type runtimeOptions struct {
 	enableAPI              bool
 	secure                 bool
 	downloadOnly           bool
+	validateConfig         bool
+	gateway                config.GatewayMode
+	listenerAddress        string
+	configHistoryLimit     int
 }
 
 func parseRuntimeOptions() runtimeOptions {
@@ -53,8 +60,12 @@ func parseRuntimeOptions() runtimeOptions {
 		secure                 = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
 		certPath               = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
-		namespace              = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
+		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		validateConfig         = flag.Bool("validate-config", false, "Validate the -config file as the Router loads it, print a JSON report on stdout and exit: 0 when it would load, 1 when it would not")
+		gatewayMode            = flag.String("gateway", string(config.GatewayExtProc), "What serves client traffic: extproc (the ext_proc gRPC server behind an Envoy-based gateway) or standalone (the OpenAI-compatible API on the configured listeners)")
+		listenerAddress        = flag.String("listener-address", "", "Standalone mode only: bind every listener on this address instead of its configured one, as in a container whose configured address governs the host port publication")
+		configHistoryLimit     = flag.Int("config-history-limit", configsnapshot.DefaultHistoryLimit, "How many configuration versions to keep for rollback, beside the configuration file")
 	)
 	flag.Parse()
 
@@ -72,6 +83,10 @@ func parseRuntimeOptions() runtimeOptions {
 		enableAPI:              *enableAPI,
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
+		validateConfig:         *validateConfig,
+		gateway:                config.GatewayMode(*gatewayMode),
+		listenerAddress:        *listenerAddress,
+		configHistoryLimit:     *configHistoryLimit,
 	}
 }
 
@@ -145,8 +160,8 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
-	writer := buildStartupWriter(cfg, configPath)
+func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) startupstatus.StatusWriter {
+	writer := registry.StartupStatusWriter(buildStartupWriter(cfg, configPath))
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
@@ -395,10 +410,35 @@ func initializeRuntimeDependencies(
 		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
 	}, "Failed to write runtime dependency startup status")
 
+	// Vector store ingestion embeds through the managed model runtime.
+	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
+	// Explicit global stores serve management APIs as well as routing and
+	// keep their own scoped embedding lease across capability changes.
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
 		return embeddingState, err
 	}
 	return embeddingState, nil
+}
+
+// startModelRuntimeManager starts the model_runtime deployments the config
+// uses and reconciles them on every config publication. The first router
+// generation waits until its Router-managed deployments are ready; one that
+// cannot become ready fails startup with its reason.
+func startModelRuntimeManager(
+	cfg *config.RouterConfig,
+	shutdownHooks *[]func(context.Context) error,
+	runtimeRegistry *routerruntime.Registry,
+) {
+	manager := modelservice.NewManager()
+	reconcile := func(next *config.RouterConfig) {
+		if err := manager.Reconcile(next); err != nil {
+			logging.ComponentWarnEvent("model_runtime", "reconcile_failed", map[string]interface{}{"error": err.Error()})
+		}
+	}
+	reconcile(cfg)
+	modelservice.SetDefault(manager)
+	runtimeRegistry.OnConfigPublished(reconcile)
+	*shutdownHooks = append(*shutdownHooks, manager.Shutdown)
 }
 
 func startupEmbeddingProviderStatus(state modelruntime.EmbeddingRuntimeState) *startupstatus.EmbeddingProviderStatus {
@@ -464,7 +504,7 @@ func initializeVectorStoreIfEnabled(
 	if err := cfg.VectorStore.Validate(); err != nil {
 		return fmt.Errorf("invalid vector store configuration: %w", err)
 	}
-	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg, runtimeRegistry.ModelPool())
+	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg, modelservice.DefaultManager(), runtimeRegistry.ModelPool())
 	if err != nil {
 		return fmt.Errorf("create vector store runtime: %w", err)
 	}
@@ -492,8 +532,8 @@ func registerVectorStoreShutdownHook(
 	})
 }
 
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server, embeddingState modelruntime.EmbeddingRuntimeState) error {
-	return server.WarmupRouter(ctx, embeddingState, modelruntime.WarmupRouterOptions{
+func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
+	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
 		Component:      "router",
 		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,
@@ -526,16 +566,21 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 		RemoteExposure:  opts.managementRemoteExpose,
 		AuthMode:        opts.managementAuthMode,
 		RuntimeRegistry: runtimeRegistry,
+		GatewayMode:     opts.gateway,
 	})
 }
 
 func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {
-	writeStartupState(writer, startupstatus.State{
+	state := startupstatus.State{
 		Phase:             "ready",
 		Ready:             true,
-		Message:           "Router models are ready. Starting router services...",
+		Message:           "Router configuration is active and the listener is accepting requests.",
 		EmbeddingProvider: embeddingProvider,
-	}, "Failed to write ready startup status")
+	}
+	if manager := modelservice.DefaultManager(); manager != nil {
+		withModelDeployments(&state, managedDeploymentStatuses(manager.Statuses()))
+	}
+	writeStartupState(writer, state, "Failed to write ready startup status")
 }
 
 func startExtProcServer(
@@ -543,8 +588,19 @@ func startExtProcServer(
 	server *extproc.Server,
 	writer startupstatus.StatusWriter,
 ) error {
-	if err := server.StartContext(ctx); err != nil {
+	if err := server.StartContextWithReady(ctx, func() {
+		if server.CurrentConfig().ConfigSource != config.ConfigSourceKubernetes {
+			markRouterReady(writer, startupEmbeddingProviderStatus(server.EmbeddingRuntimeState()))
+		}
+	}); err != nil {
 		return recordStartupError(writer, "serve ExtProc", err)
 	}
 	return nil
+}
+
+func kubernetesNamespaceDefault() string {
+	if namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE")); namespace != "" {
+		return namespace
+	}
+	return "default"
 }

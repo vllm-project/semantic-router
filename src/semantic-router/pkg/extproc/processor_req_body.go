@@ -1,8 +1,6 @@
 package extproc
 
 import (
-	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -44,6 +42,9 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 
 	originalModel := strings.TrimSpace(snapshot.Model)
+	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
+		return rejected, nil
+	}
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -56,6 +57,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 	ctx.UserContent = snapshot.UserContent
 	ctx.RequestImageURL = snapshot.FirstImageURL
+	ctx.RequestAudio = snapshot.FirstAudio
 
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
 	if earlyResponse != nil {
@@ -87,7 +89,7 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
-		inflight.End(decisionState.selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return response, nil
 	}
@@ -177,9 +179,14 @@ func (r *OpenAIRouter) handleEntrypointRouting(
 
 	logging.ComponentWarnEvent("extproc", "entrypoint_routing_no_selection", map[string]interface{}{
 		"request_id": ctx.RequestID,
+		"code":       routingFailureNoRoute.code,
+		"model":      originalModel,
+		"recipe":     ctx.Routing.RecipeName(),
+		"decision":   decisionName,
+		"reason":     "the Entrypoint selected no model",
 	})
 	metrics.RecordRequestError(originalModel, "no_model_selected")
-	return r.createErrorResponse(http.StatusBadRequest, "unable to route request: the Entrypoint selected no model"), nil
+	return r.routingFailureResponse(ctx, routingFailureNoRoute), nil
 }
 
 // handleEntrypointModelRouting dispatches the Model selected by a Recipe.
@@ -233,13 +240,20 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Log routing decision
 	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
-	// Capture router replay information if enabled
-	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	// Persist the final dispatch demand, including automatic output resolved
+	// below. Defer also preserves a record when finalization fails or panics;
+	// Process owns its terminal lifecycle and response headers run afterwards.
+	//
+	// The shadow goes out from here too. Its job copies ctx.RouterReplayID when
+	// the job is built, and a job built before the record exists carries an
+	// empty one, which makes every shadow outcome drop silently.
+	dispatched := false
+	defer func() {
+		r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
+		if dispatched {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
+	}()
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
@@ -247,7 +261,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	r.dispatchShadowIfConfigured(ctx, dispatch)
+	dispatched = true
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -284,16 +298,12 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
 
-	// Capture router replay information if enabled even when the client pins a model.
-	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
+	// Capture the final dispatch demand for pinned Models too, retaining a
+	// record on finalization failure before Process handles the terminal state.
+	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
@@ -323,8 +333,9 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	}
 	logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
 		"request_id": requestID,
+		"code":       routingFailureModelNotFound.code,
 		"model":      model,
 	})
 	metrics.RecordRequestError(model, "model_not_found")
-	return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", model))
+	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
 }

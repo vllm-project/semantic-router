@@ -14,7 +14,7 @@ ModernBERT-base-32k extends the context window from 512 tokens (BERT-base) to 32
 
 - **GPU**: NVIDIA L4 (23GB VRAM)
 - **Flash Attention 2**: Enabled
-- **Model**: `llm-semantic-router/modernbert-base-32k`
+- **Model**: `vllm-sr/modernbert-base-32k`
 - **Test Tool**: `candle-binding/examples/benchmark_concurrent.rs`
 
 ---

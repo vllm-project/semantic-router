@@ -21,6 +21,44 @@ describe('built-in model catalog API transport', () => {
 })
 
 describe('built-in model catalog API snapshot identity', () => {
+  it.each(['physical', 'virtual'])('rejects an empty %s verification date', async (kind) => {
+    const catalog = structuredClone(validCatalog)
+    const models = catalog.models as Array<Record<string, unknown>>
+    const model = models.find((item) => item.kind === kind)!
+    const verification = model.verification as Record<string, unknown>
+    verification.verified_at = ''
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(catalog), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
+      name: 'ModelCatalogApiError',
+      status: 502,
+    })
+  })
+
+  it('accepts undated claimed policies and empty advisory pools without weakening assignments', async () => {
+    const catalog = structuredClone(validCatalog)
+    const models = catalog.models as Array<Record<string, unknown>>
+    const model = models.find((item) => item.kind === 'virtual')!
+    const verification = model.verification as Record<string, unknown>
+    verification.status = 'claimed'
+    delete verification.verified_at
+    const roles = model.roles as Array<Record<string, unknown>>
+    roles[0].recommended_pool = []
+    roles[0].required = true
+    roles[0].minimum_candidates = 2
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(catalog), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).resolves.toEqual(catalog)
+    roles[0].minimum_candidates = 0
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
+  })
+
   it('fails closed when the server omits version or model inventory', async () => {
     vi.stubGlobal(
       'fetch',

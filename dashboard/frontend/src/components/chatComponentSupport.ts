@@ -1,7 +1,6 @@
 import type { StoredConversation } from '../hooks'
 import type { PlaygroundInvocation } from '../types/playgroundInvocation'
 import {
-  CLAW_MODE_STORAGE_KEY,
   PLAYGROUND_ACTIVE_CONVERSATION_STORAGE_KEY,
   type ConversationPreview,
   type Message,
@@ -10,23 +9,15 @@ import type { PlaygroundErrorPresentation } from './playgroundErrorPresentation'
 
 export interface ChatComponentProps {
   endpoint?: string
+  feedbackInsightsBasePath?: string
   invocation?: PlaygroundInvocation | null
   isFullscreenMode?: boolean
   onInvocationConsumed?: () => void
 }
 
-export type ClawPlaygroundView = 'control' | 'room'
-
-export const readClawModePreference = (): boolean => {
-  if (typeof window === 'undefined') return false
-  const saved = window.localStorage.getItem(CLAW_MODE_STORAGE_KEY)
-  if (saved === null) return false
-  return saved === 'true'
-}
-
-export const writeClawModePreference = (enabled: boolean): void => {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(CLAW_MODE_STORAGE_KEY, String(enabled))
+export function buildFeedbackInsightsHref(basePath: string | undefined, replayId: string) {
+  const normalizedBasePath = basePath?.replace(/\/+$/, '')
+  return normalizedBasePath ? `${normalizedBasePath}/${encodeURIComponent(replayId)}` : undefined
 }
 
 export const resolveActiveConversationPreference = (

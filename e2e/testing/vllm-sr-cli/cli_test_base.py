@@ -9,7 +9,9 @@ Provides common utilities for testing CLI commands including:
 Signed-off-by: vLLM-SR Team
 """
 
+import json
 import os
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +19,7 @@ import time
 import unittest
 from contextlib import suppress
 from pathlib import Path
+from unittest.mock import patch
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -26,6 +29,21 @@ from cli.runtime_stack import DEFAULT_STACK_NAME, resolve_runtime_stack
 HTTP_STATUS_OK = 200
 AGENT_SMOKE_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "config.agent-smoke.cpu.yaml"
+)
+CONTAINER_RUNTIME_SOCKETS = (
+    "/var/run/docker.sock",
+    "/run/docker.sock",
+    "/run/podman/podman.sock",
+)
+CONTAINER_RUNTIME_CLIS = (
+    "containerd",
+    "crictl",
+    "ctr",
+    "docker",
+    "dockerd",
+    "nerdctl",
+    "podman",
+    "runc",
 )
 
 
@@ -73,6 +91,7 @@ class CLITestBase(unittest.TestCase):
     ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
     ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
     DASHBOARD_CONTAINER_NAME = "vllm-sr-dashboard-container"
+    SR_BENCH_CONTAINER_NAME = "vllm-sr-sr-bench-container"
     REDIS_CONTAINER_NAME = "vllm-sr-redis"
     POSTGRES_CONTAINER_NAME = "vllm-sr-postgres"
     MILVUS_CONTAINER_NAME = "vllm-sr-milvus"
@@ -98,6 +117,15 @@ class CLITestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test class - ensure clean state."""
+        if not os.getenv("VLLM_SR_STACK_NAME", "").strip():
+            # Lifecycle locks and container names are host-wide, not cwd-scoped.
+            # Keep independent test processes away from each other and live stacks.
+            environment = patch.dict(
+                os.environ,
+                {"VLLM_SR_STACK_NAME": f"cli-test-{secrets.token_hex(6)}"},
+            )
+            environment.start()
+            cls.addClassCleanup(environment.stop)
         cls.runtime_stack = resolve_runtime_stack()
         stack_name = cls.runtime_stack.stack_name
         cls.CONTAINER_NAME = (
@@ -108,6 +136,7 @@ class CLITestBase(unittest.TestCase):
         cls.ROUTER_CONTAINER_NAME = cls.runtime_stack.router_container_name
         cls.ENVOY_CONTAINER_NAME = cls.runtime_stack.envoy_container_name
         cls.DASHBOARD_CONTAINER_NAME = cls.runtime_stack.dashboard_container_name
+        cls.SR_BENCH_CONTAINER_NAME = cls.runtime_stack.sr_bench_container_name
         cls.REDIS_CONTAINER_NAME = cls.runtime_stack.redis_container_name
         cls.POSTGRES_CONTAINER_NAME = cls.runtime_stack.postgres_container_name
         cls.MILVUS_CONTAINER_NAME = cls.runtime_stack.milvus_container_name
@@ -141,7 +170,15 @@ class CLITestBase(unittest.TestCase):
 
     def setUp(self):
         """Set up each test - create temp directory."""
-        self.test_dir = tempfile.mkdtemp(prefix="vllm-sr-cli-test-")
+        self.test_dir = str(
+            Path(tempfile.mkdtemp(prefix="vllm-sr-cli-test-")).resolve()
+        )
+        environment = patch.dict(
+            os.environ,
+            {"VLLM_SR_STATE_ROOT_DIR": self.test_dir},
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
         self.original_dir = os.getcwd()
         os.chdir(self.test_dir)
         print(f"\nTest directory: {self.test_dir}")
@@ -149,6 +186,15 @@ class CLITestBase(unittest.TestCase):
     def tearDown(self):
         """Clean up after each test."""
         os.chdir(self.original_dir)
+        if os.getenv("RUN_INTEGRATION_TESTS", "").lower() == "true":
+            # The worker owns an open journal in this test's temporary store.
+            # Stop it before deleting the store or starting another workspace.
+            self._cleanup_container()
+            self.assertEqual(
+                self._explicit_container_status(self.SR_BENCH_CONTAINER_NAME),
+                "not found",
+                "Managed worker cleanup failed; preserving its evidence directory",
+            )
         # Clean up temp directory
         try:
             shutil.rmtree(self.test_dir)
@@ -219,6 +265,7 @@ class CLITestBase(unittest.TestCase):
             cls.ROUTER_CONTAINER_NAME,
             cls.ENVOY_CONTAINER_NAME,
             cls.DASHBOARD_CONTAINER_NAME,
+            cls.SR_BENCH_CONTAINER_NAME,
             cls.PROBE_CONTAINER_NAME,
             *cls.AUXILIARY_CONTAINER_NAMES,
         )
@@ -349,6 +396,8 @@ class CLITestBase(unittest.TestCase):
         api_key_env: str | None = None,
         api_only: bool = False,
         managed_storage: bool = False,
+        skip_processing: bool = False,
+        looper: bool = False,
     ) -> str:
         """Write a minimal runnable canonical v0.3 config into the temp workspace.
 
@@ -369,6 +418,24 @@ class CLITestBase(unittest.TestCase):
             backend_ref["provider"] = provider
         if api_key_env is not None:
             backend_ref["api_key_env"] = api_key_env
+
+        decision: dict[str, object] = {
+            "name": "default-route",
+            "description": "Default route for CLI test coverage",
+            "priority": 100,
+            "rules": {"operator": "AND", "conditions": []},
+            "modelRefs": [{"model": model_name, "use_reasoning": False}],
+        }
+        if looper:
+            decision["algorithm"] = {
+                "type": "remom",
+                "remom": {
+                    "breadth_schedule": [1],
+                    "model_distribution": "first_only",
+                    "min_successful_responses": 1,
+                    "on_error": "fail",
+                },
+            }
 
         config = {
             "version": "v0.3",
@@ -395,19 +462,16 @@ class CLITestBase(unittest.TestCase):
             },
             "routing": {
                 "modelCards": [{"name": model_name}],
-                "decisions": [
-                    {
-                        "name": "default-route",
-                        "description": "Default route for CLI test coverage",
-                        "priority": 100,
-                        "rules": {"operator": "AND", "conditions": []},
-                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
-                    }
-                ],
+                "decisions": [decision],
             },
         }
         if api_only:
             config["global"] = _api_only_global_config()
+        if skip_processing:
+            global_config = config.setdefault("global", {})
+            global_config.setdefault("router", {})["skip_processing"] = {
+                "enabled": True
+            }
         if managed_storage:
             global_config = config.get("global")
             if not isinstance(global_config, dict):
@@ -535,6 +599,36 @@ class CLITestBase(unittest.TestCase):
             timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr
+
+    def assert_dashboard_holds_no_container_runtime(self) -> None:
+        """The Dashboard mounts no runtime socket and its image has no container CLI.
+
+        `vllm-sr serve` owns the stack; the Dashboard reads status from HTTP
+        probes and the stack's files, and logs from the spool.
+        """
+        code, mounts, stderr = self.inspect_container(
+            "{{json .Mounts}}", container_name=self.DASHBOARD_CONTAINER_NAME
+        )
+        self.assertEqual(code, 0, stderr)
+        destinations = {mount["Destination"] for mount in json.loads(mounts)}
+        self.assertFalse(destinations & set(CONTAINER_RUNTIME_SOCKETS), destinations)
+        found = self._run_subprocess(
+            [
+                self.container_runtime,
+                "exec",
+                self.DASHBOARD_CONTAINER_NAME,
+                "sh",
+                "-c",
+                'for name in "$@"; do command -v "$name" || true; done',
+                "sh",
+                *CONTAINER_RUNTIME_CLIS,
+            ],
+            timeout=30,
+        )
+        self.assertEqual(found.returncode, 0, found.stderr)
+        self.assertEqual(
+            found.stdout.strip(), "", "the Dashboard image has a container CLI"
+        )
 
     def container_networks(self, container_name: str) -> set[str]:
         """Return the networks *container_name* is currently attached to."""

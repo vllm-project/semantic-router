@@ -99,6 +99,7 @@ from heldout_split import (
     drop_reserved_questions,
     reserve_heldout,
 )
+from training_args_compat import create_training_arguments
 
 # Setup logging
 logger = setup_logging()
@@ -141,7 +142,7 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str | None = No
         return AutoTokenizer.from_pretrained(model_path)
 
 
-DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
+DEFAULT_SUPPLEMENT_DATASET = "vllm-sr/category-classifier-supplement"
 
 
 class MMLUDataset:
@@ -623,7 +624,8 @@ def main(
 
     # Training arguments optimized for LoRA sequence classification based on PEFT best practices
     # Enhanced with anti-overfitting measures from ft_linear.py
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,

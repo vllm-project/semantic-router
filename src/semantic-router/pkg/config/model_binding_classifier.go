@@ -15,10 +15,21 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	if err := validateClassifierLabels(*rule); err != nil {
 		return err
 	}
+	if decl.Contract == RemoteClassifierContractLabelScores {
+		// The model runtime serves the package's own operating point.
+		if !deployment.IsModelRuntime() || rule.Type == ClassifierSignalTypeLLM {
+			return fmt.Errorf("independent scores require a model_runtime deployment of a sequence classifier")
+		}
+		if deployment.Input.MaxTokens <= 0 || deployment.Input.Overflow != "reject" {
+			return fmt.Errorf("operating_point requires an explicit document token budget with reject overflow")
+		}
+	} else if decl.OperatingPoint != nil {
+		return fmt.Errorf("operating_point requires label_scores.v1")
+	}
 	switch rule.Type {
 	case ClassifierSignalTypeLocal, ClassifierSignalTypeSequenceClassifier:
-		if len(rule.Labels) < 2 || rule.Instructions != "" {
-			return fmt.Errorf("sequence classifier bindings require at least two labels and no instructions")
+		if len(rule.Labels) < 2 || rule.Instructions != "" || rule.DisableRationale {
+			return fmt.Errorf("sequence classifier bindings require at least two labels and no instructions or disable_rationale")
 		}
 		if deployment.Provider == "http" && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
 			return fmt.Errorf("sequence classifier binding requires http_classify adapter")
@@ -30,7 +41,7 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	default:
 		return fmt.Errorf("unsupported generic classifier type %q", rule.Type)
 	}
-	projected := projectGenericClassifierRule(*rule, deployment)
+	projected := projectGenericClassifierRule(*rule, decl.Deployment, deployment)
 	if deployment.Provider != "http" {
 		return nil
 	}
@@ -40,7 +51,7 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	return validateSequenceClassifierSignal(cfg, projected)
 }
 
-func projectGenericClassifierRule(rule ClassifierSignalRule, deployment ModelDeployment) ClassifierSignalRule {
+func projectGenericClassifierRule(rule ClassifierSignalRule, name string, deployment ModelDeployment) ClassifierSignalRule {
 	rule.Model, rule.ModelPath, rule.UseCPU = "", "", false
 	if deployment.Provider == "http" {
 		rule.Model = deployment.ExternalModel
@@ -49,7 +60,7 @@ func projectGenericClassifierRule(rule ClassifierSignalRule, deployment ModelDep
 		}
 	} else {
 		rule.Type = ClassifierSignalTypeLocal
-		rule.ModelPath = ResolveModelPath(deployment.Artifact)
+		rule.ModelPath = ResolveModelPath(deployment.ServedModel(name))
 		rule.UseCPU = deployment.Device == "cpu"
 	}
 	return rule

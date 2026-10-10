@@ -98,6 +98,9 @@ func testEmbeddingSignalImageRouting(ctx context.Context, client *kubernetes.Cli
 	results := runEmbeddingSignalImageTests(ctx, testCases, localPort, opts.Verbose)
 
 	totalTests := len(results)
+	if totalTests == 0 {
+		return fmt.Errorf("image-modality embedding signal routing test case set is empty")
+	}
 	correctTests := countCorrectImageTests(results)
 	accuracy := float64(correctTests) / float64(totalTests)
 
@@ -217,7 +220,7 @@ func testSingleEmbeddingSignalImage(ctx context.Context, testCase EmbeddingSigna
 	}
 
 	requestBody := map[string]interface{}{
-		"model": "auto",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]interface{}{
 			{
 				"role":    "user",

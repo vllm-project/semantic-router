@@ -9,10 +9,13 @@ import (
 )
 
 type chatResponseWire struct {
-	ID                  string                    `json:"id"`
-	Object              string                    `json:"object,omitempty"`
-	Created             int64                     `json:"created"`
-	Model               string                    `json:"model"`
+	ID      string `json:"id"`
+	Object  string `json:"object,omitempty"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	// OpenRouter names the upstream that served the request. It is metadata,
+	// not part of the model's answer.
+	Provider            *string                   `json:"provider,omitempty"`
 	Choices             []chatChoiceWire          `json:"choices"`
 	Usage               *chatUsageWire            `json:"usage,omitempty"`
 	Metadata            map[string]string         `json:"metadata,omitempty"`
@@ -33,6 +36,15 @@ type chatResponseWire struct {
 	RemoteEngineID      *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost          *string                   `json:"remote_host,omitempty"`
 	RemotePort          *int64                    `json:"remote_port,omitempty"`
+	// Groq attaches its request id here; it is provider metadata, not output.
+	XGroq json.RawMessage `json:"x_groq,omitempty"`
+	// Groq reports per-model usage for compound requests and null otherwise.
+	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+}
+
+// hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
+func (wire chatResponseWire) hasUsageBreakdown() bool {
+	return len(wire.UsageBreakdown) > 0 && !bytes.Equal(bytes.TrimSpace(wire.UsageBreakdown), []byte("null"))
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
@@ -45,13 +57,14 @@ func (wire chatResponseWire) hasLegacyKVTransferMetadata() bool {
 }
 
 type chatChoiceWire struct {
-	Index         int                 `json:"index"`
-	Message       chatMessageWire     `json:"message"`
-	FinishReason  *string             `json:"finish_reason"`
-	Logprobs      *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs      []int64             `json:"token_ids,omitempty"`
-	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int                 `json:"index"`
+	Message            chatMessageWire     `json:"message"`
+	FinishReason       *string             `json:"finish_reason"`
+	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs           []int64             `json:"token_ids,omitempty"`
+	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string
@@ -62,7 +75,8 @@ func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	switch value {
-	case "auto", "default", "flex", "priority", "scale":
+	// on_demand and performance are Groq's tiers on its OpenAI-compatible API.
+	case "auto", "default", "flex", "priority", "scale", "on_demand", "performance":
 		*tier = chatServiceTierWire(value)
 		return nil
 	default:
@@ -94,7 +108,7 @@ type chatStopReasonWire struct {
 func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		if len(text) == 0 || len(text) > 128 {
+		if len(text) == 0 {
 			return fmt.Errorf("chat stop reason string is invalid")
 		}
 		reason.Text = &text
@@ -130,29 +144,78 @@ type chatTopTokenLogprobWire struct {
 	Bytes   []int64 `json:"bytes,omitempty"`
 }
 
+// Mistral puts the served tier inside usage, separately from OpenAI's
+// top-level service_tier. Keep this provider extension typed and closed.
+type chatUsageServiceTierWire string
+
+func (tier *chatUsageServiceTierWire) UnmarshalJSON(raw []byte) error {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	switch value {
+	case "standard", "priority":
+		*tier = chatUsageServiceTierWire(value)
+		return nil
+	default:
+		return fmt.Errorf("unsupported chat usage service tier")
+	}
+}
+
 type chatUsageWire struct {
+	ServiceTier             *chatUsageServiceTierWire        `json:"service_tier,omitempty"`
 	PromptTokens            int64                            `json:"prompt_tokens"`
 	CompletionTokens        int64                            `json:"completion_tokens"`
 	TotalTokens             int64                            `json:"total_tokens"`
 	ComputeUnits            json.RawMessage                  `json:"compute_units,omitempty"`
 	PromptTokensDetails     *chatPromptTokensDetailsWire     `json:"prompt_tokens_details,omitempty"`
 	CompletionTokensDetails *chatCompletionTokensDetailsWire `json:"completion_tokens_details,omitempty"`
+	// Provider accounting extensions: xAI reports its own billing and search
+	// usage, Groq reports queue and generation timings in seconds.
+	CostInUSDTicks *int64   `json:"cost_in_usd_ticks,omitempty"`
+	NumSourcesUsed *int64   `json:"num_sources_used,omitempty"`
+	QueueTime      *float64 `json:"queue_time,omitempty"`
+	PromptTime     *float64 `json:"prompt_time,omitempty"`
+	CompletionTime *float64 `json:"completion_time,omitempty"`
+	TotalTime      *float64 `json:"total_time,omitempty"`
+	// OpenRouter reports its own pricing and server-tool accounting beside
+	// canonical token usage. Keep these fields typed at the provider boundary.
+	Cost          *float64                         `json:"cost,omitempty"`
+	IsBYOK        *bool                            `json:"is_byok,omitempty"`
+	CostDetails   *chatOpenRouterCostDetailsWire   `json:"cost_details,omitempty"`
+	ServerToolUse *chatOpenRouterServerToolUseWire `json:"server_tool_use,omitempty"`
+}
+
+type chatOpenRouterCostDetailsWire struct {
+	UpstreamInferenceCost            *float64 `json:"upstream_inference_cost,omitempty"`
+	UpstreamInferencePromptCost      *float64 `json:"upstream_inference_prompt_cost,omitempty"`
+	UpstreamInferenceCompletionsCost *float64 `json:"upstream_inference_completions_cost,omitempty"`
+	ServerToolCost                   *float64 `json:"server_tool_cost,omitempty"`
+}
+
+type chatOpenRouterServerToolUseWire struct {
+	WebSearchRequests *int64 `json:"web_search_requests,omitempty"`
 }
 
 type chatPromptTokensDetailsWire struct {
-	CachedTokens     int64 `json:"cached_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
-	AudioTokens      int64 `json:"audio_tokens,omitempty"`
-	TextTokens       int64 `json:"text_tokens,omitempty"`
-	ImageTokens      int64 `json:"image_tokens,omitempty"`
+	CachedTokens        *int64           `json:"cached_tokens,omitempty"`
+	CacheWriteTokens    *int64           `json:"cache_write_tokens,omitempty"`
+	CreatedCacheTokens  *int64           `json:"created_cache_tokens,omitempty"`
+	CacheCreationTokens *int64           `json:"cache_creation_tokens,omitempty"`
+	MultimodalTokens    map[string]int64 `json:"multimodal_tokens,omitempty"`
+	AudioTokens         int64            `json:"audio_tokens,omitempty"`
+	TextTokens          int64            `json:"text_tokens,omitempty"`
+	ImageTokens         int64            `json:"image_tokens,omitempty"`
+	VideoTokens         *int64           `json:"video_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {
-	AcceptedPredictionTokens int64 `json:"accepted_prediction_tokens,omitempty"`
-	AudioTokens              int64 `json:"audio_tokens,omitempty"`
-	ReasoningTokens          int64 `json:"reasoning_tokens"`
-	TextTokens               int64 `json:"text_tokens,omitempty"`
-	RejectedPredictionTokens int64 `json:"rejected_prediction_tokens,omitempty"`
+	AcceptedPredictionTokens int64  `json:"accepted_prediction_tokens,omitempty"`
+	AudioTokens              int64  `json:"audio_tokens,omitempty"`
+	ReasoningTokens          int64  `json:"reasoning_tokens"`
+	TextTokens               int64  `json:"text_tokens,omitempty"`
+	ImageTokens              *int64 `json:"image_tokens,omitempty"`
+	RejectedPredictionTokens int64  `json:"rejected_prediction_tokens,omitempty"`
 }
 
 type chatErrorWire struct {
