@@ -173,7 +173,8 @@ Schema-Guided Dialogue. Classes are matched inside corpus, script, length and
 question-mark strata, so neither the corpus nor the punctuation gives the label
 away. Both feedback checkpoints are scored. The set carries SAT and
 NO_FEEDBACK; WRONG_ANSWER and WANT_DIFFERENT have no published held-out text
-yet, so those classes stay unmeasured.
+yet, so those classes stay unmeasured. The legacy checkpoint's label map
+predates NO_FEEDBACK, so it scores the SAT rows of this set only.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the
