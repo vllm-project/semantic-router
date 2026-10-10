@@ -114,22 +114,22 @@ TASK_SPECS: dict[str, TaskSpec] = {
         label_field="label",
         split_rule="by_source",
     ),
+    # The fresh held-out feedback set of #4305: CrossWOZ booking dialogues, a
+    # corpus the suite never touched, deduplicated against every suite row, so
+    # it is new to both feedback checkpoints - the legacy detector trained on
+    # the feedback-detector dataset and Vela Feedback on WildFeedback and
+    # Schema-Guided Dialogue. Classes are matched inside corpus, script, length
+    # and question-mark strata, so neither the corpus nor the punctuation gives
+    # the label away. The set carries SAT and NO_FEEDBACK; the classes with no
+    # published held-out text keep #4301 open.
     "feedback": TaskSpec(
-        dataset_repo="vllm-sr/feedback-detector-dataset",
-        split="validation",
+        dataset_repo="vllm-sr/router-signal-suite",
+        revision="fa08b2a642df30955ad2ad2206d74050c7f12b5c",
+        split="test",
+        data_files=("text/crosswoz/feedback/fresh-crosswoz.jsonl",),
         text_field="text",
-        # The published split names this column label_name. The evaluation
-        # registry declares "label" and only works through a silent auto-detect
-        # fallback, so the field is pinned here instead.
-        label_field="label_name",
-        compatible_artifact_repos=(
-            LEGACY_MODEL_REGISTRY["feedback"]["id"],
-            LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
-        ),
-        restriction=(
-            "repeats a few SAT templates, each with '!', in train and validation. "
-            "It only scores the checkpoint trained on it, not {repo}."
-        ),
+        label_field="label",
+        split_rule="by_source",
     ),
     # Vela Domain trains on Global-MMLU and moves the MMLU questions that match
     # MMLU-Pro into training, so the MMLU-derived rows are left out. The legacy

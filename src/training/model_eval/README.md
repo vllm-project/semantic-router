@@ -163,15 +163,17 @@ capitalisation stratum the two classes are equal, so the corpus, a question mark
 or the length alone scores AUC 0.5 on it. Dolly is left out because the mmBERT
 fact-check checkpoint trained on it. Both fact-check checkpoints are scored.
 
-The `feedback` dataset is restricted the same way as `jailbreak`, to the mmBERT
-checkpoint trained on it. Its labels can be read without the text: the SAT class
-is a few templates, each with `!`, that appear in both train and validation.
-Vela Feedback needs a held-out set from other corpora, and the suite's feedback
-test does not qualify: 2,793 of its 2,842 rows come from WildFeedback and
-Schema-Guided Dialogue, which the repository's feedback trainers read. A legacy
-checkpoint's label order is checked against the legacy registry, and a gap
-report counts coverage per served artifact, so it still lists Vela Feedback as
-unmeasured when only the legacy result is passed.
+The `feedback` task scores the fresh held-out feedback set of the [router
+signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite) at a
+pinned revision: its CrossWOZ rows, read file by file. CrossWOZ is a corpus the
+suite never touched and the fresh build deduplicated against every suite row,
+so it is new to both feedback checkpoints - the legacy detector trained on the
+feedback-detector dataset and Vela Feedback on WildFeedback and
+Schema-Guided Dialogue. Classes are matched inside corpus, script, length and
+question-mark strata, so neither the corpus nor the punctuation gives the label
+away. Both feedback checkpoints are scored. The set carries SAT and
+NO_FEEDBACK; WRONG_ANSWER and WANT_DIFFERENT have no published held-out text
+yet, so those classes stay unmeasured.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the

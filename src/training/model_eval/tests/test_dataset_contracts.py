@@ -170,21 +170,43 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
-    def test_feedback_split_only_scores_its_legacy_checkpoint(self):
-        namespace = load_definitions(
-            "baseline_tasks.py",
-            {"TaskSpec", "TASK_SPECS"},
-            {
-                "dataclass": dataclass,
-                "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
-                "BaselineError": ValueError,
-            },
-        )
+    def test_feedback_reads_the_pinned_fresh_held_out_set_file_by_file(self):
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {"text": "a", "label": "SAT", "source": "crosswoz"},
+                {"text": "b", "label": "NO_FEEDBACK", "source": "crosswoz"},
+            ],
+        }
+        reads = []
+
+        def load_dataset(repo, data_files, split, revision):
+            reads.append((repo, data_files, split, revision))
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
         spec = namespace["TASK_SPECS"]["feedback"]
-        for key in ("id", "lora_id"):
-            spec.validate_artifact(LEGACY_MODEL_REGISTRY["feedback"][key])
-        with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
-            spec.validate_artifact(MODEL_REGISTRY["feedback"]["id"])
+        self.assertEqual(spec.split_rule, "by_source")
+        self.assertRegex(spec.revision, r"^[0-9a-f]{40}$")
+        self.assertEqual(spec.dataset_repo, "vllm-sr/router-signal-suite")
+        self.assertFalse([name for name in spec.data_files if "feedback-detector" in name])
+        for repo in (
+            LEGACY_MODEL_REGISTRY["feedback"]["id"],
+            LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
+            MODEL_REGISTRY["feedback"]["id"],
+        ):
+            spec.validate_artifact(repo)
+        mapping = {"SAT": 1, "NO_FEEDBACK": 0}
+        texts, labels, available = namespace["load_rows"](
+            spec, mapping, None, spec.revision
+        )
+        self.assertEqual((texts, labels, available), (["a", "b"], [1, 0], 2))
+        self.assertEqual(
+            reads,
+            [
+                (spec.dataset_repo, name, "train", spec.revision)
+                for name in spec.data_files
+            ],
+        )
 
     def test_fact_check_reads_the_pinned_corpus_matched_test_file_by_file(self):
         # One file carries lang and the other does not, as the published files do.
