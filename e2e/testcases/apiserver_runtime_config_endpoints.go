@@ -117,8 +117,8 @@ func fetchModelIDs(ctx context.Context, httpClient *http.Client, url string) ([]
 	for _, model := range models.Data {
 		modelIDs = append(modelIDs, model.ID)
 	}
-	if !containsString(modelIDs, "MoM") {
-		return nil, fmt.Errorf("expected /v1/models to include MoM, got %v", modelIDs)
+	if !containsString(modelIDs, "vllm-sr/auto") {
+		return nil, fmt.Errorf("expected /v1/models to include vllm-sr/auto, got %v", modelIDs)
 	}
 	return modelIDs, nil
 }

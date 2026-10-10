@@ -27,6 +27,7 @@ import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './configPageSuppor
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import type { MixtureWorkspaceView } from './ConfigPageEntrypointsRecipesSection'
 import {
+  effectiveChatEntrypoints,
   countProjectionsInProfile,
   countSignalsInProfile,
   type RoutingProfileLike,
@@ -72,7 +73,7 @@ export default function ConfigPageMoMRoutingPanel({
   } | null>(null)
   const [usageTarget, setUsageTarget] = useState<EntrypointConfig | null>(null)
 
-  const entrypoints = config.entrypoints ?? []
+  const entrypoints = effectiveChatEntrypoints(config)
 
   const openRecipeEditor = (mode: 'add' | 'edit', recipe?: RecipeConfig) => {
     const originalName = recipe?.name ?? null
@@ -230,7 +231,9 @@ export default function ConfigPageMoMRoutingPanel({
               if (!model) return
               navigate(`/evaluation?model=${encodeURIComponent(model)}`)
             }}
-            onEdit={(entrypoint, index) => setMixtureEditor({ entrypoint, index })}
+            onEdit={(entrypoint, index) =>
+              setMixtureEditor({ entrypoint, index: index < 0 ? undefined : index })
+            }
             onDelete={(entrypoint, index) => {
               setDeleteError(null)
               setEntrypointPendingDelete({ entrypoint, index })

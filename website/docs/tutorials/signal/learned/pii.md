@@ -45,6 +45,9 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
+`threshold` is optional: a rule without one takes every span the PII model
+reports, and a Vela 2.0 model reports only spans above its size's calibrated
+threshold.
 
 ## Complete local scans
 
@@ -95,7 +98,7 @@ truncation retain the partial-result behavior described below.
 Bind `pii_classifier` to a Vela 2.0 deployment and the signal asks the model's
 ready-made PII question, answered by its router span head, instead of a
 separate PII model. The PII question then travels in the same call as the
-deployment's [`decision`](tutorials/signal/learned/decision.md) questions about the same text:
+deployment's [`decision`](decision.md) questions about the same text:
 
 ```yaml
 global:
@@ -113,15 +116,37 @@ global:
 
 - The model finds the same 17 entity types as Vela 1.0 PII and names them in
   its spans, so the binding takes no `mapping_path`.
-- It reads the whole text itself, a long one in windows, so the router sends
-  each text in one piece: the deployment sets no `input` and the PII module no
-  `window`.
+- The Router sends each text as one state. The runtime must cover the admitted
+  text within its model and scan budgets. Inputs outside that policy are
+  unscanned, not clean; one state does not promise one forward or unlimited
+  context. See the [PII runtime guide](../../../model-runtime/guides/pii.md).
 - The model's calibrated threshold decides which spans it reports. A rule's
   `threshold` and `pii_types_allowed` then apply to those spans as they do for
   Vela 1.0; the model's span probability is the mean over the span's words.
 - `head` may only be `router`, the span head that answers the PII question.
 
-Existing configurations keep their Vela 1.0 PII binding.
+Explicit Vela 1.0 PII bindings keep that specialist. An unbound task follows
+the configured default decision deployment.
+
+## Presence and categories with a decision model
+
+A decision model can answer whether PII is present and which categories occur
+without locating characters. Select this task contract explicitly:
+
+```yaml
+routing:
+  model_bindings:
+    pii_classifier:
+      deployment: primary
+      contract: decision.v1
+```
+
+This uses `pii_presence` (`noul`) and `pii_categories` (`set`). When the model
+has no native `set` head, the task compiler can ask one `noul` question per
+category. The complete input must still be covered. These answers provide no
+entity offsets and must not be used as fabricated redaction spans. Use a
+native `span` model with `token_spans.v1` when exact locations are required.
+Task availability establishes an executable contract, not detection accuracy.
 
 ## Remote backend (token_spans.v1)
 
@@ -145,7 +170,11 @@ list. A declared `truncated_at` keeps the spans before the cut and marks the
 rest of the content as unscored. What a rejected or partial response does to a
 PII rule is `on_error`: `allow` (default) treats the unread content as not
 matching, `block` matches it as `classification_error`, so unverified text
-cannot pass as clean.
+cannot pass as clean. Content the model did not read at all (an input over the
+model's input or [scan cap](../../../model-runtime/reference.md#long-inputs),
+a truncated one, or one not scanned by the signals' deadline) matches as
+`unscanned` whatever `on_error` says, so a long request routes as private;
+set `classifier.pii.on_unscanned: allow` to leave it to `on_error`.
 
 The PII mapping cannot declare `classification_error` as an entity label.
 Aliases with `B-`, `I-`, or `E-` prefixes, including stacked prefixes, are also

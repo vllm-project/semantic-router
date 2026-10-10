@@ -1,8 +1,8 @@
 // Package modelruntime provides the E2E profile for the built-in model runtime:
 // runtimes the Router manages and one it attaches to, on tiny random-weight
-// fixture packages, with every task binding, decision signals, the decision
-// selector, request bundles, supervision and fail-open asserted against the
-// runtimes' own answers.
+// fixture packages, with startup readiness, every task binding, decision
+// signals, the decision selector, request bundles, supervision and fail-open
+// asserted against the runtimes' own answers.
 package modelruntime
 
 import (
@@ -69,7 +69,7 @@ func (p *Profile) Name() string { return "model-runtime" }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests managed and attached model runtimes: task bindings, decision signals and selection, bundles, supervision and fail-open"
+	return "Tests managed and attached model runtimes: startup readiness, task bindings, decision signals and selection, bundles, supervision and fail-open"
 }
 
 // Setup publishes the runtimes' files, then deploys the gateway stack.
@@ -99,9 +99,11 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	return err
 }
 
-// GetTestCases returns the profile's contracts.
+// GetTestCases returns the profile's contracts. Startup readiness runs first,
+// before cases that restart runtimes add readiness changes to the log.
 func (p *Profile) GetTestCases() []string {
 	return []string{
+		"model-runtime-startup-readiness",
 		"model-runtime-lifecycle",
 		"model-runtime-task-signals",
 		"model-runtime-embeddings-rerank",
@@ -112,7 +114,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-fail-open",
 		"model-runtime-supervision",
 		"model-runtime-load-retry",
-		"model-runtime-shared-load-retry",
+		"model-runtime-load-retry-isolation",
 	}
 }
 

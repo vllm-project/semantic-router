@@ -1825,6 +1825,7 @@ func TestFallbackRecipeCircuitBreakerConfigApplied(t *testing.T) {
 		},
 	}
 	cfg.Fallback = &globalPolicy
+	cfg.RoutingDefaults.Fallback = &globalPolicy
 
 	components, err := buildRouterComponents(cfg)
 	if err != nil {
@@ -3586,7 +3587,7 @@ func TestFallbackRecomputesAutomaticOutputAllowanceForCandidate(t *testing.T) {
 		{Model: "narrow"},
 	}
 
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	refs, err := r.decisionEligibleModelRefs(d, ctx)
 	require.NoError(t, err)
 	require.Len(t, refs, 2)

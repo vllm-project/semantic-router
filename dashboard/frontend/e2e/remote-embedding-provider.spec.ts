@@ -56,9 +56,6 @@ async function mockRemoteEmbeddingDashboard(page: Page) {
   await page.route('**/api/router/config/global/raw', async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: 'router: {}\n' })
   })
-  await page.route('**/api/router/api/v1/storage/knowledge-bases', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' })
-  })
   await page.route('**/api/tools-db', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
   })
@@ -118,11 +115,14 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await expect(modal.getByLabel('mmBERT Model Path')).toBeVisible()
     await expect(modal.getByLabel('Base URL')).toHaveCount(0)
 
-    await expect(modal.getByLabel('Local Model Type')).toBeVisible()
+    await expect(modal.getByLabel('Provider Type')).toHaveValue('local')
+    await expect(modal.getByLabel('Local Model Type')).toHaveValue('mmbert')
+    await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
     await expect(modal.getByLabel('API Protocol')).toHaveCount(0)
     await modal.getByLabel('Provider Type').selectOption('remote')
     await expect(modal.getByLabel('mmBERT Model Path')).toHaveCount(0)
     await expect(modal.getByLabel('Local Model Type')).toHaveCount(0)
+    await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
     await modal.getByLabel('API Protocol').selectOption('openai_compatible')
     await modal.getByLabel('Base URL').fill('https://embedding.example.com/v1')
     await modal.getByLabel('Model', { exact: true }).fill('text-embedding-3-small')

@@ -2,9 +2,9 @@
 title: 常见错误
 sidebar_label: 常见错误
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/troubleshooting/common-errors.md"
-  outdated: true
+  outdated: false
 ---
 
 # 常见错误
@@ -14,7 +14,7 @@ translation:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 vllm-sr config validate --config config.yaml
 ```
 
@@ -96,13 +96,14 @@ entrypoints:
     recipe: production
 ```
 
-### 模型或保留别名冲突 {#model-or-reserved-alias-collision}
+### 默认入口名冲突 {#model-or-reserved-alias-collision}
 
 ```text
-Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
-Hint: Use a distinct entrypoint model name; do not reuse a configured model or
-reserved alias such as vllm-sr/auto.
+Entrypoint model 'vllm-sr/auto' is mapped more than once
 ```
+
+`vllm-sr/auto` 默认发布 default 配方，除非显式声明替换它的默认入口。
+把同一名称交给另一个命名配方会产生重复。
 
 错误写法：
 
@@ -120,36 +121,20 @@ entrypoints:
     recipe: production
 ```
 
-### Looper 别名与模型同名 {#looper-alias-names-a-model}
+### 入口名与后端模型冲突 {#looper-alias-names-a-model}
 
-```text
-Warning: [global.integrations.looper.flow.model_names] Flow alias 'openai/gpt-oss-20b' is also a model that providers.models serves and decisions 'workflow_route', 'default_route' route to; requests for it evaluate only workflows decisions, so the model cannot be requested directly and a request that matches none of them fails with no_route
-Hint: Give the alias a name that no model uses, such as vllm-sr/flow.
-```
+公开 recipe 入口必须使用独立名字。与后端模型同名的入口会被拒绝，
+Fusion、ReMoM 和 Flow 也遵循同一规则，没有单独的隐式分发名字。
 
-配置本身合法，因此会被加载，Router 也会以 `looper_alias_shadows_model` 记录同样的警告。在别名改名之前，该模型的每个请求都会返回 [`no_route`](../api/router.md#routing-errors)，除非它匹配某个 workflows 决策。ReMoM 和 Fusion 别名同理。
-
-错误写法：
+如果 `openai/gpt-oss-20b` 是后端模型，请为工作流声明不同的入口：
 
 ```yaml
-global:
-  integrations:
-    looper:
-      flow:
-        model_names: [openai/gpt-oss-20b]
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: flow
 ```
 
-修正后，Flow 请求改为发送到 `vllm-sr/flow`：
-
-```yaml
-global:
-  integrations:
-    looper:
-      flow:
-        model_names: [vllm-sr/flow]
-```
-
-完整示例见[入口与配方教程](../tutorials/global/entrypoints-and-recipes.md)和[配方教程](../tutorials/global/recipes.md)。
+将 `algorithm.type: workflows` 的决策放在 `flow` recipe 中。
 
 ## 请求返回路由错误码 {#a-request-returns-a-routing-error-code}
 
@@ -159,7 +144,7 @@ global:
 vllm-sr logs router | grep '<x-request-id>'
 ```
 
-对于 `no_route`，`entrypoint_routing_no_selection` 日志行会给出模型、配方以及已匹配的决策。如果出现 `looper_algorithm` 值，说明该模型是只评估该算法决策的 Looper 别名；如果它同时也是某个后端模型的名字，请参阅 [Looper 别名与模型同名](#looper-alias-names-a-model)。
+对于 `no_route`，`entrypoint_routing_no_selection` 日志行会给出模型、配方以及已匹配的决策。Fusion、Flow 和 ReMoM 由 recipe 中的决策选择；先检查 entrypoint 映射和 recipe 规则。
 
 ## 响应缓存无法启动
 
@@ -401,13 +386,13 @@ providers:
 
 ## 分类器或嵌入模型无法加载
 
-每个模型都运行在[模型运行时](model-runtime/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
+每个模型都运行在[模型运行时](../model-runtime/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
 
 ```bash
 curl -s localhost:8100/v1/models
 ```
 
-每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](model-runtime/troubleshooting.md) 列出了每种原因及修复方法。
+每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](../model-runtime/troubleshooting.md) 列出了每种原因及修复方法。
 
 ## 容器镜像没有匹配的平台
 
@@ -447,7 +432,7 @@ vllm-sr status
 
 # Read component logs without depending on generated container names.
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 
 # Check the public listener and model catalog.
 curl -sS http://localhost:8899/v1/models

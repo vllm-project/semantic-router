@@ -67,7 +67,7 @@ func TestRouterContainerServesItsGatewayMode(t *testing.T) {
 			mode:     GatewayModeIntegration,
 			args:     []string{"-gateway=extproc", "--secure=false"},
 			traffic:  corev1.ContainerPort{Name: "grpc", ContainerPort: 50051, Protocol: corev1.ProtocolTCP},
-			ready:    corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(50051)}},
+			ready:    corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: 50051}},
 			liveness: corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(50051)}},
 			service: corev1.ServicePort{
 				Name: "grpc", Port: 50051, TargetPort: intstr.FromInt32(50051), Protocol: corev1.ProtocolTCP,
@@ -148,5 +148,76 @@ func TestOperatorDefaultsMatchTheHelmChart(t *testing.T) {
 	}
 	if !strings.Contains(string(template), `- -gateway={{ include "semantic-router.gatewayMode" . }}`) {
 		t.Error("the chart must pass its gateway mode to the Router as the Operator does")
+	}
+}
+
+func TestRouterReadinessProbeTransport(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+		grpc bool
+	}{
+		{name: "default", grpc: true},
+		{name: "plaintext", args: []string{"--secure=false"}, grpc: true},
+		{name: "TLS", args: []string{"--secure=true"}},
+		{name: "bare TLS flag", args: []string{"-secure"}},
+		{name: "double dash TLS flag", args: []string{"--secure"}},
+		{name: "boolean alias", args: []string{"-secure=1"}},
+		{name: "flag terminator", args: []string{"--", "--secure"}, grpc: true},
+		{name: "last flag wins", args: []string{"--secure=true", "-secure=false"}, grpc: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := &SemanticRouterReconciler{}
+			container := r.generateContainers(probedRouter(test.args...), GatewayModeIntegration)[0]
+			want := corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(50051)}}
+			if test.grpc {
+				want = corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: 50051}}
+			}
+			for _, probe := range []*corev1.Probe{container.StartupProbe, container.ReadinessProbe} {
+				if !reflect.DeepEqual(probe.ProbeHandler, want) {
+					t.Fatalf("probe = %+v, want %+v", probe.ProbeHandler, want)
+				}
+			}
+			if container.LivenessProbe.TCPSocket == nil {
+				t.Fatal("ext_proc liveness must remain a TCP check")
+			}
+		})
+	}
+}
+
+func TestRouterProbeSettingsArePreserved(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	for _, mode := range []string{GatewayModeStandalone, GatewayModeIntegration} {
+		t.Run(mode, func(t *testing.T) {
+			sr := &vllmv1alpha1.SemanticRouter{}
+			container := r.generateContainers(sr, mode)[0]
+			if container.StartupProbe != nil || container.ReadinessProbe != nil || container.LivenessProbe != nil {
+				t.Fatal("omitted probes must remain unset")
+			}
+			sr = probedRouter()
+			disabled := false
+			sr.Spec.StartupProbe.Enabled = &disabled
+			sr.Spec.ReadinessProbe.Enabled = &disabled
+			sr.Spec.LivenessProbe.Enabled = &disabled
+			container = r.generateContainers(sr, mode)[0]
+			if container.StartupProbe != nil || container.ReadinessProbe != nil || container.LivenessProbe != nil {
+				t.Fatal("disabled probes must remain unset")
+			}
+			period, timeout, failures, delay := int32(7), int32(4), int32(11), int32(19)
+			settings := &vllmv1alpha1.ProbeSpec{
+				PeriodSeconds: &period, TimeoutSeconds: &timeout,
+				FailureThreshold: &failures, InitialDelaySeconds: &delay,
+			}
+			sr.Spec.StartupProbe, sr.Spec.ReadinessProbe, sr.Spec.LivenessProbe = settings, settings, settings
+			container = r.generateContainers(sr, mode)[0]
+			for _, probe := range []*corev1.Probe{container.StartupProbe, container.ReadinessProbe, container.LivenessProbe} {
+				if probe.PeriodSeconds != period || probe.TimeoutSeconds != timeout || probe.FailureThreshold != failures {
+					t.Fatalf("custom probe timing changed: %+v", probe)
+				}
+			}
+			if container.ReadinessProbe.InitialDelaySeconds != delay || container.LivenessProbe.InitialDelaySeconds != delay {
+				t.Fatal("custom initial delay changed")
+			}
+		})
 	}
 }

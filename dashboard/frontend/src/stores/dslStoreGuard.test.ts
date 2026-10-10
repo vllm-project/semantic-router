@@ -15,8 +15,8 @@ vi.stubGlobal('window', {
   },
 })
 
-vi.mock('@/lib/wasm', () => ({
-  wasmBridge: {
+vi.mock('@/lib/dslCompiler', () => ({
+  dslCompiler: {
     init: vi.fn().mockResolvedValue(undefined),
     decompile: vi.fn(),
     format: vi.fn(),
@@ -36,13 +36,13 @@ const { initialDSLState } = await import('./dslStoreSupport')
 // The capture is complete; the stub window is no longer needed.
 vi.unstubAllGlobals()
 
-describe('store-lifetime unload guard', () => {
-  it('registers one beforeunload listener for the store lifetime', () => {
+describe('store-lifetime unload guard', async () => {
+  it('registers one beforeunload listener for the store lifetime', async () => {
     expect(typeof registered.get('beforeunload')).toBe('function')
   })
 
-  it('prompts on reload while the store holds unsaved edits', () => {
-    useDSLStore.setState({ ...initialDSLState, wasmReady: true })
+  it('prompts on reload while the store holds unsaved edits', async () => {
+    useDSLStore.setState({ ...initialDSLState, compilerReady: true })
     useDSLStore.getState().setDslSource('MODEL "draft" {}')
 
     const preventDefault = vi.fn()
@@ -51,8 +51,8 @@ describe('store-lifetime unload guard', () => {
     expect(preventDefault).toHaveBeenCalled()
   })
 
-  it('stays silent once the edits are saved', () => {
-    useDSLStore.setState({ ...initialDSLState, wasmReady: true })
+  it('stays silent once the edits are saved', async () => {
+    useDSLStore.setState({ ...initialDSLState, compilerReady: true })
     useDSLStore.getState().setDslSource('MODEL "draft" {}')
     useDSLStore.getState().loadDsl('MODEL "draft" {}')
 

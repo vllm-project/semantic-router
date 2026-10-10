@@ -1,3 +1,4 @@
+import { SignalCapabilityProvider } from './SignalCapabilityContext'
 import React, { useCallback, useMemo, useState } from 'react'
 
 import type { Diagnostic, EditorMode, DSLFieldObject } from '@/types/dsl'
@@ -58,8 +59,8 @@ interface VisualModeProps {
   projectionMappingCount: number
   routeCount: number
   pluginCount: number
-  wasmReady: boolean
-  wasmError: string | null
+  compilerReady: boolean
+  compilerError: string | null
   addingEntity: EntityKind | null
   onSetAddingEntity: (kind: EntityKind | null) => void
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void
@@ -100,8 +101,8 @@ const VisualMode: React.FC<VisualModeProps> = ({
   projectionMappingCount,
   routeCount,
   pluginCount,
-  wasmReady,
-  wasmError,
+  compilerReady,
+  compilerError,
   addingEntity,
   onSetAddingEntity,
   onDeleteEntity,
@@ -204,12 +205,13 @@ const VisualMode: React.FC<VisualModeProps> = ({
     const newSrc = lines.join('\n')
     useDSLStore.getState().setDslSource(newSrc)
     // Re-parse AST for visual mode
-    if (useDSLStore.getState().wasmReady) useDSLStore.getState().parseAST()
+    if (useDSLStore.getState().compilerReady) useDSLStore.getState().parseAST()
   }, [])
 
   const homeActive = selection === null && !addingEntity
 
   return (
+    <SignalCapabilityProvider active={addingEntity === 'signal' || selection?.kind === 'signal'} scope={{ recipe: routingScopes.find((scope) => scope.id === activeRoutingScopeId)?.recipeName || 'default', bindings: ast?.modelBindings }}>
     <div className={styles.visualContainer}>
       <BuilderRoutingScopeBar
         scopes={routingScopes}
@@ -460,7 +462,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
 
         {/* Main panel */}
         <div className={styles.mainPanel}>
-          {!wasmReady && !wasmError && (
+          {!compilerReady && !compilerError && (
             <div className={styles.wasmOverlay}>
               <ProductLoadingState label="Loading compiler" compact />
             </div>
@@ -551,6 +553,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
       />
       {sidebarDragging ? <div className={styles.dragOverlay} aria-hidden="true" /> : null}
     </div>
+    </SignalCapabilityProvider>
   )
 }
 

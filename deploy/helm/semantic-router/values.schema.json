@@ -184,6 +184,14 @@
       "minProperties": 1,
       "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
     },
+    "decisionModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {"type": "string", "minLength": 1, "pattern": "^\\S+$"}
+      },
+      "description": "Optional exact default judgment deployment reference; empty preserves the config's own. The deployment declares its artifact, device and revision."
+    },
     "configMap": {
       "type": "object",
       "additionalProperties": false,

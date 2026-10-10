@@ -3,7 +3,7 @@ sidebar_position: 2
 title: 系统概览
 description: vLLM Semantic Router 的数据面、控制面、配置模型和请求生命周期。
 translation:
-  source_commit: "a565be11ad49666c149840c91134ad1e4678e49b"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/semantic-router-overview.md"
   outdated: false
 ---
@@ -14,27 +14,17 @@ Agent harness 调用稳定的模型端点。Semantic Router 根据策略选择�
 
 ## 架构
 
-```mermaid
-flowchart LR
-    Harness["Agent harness<br/>任务循环、工具、任务状态"] --> Envoy["网关 / Envoy 数据面"]
-    Envoy <-->|"ExtProc"| Router["Semantic Router"]
-    Envoy --> Pool["已配置的模型与算力后端"]
+![前端、可选决策引擎、模型运行时与 Chat 后端](/img/architecture/system-one/01-component-composition.svg)
 
-    CLI["vllm-sr CLI"] --> Config["规范配置与配方"]
-    Dashboard["Dashboard"] --> Config
-    Operator["Helm / Operator"] --> Config
-    Config --> Router
-
-    Router --> Telemetry["指标、回放、评估"]
-    Pool --> Telemetry
-```
+默认的 standalone 前端直接接收客户端流量；配方路由与原生 System One 服务可以在同一实例中组合。基于 Envoy 的 ExtProc 网关是另一种接入方式，并非必需组件。协议路径、模型运行时副本以及System One auto 的显式原生配方见[组件架构](component-architecture)。
 
 ### 数据面
 
 - **Agent harness** 负责任务循环、工具执行与持久任务状态。每次推理调用经过 Router，响应回到 harness，由其推进下一步。
-- **Envoy** 接受客户端流量，通过 External Processing 协议调用 Router，再把结果请求转发到上游。
+- **前端** 接收客户端流量、执行 listener 访问控制并适配协议。使用 `--gateway extproc` 时，外部网关负责入口和转发，通过 ExtProc 调用 Router。
 - **Semantic Router** 提取信号、评估策略、应用路由特定行为，并选择或协调模型候选。
-- **后端** 是已配置的模型服务或提供方端点。Router 不加载它们的模型权重。
+- **模型运行时** 为已配置的使用方运行判断、分类、embedding 和重排序模型，worker 可以受管或附加。
+- **Chat 后端** 是已配置的模型服务或提供方端点，由其运维方负责权重和生成能力。
 
 ### 控制面
 
@@ -63,13 +53,13 @@ flowchart LR
 ## 请求生命周期
 
 1. Harness 使用 OpenAI Chat Completions、OpenAI Responses 或 Anthropic Messages 发送请求。
-2. Envoy 把请求交给 Router。
+2. Standalone 前端或 ExtProc 网关把请求交给 Router。
 3. 请求的模型解析为入口及其配方。
 4. Router 提取相关信号并计算投影。
 5. 决策强制约束并选出合格候选集。
 6. 路由的算法选择一个模型，或执行有界的多模型策略。
 7. 路由插件在已配置的请求、执行或响应钩子处运行。
-8. Envoy 把提供方形态的请求发送到所选后端，并返回规范化响应。
+8. Standalone 上游客户端或外部网关把提供方形态的请求发送到所选后端，并返回规范化响应。
 
 这个生命周期描述 harness 任务循环中的一次模型调用。Router 插件可以过滤暴露给模型的工具，或处理请求上下文；工具执行与授权仍由 harness 和工具服务负责。已配置的多模型算法在这一边界内协调模型调用。
 
@@ -77,9 +67,9 @@ flowchart LR
 
 ## 协议与部署边界
 
-Semantic Router 可以位于直接的 Envoy listener 之后，也可以与 Kubernetes 网关和推理平台部署集成。同一路由模型适用于本地 Docker、Kubernetes 和混合环境，但模型供给和容量管理仍由所选后端平台负责。
+Semantic Router 默认直接提供 listener，也可以通过 ExtProc 接入外部网关。同一路由策略适用于本地 Docker、Kubernetes 和混合环境。Chat 后端的模型供给和容量管理由所选推理平台负责；内置模型运行时独立管理自己的判断模型副本。
 
-Router 可以考虑请求语义和已配置的运行时观测；它不替代后端调度器。因此，一次部署可以用 Semantic Router 选择模型类别，再用 Inference Router 选择该模型的健康副本。当 AI Gateway 位于入口时，请求依次经过三个路由层：
+Router 可以考虑请求语义和已配置的运行时观测；它不替代 Chat 后端的调度器。因此，一次部署可以用 Semantic Router 选择模型类别，再用 Inference Router 选择该模型的健康副本。当 AI Gateway 位于入口时，请求依次经过三个路由层：
 
 ```text
 agent harness

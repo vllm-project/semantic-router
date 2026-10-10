@@ -62,7 +62,7 @@ func buildOwnedModalityOption(
 		return nil, nil
 	}
 	_, explicit := models.plan.Lookup(models.recipe, "modality_detector")
-	path, useCPU, ok := md.ClassifierModel()
+	path, useCPU, ok := cfg.ModalityClassifierModel()
 	if !explicit && !ok {
 		return nil, nil
 	}

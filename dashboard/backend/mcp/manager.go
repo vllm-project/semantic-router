@@ -252,19 +252,9 @@ func (m *Manager) ExecuteTool(ctx context.Context, serverID, toolName string, ar
 		return nil, fmt.Errorf("execute MCP tool: %w", err)
 	}
 
-	// Convert content
-	var content interface{}
-	if len(result.Content) > 0 {
-		if len(result.Content) == 1 && result.Content[0].Type == "text" {
-			content = result.Content[0].Text
-		} else {
-			content = result.Content
-		}
-	}
-
 	return &ToolResult{
 		Success:         !result.IsError,
-		Result:          content,
+		Result:          contentPayload(result),
 		ExecutionTimeMs: elapsed.Milliseconds(),
 	}, nil
 }

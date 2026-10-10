@@ -252,11 +252,13 @@ type HallucinationPluginConfig struct {
 
 // RouterReplayPluginConfig represents configuration for router_replay plugin.
 type RouterReplayPluginConfig struct {
-	Enabled             bool `json:"enabled" yaml:"enabled"`
-	MaxRecords          int  `json:"max_records,omitempty" yaml:"max_records,omitempty"`
-	CaptureRequestBody  bool `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
-	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
-	MaxBodyBytes        int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+	// nil permits personal data, matching the built-in capture default.
+	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
+	Enabled             bool  `json:"enabled" yaml:"enabled"`
+	MaxRecords          int   `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+	CaptureRequestBody  bool  `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	MaxBodyBytes        int   `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	// MaxToolTraceBytes caps each structured tool-trace field (Prompt,
 	// ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that

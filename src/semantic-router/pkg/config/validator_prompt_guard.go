@@ -43,6 +43,9 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	if err := cfg.ValidateWindow(); err != nil {
 		return err
 	}
+	if err := cfg.ValidateOnUnscanned(); err != nil {
+		return fmt.Errorf("prompt_guard.%w", err)
+	}
 	if cfg.Backend != nil {
 		if err := cfg.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
 			return fmt.Errorf("prompt_guard.%w", err)

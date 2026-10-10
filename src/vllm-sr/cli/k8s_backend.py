@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+import tempfile
 from typing import Any
 
+import yaml
+
+from cli import __version__
 from cli.config_translator import (
     load_profile_values,
     temporary_helm_values_file,
     translate_config_to_helm_values,
 )
-from cli.consts import DEFAULT_API_PORT, DEFAULT_LISTENER_PORT
+from cli.consts import (
+    DEFAULT_API_PORT,
+    DEFAULT_LISTENER_PORT,
+    image_tag_for_cli_version,
+)
+from cli.decision_model import configured_decision_model
 from cli.gateway_mode import DEFAULT_GATEWAY, GATEWAY_STANDALONE
 from cli.k8s_env_secret import (
     ENV_SECRET_MANAGER_LABEL,
@@ -37,6 +47,17 @@ log = get_logger(__name__)
 HELM_RELEASE_NAME = "semantic-router"
 DEFAULT_NAMESPACE = "vllm-semantic-router-system"
 CHART_REL_PATH = os.path.join("deploy", "helm", "semantic-router")
+PUBLISHED_CHART = "oci://ghcr.io/vllm-project/charts/semantic-router"
+# helm-publish.yml publishes main as this version, a release as its own.
+MAIN_CHART_VERSION = "0.0.0-latest"
+
+
+def published_chart_version(cli_version: str = __version__) -> str:
+    """The published chart that runs the images this CLI runs."""
+    tag = image_tag_for_cli_version(cli_version)
+    return MAIN_CHART_VERSION if tag == "latest" else tag.removeprefix("v")
+
+
 ENV_SECRET_REFS_JSONPATH = (
     "jsonpath="
     "{range .items[*].spec.template.spec.containers[*].envFrom[*]}"
@@ -156,7 +177,9 @@ class K8sBackend:
         self.context = context
         self.release_name = release_name or HELM_RELEASE_NAME
         self.profile = profile
-        self.chart_dir = chart_dir or self._find_chart_dir()
+        # Only deploy installs the chart; status, logs, stop and dashboard
+        # read the release, so none of them needs one.
+        self.chart_dir = chart_dir
 
     # -- Deployment operations ------------------------------------------------
 
@@ -183,7 +206,7 @@ class K8sBackend:
         log.info("Deploying vLLM Semantic Router to Kubernetes")
         log.info(f"  Release:   {self.release_name}")
         log.info(f"  Namespace: {self.namespace}")
-        log.info(f"  Chart:     {self.chart_dir}")
+        log.info(f"  Chart:     {self._resolve_chart_dir()}")
         if self.context:
             log.info(f"  Context:   {self.context}")
 
@@ -212,6 +235,7 @@ class K8sBackend:
             gateway=gateway,
             platform=platform,
         )
+
         self._bind_env_secret_revision(values, secret_name)
         self._bind_dashboard_management_credential(values, secret_plan)
 
@@ -238,7 +262,7 @@ class K8sBackend:
             "upgrade",
             "--install",
             self.release_name,
-            self.chart_dir,
+            self._resolve_chart_dir(),
             "--namespace",
             self.namespace,
             "--create-namespace",
@@ -366,6 +390,10 @@ class K8sBackend:
             "--show-desc",
         ]
         helm_result = self._run_display(helm_cmd)
+        decision_model = self._live_decision_model()
+        if decision_model:
+            echo()
+            fields((("Decision model", decision_model),))
         failed = next(
             (
                 result.returncode
@@ -376,6 +404,36 @@ class K8sBackend:
         )
         if failed:
             raise SystemExit(failed)
+
+    def _live_decision_model(self) -> str | None:
+        """The decision model of the release's live Router config, or None."""
+
+        cmd = [
+            *self._kubectl_base_cmd(),
+            "get",
+            "configmap",
+            "--namespace",
+            self.namespace,
+            "-l",
+            f"app.kubernetes.io/instance={self.release_name}",
+            "-o",
+            "json",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except OSError:
+            return None
+        if result.returncode != 0:
+            return None
+        try:
+            for item in json.loads(result.stdout).get("items", []):
+                data = item.get("data") or {}
+                if "config.yaml" in data and "tools_db.json" in data:
+                    document = yaml.safe_load(data["config.yaml"]) or {}
+                    return configured_decision_model(document)
+        except (ValueError, yaml.YAMLError):
+            return None
+        return None
 
     def _dashboard_service_query(self, jsonpath: str) -> str | None:
         cmd = [
@@ -778,8 +836,15 @@ class K8sBackend:
                 "found on PATH."
             )
 
+    def _resolve_chart_dir(self) -> str:
+        """--chart-dir, a repository checkout's chart, or the published chart
+        that runs this CLI's images."""
+        if not self.chart_dir:
+            self.chart_dir = self._find_chart_dir() or self._fetch_published_chart()
+        return self.chart_dir
+
     @staticmethod
-    def _find_chart_dir() -> str:
+    def _find_chart_dir() -> str | None:
         candidates = [
             CHART_REL_PATH,
             os.path.join(os.getcwd(), CHART_REL_PATH),
@@ -787,10 +852,37 @@ class K8sBackend:
         for path in candidates:
             if os.path.isdir(path) and os.path.exists(os.path.join(path, "Chart.yaml")):
                 return os.path.abspath(path)
-        raise SystemExit(
-            f"Helm chart directory not found. Looked in: {candidates}. "
-            "Set --chart-dir or run from the repository root."
+        return None
+
+    def _fetch_published_chart(self) -> str:
+        version = published_chart_version()
+        self._fetched_chart = tempfile.TemporaryDirectory(prefix="vllm-sr-chart-")
+        log.info(f"No chart in {CHART_REL_PATH}; using {PUBLISHED_CHART} {version}")
+        pulled = self._run(
+            [
+                *self._helm_base_cmd(),
+                "pull",
+                PUBLISHED_CHART,
+                "--version",
+                version,
+                "--untar",
+                "--untardir",
+                self._fetched_chart.name,
+            ],
+            check=False,
+            capture_output=True,
         )
+        chart = os.path.join(self._fetched_chart.name, os.path.basename(CHART_REL_PATH))
+        if pulled.returncode != 0 or not os.path.isfile(
+            os.path.join(chart, "Chart.yaml")
+        ):
+            detail = (pulled.stderr or pulled.stdout or "").strip()
+            raise SystemExit(
+                f"Could not fetch {PUBLISHED_CHART} {version}"
+                f"{': ' + detail if detail else ''}. "
+                "Pass --chart-dir with the chart directory of a repository checkout."
+            )
+        return chart
 
     @staticmethod
     def _run(

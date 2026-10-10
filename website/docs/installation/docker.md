@@ -9,10 +9,13 @@ Docker is the shortest path from a Semantic Router configuration to a running
 stack. It is a good fit for evaluation, development, CI, edge hosts, and
 single-host deployments that do not need Kubernetes scheduling or failover.
 
-The CLI manages Router, Envoy, Dashboard, and the supporting services required
-by the selected configuration. Model servers remain separate: a healthy Router
-stack does not mean that its provider endpoints are installed, running, or
-able to generate.
+The CLI manages the Router, the Dashboard, and the supporting services required
+by the selected configuration, and with `--gateway extproc` an Envoy container
+in front of the Router (see [Gateway Modes](gateway-modes)). The Router starts
+the [model runtime](../model-runtime/overview.md) for its own classifiers and
+embedding models. Model servers remain separate: a healthy Router stack does
+not mean that its provider endpoints are installed, running, or able to
+generate.
 
 ## Start the stack
 
@@ -41,6 +44,7 @@ local endpoints are:
 | Dashboard | `http://localhost:8700` | Configure and inspect the stack. |
 | Routed listener | `http://localhost:8899` | Send OpenAI-compatible model requests. |
 | Management API | `http://localhost:8080` | Validate config and use evaluation, replay, or vector-store APIs. |
+| Router metrics | `http://localhost:9190/metrics` | Prometheus metrics, including the model runtime's `vsr_model_runtime_*`. |
 
 The Dashboard port binds to `127.0.0.1` by default. First-run admin
 registration remains available from the local host. For a remote machine,
@@ -88,26 +92,46 @@ verify the model endpoint directly before debugging routing.
 
 ```bash
 vllm-sr status
-vllm-sr logs router
-vllm-sr logs envoy -f
+vllm-sr logs router -f
 vllm-sr dashboard
 vllm-sr stop
 ```
 
-Use `--minimal` to run only Router and Envoy. Use `--readonly` to keep the
-Dashboard available without allowing configuration changes. Pin images and
-review [Security Hardening](security-hardening) before exposing a listener
-beyond a trusted host.
+With `--gateway extproc`, `vllm-sr logs envoy` shows the Envoy container's log
+too; in standalone mode there is no Envoy container, and the command says so.
 
-Envoy uses the safe `info` log level by default. To troubleshoot temporarily,
-set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting the stack, then unset it
-when finished: debug logging can expose forwarded request headers, including
-provider `Authorization` headers, in logs.
+Use `--minimal` to run without the Dashboard and the observability stack
+(Jaeger, Prometheus, Grafana). Use `--readonly` to keep the Dashboard available
+without allowing configuration changes. Pin images and review
+[Security Hardening](security-hardening) before exposing a listener beyond a
+trusted host.
+
+With `--gateway extproc`, Envoy uses the safe `info` log level by default. To
+troubleshoot temporarily, set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting
+the stack, then unset it when finished: debug logging can expose forwarded
+request headers, including provider `Authorization` headers, in logs.
+
+## Expose the Dashboard through a reverse proxy
+
+Grafana Live validates the `Origin` header used to establish its WebSocket.
+When an HTTPS reverse proxy exposes the Dashboard on a public hostname, allow
+that exact origin before starting the stack:
+
+```bash
+export GF_LIVE_ALLOWED_ORIGINS='https://dashboard.example.com'
+vllm-sr serve --config config.yaml
+```
+
+Separate multiple origins with commas. Use origins in
+`scheme://host[:port]` form without paths, queries, fragments, or trailing
+slashes. Grafana supports wildcard patterns, but exact origins are safer for
+public deployments. `vllm-sr serve` writes the value into the generated
+`.vllm-sr/grafana/grafana.serve.ini`; restart the stack after changing it.
 
 ## When to move to Kubernetes
 
 Docker does not provide multi-node scheduling, rolling deployment control, or
-cluster-level recovery. Move to a Kubernetes path when you need replicas,
+cluster-level recovery. Move to a Kubernetes path when you need multi-node Router replicas,
 declarative rollout, gateway integration, or platform-managed model discovery.
 The same canonical configuration can be deployed with the CLI and Helm or
 managed through the Semantic Router Operator.

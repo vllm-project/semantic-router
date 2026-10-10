@@ -39,14 +39,6 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
-WORKDIR /app/wizmap
-COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --include=dev
-COPY dashboard/wizmap/ ./
-RUN npm run build -- --outDir /app/wizmap-dist
-
 # Stage 2: Build backend with Go
 FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
@@ -79,19 +71,26 @@ RUN set -eux; \
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
+COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
+COPY src/semantic-router/pkg/consts/ /app/src/semantic-router/pkg/consts/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
 COPY src/semantic-router/pkg/extension/ /app/src/semantic-router/pkg/extension/
 COPY src/semantic-router/pkg/fallback/ /app/src/semantic-router/pkg/fallback/
 COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
+COPY src/semantic-router/pkg/inflight/ /app/src/semantic-router/pkg/inflight/
 COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
 COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
+COPY src/semantic-router/pkg/modelservice/ /app/src/semantic-router/pkg/modelservice/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
+COPY src/semantic-router/pkg/routing/ /app/src/semantic-router/pkg/routing/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
+COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
 
 # Copy go.mod and go.sum first for better caching
@@ -133,7 +132,6 @@ WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /workspace/dashboard/frontend/dist /app/frontend
-COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 # Public version metadata is imported by the nonroot Python catalog exporter.
 # Do not inherit restrictive permissions from a caller's build context.

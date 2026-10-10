@@ -369,6 +369,33 @@ def write_runtime_config_projection(
     return path
 
 
+def recover_pending_runtime_config_projection(path: Path) -> None:
+    """Recover a startup write before comparing source and active provenance."""
+    state_path = path.with_suffix(".projection.json")
+    data = read_private_state_bytes(state_path)
+    receipt = json.loads(data) if data else None
+    if receipt is None:
+        return
+    if not isinstance(receipt, dict) or set(receipt) != {
+        "pre_projection_digest",
+        "projected_digest",
+        "provenance",
+    }:
+        raise ValueError(f"Invalid runtime projection receipt: {state_path}")
+    recover_runtime_config_projection(path, receipt)
+    write_private_state_bytes(state_path, b"null\n")
+
+
+def write_journaled_runtime_config_projection(path: Path, data: bytes) -> Path:
+    """Record write intent before publishing, retaining unrelated edit ownership."""
+    state_path = path.with_suffix(".projection.json")
+    receipt = runtime_config_projection_receipt(path, data)
+    write_private_state_bytes(state_path, json.dumps(receipt).encode())
+    write_runtime_config_projection(path, data, receipt)
+    write_private_state_bytes(state_path, b"null\n")
+    return path
+
+
 def write_private_state_bytes(
     path: Path, data: bytes, *, mode: int = PRIVATE_STATE_FILE_MODE
 ) -> Path:
@@ -514,17 +541,24 @@ def materialize_runtime_config(
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
     replace_active: bool = False,
+    preserve_unchanged_source: bool = False,
     before_replace: Callable[[], None] | None = None,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
 
     The CLI records the digest it last materialized. A Dashboard or package
     activation changes the active digest without changing that receipt, so a
-    later ``serve`` preserves the active file and reports the divergence.
+    later ``serve`` preserves the active file and reports the divergence. An
+    active document that says the same as the source (such as the one
+    ``vllm-sr config apply`` sent, re-encoded by the Router) is not a
+    divergence.
     ``replace_active`` is the explicit deployment boundary for replacing that
     drifted active document from the selected source config.
     ``before_replace`` lets restart orchestration stop old file consumers before
     an existing active document changes. It is not called for a preserved file.
+    ``preserve_unchanged_source`` retains resolved startup resources when the
+    authored source bytes are unchanged. Any source edit selects a fresh source
+    document; this does not merge old overrides into new authoring.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
@@ -543,7 +577,7 @@ def materialize_runtime_config(
                 f"Runtime config must be a regular file: {runtime_config_path}"
             )
         active_data = runtime_config_path.read_bytes()
-        if active_data == effective_data:
+        if active_data == effective_data or _same_document(active_data, effective_data):
             _write_provenance(provenance_path, source_data, active_data)
             return runtime_config_path
 
@@ -581,9 +615,16 @@ def materialize_runtime_config(
         if active_digest != provenance["last_materialized_active_digest"]:
             log.warning(
                 "Preserving Dashboard or package changes in runtime config %s; "
-                "source updates were not materialized",
+                "source updates were not materialized. To serve %s instead, "
+                "rerun with --replace-active-config",
                 runtime_config_path,
+                source_config_path,
             )
+            return runtime_config_path
+        if (
+            preserve_unchanged_source
+            and _digest_bytes(source_data) == provenance["source_digest"]
+        ):
             return runtime_config_path
 
     if runtime_config_path.exists() and before_replace is not None:
@@ -591,6 +632,14 @@ def materialize_runtime_config(
     _atomic_write_private_bytes(runtime_config_path, effective_data)
     _write_provenance(provenance_path, source_data, effective_data)
     return runtime_config_path
+
+
+def _same_document(first: bytes, second: bytes) -> bool:
+    try:
+        parsed = yaml.safe_load(first)
+        return parsed is not None and parsed == yaml.safe_load(second)
+    except yaml.YAMLError:
+        return False
 
 
 def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -> Path:
