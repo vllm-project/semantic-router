@@ -22,15 +22,15 @@ MODELS = "/data/d25/omni/models/family"
 DATA = f"{FAMILY}/data/v1/M2T-d3"
 PV1 = f"{FAMILY}/proxy/pv1"
 VISION_SUITE = "/data/d25/omni/suite/vision-0.3.1b"
-VISION_PROXIES = (
-    "blink",
-    "moderation",
-    "charxiv",
-    "cvbench",
-    "infovqa",
-    "kie",
-    "mind2web",
-)
+VISION_PROXIES = {
+    "blink": "blink-proxy-1500",
+    "moderation": "moderation-proxy",
+    "charxiv": "charxiv-proxy",
+    "cvbench": "cvbench-proxy",
+    "infovqa": "infovqa-proxy",
+    "kie": "kie-proxy",
+    "mind2web": "mind2web-proxy",
+}
 
 
 def model_dir(size: Size) -> str:
@@ -92,7 +92,10 @@ def evals(size: Size, arm: str, full: bool, vision_suite: str) -> dict:
     res = f"{FAMILY}/results/{run}"
     suites = " ".join(
         [f"--suite public={vision_suite}"]
-        + [f"--suite {p}-proxy=/data/d25/omni/proxy/{p}-proxy" for p in VISION_PROXIES]
+        + [
+            f"--suite {p}-proxy=/data/d25/omni/proxy/{d}"
+            for p, d in VISION_PROXIES.items()
+        ]
     )
     loop = (
         f"for C in $(ls -d {ckpt}/step-[0-9]* | grep -v -E 'partial|tmp' | sort); do S=$(basename $C); "
@@ -123,6 +126,68 @@ def evals(size: Size, arm: str, full: bool, vision_suite: str) -> dict:
     }
 
 
+PPLX_PUBLIC = "/data/d25/omni/results/cx/pplx-v1.1/public-11/results.jsonl"
+PPLX_PROXY = {
+    "blink": "/data/d25/omni/imports/n03/results/enl/pplx-v1.1/blink-proxy/results.jsonl",
+    "moderation": "/data/d25/omni/imports/n03/results/zs/pplx-v1.1/moderation-proxy/results.jsonl",
+}
+PROXY_BENCH = {
+    "blink": "BLINK",
+    "moderation": "Moderation (Hateful Memes)",
+    "cvbench": "CV-Bench",
+    "charxiv": "CharXiv",
+    "infovqa": "InfographicVQA",
+    "kie": "KIE (CORD+FUNSD)",
+    "mind2web": "Mind2Web",
+}
+TEXT_REF = {
+    "flash": "lux2",
+    "mini": "nox2",
+    "nano": "sol2",
+    "lite": "eos2",
+    "edge": "kai2",
+}
+
+
+def gates(size: Size, arm: str) -> dict:
+    """Paired estimates of the arm's final export: vision vs pplx (node 02 references), text vs a same-size anchor."""
+    run = run_name(size, arm)
+    res = f"{FAMILY}/results/{run}"
+    last = f"S=$(ls -d {FAMILY}/ckpt/{run}/step-[0-9]* | grep -v -E 'partial|tmp' | sort | tail -1 | xargs basename)"
+    proxies = " ".join(
+        f'--proxy "{bench}=/data/d25/omni/proxy/{VISION_PROXIES[p]}/rows.jsonl.gz,'
+        f"{res}/vision/$S/{p}-proxy/results.jsonl,"
+        + PPLX_PROXY.get(
+            p,
+            f"/data/d25/omni/imports/n03/results/zs5/pplx-v1.1/{p}-proxy/results.jsonl",
+        )
+        + '"'
+        for p, bench in PROXY_BENCH.items()
+    )
+    vision = (
+        f"{last}; python -m d25.omni.proxy.paired --board /data/d25/omni/suite/vision-live-20261009T2353Z.json "
+        f"--reference-name 'Perplexity Decider v1.1 (27B)' --rows {VISION_SUITE}/rows.jsonl.gz "
+        f"--ours {res}/vision/$S/public/results.jsonl --ref {PPLX_PUBLIC} {proxies} --out {res}/vgate.json"
+    )
+    ref = TEXT_REF[size.short]
+    o_ref = (
+        ""
+        if ref in ("lux2", "nox2")
+        else f" --ref-o-proxy $(python -c \"import json; print(json.load(open('{FAMILY}/anchors/{ref}/scores.json'))['O_proxy'])\")"
+    )
+    text = f"python -m d25.family.gate --result {res}/full/final/result.json --ref {ref}{o_ref} --out {res}/tgate.json"
+    return {
+        "name": f"77-gates-{run}",
+        "max_attempts": 2,
+        "wait_for": [f"{res}/full/final/result.json"],
+        "defer": "skip",
+        "steps": [
+            {"run": vision, "creates": f"{res}/vgate.json", "timeout_h": 0.5},
+            {"run": text, "creates": f"{res}/tgate.json", "timeout_h": 0.5},
+        ],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -132,17 +197,19 @@ def main() -> None:
     e = sub.add_parser("evals")
     e.add_argument("--full", action="store_true")
     e.add_argument("--vision-suite", default=VISION_SUITE)
-    for p in (t, e):
+    g = sub.add_parser("gates")
+    for p in (t, e, g):
         p.add_argument("--size", required=True, choices=sorted(SIZES))
         p.add_argument("--arm", required=True)
         p.add_argument("--out", required=True)
     args = parser.parse_args()
     size = SIZES[args.size]
-    item = (
-        stage_t(size, args.arm, args.lr, args.data)
-        if args.cmd == "stage-t"
-        else evals(size, args.arm, args.full, args.vision_suite)
-    )
+    if args.cmd == "stage-t":
+        item = stage_t(size, args.arm, args.lr, args.data)
+    elif args.cmd == "evals":
+        item = evals(size, args.arm, args.full, args.vision_suite)
+    else:
+        item = gates(size, args.arm)
     path = Path(args.out) / f"{item['name']}.json"
     path.write_text(json.dumps(item, indent=1) + "\n")
     print(path)
