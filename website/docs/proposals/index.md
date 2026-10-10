@@ -40,7 +40,7 @@ explicit when a model cannot or should not handle a request.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
-| [Model Execution Fallback](./model-execution-fallback) | 2026-08-10 | Proposal | Safe ownership boundary for cross-model fallback. |
+| [Model Execution Fallback](./model-execution-fallback) | 2026-08-10 | Implemented | Safe ownership boundary for cross-model fallback. |
 | [PRISM](./Prism-153key) | 2026-03-20 | Proposal | Model qualification and legitimacy checks. |
 | [TruthLens](./hallucination-mitigation-milestone) | 2025-12-02 | Proposal | Gateway-level hallucination detection and mitigation. |
 
@@ -53,9 +53,9 @@ different client and transport protocols.
 | --- | --- | --- | --- |
 | [Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | Implemented | Defines the six open core benchmarks, complete-case index, physical/virtual ranking, operator evidence, routing objectives, and benchmark-version migration. |
 | [Unified Model Catalog and Evaluation Index](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | Implemented | Unifies provider, protocol, model, reasoning, presentation, Day-0, and benchmark-comparison metadata. |
-| [Standalone Mode](./standalone-mode) | 2026-10-06 | Proposal | The Router serves the OpenAI-compatible API and proxies to backends itself, with one routing core for standalone and extproc modes ([#4623](https://github.com/vllm-project/semantic-router/issues/4623)). |
+| [Standalone Mode](./standalone-mode) | 2026-10-06 | Implemented | The Router serves the OpenAI-compatible API and proxies to backends itself, with one routing core for standalone and extproc modes ([#4623](https://github.com/vllm-project/semantic-router/issues/4623)). |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
-| [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
+| [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Implemented | Protocol-independent access to the routing engine. |
 | [Standalone HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | Superseded | A separate gateway binary linking the router packages; superseded by [Standalone Mode](./standalone-mode). |
 
 ## Serving Integrations

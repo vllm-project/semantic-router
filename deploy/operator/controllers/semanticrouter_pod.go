@@ -17,6 +17,9 @@ limitations under the License.
 package controllers
 
 import (
+	"strconv"
+	"strings"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -178,8 +181,9 @@ func semanticRouterImage(sr *vllmv1alpha1.SemanticRouter) string {
 
 // routerProbeHandler is what a probe checks. A standalone Router answers
 // /health once it serves and /ready once routing can take traffic, on its
-// listener; an ext_proc Router is checked by its gRPC port accepting.
-func routerProbeHandler(gatewayMode, path string) corev1.ProbeHandler {
+// listener. Plaintext ext_proc startup/readiness requires a serving generation;
+// liveness and TLS listeners retain TCP checks.
+func routerProbeHandler(gatewayMode, path string, args []string) corev1.ProbeHandler {
 	if gatewayMode == GatewayModeStandalone {
 		return corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -189,6 +193,9 @@ func routerProbeHandler(gatewayMode, path string) corev1.ProbeHandler {
 			},
 		}
 	}
+	if path == "/ready" && !routerUsesGRPCTLS(args) {
+		return corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: DefaultGRPCPort}}
+	}
 	return corev1.ProbeHandler{
 		TCPSocket: &corev1.TCPSocketAction{
 			Port: intstr.FromInt(int(DefaultGRPCPort)),
@@ -196,10 +203,31 @@ func routerProbeHandler(gatewayMode, path string) corev1.ProbeHandler {
 	}
 }
 
+// Native gRPC probes on supported clusters cannot probe TLS listeners.
+// Match the Router's boolean flag syntax and last-value-wins behavior.
+func routerUsesGRPCTLS(args []string) bool {
+	secure := false
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		name, value, hasValue := strings.Cut(arg, "=")
+		if name != "-secure" && name != "--secure" {
+			continue
+		}
+		secure = true
+		if hasValue {
+			parsed, err := strconv.ParseBool(value)
+			secure = err != nil || parsed
+		}
+	}
+	return secure
+}
+
 func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.Container, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) {
 	if sr.Spec.StartupProbe != nil && (sr.Spec.StartupProbe.Enabled == nil || *sr.Spec.StartupProbe.Enabled) {
 		container.StartupProbe = &corev1.Probe{
-			ProbeHandler:     routerProbeHandler(gatewayMode, "/ready"),
+			ProbeHandler:     routerProbeHandler(gatewayMode, "/ready", sr.Spec.Args),
 			PeriodSeconds:    r.getInt32OrDefault(sr.Spec.StartupProbe.PeriodSeconds, DefaultStartupProbePeriod),
 			TimeoutSeconds:   r.getInt32OrDefault(sr.Spec.StartupProbe.TimeoutSeconds, DefaultStartupProbeTimeout),
 			FailureThreshold: r.getInt32OrDefault(sr.Spec.StartupProbe.FailureThreshold, DefaultStartupProbeFailureThreshold),
@@ -208,7 +236,7 @@ func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.C
 
 	if sr.Spec.LivenessProbe != nil && (sr.Spec.LivenessProbe.Enabled == nil || *sr.Spec.LivenessProbe.Enabled) {
 		container.LivenessProbe = &corev1.Probe{
-			ProbeHandler:        routerProbeHandler(gatewayMode, "/health"),
+			ProbeHandler:        routerProbeHandler(gatewayMode, "/health", sr.Spec.Args),
 			InitialDelaySeconds: r.getInt32OrDefault(sr.Spec.LivenessProbe.InitialDelaySeconds, DefaultLivenessProbeInitialDelay),
 			PeriodSeconds:       r.getInt32OrDefault(sr.Spec.LivenessProbe.PeriodSeconds, DefaultLivenessProbePeriod),
 			TimeoutSeconds:      r.getInt32OrDefault(sr.Spec.LivenessProbe.TimeoutSeconds, DefaultLivenessProbeTimeout),
@@ -218,7 +246,7 @@ func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.C
 
 	if sr.Spec.ReadinessProbe != nil && (sr.Spec.ReadinessProbe.Enabled == nil || *sr.Spec.ReadinessProbe.Enabled) {
 		container.ReadinessProbe = &corev1.Probe{
-			ProbeHandler:        routerProbeHandler(gatewayMode, "/ready"),
+			ProbeHandler:        routerProbeHandler(gatewayMode, "/ready", sr.Spec.Args),
 			InitialDelaySeconds: r.getInt32OrDefault(sr.Spec.ReadinessProbe.InitialDelaySeconds, DefaultReadinessProbeInitialDelay),
 			PeriodSeconds:       r.getInt32OrDefault(sr.Spec.ReadinessProbe.PeriodSeconds, DefaultReadinessProbePeriod),
 			TimeoutSeconds:      r.getInt32OrDefault(sr.Spec.ReadinessProbe.TimeoutSeconds, DefaultReadinessProbeTimeout),

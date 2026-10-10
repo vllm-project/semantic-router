@@ -3,23 +3,30 @@ title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
 translation:
-  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/overview.md"
   outdated: false
 ---
 
 # 模型运行时
 
-路由器用到的每个模型都运行在**内置模型运行时**中：domain、PII、jailbreak
-等信号背后的分类器，语义缓存、记忆和 RAG 背后的 embedding 模型，重排序模型，
-幻觉检测器，以及回答路由问题的决策模型。
+**内置模型运行时**提供路由功能需要的判断、分类、embedding、重排序和幻觉检测模型。
+它可以管理本地 worker，也可以附加到独立运行的 worker。显式配置了
+[外部服务](../installation/runtime/external)的功能则调用相应服务。
 
 运行时不是你的聊天模型运行的地方。回答用户的模型留在你的提供方后面（vLLM、Ollama、托管 API）；
-运行时提供的是路由器针对每个请求去询问的那些小模型。它以 `vllm-srun` 进程的形式运行在路由器容器内，
-或者在你用 `vllm-sr serve ARTIFACT --engine` 启动时由同一个实例前端管理（Engine 模式关闭路由）。
+运行时提供路由器调用的判断与辅助模型。每个受管副本在独立的 `vllm-srun` 进程中运行。
 
-通常你什么都不用做。某个功能需要模型时，路由器会下载模型、校验每个文件、
-启动运行时，并把请求文本发给它。路由所需的模型加载完成后，路由器才开始提供服务。
+用 `vllm-sr serve ARTIFACT --engine` 启动时仍保留同一个实例前端和模型管理，但关闭 Chat 路由。
+Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求。
+
+![前端、可选决策引擎与按需模型运行时](/img/architecture/system-one/01-component-composition.svg)
+
+请求路径，以及模型选择与副本调度的区别，见[组件架构](../overview/component-architecture)。
+
+内置功能会自动解析模型默认值。准备配置时，Router 只为实际模型使用方和显式发布的原生模型启动受管 worker；
+未使用的 deployment 不加载权重。启动会等待所需受管模型就绪；附加模型遵循
+[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 之后如果运行时变慢或崩溃，信号截止时间会限制请求等待的时长。
 未完成的信号按配置的错误策略或未扫描策略处理。
 
@@ -27,7 +34,7 @@ translation:
 
 | 你想要 | 这样做 | 阅读 |
 | --- | --- | --- |
-| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时；`vllm-sr serve --platform rocm` 或 `--platform cuda` 会把它的模型放到 GPU 上。 | [与路由器一起运行](model-runtime/deploy.md) |
+| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时；`--platform rocm` 或 `--platform cuda` 选择支持 GPU 的镜像，每个 worker 的设备由 deployment 决定。 | [与路由器一起运行](model-runtime/deploy.md) |
 | 在多个路由器之间共享模型，或在另一台机器上运行它们 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](model-runtime/deploy.md#attach-to-a-runtime-you-run) |
 | 在自己的代码里调用模型 | 运行 `vllm-sr serve ARTIFACT --engine` 并发送 HTTP 请求。 | [快速开始](model-runtime/quickstart.md) |
 

@@ -63,7 +63,7 @@ plugins:
 | `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
 | `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
-| `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. The primary path reaches backends through Envoy, which does not verify upstream certificates. |
+| `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
 
 A shadow is skipped, with a metric but no outcome, when the request is sampled out or when the primary dispatch already selected the shadow model. Decisions that execute through the looper (ratings, confidence, fusion, ReMoM, workflows) reject the plugin at config load, because the shadow hook runs only on single-model provider dispatch.

@@ -7,15 +7,19 @@ description: Update a configuration that used the candle, ONNX Runtime or OpenVI
 # Migrate from the native bindings
 
 Earlier releases ran models inside the router with three back ends: candle,
-ONNX Runtime (`ort`) and OpenVINO. Those back ends are gone. Every model now
-runs in the [model runtime](model-runtime/overview.md), on CPU by default and on GPUs when
-you ask for them. The [release note](release-notes/built-in-model-runtime.md)
+ONNX Runtime (`ort`) and OpenVINO. Those in-process back ends are gone. Local
+routing models now run in the [model runtime](model-runtime/overview.md);
+external classifier and embedding services retain their separate adapters.
+`vllm-sr serve --platform auto` detects the host or target; use `--platform cpu`
+to select the CPU image explicitly. The [release note](release-notes/built-in-model-runtime.md)
 lists every breaking change of that release.
 
-**Most configurations need no change.** If you only turn features on (a
-`domain` signal, the semantic cache, PII detection) and never named a back
-end, the router picks the same Vela models as before and runs them in the
-runtime.
+**Review defaults as well as field migrations.** Features without an explicit
+model override use current defaults, including Vela 2.0 0.3B for common judgment
+tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
+change answers even when its YAML still parses. Review
+[model and threshold choices](./choose-a-model.md#vela-20) and test representative
+requests before rollout; explicit specialist assignments remain available.
 
 You need to migrate if your configuration contains any of these:
 
