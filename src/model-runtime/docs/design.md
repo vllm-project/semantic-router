@@ -78,7 +78,7 @@ running packaged remote code (`trust_remote_code`).
 | Config | The canonical layout stays. `provider: model_runtime` deployments may serve task bindings. The providers `candle`, `ort` and `openvino` and their execution fields are removed from the parser; `vllm-sr config migrate` rewrites them. |
 | Retirements | The NLI model (hallucination explainer, response-cache polarity guard) and the OpenVINO provider retire, as decided in the runtime proposal. Every other legacy model migrates or has a documented replacement (section 16). |
 | Exactness | Decision 2.0 `exact` stays byte-identical. Decision 1.0 `exact` targets bit-identity with the packages' bundled runtime on the same device class. Vela 1.0 `exact` is FP32 on every device, with parity records against the legacy path. |
-| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. The Rust build stages are deleted. |
+| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Its other dependencies install at the versions in `requirements-lock.txt`, so every build of a release gets the same set. The Rust build stages are deleted. |
 
 ## 3. Overview
 
@@ -116,6 +116,7 @@ src/model-runtime/
   pyproject.toml            # distribution vllm-srun; entry points for built-in plugins
   AGENTS.md, README.md
   Dockerfile                # CPU image (CI, E2E, Kubernetes)
+  requirements-lock.txt     # dependency versions every image installs, PyTorch's excepted
   docs/
     design.md               # this document
     records/                # parity and performance records
@@ -333,7 +334,10 @@ Decision 2.0 GPU policy), and dynamic int8 on CPU where that measures faster
 than FP32. `max_speed` requests run the copy. A family consents to a copy
 (`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records show at
 least 99% label agreement with `exact` (embeddings: cosine of at least
-0.999); faster alone is not enough. Golden readiness always runs `exact`;
+0.999); faster alone is not enough. Approximate kernels follow the same rule
+per question type (`DtypePolicy.approximate_kernels`): Decision 2.0 consents
+to CUDA's approximate fused kernels, and Vela 2.0 does not, because they
+change 7% of its span answers. Golden readiness always runs `exact`;
 each family records the accuracy (label agreement, max |Δp| or embedding
 cosine against `exact`) and the latency of its reduced path. `vllm-sr config
 migrate` maps the legacy `precision: fp16` to `max_speed`.
@@ -883,7 +887,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; fused kernels only after a bit-exactness record |
+| `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; bit-exact fused kernels only after a bit-exactness record; on Ampere and newer with Triton, the gfx942 fused kernels as approximate kernels, which only a family that consents runs under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or

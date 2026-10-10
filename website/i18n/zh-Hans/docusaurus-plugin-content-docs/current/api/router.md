@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e86e1ac69ece8f9921cddbbfa12a4c2d8f50b66b"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/api/router.md"
   outdated: false
 ---
@@ -208,7 +208,7 @@ Dashboard Insights 将这些路由与已记录的信号、投影、候选分数�
 
 | 任务 | 表面 |
 | --- | --- |
-| 发送模型流量 | 已配置的 Envoy 监听器；标准本地栈为 `8899` |
+| 发送模型流量 | 默认 standalone frontend，或 `--gateway extproc` 下的 Envoy；标准本地栈为 `8899` |
 | 列出公开模型 | 推理监听器上的 `GET /v1/models` |
 | 检查健康或就绪 | `8080` 上的管理 API |
 | 读取或更改配置 | `8080` 上的管理 API |

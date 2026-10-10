@@ -3,7 +3,7 @@ sidebar_position: 1
 title: 快速开始
 description: 安装 vLLM Semantic Router 并发送你的第一条已路由请求。
 translation:
-  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/installation.md"
   outdated: false
 ---
@@ -22,7 +22,7 @@ import {
 
 # 快速开始
 
-安装 vLLM Semantic Router，接入一个模型，发送第一条路由请求。
+安装 vLLM Semantic Router，接入一个模型，发送第一条路由请求。若只需要直接调用判断模型，可从 [System One 快速开始](../model-runtime/quickstart)进入，无需准备 Chat 后端。两种用法共用[组件架构](../overview/component-architecture)中的前端与模型运行时。
 
 `vllm-sr serve` 在 Docker 中运行一个本地栈：Router 自己在 8899 端口提供 OpenAI
 兼容 API（standalone 模式，默认），控制面板在 8700 端口，还有运行 Router 自身分类器和
@@ -30,9 +30,9 @@ import {
 Ollama、vLLM 服务或托管 API，你在控制面板中接入它们。
 
 :::note 发布渠道
-本文档跟随 `main`。standalone 模式和内置模型运行时晚于当前稳定版 `vllm-sr` 0.4.0：
-0.4.0 仍在 Router 前面放置 Envoy，也没有 `--gateway` 选项。想按本文档操作，请安装开发渠道：
-给 curl 安装脚本传入 `--channel dev`。
+本文档跟随 `main`。standalone 模式和内置模型运行时晚于稳定版 `vllm-sr` 0.4.0。
+以下安装选项均选择开发渠道：curl 使用 `--channel dev`，pip 使用 `--pre`，uv 允许预发布版本。
+稳定版的升级方式见[升级与回滚](upgrade-rollback)。
 :::
 
 ## 系统要求
@@ -50,7 +50,7 @@ Ollama、vLLM 服务或托管 API，你在控制面板中接入它们。
 `--runtime skip` 跳过容器运行时准备。例如：
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --runtime skip
 ```
 
 这些参数属于安装脚本。`vllm-sr serve --container-runtime` 用于选择容器运行时

@@ -6,7 +6,8 @@ description: Fix the common problems of the model runtime and answers to frequen
 
 # Troubleshooting and FAQ
 
-Start with what the runtime says about itself. For a runtime you started:
+Start with what the runtime says about itself. For an independent `vllm-srun`
+worker listening on port 8100:
 
 ```bash
 curl -s localhost:8100/health
@@ -21,6 +22,10 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 `vsr_model_runtime_ready{deployment="..."} 1` means the deployment answers.
 The router log names each managed runtime process and why it stopped.
+
+For `vllm-sr serve ARTIFACT --engine`, use the frontend listener and
+`/v1/systemone/models` instead. Public `/v1/models` describes Chat models, not
+the private worker inventory. Include the listener API key when configured.
 
 ## Startup waits for the models
 
@@ -38,6 +43,12 @@ deployment in `model_deployments` with its state:
 ```bash
 curl -s localhost:8080/startup-status
 ```
+
+An offline attached runtime does not block custom `decision` questions or
+explicit `decision.v1` task bindings from being prepared. Those tasks remain
+unavailable until current capability metadata is ready and compatible.
+Implicit and native-head bindings may still need metadata at startup. See
+[deployment readiness](./deploy.md#when-a-model-is-not-ready).
 
 A first start downloads the models, so it takes longer than the next ones. The
 wait ends after `VLLM_SRUN_READY_TIMEOUT` (10 minutes by default) with

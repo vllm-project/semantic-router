@@ -188,7 +188,7 @@ every request.
 Use named entrypoints and recipes when one deployment must expose more than one
 routing objective, policy boundary, or rollout track. Keep a single top-level
 `routing` profile when all clients should follow the same policy; the existing
-auto-model flow needs no extra configuration.
+default `vllm-sr/auto` entrypoint needs no extra configuration.
 
 Continue with:
 

@@ -176,6 +176,37 @@ async function showTwentyFiveModels(page: Page) {
 }
 
 test.describe('Models inventory at 300+ scale', () => {
+  test('keeps pricing clear of actions at 1320px', async ({ page }) => {
+    await page.setViewportSize({ width: 1320, height: 549 })
+    await mockLargeModelInventory(page)
+    await page.goto('/config/models')
+
+    const table = inventoryTable(page)
+    const pricing = table.getByRole('columnheader', { name: 'Pricing', exact: true })
+    await expect(pricing).toBeVisible()
+    const viewButton = page.getByRole('button', { name: `View ${DEFAULT_MODEL}`, exact: true })
+    const row = table.getByRole('row').filter({ has: viewButton })
+
+    // Text visibility alone misses a sticky Actions cell covering Pricing.
+    // Measure before clicking, since Playwright may scroll the table for us.
+    for (const [price, actions] of [
+      [pricing, table.getByRole('columnheader', { name: 'Actions', exact: true })],
+      [
+        row.getByRole('cell', { name: '$0.00 / 1M', exact: true }),
+        row.getByRole('cell').filter({ has: viewButton }),
+      ],
+    ]) {
+      const priceBounds = await price.boundingBox()
+      const actionBounds = await actions.boundingBox()
+      expect(priceBounds).not.toBeNull()
+      expect(actionBounds).not.toBeNull()
+      expect(actionBounds!.x).toBeGreaterThanOrEqual(priceBounds!.x + priceBounds!.width - 1)
+    }
+
+    await row.getByRole('button', { name: `View ${DEFAULT_MODEL}`, exact: true }).click()
+    await expect(page.getByRole('dialog', { name: `Model: ${DEFAULT_MODEL}` })).toBeVisible()
+  })
+
   test('adds and edits one model with one canonical write per action', async ({ page }) => {
     test.setTimeout(90_000)
     const { writes } = await mockLargeModelInventory(page)

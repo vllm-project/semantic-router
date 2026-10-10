@@ -133,6 +133,14 @@ dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (r
 		go test -json -list '^(Test|Fuzz|Example)' ./... > "$(DASHBOARD_TEST_REPORT_DIR)/inventory.jsonl" && \
 		go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"
 
+# dashboard-test-backend fails when dashboard/backend/router/dashboard.openapi.json
+# drifts from the route registration; this target rewrites it.
+dashboard-openapi-generate: ## Regenerate the Dashboard OpenAPI document from the route registration
+	@$(LOG_TARGET)
+	@cd $(DASHBOARD_BACKEND_DIR) && \
+		UPDATE_DASHBOARD_OPENAPI=1 go test -count=1 -run '^TestDashboardOpenAPIArtifactIsCurrent$$' ./router
+	@echo "Wrote dashboard/backend/router/dashboard.openapi.json"
+
 dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
@@ -150,6 +158,6 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 
 .PHONY: dashboard-frontend-deps dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-frontend dashboard-build-backend \
-	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
+	dashboard-test-backend dashboard-openapi-generate dashboard-test-frontend dashboard-test-e2e-evaluation \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean decision-runtime-catalog-check decision-runtime-catalog-generate

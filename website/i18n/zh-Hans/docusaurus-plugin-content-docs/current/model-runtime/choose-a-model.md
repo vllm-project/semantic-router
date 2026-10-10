@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "83b848c3b6a8a5cf17e488ca84975103a2855b46"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -24,7 +24,7 @@ translation:
 | 拦截提示词注入和越狱 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
 | 标记不安全内容 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` | Shield 是另一种安全模型 |
 | 对照来源检查回答 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 标出回答中无依据的片段 |
-| 指出风险类别 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | | 12 个独立的危害类别，带已发布的阈值 |
+| 识别风险类别 | 显式绑定 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 12 个独立类别；绑定 `hazard` deployment 及其发布的 operating point |
 | 用于缓存、记忆、RAG 和工具的 embedding | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | 更小的维度和更少的层以质量换速度 |
 | 更大或带指令的文本 embedding | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B，1,024 维 |
 | 对检索到的文档重排序 | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
@@ -76,7 +76,7 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
   速度约为 `exact` 的 1.6 倍。
 - **输入：** 普通路由判断可以按模型输入上限截断。Prompt guard、safety、PII 和 hallucination 要求完整读取输入；
   支持窗口扫描的任务可在扫描预算内覆盖更长的输入。覆盖不完整时返回错误或未知结果。
-  具体限制和路由策略见[长输入](/docs/model-runtime/reference#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
+  具体限制和路由策略见[长输入](./reference#long-inputs)。Vela 1.0 的 Guard 和 PII 按窗口扫描最多 32K。
 - **阈值：** 模块默认阈值按 0.3B 的分数校准（见下文）。
 
 维护者选择了这个默认值，尽管它没有达到当初设定的两个目标
@@ -164,10 +164,11 @@ global:
 
 默认决策绑定引用一个已声明的 deployment，用于 Router 判断任务及未指定覆盖的
 [`decision` 问题](tutorials/signal/learned/decision.md)。模型、设备和 profile 仅在该资源中声明；
-省略绑定时使用内置 `primary`，即 CPU 上的 Vela 2.0 0.3B：
+没有覆盖配置时，内置默认模型为 Vela 2.0 0.3B。传入模型 artifact 可更新当前默认 deployment；
+`--platform` 选择运行平台，deployment 中显式设置的设备位置仍优先。例如：
 
 ```bash
-vllm-sr serve --platform rocm
+vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm
 ```
 
 ```yaml
@@ -177,7 +178,7 @@ global:
       primary:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-4B
-        device: rocm
+        device: rocm:0
     system:
       decision_model:
         deployment: primary
@@ -194,14 +195,13 @@ global:
 | --- | --- | --- | ---: | ---: |
 | `Vela-2.0-0.3B`（默认） | CPU 或 GPU | prompt guard 和 safety 领先，domain、modality 和 feedback 落后 | 6.6 ms | 79 ms |
 | `Vela-2.0-0.8B` | CPU 或 GPU | domain、prompt guard、safety、modality 和 hallucination 领先；PII 落后 | 40.1 ms | 约 3 s |
-| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 55.2 ms | 仅 GPU |
-| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 76.5 ms | 仅 GPU |
+| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 55.2 ms | 未测量 |
+| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 76.5 ms | 未测量 |
 | `Vela-1.0` | CPU 或 GPU | 专用模型本身 | 不适用 | 16 ms |
 
 - **GPU：** 一块 AMD Instinct MI325X，顺序请求。并发 16 时，一块 GPU 每秒约处理 154（0.3B）、
   25（0.8B）、18（4B）和 13（9B）个请求。
-- **4B 和 9B 需要 GPU。** 在 `--platform cpu` 或没有该平台 GPU 的主机上，`vllm-sr serve` 会拒绝它们；
-  在模型运行时找不到 GPU 的地方，Router 也会拒绝。在 GPU 上，无论模块的 `use_cpu` 如何设置，它们都在 GPU 上运行。
+- **该工作负载建议为 4B 和 9B 使用 GPU。** 这份记录未测量它们的 CPU 延迟。设备位置由 deployment 和运行时要求决定，CLI 不按模型名称禁止 CPU；显式 GPU 设备必须与所选平台一致，并且在主机上可用。
 - **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
 - **每个规模** 在 user feedback 的新留出文件（CrossWOZ）和分布内的 PII 上都落后于 Vela 1.0。带区间的逐信号数据见记录。
 - **Decision 1.0 和 Decision 2.0** 都可作为默认判断模型；可用任务取决于其原生能力，不按家族名称限制。
@@ -243,9 +243,9 @@ global:
 
 ### 需要多少内存 {#how-much-memory}
 
-按 CPU 上每个参数约 4 字节、GPU 上每个参数约 2 字节估算，再为请求留出余量：
-一个 307M 的任务模型在 CPU 上约需 1.3 GB，Decision 2.0 Lux-9B 在 GPU 上约需 18 GB。
-运行时会拒绝加载放不进设备的模型并说明原因。每个模型副本都运行在独立的进程中，可通过 `replicas` 配置设备位置
+内存取决于模型家族和 profile，而不只是设备。FP32 权重约占每参数 4 字节，低精度模型可能约占 2 字节；
+还需要为输入、激活和并发请求留出余量。307M FP32 任务模型仅权重就约需 1.3 GB。
+请查看模型记录并测量实际工作负载的峰值。每个副本有独立进程和权重副本，通过 `replicas` 配置设备位置
 （见[放置和扩展副本](model-runtime/deploy.md#place-and-scale-replicas)）。
 
 ## 你自己的模型 {#your-own-models}
