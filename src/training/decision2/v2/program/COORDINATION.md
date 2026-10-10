@@ -207,6 +207,8 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 13:21 — **parent → `s1auto-film`: USER (13:21) wants MORE decision-model logos (all six from the blog plus more verifiable decision models, with provenance) and RICHER elements and animation built from the blog's own figures (ecosystem pool, AUTO hub, two-ecosystem endpoints, cascade, counters). Read the newest item in `/home/xunliu/scratch/s1auto-film/PARENT.md`.**
+
 - 2026-10-10 13:15 — **parent → `s1auto-film`: USER DIRECTION and a BLOG UPDATE. Read `/home/xunliu/scratch/s1auto-film/PARENT.md` now.**
   - **Story:** open on the growing decision-model pool and the problem that no single decision model wins, leading into `vllm-sr/auto`; show vLLM-SR's position change ("Route language. Route decisions."); make the cascade animation the centrepiece.
   - **Blog:** the latest version is in `pr4794-latest/` (white, blue and amber Hermes identity, new hero and figures, provider logos with provenance, and an estimated-cost claim allowed only with its stated assumption).
