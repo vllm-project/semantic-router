@@ -53,6 +53,8 @@ FAMILY = {
     "d3-edge": "0.6B",
 }
 TRAINED_ON = "Trained on AMD Instinct MI325X GPUs."
+# The cards name the GPU of the speed line and of training (user 02:28); the wording lint allows exactly these.
+SPEED_GPU = "AMD Instinct MI325X"
 TAGS = (
     "zero-shot-classification",
     "decision-model",
@@ -523,7 +525,7 @@ def check_rendered(
     from d25.vega.release.build import PUBLIC_TRACES, traced
 
     scrubbed = readme
-    for name in sorted(names, key=len, reverse=True):
+    for name in sorted((*names, TRAINED_ON, SPEED_GPU), key=len, reverse=True):
         scrubbed = scrubbed.replace(name, "")
     problems = lint_readme(scrubbed)
     problems += [

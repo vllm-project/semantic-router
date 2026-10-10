@@ -126,7 +126,12 @@ PUBLIC_TRACES = (
     "internal name or training trace",
 )
 # Public board entrants whose names contain a traced word; family cards list them as same-size peers.
-PUBLIC_NAMES = ("Jev-Omni", "d1-omni-600M", "GLiNER2.5-Decide")
+PUBLIC_NAMES = (
+    "Jev-Omni",
+    "d1-omni-600M",
+    "GLiNER2.5-Decide",
+    "Trained on AMD Instinct MI325X GPUs.",
+)
 
 
 def traced(line: str) -> bool:
