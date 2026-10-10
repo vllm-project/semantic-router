@@ -103676,6 +103676,27 @@
   "protocols": [
     {
       "capabilities": [
+        "typed_decisions"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "System One",
+      "id": "vllm-sr/systemone@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/systemone"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/systemone/models"
+        }
+      ],
+      "wire_format": "vllm-sr.systemone.v1"
+    },
+    {
+      "capabilities": [
         "chat",
         "streaming",
         "tools",
@@ -107307,6 +107328,35 @@
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "private_runtime",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_protocol": "vllm-sr/systemone@1",
+      "description": "Connect a concrete decision model through the native System One API.",
+      "display_name": "System One Compatible",
+      "id": "systemone-compatible",
+      "presentation": {
+        "featured": false,
+        "logo": "public:/img/vllm-sr-mark.svg",
+        "monochrome": true,
+        "monogram": "S"
+      },
+      "protocols": [
+        "vllm-sr/systemone@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "vllm-sr/systemone@1#create",
+        "vllm-sr/systemone@1#list_models"
       ]
     },
     {
