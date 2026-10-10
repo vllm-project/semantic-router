@@ -21,7 +21,23 @@ const (
 	defaultMemoryCacheKeyPrefix = "memory_cache:"
 	defaultMemoryCacheTTL       = 300 // 5 minutes
 	memoryCacheKeyVersion       = "v2:"
+	// cacheWriteHold outlasts Milvus Bounded-consistency staleness (5 s), so a
+	// read that still sees a just-deleted row is never written back to the cache.
+	cacheWriteHold = 10 * time.Second
 )
+
+// setIfCurrentScript caches a result only if no invalidation ran since the
+// caller read the user's generation and no post-invalidation hold is active.
+var setIfCurrentScript = redis.NewScript(`
+local generation = redis.call('GET', KEYS[1]) or '0'
+if generation ~= ARGV[1] or redis.call('EXISTS', KEYS[2]) == 1 then
+	return 0
+end
+redis.call('SET', KEYS[3], ARGV[2], 'PX', ARGV[3])
+redis.call('SADD', KEYS[4], KEYS[3])
+redis.call('PEXPIRE', KEYS[4], ARGV[3])
+return 1
+`)
 
 // RedisCacheConfig configures the Redis hot cache for memory retrieval.
 type RedisCacheConfig struct {
@@ -119,6 +135,52 @@ func (c *RedisCache) userIndexKey(userID string) string {
 	return c.prefix + "u:" + userID
 }
 
+// generationKey and holdKey fence retrievals that raced an invalidation; their
+// "g:" and "h:" namespaces are disjoint from value and index keys.
+func (c *RedisCache) generationKey(userID string) string {
+	return c.prefix + "g:" + userID
+}
+
+func (c *RedisCache) holdKey(userID string) string {
+	return c.prefix + "h:" + userID
+}
+
+// generation returns the user's invalidation generation. ok is false when the
+// cache cannot be used safely for this user.
+func (c *RedisCache) generation(ctx context.Context, userID string) (string, bool) {
+	if c == nil || c.client == nil || userID == "" {
+		return "", false
+	}
+	generation, err := c.client.Get(ctx, c.generationKey(userID)).Result()
+	if errors.Is(err, redis.Nil) {
+		return "0", true
+	}
+	if err != nil {
+		logging.Debugf("Memory Redis cache generation read error: %v", err)
+		return "", false
+	}
+	return generation, true
+}
+
+// setIfCurrent caches results read after the caller observed generation.
+func (c *RedisCache) setIfCurrent(ctx context.Context, opts RetrieveOptions, generation string, results []*RetrieveResult) {
+	if c == nil || c.client == nil || opts.UserID == "" {
+		return
+	}
+	val, err := json.Marshal(results)
+	if err != nil {
+		logging.Warnf("Memory Redis cache set marshal error: %v", err)
+		return
+	}
+	keys := []string{
+		c.generationKey(opts.UserID), c.holdKey(opts.UserID),
+		cacheKey(c.prefix, opts.UserID, opts), c.userIndexKey(opts.UserID),
+	}
+	if err := setIfCurrentScript.Run(ctx, c.client, keys, generation, val, c.ttl.Milliseconds()).Err(); err != nil {
+		logging.Debugf("Memory Redis cache set error: %v", err)
+	}
+}
+
 // Get retrieves cached results for the given options. Returns (nil, nil) on miss or error (no fatal).
 func (c *RedisCache) Get(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, bool) {
 	if c == nil || c.client == nil {
@@ -140,7 +202,7 @@ func (c *RedisCache) Get(ctx context.Context, opts RetrieveOptions) ([]*Retrieve
 	return results, true
 }
 
-// Set stores retrieval results in the cache.
+// Set stores retrieval results unconditionally. Retrieval paths use setIfCurrent.
 func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*RetrieveResult) {
 	if c == nil || c.client == nil {
 		return
@@ -176,6 +238,15 @@ func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*R
 func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error {
 	if c == nil || c.client == nil || userID == "" {
 		return nil
+	}
+	// Fence in-flight retrievals before deleting, so none can re-cache old results.
+	pipe := c.client.TxPipeline()
+	pipe.Incr(ctx, c.generationKey(userID))
+	pipe.PExpire(ctx, c.generationKey(userID), 2*c.ttl+cacheWriteHold)
+	pipe.Set(ctx, c.holdKey(userID), "1", cacheWriteHold)
+	if _, err := pipe.Exec(ctx); err != nil {
+		logging.Warnf("Memory Redis cache generation bump failed for user %s, entries remain cached until TTL: %v", userID, err)
+		return err
 	}
 	idxKey := c.userIndexKey(userID)
 	keys, err := c.client.SMembers(ctx, idxKey).Result()

@@ -64,10 +64,12 @@ func (c *CachingStore) invalidate(ctx context.Context, userID string) {
 	RecordMemoryStoreOperation(c.label(), "cache_invalidate", "success", time.Since(start).Seconds())
 }
 
-// Retrieve implements Store. It checks the cache first; on miss, calls the underlying store and caches the result.
+// Retrieve implements Store. It checks the cache first; on miss, calls the
+// underlying store and caches the result unless the user was invalidated meanwhile.
 func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
 	label := c.label()
-	if c.cache != nil {
+	generation, cacheable := c.cache.generation(ctx, opts.UserID)
+	if cacheable {
 		start := time.Now()
 		results, ok := c.cache.Get(ctx, opts)
 		elapsed := time.Since(start).Seconds()
@@ -75,14 +77,16 @@ func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*R
 			RecordMemoryCacheHit(label, elapsed)
 			return results, nil
 		}
+	}
+	if c.cache != nil {
 		RecordMemoryCacheMiss(label)
 	}
 	results, err := c.store.Retrieve(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	if c.cache != nil {
-		c.cache.Set(ctx, opts, results)
+	if cacheable {
+		c.cache.setIfCurrent(ctx, opts, generation, results)
 	}
 	return results, nil
 }
