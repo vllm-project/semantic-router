@@ -3,14 +3,14 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "04f1dd1d06d1e310b86bd65cf404509cb27afeac"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
 
 # 故障排查与常见问题
 
-先看运行时对自身的报告。对于你自己启动的运行时：
+先看运行时对自身的报告。对于在 8100 端口独立运行的 `vllm-srun` worker：
 
 ```bash
 curl -s localhost:8100/health
@@ -25,6 +25,8 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 `vsr_model_runtime_ready{deployment="..."} 1` 表示该 deployment 可以作答。
 路由器日志会列出每个托管运行时进程以及它停止的原因。
+
+使用 `vllm-sr serve ARTIFACT --engine` 时，应访问前端 listener 的 `/v1/systemone/models`。公网 `/v1/models` 列出 Chat 模型，不是私有 worker 清单；配置了 listener API key 时还需要携带相应凭据。
 
 ## 启动会等待模型 {#startup-waits-for-the-models}
 
@@ -41,6 +43,8 @@ deployment 及其状态：
 ```bash
 curl -s localhost:8080/startup-status
 ```
+
+离线的附加运行时不会阻塞自定义 `decision` 问题或显式 `decision.v1` 任务绑定的准备；当前能力信息就绪且兼容之前，这些任务不可用。隐式绑定和原生任务头仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 
 首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
 并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。

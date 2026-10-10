@@ -37,8 +37,10 @@ internal architecture does not change the routing abstraction.
 | **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
 | **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
 
-Router system models support the decision process; they are not themselves the
-Mixture of Models product exposed to clients.
+Router system models support the decision process. A decision deployment can
+also be published directly through System One. Routing System One across
+several decision models uses an explicit [native recipe](component-architecture#route-system-one-across-decision-models),
+separate from the current Chat Mixture of Models.
 
 ## Execution patterns
 

@@ -15,7 +15,6 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
-    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -23,6 +22,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
+        'overview/component-architecture',
         'overview/use-cases',
         'overview/signal-driven-decisions',
         'overview/mom-model-family',
@@ -173,6 +173,13 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
                 'tutorials/algorithm/looper/workflows',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'System One',
+              items: [
+                'tutorials/algorithm/native/cascade',
               ],
             },
           ],
@@ -572,6 +579,7 @@ const sidebars: SidebarsConfig = {
         'community/code-style',
       ],
     },
+    'faq',
   ],
 }
 

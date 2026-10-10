@@ -184,6 +184,20 @@
   word-break: normal;
 }
 
+.channelNote {
+  max-width: 58rem;
+  margin: 0.85rem auto 0;
+  color: var(--site-muted);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.channelNote strong {
+  color: var(--site-accent-strong);
+  font-weight: 600;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

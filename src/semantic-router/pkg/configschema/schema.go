@@ -131,6 +131,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 
 	addRecipeRoutingDefinition(schema)
 	setCoreEnums(schema)
+	addNativeAlgorithmConditions(schema)
 	deployments := definitionProperty(schema, "CanonicalModelCatalog", "deployments")
 	if deployments == nil {
 		return nil, fmt.Errorf("canonical model deployment schema is missing")
@@ -538,6 +539,9 @@ func buildExtension(root *jsonschema.Schema, pluginRefs map[string]string) (sche
 		"type",
 		"minimum_candidates",
 		"on_error",
+		"quality",
+		"stages",
+		"budget",
 	); err != nil {
 		return schemaExtension{}, err
 	}

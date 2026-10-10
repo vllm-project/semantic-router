@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	DecisionAlgorithmCascade      = "cascade"
 	DecisionAlgorithmAutoMix      = "automix"
 	DecisionAlgorithmConfidence   = "confidence"
 	DecisionAlgorithmFusion       = "fusion"
@@ -108,6 +109,7 @@ type DecisionPluginCatalogEntry struct {
 type AlgorithmExecution string
 
 const (
+	AlgorithmExecutionNative   AlgorithmExecution = "native"
 	AlgorithmExecutionLooper   AlgorithmExecution = "looper"
 	AlgorithmExecutionSelector AlgorithmExecution = "selector"
 )
@@ -125,7 +127,7 @@ type AlgorithmCatalogEntry struct {
 	DisplayName  string                `json:"display_name"` // concise user-facing name
 	Description  string                `json:"description"`  // request-time behavior
 	Tier         string                `json:"tier"`         // "supported" or "experimental"
-	Execution    AlgorithmExecution    `json:"execution"`    // "selector" or "looper"
+	Execution    AlgorithmExecution    `json:"execution"`    // "selector", "looper", or "native"
 	ConfigField  string                `json:"config_field,omitempty"`
 	PayloadShape AlgorithmPayloadShape `json:"payload_shape,omitempty"` // empty/flat or nested in public DSL editors
 }
@@ -149,6 +151,7 @@ type DecisionAlgorithmType struct {
 }
 
 var builtinDecisionAlgorithms = []DecisionAlgorithmType{
+	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmCascade, DisplayName: "Native Cascade", Description: "Escalate complete typed responses through declared stages.", Tier: "experimental", Execution: AlgorithmExecutionNative}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmAutoMix, DisplayName: "AutoMix", Description: "Optimize a cost-quality escalation policy.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "automix"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.AutoMix != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmConfidence, DisplayName: "Confidence", Description: "Escalate across candidate models until confidence is sufficient.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "confidence"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Confidence != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmFusion, DisplayName: "Fusion", Description: "Run a parallel panel and synthesize a judged final response.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "fusion"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Fusion != nil }},
@@ -262,14 +265,6 @@ func DecisionPluginCatalog() []DecisionPluginCatalogEntry {
 		result[index] = entry.Spec.Catalog
 	}
 	return result
-}
-
-func newDecisionPluginPayload(pluginType string) interface{} {
-	spec, ok := DecisionPlugins.Lookup(pluginType)
-	if !ok {
-		return nil
-	}
-	return spec.NewPayload()
 }
 
 func SupportedDecisionAlgorithmTypes() []string {

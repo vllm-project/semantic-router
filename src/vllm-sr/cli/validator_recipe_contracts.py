@@ -5,8 +5,10 @@ from cli.config_contract import (
     iter_condition_leaves,
     iter_routing_profiles,
 )
+from cli.model_runtime_defaults import effective_model_deployments
 from cli.models import Entrypoint, UserConfig
 from cli.validation_error import ValidationError
+from cli.validator_decision_model import public_model_name
 
 
 def validate_domain_references(config: UserConfig) -> list[ValidationError]:
@@ -142,16 +144,30 @@ def _normalized_string_list(
 def effective_entrypoints(config: UserConfig):
     """Source mappings plus the default Chat entrypoint when not overridden."""
     entries = list(config.entrypoints)
-    if not any(entry.recipe == "default" for entry in entries):
+    if not any(
+        entry.recipe == "default" and entry.api != "systemone" for entry in entries
+    ):
         entries.insert(0, Entrypoint(model_names=["vllm-sr/auto"], recipe="default"))
     return entries
 
 
 def _reserved_routing_models(
     config: UserConfig,
+    api: str = "chat",
 ) -> tuple[set[str], list[ValidationError]]:
-    names = {model.name for model in config.providers.models}
-    for model in config.providers.models:
+    models = [
+        model
+        for model in config.providers.models
+        if (model.api_format == "systemone") == (api == "systemone")
+    ]
+    names = {model.name for model in models}
+    if api == "systemone":
+        names.update(
+            public_model_name(value)
+            for value in effective_model_deployments(config).values()
+        )
+        return {name for name in names if name}, []
+    for model in models:
         if model.provider_model_id:
             names.add(model.provider_model_id)
         names.update((model.external_model_ids or {}).values())
@@ -163,10 +179,10 @@ def _reserved_routing_models(
 def _validate_entrypoints(
     config: UserConfig,
     recipe_names: set[str],
-    reserved_models: set[str],
+    reserved_models: dict[str, set[str]],
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
-    claimed_models: set[str] = set()
+    claimed_models: set[tuple[str, str]] = set()
     for index, entrypoint in enumerate(effective_entrypoints(config)):
         if entrypoint.recipe not in recipe_names:
             errors.append(
@@ -176,16 +192,18 @@ def _validate_entrypoints(
                     hint=("Change this to the name of a recipe defined under recipes."),
                 )
             )
+        api = entrypoint.api or "chat"
         for model_name in entrypoint.model_names:
-            if model_name in claimed_models:
+            identity = (api, model_name)
+            if identity in claimed_models:
                 errors.append(
                     ValidationError(
                         f"Entrypoint model '{model_name}' is mapped more than once",
                         field=f"entrypoints.{index}.model_names",
                     )
                 )
-            claimed_models.add(model_name)
-            if model_name in reserved_models:
+            claimed_models.add(identity)
+            if model_name in reserved_models[api]:
                 errors.append(
                     ValidationError(
                         f"Entrypoint model '{model_name}' conflicts with a "
@@ -203,8 +221,10 @@ def _validate_entrypoints(
 def validate_recipe_contracts(config: UserConfig) -> list[ValidationError]:
     recipe_names, errors = _recipe_name_contract(config)
     errors.extend(_validate_entrypoint_contract_keys(config.global_ or {}))
-    reserved_models, alias_errors = _reserved_routing_models(config)
-    errors.extend(alias_errors)
+    reserved_models = {}
+    for api in ("chat", "systemone"):
+        reserved_models[api], alias_errors = _reserved_routing_models(config, api)
+        errors.extend(alias_errors)
     errors.extend(_validate_entrypoints(config, recipe_names, reserved_models))
     return errors
 

@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "bce357c513f391824e8320267d03977794c20f76"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/global/overview.md"
-  outdated: true
+  outdated: false
 ---
 
 # 全局配置
@@ -47,10 +47,10 @@ global:
 | `global.services` | API、Response API、可观测性、authz、速率限制、管理 API、启动状态、回放 | [API 与可观测性](./api-and-observability) |
 | `global.stores` | 响应缓存、memory、向量存储 | [存储与工具](./stores-and-tools) |
 | `global.integrations` | 工具目录和 Looper 运行时/状态 | [存储与工具](./stores-and-tools) |
-| `global.model_catalog` | 嵌入、系统模型、外部辅助、知识库、能力模块 | [Router 运行时](model-runtime/overview.md) |
+| `global.model_catalog` | 嵌入、系统模型、外部辅助、知识库、能力模块 | [Router 运行时](../../model-runtime/overview.md) |
 
 入口和命名配方是顶层对象，而不是全局设置；见[虚拟模型](./entrypoints-and-recipes)。
-远程文本嵌入见[运行时嵌入](model-runtime/guides/embeddings.md)。
+远程文本嵌入见[运行时嵌入](../../model-runtime/guides/embeddings)。
 
 ## 运维边界 {#operational-boundaries}
 

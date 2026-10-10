@@ -100,12 +100,77 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AlgorithmBudget": {
+      "properties": {
+        "deadline": {
+          "type": "string"
+        },
+        "max_calls": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deadline",
+        "max_calls"
+      ]
+    },
     "AlgorithmConfig": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cascade"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minimum_candidates"
+              ]
+            },
+            "required": [
+              "budget",
+              "quality",
+              "stages"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "budget"
+                  ]
+                },
+                {
+                  "required": [
+                    "quality"
+                  ]
+                },
+                {
+                  "required": [
+                    "stages"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "type": {
           "type": "string",
           "enum": [
             "automix",
+            "cascade",
             "confidence",
             "decision",
             "fusion",
@@ -123,6 +188,18 @@
             "svm",
             "workflows"
           ]
+        },
+        "quality": {
+          "$ref": "#/$defs/NativeQualityConfig"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/CascadeStage"
+          },
+          "type": "array"
+        },
+        "budget": {
+          "$ref": "#/$defs/AlgorithmBudget"
         },
         "minimum_candidates": {
           "type": "integer"
@@ -376,6 +453,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CalibrationArtifact": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "source",
+        "sha256"
+      ]
+    },
     "CandidateIterationConfig": {
       "properties": {
         "variable": {
@@ -540,6 +638,13 @@
     },
     "CanonicalEntrypoint": {
       "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "chat",
+            "systemone"
+          ]
+        },
         "model_names": {
           "items": {
             "type": "string"
@@ -555,6 +660,12 @@
     },
     "CanonicalEvaluation": {
       "properties": {
+        "calibrations": {
+          "items": {
+            "$ref": "#/$defs/CalibrationArtifact"
+          },
+          "type": "array"
+        },
         "benchmarks": {
           "items": {
             "$ref": "#/$defs/BenchmarkDefinition"
@@ -967,6 +1078,9 @@
           "type": "string"
         },
         "catalog": {
+          "type": "string"
+        },
+        "deployment": {
           "type": "string"
         },
         "reasoning": {
@@ -1447,6 +1561,45 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "CascadeStage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "native",
+            "judge"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "accept": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "generation": {
+          "$ref": "#/$defs/NativeGenerationConfig"
+        },
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "model"
+      ]
     },
     "Category": {
       "properties": {
@@ -4725,6 +4878,93 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "NativeAcceptance": {
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/NativeAcceptanceRule"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "rules"
+      ]
+    },
+    "NativeAcceptanceRule": {
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "question_type": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string",
+          "enum": [
+            "confidence",
+            "top_probability",
+            "probability_margin"
+          ]
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "field",
+        "predicate"
+      ]
+    },
+    "NativeGenerationConfig": {
+      "properties": {
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "max_output_tokens"
+      ]
+    },
+    "NativeQualityConfig": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "uncalibrated",
+            "calibrated"
+          ]
+        },
+        "acceptance": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "loss": {
+          "type": "string"
+        },
+        "max_risk": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
     "Normalization": {
       "properties": {
         "type": {
@@ -7896,6 +8136,13 @@
       }
     ],
     "algorithms": [
+      {
+        "type": "cascade",
+        "display_name": "Native Cascade",
+        "description": "Escalate complete typed responses through declared stages.",
+        "tier": "experimental",
+        "execution": "native"
+      },
       {
         "type": "automix",
         "display_name": "AutoMix",

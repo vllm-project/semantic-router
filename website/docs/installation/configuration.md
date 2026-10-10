@@ -29,11 +29,11 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional allow-list of request models (`models`; empty accepts all), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
+| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
-| `entrypoints` | Public virtual model aliases mapped to named recipes. |
+| `entrypoints` | Public virtual model aliases mapped to the default or a named recipe. |
 | `recipes` | Additional isolated routing profiles that share providers and global infrastructure. |
 | `global` | Router services, stores, integrations, observability, learning, and router-owned model assets. |
 
@@ -180,6 +180,12 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `ratings` — looper algorithm | `ratings` calls every candidate model and returns one OpenAI-compatible choice per successful model. `max_concurrent` limits parallel work; it does not limit the total number of candidates executed. | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [Guide](../tutorials/algorithm/looper/ratings) |
 | `remom` — looper algorithm | `remom` runs several candidate models across bounded rounds and synthesizes their responses into one answer. | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [Guide](../tutorials/algorithm/looper/remom) |
 | `workflows` — looper algorithm | `workflows` runs a bounded, multi-step Router Flow behind one OpenAI-compatible model name. | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [Guide](../tutorials/algorithm/looper/workflows) |
+
+### Native System One algorithms
+
+| Family and type | Use it to | Reusable fragment | Guide |
+| --- | --- | --- | --- |
+| `cascade` — native algorithm | `cascade` tries declared decision models in order and returns a complete System One response when its acceptance rules pass. | [`config/fragments/algorithm/native/cascade.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/cascade.yaml) | [Guide](../tutorials/algorithm/native/cascade) |
 
 ### Plugins and bundles
 
@@ -332,6 +338,11 @@ in Secrets rather than ConfigMaps or Helm values. See
 [Security Hardening](security-hardening).
 
 ## Entrypoints and recipes
+
+Without an explicit entrypoint for `recipe: default`, the top-level routing
+recipe is published as `vllm-sr/auto`. To replace that name, declare its
+`model_names` in `entrypoints` with `recipe: default`. Named recipes require
+their own entrypoints. `MoM` has no implicit special meaning.
 
 An entrypoint maps one or more public model aliases to a recipe. A recipe owns
 its signal, projection, decision, algorithm, plugin, cache, learning,

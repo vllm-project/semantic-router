@@ -472,6 +472,7 @@ func canonicalProviderModelFromRuntime(
 		return *authored
 	}
 	providerModel := CanonicalProviderModel{
+		Deployment:       params.Deployment,
 		Name:             name,
 		Catalog:          params.Catalog,
 		APIFormat:        params.APIFormat,
