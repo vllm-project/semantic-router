@@ -318,10 +318,13 @@ def hub_new(repo: str, package: Path, message: str) -> dict[str, Any]:
     api = HfApi()
     try:
         info = api.model_info(repo)
-        raise SystemExit(f"{repo} exists already (resolves to {info.id})")
+        # An interrupted first upload leaves the fresh private repo with only the Hub's initial commit.
+        commits = api.list_repo_commits(repo)
+        empty = set(api.list_repo_files(repo)) <= {".gitattributes"}
+        if not (info.id == repo and info.private and len(commits) == 1 and empty):
+            raise SystemExit(f"{repo} exists already (resolves to {info.id})")
     except RepositoryNotFoundError:
-        pass
-    api.create_repo(repo, private=True, exist_ok=False)
+        api.create_repo(repo, private=True, exist_ok=False)
     info = api.model_info(repo)
     if info.id != repo or info.private is not True:
         raise SystemExit(
