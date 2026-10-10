@@ -321,7 +321,7 @@ func bindCoreFlags() parsedFlags {
 			"allowed-origins", env("DASHBOARD_ALLOWED_ORIGINS", ""),
 			"comma-separated origins permitted to make state-changing requests, e.g. http://localhost:3001 for the Vite dev proxy (empty = own origin only)",
 		),
-		platform: flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)"),
+		platform: flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'rocm' for AMD GPU deployments)"),
 	}
 }
 

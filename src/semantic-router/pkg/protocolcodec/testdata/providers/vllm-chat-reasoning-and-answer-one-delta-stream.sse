@@ -1,0 +1,16 @@
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}],"prompt_token_ids":null,"prompt_text":null}
+
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"reasoning":" how are you\" five"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"reasoning":" words. final"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"content":"\n\nHello","reasoning":".\n"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{"content":" there, how are you"},"logprobs":null,"finish_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":null}]}
+
+data: {"id":"chatcmpl-97284ab7-da48-4f15-b3e5-e6466f8a179e","object":"chat.completion.chunk","created":1791290813,"model":"Qwen/Qwen3.8-27B-FP8","choices":[],"usage":{"prompt_tokens":58,"total_tokens":188,"completion_tokens":130,"completion_tokens_details":{"reasoning_tokens":121}},"system_fingerprint":"vllm-0.30.0-9a28a237"}
+
+data: [DONE]
+

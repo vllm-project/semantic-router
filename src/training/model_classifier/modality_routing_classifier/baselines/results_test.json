@@ -1,0 +1,87 @@
+{
+  "split": "test",
+  "n_eval": 759,
+  "train_priors": {
+    "AR": 0.395703787450537,
+    "DIFFUSION": 0.395703787450537,
+    "BOTH": 0.20859242509892595
+  },
+  "controls": {
+    "lexical": {
+      "accuracy": 0.9025032938076416,
+      "correct": 685,
+      "total": 759,
+      "per_class": {
+        "AR": {
+          "recall": 0.93,
+          "precision": 0.8403614457831325,
+          "support": 300,
+          "predicted": 332
+        },
+        "DIFFUSION": {
+          "recall": 0.9133333333333333,
+          "precision": 0.9351535836177475,
+          "support": 300,
+          "predicted": 293
+        },
+        "BOTH": {
+          "recall": 0.8301886792452831,
+          "precision": 0.9850746268656716,
+          "support": 159,
+          "predicted": 134
+        }
+      },
+      "confusion": {
+        "AR->AR": 279,
+        "AR->BOTH": 2,
+        "AR->DIFFUSION": 19,
+        "BOTH->AR": 27,
+        "BOTH->BOTH": 132,
+        "DIFFUSION->AR": 26,
+        "DIFFUSION->DIFFUSION": 274
+      }
+    },
+    "majority": {
+      "accuracy": 0.3952569169960474,
+      "correct": 300,
+      "total": 759,
+      "per_class": {
+        "AR": {
+          "recall": 1.0,
+          "precision": 0.3952569169960474,
+          "support": 300,
+          "predicted": 759
+        },
+        "DIFFUSION": {
+          "recall": 0.0,
+          "precision": null,
+          "support": 300,
+          "predicted": 0
+        },
+        "BOTH": {
+          "recall": 0.0,
+          "precision": null,
+          "support": 159,
+          "predicted": 0
+        }
+      },
+      "confusion": {
+        "AR->AR": 300,
+        "BOTH->AR": 159,
+        "DIFFUSION->AR": 300
+      }
+    },
+    "prior_random": {
+      "accuracy_mean": 0.3571976284584983,
+      "accuracy_std": 0.01725171708638249,
+      "accuracy_analytic": 0.3565065455349821,
+      "trials": 1000,
+      "seed": 42,
+      "per_class_recall": {
+        "AR": 0.395703787450537,
+        "DIFFUSION": 0.395703787450537,
+        "BOTH": 0.20859242509892595
+      }
+    }
+  }
+}

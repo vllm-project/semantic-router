@@ -1825,6 +1825,7 @@ func TestFallbackRecipeCircuitBreakerConfigApplied(t *testing.T) {
 		},
 	}
 	cfg.Fallback = &globalPolicy
+	cfg.RoutingDefaults.Fallback = &globalPolicy
 
 	components, err := buildRouterComponents(cfg)
 	if err != nil {
@@ -2912,16 +2913,19 @@ func TestFallbackPreservesInflightModelOwnershipDuringSettlement(t *testing.T) {
 	primaryModel := "model-primary"
 	candidateModel := "model-fallback-1"
 
-	// Allocate token 1 on primary model (the active request that fails on primary)
+	// Allocate a process-wide token for the active request that fails on primary.
 	primaryToken := inflight.Begin(primaryModel)
-	if primaryToken != 1 {
-		t.Fatalf("expected primary token 1, got %d", primaryToken)
+	if primaryToken == 0 {
+		t.Fatal("expected non-zero primary token")
 	}
 
-	// Allocate token 1 on candidate model (an independent concurrent in-flight request)
+	// Allocate a distinct token for an independent request already in flight on candidate.
 	candidateToken := inflight.Begin(candidateModel)
-	if candidateToken != 1 {
-		t.Fatalf("expected candidate token 1, got %d", candidateToken)
+	if candidateToken == 0 {
+		t.Fatal("expected non-zero candidate token")
+	}
+	if candidateToken == primaryToken {
+		t.Fatalf("expected distinct tokens for primary and candidate models, got %d", primaryToken)
 	}
 
 	// Verify initial state: both models have in-flight count 1
@@ -2960,9 +2964,9 @@ func TestFallbackPreservesInflightModelOwnershipDuringSettlement(t *testing.T) {
 		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", resp)
 	}
 
-	// Verify token model ownership after fallback settlement:
-	// - Primary model token has been ended: count must be 0
-	// - Candidate model independent concurrent token is preserved: count must be 1 (0/1 distribution)
+	// Verify model ownership after fallback settlement:
+	// - The primary request token has been ended: count must be 0.
+	// - The independent candidate request remains in flight: count must be 1.
 	if count := inflight.Get(primaryModel); count != 0 {
 		t.Errorf("expected primary model %s inflight count to be 0, got %d", primaryModel, count)
 	}
@@ -3586,7 +3590,7 @@ func TestFallbackRecomputesAutomaticOutputAllowanceForCandidate(t *testing.T) {
 		{Model: "narrow"},
 	}
 
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	refs, err := r.decisionEligibleModelRefs(d, ctx)
 	require.NoError(t, err)
 	require.Len(t, refs, 2)

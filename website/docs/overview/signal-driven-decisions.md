@@ -99,6 +99,10 @@ contain local vLLM or Ollama services, Kubernetes-hosted models, or remote
 OpenAI-compatible providers. Semantic Router chooses the model path; the model
 server or backend scheduler executes it and owns replica placement.
 
+The decision models used by signals and selection algorithms have a separate
+[model-runtime replica pool](component-architecture#scale-a-deployment-through-replicas).
+Its worker dispatch does not choose the Chat backend for the request.
+
 Capability and runtime metadata are useful only within policy boundaries. A
 fast backend is not eligible if it cannot handle the request's modality,
 context, tools, or locality requirement.
@@ -131,7 +135,7 @@ and the next task step.
 For multi-turn routing, configure session identity and protection deliberately.
 An active tool loop or nonportable provider state can restrict model switches;
 a candidate excluded by policy cannot be restored merely to preserve continuity.
-See the [agent harness guide](/docs/installation/agent-harness) for these
+See the [agent harness guide](../installation/agent-harness) for these
 integration boundaries.
 
 ## Workload, Router, and pool

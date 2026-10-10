@@ -90,6 +90,22 @@ func (c *Classifier) signalQuestionDeployments(signalType string, usedSignals ma
 		return deployments
 	case config.SignalTypeDomain:
 		consumers = append(consumers, c.categoryInference)
+	case config.SignalTypePreference:
+		if c.preferenceClassifier != nil && c.preferenceClassifier.judgment != nil {
+			consumers = append(consumers, c.preferenceClassifier.judgment)
+		}
+	case config.SignalTypeComplexity:
+		if c.complexityClassifier != nil {
+			for _, judgment := range c.complexityClassifier.judgments {
+				consumers = append(consumers, judgment)
+			}
+		}
+	case config.SignalTypeClassifier:
+		for name, classifier := range c.genericClassifiers {
+			if signalRuleUsed(usedSignals, signalType, name) {
+				consumers = append(consumers, classifier)
+			}
+		}
 	case config.SignalTypeJailbreak:
 		consumers = append(consumers, c.jailbreakInference)
 	case config.SignalTypeFactCheck:
@@ -102,12 +118,17 @@ func (c *Classifier) signalQuestionDeployments(signalType string, usedSignals ma
 		}
 	case config.SignalTypeModality:
 		consumers = append(consumers, c.modalityInference)
+	case config.SignalTypeReask:
+		if c.reaskClassifier != nil && c.reaskClassifier.judgment != nil {
+			return []string{c.reaskClassifier.judgment.deployment}
+		}
 	case config.SignalTypePII:
 		consumers = append(consumers, c.piiInference)
 	case config.SignalTypeSafety:
 		for _, detector := range c.safetyClassifiers {
 			if detector != nil {
 				consumers = append(consumers, detector.binary)
+				consumers = append(consumers, detector.hazard)
 			}
 		}
 	}

@@ -16,6 +16,11 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AnswerInputCoverage.
+const (
+	AnswerInputCoverageComplete AnswerInputCoverage = "complete"
+)
+
 // Defines values for ClassifyOptionsOverflow.
 const (
 	ClassifyOptionsOverflowReject   ClassifyOptionsOverflow = "reject"
@@ -164,6 +169,11 @@ const (
 	Truncate RerankOptionsOverflow = "truncate"
 )
 
+// Defines values for SetAnswerInputCoverage.
+const (
+	SetAnswerInputCoverageComplete SetAnswerInputCoverage = "complete"
+)
+
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
 // level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
 // knows why, message.
@@ -177,8 +187,11 @@ type Answer struct {
 	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
 	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
 	// scanned.
-	Error  *ItemError         `json:"error,omitempty"`
-	Legend *map[string]string `json:"legend,omitempty"`
+	Error *ItemError `json:"error,omitempty"`
+
+	// InputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+	InputCoverage *AnswerInputCoverage `json:"input_coverage,omitempty"`
+	Legend        *map[string]string   `json:"legend,omitempty"`
 
 	// Message Why the question failed, naming the field, such as "set questions do not take ['colour']".
 	Message       *string             `json:"message,omitempty"`
@@ -187,6 +200,9 @@ type Answer struct {
 	Score         *float64            `json:"score,omitempty"`
 	Type          *string             `json:"type"`
 }
+
+// AnswerInputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+type AnswerInputCoverage string
 
 // AudioPart defines model for AudioPart.
 type AudioPart struct {
@@ -819,6 +835,13 @@ type Question struct {
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
 	Preset *string `json:"preset,omitempty"`
 
+	// RequireFullInput Require every supplied state part to be read completely, including context outside `over`.
+	// Clipping fails this question with max_length_exceeded unless complete window coverage is
+	// guaranteed. Cannot be combined with overflow truncate. Success includes input_coverage complete;
+	// absence of that proof must not be treated as full coverage by clients. Omitted or false retains
+	// the model's ordinary input-fitting behavior.
+	RequireFullInput *bool `json:"require_full_input,omitempty"`
+
 	// Threshold Set or Span decision threshold; the applied threshold is reported in `thresholds`.
 	Threshold *float64 `json:"threshold,omitempty"`
 
@@ -948,7 +971,10 @@ type ResponseMeta struct {
 	Engine      *string  `json:"engine,omitempty"`
 
 	// Head The head that produced a classify result.
-	Head        *string  `json:"head,omitempty"`
+	Head *string `json:"head,omitempty"`
+
+	// ModelId The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
+	ModelId     *string  `json:"model_id,omitempty"`
 	ModelSha256 *string  `json:"model_sha256,omitempty"`
 	Numerics    *string  `json:"numerics,omitempty"`
 	Profile     *string  `json:"profile,omitempty"`
@@ -963,9 +989,14 @@ type ResponseMeta struct {
 
 // SetAnswer defines model for SetAnswer.
 type SetAnswer struct {
-	Probabilities map[string]float64 `json:"probabilities"`
-	Selected      []string           `json:"selected"`
+	// InputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+	InputCoverage *SetAnswerInputCoverage `json:"input_coverage,omitempty"`
+	Probabilities map[string]float64      `json:"probabilities"`
+	Selected      []string                `json:"selected"`
 }
+
+// SetAnswerInputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
+type SetAnswerInputCoverage string
 
 // Span A labelled span; offsets are Unicode code points into the text the question read, end exclusive.
 type Span struct {

@@ -655,8 +655,11 @@ export function serializeBoolExpr(expr: BoolExprNode | null): string {
       return `${serializeBoolExpr(expr.left)} AND ${serializeBoolExpr(expr.right)}`
     case 'or':
       return `(${serializeBoolExpr(expr.left)} OR ${serializeBoolExpr(expr.right)})`
-    case 'not':
-      return `NOT ${serializeBoolExpr(expr.expr)}`
+    case 'not': {
+      const operand = serializeBoolExpr(expr.expr)
+      // NOT binds tighter than AND, so an AND operand keeps its parentheses.
+      return expr.expr.type === 'and' ? `NOT (${operand})` : `NOT ${operand}`
+    }
     default:
       return ''
   }

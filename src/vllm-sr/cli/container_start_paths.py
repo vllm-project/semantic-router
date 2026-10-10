@@ -22,6 +22,7 @@ from cli.commands.runtime_paths import (
     materialize_runtime_config,
 )
 from cli.container_log_spool import prepare_runtime_log_spool
+from cli.instance_paths import prepare_instance_control_directory
 from cli.recipe_directory import resolve_active_recipe_directory
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
@@ -105,6 +106,9 @@ def _prepare_runtime_paths(
     )
 
     log_spool = prepare_runtime_log_spool(vllm_sr_dir, stack_layout.stack_name)
+    instance_directory = prepare_instance_control_directory(
+        config_dir, stack_layout.stack_name
+    )
 
     effective_config_path = runtime_config_path
     envoy_config_path = os.path.join(vllm_sr_dir, "envoy.yaml")
@@ -143,6 +147,7 @@ def _prepare_runtime_paths(
                 f"/app/.vllm-sr/recipe-store/{stack_layout.stack_name}"
             ),
             "recipe_store_gid": str(cli_user_share_gid()),
+            "instance_socket_dir": str(instance_directory / "socket"),
             "envoy_config_path": envoy_config_path,
             "runtime_container_config": runtime_container_config,
             "active_recipe_root": str(active_recipe.root) if active_recipe else "",

@@ -2,7 +2,7 @@
 title: 协议兼容性矩阵
 description: 将面向客户端的推理 API 与受支持的后端模型协议匹配，并理解跨协议功能边界。
 translation:
-  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/protocol-compatibility.md"
   outdated: false
 ---
@@ -32,6 +32,8 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 
 公共监听器还提供 `GET /v1/models`。完整的方法和路径清单、Responses 对象操作以及请求示例见 [Router API](../api/router)。
 
+原生 **System One** API 是独立的类型化接口，用于直接调用判断模型，不经过本页的 Chat 协议转换矩阵。Router 和 Engine 模式都可以提供它，但 listener 必须通过 `systemone.models` 显式授予模型访问权限。见[组件架构](../overview/component-architecture#keep-public-and-worker-apis-distinct)。
+
 ## 后端模型协议
 
 在每个 `providers.models[]` 条目上设置 `api_format`。它描述该模型端点实现的线契约，而不是 provider 品牌。
@@ -50,7 +52,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 
 对于每种后端格式，`base_url` 命名完整的上游 API 根。其路径会被保留，并且协议操作后缀恰好追加一次；仅当 URL 没有路径时，才使用协议的默认 `/v1` 基路径。`chat_path` 仅适用于 Chat Completions。
 
-对于 HTTPS 后端，生成的 Envoy cluster 会同时验证服务器证书链及其 DNS 主机名。HTTPS 副本池必须保持一个主机名，因为受支持的 Envoy 运行时在 cluster 内共享其 TLS 上下文；对不同的 HTTPS 主机使用单独的模型别名。IP 字面量 HTTPS 目标会被拒绝，而不是悄悄削弱主机名验证。与 `vllm-sr serve` 一起使用的自定义 Envoy 镜像必须在 `/etc/ssl/certs/ca-certificates.crt` 提供系统 CA 包；当该信任存储不可用时，启动校验会失败，而不是悄悄禁用验证。
+使用 `--gateway extproc` 时，对于 HTTPS 后端，生成的 Envoy cluster 会同时验证服务器证书链及其 DNS 主机名。HTTPS 副本池必须保持一个主机名，因为受支持的 Envoy 运行时在 cluster 内共享其 TLS 上下文；对不同的 HTTPS 主机使用单独的模型别名。IP 字面量 HTTPS 目标会被拒绝，而不是悄悄削弱主机名验证。与 `vllm-sr serve` 一起使用的自定义 Envoy 镜像必须在 `/etc/ssl/certs/ca-certificates.crt` 提供系统 CA 包；当该信任存储不可用时，启动校验会失败，而不是悄悄禁用验证。
 
 ## 客户端到后端矩阵
 
@@ -138,7 +140,7 @@ providers:
           weight: 100
 ```
 
-`api_format` 只选择后端编解码器。它并不暗示 Anthropic、OpenAI 或任何其他运行时 Provider。Router 拥有的监听器要求物理模型声明 `backend_refs[].provider`；仅元数据的 `listeners: []` 配置将传输和凭据留给外部网关。本地 `vllm-sr serve` 工作流管理 Envoy 传输，因此它不接受没有后端的物理模型；对该拓扑使用外部网关部署配置。
+`api_format` 只选择后端编解码器。它并不暗示 Anthropic、OpenAI 或任何其他运行时 Provider。Router 拥有的监听器要求物理模型声明 `backend_refs[].provider`；仅元数据的 `listeners: []` 配置将传输和凭据留给外部网关。本地 `vllm-sr serve` 工作流通过 standalone 前端或生成的 Envoy 配置管理后端传输，因此不接受没有后端的物理模型；该拓扑应使用外部网关部署配置。
 
 先用其后端原生路径和最小请求直接测试后端。然后使用 Agent Harness 或其他 API 客户端所需的协议，通过 Router 发送相同的语义请求。成功的健康检查并不能校验请求 schema、流式、工具或错误翻译。
 

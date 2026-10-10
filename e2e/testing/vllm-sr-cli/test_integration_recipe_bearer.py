@@ -316,9 +316,9 @@ class TestBearerRecipeActivation(MockUpstreamMixin, ServeSessionMixin, CLITestBa
             self.assertEqual(response.status, 200)
 
     def _assert_the_recipe_routes(self):
-        # "auto" lets the Router decide; a named model would skip the decisions.
+        # "vllm-sr/auto" lets the Router decide; a named model would skip the decisions.
         headers = self._send_mock_chat_completion(
-            UPSTREAM, model="auto", request_headers={"x-vsr-debug": "true"}
+            UPSTREAM, model="vllm-sr/auto", request_headers={"x-vsr-debug": "true"}
         )
         self.assertEqual(
             headers.get("x-vsr-selected-decision"), "bearer_route", dict(headers)

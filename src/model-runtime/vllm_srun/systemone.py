@@ -130,6 +130,16 @@ def content(value: Any, where: str, *, nullable: bool = False) -> Any:
     raise _invalid(f"{where} must be text, an object or an array")
 
 
+def require_full_input(question: dict[str, Any]) -> bool:
+    """Validate the opt-in completeness contract without changing ordinary questions."""
+    value = question.get("require_full_input", False)
+    if not isinstance(value, bool):
+        raise _invalid("require_full_input must be a boolean")
+    if value and question.get("overflow") == "truncate":
+        raise _invalid("require_full_input cannot be combined with overflow truncate")
+    return value
+
+
 def read_question(
     question: Any, *, extra_fields: frozenset[str] = frozenset()
 ) -> Question:
@@ -145,7 +155,8 @@ def read_question(
     kind = question.get("type")
     if kind not in QUESTION_TYPES:
         raise _invalid(f"type must be one of {list(QUESTION_TYPES)}")
-    unknown = set(question) - FIELDS[kind] - extra_fields
+    require_full_input(question)
+    unknown = set(question) - FIELDS[kind] - extra_fields - {"require_full_input"}
     if unknown:
         raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
     if "instructions" not in question:

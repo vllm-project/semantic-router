@@ -71,9 +71,33 @@ else
 fi
 echo ""
 
+log_info "Testing Grafana Live origins in Helm and static deployments (requires kubectl)..."
+python3 -m unittest discover -s deploy/helm -p test_grafana_live.py -v
+echo ""
+
 # A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
 # after rollout. The backup history needed for rollback must outlive that pod.
 log_info "Testing default Dashboard backup persistence..."
+helm template decision-release "$CHART_PATH" \
+    --set decisionModel.deployment=judgment \
+    --set config.global.model_catalog.deployments.judgment.provider=model_runtime \
+    --set config.global.model_catalog.deployments.judgment.artifact=vllm-sr/Decision2-Kai-0.5B \
+    > "$TEMP_DIR/decision-template.yaml"
+python3 - "$TEMP_DIR/decision-template.yaml" <<'PY'
+import sys
+import yaml
+
+documents = list(yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")))
+configmap = next(doc for doc in documents if doc and doc.get("kind") == "ConfigMap" and "config.yaml" in doc.get("data", {}))
+catalog = yaml.safe_load(configmap["data"]["config.yaml"])["global"]["model_catalog"]
+assert catalog["system"]["decision_model"] == {"deployment": "judgment"}
+assert catalog["deployments"]["judgment"]["artifact"] == "vllm-sr/Decision2-Kai-0.5B"
+PY
+if helm template old-decision-release "$CHART_PATH" --set-string decisionModel=Vela-2.0-4B \
+    > "$TEMP_DIR/old-decision-output" 2>&1; then
+    log_error "Retired scalar decisionModel was accepted"
+    exit 1
+fi
 helm template dashboard-release "$CHART_PATH" --set dashboard.enabled=true \
     > "$TEMP_DIR/dashboard-default-template.yaml"
 python3 - "$TEMP_DIR/dashboard-default-template.yaml" <<'PY'

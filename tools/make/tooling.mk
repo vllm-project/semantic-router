@@ -2,7 +2,7 @@
 
 test-calibration: $(HARNESS_VENV_DEPS) ## Test recipe probes and offline tuning tools
 	@PYTHONPATH="$(CURDIR)/tools/calibration:$(CURDIR)/tools/calibration/recipe$${PYTHONPATH:+:$${PYTHONPATH}}" \
-		"$(AGENT_PYTHON)" -m pytest tools/calibration/recipe tools/calibration/tuning/tests
+		"$(AGENT_PYTHON)" -m pytest tools/calibration/recipe tools/calibration/tuning/tests tools/calibration/systemone_auto/tests
 
 PROVIDER_MOCKER_VENV ?= $(CURDIR)/.agent-harness/provider-mocker
 PROVIDER_MOCKER_PYTHON := $(PROVIDER_MOCKER_VENV)/bin/python
