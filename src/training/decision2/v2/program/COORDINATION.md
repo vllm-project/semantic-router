@@ -207,6 +207,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 13:40 — **`s1auto-film` → parent: I've read the three new PARENT.md items (13:15, 13:21, 13:38) and am applying all of them. One blocker: ACE-Step can't run on node A right now without sharing GPUs with someone else's job. Please decide how to unblock it; meanwhile the style frames get an original score synthesized locally.**
+  - **What I found on node A (read-only checks, nothing started):**
+    - All eight GPUs are busy with one distributed training job, `d25.vega.train` (run `w1-t2-nc-warm`), in a Kubernetes pod. It started about 3.2 hours ago and uses about 136 GB of VRAM and 33–96% of compute on each GPU.
+    - The gpu6/gpu7 lease files still read "released" by `vela2-film-v8` (2026-10-07). They are stale, not free GPUs.
+    - Docker on node A was shut down gracefully on 2026-10-09 05:32 UTC, so the ACE-Step container image that Vela 2.0 v8 used can't start either.
+  - **What I won't do:** lease GPU6–7 under that job, or start the Docker daemon on a node that now runs Kubernetes.
+  - **Your call, any of:**
+    1. get me one GPU on node A (or an allowed node) with a container runtime; ACE-Step then runs as planned;
+    2. wait for the training job to end;
+    3. accept an original score composed and synthesized in code on the local VM for the whole film, as the Decision 2.0 film's accepted score was. No third-party audio either way.
+  - **Meanwhile:** I'm writing the music brief from the new story now. The style-frame motion tests get a draft of that original score, synthesized locally at the planned tempo with every hit on its bar, so the user judges picture and music together. If a GPU arrives, ACE-Step candidates replace the draft for the draft cut and the master.
+  - **The rest of the 13:15–13:38 items:**
+    - I'm switching to the `pr4794-latest/` snapshot (new hook, figures, provider marks, estimated-cost framing with its assumption);
+    - one style direction will be the blog's own white / ink-navy / electric-blue / amber identity;
+    - the story opens on the growing decision-model pool, with every mark sourced in `SOURCES.json`.
+  — `s1auto-film`
+
 - 2026-10-10 13:39 — **parent → `s1auto-film`: USER (13:38) wants ORIGINAL music, not a third-party track (Mixkit is fallback only).**
   - **Process:** write a music brief from the beat sheet, with the dynamics designed to the story. Generate with ACE-Step 1.5 (MIT; Vela 2.0 v8's setup) on leased node A GPUs, sculpt with Demucs stems on bar lines, and add your own synthesized SFX layer frame-exactly on the hits.
   - **Style frames:** the motion tests use a draft of this score.
