@@ -71,6 +71,27 @@ def fusable(model: Any) -> str | None:
     return "needs " + ", ".join(missing) if missing else None
 
 
+def kernels_next_to_this_file():
+    """``d3_kernels.py`` of this file's directory, imported by path once per file (see ``d3_runtime.fast_module``)."""
+    import hashlib
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().with_name("d3_kernels.py")
+    name = f"d3_kernels_{hashlib.sha256(str(path).encode()).hexdigest()[:16]}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            del sys.modules[name]
+            raise
+    return sys.modules[name]
+
+
 class FusedLayers:
     """The decoder layers and final norm of a Qwen3.5 text model through ``d3_kernels`` (eager values)."""
 
@@ -82,7 +103,10 @@ class FusedLayers:
         try:
             from . import d3_kernels as kernels
         except ImportError:
-            kernels = importlib.import_module("d3_kernels")
+            try:
+                kernels = importlib.import_module("d3_kernels")
+            except ImportError:
+                kernels = kernels_next_to_this_file()
         self.k = kernels
         self.torch = torch
         self.chunk = modeling.torch_chunk_gated_delta_rule

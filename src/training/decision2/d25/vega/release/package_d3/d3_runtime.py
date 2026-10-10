@@ -463,6 +463,36 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def load_file_module(path: Path):
+    """Import a flat package file by its path, once per file (two checkpoints can share a process)."""
+    import importlib.util
+    import sys
+
+    path = Path(path).resolve()
+    name = f"{path.stem}_{hashlib.sha256(str(path).encode()).hexdigest()[:16]}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            del sys.modules[name]
+            raise
+    return sys.modules[name]
+
+
+def fast_module(root: Path):
+    """``d3_fast.py`` of the checkpoint directory when it is not importable as a module.
+
+    ``AutoModel.from_pretrained(..., trust_remote_code=True)`` copies only the modeling files and their
+    ``from .x import y`` imports into its module cache; the package's own copy (verified against
+    ``MODEL_MANIFEST.json``) is next to the weights.
+    """
+    path = Path(root) / "d3_fast.py"
+    return load_file_module(path) if path.is_file() else None
+
+
 def resolve_dir(
     name_or_path: str | os.PathLike, revision: str | None = None, **hub: Any
 ) -> Path:
@@ -799,8 +829,14 @@ class D3:
                 self.image_unavailable = (
                     f"the image processor failed to load ({type(exc).__name__}: {exc})"
                 )
-        self.fast_skipped = None if d3_fast else "d3_fast.py is not present"
-        self.fast = d3_fast.install(self) if d3_fast else None
+        fast, reason = d3_fast, "d3_fast.py is not present"
+        if fast is None:
+            try:
+                fast = fast_module(self.root)
+            except Exception as exc:  # noqa: BLE001 - the plain path always loads
+                reason = f"d3_fast.py failed to import ({type(exc).__name__}: {exc})"
+        self.fast_skipped = None if fast else reason
+        self.fast = fast.install(self) if fast else None
         self.loaded_seconds = time.perf_counter() - started
 
     @classmethod
