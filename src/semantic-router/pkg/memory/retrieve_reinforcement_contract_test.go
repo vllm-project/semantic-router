@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,120 @@ func TestQdrantRetrieveReinforcementContract(t *testing.T) {
 	storagetest.Require(t, "qdrant")
 	store := setupQdrantReinforcementStore(t)
 	assertRetrieveReinforces(t, store, true)
+}
+
+// StorageIntegration: qdrant
+func TestQdrantConcurrentReinforcementContract(t *testing.T) {
+	storagetest.Require(t, "qdrant")
+	storeA, storeB := setupQdrantSharedReinforcementStores(t)
+	assertConcurrentReinforcesExact(t, storeA, storeB, "shared-client-race")
+}
+
+// assertConcurrentReinforcesExact is the shared-store regression: two Router
+// clients reinforce one memory concurrently, and every increment must persist.
+// The unconditional write this contract replaced lost increments here.
+func assertConcurrentReinforcesExact(t *testing.T, storeA, storeB Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+
+	mem := &Memory{
+		ID:      id,
+		Content: retrieveReinforcementContent,
+		UserID:  "user-a",
+		Type:    MemoryTypeSemantic,
+	}
+	require.NoError(t, storeA.Store(ctx, mem))
+	mem = getMemoryEventually(t, storeA, mem.ID, 15*time.Second)
+	require.Equal(t, 0, mem.AccessCount, "a fresh memory starts unreinforced")
+
+	const perClient = 20
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for _, store := range []Store{storeA, storeB} {
+		go func(store Store) {
+			defer wg.Done()
+			for range perClient {
+				_, err := store.Retrieve(ctx, RetrieveOptions{
+					Query:  retrieveReinforcementQuery,
+					UserID: "user-a",
+					Limit:  5,
+				})
+				require.NoError(t, err)
+			}
+		}(store)
+	}
+	wg.Wait()
+
+	// Reinforcement is asynchronous by design; poll the read path until every
+	// retrieve's increment is visible, or fail with the shortfall.
+	deadline := time.Now().Add(20 * time.Second)
+	var final *Memory
+	for time.Now().Before(deadline) {
+		current, err := storeA.Get(ctx, mem.ID)
+		require.NoError(t, err)
+		if current.AccessCount >= 2*perClient {
+			final = current
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if final == nil {
+		current, err := storeA.Get(ctx, mem.ID)
+		require.NoError(t, err)
+		t.Fatalf("lost increments across clients: access_count=%d, want >= %d",
+			current.AccessCount, 2*perClient)
+	}
+}
+
+// setupQdrantSharedReinforcementStores builds two stores over one collection —
+// the "two Router processes" shape of the shared-store race.
+func setupQdrantSharedReinforcementStores(t *testing.T) (Store, Store) {
+	t.Helper()
+	host := os.Getenv("QDRANT_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+	port := 6334
+	if configured := os.Getenv("QDRANT_PORT"); configured != "" {
+		parsed, err := strconv.Atoi(configured)
+		require.NoError(t, err)
+		port = parsed
+	}
+
+	client, err := qdrant.NewClient(&qdrant.Config{Host: host, Port: port})
+	if err != nil {
+		storagetest.Unavailable(t, "qdrant", err)
+		return nil, nil
+	}
+	collection := fmt.Sprintf("memory_reinforce_%s", uniqueReinforcementSuffix())
+	newStore := func() Store {
+		store, err := NewQdrantStore(QdrantStoreOptions{
+			Client: client,
+			Config: config.MemoryConfig{},
+			QdrantConfig: &config.MemoryQdrantConfig{
+				Host: host, Port: port, Collection: collection, Dimension: 384,
+			},
+			Enabled:         true,
+			EmbeddingConfig: reinforcementEmbeddingConfig(),
+		})
+		if err != nil {
+			_ = client.Close()
+			storagetest.Unavailable(t, "qdrant", err)
+			return nil
+		}
+		return store
+	}
+	storeA := newStore()
+	storeB := newStore()
+	if storeA == nil || storeB == nil {
+		return nil, nil
+	}
+	t.Cleanup(func() {
+		_ = client.DeleteCollection(context.Background(), collection)
+		_ = storeA.Close()
+		_ = storeB.Close()
+	})
+	return storeA, storeB
 }
 
 // StorageIntegration: valkey
