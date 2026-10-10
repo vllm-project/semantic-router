@@ -258,6 +258,7 @@ domains:
     paths:
       - tools/calibration/recipe/**
       - tools/calibration/tuning/**
+      - tools/calibration/systemone_auto/**
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-metadata-v1.contract.yaml
       - config/schemas/recipe-probes-v1.schema.json

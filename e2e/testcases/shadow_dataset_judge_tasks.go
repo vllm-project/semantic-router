@@ -109,7 +109,7 @@ func requireBlindedPair(set *shadowJudgeTaskSet) error {
 		return fmt.Errorf("judge task input %q does not carry the request", first.Input)
 	}
 	// The captured body names the upstream model the primary answered from.
-	if strings.Contains(first.Input, `"model"`) || strings.Contains(first.Input, "gpt-oss") {
+	if strings.Contains(strings.ToLower(first.Input), `"model"`) || strings.Contains(first.Input, "gpt-oss") {
 		return fmt.Errorf("judge task input %q names the primary model", first.Input)
 	}
 	// Both mock answers introduce their own model, which is the leak no label

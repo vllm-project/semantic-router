@@ -160,6 +160,17 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert all(model.verified for model in catalog.models)
 
 
+def test_native_protocol_does_not_expand_chat_recipe_interfaces() -> None:
+    shared = packaged_model_catalog_document()
+    assert any(
+        protocol["id"] == "vllm-sr/systemone@1" for protocol in shared["protocols"]
+    )
+    assert all(
+        "vllm-sr/systemone@1" not in model.protocols
+        for model in load_model_catalog("latest").models
+    )
+
+
 def test_model_assets_root_supports_shallow_installed_package(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

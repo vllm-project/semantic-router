@@ -4,7 +4,7 @@
 # These commands have no build-tag variants. The Dashboard WASM adapter
 # selects its js/wasm sources separately in dashboard/wasm/Makefile.
 
-ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval memory-coldstart image-routing-calibration ml-selection-validate selector-parity shadow-dataset
+ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval memory-coldstart image-routing-calibration ml-selection-validate selector-parity systemone-judge-requests shadow-dataset
 
 sr-dsl_DIR := tools/dev/dsl
 classifier-operating-point_DIR := tools/models/classifier-operating-point
@@ -13,6 +13,7 @@ memory-coldstart_DIR := bench/memory_coldstart
 image-routing-calibration_DIR := tools/calibration/image-routing
 ml-selection-validate_DIR := src/training/model_selection/ml_model_selection
 selector-parity_DIR := src/training/model_selection/ml_model_selection/selectorparity
+systemone-judge-requests_DIR := tools/calibration/systemone_auto/judge_requests
 shadow-dataset_DIR := tools/calibration/shadow-dataset
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(tool)_TEST_EXCLUDE ?=))
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(tool)_TEST_FLAGS ?=))

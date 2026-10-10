@@ -135,7 +135,7 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
   "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset/judge-tasks?recipe=vault&seed=2026-q3&split=train:8&split=eval:2&blinding_key=$JUDGE_KEY"
 ```
 
-只有当请求和两段回答都能哈希回清单中的摘要时才会构建一对任务。存储的请求会写明路由器把它发往的模型，因此输入摘要覆盖去掉顶层 `model` 字段后的请求体，这也是评审读到的 `input`，每个任务都带有这个 `input_digest`。影子文本来自采集的摘录，因此影子决策需要开启 `capture_response_body`，并把 `max_capture_bytes` 设得足以容纳完整回答。被截断的摘录，或在存储前被响应阶段插件改写的主模型回答，都会被排除并计为 `arm_text_digest_mismatch`；完全没有文本的一对计为 `arm_text_missing`。与摘要不符的请求计为 `input_text_digest_mismatch`，缺失的请求计为 `input_text_missing`。提到自身模型名称的回答会被标记为 `names_own_model`，因为任何标签都无法对评审模型隐藏这一点。
+只有当请求和两段回答都能哈希回清单中的摘要时才会构建一对任务。存储的请求会写明路由器把它发往的模型，因此输入摘要覆盖去掉顶层模型字段（记录中的请求为 `Model`，客户端请求体为 `model`）后的请求体，这也是评审读到的 `input`，每个任务都带有这个 `input_digest`。这改变了输入标识、去重和拆分，因此清单版本为 `shadow-dataset.v2`，任务版本为 `shadow-judge-tasks.v2`。`shadow-dataset.v1` 清单会被拒绝。影子文本来自采集的摘录，因此影子决策需要开启 `capture_response_body`，并把 `max_capture_bytes` 设得足以容纳完整回答。被截断的摘录，或在存储前被响应阶段插件改写的主模型回答，都会被排除并计为 `arm_text_digest_mismatch`；完全没有文本的一对计为 `arm_text_missing`。与摘要不符的请求计为 `input_text_digest_mismatch`，缺失的请求计为 `input_text_missing`。提到自身模型名称的回答会被标记为 `names_own_model`，因为任何标签都无法对评审模型隐藏这一点。
 
 任务携带提示词与回答文本，因此该接口需要 `replay.detail` 权限，对没有该权限的调用方直接拒绝，而不是返回脱敏后的任务。评审模型在路由器之外运行。
 
