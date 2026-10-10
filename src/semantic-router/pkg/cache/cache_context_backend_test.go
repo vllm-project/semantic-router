@@ -1,4 +1,4 @@
-//go:build !windows && cgo && !riscv64
+//go:build !windows
 
 package cache
 
@@ -42,7 +42,7 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cache := &MilvusCache{
 			enabled:           true,
 			config:            cfg,
-			embeddingModel:    "bert",
+			embeddingModel:    "qwen3",
 			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
 				return nil, errors.New("milvus unavailable")
@@ -54,7 +54,7 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cache := &QdrantCache{
 			enabled:           true,
 			cfg:               &config.QdrantConfig{},
-			embeddingModel:    "bert",
+			embeddingModel:    "qwen3",
 			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
 				return nil, errors.New("qdrant unavailable")
@@ -69,7 +69,7 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cache := &RedisCache{
 			enabled:           true,
 			config:            cfg,
-			embeddingModel:    "bert",
+			embeddingModel:    "qwen3",
 			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error) {
 				return redis.FTSearchResult{}, errors.New("redis unavailable")
@@ -84,7 +84,7 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cache := &ValkeyCache{
 			enabled:           true,
 			config:            cfg,
-			embeddingModel:    "bert",
+			embeddingModel:    "qwen3",
 			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, []string) (any, error) {
 				return nil, errors.New("valkey unavailable")

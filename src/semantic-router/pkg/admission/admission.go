@@ -22,6 +22,25 @@ type Admissioner interface {
 	Acquire(ctx context.Context) (Ticket, error)
 }
 
+type waiterKey struct{}
+
+// WithWaiter returns a context whose waits for a slot are reported: wait is
+// called when one starts and the function it returns when it ends. A caller
+// whose slot is held by work it waits on itself (a bundle of runtime calls
+// that sends once its participants are blocked) counts as blocked meanwhile.
+func WithWaiter(ctx context.Context, wait func() (done func())) context.Context {
+	return context.WithValue(ctx, waiterKey{}, wait)
+}
+
+// waiting reports a wait that starts now to the context's waiter, if any,
+// and returns the function that reports its end.
+func waiting(ctx context.Context) func() {
+	if wait, ok := ctx.Value(waiterKey{}).(func() func()); ok && wait != nil {
+		return wait()
+	}
+	return func() {}
+}
+
 // Do runs fn under an admission ticket and releases it afterwards.
 func Do[T any](ctx context.Context, admissioner Admissioner, fn func() (T, error)) (T, error) {
 	ticket, err := admissioner.Acquire(ctx)

@@ -8,8 +8,29 @@ listeners:
     address: 0.0.0.0
     port: 8899
     timeout: 300s
-    # Optional bearer credentials for CLI-managed Envoy listeners.
+    # Optional client keys the listener requires (standalone mode and the
+    # CLI-managed Envoy listener).
     api_keys: []
+  # One-way TLS, served in standalone mode. Relative paths are relative to this
+  # file's directory.
+  - name: https-8443
+    address: 0.0.0.0
+    port: 8443
+    timeout: 300s
+    tls:
+      cert_file: certs/tls.crt
+      key_file: certs/tls.key
+    # Standalone mode: accept only these request models (exact `model` values);
+    # others get 403 model_not_allowed. Absent or empty accepts every model.
+    models: [vllm-sr/exhaustive-default]
+    # Native System One inference has its own explicit public-model scope.
+    systemone:
+      models: [decision-public]
+    # Standalone mode drops client identity headers unless the listener trusts
+    # them: here, from an authenticating proxy on a private network.
+    identity:
+      trust_headers: true
+      trusted_peers: ["10.0.0.0/8"]
 
 providers:
   defaults:
@@ -325,7 +346,7 @@ routing:
         description: Content risk, independent of prompt attacks.
         labels: [safe, unsafe]
         unsafe_labels: [unsafe]
-        threshold: 0.5
+        threshold: 0.46
 
     fact_check:
       - name: needs_fact_check
@@ -544,22 +565,20 @@ routing:
       # decision's response_jailbreak plugin enforces on it.
       - name: unsafe_completion
         direction: response
-        threshold: 0.85
+        threshold: 0.77
         description: Detect jailbreak content in the model's own output.
 
     # Hallucination rules check the model's answer against the grounding
     # context the request carried (tool results or retrieved context), so they
     # only exist once the model has answered; the selected decision's
-    # hallucination plugin enforces on them. use_nli asks the detector for
-    # span-level NLI explanations.
+    # hallucination plugin enforces on them.
     hallucination:
       - name: ungrounded_claims
-        use_nli: true
         description: Detect claims the grounding context does not support.
 
     pii:
       - name: restricted_pii
-        threshold: 0.85
+        threshold: 0.01
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS
@@ -1011,7 +1030,6 @@ routing:
         - type: hallucination
           configuration:
             enabled: true
-            use_nli: true
             hallucination_action: header
             unverified_factual_action: header
             include_hallucination_details: true
@@ -1063,6 +1081,7 @@ routing:
             max_records: 10000
             capture_request_body: true
             capture_response_body: true
+            capture_personal_data: false
             max_body_bytes: 4096
             # 0 = no truncation (the documented default). Set to a positive
             # byte cap to independently limit structured tool-trace fields
@@ -1200,15 +1219,16 @@ routing:
           synthesis_template: ""
           judge_prompt_version: fusion-v1
           # Grounding-aware synthesis: score panel responses for faithfulness
-          # (hallucination detector against context, else cross-model NLI) and
-          # use the scores to guide the judge. Disabled by default.
+          # with the hallucination detector (against the request's context, else
+          # against each peer response) and use the scores to guide the judge.
+          # Disabled by default.
           grounding:
             enabled: false
             reference: hybrid          # hybrid | context | panel
             policy: weight             # weight | annotate | filter (see below)
             min_score: 0.0             # filter policy only: drop below this (0-1)
             min_keep: 1                # filter policy only: keep at least this many
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0 # panel reference: weight of a peer's contradiction
             on_error: skip             # skip (fall back to plain fusion) | fail
             # policy controls how the scores are used:
             #   weight   (default) keep every response; tell the judge to weight
@@ -1308,6 +1328,16 @@ routing:
           use_model_contrastive: true
           require_descriptions: true
           use_capabilities: true
+      # Overrides the recipe's cross-model fallback policy (routing.fallback,
+      # then global.router.fallback) field by field for this route. The
+      # candidates stay this decision's ranked models; circuit_breaker is per
+      # backend and stays on the recipe's or the global policy.
+      fallback:
+        enabled: true
+        max_attempts: 2
+        total_timeout: 20s
+        per_attempt_timeout: 8s
+        retryable_status_codes: [429, 502, 503, 504]
       plugins:
         - type: header_mutation
           configuration:
@@ -1479,6 +1509,15 @@ routing:
           tpot_percentile: 90
           ttft_percentile: 95
           description: Balance throughput and first-token latency for long prompts.
+      # Overrides the provider model's timeouts and retries for this route.
+      # Envoy applies these fields per request; idle_timeout,
+      # first_byte_timeout, back-off and retry_after_max need --gateway standalone.
+      reliability:
+        total_timeout: 600s
+        per_try_timeout: 300s
+        retry_count: 1
+        retry_on: reset,connect-failure,retriable-status-codes
+        retriable_status_codes: [503]
       plugins:
         - type: rag
           configuration:
@@ -1821,9 +1860,6 @@ recipes:
       candidate_requirements:
         capabilities: declared
         context: known_limits
-      # This deny also applies before a decision is available.
-      data_policy:
-        replay: false
       signals:
         keywords:
           - name: privacy_recipe_keywords
@@ -1834,6 +1870,10 @@ recipes:
             bm25_threshold: 0.1
       decisions:
         - name: privacy_recipe_route
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: false
           description: Route privacy-sensitive prompts to the local model.
           priority: 100
           rules:
@@ -1863,14 +1903,11 @@ recipes:
 
 global:
   router:
+    # Engine mode keeps native serving and disables routing consumers.
+    enabled: true
     config_source: file
     strategy: priority
-    auto_model_name: exhaustive-reference
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - exhaustive-reference
-    include_config_models_in_list: true
+    list_backend_models: true
     clear_route_cache: true
     fallback:
       version: 1
@@ -2126,6 +2163,14 @@ global:
       store_backend: file
     router_replay:
       enabled: true
+      capture_request_body: true
+      capture_response_body: true
+      # Keep detected or uncertain personal data out of captured content.
+      capture_personal_data: false
+      max_records: 10000
+      max_body_bytes: 4096
+      max_tool_trace_bytes: 0
+      max_tool_trace_steps: 100
       store_backend: postgres
       ttl_seconds: 2592000
       async_writes: true
@@ -2172,14 +2217,6 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
-      # Negation/antonym guard for the in-memory backend. "lexical" is the
-      # model-free default; "nli" or "lexical+nli" additionally verifies the
-      # winning candidate once with the hallucination explainer NLI model and
-      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
-      polarity_guard:
-        mode: lexical
-        nli:
-          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
@@ -2231,7 +2268,7 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384
+        dimension: 256
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
@@ -2241,7 +2278,7 @@ global:
       milvus:
         address: milvus:19530
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
         num_partitions: 32
       qdrant:
         host: qdrant
@@ -2250,7 +2287,7 @@ global:
         use_tls: false
         connect_timeout: 10
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
       redis_cache:
         enabled: false
         address: "localhost:6379"
@@ -2258,9 +2295,9 @@ global:
         db: 0
         key_prefix: "memory_cache:"
         password: ""
-      embedding_model: bert
+      embedding_model: mmbert
       default_retrieval_limit: 10
-      # Calibrated for mom-embedding-light with weighted hybrid scoring.
+      # Weighted hybrid scoring. The value predates Vela Embedding; check it on your own data.
       default_similarity_threshold: 0.40
       hybrid_search: true
       hybrid_mode: weighted
@@ -2389,6 +2426,8 @@ global:
         key_prefix: "vsr:session-tools:v1:"
 
   integrations:
+    kv_transfer:
+      enabled: false
     tools:
       enabled: true
       top_k: 5
@@ -2420,21 +2459,12 @@ global:
           weight_decision_prior: 1
           repetition_penalty_strength: 0
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
       timeout_seconds: 120
       headers:
         X-Trace-Source: looper
-      remom:
-        model_names:
-          - vllm-sr/remom
-      fusion:
-        model_names:
-          - vllm-sr/fusion
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -2455,42 +2485,61 @@ global:
     bindings: {}
     # Named physical deployments and their shared admission budgets.
     deployments:
+      primary:
+        provider: model_runtime
+        public_name: decision-public
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+        profile: exact
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket; set endpoint to attach to an
-      # engine started elsewhere with `vllm-sr serve <hf-model>`.
+      # worker started elsewhere with `vllm-srun serve <hf-model>`.
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
-        revision: 881bee413681d80ebeac86afcda8b4138dae516e
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
         profile: exact
       content-risk:
-        artifact: models/Vela-1.0-Encoder-307M-Hazard
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
+        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: cpu
-        precision: fp32
+        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
       document-ranker:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
+        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: cpu
-        precision: native
+        profile: exact
         input:
           max_tokens: 4096
           overflow: reject
+      # Unbound example pool: only deployments used by a task or listener load.
+      decision-replicas:
+        provider: model_runtime
+        public_name: decision-replicas
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        profile: exact
+        replicas:
+          - device: cpu
+          - endpoint: http://decision-worker:8100
+            served_name: decision-kai
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
-        gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: models/vela-1.0-omni-nano
-        bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
           full_context: false
-          backend: candle
+          # model_runtime embeds with the built-in model runtime;
+          # openai_compatible calls the endpoint below.
+          backend: model_runtime
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 0
@@ -2513,20 +2562,17 @@ global:
           max_retries: 2
           max_response_bytes: 16777216
           dimensions: 1024
+    # Default judgment tasks resolve this exact deployment. Task bindings may
+    # select another resource. Model capabilities, rather than family names,
+    # determine which tasks are available. Omission selects primary (Vela 0.3B).
     system:
-      safety: models/Vela-1.0-Encoder-307M-Safety
+      decision_model:
+        deployment: primary
       hazard: models/Vela-1.0-Encoder-307M-Hazard
-      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
-      pii_classifier: models/Vela-1.0-Encoder-307M-PII
-      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
-      hallucination_explainer: models/mom-halugate-explainer
-      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
     # Keys must match global.model_catalog.system entries (prompt_guard,
     # domain_classifier, pii_classifier, fact_check_classifier,
-    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # hallucination_detector, feedback_detector).
     # max_concurrency: inference slots running at once (>= 1).
     # max_queue: bounded wait queue beyond the slots (0 = no queue).
     # queue_timeout_ms: longest a request may wait for a slot; on expiry the
@@ -2543,6 +2589,12 @@ global:
         max_queue: 64
         queue_timeout_ms: 250
         on_overflow: shed
+    # Deadline of a request's model-runtime signals. 0 (default) derives it
+    # from the request's deadline, less a tenth of the time left (at least a
+    # second), or 45 s for a served request. A signal still running resolves
+    # through its policy: a routing signal through on_error, a safety signal
+    # (prompt guard, PII) as unscanned.
+    signal_timeout_ms: 0
     external:
       - name: external-safety
         model_role: classification
@@ -2708,7 +2760,6 @@ global:
       safety:
         safety:
           model_ref: safety
-          model_id: models/Vela-1.0-Encoder-307M-Safety
           use_cpu: true
           max_sequence_length: 0
       prompt_compression:
@@ -2730,22 +2781,27 @@ global:
       prompt_guard:
         enabled: true
         model_ref: prompt_guard
-        model_id: models/Vela-1.0-Encoder-307M-Guard
-        threshold: 0.5
+        # model_id binds the guard to one model and threshold sets its own;
+        # without them it runs the decision model at that model's threshold.
         use_cpu: true
-        variant: mmbert32k
+        # Vela 2.0 reads the whole text up to its scan budget (four inputs on a
+        # CPU, or the deployment's input {overflow: window, max_tokens}) and
+        # names its own labels, so it sets no window. A sequence classifier such
+        # as Vela 1.0 Guard takes a document budget, token windows
+        # (window: {size: 512, overlap: 255}) and a label mapping
+        # (jailbreak_type_mapping.json in its directory).
         max_sequence_length: 0
-        # Optional token windows. The total input budget above remains 512
-        # when zero; larger budgets require a qualified checkpoint and policy.
-        window:
-          size: 512
-          overlap: 255
-        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
+        jailbreak_mapping_path: ""
         positive_labels: [jailbreak]
         # allow (default) tolerates a classifier-backend failure and treats the
         # affected content as not matching; block treats it as a match instead,
         # since an inference failure means the content could not be verified safe.
         on_error: allow
+        # block (default) matches content the guard did not read in full (over
+        # its input or cap, truncated, or not scanned by the signal deadline) as
+        # unscanned, so padding cannot carry an attack past it; allow leaves
+        # such content to on_error.
+        on_unscanned: block
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is
@@ -2753,10 +2809,10 @@ global:
           enabled: true
           model_ref: domain_classifier
           max_sequence_length: 0
-          model_id: models/Vela-1.0-Encoder-307M-Domain
-          threshold: 0.5
           use_cpu: true
-          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
+          # Vela 2.0 names its 14 domains itself; a classifier head takes its
+          # category_mapping.json.
+          category_mapping_path: ""
           fallback_category: other
         mcp:
           enabled: true
@@ -2775,20 +2831,23 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: pii_classifier
-          # Document budget; each exact token window executes at most 512 tokens.
-          max_sequence_length: 32768
-          window:
-            size: 512
-            overlap: 255
-          model_id: models/Vela-1.0-Encoder-307M-PII
-          threshold: 0.9
+          # Vela 2.0 0.3B finds spans with its router span head and reads the
+          # whole text up to its scan budget, so it sets no window; a token
+          # classifier such as Vela 1.0 PII takes a document budget (32768),
+          # token windows (window: {size: 512, overlap: 255}) and its
+          # pii_mapping.json.
+          max_sequence_length: 0
           use_cpu: true
-          use_mmbert_32k: true
-          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
-          # allow (default) keeps a classify error or a provider-declared
-          # truncation as a non-match for that content; block treats it as a
-          # match on classification_error, so unverified text cannot pass as clean.
+          pii_mapping_path: ""
+          # allow (default) keeps a classify error as a non-match for that
+          # content; block treats it as a match on classification_error, so
+          # unverified text cannot pass as clean.
           on_error: allow
+          # block (default) matches content the model did not read in full
+          # (over its input or cap, a provider-declared truncation, or not
+          # scanned by the signal deadline) as unscanned, so a long request
+          # routes as private; allow leaves such content to on_error.
+          on_unscanned: block
         preference:
           use_contrastive: true
           embedding_model: models/preference-encoder
@@ -2812,43 +2871,28 @@ global:
         fact_check:
           model_ref: fact_check_classifier
           max_sequence_length: 0
-          model_id: models/Vela-1.0-Encoder-307M-FactCheck
-          threshold: 0.95
           use_cpu: true
-          use_mmbert_32k: true
         detector:
-          backend: candle
-          endpoint: ""
+          backend: model_runtime
           include_explanation: false
           model_ref: hallucination_detector
-          model_id: models/Vela-1.0-Encoder-307M-Halu
           threshold: 0.5
           use_cpu: true
           min_span_length: 1
           min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: false
-          nli_entailment_threshold: 0.75
-        explainer:
-          model_ref: hallucination_explainer
-          model_id: models/mom-halugate-explainer
-          threshold: 0.9
-          use_cpu: true
       feedback_detector:
         enabled: true
         model_ref: feedback_detector
         max_sequence_length: 0
-        model_id: models/Vela-1.0-Encoder-307M-Feedback
-        threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
         feedback_mapping_path: ''
       modality_detector:
         enabled: true
         method: hybrid
         classifier:
-          model_path: models/Vela-1.0-Encoder-307M-Modality
+          # Empty runs the decision model; a model or package path binds one.
+          model_path: ""
           max_sequence_length: 0
           use_cpu: true
         keywords:
@@ -2858,5 +2902,5 @@ global:
         both_keywords:
           - explain and illustrate
           - describe with an image
-        confidence_threshold: 0.7
+        confidence_threshold: 0.51
         lower_threshold_ratio: 0.7

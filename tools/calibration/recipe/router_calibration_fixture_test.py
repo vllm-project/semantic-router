@@ -771,7 +771,7 @@ fixtures:
         self.assertEqual(receipt["message_probes"], 90)
         self.assertEqual(receipt["generated_probes"], 42)
         self.assertEqual(receipt["image_parts"], 53)
-        self.assertEqual(receipt["text_bytes"], 18_744_938)
+        self.assertEqual(receipt["text_bytes"], 18_744_960)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -791,11 +791,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "d4be8213feb553178492c7c3616fbe6ffb6a473b9c0120ee0b1e6c21e46b8f39",
+            "3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "0ab64db1b2f096761ea4133051ec80846dfb188449dcfe6d60785d1d32953bf3",
+            "07215aca085c3e8e2b912551c5c5cee1407c341048acb2f71b4b86186d6e5773",
         )
         by_id = {probe.probe_id: probe for probe in probes}
         self.assertEqual(len(by_id), len(probes))

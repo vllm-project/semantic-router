@@ -11,9 +11,10 @@ import { StructuredFieldEditor } from './builderPageStructuredFieldControls'
 export const CustomSelect: React.FC<{
   value: string
   options: string[]
+  disabledOptions?: Record<string, string>
   onChange: (value: string) => void
   placeholder?: string
-}> = ({ value, options, onChange, placeholder = '— select —' }) => {
+}> = ({ value, options, disabledOptions = {}, onChange, placeholder = '— select —' }) => {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -54,6 +55,16 @@ export const CustomSelect: React.FC<{
     <div className={styles.customSelect} ref={triggerRef}>
       <div
         className={open ? styles.customSelectTriggerOpen : styles.customSelectTrigger}
+        role="button"
+        tabIndex={0}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setOpen(!open)
+          }
+        }}
         onClick={() => setOpen(!open)}
       >
         <span>{value || placeholder}</span>
@@ -71,6 +82,7 @@ export const CustomSelect: React.FC<{
         createPortal(
           <div
             ref={dropdownRef}
+            role="listbox"
             className={styles.customSelectDropdown}
             style={{
               position: 'fixed',
@@ -82,10 +94,24 @@ export const CustomSelect: React.FC<{
             {options.map((opt) => (
               <div
                 key={opt}
+                role="option"
+                tabIndex={disabledOptions[opt] ? -1 : 0}
+                onKeyDown={(event) => {
+                  if (!disabledOptions[opt] && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault()
+                    onChange(opt)
+                    setOpen(false)
+                  }
+                }}
+                aria-selected={opt === value}
+                aria-disabled={Boolean(disabledOptions[opt])}
+                title={disabledOptions[opt]}
+                style={disabledOptions[opt] ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 className={
                   opt === value ? styles.customSelectOptionActive : styles.customSelectOption
                 }
                 onClick={() => {
+                  if (disabledOptions[opt]) return
                   onChange(opt)
                   setOpen(false)
                 }}
@@ -104,6 +130,7 @@ export const CustomSelect: React.FC<{
                   <span className={styles.customSelectPlaceholder} />
                 )}
                 {opt || '(none)'}
+                {disabledOptions[opt] ? ' · unavailable' : ''}
               </div>
             ))}
           </div>,
@@ -188,6 +215,7 @@ export const FieldEditor: React.FC<{
           <CustomSelect
             value={(value as string) ?? ''}
             options={schema.options ?? []}
+            disabledOptions={schema.disabledOptions}
             onChange={(v) => onChange(v || undefined)}
             placeholder="— select —"
           />

@@ -10,6 +10,7 @@ type exactL1Entry struct {
 	key          string
 	responseBody []byte
 	storedAt     time.Time
+	ageKnown     bool
 	expiresAt    time.Time
 }
 
@@ -45,9 +46,12 @@ func (c *exactL1) get(key string, maxAge *time.Duration) (CacheResult, bool) {
 		return CacheResult{}, false
 	}
 	entry := element.Value.(*exactL1Entry)
-	age := now.Sub(entry.storedAt)
+	var age time.Duration
+	if entry.ageKnown {
+		age = now.Sub(entry.storedAt)
+	}
 	if (!entry.expiresAt.IsZero() && !now.Before(entry.expiresAt)) ||
-		(maxAge != nil && age > *maxAge) {
+		(maxAge != nil && (!entry.ageKnown || age > *maxAge)) {
 		c.removeElement(element)
 		return CacheResult{}, false
 	}
@@ -58,12 +62,12 @@ func (c *exactL1) get(key string, maxAge *time.Duration) (CacheResult, bool) {
 		HitKind:      HitKindExact,
 		Source:       CacheSourceL1,
 		Age:          age,
-		AgeKnown:     true,
+		AgeKnown:     entry.ageKnown,
 		ExpiresAt:    entry.expiresAt,
 	}, true
 }
 
-func (c *exactL1) put(key string, responseBody []byte, ttl TTLPolicy) {
+func (c *exactL1) put(key string, result CacheResult, ttl TTLPolicy) {
 	if c == nil || c.maxEntries == 0 || ttl.NoStore {
 		return
 	}
@@ -76,11 +80,20 @@ func (c *exactL1) put(key string, responseBody []byte, ttl TTLPolicy) {
 		return
 	}
 	now := time.Now()
+	var storedAt time.Time
+	if result.AgeKnown {
+		storedAt = now.Add(-max(0, result.Age))
+	}
+	expiresAt := now.Add(effectiveTTL)
+	if !result.ExpiresAt.IsZero() && result.ExpiresAt.Before(expiresAt) {
+		expiresAt = result.ExpiresAt
+	}
 	entry := &exactL1Entry{
 		key:          key,
-		responseBody: append([]byte(nil), responseBody...),
-		storedAt:     now,
-		expiresAt:    now.Add(effectiveTTL),
+		responseBody: append([]byte(nil), result.ResponseBody...),
+		storedAt:     storedAt,
+		ageKnown:     result.AgeKnown,
+		expiresAt:    expiresAt,
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()

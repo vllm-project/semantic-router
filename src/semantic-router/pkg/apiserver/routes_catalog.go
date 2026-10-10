@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -152,14 +152,6 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBodyFor[BatchClassificationRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleNLIClassification,
-			jsonResponse[services.NLIResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[services.NLIRequest](),
-		),
-		managedRoute(
 			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
@@ -228,6 +220,12 @@ func apiInventoryRoutes() []apiRoute {
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleEmbeddingModelsInfo,
 			jsonResponse[embeddingModelsResponse](http.StatusOK, "Successful response"),
+		),
+		managedRoute(
+			EndpointMetadata{Path: apiInventoryModelRuntime, Method: "GET", Description: "Get the model_runtime deployments: process, readiness, restarts and served model cards"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
+			(*ClassificationAPIServer).handleModelRuntimeInventory,
+			jsonResponse[modelRuntimeInventoryResponse](http.StatusOK, "Successful response"),
 		),
 	}
 }
@@ -448,7 +446,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 			errorResponses(500),
 			mediaResponse(http.StatusOK, "Canonical configuration document; field schemas are available at /api/v1/config/schema?view=full", "application/json", OpenAPISchema{Type: "object", AdditionalProperties: true}),
-			etagResponseHeaders(http.StatusOK),
+			activeConfigResponseHeaders(http.StatusOK),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config without writing it"},

@@ -34,7 +34,7 @@ OpenAI-specific mapping from `catalog: openai/gpt-5.6-sol`; do not repeat its
 reasoning definition in YAML.
 
 Browse built-in identities and their Provider support in **Model Hub**, or
-choose a Provider in **Build → Models → Add Model**. The Dashboard labels
+choose a Provider in **Build → Routing → Models → Add Model**. The Dashboard labels
 catalog choices as **Built-in** and saves both the local alias and canonical
 identity.
 
@@ -93,6 +93,32 @@ routing:
     - name: qwen/qwen3.6-27b
       context_window_size: 32768
 ```
+
+For example, vLLM 0.11.1 derives a 32,768-token limit from the pinned
+[Hunyuan 7B Instruct config](https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/config.json)
+and rejects `max_model_len=262144`, although the model card and tokenizer
+advertise 256K. For that deployment, override the canonical card window:
+
+```yaml
+version: v0.3
+providers:
+  defaults:
+    model: local-hunyuan
+  models:
+    - name: local-hunyuan
+      catalog: tencent/hunyuan-7b-instruct
+      backend_refs:
+        - provider: vllm
+          base_url: http://127.0.0.1:8000/v1
+routing:
+  modelCards:
+    - name: tencent/hunyuan-7b-instruct
+      context_window_size: 32768
+```
+
+The override uses the canonical card ID, not `local-hunyuan`. Keep the published
+card unchanged, and revalidate the deployment limit after changing the serving
+runtime or model revision.
 
 When a configuration loads or reloads, the Router reads `max_model_len` from
 each `vllm` backend's `/v1/models` response. If a backend serves less than the

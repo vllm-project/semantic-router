@@ -9,6 +9,10 @@ import (
 // Sentinel errors returned by Store implementations. Callers should use
 // errors.Is against these rather than matching on error strings.
 var (
+	// ErrRevisionExhausted fails writes before changing state or admission
+	// bookkeeping. Revisions must never wrap or be reset in a live store.
+	ErrRevisionExhausted = errors.New("sessiontools: revision space exhausted")
+
 	// ErrRevisionMismatch is returned by CompareAndSwap (alongside applied
 	// = false) when expectedRevision no longer matches the stored
 	// revision. This is an expected, retryable outcome of concurrent
@@ -21,9 +25,10 @@ var (
 	ErrStoreClosed = errors.New("sessiontools: store is closed")
 
 	// ErrStateCorrupted is returned by Load when a stored value exists but
-	// cannot be decoded or fails State.Validate. Corrupted values are
-	// deleted best-effort by the store before returning this error, never
-	// returned as a partially-trusted State.
+	// cannot be decoded safely. A storage adapter may remove corrupt bytes
+	// only conditionally on the observed value; delayed deletion by key is
+	// unsafe. Decodable but invalid snapshots retain their revision so the
+	// manager can conditionally reset them, never partially reuse them.
 	ErrStateCorrupted = errors.New("sessiontools: stored state is corrupted")
 )
 
@@ -48,12 +53,10 @@ type QuotaKey struct {
 // Store is the transport-storage contract for session-scoped sticky
 // tool-set state. Implementations must be safe for concurrent use.
 //
-// Store is deliberately narrow: it owns key-value mechanics (load, atomic
-// compare-and-swap, delete, lifecycle) only. Decode validation,
-// deterministic merge, retry policy, L1 hydration, fallback, and receipts
-// belong to the manager built on top of Store (a later task) — see PL-0042
-// section 7.1, "Manager.Update owns decode validation... Extproc never
-// calls Redis directly."
+// Store owns key-value mechanics and the actual encoded write-size bound.
+// State validation, merge, retries and receipts belong to Manager. Runtime
+// eligibility and fallback belong to its caller. Implementations must honor
+// context cancellation; callers must not mutate arguments during a call.
 //
 // Deviation from the original interface sketch: Load returns
 // (VersionedState, error), not (VersionedState, bool, error). The sketch's
@@ -73,6 +76,9 @@ type Store interface {
 	// creation case). ttl sets/refreshes the key's expiry on success.
 	// quota identifies the cardinality bucket this key counts against for
 	// admission/eviction purposes.
+	// The store stamps LastSeenAt/ExpiresAt in UTC and checks the final
+	// encoded size, including its allocated revision, before publication or
+	// eviction. Failed preparation may consume a revision; gaps are valid.
 	//
 	// Implementations must make revisions incarnation-safe: a revision
 	// value must never be reused at a given key across that key's full
@@ -97,8 +103,9 @@ type Store interface {
 		quota QuotaKey,
 	) (bool, error)
 
-	// Delete removes key. Idempotent: deleting an absent key is not an
-	// error.
+	// Delete unconditionally removes the current key. It is for explicit
+	// deletion, not invalidation based on an earlier Load; Manager resets
+	// those snapshots with CompareAndSwap instead. Missing keys are a no-op.
 	Delete(ctx context.Context, key string) error
 
 	// Close releases resources held by the store. After Close returns,

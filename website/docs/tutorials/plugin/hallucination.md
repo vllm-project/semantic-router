@@ -29,7 +29,6 @@ plugins:
   - type: hallucination
     configuration:
       enabled: true
-      use_nli: true
       hallucination_action: header
       unverified_factual_action: header
       include_hallucination_details: true
@@ -44,17 +43,18 @@ With a [hallucination signal](../signal/learned/hallucination) declared under
 this plugin only enforces on it: it applies `hallucination_action` when the rule
 matched, `unverified_factual_action` when the answer had no grounding context
 to be checked against, and nothing when the rule was unavailable or did not
-apply. The rule then decides whether NLI explanations are produced, and the
-plugin's `use_nli` is reported as ignored at load. Without a rule the plugin
-classifies the answer itself, which is the compatibility path and is reported
-at load as such.
+apply. Without a rule the plugin classifies the answer itself, which is the
+compatibility path and is reported at load as such.
 
 The plugin depends on
-`global.model_catalog.modules.hallucination_mitigation`; `use_nli: true` also
-uses the configured explainer/NLI model. Model responses and supplied grounding
-context are processed by those modules. Grounding context longer than the
-detector's token window is trimmed from the end so the answer always reaches
-the model. Detection can identify unsupported text, but it cannot establish
+`global.model_catalog.modules.hallucination_mitigation`, whose detector (Vela
+2.0 0.3B by default, with Vela Halu available as a specialist) runs in the [model runtime](../../model-runtime/guides/hallucination.md).
+Model responses and supplied grounding context are processed by that module.
+NLI explanations (`use_nli`) are retired; `vllm-sr config migrate` removes the
+setting. Input handling depends on the selected detector and deployment budget;
+a general decision task requires complete admitted context and reports an
+unavailable result if it cannot cover it. See the runtime guide before
+choosing a truncation or window policy. Detection can identify unsupported text, but it cannot establish
 truth without authoritative evidence.
 
 See a complete example:

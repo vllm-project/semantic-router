@@ -3,7 +3,6 @@ package classification
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -43,7 +42,7 @@ func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 		return nil
 	}
 
-	numWorkers := complexityWorkerCount(len(tasks))
+	numWorkers := embeddingWorkers(len(tasks))
 	successCount, firstError := c.collectCandidateEmbeddingResults(c.startCandidateEmbeddingWorkers(tasks, numWorkers))
 
 	elapsed := time.Since(startTime)
@@ -97,21 +96,6 @@ func appendComplexityTasks(
 		})
 	}
 	return tasks
-}
-
-func complexityWorkerCount(taskCount int) int {
-	if taskCount <= 1 {
-		return 1
-	}
-	backend := embeddingBackendOverride()
-	if backend == "" || backend == "candle" {
-		return 1
-	}
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > taskCount {
-		return taskCount
-	}
-	return numWorkers
 }
 
 func (c *ComplexityClassifier) startCandidateEmbeddingWorkers(

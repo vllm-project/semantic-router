@@ -329,6 +329,47 @@ func TestImagesCodecCapabilitiesEnableCapabilityDrivenSelection(t *testing.T) {
 	}
 }
 
+// vLLM and vLLM-Omni send the HTTP status as an integer error code (e.g.
+// "code":400) rather than a string. The images codec must decode this the
+// same way the Chat and Responses codecs do via openAIErrorCode, instead of
+// failing the whole transport-error decode and masking the backend's
+// message behind a generic invalid-upstream error.
+func TestImagesCodecDecodeTransportErrorAcceptsIntegerCode(t *testing.T) {
+	codec := ImagesCodec{}
+	body := []byte(`{"error":{"message":"quality must be one of ['lossless', 'high'], got 'auto'","type":"Bad Request","param":null,"code":400}}`)
+	transportErr, _, err := codec.DecodeTransportError(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatalf("DecodeTransportError failed on integer code: %v", err)
+	}
+	if transportErr.Error == nil {
+		t.Fatal("expected a decoded protocol error")
+	}
+	if transportErr.Error.Code != "400" {
+		t.Fatalf("code = %q, want %q", transportErr.Error.Code, "400")
+	}
+	wantMessage := "quality must be one of ['lossless', 'high'], got 'auto'"
+	if transportErr.Error.Message != wantMessage {
+		t.Fatalf("message = %q, want %q", transportErr.Error.Message, wantMessage)
+	}
+}
+
+// A string error code (the shape used by OpenAI-style bodies) must keep
+// decoding exactly as before.
+func TestImagesCodecDecodeTransportErrorAcceptsStringCode(t *testing.T) {
+	codec := ImagesCodec{}
+	body := []byte(`{"error":{"message":"bad size","type":"invalid_request_error","code":"invalid_size"}}`)
+	transportErr, _, err := codec.DecodeTransportError(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatalf("DecodeTransportError failed on string code: %v", err)
+	}
+	if transportErr.Error == nil || transportErr.Error.Code != "invalid_size" {
+		t.Fatalf("code = %+v, want invalid_size", transportErr.Error)
+	}
+	if transportErr.Error.Message != "bad size" {
+		t.Fatalf("message = %q, want %q", transportErr.Error.Message, "bad size")
+	}
+}
+
 func TestRegistryCoordinatesImagesFormat(t *testing.T) {
 	registry := NewBuiltinRegistry()
 	set, ok := registry.CapabilitiesFor(llmprotocol.OpenAIImagesV1)

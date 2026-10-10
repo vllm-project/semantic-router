@@ -103,21 +103,17 @@ type FusionAlgorithmConfig struct {
 // FusionGroundingConfig configures the optional grounding stage that scores each
 // panel response for faithfulness before the judge synthesizes. When nil or
 // disabled, Fusion behaves exactly as without grounding. Grounding makes no extra
-// LLM calls: it uses local encoder models (hallucination detector + NLI).
+// LLM calls: it reads each response with the router's hallucination detector,
+// against the request's context or the peer responses. ContradictionPenalty
+// weighs a peer's contradiction evidence in the panel reference.
 type FusionGroundingConfig struct {
-	Enabled                 bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	Reference               string  `yaml:"reference,omitempty" json:"reference,omitempty"`
-	Policy                  string  `yaml:"policy,omitempty" json:"policy,omitempty"`
-	MinScore                float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
-	MinKeep                 int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
-	NLIContradictionPenalty float64 `yaml:"nli_contradiction_penalty,omitempty" json:"nli_contradiction_penalty,omitempty"`
-	OnError                 string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-}
-
-// FusionRuntimeConfig registers direct Fusion model slugs. The panel and judge
-// policy live on routing decisions, not in global runtime config.
-type FusionRuntimeConfig struct {
-	ModelNames []string `yaml:"model_names,omitempty" json:"model_names,omitempty"`
+	Enabled              bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Reference            string  `yaml:"reference,omitempty" json:"reference,omitempty"`
+	Policy               string  `yaml:"policy,omitempty" json:"policy,omitempty"`
+	MinScore             float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
+	MinKeep              int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
+	ContradictionPenalty float64 `yaml:"contradiction_penalty,omitempty" json:"contradiction_penalty,omitempty"`
+	OnError              string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 }
 
 // FusionRequestConfig is the request-level OpenAI-compatible extension parsed
@@ -148,57 +144,6 @@ type FusionModelOverride struct {
 	Model               string   `json:"model,omitempty" yaml:"model,omitempty"`
 	Temperature         *float64 `json:"temperature,omitempty" yaml:"temperature,omitempty"`
 	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
-}
-
-func DefaultFusionModelNames() []string {
-	return []string{DefaultFusionModelName}
-}
-
-func (c FusionRuntimeConfig) EffectiveModelNames() []string {
-	if len(c.ModelNames) > 0 {
-		return normalizeFusionModelNames(c.ModelNames)
-	}
-	return DefaultFusionModelNames()
-}
-
-func (c *RouterConfig) ExposedFusionModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if len(c.Looper.Fusion.ModelNames) == 0 && !c.HasFusionDecision() {
-		return nil
-	}
-	return c.Looper.Fusion.EffectiveModelNames()
-}
-
-func normalizeFusionModelNames(names []string) []string {
-	seen := make(map[string]bool, len(names))
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		normalized := strings.TrimSpace(name)
-		if normalized == "" || seen[normalized] {
-			continue
-		}
-		seen[normalized] = true
-		result = append(result, normalized)
-	}
-	return result
-}
-
-func (c *RouterConfig) IsFusionModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.Fusion.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *RouterConfig) HasFusionDecision() bool {
@@ -303,19 +248,10 @@ func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
 	if cfg.MinKeep < 0 {
 		return fmt.Errorf("grounding.min_keep must be >= 0")
 	}
-	if cfg.NLIContradictionPenalty < 0 {
-		return fmt.Errorf("grounding.nli_contradiction_penalty must be >= 0")
+	if cfg.ContradictionPenalty < 0 {
+		return fmt.Errorf("grounding.contradiction_penalty must be >= 0")
 	}
 	return validateFusionOnError(cfg.OnError)
-}
-
-func ValidateFusionRuntimeConfig(cfg FusionRuntimeConfig) error {
-	for i, name := range cfg.ModelNames {
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("model_names[%d] cannot be empty", i)
-		}
-	}
-	return nil
 }
 
 func (c *FusionRequestConfig) Validate() error {
