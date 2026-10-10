@@ -2,7 +2,7 @@
   --runtime-purple: #7651cb;
   --runtime-active: var(--site-accent-strong);
   margin: 0;
-  padding: clamp(1rem, 2.4vw, 2rem);
+  padding: clamp(0.75rem, 1.5vw, 1.25rem);
   border: 1px solid var(--site-border);
   border-radius: 1.25rem;
   background:
@@ -25,12 +25,12 @@
   gap: 1rem;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.8rem;
+  margin-bottom: 1.15rem;
 }
 
 .logo {
   width: auto;
-  height: 2rem;
+  height: 1.65rem;
 }
 
 .pathPicker {
@@ -47,7 +47,7 @@
   gap: 0.45rem;
   align-items: center;
   justify-content: center;
-  padding: 0.6rem 0.85rem;
+  padding: 0.5rem 0.7rem;
   border: 1px solid transparent;
   border-radius: 0.45rem;
   background: transparent;
@@ -76,15 +76,15 @@
 
 .diagram {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr) 3rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 2.25rem minmax(0, 1fr) 2.25rem minmax(0, 1fr);
   align-items: stretch;
 }
 
 .nativeLane {
   position: relative;
   grid-column: 1 / -1;
-  height: 2.5rem;
-  margin: 0 calc((100% - 6rem) / 6);
+  height: 2.1rem;
+  margin: 0 calc((100% - 4.5rem) / 6);
   border: 1.5px dashed var(--site-border-strong);
   border-bottom: 0;
   border-radius: 0.9rem 0.9rem 0 0;
@@ -115,7 +115,7 @@
 
 .module {
   min-width: 0;
-  padding: clamp(1rem, 1.6vw, 1.5rem);
+  padding: clamp(0.75rem, 1.25vw, 1.1rem);
   border: 1px solid var(--site-border-strong);
   border-radius: 0.85rem;
   background: var(--site-surface);
@@ -136,8 +136,8 @@
 .moduleIcon {
   display: grid;
   flex: 0 0 auto;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 1.85rem;
+  height: 1.85rem;
   place-items: center;
   border-radius: 0.6rem;
   background: var(--site-accent-soft);
@@ -161,8 +161,8 @@
 }
 
 .module > p {
-  min-height: 2.9em;
-  margin: 0.9rem 0 1rem;
+  min-height: 2.5em;
+  margin: 0.65rem 0 0.75rem;
   color: var(--site-muted-bright);
   font-size: 0.75rem;
   line-height: 1.6;
@@ -171,8 +171,8 @@
 .api {
   display: grid;
   gap: 0.3rem;
-  margin-top: 0.65rem;
-  padding: 0.7rem;
+  margin-top: 0.5rem;
+  padding: 0.55rem;
   border: 1px solid var(--site-border);
   border-radius: 0.5rem;
   background: var(--site-surface-alt);
@@ -211,7 +211,7 @@
   align-items: center;
   justify-content: center;
   color: var(--site-accent-strong);
-  font-size: 1.4rem;
+  font-size: 1.15rem;
 }
 
 .connector svg {
@@ -221,7 +221,7 @@
 .taskConnector {
   position: relative;
   color: var(--runtime-purple);
-  font-size: 1.7rem;
+  font-size: 1.4rem;
 }
 
 .taskConnector small {
@@ -250,7 +250,7 @@
   display: flex;
   gap: 0.65rem;
   align-items: center;
-  padding: 0.4rem 0.55rem;
+  padding: 0.32rem 0.45rem;
   border-radius: 0.35rem;
   background: var(--site-surface-alt);
   color: var(--site-text-strong);
@@ -268,7 +268,7 @@
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  margin-top: 0.85rem;
+  margin-top: 0.6rem;
   color: var(--site-muted);
   font-size: 0.66rem;
   line-height: 1.6;
@@ -285,7 +285,7 @@
 }
 
 .workerPool {
-  padding: 0.8rem;
+  padding: 0.65rem;
   border: 1px solid color-mix(in srgb, var(--runtime-purple) 28%, var(--site-border));
   border-radius: 0.6rem;
   background: color-mix(in srgb, var(--runtime-purple) 3%, var(--site-surface));
@@ -304,7 +304,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.4rem;
-  margin: 0.75rem 0 0.65rem;
+  margin: 0.55rem 0 0.5rem;
 }
 
 .replicas > span {
@@ -312,7 +312,7 @@
   gap: 0.35rem;
   align-items: center;
   justify-content: center;
-  min-height: 2.1rem;
+  min-height: 1.85rem;
   border: 1px solid var(--site-border-strong);
   border-radius: 0.35rem;
   background: var(--site-surface);
@@ -347,7 +347,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  margin: 0.85rem 0 0.45rem;
+  margin: 0.6rem 0 0.35rem;
 }
 
 .taskTypes span {
@@ -365,7 +365,7 @@
   gap: 0.5rem;
   align-items: flex-start;
   align-self: center;
-  padding: 1.25rem 0.3rem 0;
+  padding: 0.85rem 0.3rem 0;
   color: var(--site-muted);
   font-size: 0.68rem;
   line-height: 1.65;
@@ -396,7 +396,7 @@
   display: flex;
   gap: 0.65rem;
   align-items: center;
-  padding: 0.85rem 1rem;
+  padding: 0.65rem 0.85rem;
   border: 1px solid color-mix(in srgb, var(--site-accent-strong) 35%, var(--site-border));
   border-radius: 0.65rem;
   background: var(--site-surface);
@@ -429,7 +429,7 @@
   grid-column: 5;
   gap: 0.35rem;
   align-content: center;
-  padding: 1.25rem 0.3rem 0;
+  padding: 0.85rem 0.3rem 0;
   color: var(--site-muted-bright);
   font-size: 0.68rem;
   line-height: 1.6;
@@ -451,9 +451,9 @@
   display: flex;
   gap: 0.7rem;
   align-items: flex-start;
-  min-height: 3.7rem;
-  margin-top: 1.5rem;
-  padding-top: 1.2rem;
+  min-height: 3rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
   border-top: 1px solid var(--site-border);
   color: var(--site-muted-bright);
   font-size: 0.77rem;
