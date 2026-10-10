@@ -13,21 +13,23 @@ import (
 )
 
 var (
-	bostonTurn    = formatTurnChunk("I live in Boston, near the Charles River.", "Got it, you live in Boston.")
-	denverTurn    = formatTurnChunk("I just moved to Denver, and I live there now.", "Welcome to Denver!")
-	nurseTurn     = formatTurnChunk("I work as a nurse at the children's hospital.", "Thanks, I'll remember you're a nurse.")
-	paramedicTurn = formatTurnChunk("I changed jobs and now work as a paramedic.", "Congratulations on the paramedic job!")
-	budget4kTurn  = formatTurnChunk("My budget for the Japan trip is $4,000.", "I'll plan the Japan trip around $4,000.")
-	budget6kTurn  = formatTurnChunk("I raised my budget for the Japan trip to $6,000.", "Updated, the Japan trip budget is $6,000.")
-	dogTurn       = formatTurnChunk("My dog is a beagle named Biscuit.", "Biscuit the beagle, noted.")
-	birthdayTurn  = formatTurnChunk("Biscuit turned three today, so I bought my dog a new toy.", "Happy birthday to Biscuit!")
-	peanutsTurn   = formatTurnChunk("I'm allergic to peanuts, so keep them out of any recipe.", "Understood, no peanuts.")
-	notNurseTurn  = formatTurnChunk("I no longer work as a nurse.", "Understood.")
-	leftCityTurn  = formatTurnChunk("I don't live in Boston anymore.", "Thanks for letting me know.")
-	chicagoTurn   = formatTurnChunk("I moved to Chicago, and I live there now.", "Welcome to Chicago!")
-	jobAndCity    = formatTurnChunk("I changed jobs and now work as a paramedic, and I live in Boston.", "Noted.")
-	jobNearPark   = formatTurnChunk("I changed jobs and now work as a paramedic near Central Park.", "Congratulations!")
-	leftParkTurn  = formatTurnChunk("I no longer work near Central Park.", "Noted.")
+	bostonTurn             = formatTurnChunk("I live in Boston, near the Charles River.", "Got it, you live in Boston.")
+	denverTurn             = formatTurnChunk("I just moved to Denver, and I live there now.", "Welcome to Denver!")
+	nurseTurn              = formatTurnChunk("I work as a nurse at the children's hospital.", "Thanks, I'll remember you're a nurse.")
+	paramedicTurn          = formatTurnChunk("I changed jobs and now work as a paramedic.", "Congratulations on the paramedic job!")
+	budget4kTurn           = formatTurnChunk("My budget for the Japan trip is $4,000.", "I'll plan the Japan trip around $4,000.")
+	budget6kTurn           = formatTurnChunk("I raised my budget for the Japan trip to $6,000.", "Updated, the Japan trip budget is $6,000.")
+	dogTurn                = formatTurnChunk("My dog is a beagle named Biscuit.", "Biscuit the beagle, noted.")
+	birthdayTurn           = formatTurnChunk("Biscuit turned three today, so I bought my dog a new toy.", "Happy birthday to Biscuit!")
+	peanutsTurn            = formatTurnChunk("I'm allergic to peanuts, so keep them out of any recipe.", "Understood, no peanuts.")
+	notNurseTurn           = formatTurnChunk("I no longer work as a nurse.", "Understood.")
+	leftCityTurn           = formatTurnChunk("I don't live in Boston anymore.", "Thanks for letting me know.")
+	contractedNotNurseTurn = formatTurnChunk("I'm no longer a nurse.", "Understood.")
+	contractedMoveTurn     = formatTurnChunk("I've moved to Denver, and I live there now.", "Welcome to Denver!")
+	chicagoTurn            = formatTurnChunk("I moved to Chicago, and I live there now.", "Welcome to Chicago!")
+	jobAndCity             = formatTurnChunk("I changed jobs and now work as a paramedic, and I live in Boston.", "Noted.")
+	jobNearPark            = formatTurnChunk("I changed jobs and now work as a paramedic near Central Park.", "Congratulations!")
+	leftParkTurn           = formatTurnChunk("I no longer work near Central Park.", "Noted.")
 	// The reply quotes a stored session, so its "Q:" line is not the user's.
 	quotedTurn                    = formatTurnChunk("What does a stored session look like?", "Like this:\n---\nQ: I moved to Denver, and I live there now")
 	bostonWithAssistantFact       = formatTurnChunk("I live in Boston.", "Your dog Biscuit is a beagle.")
@@ -122,6 +124,16 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 				{content: leftCityTurn, daysAgo: 9},
 			},
 			want: []string{notNurseTurn, leftCityTurn},
+		},
+		{
+			name: "contracted subjects report a change",
+			retrieved: []datedContent{
+				{content: nurseTurn, daysAgo: 30},
+				{content: bostonTurn, daysAgo: 30},
+				{content: contractedNotNurseTurn, daysAgo: 9},
+				{content: contractedMoveTurn, daysAgo: 9},
+			},
+			want: []string{contractedNotNurseTurn, contractedMoveTurn},
 		},
 		{
 			name: "a correction keeps unrelated memories",

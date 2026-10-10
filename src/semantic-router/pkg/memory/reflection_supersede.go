@@ -19,19 +19,19 @@ import (
 // older statement. Questions and changes made by someone else, negated,
 // hypothetical or still planned don't count.
 var (
-	changeVerbs           = wordSet("moved relocated changed switched raised lowered increased decreased reduced")
-	firstPersonSubjects   = wordSet("i we i've we've i'm we're")
-	changeModifiers       = wordSet("just recently finally already also actually have am are")
-	hypotheticalMarkers   = wordSet("if wish unless whether had have has would could should might may")
-	negations             = wordSet("not don't doesn't can't never")
-	elidedSubjectVerbs    = wordSet("work live drive study teach own rent use run manage lead stay")
-	verbParticles         = wordSet("as out up off down away back for with from to into about like over")
-	placeWords            = wordSet("in at near on by there here")
-	destinationWords      = wordSet("to into from back closer in at near on by there here")
-	determiners           = wordSet("a an the this that these those my our your his her their")
-	qualifierPrepositions = wordSet("for of")
-	auxiliaries           = wordSet("is are was were be been has have had will would can could should may might must do does did")
-	functionWords         = wordSet(`a an the this that these those some any all each every no
+	changeVerbs           = vocabulary("moved relocated changed switched raised lowered increased decreased reduced")
+	firstPersonSubjects   = vocabulary("i we i've we've i'm we're")
+	changeModifiers       = vocabulary("just recently finally already also actually have am are")
+	hypotheticalMarkers   = vocabulary("if wish unless whether had have has would could should might may")
+	negations             = vocabulary("not don't doesn't can't never")
+	elidedSubjectVerbs    = vocabulary("work live drive study teach own rent use run manage lead stay")
+	verbParticles         = vocabulary("as out up off down away back for with from to into about like over")
+	placeWords            = vocabulary("in at near on by there here")
+	destinationWords      = vocabulary("to into from back closer in at near on by there here")
+	determiners           = vocabulary("a an the this that these those my our your his her their")
+	qualifierPrepositions = vocabulary("for of")
+	auxiliaries           = vocabulary("is are was were be been has have had will would can could should may might must do does did")
+	functionWords         = vocabulary(`a an the this that these those some any all each every no
 		and or but so if then than because while
 		of to in on at for from with by as about into onto near over under after before
 		since until around through during without within
@@ -41,10 +41,21 @@ var (
 		will would shall should can could may might must get got
 		not yes just now still also very really too there here more most much many
 		other such only own same again ever never already yet longer anymore`)
-	qualifierLeads = wordSet(`of to in on at for from with by as about into onto near next close over under
+	qualifierLeads = vocabulary(`of to in on at for from with by as about into onto near next close over under
 		after before since until around through during without within off across along behind beside between past
 		which who whom whose where when`)
 )
+
+// vocabulary splits only on whitespace, so contractions such as "don't" stay
+// whole and match statementWords. wordSet splits them into dedup text units.
+func vocabulary(words string) map[string]bool {
+	fields := strings.Fields(words)
+	set := make(map[string]bool, len(fields))
+	for _, word := range fields {
+		set[word] = true
+	}
+	return set
+}
 
 type retrievedTurn struct {
 	text        string
@@ -387,7 +398,7 @@ func correctionPairs(clauses [][]string) ([]wordPair, []bool) {
 	return pairs, inCorrection
 }
 
-var reaffirmingWords = wordSet("still continue continues continued remain remains remained stay stays stayed")
+var reaffirmingWords = vocabulary("still continue continues continued remain remains remained stay stays stayed")
 
 // reaffirms reports that a clause keeps a fact as it was, as in "I moved
 // apartments, and I still work as a nurse now" or "and I continue to work as a
