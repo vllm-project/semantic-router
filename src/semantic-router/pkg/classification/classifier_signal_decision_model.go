@@ -78,22 +78,19 @@ func (c *Classifier) evaluateDecisionModelSignals(
 }
 
 // withPriorUserTurns is state after the last turns of prior, oldest first,
-// one blank line apart. Each earlier turn is cut to its first
-// semanticSignalUnitLimit runes, so the context stays small next to the
-// model's input budget and a long paste cannot push the current turn, which
-// comes last, out of what the model reads.
+// one blank line apart. The earlier turns share semanticSignalUnitLimit runes,
+// the latest turn first and each cut to its first runes, so however many turns
+// a question reads they add the same bounded context to the current turn.
 func withPriorUserTurns(state string, prior []string, turns int) string {
-	if turns == 0 {
-		return state
+	parts := []string{state}
+	room := semanticSignalUnitLimit
+	for index := len(prior) - 1; index >= len(prior)-turns && room > 0; index-- {
+		runes := []rune(prior[index])
+		runes = runes[:min(len(runes), room)]
+		room -= len(runes)
+		parts = append([]string{string(runes)}, parts...)
 	}
-	parts := make([]string, 0, turns+1)
-	for _, turn := range prior[len(prior)-turns:] {
-		if runes := []rune(turn); len(runes) > semanticSignalUnitLimit {
-			turn = string(runes[:semanticSignalUnitLimit])
-		}
-		parts = append(parts, turn)
-	}
-	return strings.Join(append(parts, state), "\n\n")
+	return strings.Join(parts, "\n\n")
 }
 
 func (c *Classifier) evaluateDecisionDeployment(

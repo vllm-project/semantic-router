@@ -238,7 +238,8 @@ func TestDecisionQuestionsReadTheirPriorUserTurns(t *testing.T) {
 	classifier := &Classifier{Config: cfg}
 	classifier.SetDecisionDecider(decider)
 	used := map[string]bool{"decision:alone": true, "decision:one": true, "decision:many": true}
-	prior := []string{"Write a poem about rain.", strings.Repeat("ü", semanticSignalUnitLimit+5)}
+	latest := strings.Repeat("ü", semanticSignalUnitLimit-10)
+	prior := []string{"Write a poem about rain.", latest}
 
 	classifier.evaluateDecisionModelSignals(context.Background(), newSignalResults(), &sync.Mutex{}, "Now make it shorter.", "Now make it shorter.", prior, used)
 
@@ -248,12 +249,11 @@ func TestDecisionQuestionsReadTheirPriorUserTurns(t *testing.T) {
 			states[question.ID] = request.State
 		}
 	}
-	cut := strings.Repeat("ü", semanticSignalUnitLimit)
 	want := map[string]string{
 		"alone": "Now make it shorter.",
-		"one":   cut + "\n\nNow make it shorter.",
-		// five asked, two exist: every earlier turn, oldest first
-		"many": "Write a poem about rain.\n\n" + cut + "\n\nNow make it shorter.",
+		"one":   latest + "\n\nNow make it shorter.",
+		// five asked, two exist: oldest first, within one shared budget
+		"many": "Write a po\n\n" + latest + "\n\nNow make it shorter.",
 	}
 	for name, state := range want {
 		if states[name] != state {

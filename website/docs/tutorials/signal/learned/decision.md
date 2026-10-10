@@ -216,9 +216,11 @@ routing:
 ```
 
 The state is then up to that many earlier user turns, oldest first, then the
-current turn, one blank line apart; each earlier turn is cut to its first
-1,760 characters. Assistant and tool messages are not included. Questions to
-one deployment share a call only when they read the same number of turns. On
+current turn, one blank line apart. The earlier turns share 1,760 characters,
+filled from the latest turn back, so they add the same bounded context however
+many turns a question reads. Assistant and tool messages are not included.
+Questions to one deployment share a call only when they read the same number of
+turns. On
 MT-Bench's 80 two-turn conversations, an eight-way Choice over its categories
 on the second turn was right 41% to 55% of the time from that turn alone and
 71% to 84% with the first turn read too (Decision 2.0 Kai-0.6B to Lux-9B), and
