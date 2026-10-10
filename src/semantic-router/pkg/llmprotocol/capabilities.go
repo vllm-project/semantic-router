@@ -79,6 +79,10 @@ func (set CapabilitySet) Contains(required CapabilitySet) bool {
 func (set CapabilitySet) Intersect(other CapabilitySet) CapabilitySet {
 	return CapabilitySet{bits: set.bits & other.bits}
 }
+
+func (set CapabilitySet) Union(other CapabilitySet) CapabilitySet {
+	return CapabilitySet{bits: set.bits | other.bits}
+}
 func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 
 // taskCapabilityMask is the subset of capabilities that describe model

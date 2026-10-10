@@ -32,7 +32,7 @@ func TestCandidatePoolBudgetRejectionRequiresEveryCandidate(t *testing.T) {
 		{"no capabilities", []config.ModelRef{{Model: "unknown"}}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, test.refs, demand)
+			_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, test.refs, demand, llmprotocol.CapabilitySet{})
 			var budget *selection.RequestBudgetError
 			if !errors.Is(err, selection.ErrNoEligibleCandidates) || errors.As(err, &budget) != test.budget {
 				t.Fatalf("err=%v budget=%v", err, budget)
@@ -41,7 +41,7 @@ func TestCandidatePoolBudgetRejectionRequiresEveryCandidate(t *testing.T) {
 	}
 	request = strictCandidateRequest()
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(1025)
-	_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, []config.ModelRef{{Model: "vision"}, {Model: "text"}}, selection.DemandForRequest(request))
+	_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, []config.ModelRef{{Model: "vision"}, {Model: "text"}}, selection.DemandForRequest(request), llmprotocol.CapabilitySet{})
 	var budget *selection.RequestBudgetError
 	if errors.As(err, &budget) {
 		t.Fatal("mixed capability and budget failure misclassified")

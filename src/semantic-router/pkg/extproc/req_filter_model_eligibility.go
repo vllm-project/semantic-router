@@ -93,7 +93,7 @@ func (r *OpenAIRouter) decisionRouteActionDestination(
 	}
 	if requirements := r.candidateRequirements(ctx); selection.CandidateRequirementsEnabled(requirements) {
 		refs := append([]config.ModelRef{{Model: destination}}, decision.ModelRefs...)
-		eligible, err := r.eligibleRequestModelRefs(requirements, refs, ctx.SemanticRequest, decision)
+		eligible, err := r.eligibleRequestModelRefs(requirements, refs, ctx.SemanticRequest, decision, callerCapabilities(ctx))
 		if err != nil {
 			return "", false, err
 		}
