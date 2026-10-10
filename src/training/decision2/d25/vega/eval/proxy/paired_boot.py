@@ -368,7 +368,12 @@ def main(argv=None):
     ap.add_argument("--ours-public", required=True)
     ap.add_argument("--pplx-public", required=True)
     ap.add_argument("--proxy-build", required=True)
-    ap.add_argument("--ours-proxy-probs", required=True)
+    ap.add_argument(
+        "--ours-proxy-probs", help="our checkpoints' O-proxy probs.jsonl(.gz)"
+    )
+    ap.add_argument(
+        "--ours-proxy-results", help="or kit result records (an entrant's own server)"
+    )
     ap.add_argument("--pplx-proxy-results", required=True)
     ap.add_argument("--calibration", default=str(DEFAULT))
     ap.add_argument("--out", required=True)
@@ -401,7 +406,11 @@ def main(argv=None):
 
     _, o_rows = load_build(a.proxy_build)
     o_res = {
-        "ours": load_ours_proxy(a.proxy_build, a.ours_proxy_probs),
+        "ours": (
+            proxy_results([a.ours_proxy_results])
+            if a.ours_proxy_results
+            else load_ours_proxy(a.proxy_build, a.ours_proxy_probs)
+        ),
         "pplx": proxy_results([a.pplx_proxy_results]),
     }
     print(f"loaded {len(rows)} rows in {time.time() - t0:.0f}s", flush=True)

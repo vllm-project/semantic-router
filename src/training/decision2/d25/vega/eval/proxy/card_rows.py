@@ -116,6 +116,10 @@ def main(argv=None):
             ]
             dv[f"d_{key}_vs_release"] = round(pt, 3)
             dv[f"d_{key}_vs_release_se"] = round(sd(ds), 3)
+            if k == "full":
+                dv["share_of_replicates_model_above_release"] = round(
+                    sum(x > 0 for x in ds) / len(ds), 3
+                )
         for v in res.values():
             v.pop("_reps")
         out[path] = {**res, **dv}

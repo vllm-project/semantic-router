@@ -16,11 +16,28 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import os
 import random
 import statistics
+import sys
 from pathlib import Path
 
 from d25.vega.eval.proxy.common import NAMES, S_BENCHMARKS, read_jsonl, s_weights
+
+KIT = os.environ.get("DECISION_INDEX_KIT", "/data/d25/shared/decision-index-kit")
+
+
+def ensure_kit(path: str | None = None) -> None:
+    """Make the decision-index kit importable; the scorer reuses its metrics and scoring."""
+    try:
+        import decision_index  # noqa: F401
+    except ImportError:
+        p = path or KIT
+        if p not in sys.path:
+            sys.path.insert(0, p)
+
+
+ensure_kit()
 
 TRACK = {25, 30, 43, 44, 31, 41, 40, 36, 37, 1, 2, 20, 21, 22, 50, 11, 23}
 ADDED = {56, 57, 58, 59, 61, 62, 64}
@@ -384,7 +401,14 @@ def main(argv=None):
     ap.add_argument("--build", default="/data/d25/vega/proxy/build")
     ap.add_argument("--results", nargs="+", required=True)
     ap.add_argument("--out")
+    ap.add_argument(
+        "--kit",
+        default=None,
+        help="decision-index kit checkout (default $DECISION_INDEX_KIT or the shared one)",
+    )
     a = ap.parse_args(argv)
+    if a.kit and a.kit not in sys.path:
+        sys.path.insert(0, a.kit)
     sc = score_all(a.build, load_results(a.results))
     text = json.dumps(sc, indent=1)
     if a.out:
