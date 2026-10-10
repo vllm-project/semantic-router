@@ -256,10 +256,14 @@ function DecisionCenter(): JSX.Element {
 
 export default function ArchitectureCapabilities({ stats }: ArchitectureCapabilitiesProps): JSX.Element {
   return (
-    <section id="architecture" className={shared.bandSection} aria-labelledby="architecture-title">
+    <section
+      id="architecture"
+      className={styles.compactSection}
+      aria-labelledby="architecture-title"
+    >
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={`site-section-intro ${shared.sectionHeader}`}>
+          <header className={`site-section-intro ${shared.sectionHeader} ${styles.compactHeader}`}>
             <SectionLabel><Translate id="homepage.capabilities.label">Architecture</Translate></SectionLabel>
             <h2 id="architecture-title" className={shared.sectionTitle}>
               <Translate id="homepage.capabilities.heading">Your models. Your rules.</Translate>
