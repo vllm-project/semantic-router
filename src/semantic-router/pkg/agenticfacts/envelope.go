@@ -74,7 +74,7 @@ type Lineage struct {
 //
 // The proposal names "remaining token, time, or cost counters", so all three
 // concepts are evidenced. The exact field names and the millisecond unit are
-// chosen here and recorded as open in PL-0042.
+// chosen here and recorded as open in PL-0045.
 type Budget struct {
 	RemainingTokens *int64   `json:"remaining_tokens,omitempty"`
 	RemainingTimeMs *int64   `json:"remaining_time_ms,omitempty"`
