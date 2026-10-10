@@ -1,17 +1,15 @@
-# ruff: noqa: PLR2004
 """sr-bench public CLI contract (the retired evaluation commands are absent)."""
 
 import json
 import threading
 import time
 
-from click.testing import CliRunner
-from test_sr_bench_replay import manifest, record
-
 from cli.commands.benchmark import benchmark
 from cli.sr_bench.contracts import plan
 from cli.sr_bench.service import Server
 from cli.sr_bench.store import Store
+from click.testing import CliRunner
+from test_sr_bench_replay import manifest, record
 
 
 def _write_json(path, document):
