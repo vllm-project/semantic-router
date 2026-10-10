@@ -19,7 +19,12 @@ from cli.models import (
     MemoryPluginConfig,
     RAGPluginConfig,
 )
-from cli.terminal import echo, error as terminal_error
+from cli.terminal import (
+    echo,
+    error as terminal_error,
+    hint as terminal_hint,
+    warning as terminal_warning,
+)
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
@@ -29,6 +34,7 @@ from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
 )
 from cli.validator_prompt import validate_prompt_dependencies
+from cli.validator_inprocess_models import validate_inprocess_model_backends
 from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
@@ -43,6 +49,7 @@ from cli.validator_workflows import (
 )
 from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
+from cli.validator_native import validate_native_execution
 from cli.validator_reasoning import validate_reasoning_controls
 from cli.validator_model_runtime import validate_model_runtime_references
 from cli.config_schema import routing_surface_catalog
@@ -544,8 +551,13 @@ def validate_user_config(
         log.info("Validating user configuration...")
 
     errors = []
+    if not config.routing_enabled:
+        # Engine mode keeps dormant routing configuration without constructing
+        # its classifiers, algorithms or plugin dependencies.
+        return validate_model_runtime_references(config)
 
     errors.extend(validate_recipe_contracts(config))
+    errors.extend(validate_native_execution(config))
 
     # Validate signal references
     errors.extend(validate_signal_references(config))
@@ -568,6 +580,7 @@ def validate_user_config(
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
     errors.extend(validate_prompt_dependencies(config))
+    errors.extend(validate_inprocess_model_backends(config))
 
     # Validate projection score dependency ordering
     errors.extend(validate_projection_score_dependencies(config))
@@ -583,6 +596,19 @@ def validate_user_config(
         log.info("Configuration validation passed")
 
     return errors
+
+
+def collect_validation_warnings(config: UserConfig) -> List[ValidationError]:
+    """Return findings that leave the configuration valid but likely wrong."""
+    return []
+
+
+def print_validation_warnings(warnings: List[ValidationError]):
+    """Print validation warnings, each with its hint."""
+    for validation_warning in warnings:
+        terminal_warning(str(validation_warning))
+        if validation_warning.hint:
+            terminal_hint(validation_warning.hint)
 
 
 def print_validation_errors(errors: List[ValidationError]):

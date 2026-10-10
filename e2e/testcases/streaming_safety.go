@@ -49,7 +49,7 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 	defer stop()
 
-	resp, err := sendNonStreamingRequest(ctx, prompt, "MoM", localPort)
+	resp, err := sendNonStreamingRequest(ctx, prompt, "vllm-sr/auto", localPort)
 	if err != nil {
 		return fmt.Errorf("%s: request failed: %w", testName, err)
 	}

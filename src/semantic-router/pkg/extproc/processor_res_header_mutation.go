@@ -76,6 +76,13 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	builder.addString(headers.VSRResponsePath, path)
 }
 
+// addConfigVersion names the configuration snapshot version that served.
+func (builder *responseHeaderMutationBuilder) addConfigVersion(ctx *RequestContext) {
+	if ctx.ConfigVersion > 0 {
+		builder.addString(headers.VSRConfigVersion, strconv.FormatUint(ctx.ConfigVersion, 10))
+	}
+}
+
 // addProtocolMarkers emits the client/upstream protocol markers
 // (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
 // (#2206) they ride on cross-protocol responses — when the inbound client
@@ -309,6 +316,7 @@ func buildResponseHeaderMutation(
 		// non-cache-hit response. This function only handles upstream responses,
 		// so the path defaults to "upstream".
 		builder.addKeystone(ctx)
+		builder.addConfigVersion(ctx)
 		// Client/upstream protocol markers ride only on cross-protocol responses
 		// (#2206); same-protocol calls omit them.
 		builder.addProtocolMarkers(ctx)
@@ -377,6 +385,10 @@ func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	if record := ctx.FallbackRecord; record != nil && record.FinalStatus == "succeeded" && len(record.Attempts) > 1 {
+		// A fallback candidate served this response, in either gateway mode.
+		builder.addString(headers.VSRFallbackAttempts, strconv.Itoa(len(record.Attempts)))
+	}
 	if ctx.RoutingLatency > 0 {
 		builder.addString(headers.VSRRoutingLatencyMs, formatMilliseconds(ctx.RoutingLatency))
 	}
@@ -402,12 +414,26 @@ func appliedUnknownPolicyHeader(ctx *RequestContext) string {
 	return strings.Join(pairs, ",")
 }
 
+// decisionRankingHeader explains the served decision against its runner-up.
+// It stays silent when the context no longer serves the ranked winner.
+func decisionRankingHeader(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	ranking := ctx.VSRDecisionDiagnostics.Ranking
+	if ranking == nil || ranking.RunnerUp == "" || ranking.Winner != ctx.VSRSelectedDecisionName {
+		return ""
+	}
+	return sanitizeWarningField(ranking.Winner) + " over " + sanitizeWarningField(ranking.RunnerUp) + ": " + ranking.Reason
+}
+
 // addDecisionDetailHeaders adds the intermediate decision/classification details
 // (category, modality, reasoning, session phase, injected-system-prompt, cache
 // similarity). Per the v0.4 contract (#2205) these are demoted off the default
 // surface and emitted only under x-vsr-debug; they remain in the replay record.
 func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
+	builder.addString(headers.VSRDecisionRanking, decisionRankingHeader(ctx))
 	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
 		modalityValue := ctx.ModalityClassification.Modality
 		if ctx.ModalityClassification.Method != "" {

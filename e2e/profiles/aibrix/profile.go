@@ -189,7 +189,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		Namespace:   namespaceSemanticRouter,
 		ValuesFiles: []string{"e2e/profiles/aibrix/values.yaml"},
 		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
+			"gateway.mode":     "extproc",
+			"image.repository": "ghcr.io/vllm-project/semantic-router/vllm-sr",
 			"image.tag":        opts.ImageTag,
 			"image.pullPolicy": "Never", // Use local image, don't pull from registry
 		},

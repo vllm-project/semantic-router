@@ -20,7 +20,7 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 		if entry.Tier != "supported" && entry.Tier != "experimental" {
 			t.Errorf("Catalog entry %q has invalid Tier %q", entry.Type, entry.Tier)
 		}
-		if entry.Execution != AlgorithmExecutionSelector && entry.Execution != AlgorithmExecutionLooper {
+		if entry.Execution != AlgorithmExecutionSelector && entry.Execution != AlgorithmExecutionLooper && entry.Execution != AlgorithmExecutionNative {
 			t.Errorf("Catalog entry %q has invalid Execution %q", entry.Type, entry.Execution)
 		}
 		if entry.PayloadShape != "" && entry.PayloadShape != AlgorithmPayloadNested {
@@ -34,7 +34,7 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 
 func TestDecisionAlgorithmRegistryOwnsEveryPayloadBlock(t *testing.T) {
 	algorithmType := reflect.TypeOf(AlgorithmConfig{})
-	for _, entry := range decisionAlgorithmRegistry {
+	for _, entry := range registeredSpecs(decisionAlgorithms) {
 		configField := entry.Catalog.ConfigField
 		if configField == "" {
 			if entry.IsConfigured != nil {

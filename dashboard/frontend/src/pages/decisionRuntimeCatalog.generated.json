@@ -1,0 +1,126 @@
+{
+  "questionTypes": [
+    "choice",
+    "noul",
+    "score"
+  ],
+  "models": [
+    {
+      "id": "vllm-sr/Decision-2.0-Kai-0.6B",
+      "name": "Decision-2.0-Kai-0.6B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+      "backbone": "qwen3",
+      "minMemoryGiB": 4
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Eos-0.8B",
+      "name": "Decision-2.0-Eos-0.8B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Sol-2B",
+      "name": "Decision-2.0-Sol-2B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "revision": "64235bef55dad29387dd16da7c90e038bf2f0972",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 8
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Nox-4B",
+      "name": "Decision-2.0-Nox-4B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Lux-9B",
+      "name": "Decision-2.0-Lux-9B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 24
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Vega-27B",
+      "name": "Decision-2.0-Vega-27B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "revision": "7aec49ae11a18741706da549ab626b9052795fe7",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Kai-0.6B",
+      "name": "Decision-1.0-Kai-0.6B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "79263ba4c4befac3845e7c1111c2c679d0716623",
+      "backbone": "modernbert",
+      "minMemoryGiB": 4
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Lex-0.6B",
+      "name": "Decision-1.0-Lex-0.6B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "a5ba6895347218eb8acd818420001b59a00b64c2",
+      "backbone": "modernbert",
+      "minMemoryGiB": 4
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Route-0.6B",
+      "name": "Decision-1.0-Route-0.6B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "deed1f29dad146d2138588025afb83dbdaf3c133",
+      "backbone": "modernbert",
+      "minMemoryGiB": 4
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Eos-0.8B",
+      "name": "Decision-1.0-Eos-0.8B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "2ca39a23e3f4500873ebcd8f97394268e27d3167",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Sol-2B",
+      "name": "Decision-1.0-Sol-2B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "5c698b1ad76abf7c35fc4957519c47668f54d23a",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 8
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Nox-4B",
+      "name": "Decision-1.0-Nox-4B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "7f65e1db2c55a11ab8b558a8027c8883752f192d",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Lux-9B",
+      "name": "Decision-1.0-Lux-9B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "revision": "2064c84daf599447f840719ef8e86db152a56851",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 24
+    }
+  ]
+}

@@ -1,11 +1,11 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import path from 'node:path'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { mockAuthenticatedAppShell, test } from './support/compiler'
 
 test.use({ screenshot: 'only-on-failure' })
 
-// These tests use the actual Go WASM compiler built by dashboard-build-wasm.
+// These tests use the production Go compiler through its HTTP handler.
 // Only server data is a fixture; malformed config and DSL are parsed normally.
 const invalidConfig = 'version: v0.3\nrouting:\n  unknown_field: true\n'
 const validConfig = `version: v0.3
@@ -42,8 +42,18 @@ test('shows automatic load failure and preserves the detailed error during manua
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: invalidConfig }))
   await page.goto('/builder')
   await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeEnabled()
-  await test.info().attach('real-wasm-error', {
-    body: await page.evaluate((yaml) => window.signalDecompile(yaml), invalidConfig),
+  await test.info().attach('real-compiler-error', {
+    body: await page.evaluate(
+      async (source) =>
+        (
+          await fetch('/api/dsl/decompile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source }),
+          })
+        ).text(),
+      invalidConfig,
+    ),
     contentType: 'application/json',
   })
   await expect(page.getByRole('alert')).toContainText('unknown_field')
@@ -103,7 +113,15 @@ test('shows Format parser errors with output closed and clears them after correc
   await replaceSource('hello')
   await page.getByTitle('Hide Output Panel').click()
   await test.info().attach('real-format-error', {
-    body: await page.evaluate(() => window.signalFormat('hello')),
+    body: await page.evaluate(async () =>
+      (
+        await fetch('/api/dsl/format', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'hello' }),
+        })
+      ).text(),
+    ),
     contentType: 'application/json',
   })
   await page.getByRole('button', { name: 'Format', exact: true }).click()

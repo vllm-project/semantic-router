@@ -140,7 +140,7 @@ def test_first_launch_reuses_runtime_for_dashboard_check() -> None:
     invocations = [
         line.strip()
         for line in out.split("[FIRST_LAUNCH_ARGS]")[1].splitlines()
-        if line.strip()
+        if line.strip() and not line.strip().endswith("--help")
     ]
     serve = next(line for line in invocations if line.startswith("serve"))
     dashboard = next(line for line in invocations if line.startswith("dashboard"))
@@ -149,20 +149,55 @@ def test_first_launch_reuses_runtime_for_dashboard_check() -> None:
     assert "--runtime podman" in dashboard, invocations
 
 
+def test_first_launch_returns_while_serve_waits_for_setup() -> None:
+    """With no config, `vllm-sr serve` waits for the Dashboard to activate one.
+    The installer must not wait with it: it returns, prints the Dashboard, and
+    leaves serve running to start the Router. A CLI that has
+    --container-runtime gets it instead of the deprecated --runtime."""
+    out = _run_harness("first-launch-setup-wait")
+
+    assert "First-time serve flow is waiting for setup" in out
+    assert "AUTO_LAUNCH_RAN=1" in out
+    assert "SERVE_STILL_RUNNING=1" in out
+    assert "keeps waiting in the background" in out
+
+    invocations = [
+        line.strip()
+        for line in out.split("[FIRST_LAUNCH_ARGS]")[1].splitlines()
+        if line.strip()
+    ]
+    serve = next(line for line in invocations if line.startswith("serve"))
+    dashboard = next(line for line in invocations if line.startswith("dashboard"))
+    assert serve == "serve --container-runtime docker", invocations
+    assert "--container-runtime docker" in dashboard, invocations
+
+
 def test_dashboard_access_uses_the_stack_port_offset() -> None:
-    """The first-run link, browser target, and SSH tunnel must agree."""
+    """The first-run link, browser target, and SSH tunnel must agree. The
+    Dashboard binds 127.0.0.1 by default, so no network URL is offered."""
     out = _run_harness("print-dashboard-offset")
     access = out.split("[DASHBOARD_ACCESS]\n", 1)[1].split("[NEXT_STEPS]\n", 1)[0]
     next_steps = out.split("[NEXT_STEPS]\n", 1)[1].split("OPENED_URL=", 1)[0]
 
     assert "http://localhost:9700" in access
-    assert "http://192.0.2.10:9700" in access
+    assert "192.0.2.10" not in access
     assert "ssh -L 9700:localhost:9700 fixture-user@fixture.example" in access
     assert "http://localhost:9700" in next_steps
-    assert "http://192.0.2.10:9700" in next_steps
+    assert "192.0.2.10" not in next_steps
     assert "ssh -L 9700:localhost:9700 fixture-user@fixture.example" in next_steps
     assert "OPENED_URL=http://localhost:9700" in out
     assert ":8700" not in access + next_steps
+
+
+def test_network_dashboard_url_needs_a_published_dashboard() -> None:
+    """VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0 publishes the Dashboard on every
+    interface; only then does the network URL answer."""
+    out = _run_harness("print-dashboard-published")
+    access = out.split("[DASHBOARD_ACCESS]\n", 1)[1].split("[NEXT_STEPS]\n", 1)[0]
+    next_steps = out.split("[NEXT_STEPS]\n", 1)[1].split("OPENED_URL=", 1)[0]
+
+    assert "http://192.0.2.10:9700" in access
+    assert "http://192.0.2.10:9700" in next_steps
 
 
 def test_dashboard_offset_respects_runtime_host_port_range() -> None:

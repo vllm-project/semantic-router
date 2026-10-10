@@ -109,8 +109,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 	// Initialize request context
 	ctx = &RequestContext{
-		Headers:      make(map[string]string),
-		TraceContext: stream.Context(),
+		Headers:       make(map[string]string),
+		TraceContext:  stream.Context(),
+		ConfigVersion: r.configVersion.Load(),
 	}
 
 	for {
@@ -174,8 +175,8 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 	// for the response body, but the stream terminated before the body arrived, record it now.
 	if ctx != nil && !ctx.UpstreamErrorMetricRecorded && ctx.UpstreamStatusCode >= 400 {
 		if ctx.UpstreamStatusCode == 503 {
-			rel := r.getModelReliability(ctx.RequestModel)
-			if connDur, ok := parseDurationSafe(rel.ConnectTimeout); ok {
+			_, _, connectTimeoutStr := r.getEffectiveTimeouts(ctx)
+			if connDur, ok := parseDurationSafe(connectTimeoutStr); ok {
 				elapsed := time.Since(ctx.StartTime)
 				if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) {
 					recordProcessTimeout(ctx)
@@ -240,6 +241,25 @@ func (r *OpenAIRouter) getModelReliability(model string) config.ProviderReliabil
 	return config.ProviderReliability{}
 }
 
+func (r *OpenAIRouter) getEffectiveTimeouts(ctx *RequestContext) (totalTimeout, idleTimeout, connectTimeout string) {
+	if ctx == nil {
+		return "", "", ""
+	}
+	rel := r.getModelReliability(ctx.RequestModel)
+	totalTimeout = rel.TotalTimeout
+	idleTimeout = rel.IdleTimeout
+	connectTimeout = rel.ConnectTimeout
+	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.Reliability != nil {
+		if dTotal := ctx.VSRSelectedDecision.Reliability.TotalTimeout; dTotal != "" {
+			totalTimeout = dTotal
+		}
+		if dIdle := ctx.VSRSelectedDecision.Reliability.IdleTimeout; dIdle != "" {
+			idleTimeout = dIdle
+		}
+	}
+	return totalTimeout, idleTimeout, connectTimeout
+}
+
 func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err error) bool {
 	if ctx == nil || ctx.RequestModel == "" || ctx.ImmediateResponseEncoded || ctx.SkipProcessing {
 		return false
@@ -255,7 +275,7 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 		return true
 	}
 
-	rel := r.getModelReliability(ctx.RequestModel)
+	totalTimeoutStr, idleTimeoutStr, connectTimeoutStr := r.getEffectiveTimeouts(ctx)
 
 	var start time.Time
 	if !ctx.ProcessingStartTime.IsZero() {
@@ -284,10 +304,10 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 			idleGap = time.Since(lastActivity)
 		}
 
-		if idleDur, ok := parseDurationSafe(rel.StreamIdleTimeout); ok && idleGap >= timeoutThreshold(idleDur, 300*time.Millisecond) {
+		if idleDur, ok := parseDurationSafe(idleTimeoutStr); ok && idleGap >= timeoutThreshold(idleDur, 300*time.Millisecond) {
 			return true
 		}
-		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok && elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
+		if reqDur, ok := parseDurationSafe(totalTimeoutStr); ok && elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
 			return true
 		}
 		return false
@@ -295,16 +315,16 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 
 	// Pre-header termination (Envoy local reply due to request timeout or connect timeout)
 	if ctx.UpstreamStatusCode == 0 && elapsed > 0 {
-		// Check if request exceeded request_timeout
-		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok {
+		// Check if request exceeded total_timeout
+		if reqDur, ok := parseDurationSafe(totalTimeoutStr); ok {
 			if elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
 				return true
 			}
 		}
 
 		// Check if request exceeded connect_timeout
-		if connDur, ok := parseDurationSafe(rel.ConnectTimeout); ok {
-			reqDur, hasReq := parseDurationSafe(rel.RequestTimeout)
+		if connDur, ok := parseDurationSafe(connectTimeoutStr); ok {
+			reqDur, hasReq := parseDurationSafe(totalTimeoutStr)
 			if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) && (!hasReq || elapsed < timeoutThreshold(reqDur, 300*time.Millisecond)) {
 				return true
 			}
@@ -379,7 +399,9 @@ func (r *OpenAIRouter) handleProcessRequest(
 	ctx *RequestContext,
 ) error {
 	if protocolConfig := req.GetProtocolConfig(); protocolConfig != nil {
-		ctx.FullDuplexRequestBody = protocolConfig.GetRequestBodyMode() == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+		mode := protocolConfig.GetRequestBodyMode()
+		ctx.FullDuplexRequestBody = mode == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+		ctx.BufferedRequestBody = mode == http_ext.ProcessingMode_BUFFERED || mode == http_ext.ProcessingMode_BUFFERED_PARTIAL
 	}
 
 	switch v := req.Request.(type) {
@@ -406,13 +428,10 @@ func (r *OpenAIRouter) processRequestHeaders(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleRequestHeaders(v, ctx)
+	response, err := r.requestHeadersReply(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestHeaders failed: %v", err)
 		return err
 	}
-	response = r.encodeImmediateResponseForClient(response, ctx)
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if r.holdFullDuplexHeaderReply(v, response, ctx) {
 		return nil
 	}
@@ -443,16 +462,11 @@ func (r *OpenAIRouter) sendRequestBodyResult(
 	err error,
 	ctx *RequestContext,
 ) (bool, error) {
+	response, err = r.requestBodyReply(response, err, ctx)
 	if err != nil {
-		var ok bool
-		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
-			logging.Errorf("handleRequestBody failed: %v", err)
-			return false, err
-		}
+		return false, err
 	}
-	response = r.encodeImmediateResponseForClient(response, ctx)
-	r.bindBenchmarkConfigResponse(response, ctx)
-	r.persistImmediateResponseObject(response, ctx)
+	r.addEnvoyReliabilityHeaders(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.
@@ -499,18 +513,14 @@ func (r *OpenAIRouter) processResponseHeaders(
 	v *ext_proc.ProcessingRequest_ResponseHeaders,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleResponseHeaders(v, ctx)
+	response, err := r.responseHeadersReply(v, ctx)
 	if err != nil {
 		return err
 	}
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "response header"); err != nil {
 		return err
 	}
-	finishImmediateResponseTrace(ctx, response)
-	if v.ResponseHeaders.GetEndOfStream() {
-		finishRequestTrace(ctx, nil)
-	}
+	responseHeadersReplySent(ctx, response, v.ResponseHeaders.GetEndOfStream())
 	return nil
 }
 
@@ -519,18 +529,14 @@ func (r *OpenAIRouter) processResponseBody(
 	v *ext_proc.ProcessingRequest_ResponseBody,
 	ctx *RequestContext,
 ) error {
-	response, err := r.handleResponseBody(v, ctx)
+	response, err := r.responseBodyReply(v, ctx)
 	if err != nil {
 		return err
 	}
-	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "response body"); err != nil {
 		return err
 	}
-	finishImmediateResponseTrace(ctx, response)
-	if v.ResponseBody.GetEndOfStream() || ctx.StreamingComplete {
-		finishRequestTrace(ctx, nil)
-	}
+	responseBodyReplySent(ctx, response, v.ResponseBody.GetEndOfStream())
 	return nil
 }
 

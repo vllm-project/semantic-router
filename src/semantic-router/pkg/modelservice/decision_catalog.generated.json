@@ -1,0 +1,165 @@
+{
+  "models": [
+    {
+      "id": "vllm-sr/Decision-2.0-Kai-0.6B",
+      "family": "decision2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Eos-0.8B",
+      "family": "decision2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Sol-2B",
+      "family": "decision2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Nox-4B",
+      "family": "decision2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Lux-9B",
+      "family": "decision2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Vega-27B",
+      "family": "decision2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Kai-0.6B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Lex-0.6B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Route-0.6B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Eos-0.8B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Sol-2B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Nox-4B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Lux-9B",
+      "family": "decision1",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-0.3B",
+      "family": "vela2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-0.8B",
+      "family": "vela2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-4B",
+      "family": "vela2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-9B",
+      "family": "vela2",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ]
+    }
+  ]
+}

@@ -131,6 +131,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 
 	addRecipeRoutingDefinition(schema)
 	setCoreEnums(schema)
+	addNativeAlgorithmConditions(schema)
 	deployments := definitionProperty(schema, "CanonicalModelCatalog", "deployments")
 	if deployments == nil {
 		return nil, fmt.Errorf("canonical model deployment schema is missing")
@@ -147,6 +148,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 		return nil, err
 	}
 	addPluginPayloadConditions(schema, pluginRefs)
+	addAlgorithmExtensionBlocks(reflector, schema)
 	extension, err := buildExtension(schema, pluginRefs)
 	if err != nil {
 		return nil, err
@@ -437,6 +439,32 @@ func addPluginDefinitions(
 	return refs, nil
 }
 
+// addAlgorithmExtensionBlocks adds the block of every algorithm type
+// registered outside the Router to AlgorithmConfig, under the type's name.
+func addAlgorithmExtensionBlocks(reflector *jsonschema.Reflector, root *jsonschema.Schema) {
+	algorithm := root.Definitions["AlgorithmConfig"]
+	if algorithm == nil {
+		return
+	}
+	samples := routerconfig.DecisionAlgorithmPayloadSamples()
+	types := make([]string, 0, len(samples))
+	for typ := range samples {
+		types = append(types, typ)
+	}
+	sort.Strings(types)
+	for _, typ := range types {
+		reflector.ExpandedStruct = false
+		block := reflector.Reflect(samples[typ])
+		reflector.ExpandedStruct = true
+		for name, definition := range block.Definitions {
+			if root.Definitions[name] == nil {
+				root.Definitions[name] = definition
+			}
+		}
+		algorithm.Properties.Set(typ, &jsonschema.Schema{Ref: block.Ref})
+	}
+}
+
 func addPluginPayloadConditions(root *jsonschema.Schema, pluginRefs map[string]string) {
 	plugin := root.Definitions["DecisionPlugin"]
 	if plugin == nil {
@@ -510,6 +538,9 @@ func buildExtension(root *jsonschema.Schema, pluginRefs map[string]string) (sche
 		"type",
 		"minimum_candidates",
 		"on_error",
+		"quality",
+		"stages",
+		"budget",
 	); err != nil {
 		return schemaExtension{}, err
 	}

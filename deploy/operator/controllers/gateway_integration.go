@@ -28,6 +28,25 @@ import (
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
+// The gateway modes status.gatewayMode reports.
+const (
+	// GatewayModeStandalone serves inference HTTP on the Router's own
+	// listener, with no Envoy in the Pod.
+	GatewayModeStandalone = "standalone"
+	// GatewayModeIntegration serves ext_proc gRPC for the Gateway that
+	// spec.gateway names.
+	GatewayModeIntegration = "gateway-integration"
+)
+
+// routerGatewayArgs are the Router flags that select a gateway mode. They
+// precede spec.args, which may override them.
+func routerGatewayArgs(gatewayMode string) []string {
+	if gatewayMode == GatewayModeStandalone {
+		return []string{"-gateway=standalone", "-listener-address=0.0.0.0"}
+	}
+	return []string{"-gateway=extproc"}
+}
+
 // reconcileGatewayIntegration resolves the externally managed ExtProc integration.
 func reconcileGatewayIntegration(ctx context.Context, c client.Client, sr *vllmv1alpha1.SemanticRouter) (string, error) {
 	logger := log.FromContext(ctx)
@@ -35,7 +54,7 @@ func reconcileGatewayIntegration(ctx context.Context, c client.Client, sr *vllmv
 	// Check if gateway.existingRef configured
 	if sr.Spec.Gateway == nil || sr.Spec.Gateway.ExistingRef == nil {
 		logger.Info("No Gateway configuration specified, using standalone mode")
-		return "standalone", nil
+		return GatewayModeStandalone, nil
 	}
 
 	// Validate Gateway exists
@@ -54,5 +73,5 @@ func reconcileGatewayIntegration(ctx context.Context, c client.Client, sr *vllmv
 	// A route to the management API would not provide an inference data plane.
 	logger.Info("Found Gateway; external ExtProc policy and routes must be configured separately", "gateway", gateway.Name)
 
-	return "gateway-integration", nil
+	return GatewayModeIntegration, nil
 }

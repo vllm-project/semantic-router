@@ -138,7 +138,7 @@ describe('Builder routing scope navigation', () => {
     expect(listBuilderRoutingScopes(scopedAst)).toEqual([
       {
         id: 'global',
-        label: 'Global catalog',
+        label: 'Shared model catalog',
         recipeName: null,
         modelNames: [],
       },

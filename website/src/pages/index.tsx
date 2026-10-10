@@ -1,13 +1,15 @@
 import React from 'react'
-import clsx from 'clsx'
 import Head from '@docusaurus/Head'
 import Link from '@docusaurus/Link'
+import { FiArrowUpRight, FiGlobe, FiTerminal } from 'react-icons/fi'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import useBaseUrl from '@docusaurus/useBaseUrl'
-import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
-import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
+import ArchitectureCapabilities from '@site/src/components/homepage/ArchitectureCapabilities'
+import RuntimeModes from '@site/src/components/homepage/RuntimeModes'
+import SovereigntyAI from '@site/src/components/homepage/SovereigntyAI'
+import EcosystemSection from '@site/src/components/homepage/EcosystemSection'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import YouTubeSection from '@site/src/components/YouTubeSection'
@@ -18,26 +20,22 @@ import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
-import {
-  PillLink,
-  SectionLabel,
-  StatStrip,
-} from '@site/src/components/site/Chrome'
+import { SectionLabel } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
 
 const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
-  message: 'Build Your Mixture-of-Models',
+  message: 'Intelligence Beyond Any One Model',
 })
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'Mixture-of-Models is a serving architecture for heterogeneous LLM inference. vLLM Semantic Router makes it practical to deploy.',
+    'An open, programmable decision layer for models and compute.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
-  message: 'Build Your Mixture-of-Models | vLLM Semantic Router',
+  message: 'Intelligence Beyond Any One Model | vLLM Semantic Router',
 })
 
 const heroStats = [
@@ -50,7 +48,7 @@ const heroStats = [
     description: translate({
       id: 'homepage.stats.signals.description',
       message:
-        '20 signal families spanning request context, safety, intent, preference, and system state.',
+        'Context, intent, safety, preferences, and system state.',
     }),
   },
   {
@@ -62,7 +60,7 @@ const heroStats = [
     description: translate({
       id: 'homepage.stats.algorithms.description',
       message:
-        '11 selection algorithms and 5 loopers for choosing, composing, and retrying model calls.',
+        '11 selection algorithms and 5 loopers.',
     }),
   },
   {
@@ -72,660 +70,54 @@ const heroStats = [
       {
         id: 'homepage.stats.papers.description',
         message:
-          '{count} research papers spanning routing, systems, safety, and multimodality.',
+          '{count} papers on routing, safety, and inference.',
       },
       { count: paperCount },
     ),
   },
 ]
 
-/* The four beats of the routing decision. The gate stage is the claim: hard
- * constraints remove paths, and only what survives is ranked. */
-const sovereigntyStages = [
-  {
-    id: 'request',
-    label: translate({ id: 'homepage.sovereignty.stage.request', message: 'Request' }),
-    detail: translate({ id: 'homepage.sovereignty.stage.request.detail', message: 'Identity + context' }),
-    gate: false,
-  },
-  {
-    id: 'constraints',
-    label: translate({ id: 'homepage.sovereignty.stage.constraints', message: 'Hard constraints' }),
-    detail: translate({ id: 'homepage.sovereignty.stage.constraints.detail', message: 'Residency · locality · auth' }),
-    gate: true,
-  },
-  {
-    id: 'eligible',
-    label: translate({ id: 'homepage.sovereignty.stage.eligible', message: 'Eligible pool' }),
-    detail: translate({ id: 'homepage.sovereignty.stage.eligible.detail', message: 'Approved paths only' }),
-    gate: false,
-  },
-  {
-    id: 'rank',
-    label: translate({ id: 'homepage.sovereignty.stage.rank', message: 'Rank' }),
-    detail: translate({ id: 'homepage.sovereignty.stage.rank.detail', message: 'Quality · latency · cost' }),
-    gate: false,
-  },
-]
-
-const architectureDimensions = [
-  {
-    marker: '01',
-    dimension: translate({
-      id: 'homepage.capabilities.axis.models',
-      message: 'Models',
-    }),
-    fragmented: translate({
-      id: 'homepage.capabilities.models.reality',
-      message: 'Models specialize in different work.',
-    }),
-    unified: translate({
-      id: 'homepage.capabilities.models.value',
-      message: 'Compose policy-specific model paths.',
-    }),
-  },
-  {
-    marker: '02',
-    dimension: translate({
-      id: 'homepage.capabilities.axis.compute',
-      message: 'Compute',
-    }),
-    fragmented: translate({
-      id: 'homepage.capabilities.compute.reality',
-      message: 'GPU generations and accelerators differ in capacity and latency.',
-    }),
-    unified: translate({
-      id: 'homepage.capabilities.compute.value',
-      message: 'Route across heterogeneous compute.',
-    }),
-  },
-  {
-    marker: '03',
-    dimension: translate({
-      id: 'homepage.capabilities.axis.location',
-      message: 'Location',
-    }),
-    fragmented: translate({
-      id: 'homepage.capabilities.location.reality',
-      message: 'Inference spans edge, private, and cloud.',
-    }),
-    unified: translate({
-      id: 'homepage.capabilities.location.value',
-      message: 'Route to configured local, private, or cloud backends.',
-    }),
-  },
-  {
-    marker: '04',
-    dimension: translate({
-      id: 'homepage.capabilities.axis.preference',
-      message: 'Preference',
-    }),
-    fragmented: translate({
-      id: 'homepage.capabilities.preference.reality',
-      message: '“Best” changes by user and workload.',
-    }),
-    unified: translate({
-      id: 'homepage.capabilities.preference.value',
-      message: 'Express preferences as routing policy.',
-    }),
-  },
-]
-
-const momScorecards = [
-  {
-    title: translate({
-      id: 'homepage.momProof.livecodebench.title',
-      message: 'LiveCodeBench',
-    }),
-    result: translate({
-      id: 'homepage.momProof.livecodebench.result',
-      message: '92.6 vs Fugu Ultra 92.0',
-    }),
-    image: '/img/mom-proof/livecodebench-scorecard-dark.png',
-    alt: translate({
-      id: 'homepage.momProof.livecodebench.alt',
-      message: 'LiveCodeBench dark scorecard showing VSR Closed at 92.6',
-    }),
-  },
-  {
-    title: translate({
-      id: 'homepage.momProof.gpqa.title',
-      message: 'GPQA-Diamond',
-    }),
-    result: translate({
-      id: 'homepage.momProof.gpqa.result',
-      message: '96.0 vs Fugu Ultra 95.5',
-    }),
-    image: '/img/mom-proof/gpqa-diamond-scorecard-dark.png',
-    alt: translate({
-      id: 'homepage.momProof.gpqa.alt',
-      message: 'GPQA-Diamond dark scorecard showing VSR Closed at 96.0',
-    }),
-  },
-  {
-    title: translate({
-      id: 'homepage.momProof.hle.title',
-      message: 'Humanity\'s Last Exam',
-    }),
-    result: translate({
-      id: 'homepage.momProof.hle.result',
-      message: '50.0 matches Fugu Ultra',
-    }),
-    image: '/img/mom-proof/humanitys-last-exam-scorecard-dark.png',
-    alt: translate({
-      id: 'homepage.momProof.hle.alt',
-      message: 'Humanity\'s Last Exam dark scorecard showing VSR Closed at 50.0',
-    }),
-  },
-]
-
-type ExampleProduct = {
-  label: string
-  to?: string
-}
-
-function ExampleProducts({ products }: { products: ExampleProduct[] }): JSX.Element {
-  return (
-    <span className="site-prose">
-      {products.map((product, index) => (
-        <React.Fragment key={product.label}>
-          {index > 0 && ', '}
-          {product.to ? <Link to={product.to}>{product.label}</Link> : product.label}
-        </React.Fragment>
-      ))}
-    </span>
-  )
-}
-
-const alternativeComparison = [
-  {
-    capability: translate({
-      id: 'homepage.alternatives.examples.capability',
-      message: 'Examples',
-    }),
-    semanticRouter: 'vLLM Semantic Router',
-    aiGateway: (
-      <ExampleProducts
-        products={[
-          { label: 'Agent Router', to: '/docs/installation/k8s/ai-gateway' },
-          { label: 'LiteLLM' },
-          { label: 'agentgateway', to: '/docs/installation/k8s/agentgateway' },
-        ]}
-      />
-    ),
-    llmd: (
-      <ExampleProducts
-        products={[
-          { label: 'llm-d', to: '/docs/installation/k8s/llm-d' },
-          { label: 'vLLM Router' },
-          { label: 'AIBrix gateway', to: '/docs/installation/k8s/aibrix' },
-        ]}
-      />
-    ),
-  },
-  {
-    capability: translate({
-      id: 'homepage.alternatives.decides.capability',
-      message: 'What it decides',
-    }),
-    semanticRouter: translate({
-      id: 'homepage.alternatives.decides.semanticRouter',
-      message: 'Which model, recipe and policy serve a request',
-    }),
-    aiGateway: translate({
-      id: 'homepage.alternatives.decides.aiGateway',
-      message: 'How a request reaches a backend',
-    }),
-    llmd: translate({
-      id: 'homepage.alternatives.decides.llmd',
-      message: 'Which healthy replica inside the chosen pool',
-    }),
-  },
-  {
-    capability: translate({
-      id: 'homepage.alternatives.reads.capability',
-      message: 'What it reads',
-    }),
-    semanticRouter: translate({
-      id: 'homepage.alternatives.reads.semanticRouter',
-      message: 'Request content, policy, semantic evidence',
-    }),
-    aiGateway: translate({
-      id: 'homepage.alternatives.reads.aiGateway',
-      message: 'Protocol, credentials, rate limits',
-    }),
-    llmd: translate({
-      id: 'homepage.alternatives.reads.llmd',
-      message: 'Load, prefix-cache locality, replica health',
-    }),
-  },
-  {
-    capability: translate({
-      id: 'homepage.alternatives.owns.capability',
-      message: 'What it owns',
-    }),
-    semanticRouter: translate({
-      id: 'homepage.alternatives.owns.semanticRouter',
-      message: 'The model, recipe and policy decision',
-    }),
-    aiGateway: translate({
-      id: 'homepage.alternatives.owns.aiGateway',
-      message: 'Provider translation, credentials, rate limits, traffic policy',
-    }),
-    llmd: translate({
-      id: 'homepage.alternatives.owns.llmd',
-      message: 'Endpoint selection inside a pool',
-    }),
-  },
-  {
-    capability: translate({
-      id: 'homepage.alternatives.runs.capability',
-      message: 'Where it runs',
-    }),
-    semanticRouter: translate({
-      id: 'homepage.alternatives.runs.semanticRouter',
-      message: 'An Envoy ExtProc filter',
-    }),
-    aiGateway: translate({
-      id: 'homepage.alternatives.runs.aiGateway',
-      message: 'The data plane',
-    }),
-    llmd: translate({
-      id: 'homepage.alternatives.runs.llmd',
-      message: 'A pool scheduler, such as the llm-d Endpoint Picker',
-    }),
-  },
-  {
-    capability: translate({
-      id: 'homepage.alternatives.receipt.capability',
-      message: 'Decision receipt',
-    }),
-    semanticRouter: translate({
-      id: 'homepage.alternatives.receipt.semanticRouter',
-      message: 'x-vsr-selected-model',
-    }),
-    aiGateway: translate({
-      id: 'homepage.alternatives.receipt.aiGateway',
-      message: 'Varies by implementation',
-    }),
-    llmd: translate({
-      id: 'homepage.alternatives.receipt.llmd',
-      message: 'Varies by implementation',
-    }),
-  },
-]
-
-function CapabilitySection(): JSX.Element {
-  return (
-    <section
-      className={styles.capabilitySection}
-      aria-labelledby="mixture-architecture-title"
-    >
-      <div className="site-shell-container">
-        <ScrollReveal>
-          <header className={`site-section-intro ${styles.capabilityHeading}`}>
-            <SectionLabel>
-              <Translate id="homepage.capabilities.label">Architecture</Translate>
-            </SectionLabel>
-            <h2 id="mixture-architecture-title">
-              <Translate id="homepage.capabilities.heading">
-                Unify heterogeneous inference
-              </Translate>
-            </h2>
-            <p>
-              <Translate id="homepage.capabilities.description">
-                Unify a fragmented model landscape across four dimensions.
-              </Translate>
-            </p>
-          </header>
-
-          <div className={styles.capabilityFrame}>
-            <div
-              className={styles.architectureMatrix}
-              role="table"
-              aria-label={translate({
-                id: 'homepage.capabilities.table.aria',
-                message: 'Fragmented inference compared with vLLM Semantic Router',
-              })}
-            >
-              <div className={styles.matrixHeader} role="row">
-                <span role="columnheader">
-                  <Translate id="homepage.capabilities.table.dimension">
-                    Dimension
-                  </Translate>
-                </span>
-                <span role="columnheader">
-                  <Translate id="homepage.capabilities.table.reality">
-                    Fragmented today
-                  </Translate>
-                </span>
-                <span role="columnheader">
-                  <Translate id="homepage.capabilities.table.value">
-                    With vLLM SR
-                  </Translate>
-                </span>
-              </div>
-
-              {architectureDimensions.map(item => (
-                <div key={item.marker} className={styles.matrixRow} role="row">
-                  <div className={styles.matrixDimension} role="rowheader">
-                    <span aria-hidden="true">{item.marker}</span>
-                    <strong>{item.dimension}</strong>
-                  </div>
-                  <div className={styles.matrixFragmented} role="cell">
-                    <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.capabilities.table.reality">
-                        Fragmented today
-                      </Translate>
-                    </span>
-                    <p>{item.fragmented}</p>
-                  </div>
-                  <div className={styles.matrixUnified} role="cell">
-                    <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.capabilities.table.value">
-                        With vLLM SR
-                      </Translate>
-                    </span>
-                    <p>{item.unified}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className={styles.capabilityStats}>
-              <StatStrip items={heroStats} />
-            </div>
-          </div>
-        </ScrollReveal>
-      </div>
-    </section>
-  )
-}
-
-function AlternativesSection(): JSX.Element {
-  return (
-    <section
-      className={styles.capabilitySection}
-      aria-labelledby="alternatives-title"
-    >
-      <div className="site-shell-container">
-        <ScrollReveal>
-          <header className={`site-section-intro ${styles.capabilityHeading}`}>
-            <SectionLabel>
-              <Translate id="homepage.alternatives.label">
-                Where it fits
-              </Translate>
-            </SectionLabel>
-            <h2 id="alternatives-title">
-              <Translate id="homepage.alternatives.heading">
-                One decision layer, two neighbours
-              </Translate>
-            </h2>
-            <p>
-              <Translate id="homepage.alternatives.description">
-                What the Router owns next to an AI Gateway and an Inference
-                Router. The three components make no overlapping decisions.
-              </Translate>
-            </p>
-          </header>
-
-          <div className={styles.capabilityFrame}>
-            <div
-              className={`${styles.architectureMatrix} ${styles.alternativesMatrix}`}
-              role="table"
-              aria-label={translate({
-                id: 'homepage.alternatives.table.aria',
-                message:
-                  'Semantic Router compared with an AI Gateway and an Inference Router',
-              })}
-            >
-              <div className={styles.matrixHeader} role="row">
-                <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.capability">
-                    Capability
-                  </Translate>
-                </span>
-                <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.semanticRouter">
-                    Semantic Router
-                  </Translate>
-                </span>
-                <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.aiGateway">
-                    AI Gateway
-                  </Translate>
-                </span>
-                <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.llmd">
-                    Inference Router
-                  </Translate>
-                </span>
-              </div>
-
-              {alternativeComparison.map(item => (
-                <div key={item.capability} className={styles.matrixRow} role="row">
-                  <div className={styles.matrixDimension} role="rowheader">
-                    <strong>{item.capability}</strong>
-                  </div>
-                  <div className={styles.matrixUnified} role="cell">
-                    <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.alternatives.table.semanticRouter">
-                        Semantic Router
-                      </Translate>
-                    </span>
-                    <p>{item.semanticRouter}</p>
-                  </div>
-                  <div className={styles.matrixFragmented} role="cell">
-                    <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.alternatives.table.aiGateway">
-                        AI Gateway
-                      </Translate>
-                    </span>
-                    <p>{item.aiGateway}</p>
-                  </div>
-                  <div className={styles.matrixFragmented} role="cell">
-                    <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.alternatives.table.llmd">
-                        Inference Router
-                      </Translate>
-                    </span>
-                    <p>{item.llmd}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </ScrollReveal>
-      </div>
-    </section>
-  )
-}
-
-function MixtureOfModelsProofSection(): JSX.Element {
-  return (
-    <section className={styles.momProofSection} aria-labelledby="mom-proof-title">
-      <div className="site-shell-container">
-        <ScrollReveal>
-          <div className={styles.momProofHeading}>
-            <SectionLabel>
-              <Translate id="homepage.momProof.label">
-                Mixture-of-Models proof
-              </Translate>
-            </SectionLabel>
-            <div>
-              <h2 id="mom-proof-title">
-                <Translate id="homepage.momProof.title">
-                  One Model API can beat frontier models
-                </Translate>
-              </h2>
-              <p>
-                <Translate id="homepage.momProof.description">
-                  vLLM Semantic Router keeps the public surface as vllm-sr/auto,
-                  then coordinates closed, open, and hybrid model pools inside the
-                  serving layer.
-                </Translate>
-              </p>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <ScrollReveal delay={70}>
-          <div className={styles.momProofFrame}>
-            <div className={styles.momProofArchitecture}>
-              <div className={styles.momProofArchitectureCopy}>
-                <SectionLabel>
-                  <Translate id="homepage.momProof.architectureLabel">
-                    Router-side collaboration
-                  </Translate>
-                </SectionLabel>
-                <h3>
-                  <Translate id="homepage.momProof.architectureTitle">
-                    The app calls one model. The router builds the team.
-                  </Translate>
-                </h3>
-                <p>
-                  <Translate id="homepage.momProof.architectureCopy">
-                    Route by task shape, risk, confidence, and model capability;
-                    run bounded collaboration; return one OpenAI-compatible
-                    response.
-                  </Translate>
-                </p>
-              </div>
-
-              <div className={styles.momProofArchitectureImageWrap}>
-                <img
-                  className={styles.momProofArchitectureImage}
-                  src="/img/mom-proof/architecture-router-dark.png"
-                  alt={translate({
-                    id: 'homepage.momProof.architectureAlt',
-                    message:
-                      'vLLM Semantic Router routes heterogeneous closed and open model pools',
-                  })}
-                  loading="lazy"
-                />
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <ScrollReveal delay={120}>
-          <div className={styles.momScorecardGrid}>
-            {momScorecards.map(card => (
-              <article key={card.image} className={styles.momScorecard}>
-                <div className={styles.momScorecardHeader}>
-                  <h3>{card.title}</h3>
-                  <p>{card.result}</p>
-                </div>
-                <img
-                  className={styles.momScorecardImage}
-                  src={card.image}
-                  alt={card.alt}
-                  loading="lazy"
-                />
-              </article>
-            ))}
-          </div>
-        </ScrollReveal>
-      </div>
-    </section>
-  )
-}
-
-/* Residency and authorization are eliminated as hard constraints before any
- * ranking happens. Deliberately no claim that data never leaves your estate —
- * docs/overview/use-cases.md is explicit that "local" is not an end-to-end
- * privacy guarantee, and the homepage should not say otherwise. */
-function DataSovereigntySection(): JSX.Element {
-  return (
-    <section className={styles.sovereigntySection}>
-      <div className="site-shell-container">
-        <ScrollReveal>
-          <div className={styles.sovereigntyFrame}>
-            <div className={`site-section-intro ${styles.sovereigntyCopy}`}>
-              <SectionLabel>
-                <Translate id="homepage.sovereignty.label">Data sovereignty</Translate>
-              </SectionLabel>
-              <h2>
-                <Translate id="homepage.sovereignty.title">
-                  Keep regulated traffic on approved paths
-                </Translate>
-              </h2>
-              <p>
-                <Translate id="homepage.sovereignty.description">
-                  Residency, locality, and authorization are hard constraints, not preferences.
-                  Ineligible paths are removed before ranking ever runs.
-                </Translate>
-              </p>
-            </div>
-
-            <ol className={styles.constraintFlow}>
-              {sovereigntyStages.map((stage, index) => (
-                <li
-                  key={stage.id}
-                  className={clsx(styles.constraintStage, {
-                    [styles.constraintStageGate]: stage.gate,
-                  })}
-                  style={{ '--stage-delay': `${index * 0.5}s` } as React.CSSProperties}
-                >
-                  <span className={styles.constraintStageIndex}>
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                  <strong>{stage.label}</strong>
-                  <span className={styles.constraintStageDetail}>{stage.detail}</span>
-                </li>
-              ))}
-            </ol>
-
-            <div className={styles.constraintFooter}>
-              <p className={styles.constraintNote}>
-                <Translate id="homepage.sovereignty.note">
-                  A request fails closed instead of reaching a provider your policy does not allow.
-                </Translate>
-              </p>
-              <PillLink className={styles.sovereigntyCta} to="/docs/overview/signal-driven-decisions" muted>
-                <Translate id="homepage.sovereignty.cta">How routing policy works</Translate>
-              </PillLink>
-            </div>
-          </div>
-        </ScrollReveal>
-      </div>
-    </section>
-  )
-}
-
 function FinalCtaSection(): JSX.Element {
   return (
-    <section className={styles.finalCtaSection}>
+    <section id="get-started" className={styles.finalCtaSection} aria-labelledby="get-started-title">
       <div className="site-shell-container">
         <ScrollReveal>
           <div className={styles.finalCtaFrame}>
             <div className={styles.finalCtaCopy}>
               <SectionLabel>
-                <Translate id="homepage.finalCta.label">Start building</Translate>
+                <Translate id="homepage.finalCta.label">Make it yours</Translate>
               </SectionLabel>
-              <h2>
-                <Translate id="homepage.finalCta.title">
-                  Compose your Mixture-of-Models
-                </Translate>
+              <h2 id="get-started-title">
+                <Translate id="homepage.finalCta.title">Make every request count.</Translate>
               </h2>
               <p>
                 <Translate id="homepage.finalCta.description">
-                  Shape model paths with signals, preferences, and policy.
+                  Explore intelligent routing in the Playground. Bring it to your own stack when you're ready.
                 </Translate>
               </p>
             </div>
             <div className={styles.finalCtaActions}>
-              <PillLink
-                className={styles.finalCtaPrimary}
+              <Link
+                className={styles.finalCtaLink}
                 href="https://app.vllm-sr.ai/playground"
                 rel="noreferrer"
                 target="_blank"
               >
-                <Translate id="homepage.finalCta.playground">Try the Playground</Translate>
-              </PillLink>
-              <PillLink to="/docs/intro" muted>
-                <Translate id="homepage.finalCta.docs">Explore the Docs</Translate>
-              </PillLink>
+                <span className={styles.finalCtaIcon} aria-hidden="true"><FiGlobe /></span>
+                <span className={styles.finalCtaLinkCopy}>
+                  <strong><Translate id="homepage.finalCta.playground">Try the Playground</Translate></strong>
+                  <span><Translate id="homepage.finalCta.playgroundDetail">See how requests find the right model.</Translate></span>
+                </span>
+                <FiArrowUpRight className={styles.finalCtaArrow} aria-hidden="true" />
+              </Link>
+              <Link className={`${styles.finalCtaLink} ${styles.finalCtaInstall}`} to="/docs/installation/">
+                <span className={styles.finalCtaIcon} aria-hidden="true"><FiTerminal /></span>
+                <span className={styles.finalCtaLinkCopy}>
+                  <strong><Translate id="homepage.finalCta.docs">Run it yourself</Translate></strong>
+                  <span><Translate id="homepage.finalCta.docsDetail">From installation to your first request.</Translate></span>
+                </span>
+                <FiArrowUpRight className={styles.finalCtaArrow} aria-hidden="true" />
+              </Link>
             </div>
           </div>
         </ScrollReveal>
@@ -773,7 +165,7 @@ export default function Home(): JSX.Element {
         <meta property="og:type" content="website" />
         <meta
           name="keywords"
-          content="Mixture-of-Models runtime, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, micro-agent workflows, semantic router, policy-aware routing, vLLM"
+          content="programmable decision layer, agent harness, models and compute, Mixture-of-Models, open-source LLM router, multi-model routing, model selection, bounded model collaboration, semantic router, policy-aware routing, vLLM"
         />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={homepageSocialTitle} />
@@ -811,28 +203,16 @@ export default function Home(): JSX.Element {
           </ScrollReveal>
         </div>
 
-        <div className={styles.bandBlack}>
-          <CapabilitySection />
+        <div className={styles.bandArchitecture}>
+          <ArchitectureCapabilities stats={heroStats} />
         </div>
 
-        <div className={styles.bandGraphite}>
-          <IntegrationArchitecture />
-        </div>
-
-        <div className={styles.bandBlack}>
-          <AlternativesSection />
-        </div>
-
-        <div className={styles.bandBlack}>
-          <MixtureOfModelsProofSection />
-        </div>
-
-        <div className={styles.bandBlack}>
-          <UseCaseExplorer />
+        <div className={styles.bandRuntime}>
+          <RuntimeModes />
         </div>
 
         <div className={styles.bandRaised}>
-          <DataSovereigntySection />
+          <SovereigntyAI />
         </div>
 
         <div className={styles.bandBlack}>
@@ -844,6 +224,12 @@ export default function Home(): JSX.Element {
         <div className={styles.bandGraphite}>
           <ScrollReveal delay={40}>
             <TeamCarousel />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandBlack}>
+          <ScrollReveal delay={40}>
+            <EcosystemSection />
           </ScrollReveal>
         </div>
 

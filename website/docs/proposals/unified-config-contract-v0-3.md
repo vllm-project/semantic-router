@@ -51,9 +51,10 @@ silently translated at runtime.
 selects a Provider. A physical model in a Router-owned listener configuration
 must declare an explicit backend Provider; metadata-only external-gateway
 configuration and built-in virtual models may remain backendless.
-The local CLI serve path owns Envoy transport and rejects backendless physical
-models; external-gateway metadata-only configurations are deployed through the
-gateway integration rather than converted into a standalone Envoy data plane.
+The local CLI serve path defaults to the standalone frontend and rejects
+backendless physical Chat models. `--gateway extproc` selects Envoy transport.
+Metadata-only external-gateway configurations use their gateway integration;
+native System One models instead reference model-runtime deployments.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
 
@@ -122,26 +123,26 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
-Built-in category/domain inference keeps its runtime policy in
-`global.model_catalog.modules.classifier.domain`. The local model uses the
-canonical `variant` field; a remote classifier uses the shared `backend` block
-(`protocol`, `contract`, `model`, and `deadline_ms`) and resolves `model` by
-exact external-catalog name. The category consumer currently accepts
-`http_classify` plus `label_distribution.v1`, preserving the full label-score
-distribution. Prompt guard remains on its existing configuration surface until
-its separately scoped migration.
+Built-in model resources live in `global.model_catalog.deployments`; the default
+judgment deployment is selected by `system.decision_model`. Runtime modules own
+task policy, global bindings supply shared consumer defaults, and a recipe's
+`routing.model_bindings` can select a different resource or contract for its tasks.
+Native `candle`, `ort`, `openvino` execution fields such as `variant` are retired;
+use the [model-runtime migration guide](../model-runtime/migrate.md).
 
-Complexity is the second consumer and keeps its runtime policy in
-`global.model_catalog.modules.complexity`, so a backend survives the per-recipe
-replacement of `routing.signals`. It accepts `http_classify` with either
-`score.v1`, a continuous score the signal converts into a verdict through
-per-rule boundaries, or `label_distribution.v1`, where the winning label is the
-verdict. A consumer that reads more than one contract cannot default the field:
-omitting it would leave the runtime guessing which response shape to expect,
-and guessing wrong surfaces per request rather than at config load. Consumers
-reading exactly one contract keep it as the default, so category is unchanged.
-Connector byte ceilings belong to the connector configuration. External LLM
-classifier entries and the MCP classifier module use `max_response_bytes`.
+Domain, complexity, safety, PII and other model consumers share this boundary.
+External classifier backends still declare `protocol`, `contract`, `model` and
+`deadline_ms`; `model` is an exact external-catalog name. A consumer accepting
+multiple response contracts requires an explicit contract. Connector byte ceilings
+belong to connector configuration (`max_response_bytes` for external classifiers
+and MCP).
+
+A named recipe does not inherit signals, decisions, strategy or fallback from
+top-level `routing`. Each profile resolves its own built-in defaults. With no
+explicit default-recipe entrypoint, `vllm-sr/auto` resolves to top-level routing;
+an explicit `recipe: default` mapping replaces that name. Replay data retention
+belongs to `global.services.router_replay`, with decision-plugin overrides.
+
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.
 

@@ -17,7 +17,7 @@ limitations under the License.
 // Package mlmodelselection provides the e2e test profile for ML-based model selection.
 // This profile demonstrates ML-based model selection using pretrained models downloaded
 // from HuggingFace. Supports KNN, KMeans, SVM, and MLP algorithms aligned with FusionFactory
-// and Avengers-Pro papers. MLP uses Candle for GPU-accelerated inference (CUDA/Metal).
+// and Avengers-Pro papers. Every selector, MLP included, runs in Go inside the router.
 package mlmodelselection
 
 import (
@@ -153,7 +153,6 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	p.log("  • ML Models (KNN, KMeans, SVM, MLP) downloaded from HuggingFace and mounted")
 	p.log("  • Mock LLM service (receives routed requests)")
 	p.log("  • Semantic Router with ML-based model selectors")
-	p.log("  • MLP uses Candle for GPU acceleration (CUDA/Metal)")
 	p.log("")
 
 	return nil
@@ -244,7 +243,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	chartPath := "deploy/helm/semantic-router"
 	valuesFile := "e2e/profiles/ml-model-selection/values.yaml"
 
-	imageRepo := "ghcr.io/vllm-project/semantic-router/extproc"
+	imageRepo := "ghcr.io/vllm-project/semantic-router/vllm-sr"
 	imageTag := opts.ImageTag
 
 	installOpts := helm.InstallOptions{
@@ -253,6 +252,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		Namespace:   "vllm-semantic-router-system",
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
+			"gateway.mode":     "extproc",
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,
 			"image.pullPolicy": "Never",

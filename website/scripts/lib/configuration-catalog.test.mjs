@@ -9,6 +9,7 @@ import {
   GENERATED_CATALOG_END,
   GENERATED_CATALOG_START,
   replaceGeneratedCatalog,
+  renderConfigurationCatalog,
 } from './configuration-catalog.mjs'
 
 test('extracts the first sentence from the Overview prose', () => {
@@ -63,4 +64,22 @@ test('replaces only the marked generated catalog block', () => {
     replaceGeneratedCatalog(page, generated),
     `Before\n\n${generated}\n\nAfter\n`,
   )
+})
+
+test('publishes native System One algorithms separately from Chat algorithms', () => {
+  const entry = {
+    family: 'cascade',
+    type: 'native algorithm',
+    goal: 'Keep the typed request together.',
+    fragmentPath: 'config/fragments/algorithm/native/cascade.yaml',
+    fragmentKind: 'file',
+    guide: '../tutorials/algorithm/native/cascade',
+  }
+  const catalog = renderConfigurationCatalog({
+    signals: [], selectionAlgorithms: [], looperAlgorithms: [],
+    nativeAlgorithms: [entry], plugins: [],
+  })
+  assert.match(catalog, /### Native System One algorithms/)
+  assert.match(catalog, /`cascade` — native algorithm/)
+  assert.match(catalog, /tutorials\/algorithm\/native\/cascade/)
 })

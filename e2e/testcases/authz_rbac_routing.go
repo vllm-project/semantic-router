@@ -127,7 +127,7 @@ func checkAuthzRoutingCase(ctx context.Context, chatClient *fixtures.ChatComplet
 	}
 
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model:    "MoM",
+		Model:    "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{{Role: "user", Content: tc.prompt}},
 	}, headers)
 	if err != nil {

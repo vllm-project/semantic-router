@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package memory
 
@@ -338,10 +338,10 @@ func (m *MockMilvusClient) ReplicateMessage(context.Context, string, uint64, uin
 
 func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
-	// Use bert embedding config for tests since that's initialized in TestMain
+	// The qwen3 model type stores the test provider's full output
 	testEmbeddingConfig := EmbeddingConfig{
 		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelBERT,
+		Model:    EmbeddingModelQwen3,
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -975,7 +975,7 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 
 	testEmbeddingConfig := EmbeddingConfig{
 		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelBERT,
+		Model:    EmbeddingModelQwen3,
 	}
 
 	config := DefaultMemoryConfig()

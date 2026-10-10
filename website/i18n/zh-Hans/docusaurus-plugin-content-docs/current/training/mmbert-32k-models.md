@@ -2,7 +2,7 @@
 title: 训练 Vela Embedding 和 Reranker
 sidebar_label: Embedding 和 Reranking
 translation:
-  source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/training/mmbert-32k-models.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 使用 Vela Embedding 高效找到相关文档，再用 Vela Reranker 改善少量候选的排序。两者均从共享的 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)适配而来，并支持选择编码器深度和输出维度。
 
-直接使用已发布模型，请参阅[嵌入和重排序](../installation/runtime/embeddings.md)。
+直接使用已发布模型，请参阅[嵌入和重排序](../model-runtime/guides/embeddings)。
 
 ## Embedding：双编码器 {#embedding-model-bi-encoder}
 
@@ -81,7 +81,7 @@ Embedding 需要覆盖检索、相似度和多语言迁移。Reranker 使用固�
 
 ## 部署结果 {#deploy-the-result}
 
-通过[本地模型绑定](../installation/runtime/in-process.md)选择 checkpoint 和引擎，再通过[路由预览](../installation/runtime/lifecycle-diagnostics.md)检查深度、维度和输入预算。ONNX 部署需要从同一组训练权重导出的图。
+通过[本地模型绑定](../model-runtime/deploy)选择 checkpoint 和引擎，再通过[路由预览](../model-runtime/troubleshooting.md)检查深度、维度和输入预算。ONNX 部署需要从同一组训练权重导出的图。
 
 ## 早期 mmBERT 流程 {#earlier-mmbert-workflows}
 

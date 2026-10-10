@@ -4,9 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -321,7 +319,6 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		return errorResponse
 	}
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
-	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
 	// Body-stage model and path mutations can change the Envoy route selected
@@ -504,6 +501,9 @@ func (r *OpenAIRouter) appendProviderCredential(
 ) *ext_proc.ProcessingResponse {
 	provider, providerAuth, err := resolveProviderAuth(state.profile)
 	if err != nil {
+		logging.ComponentErrorEvent("extproc", "provider_auth_resolution_failed", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName, "error": err.Error(),
+		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	if providerAuth.Strategy == "none" {
@@ -575,37 +575,6 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 	}})
 }
 
-func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueOption, models ...string) {
-	if r == nil || r.Config == nil {
-		return
-	}
-	for _, model := range models {
-		if model == "" {
-			continue
-		}
-		modelParams, ok := r.Config.ModelConfig[model]
-		if !ok {
-			continue
-		}
-		rel := modelParams.Reliability
-		if rel.RequestTimeout != "" {
-			if dur, err := time.ParseDuration(rel.RequestTimeout); err == nil {
-				var timeoutMs int64
-				if dur > 0 {
-					// Round positive durations up to at least 1ms so sub-millisecond durations
-					// do not truncate to 0, which would disable Envoy's request timeout.
-					timeoutMs = int64((dur + time.Millisecond - 1) / time.Millisecond)
-				}
-				*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-					Key:      "x-envoy-upstream-rq-timeout-ms",
-					RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
-				}})
-				return
-			}
-		}
-	}
-}
-
 func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength int) {
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 		Key: "content-length", RawValue: []byte(fmt.Sprintf("%d", bodyLength)),
@@ -619,6 +588,7 @@ func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx
 	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
 	state.setHeaders = append(state.setHeaders, setHeaders...)
 	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
+	r.runRequestExtensions(state, ctx)
 }
 
 func buildRequestBodyContinueResponse(

@@ -158,6 +158,10 @@ MoM adapter requires one fully accounted inference call; unsupported compound
 usage cannot be priced from the final selected model alone. Dashboard can
 select registered targets but cannot edit their destinations or credentials.
 
+A target with `session_mode: session_aware` sends one session identity per task
+on its subject calls; [Read the results](./results.md) describes the header and
+the report label. Targets are `stateless` by default.
+
 An operator can freeze native generation settings in a target's `request_params`.
 These settings override the run's `sampling` defaults, including temperature,
 reasoning options and output length when present. Inspect the effective profile

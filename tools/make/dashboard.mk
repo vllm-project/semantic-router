@@ -5,7 +5,6 @@
 DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
-DASHBOARD_WIZMAP_DIR := $(DASHBOARD_DIR)/wizmap
 DASHBOARD_WASM_DIR := $(DASHBOARD_DIR)/wasm
 DASHBOARD_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/dashboard
 
@@ -16,10 +15,7 @@ DASHBOARD_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/dashboard
 dashboard-frontend-deps: ## Install the locked frontend dependencies once per make invocation
 	@cd $(DASHBOARD_FRONTEND_DIR) && npm ci --no-audit --no-fund
 
-dashboard-wizmap-deps: ## Install the locked Knowledge Map dependencies once per make invocation
-	@cd $(DASHBOARD_WIZMAP_DIR) && npm ci --no-audit --no-fund
-
-dashboard-install: dashboard-frontend-deps dashboard-wizmap-deps ## Install locked Dashboard dependencies
+dashboard-install: dashboard-frontend-deps ## Install locked Dashboard dependencies
 	@cd $(DASHBOARD_BACKEND_DIR) && go mod download
 
 dashboard-build-wasm: ## Build dashboard DSL compiler WASM assets
@@ -42,15 +38,9 @@ dashboard-dev-backend: ## Start dashboard backend in dev mode
 
 ## Build
 
-dashboard-build-wizmap: dashboard-wizmap-deps ## Build the Knowledge Map once for checks and embedding
-	@$(LOG_TARGET)
-	cd $(DASHBOARD_WIZMAP_DIR) && npm run build
-
-dashboard-build-frontend: dashboard-install dashboard-build-wasm dashboard-build-wizmap ## Build dashboard frontend for production
+dashboard-build-frontend: dashboard-install dashboard-build-wasm ## Build dashboard frontend for production
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm run build
-	@mkdir -p $(DASHBOARD_FRONTEND_DIR)/dist/embedded/wizmap
-	@cp -R $(DASHBOARD_WIZMAP_DIR)/dist/. $(DASHBOARD_FRONTEND_DIR)/dist/embedded/wizmap/
 	@echo "dashboard/frontend build completed"
 
 dashboard-build-backend: ## Build dashboard backend binary
@@ -72,6 +62,12 @@ dashboard-build: dashboard-build-frontend dashboard-build-backend ## Build dashb
 	@echo "dashboard build completed (frontend + backend)"
 
 ## Lint and Type Check
+
+decision-runtime-catalog-check: ## Check the Dashboard projection of canonical decision runtimes
+	@python3 $(DASHBOARD_FRONTEND_DIR)/scripts/generate-decision-runtime-catalog.py --check
+
+decision-runtime-catalog-generate: ## Regenerate the Dashboard decision runtime catalog
+	@python3 $(DASHBOARD_FRONTEND_DIR)/scripts/generate-decision-runtime-catalog.py
 
 dashboard-lint: dashboard-frontend-deps ## Lint dashboard frontend and backend
 	@$(LOG_TARGET)
@@ -99,7 +95,7 @@ dashboard-lint-fix: dashboard-frontend-deps ## Auto-fix lint issues in dashboard
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "dashboard/backend lint fix applied"
 
-dashboard-type-check: dashboard-frontend-deps dashboard-build-wizmap ## Type-check the frontend and compile the Knowledge Map
+dashboard-type-check: dashboard-frontend-deps ## Type-check the frontend
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm run type-check
 	@echo "dashboard/frontend type-check passed"
@@ -137,6 +133,14 @@ dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (r
 		go test -json -list '^(Test|Fuzz|Example)' ./... > "$(DASHBOARD_TEST_REPORT_DIR)/inventory.jsonl" && \
 		go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"
 
+# dashboard-test-backend fails when dashboard/backend/router/dashboard.openapi.json
+# drifts from the route registration; this target rewrites it.
+dashboard-openapi-generate: ## Regenerate the Dashboard OpenAPI document from the route registration
+	@$(LOG_TARGET)
+	@cd $(DASHBOARD_BACKEND_DIR) && \
+		UPDATE_DASHBOARD_OPENAPI=1 go test -count=1 -run '^TestDashboardOpenAPIArtifactIsCurrent$$' ./router
+	@echo "Wrote dashboard/backend/router/dashboard.openapi.json"
+
 dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
@@ -147,15 +151,13 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	@$(LOG_TARGET)
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/dist
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/node_modules
-	rm -rf $(DASHBOARD_WIZMAP_DIR)/dist
-	rm -rf $(DASHBOARD_WIZMAP_DIR)/node_modules
 	rm -f $(DASHBOARD_FRONTEND_DIR)/public/signal-compiler.wasm
 	rm -f $(DASHBOARD_FRONTEND_DIR)/public/wasm_exec.js
 	rm -rf $(DASHBOARD_BACKEND_DIR)/bin
 	@echo "dashboard cleaned"
 
-.PHONY: dashboard-frontend-deps dashboard-wizmap-deps dashboard-install dashboard-dev-frontend dashboard-dev-backend \
-	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-wizmap dashboard-build-frontend dashboard-build-backend \
-	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
+.PHONY: dashboard-frontend-deps dashboard-install dashboard-dev-frontend dashboard-dev-backend \
+	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-frontend dashboard-build-backend \
+	dashboard-test-backend dashboard-openapi-generate dashboard-test-frontend dashboard-test-e2e-evaluation \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
-	dashboard-check dashboard-clean
+	dashboard-check dashboard-clean decision-runtime-catalog-check decision-runtime-catalog-generate

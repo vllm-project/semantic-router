@@ -31,8 +31,6 @@ const (
 	PermEvalRun        = "evaluation.run"
 	PermTopologyRead   = "topology.read"
 	PermLogsRead       = "logs.read"
-	PermOpenClawRead   = "openclaw.read"
-	PermOpenClaw       = "openclaw.manage"
 	PermMcpRead        = "mcp.read"
 	PermMcpManage      = "mcp.manage"
 	PermToolsUse       = "tools.use"
@@ -43,9 +41,9 @@ const (
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
-	RoleWrite: {PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
-	RoleRead:  {PermSessionRead, PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleWrite: {PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleRead:  {PermSessionRead, PermConfigRead, PermEvalRead, PermTopologyRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
@@ -59,8 +57,8 @@ var legacyRoleAliases = map[string]string{
 
 var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermSessionRead, PermConfigRead, PermConfigWrite, PermConfigDeploy,
-	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
-	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
+	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead,
+	PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
 	PermFeedbackSubmit, PermReplayRead, PermInferenceRun,
 }
 

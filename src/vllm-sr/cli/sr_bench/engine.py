@@ -16,7 +16,7 @@ from cli.routing_preview import build_preview_request, case_request_fields
 
 from .activity import CallActivity
 from .adapters import get_adapter
-from .contracts import digest, plan, planned_cells
+from .contracts import SESSION_AWARE, digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
 from .native_output import capacity as native_capacity
 from .native_output import validate_recipes as validate_native_recipes
@@ -57,6 +57,11 @@ class Context:
             self.store.root / "runs" / run_id / digest([case["id"], target["id"]])[:24]
         )
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.session_id: str | None = (
+            f"{run_id}-{digest([case['id'], target['id']])[:24]}"
+            if target.get("session_mode") == SESSION_AWARE
+            else None
+        )
 
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
@@ -78,6 +83,7 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
+        session_id: str | None = self.session_id if role == "subject" else None
         if role == "subject" and not any(
             call["role"] == "subject" for call in self.calls
         ):
@@ -160,6 +166,7 @@ class Context:
                     "effective_body": request_body,
                     "extra_body": extra_body,
                 },
+                **({"session_id": session_id} if session_id else {}),
             },
         )
         call_record = {"id": call_id, "role": role}
@@ -174,6 +181,7 @@ class Context:
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
+                session_id=session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"

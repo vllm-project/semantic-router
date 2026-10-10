@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -12,7 +11,6 @@ import (
 
 type canonicalRoutingOverrideFields struct {
 	candidateRequirements bool
-	dataPolicy            bool
 	modelBindings         bool
 	modelCards            bool
 	signals               bool
@@ -40,8 +38,6 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 		switch key {
 		case "candidate_requirements":
 			fields.candidateRequirements = true
-		case "data_policy":
-			fields.dataPolicy = true
 		case "model_bindings":
 			fields.modelBindings = true
 		case "modelCards":
@@ -55,13 +51,11 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 		}
 	}
 
-	data, err := yaml.Marshal(object)
+	decoded, err := decodeCanonicalModelObject[routerconfig.CanonicalRouting](raw)
 	if err != nil {
 		return routing, fields, err
 	}
-	if err := yaml.Unmarshal(data, &routing); err != nil {
-		return routing, fields, err
-	}
+	routing = decoded
 	if fields.candidateRequirements {
 		payload, err := json.Marshal(object["candidate_requirements"])
 		if err != nil {
@@ -75,17 +69,6 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 			return routing, fields, err
 		}
 		routing.CandidateRequirements = &policy
-	}
-	if fields.dataPolicy {
-		payload, err := json.Marshal(object["data_policy"])
-		if err != nil {
-			return routing, fields, err
-		}
-		policy, err := decodeCanonicalModelObject[routerconfig.RoutingDataPolicy](&apiextensionsv1.JSON{Raw: payload})
-		if err != nil {
-			return routing, fields, fmt.Errorf("data_policy: %w", err)
-		}
-		routing.DataPolicy = &policy
 	}
 	if fields.modelBindings {
 		bindingsJSON, err := json.Marshal(object["model_bindings"])
@@ -109,9 +92,6 @@ func applyCanonicalRoutingOverrides(
 ) {
 	if fields.candidateRequirements {
 		canonical.Routing.CandidateRequirements = routing.CandidateRequirements.Clone()
-	}
-	if fields.dataPolicy {
-		canonical.Routing.DataPolicy = routing.DataPolicy.Clone()
 	}
 	if fields.modelBindings {
 		canonical.Routing.ModelBindings = routing.ModelBindings

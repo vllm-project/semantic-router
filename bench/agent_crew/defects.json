@@ -1,0 +1,44 @@
+[
+  {
+    "id": "D1",
+    "file": "counter.py",
+    "lines": "15-16",
+    "defect": "total is read and written back without holding the lock, so concurrent record() calls lose increments",
+    "hints": ["lock", "race", "atomic", "thread-safe", "thread safe", "synchron"]
+  },
+  {
+    "id": "D2",
+    "file": "counter.py",
+    "lines": "18",
+    "defect": "errors += 1 is not synchronized either",
+    "hints": ["errors"]
+  },
+  {
+    "id": "D3",
+    "file": "billing.py",
+    "lines": "6",
+    "defect": "parse_amount fails on None or an empty string",
+    "hints": ["none", "empty", "valueerror", "attributeerror", "validat"]
+  },
+  {
+    "id": "D4",
+    "file": "billing.py",
+    "lines": "15-16",
+    "defect": "bare except: pass silently drops line items from the total",
+    "hints": ["except", "swallow", "silent"]
+  },
+  {
+    "id": "D5",
+    "file": "billing.py",
+    "lines": "6, 11, 14",
+    "defect": "money is computed with float instead of Decimal",
+    "hints": ["decimal", "float", "rounding", "precision"]
+  },
+  {
+    "id": "D6",
+    "file": "pagination.py",
+    "lines": "7",
+    "defect": "the slice ends at start + page_size - 1, so every page drops its last row",
+    "hints": ["off-by-one", "off by one", "- 1", "last row", "last item"]
+  }
+]

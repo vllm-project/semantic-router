@@ -1,7 +1,7 @@
 import math
 
 import pytest
-from vllm_sr_runtime.families.decision2.answers import (
+from vllm_srun.families.decision2.answers import (
     apply_score_bias,
     normalized_answer,
     product_answer,

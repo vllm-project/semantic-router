@@ -2,10 +2,10 @@ package config
 
 import "testing"
 
-func TestPreferenceModelConfigWithDefaultsEnablesContrastiveByDefault(t *testing.T) {
+func TestPreferenceModelConfigWithDefaultsPreservesJudgmentDefault(t *testing.T) {
 	cfg := PreferenceModelConfig{}.WithDefaults()
-	if cfg.UseContrastive == nil || !*cfg.UseContrastive {
-		t.Fatal("expected default preference config to enable contrastive mode")
+	if cfg.UseContrastive != nil || cfg.ContrastiveEnabled() {
+		t.Fatal("omitted preference policy must use judgment without an embedding demand")
 	}
 }
 

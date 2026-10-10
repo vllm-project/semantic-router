@@ -15,7 +15,7 @@ func (b *classifierOptionBuilder) prepareEmbeddingSet() error {
 				b.models = standaloneModelRuntime()
 				b.models.cfg = b.cfg
 			}
-			b.embeddingSet, b.providerErr = modelruntime.PrepareOwnedRecipeEmbeddings(context.Background(), b.cfg, b.models.runtime)
+			b.embeddingSet, b.providerErr = modelruntime.PrepareOwnedEmbeddings(context.Background(), b.cfg, b.models.runtime)
 			b.ownsEmbeddingSet = b.providerErr == nil
 		}
 		if b.providerErr == nil {

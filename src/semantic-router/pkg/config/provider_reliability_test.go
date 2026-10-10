@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+)
 
 func TestProviderReliabilityRoundTripsCanonicalConfig(t *testing.T) {
 	parsed, err := ParseYAMLBytes([]byte(`
@@ -20,9 +25,6 @@ providers:
         health_check_path: /health
         health_check_interval: 15s
         health_check_timeout: 3s
-        request_timeout: 120s
-        stream_idle_timeout: 30s
-        connect_timeout: 5s
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
@@ -45,153 +47,93 @@ routing:
 		reliability.Consecutive5xx != 5 ||
 		reliability.BaseEjectionTime != "45s" ||
 		reliability.MaxEjectionPercent != 25 ||
-		reliability.HealthCheckPath != "/health" ||
-		reliability.RequestTimeout != "120s" ||
-		reliability.StreamIdleTimeout != "30s" ||
-		reliability.ConnectTimeout != "5s" {
+		reliability.HealthCheckPath != "/health" {
 		t.Fatalf("reliability did not normalize: %#v", reliability)
 	}
 }
 
+func TestProviderReliabilityTimeoutsAndRetriesRoundTrip(t *testing.T) {
+	const doc = `
+version: v0.3
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      api_format: openai
+      reliability:
+        retry_count: 2
+        connect_timeout: 3s
+        total_timeout: 0s
+        idle_timeout: 45s
+        per_try_timeout: 20s
+        first_byte_timeout: 5s
+        retriable_status_codes: [429, 503]
+        retry_back_off_base: 50ms
+        retry_back_off_max: 1s
+        retry_after_max: 30s
+        retry_budget_percent: 25
+        retry_budget_min_concurrency: 4
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+routing: {}
+`
+	want := ProviderReliability{
+		RetryCount: 2, ConnectTimeout: "3s", TotalTimeout: "0s", IdleTimeout: "45s", PerTryTimeout: "20s",
+		FirstByteTimeout: "5s", RetriableStatusCodes: []int{429, 503}, RetryBackOffBase: "50ms",
+		RetryBackOffMax: "1s", RetryAfterMax: "30s", RetryBudgetPercent: 25, RetryBudgetMinConcurrency: 4,
+	}
+	parsed, err := ParseYAMLBytes([]byte(doc))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes: %v", err)
+	}
+	if got := parsed.ModelConfig["model-a"].Reliability; !reflect.DeepEqual(got, want) {
+		t.Fatalf("reliability = %#v, want %#v", got, want)
+	}
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(parsed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reparsed, err := ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("re-import: %v", err)
+	}
+	if got := reparsed.ModelConfig["model-a"].Reliability; !reflect.DeepEqual(got, want) {
+		t.Fatalf("exported reliability = %#v, want %#v", got, want)
+	}
+}
+
+func TestProviderReliabilityDefaultsRetryOnLikeTheCLI(t *testing.T) {
+	if err := validateProviderReliability("model-a", ProviderReliability{RetryCount: 2}); err != nil {
+		t.Fatalf("retries without retry_on must take the default %q: %v", DefaultProviderRetryOn, err)
+	}
+}
+
+func TestProviderReliabilityRejectsInvalidTimeoutsAndRetries(t *testing.T) {
+	for name, reliability := range map[string]ProviderReliability{
+		"zero connect timeout":   {ConnectTimeout: "0s"},
+		"unparsable total":       {TotalTimeout: "soon"},
+		"negative idle":          {IdleTimeout: "-1s"},
+		"zero per try":           {PerTryTimeout: "0s"},
+		"status out of range":    {RetriableStatusCodes: []int{429, 700}},
+		"max below base":         {RetryBackOffBase: "100ms", RetryBackOffMax: "50ms"},
+		"max below default base": {RetryBackOffMax: "10ms"},
+		"budget over 100":        {RetryBudgetPercent: 150},
+		"negative concurrency":   {RetryBudgetMinConcurrency: -1},
+		"zero retry after max":   {RetryAfterMax: "0s"},
+	} {
+		if err := validateProviderReliability("model-a", reliability); err == nil {
+			t.Errorf("%s: accepted %#v", name, reliability)
+		}
+	}
+}
+
 func TestProviderReliabilityRejectsUnsafeValues(t *testing.T) {
-	tests := []struct {
-		name        string
-		reliability ProviderReliability
-	}{
-		{
-			name: "invalid lb policy",
-			reliability: ProviderReliability{
-				LBPolicy:   "random",
-				RetryCount: 2,
-				RetryOn:    "connect-failure",
-			},
-		},
-		{
-			name: "retry count too high",
-			reliability: ProviderReliability{
-				RetryCount: 8,
-			},
-		},
-		{
-			name: "retry enabled without retry_on",
-			reliability: ProviderReliability{
-				RetryCount: 2,
-			},
-		},
-		{
-			name: "negative consecutive 5xx",
-			reliability: ProviderReliability{
-				Consecutive5xx: -1,
-			},
-		},
-		{
-			name: "invalid base ejection time duration",
-			reliability: ProviderReliability{
-				BaseEjectionTime: "invalid-duration",
-			},
-		},
-		{
-			name: "invalid health check timeout",
-			reliability: ProviderReliability{
-				HealthCheckTimeout: "bad",
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateProviderReliability("model-a", tc.reliability)
-			if err == nil {
-				t.Fatalf("expected error for %s, got nil", tc.name)
-			}
-		})
-	}
-}
-
-func TestProviderReliabilityRejectsUnsafeTimeouts(t *testing.T) {
-	tests := []struct {
-		name        string
-		reliability ProviderReliability
-	}{
-		{
-			name: "invalid request timeout format",
-			reliability: ProviderReliability{
-				RequestTimeout: "abc",
-			},
-		},
-		{
-			name: "negative request timeout",
-			reliability: ProviderReliability{
-				RequestTimeout: "-10s",
-			},
-		},
-		{
-			name: "zero request timeout without stream idle timeout",
-			reliability: ProviderReliability{
-				RequestTimeout: "0s",
-			},
-		},
-		{
-			name: "zero request timeout with zero stream idle timeout",
-			reliability: ProviderReliability{
-				RequestTimeout:    "0s",
-				StreamIdleTimeout: "0s",
-			},
-		},
-		{
-			name: "submillisecond request timeout below 1ms",
-			reliability: ProviderReliability{
-				RequestTimeout: "100us",
-			},
-		},
-		{
-			name: "negative stream idle timeout",
-			reliability: ProviderReliability{
-				StreamIdleTimeout: "-5s",
-			},
-		},
-		{
-			name: "invalid stream idle timeout format",
-			reliability: ProviderReliability{
-				StreamIdleTimeout: "not-a-duration",
-			},
-		},
-		{
-			name: "zero connect timeout",
-			reliability: ProviderReliability{
-				ConnectTimeout: "0s",
-			},
-		},
-		{
-			name: "negative connect timeout",
-			reliability: ProviderReliability{
-				ConnectTimeout: "-1s",
-			},
-		},
-		{
-			name: "invalid connect timeout format",
-			reliability: ProviderReliability{
-				ConnectTimeout: "xyz",
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateProviderReliability("model-a", tc.reliability)
-			if err == nil {
-				t.Fatalf("expected error for %s, got nil", tc.name)
-			}
-		})
-	}
-}
-
-func TestProviderReliabilityAllowsZeroRequestTimeoutWithStreamIdleTimeout(t *testing.T) {
-	rel := ProviderReliability{
-		RequestTimeout:    "0s",
-		StreamIdleTimeout: "30s",
-	}
-	if err := validateProviderReliability("model-a", rel); err != nil {
-		t.Fatalf("expected valid 0s request_timeout with positive stream_idle_timeout, got: %v", err)
+	err := validateProviderReliability("model-a", ProviderReliability{
+		LBPolicy:   "random",
+		RetryCount: 8,
+	})
+	if err == nil {
+		t.Fatal("invalid reliability config must be rejected")
 	}
 }

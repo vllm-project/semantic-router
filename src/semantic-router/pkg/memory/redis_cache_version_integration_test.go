@@ -26,8 +26,8 @@ func TestCachingStoreEquivalentPoliciesShareVersionedEntry(t *testing.T) {
 			store := &retrievalPolicyStore{}
 			wrapped := NewCachingStore(store, cache, "valkey")
 			opts := RetrieveOptions{Query: "coffee", UserID: "equivalent-user", HybridSearch: hybrid, Limit: 5, Threshold: 0.5}
-			cache.InvalidateByUser(ctx, opts.UserID)
-			t.Cleanup(func() { cache.InvalidateByUser(ctx, opts.UserID) })
+			_ = cache.InvalidateByUser(ctx, opts.UserID)
+			t.Cleanup(func() { _ = cache.InvalidateByUser(ctx, opts.UserID) })
 			first, err := wrapped.Retrieve(ctx, opts)
 			require.NoError(t, err)
 			require.Equal(t, opts, store.lastOptions, "normalizing the key must not change backing-store options")
@@ -59,8 +59,8 @@ func TestRedisCacheVersionExcludesLegacyValuesAndPreservesLifecycle(t *testing.T
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = cache.Close() })
 	opts := RetrieveOptions{Query: "coffee", UserID: "version-user", Limit: 5, Threshold: 0.5, HybridSearch: true}
-	cache.InvalidateByUser(ctx, opts.UserID)
-	t.Cleanup(func() { cache.InvalidateByUser(ctx, opts.UserID) })
+	_ = cache.InvalidateByUser(ctx, opts.UserID)
+	t.Cleanup(func() { _ = cache.InvalidateByUser(ctx, opts.UserID) })
 	stale, err := json.Marshal([]*RetrieveResult{{Memory: &Memory{ID: "legacy-vector-result", UserID: opts.UserID}}})
 	require.NoError(t, err)
 	// Reconstruct the deployed pre-policy key, then keep it in the unchanged
@@ -95,7 +95,7 @@ func TestRedisCacheVersionExcludesLegacyValuesAndPreservesLifecycle(t *testing.T
 		require.Greater(t, ttl, 50*time.Second)
 		require.LessOrEqual(t, ttl, time.Minute)
 	}
-	cache.InvalidateByUser(ctx, opts.UserID)
+	_ = cache.InvalidateByUser(ctx, opts.UserID)
 	remaining, err := cache.client.Exists(ctx, legacy, unversionedPolicy, key, cache.userIndexKey(opts.UserID)).Result()
 	require.NoError(t, err)
 	require.Zero(t, remaining, "invalidation must remove both old and new indexed values")

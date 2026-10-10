@@ -71,7 +71,7 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     target = tmp_path / "state" / "runtime-config.yaml"
 
     result = realize_runtime_config(
-        source, target, algorithm="multi_factor", platform="amd"
+        source, target, algorithm="multi_factor", platform="rocm"
     )
 
     assert result == target
@@ -121,7 +121,7 @@ def test_runtime_materialize_module_cli(tmp_path: Path, capsys):
             "--algorithm",
             "multi_factor",
             "--platform",
-            "amd",
+            "rocm",
         ]
     )
 
@@ -138,7 +138,7 @@ def test_runtime_materialize_module_uses_current_runtime_env(
     _write_source(source)
     target = tmp_path / "state" / "runtime-config.yaml"
     monkeypatch.setenv("VLLM_SR_ALGORITHM_OVERRIDE", "multi_factor")
-    monkeypatch.setenv("DASHBOARD_PLATFORM", "amd")
+    monkeypatch.setenv("DASHBOARD_PLATFORM", "rocm")
 
     assert main(["--source", str(source), "--target", str(target)]) == 0
 
@@ -208,18 +208,17 @@ def test_managed_materialization_rejects_before_publishing(
 def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
     tmp_path: Path, monkeypatch
 ):
-    monkeypatch.setenv("DASHBOARD_PLATFORM", "amd")
-    monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
+    monkeypatch.setenv("DASHBOARD_PLATFORM", "rocm")
+    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
+    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     source = tmp_path / "raw.yaml"
     _write_source(source)
     document = yaml.safe_load(source.read_text())
     deployments = {
         "gpu-embedding": {
-            "artifact": "models/mmbert-embedding",
-            "provider": "ort",
-            "device": "migraphx:0",
-            "precision": "native",
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+            "device": "rocm:0",
             "input": {"max_tokens": 128, "overflow": "reject"},
         }
     }

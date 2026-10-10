@@ -51,7 +51,7 @@ func testSessionPricingChatCompletions(
 		"x-authz-user-id": "e2e-pricing-chat-user",
 	}
 	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Say hello in one short sentence for pricing telemetry."},
 		},
@@ -111,7 +111,7 @@ func testSessionPricingResponseAPI(
 	respAPI := fixtures.NewResponseAPIClient(traffic, 60*time.Second)
 
 	_, raw, err := respAPI.Create(ctx, fixtures.ResponseAPIRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Input: "Say hello in one short sentence for Response API pricing telemetry.",
 	})
 	if err != nil {

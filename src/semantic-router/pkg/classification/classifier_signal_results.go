@@ -84,8 +84,11 @@ type SignalResults struct {
 	JailbreakScoreAvailable bool
 
 	// PII detection metadata (populated when PII signal is evaluated)
-	PIIDetected bool     // Whether any PII was detected
-	PIIEntities []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
+	// PIIContentVerified is true only after complete, successful classification with no personal entities.
+	PIIContentVerified bool
+	PIIEvidence        []PrivacyEvidence
+	PIIDetected        bool     // Whether any PII was detected
+	PIIEntities        []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
 
 	SignalConfidences  map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
 	SignalValues       map[string]float64 // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4

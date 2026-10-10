@@ -103,8 +103,8 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 3. 使用 `schema_id`、`contract_version` 和 `ETag` 作为契约身份；
 4. 从 schema 字段和路由表面引用构建最小的 canonical 文档；
 5. 省略仅用于引导的 `setup` 块，并调用语义校验端点；
-6. 规划变更；使用返回的 `current_etag` 在 `If-Match` 中应用可热重载的变更，或在 listener 或 provider 拓扑返回 `RESTART_REQUIRED` 时使用部署工作流（对于本地 Docker，在批准后使用显式的 `vllm-sr serve --config <candidate> --replace-active-config` 操作）；
-7. 轮询 `activation_status`，并在保留变更之前探测 Envoy 数据平面。
+6. 规划变更；使用返回的 `current_etag` 在 `If-Match` 中应用可热重载的变更。运行中的 Router 无法接收的变更返回 `RESTART_REQUIRED`：standalone 模式下是 listener 变更，`--gateway extproc` 时是 listener 或 provider 拓扑变更。在本地 Docker 上，`vllm-sr config apply` 会保存这类变更，由下一次 `vllm-sr serve` 应用（或在批准后运行显式的 `vllm-sr serve --config <candidate> --replace-active-config`）；其他环境使用部署工作流；
+7. 轮询 `activation_status`，并在保留变更之前探测数据平面。
 
 当目标 Router 的 schema 可用时，Agent 绝不应该从示例推断字段，或发送未知键。
 

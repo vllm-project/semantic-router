@@ -58,7 +58,9 @@ type StartupObservation struct {
 }
 
 type ConfigStatus struct {
-	ActiveHash       string `json:"active_hash,omitempty"`
+	ActiveHash string `json:"active_hash,omitempty"`
+	// ActiveVersion is the version of the configuration snapshot that serves.
+	ActiveVersion    uint64 `json:"active_version,omitempty"`
 	ObservedHash     string `json:"observed_hash,omitempty"`
 	ObservedAttempt  uint64 `json:"observed_attempt"`
 	ActivationStatus string `json:"activation_status,omitempty"`
@@ -88,6 +90,7 @@ type localStartupSnapshot struct {
 
 func cloneStartupState(state startupstatus.State) startupstatus.State {
 	state.PendingModels = slices.Clone(state.PendingModels)
+	state.ModelDeployments = slices.Clone(state.ModelDeployments)
 	if state.EmbeddingProvider != nil {
 		provider := *state.EmbeddingProvider
 		if provider.APIKeyEnvSet != nil {
@@ -159,6 +162,9 @@ func (r *Registry) Status() StatusReport {
 		report.Config.ObservedHash = r.config.DocumentHash
 		if active {
 			report.Config.ActiveHash = r.config.DocumentHash
+			if r.configSnapshot != nil {
+				report.Config.ActiveVersion = r.configSnapshot.Version()
+			}
 		}
 	}
 	if r.configActivation.Attempt != 0 {

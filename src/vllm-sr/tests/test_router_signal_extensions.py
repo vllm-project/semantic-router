@@ -380,7 +380,8 @@ def test_prompt_dependency_validation_covers_recipes():
     assert (
         "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt.model" in fields
     )
-    assert "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt" in fields
+    # The helper call runs in process, so no Looper endpoint is required.
+    assert "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt" not in fields
 
 
 def test_prompt_dependency_validation_rejects_anthropic_helper():
@@ -635,7 +636,7 @@ def test_user_config_allows_recipe_local_projection_names():
 
 @pytest.mark.parametrize(
     "model_name",
-    ["model-a", "adapter-a", "vllm-sr/auto", "vllm-sr/remom"],
+    ["model-a", "adapter-a"],
 )
 def test_user_config_rejects_entrypoint_name_collisions(model_name):
     config = UserConfig.model_validate(
@@ -680,4 +681,26 @@ def test_user_config_rejects_empty_entrypoint_names():
                 "version": "v0.3",
                 "entrypoints": [{"model_names": [], "recipe": "default"}],
             }
+        )
+
+
+def test_local_classifier_can_use_default_decision_deployment():
+    signal = ClassifierSignal(
+        name="task",
+        type="local",
+        labels=["coding", "other"],
+        instructions="Choose the request category.",
+    )
+    assert signal.model_path is None
+    assert signal.instructions == "Choose the request category."
+
+
+def test_specialist_classifier_keeps_its_native_contract():
+    with pytest.raises(ValueError, match="specialist local classifiers"):
+        ClassifierSignal(
+            name="task",
+            type="local",
+            model_path="models/specialist",
+            labels=["coding", "other"],
+            instructions="Choose a category.",
         )

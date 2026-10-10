@@ -1,6 +1,7 @@
 """Validate command implementation."""
 
 import sys
+from collections.abc import Callable
 
 from cli.catalog_provider_projection import (
     CatalogProviderProjectionError,
@@ -13,9 +14,15 @@ from cli.config_contract import (
 )
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
+from cli.router_validation import RouterValidationUnavailableError, RouterVerdict
 from cli.terminal import echo, error, fields, heading, success
 from cli.validation_error import ValidationError
-from cli.validator import print_validation_errors, validate_user_config
+from cli.validator import (
+    collect_validation_warnings,
+    print_validation_errors,
+    print_validation_warnings,
+    validate_user_config,
+)
 
 
 def _count_items(value) -> int:
@@ -118,12 +125,42 @@ def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
     return []
 
 
-def validate_command(config_path: str):
+def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
+    """Return the semantic and provider projection errors for a parsed config."""
+
+    errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(_provider_projection_errors(user_config))
+    return errors
+
+
+def _router_verdict(
+    router_verdict: Callable[[], RouterVerdict] | None,
+) -> tuple[RouterVerdict | None, str]:
+    """The Router's verdict, or why it could not give one."""
+
+    if router_verdict is None:
+        return None, ""
+    try:
+        return router_verdict(), ""
+    except RouterValidationUnavailableError as unavailable:
+        return None, str(unavailable)
+    except SystemExit:
+        return None, "the container runtime is not reachable"
+
+
+def validate_command(
+    config_path: str,
+    *,
+    router_verdict: Callable[[], RouterVerdict] | None = None,
+):
     """
     Validate user configuration.
 
     Args:
         config_path: Path to user config.yaml
+        router_verdict: Runs the Router's own validation of the file, after
+            the CLI's checks pass. None runs only the CLI's checks.
     """
     # Parse config
     try:
@@ -132,16 +169,32 @@ def validate_command(config_path: str):
         error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
-    # Validate config
-    errors = validate_user_config(user_config, log_summary=False)
-    if not errors:
-        errors.extend(_provider_projection_errors(user_config))
-
+    errors = collect_config_errors(user_config)
     if errors:
         print_validation_errors(errors)
         sys.exit(1)
 
+    verdict, unavailable = _router_verdict(router_verdict)
+    if verdict is not None and not verdict.valid:
+        print_validation_errors(
+            [ValidationError(f"{verdict.source} refuses it: {verdict.error}")]
+        )
+        sys.exit(1)
+
     success("Configuration is valid")
+    if verdict is not None:
+        echo(f"  Checked by {verdict.source} as well as the CLI.")
+        print_validation_warnings(
+            [ValidationError(item.message) for item in verdict.warnings]
+        )
+    else:
+        if unavailable:
+            echo(
+                f"  Only the CLI's own checks ran: {unavailable}. The Router "
+                "checks more when it loads the file; pass --endpoint to "
+                "validate with a running Router."
+            )
+        print_validation_warnings(collect_validation_warnings(user_config))
     heading("Configuration summary")
     fields(
         (

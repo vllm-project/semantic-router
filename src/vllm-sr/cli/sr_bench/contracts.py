@@ -34,6 +34,8 @@ from .native_output import configure as configure_output_policy
 MAX_PARAMETER_BYTES = 65536
 MAX_INFERENCE_CALLS = 256
 MAX_CONCURRENCY = 32
+STATELESS = "stateless"
+SESSION_AWARE = "session_aware"
 
 BENCHMARKS = (
     (
@@ -442,6 +444,8 @@ def plan(manifest, *, policy=None):
             raise ValueError("capture_recipe must be boolean")
         if t.get("capture_recipe") and t["kind"] != "mom":
             raise ValueError("Recipe capture is only available for MoM targets")
+        if t.get("session_mode", STATELESS) not in {STATELESS, SESSION_AWARE}:
+            raise ValueError("session_mode must be stateless or session_aware")
         u = urlparse(t.get("base_url", ""))
         if (
             u.scheme not in {"http", "https"}

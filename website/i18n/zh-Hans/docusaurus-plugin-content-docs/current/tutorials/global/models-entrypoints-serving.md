@@ -1,8 +1,8 @@
 ---
 title: 模型、入口与服务
-description: 连接推理后端，组合 Mixture-of-Model，并暴露稳定的 OpenAI 兼容模型名。
+description: 连接推理后端，为 Agent Harness 提供可编程的模型入口。
 translation:
-  source_commit: "6a4e51ad570a95c2a493ce4b1494bcedb525fa08"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/models-entrypoints-serving.md"
   outdated: false
 ---
@@ -11,11 +11,11 @@ translation:
 
 ## 概览
 
-Semantic Router 为应用提供稳定的模型名，同时运维人员可以更改其背后的物理模型和路由策略。控制面板是到达可用拓扑的最快路径；YAML 仍可用于经过评审、受版本控制的部署。
+连接模型、选择配方、发布入口。使用控制面板交互配置，或通过 YAML 管理版本化部署。
 
 ## 解决什么问题？
 
-应用应调用稳定的模型名，而不把自己耦合到某个提供商、端点或 checkpoint。入口保持该公开契约稳定，同时配方和已连接的模型可以独立演进。
+保持 Harness 的模型名稳定，独立调整背后的提供商、端点和路由策略。
 
 该拓扑有四个面向用户的对象：
 
@@ -130,6 +130,7 @@ vllm-sr config migrate --config old-config.yaml
 
 ## 下一步 {#next}
 
+- [接入 Agent Harness](../../installation/agent-harness)：推理连接设置、预算、工具与会话连续性。
 - [配置模型](../../installation/model-configuration)：模型身份、Provider 绑定、自定义模型和推理。
 - [虚拟模型](entrypoints-and-recipes)：请求解析与隔离。
 - [入口](entrypoints)：命名与校验规则。

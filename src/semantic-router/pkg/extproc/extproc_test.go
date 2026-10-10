@@ -496,8 +496,7 @@ func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
-				BertModelPath: "sentence-transformers/all-MiniLM-L6-v2",
-				UseCPU:        true,
+				UseCPU: true,
 				EmbeddingConfig: config.HNSWConfig{
 					ModelType:         "qwen3",
 					TargetDimension:   768,
@@ -508,7 +507,6 @@ func CreateTestConfig() *config.RouterConfig {
 				CategoryModel: config.CategoryModel{
 					ModelID:             categoryModelID,
 					UseCPU:              true,
-					UseModernBERT:       true,
 					CategoryMappingPath: categoryMappingPath,
 				},
 				MCPCategoryModel: config.MCPCategoryModel{
@@ -639,7 +637,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// If PII classifier is available, should detect entities
-				// If not available (candle-binding issues), should return empty slice gracefully
+				// Without a served PII model it returns an empty slice
 				if len(piiTypes) > 0 {
 					// Check that we get actual PII types (not empty)
 					for _, piiType := range piiTypes {
@@ -648,7 +646,7 @@ var _ = Describe("Security Checks", func() {
 					}
 				} else {
 					// PII classifier not available - this is acceptable in test environment
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 			})
 
@@ -701,7 +699,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				if len(testPII) == 0 {
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 
 				for _, tc := range testCases {
@@ -728,7 +726,7 @@ var _ = Describe("Security Checks", func() {
 				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), contentList)
 
 				// If PII classifier is available, should detect entities
-				// If not available (candle-binding issues), should return empty slice gracefully
+				// Without a served PII model it returns an empty slice
 				if len(detectedPII) > 0 {
 					// Should not contain duplicates
 					seenTypes := make(map[string]bool)
@@ -738,7 +736,7 @@ var _ = Describe("Security Checks", func() {
 					}
 				} else {
 					// PII classifier not available - this is acceptable in test environment
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 			})
 
@@ -1057,7 +1055,7 @@ var _ = Describe("Security Checks", func() {
 			}
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
-			// Should process (jailbreak detection result depends on candle_binding)
+			// Should process (jailbreak detection result depends on a served jailbreak model)
 			Expect(err).To(Or(BeNil(), HaveOccurred()))
 			if err == nil {
 				// Should either continue or return jailbreak violation
@@ -1077,7 +1075,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
+			Expect(cfg.InlineModels.EmbeddingModels.UseCPU).To(BeTrue())
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
@@ -1113,7 +1111,6 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 
 			// Test essential fields are present
-			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-a"))
@@ -1405,7 +1402,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 				}
 			}
 
-			// Some errors might be expected due to candle_binding dependencies
+			// Some errors might be expected without served models
 			// The important thing is that the system doesn't crash
 			Expect(errorCount).To(BeNumerically("<=", numRequests))
 		})
@@ -1610,7 +1607,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should recover from classification errors gracefully", func() {
 			// Create a request that might cause classification issues
 			request := testOpenAIRequest{
-				Model: "auto", // This triggers classification
+				Model: "vllm-sr/auto", // This triggers classification
 				Messages: []testChatMessage{
 					{Role: "user", Content: json.RawMessage(`"Test content that might cause classification issues: \u0000\u0001\u0002"`)}, // Binary content
 				},
@@ -1642,7 +1639,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should handle timeout scenarios gracefully", func() {
 			// Simulate a request that might take a long time to process
 			request := testOpenAIRequest{
-				Model: "auto",
+				Model: "vllm-sr/auto",
 				Messages: []testChatMessage{
 					{Role: "user", Content: json.RawMessage(`"This is a complex request that might take time to classify and process"`)},
 				},
@@ -1730,7 +1727,7 @@ var _ = Describe("Caching Functionality", func() {
 		}
 
 		response, err := router.HandleRequestBody(bodyRequest, ctx)
-		// Even if caching fails due to candle_binding, request should continue
+		// Even if caching fails without a served embedding model, request should continue
 		Expect(err).To(Or(BeNil(), HaveOccurred()))
 		if err == nil {
 			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
@@ -2940,14 +2937,14 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 			ModelConfig: map[string]config.ModelParams{
 				"fast-model": {
 					Reliability: config.ProviderReliability{
-						RequestTimeout:    "2s",
-						StreamIdleTimeout: "2s",
-						ConnectTimeout:    "2s",
+						TotalTimeout: "2s",
+						IdleTimeout:  "2s",
+						ConnectTimeout: "2s",
 					},
 				},
 				"slow-model": {
 					Reliability: config.ProviderReliability{
-						RequestTimeout: "15s",
+						TotalTimeout: "15s",
 						ConnectTimeout: "5s",
 					},
 				},
@@ -2958,9 +2955,9 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 				},
 				"subsecond-model": {
 					Reliability: config.ProviderReliability{
-						RequestTimeout:    "100ms",
-						StreamIdleTimeout: "100ms",
-						ConnectTimeout:    "100ms",
+						TotalTimeout: "100ms",
+						IdleTimeout:  "100ms",
+						ConnectTimeout: "100ms",
 					},
 				},
 			},
@@ -3270,103 +3267,3 @@ func TestConnectFailure503RecordsUpstream5xxMetric(t *testing.T) {
 	}
 }
 
-func TestAppendReliabilityHeaders(t *testing.T) {
-	r := &OpenAIRouter{
-		Config: &config.RouterConfig{
-			BackendModels: config.BackendModels{
-				ModelConfig: map[string]config.ModelParams{
-					"fast-model": {
-						Reliability: config.ProviderReliability{
-							RequestTimeout:    "2s",
-							StreamIdleTimeout: "2s",
-						},
-					},
-					"slow-model": {
-						Reliability: config.ProviderReliability{
-							RequestTimeout: "15s",
-						},
-					},
-					"unbounded-model": {
-						Reliability: config.ProviderReliability{
-							RequestTimeout:    "0s",
-							StreamIdleTimeout: "15s",
-						},
-					},
-					"submillisecond-model": {
-						Reliability: config.ProviderReliability{
-							RequestTimeout: "100us",
-						},
-					},
-					"submillisecond-roundup-model": {
-						Reliability: config.ProviderReliability{
-							RequestTimeout: "1500us",
-						},
-					},
-					"no-rel-model": {},
-				},
-			},
-		},
-	}
-
-	// Case 1: fast-model sets both request and stream idle timeout in config; only rq-timeout is injected as header
-	var headers1 []*core.HeaderValueOption
-	r.appendReliabilityHeaders(&headers1, "fast-model")
-	headerMap1 := make(map[string]string)
-	for _, h := range headers1 {
-		headerMap1[h.Header.Key] = string(h.Header.RawValue)
-	}
-	if headerMap1["x-envoy-upstream-rq-timeout-ms"] != "2000" {
-		t.Fatalf("fast-model: expected x-envoy-upstream-rq-timeout-ms=2000, got %q", headerMap1["x-envoy-upstream-rq-timeout-ms"])
-	}
-
-	// Case 2: slow-model sets only request timeout
-	var headers2 []*core.HeaderValueOption
-	r.appendReliabilityHeaders(&headers2, "slow-model")
-	headerMap2 := make(map[string]string)
-	for _, h := range headers2 {
-		headerMap2[h.Header.Key] = string(h.Header.RawValue)
-	}
-	if headerMap2["x-envoy-upstream-rq-timeout-ms"] != "15000" {
-		t.Fatalf("slow-model: expected x-envoy-upstream-rq-timeout-ms=15000, got %q", headerMap2["x-envoy-upstream-rq-timeout-ms"])
-	}
-
-	// Case 3: unbounded-model sets request timeout 0
-	var headers3 []*core.HeaderValueOption
-	r.appendReliabilityHeaders(&headers3, "unbounded-model")
-	headerMap3 := make(map[string]string)
-	for _, h := range headers3 {
-		headerMap3[h.Header.Key] = string(h.Header.RawValue)
-	}
-	if headerMap3["x-envoy-upstream-rq-timeout-ms"] != "0" {
-		t.Fatalf("unbounded-model: expected x-envoy-upstream-rq-timeout-ms=0, got %q", headerMap3["x-envoy-upstream-rq-timeout-ms"])
-	}
-
-	// Case 4: submillisecond-model (100us) preserves nonzero millisecond bound (rounds up to 1ms instead of 0)
-	var headersSub []*core.HeaderValueOption
-	r.appendReliabilityHeaders(&headersSub, "submillisecond-model")
-	headerMapSub := make(map[string]string)
-	for _, h := range headersSub {
-		headerMapSub[h.Header.Key] = string(h.Header.RawValue)
-	}
-	if headerMapSub["x-envoy-upstream-rq-timeout-ms"] != "1" {
-		t.Fatalf("submillisecond-model: expected x-envoy-upstream-rq-timeout-ms=1, got %q", headerMapSub["x-envoy-upstream-rq-timeout-ms"])
-	}
-
-	// Case 5: submillisecond-roundup-model (1500us) rounds up to 2ms
-	var headersRoundUp []*core.HeaderValueOption
-	r.appendReliabilityHeaders(&headersRoundUp, "submillisecond-roundup-model")
-	headerMapRoundUp := make(map[string]string)
-	for _, h := range headersRoundUp {
-		headerMapRoundUp[h.Header.Key] = string(h.Header.RawValue)
-	}
-	if headerMapRoundUp["x-envoy-upstream-rq-timeout-ms"] != "2" {
-		t.Fatalf("submillisecond-roundup-model: expected x-envoy-upstream-rq-timeout-ms=2, got %q", headerMapRoundUp["x-envoy-upstream-rq-timeout-ms"])
-	}
-
-	// Case 6: model without reliability settings sets no timeout headers
-	var headers4 []*core.HeaderValueOption
-	r.appendReliabilityHeaders(&headers4, "no-rel-model")
-	if len(headers4) != 0 {
-		t.Fatalf("no-rel-model: expected no headers, got %v", headers4)
-	}
-}

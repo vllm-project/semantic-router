@@ -156,7 +156,7 @@ func testSingleRoutingFallback(ctx context.Context, testCase RoutingFallbackCase
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

@@ -275,9 +275,6 @@ func TestNamedRecipeModelNeedsCoverProjectionsAndPlugins(t *testing.T) {
 	if !cfg.NeedsLocalHallucinationModelsForRouting() {
 		t.Fatal("local hallucination models enabled by a named-recipe plugin were not required")
 	}
-	if !cfg.NeedsLocalHallucinationNLIForRouting() {
-		t.Fatal("NLI requested by a named-recipe hallucination plugin was not required")
-	}
 }
 
 func TestEndpointHallucinationBackendDoesNotNeedLocalModels(t *testing.T) {
@@ -289,9 +286,6 @@ func TestEndpointHallucinationBackendDoesNotNeedLocalModels(t *testing.T) {
 	}
 	if cfg.NeedsLocalHallucinationModelsForRouting() {
 		t.Fatal("endpoint hallucination detector must not require local model snapshots")
-	}
-	if cfg.NeedsLocalHallucinationNLIForRouting() {
-		t.Fatal("endpoint hallucination detector must not require a local NLI snapshot")
 	}
 }
 
@@ -334,7 +328,6 @@ func TestNamedRecipeScopeDoesNotOwnDefaultAuxiliaryAPIs(t *testing.T) {
 				Enabled:            true,
 				FactCheckModel:     FactCheckModelConfig{ModelID: "models/test-fact-check"},
 				HallucinationModel: HallucinationModelConfig{ModelID: "models/test-hallucination"},
-				NLIModel:           NLIModelConfig{ModelID: "models/test-nli"},
 			},
 			FeedbackDetector: FeedbackDetectorConfig{
 				Enabled: true,
@@ -351,8 +344,7 @@ func TestNamedRecipeScopeDoesNotOwnDefaultAuxiliaryAPIs(t *testing.T) {
 
 	if cfg.NeedsFactCheckModelForAPI() ||
 		cfg.NeedsFeedbackModelForAPI() ||
-		cfg.NeedsHallucinationDetectorForDefaultRuntime() ||
-		cfg.NeedsLocalHallucinationNLIForAPI() {
+		cfg.NeedsHallucinationDetectorForDefaultRuntime() {
 		t.Fatal("named recipe scope inherited default/API model consumers")
 	}
 }
@@ -496,7 +488,6 @@ func TestNeedsJailbreakMappingForResponseStageConsumersFollowsRecipeReachability
 func TestNeedsHallucinationDetectorForDeclaredRule(t *testing.T) {
 	cfg := newRoutingSignalUsageTestConfig()
 	cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/halugate-detector"
-	cfg.HallucinationMitigation.NLIModel.ModelID = "models/halugate-explainer"
 	cfg.Decisions = keywordDecisionsForRoutingSignalUsageTest()
 
 	if cfg.NeedsHallucinationDetectorForRouting() {
@@ -505,13 +496,6 @@ func TestNeedsHallucinationDetectorForDeclaredRule(t *testing.T) {
 	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}}
 	if !cfg.NeedsHallucinationDetectorForRouting() {
 		t.Fatal("a declared hallucination rule must provision the detector")
-	}
-	if cfg.NeedsLocalHallucinationNLIForRouting() {
-		t.Fatal("a rule without use_nli must not provision the explainer")
-	}
-	cfg.HallucinationRules[0].UseNLI = true
-	if !cfg.NeedsLocalHallucinationNLIForRouting() {
-		t.Fatal("a rule with use_nli must provision the explainer")
 	}
 
 	cfg.HallucinationRules = nil
