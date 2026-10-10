@@ -19,8 +19,8 @@ import (
 const (
 	// HostRuntimeEndpointEnv selects the CLI-owned Apple process supervisor.
 	HostRuntimeEndpointEnv = "VLLM_SR_HOST_RUNTIME_ENDPOINT"
-	// HostRuntimeTokenEnv authenticates model and process calls to that supervisor.
-	HostRuntimeTokenEnv = "VLLM_SR_HOST_RUNTIME_TOKEN"
+	// HostRuntimeTokenEnv names the environment variable holding the supervisor credential.
+	HostRuntimeTokenEnv = "VLLM_SR_HOST_RUNTIME_TOKEN" // #nosec G101 -- environment variable name, not a credential
 )
 
 // hostRuntime is a CLI-owned host supervisor. Its private lease API changes

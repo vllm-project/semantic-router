@@ -21,8 +21,8 @@ func TestHostRuntimeGenerationLeases(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodPost:
+		switch r.Method {
+		case http.MethodPost:
 			var body struct {
 				Models []modelEntry `json:"models"`
 			}
@@ -36,7 +36,7 @@ func TestHostRuntimeGenerationLeases(t *testing.T) {
 			starts++
 			mu.Unlock()
 			_, _ = w.Write([]byte(`{"port":12345}`))
-		case r.Method == http.MethodDelete:
+		case http.MethodDelete:
 			mu.Lock()
 			stops++
 			mu.Unlock()
