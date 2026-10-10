@@ -522,6 +522,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
+        'benchmarking/agent-routing-protection',
         {
           type: 'category',
           label: 'sr-bench 1.0',
