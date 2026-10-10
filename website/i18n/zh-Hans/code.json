@@ -2921,18 +2921,6 @@
   "homepage.ecosystem.decisionLayer": {
     "message": "决策层"
   },
-  "homepage.ecosystem.explore": {
-    "message": "探索生态"
-  },
-  "community.ecosystem.title": {
-    "message": "生态与合作"
-  },
-  "community.ecosystem.description": {
-    "message": "面向模型与算力的开放、可编程{decisionLayer}。"
-  },
-  "community.ecosystem.decisionLayer": {
-    "message": "决策层"
-  },
   "homepage.hero.beyond": {
     "message": "超越单一模型。"
   },
