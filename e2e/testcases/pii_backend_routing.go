@@ -82,7 +82,7 @@ func testPIIBackendRouting(ctx context.Context, client *kubernetes.Clientset, op
 
 	observed := make(map[string]string, len(cases))
 	for _, tc := range cases {
-		resp, err := sendLocalChatCompletion(ctx, localPort, "auto", tc.prompt, 30*time.Second)
+		resp, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", tc.prompt, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("remote PII request (%s): %w", tc.name, err)
 		}

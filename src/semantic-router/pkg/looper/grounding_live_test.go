@@ -37,11 +37,11 @@ func TestFusionWeightPolicy_LiveOllama(t *testing.T) {
 	// Deterministic detector stub: flag any answer mentioning "teleport" as
 	// unsupported by its peers, everything else supported. Produces a real score
 	// spread so the weight policy has something to surface to the judge.
-	withGroundingDetector(t, func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+	withGroundingDetector(t, func(_ context.Context, _, _, answer string) (GroundingEvidence, error) {
 		if strings.Contains(strings.ToLower(answer), "teleport") {
-			return []string{"teleport"}, 0.9, nil
+			return spanEvidence([]string{"teleport"}, 0.9), nil
 		}
-		return nil, 0, nil
+		return GroundingEvidence{}, nil
 	})
 
 	req := newFusionTestRequest()

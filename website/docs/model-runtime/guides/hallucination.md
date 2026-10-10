@@ -53,9 +53,12 @@ global:
         enabled: true
 ```
 
-The router runs FactCheck and Halu on the CPU. Halu reads up to 8,192 tokens of
-context, question and answer together; longer context is shortened from its
-end so the answer is always checked.
+Without task overrides, these judgments use the default Vela 2.0 deployment.
+The explicit Vela 1.0 Halu binding below selects the specialist instead. That
+specialist reads up to 8,192 tokens of context, question, and answer together;
+its context preparation prioritizes retaining the answer. Input limits and
+complete-coverage requirements still apply; see
+[Long inputs](../reference.md#long-inputs).
 
 ## Choose where it runs
 
@@ -106,8 +109,12 @@ its [PII question](model-runtime/guides/pii.md#on-vela-20).
 
 ## Check it
 
+These worker-level examples run inside an environment containing `vllm-srun`
+(such as the Router image). Classify, embeddings, rerank and bundle are worker
+APIs; the instance frontend publishes System One and decision requests.
+
 ```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Halu --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Halu --device cpu --port 8100
 curl -s localhost:8100/v1/classify -H 'content-type: application/json' -d '{
   "input": [{"context": "The Eiffel Tower is 330 metres tall and stands in Paris.",
              "question": "How tall is the Eiffel Tower?",

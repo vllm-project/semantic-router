@@ -1450,13 +1450,17 @@ spec:
                     type: array
                   decision_model:
                     description: |-
-                      DecisionModel is the Vela model that answers the Router's questions,
-                      global.model_catalog.system.decision_model: Vela-2.0-0.3B (the
-                      default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any
-                      case. It answers the built-in signals and every decision question that
-                      names no deployment; the 4B and 9B need a GPU in the Router pod.
-                    pattern: ^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]|0\.8[Bb]|4[Bb]|9[Bb])|1\.0))?$
-                    type: string
+                      DecisionModel selects the declared deployment that answers default judgment tasks.
+                      Omitted uses the Router's primary deployment. Artifact identity belongs in
+                      model_deployments; the reference never infers a model family or alias.
+                    properties:
+                      deployment:
+                        description: Deployment is an exact key in model_deployments.
+                        minLength: 1
+                        type: string
+                    required:
+                    - deployment
+                    type: object
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,
                       etc.)
