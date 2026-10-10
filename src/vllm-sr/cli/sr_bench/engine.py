@@ -5,9 +5,10 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import socket
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from http import HTTPStatus
 
 import requests
@@ -396,18 +397,40 @@ class Engine:
                         "preview_context": manifest["preview_context"],
                     }
                 )
+                if ctx.cancelled():
+                    raise CallFailure("Run cancelled or wall-time budget exhausted")
                 response = requests.post(
                     url,
                     json=payload,
                     headers=headers,
+                    stream=True,
                     timeout=min(
                         manifest["limits"]["total_timeout_s"],
                         manifest["limits"]["idle_timeout_s"],
+                        max(0.1, ctx.deadline - time.monotonic()),
                     ),
                 )
-                if response.status_code >= HTTPStatus.BAD_REQUEST:
-                    raise ValueError(f"Preview HTTP {response.status_code}")
-                routing = response.json()
+                stop = threading.Event()
+
+                def watch():
+                    while not stop.wait(0.1):
+                        if ctx.cancelled():
+                            with suppress(AttributeError, OSError):
+                                response.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+                            return
+
+                watcher = threading.Thread(target=watch, daemon=True)
+                watcher.start()
+                try:
+                    if response.status_code >= HTTPStatus.BAD_REQUEST:
+                        raise ValueError(f"Preview HTTP {response.status_code}")
+                    routing = response.json()
+                    if ctx.cancelled():
+                        raise CallFailure("Run cancelled or wall-time budget exhausted")
+                finally:
+                    stop.set()
+                    response.close()
+                    watcher.join()
                 if (
                     target.get("config_hash")
                     and routing.get("config_hash") != target["config_hash"]
