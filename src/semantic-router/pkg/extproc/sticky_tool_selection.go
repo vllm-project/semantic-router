@@ -26,6 +26,7 @@ const (
 	stickyToolReasonInvalidCatalog        = "invalid_catalog"
 	stickyToolReasonRetrievalFailed       = "retrieval_failed"
 	stickyToolReasonToolChoiceNotAuto     = "tool_choice_not_auto"
+	stickyToolReasonDispatchFailed        = "dispatch_failed"
 	stickyToolReasonEmptyQuery            = "empty_query"
 	stickyToolReasonStoreClosed           = "store_closed"
 	stickyToolReasonStoreTimeout          = "store_timeout"

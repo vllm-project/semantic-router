@@ -25,6 +25,12 @@ import (
 // has not authorized, and a stream error could do the same through an Envoy
 // configured with failure_mode_allow.
 func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Request, response *ext_proc.ProcessingResponse, ctx *RequestContext) *ext_proc.ProcessingResponse {
+	// A failed dispatch already answers the client, so sticky selection must
+	// not record a turn the provider never receives.
+	if response.GetImmediateResponse() != nil && stickyToolSelectionDecision(ctx) {
+		r.recordStickyToolBypass(ctx, ctx.VSRSelectedDecision.GetToolSelectionConfig(), stickyToolReasonDispatchFailed)
+		return nil
+	}
 	fast := extractSemanticRequestSignals(request)
 	if err := r.handleToolSelection(request, fast.UserContent, fast.NonUserMessages, &response, ctx); err != nil {
 		if stickyToolSelectionDecision(ctx) {

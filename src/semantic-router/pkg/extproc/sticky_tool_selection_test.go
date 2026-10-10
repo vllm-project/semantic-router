@@ -364,3 +364,18 @@ func TestApplyStickyToolsChangesGenerationOnlyForNewRepresentation(t *testing.T)
 	require.Nil(t, request.Tools)
 	require.Equal(t, uint64(3), request.Generation)
 }
+
+// A dispatch that already failed answers the client. Sticky selection must
+// not read or write session state for a turn the provider never receives.
+func TestStickyDispatchFailureLeavesSessionStateUntouched(t *testing.T) {
+	h := newStickyHarness(t, llmprotocol.OpenAIChatV1, stickyAddDecision(t, &config.StickyToolSelectionConfig{MaxTools: intPtr(3)}), nil)
+	h.run(stickyTurn{query: stickyTestQueries["weather"]})
+	operations := h.store.operations()
+
+	h.router.CredentialResolver = nil
+	failed := h.run(stickyTurn{query: stickyTestQueries["calendar"]})
+	require.False(t, failed.response)
+	require.Equal(t, 500, failed.status, "the dispatch failure reaches the client")
+	require.Equal(t, stickyToolReasonDispatchFailed, failed.receipt.Reason)
+	require.Equal(t, operations, h.store.operations(), "a failed dispatch must not touch session state")
+}
