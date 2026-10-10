@@ -281,11 +281,7 @@ func independentAssistantAnswer(turn string, corrections []wordPair) string {
 	return strings.Join(independent, " ")
 }
 
-var (
-	secondPersonWords   = vocabulary("you you're you've you'd you'll your yours yourself")
-	otherPersonSubjects = vocabulary("he she they")
-	possessiveSubjects  = vocabulary("your his her their")
-)
+var secondPersonWords = vocabulary("you you're you've you'd you'll your yours yourself")
 
 // restatesOriginal reports that an assistant clause repeats the corrected
 // statement: it shares a word with it and either speaks to the user, as in
@@ -308,18 +304,10 @@ func restatesOriginal(clause []string, originalContentWords map[string]bool, ori
 	return slices.ContainsFunc(anchorPairs(clause), func(pair wordPair) bool { return originalPairs[pair] })
 }
 
-// namesAnotherSubject reports that an assistant clause opens with someone or
-// something other than the corrected statement, as in "your dog Biscuit is a
-// Boston terrier" or "they live in Boston too". "Your budget" still names
-// what "my budget" stated.
+// namesAnotherSubject accepts "your <subject>" only when that subject is absent
+// from the corrected statement. A pronoun alone can't establish another subject.
 func namesAnotherSubject(clause []string, originalContentWords map[string]bool) bool {
-	if len(clause) == 0 {
-		return false
-	}
-	if otherPersonSubjects[clause[0]] {
-		return true
-	}
-	return len(clause) > 1 && possessiveSubjects[clause[0]] && !originalContentWords[clause[1]]
+	return len(clause) > 1 && clause[0] == "your" && !originalContentWords[clause[1]]
 }
 
 func (s *supersession) correctsAll(corrector turnRef, turns []turnRef) bool {

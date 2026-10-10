@@ -29,6 +29,10 @@ var (
 	bostonTerrierTurn      = formatTurnChunk("I live in Boston.", "Your dog Biscuit is a Boston terrier.")
 	nurseAndSisterTurn     = formatTurnChunk("I work as a nurse.", "Got it, you work as a nurse. Your sister is a nurse too.")
 	bostonAndParentsTurn   = formatTurnChunk("I live in Boston.", "Your parents visit often. They live in Boston too.")
+	sisterNursePronounTurn = formatTurnChunk("My sister is a nurse.", "She is a nurse.")
+	sisterParamedicTurn    = formatTurnChunk("I changed my sister from a nurse to a paramedic.", "Your sister is now a paramedic.")
+	dogTerrierRestatedTurn = formatTurnChunk("My dog Biscuit is a Boston terrier.", "Your dog Biscuit is a Boston terrier.")
+	dogBeagleTurn          = formatTurnChunk("I changed my dog Biscuit from a Boston terrier to a beagle.", "Your dog Biscuit is now a beagle.")
 	budgetRestatedTurn     = formatTurnChunk("My budget for the Japan trip is 4000 dollars.", "Your budget is 4000 dollars.")
 	bostonInTheFallTurn    = formatTurnChunk("I live in Boston.", "Got it, you live in Boston. Boston is lovely in the fall.")
 	hopeYouLoveBostonTurn  = formatTurnChunk("I live in Boston.", "I hope you love Boston.")
@@ -175,9 +179,19 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			want:      []string{"A: Your sister is a nurse too.", paramedicTurn},
 		},
 		{
-			name:      "a move keeps where other people live",
+			name:      "a correction drops a stale assistant pronoun sentence",
+			retrieved: []datedContent{{content: sisterNursePronounTurn, daysAgo: 30}, {content: sisterParamedicTurn, daysAgo: 9}},
+			want:      []string{sisterParamedicTurn},
+		},
+		{
+			name:      "a correction drops a your clause about the corrected subject",
+			retrieved: []datedContent{{content: dogTerrierRestatedTurn, daysAgo: 30}, {content: dogBeagleTurn, daysAgo: 9}},
+			want:      []string{dogBeagleTurn},
+		},
+		{
+			name:      "a move keeps an explicit parent fact but drops an unresolved pronoun",
 			retrieved: []datedContent{{content: bostonAndParentsTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
-			want:      []string{"A: Your parents visit often. They live in Boston too.", denverTurn},
+			want:      []string{"A: Your parents visit often.", denverTurn},
 		},
 		{
 			name:      "a move keeps a sentence that only mentions the old city",
@@ -245,6 +259,26 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.ElementsMatch(t, tc.want, injectedContents(t, tc.retrieved))
+		})
+	}
+}
+
+func TestIndependentAssistantAnswerDoesNotResolvePronouns(t *testing.T) {
+	cases := []struct {
+		name      string
+		statement string
+		answer    string
+	}{
+		{name: "he", statement: "My brother is a nurse.", answer: "He is a nurse."},
+		{name: "she", statement: "My sister is a nurse.", answer: "She is a nurse."},
+		{name: "they", statement: "My siblings are nurses.", answer: "They are nurses."},
+		{name: "his", statement: "My brother is active.", answer: "His status is active."},
+		{name: "her", statement: "My sister is active.", answer: "Her status is active."},
+		{name: "their", statement: "My team is active.", answer: "Their status is active."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Empty(t, independentAssistantAnswer(formatTurnChunk(tc.statement, tc.answer), nil))
 		})
 	}
 }
