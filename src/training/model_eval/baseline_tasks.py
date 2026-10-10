@@ -268,8 +268,13 @@ def load_split(spec: TaskSpec, revision: str):
 
 def load_rows(
     spec: TaskSpec, mapping: dict[str, int], limit: int | None, revision: str
-) -> tuple[list[str], np.ndarray, int]:
-    """Load the held-out split and map every row onto the artifact's class order."""
+) -> tuple[list[str], np.ndarray, int, dict[str, int]]:
+    """Load the held-out split and map every row onto the artifact's class order.
+
+    The fourth element names the labels whose rows were dropped because the
+    artifact does not define them, with the row count each dropped, so the
+    result can record the gap the log line reports.
+    """
     dataset = load_split(spec, revision)
     if spec.exclude_prefix is not None:
         field, prefix = spec.exclude_prefix
@@ -280,7 +285,7 @@ def load_rows(
 
     texts: list[str] = []
     labels: list[int] = []
-    unmapped: set[str] = set()
+    dropped: dict[str, int] = {}
     for row in dataset:
         text = row.get(spec.text_field)
         raw = row.get(spec.label_field)
@@ -288,13 +293,13 @@ def load_rows(
             continue
         if isinstance(raw, str):
             if raw not in mapping:
-                unmapped.add(raw)
+                dropped[raw] = dropped.get(raw, 0) + 1
                 continue
             index = mapping[raw]
         else:
             index = int(raw)
             if index not in mapping.values():
-                unmapped.add(str(raw))
+                dropped[str(raw)] = dropped.get(str(raw), 0) + 1
                 continue
         texts.append(str(text))
         labels.append(index)
@@ -302,14 +307,17 @@ def load_rows(
     if not texts:
         raise BaselineError(
             f"{spec.dataset_repo}:{spec.split} produced no rows the artifact can "
-            f"score; unmapped label values: {sorted(unmapped)[:MAX_REPORTED_UNMAPPED]}"
+            f"score; unmapped label values: {sorted(dropped)[:MAX_REPORTED_UNMAPPED]}"
         )
-    if unmapped:
+    if dropped:
         logger.warning(
             "dropped rows with labels the artifact does not define: %s",
-            ", ".join(sorted(unmapped)[:MAX_REPORTED_UNMAPPED]),
+            ", ".join(
+                f"{label} ({dropped[label]})"
+                for label in sorted(dropped)[:MAX_REPORTED_UNMAPPED]
+            ),
         )
-    return texts, np.array(labels, dtype=np.int64), available
+    return texts, np.array(labels, dtype=np.int64), available, dropped
 
 
 def tokenizer_class(model_dir: Path) -> str | None:

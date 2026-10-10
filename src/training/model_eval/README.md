@@ -148,7 +148,10 @@ itself, so the runner refuses that artifact for this task. The kept questions
 cover nine of the fourteen categories, since health, history, law, other and
 philosophy come only from MMLU. A label with no rows keeps its per-label entry
 with support 0, is left out of macro F1, and is listed in the result's
-`unsupported_labels` and as unmeasured in the gap report.
+`unsupported_labels` and as unmeasured in the gap report. The mirror case -
+rows whose label the artifact does not define - is dropped before scoring, and
+the result's `dataset.dropped_rows` names those labels with the row count each
+dropped, so the scored row count is never read as the size of the split.
 
 The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
