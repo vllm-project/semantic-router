@@ -48,10 +48,12 @@ func TestPIIWindowConfigurationPreservesExplicitDocumentBudget(t *testing.T) {
 	if err := ValidatePIIWindow(cfg); err != nil {
 		t.Fatal(err)
 	}
+	// Without geometry a window input is a question deployment's scan budget;
+	// a head deployment that reads in windows fails preparation instead.
 	deployment.Input.Overflow = "window"
 	cfg.ModelDeployments["pii"] = deployment
-	if ValidatePIIWindow(cfg) == nil {
-		t.Fatal("window overflow silently ignored missing geometry")
+	if err := ValidatePIIWindow(cfg); err != nil {
+		t.Fatal(err)
 	}
 }
 

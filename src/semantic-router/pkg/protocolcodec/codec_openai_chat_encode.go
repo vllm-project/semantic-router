@@ -61,6 +61,9 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIChatV1); err != nil {
+		return diagnostics, err
+	}
 	for _, message := range request.Messages {
 		if message.ReasoningEffort != "" {
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
@@ -127,9 +130,38 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 		if err != nil {
 			return err
 		}
-		wire.Messages = append(wire.Messages, encoded)
+		appendChatMessage(wire, encoded, request.Trusted.SourceFormat == llmprotocol.OpenAIResponsesV1)
 	}
 	return nil
+}
+
+func appendChatMessage(wire *chatRequestWire, message chatMessageWire, mergeResponsesToolCalls bool) {
+	// Responses represents each function/custom call as an item. Chat requires
+	// adjacent calls in one assistant turn before their tool results. Group only
+	// at this projection boundary so native Responses retains individual item IDs.
+	// Adjacency is after instruction normalization, as for other Chat messages.
+	if mergeResponsesToolCalls && isChatToolCallOnlyMessage(message) && len(wire.Messages) > 0 {
+		previous := &wire.Messages[len(wire.Messages)-1]
+		if isChatToolCallOnlyMessage(*previous) {
+			previous.ToolCalls = append(previous.ToolCalls, message.ToolCalls...)
+			return
+		}
+	}
+	wire.Messages = append(wire.Messages, message)
+}
+
+func isChatToolCallOnlyMessage(message chatMessageWire) bool {
+	return message.Role == "assistant" &&
+		len(message.ToolCalls) > 0 &&
+		len(message.Content) == 0 &&
+		message.Refusal == nil &&
+		message.Reasoning == nil &&
+		message.AlternateReasoning == nil &&
+		message.Audio == nil &&
+		message.LegacyFunctionCall == nil &&
+		message.ToolCallID == "" &&
+		len(message.Annotations) == 0 &&
+		len(message.Name) == 0
 }
 
 func appendChatTools(wire *chatRequestWire, tools []llmprotocol.Tool) {

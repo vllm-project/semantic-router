@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -34,6 +35,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
 		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
+		config.SignalTypeAction:        len(c.Config.ActionRules) > 0,
 		config.SignalTypeDecision:      len(c.Config.DecisionRules) > 0,
 	}
 }
@@ -209,8 +211,11 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 
 	// One request stage, one bundle: the model calls of every signal reach each
-	// runtime process as a single /v1/bundle call.
+	// runtime process as a single /v1/bundle call, before the signals' deadline,
+	// and every question the stage asks one decision model goes in one call.
 	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
+	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
+	defer cancel()
 	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -220,9 +225,20 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
 
-	runSignalDispatchers(dispatchers, usedSignals, ready, bundle, &wg)
+	asks := func(signalType string) []string { return c.signalQuestionDeployments(signalType, usedSignals) }
+	runSignalDispatchers(stage, dispatchers, usedSignals, ready, bundle, asks, &wg)
 
 	wg.Wait()
+	originalText := input.Text
+	if input.UncompressedText != "" {
+		originalText = input.UncompressedText
+	}
+	if textForSignal(config.SignalTypePII) != originalText {
+		results.PIIContentVerified = false
+	}
+	if input.ImageURL != "" || input.Audio != "" {
+		results.PIIContentVerified = false
+	}
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
 	results = c.applySignalOutputPolicies(results)

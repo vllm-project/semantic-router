@@ -17,6 +17,26 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ActionRule": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "explain",
+            "fix",
+            "refactor",
+            "test",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AdmissionConfig": {
       "properties": {
         "max_concurrency": {
@@ -80,12 +100,77 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AlgorithmBudget": {
+      "properties": {
+        "deadline": {
+          "type": "string"
+        },
+        "max_calls": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deadline",
+        "max_calls"
+      ]
+    },
     "AlgorithmConfig": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cascade"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minimum_candidates"
+              ]
+            },
+            "required": [
+              "budget",
+              "quality",
+              "stages"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "budget"
+                  ]
+                },
+                {
+                  "required": [
+                    "quality"
+                  ]
+                },
+                {
+                  "required": [
+                    "stages"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "type": {
           "type": "string",
           "enum": [
             "automix",
+            "cascade",
             "confidence",
             "decision",
             "fusion",
@@ -103,6 +188,18 @@
             "svm",
             "workflows"
           ]
+        },
+        "quality": {
+          "$ref": "#/$defs/NativeQualityConfig"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/CascadeStage"
+          },
+          "type": "array"
+        },
+        "budget": {
+          "$ref": "#/$defs/AlgorithmBudget"
         },
         "minimum_candidates": {
           "type": "integer"
@@ -356,6 +453,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CalibrationArtifact": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "source",
+        "sha256"
+      ]
+    },
     "CandidateIterationConfig": {
       "properties": {
         "variable": {
@@ -520,6 +638,13 @@
     },
     "CanonicalEntrypoint": {
       "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "chat",
+            "systemone"
+          ]
+        },
         "model_names": {
           "items": {
             "type": "string"
@@ -535,6 +660,12 @@
     },
     "CanonicalEvaluation": {
       "properties": {
+        "calibrations": {
+          "items": {
+            "$ref": "#/$defs/CalibrationArtifact"
+          },
+          "type": "array"
+        },
         "benchmarks": {
           "items": {
             "$ref": "#/$defs/BenchmarkDefinition"
@@ -709,6 +840,9 @@
     },
     "CanonicalIntegrationGlobal": {
       "properties": {
+        "kv_transfer": {
+          "$ref": "#/$defs/KVTransferConfig"
+        },
         "tools": {
           "$ref": "#/$defs/ToolsConfig"
         },
@@ -743,6 +877,14 @@
                 "overflow": "reject"
               },
               "profile": "exact"
+            },
+            "primary": {
+              "artifact": "vllm-sr/Vela-2.0-0.3B",
+              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {},
+              "profile": "max_speed"
             }
           }
         },
@@ -772,6 +914,9 @@
             "$ref": "#/$defs/AdmissionConfig"
           },
           "type": "object"
+        },
+        "signal_timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -834,6 +979,9 @@
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -902,6 +1050,9 @@
         "on_error": {
           "type": "string"
         },
+        "on_unscanned": {
+          "type": "string"
+        },
         "model_ref": {
           "type": "string"
         }
@@ -927,6 +1078,9 @@
           "type": "string"
         },
         "catalog": {
+          "type": "string"
+        },
+        "deployment": {
           "type": "string"
         },
         "reasoning": {
@@ -1040,9 +1194,6 @@
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
         },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
-        },
         "model_bindings": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelBinding"
@@ -1078,6 +1229,9 @@
     },
     "CanonicalRouterGlobal": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "config_source": {
           "type": "string",
           "enum": [
@@ -1088,16 +1242,7 @@
         "strategy": {
           "type": "string"
         },
-        "auto_model_name": {
-          "type": "string"
-        },
-        "auto_model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "include_config_models_in_list": {
+        "list_backend_models": {
           "type": "boolean"
         },
         "clear_route_cache": {
@@ -1126,9 +1271,6 @@
       "properties": {
         "candidate_requirements": {
           "$ref": "#/$defs/CandidateRequirements"
-        },
-        "data_policy": {
-          "$ref": "#/$defs/RoutingDataPolicy"
         },
         "model_bindings": {
           "additionalProperties": {
@@ -1338,6 +1480,12 @@
           },
           "type": "array"
         },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRule"
+          },
+          "type": "array"
+        },
         "decision": {
           "items": {
             "$ref": "#/$defs/DecisionSignalRule"
@@ -1383,6 +1531,9 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "$ref": "#/$defs/DecisionModelBinding"
+        },
         "safety": {
           "type": "string"
         },
@@ -1410,6 +1561,45 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "CascadeStage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "native",
+            "judge"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "accept": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "generation": {
+          "$ref": "#/$defs/NativeGenerationConfig"
+        },
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "model"
+      ]
     },
     "Category": {
       "properties": {
@@ -2023,6 +2213,19 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "DecisionModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "deployment"
+      ]
     },
     "DecisionPlugin": {
       "allOf": [
@@ -2829,12 +3032,6 @@
     },
     "FlowRuntimeConfig": {
       "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "state": {
           "$ref": "#/$defs/WorkflowStateRuntimeConfig"
         }
@@ -2945,18 +3142,6 @@
         },
         "max_completion_tokens": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "FusionRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3300,6 +3485,105 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "KVServingIdentity": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "weight_revision": {
+          "type": "string"
+        },
+        "tokenizer": {
+          "type": "string"
+        },
+        "tokenizer_revision": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "string"
+        },
+        "tensor_parallel": {
+          "type": "integer"
+        },
+        "kv_heads": {
+          "type": "integer"
+        },
+        "head_dim": {
+          "type": "integer"
+        },
+        "head_order": {
+          "type": "string"
+        },
+        "adapter_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferBackend": {
+      "properties": {
+        "model_alias": {
+          "type": "string"
+        },
+        "backend_name": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "can_export": {
+          "type": "boolean"
+        },
+        "can_load": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backends": {
+          "items": {
+            "$ref": "#/$defs/KVTransferBackend"
+          },
+          "type": "array"
+        },
+        "pairs": {
+          "items": {
+            "$ref": "#/$defs/KVTransferPair"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KVTransferPair": {
+      "properties": {
+        "mapper_id": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "target": {
+          "$ref": "#/$defs/KVServingIdentity"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_transfer_turn": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "KeywordRule": {
       "properties": {
         "name": {
@@ -3458,6 +3742,15 @@
           },
           "type": "array"
         },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "systemone": {
+          "$ref": "#/$defs/ListenerSystemOne"
+        },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
         },
@@ -3474,6 +3767,18 @@
           "type": "boolean"
         },
         "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerSystemOne": {
+      "properties": {
+        "models": {
           "items": {
             "type": "string"
           },
@@ -3547,12 +3852,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "remom": {
-          "$ref": "#/$defs/ReMoMRuntimeConfig"
-        },
-        "fusion": {
-          "$ref": "#/$defs/FusionRuntimeConfig"
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
@@ -4336,10 +4635,16 @@
         "endpoint": {
           "type": "string"
         },
-        "process": {
-          "type": "string"
+        "replicas": {
+          "items": {
+            "$ref": "#/$defs/ModelReplica"
+          },
+          "type": "array"
         },
         "served_name": {
+          "type": "string"
+        },
+        "public_name": {
           "type": "string"
         }
       },
@@ -4415,6 +4720,21 @@
           "type": "string"
         },
         "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelReplica": {
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "served_name": {
           "type": "string"
         }
       },
@@ -4557,6 +4877,93 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "NativeAcceptance": {
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/NativeAcceptanceRule"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "rules"
+      ]
+    },
+    "NativeAcceptanceRule": {
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "question_type": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string",
+          "enum": [
+            "confidence",
+            "top_probability",
+            "probability_margin"
+          ]
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "field",
+        "predicate"
+      ]
+    },
+    "NativeGenerationConfig": {
+      "properties": {
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "max_output_tokens"
+      ]
+    },
+    "NativeQualityConfig": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "uncalibrated",
+            "calibrated"
+          ]
+        },
+        "acceptance": {
+          "$ref": "#/$defs/NativeAcceptance"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "loss": {
+          "type": "string"
+        },
+        "max_risk": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
     },
     "Normalization": {
       "properties": {
@@ -5505,18 +5912,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ReMoMRuntimeConfig": {
-      "properties": {
-        "model_names": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ReaskRule": {
       "properties": {
         "name": {
@@ -6183,6 +6578,27 @@
     },
     "RouterReplayConfig": {
       "properties": {
+        "capture_request_body": {
+          "type": "boolean"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_personal_data": {
+          "type": "boolean"
+        },
+        "max_records": {
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_steps": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6237,6 +6653,9 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
+        "capture_personal_data": {
+          "type": "boolean"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -6349,15 +6768,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "RoutingDataPolicy": {
-      "properties": {
-        "replay": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "RoutingModel": {
       "properties": {
         "name": {
@@ -6452,6 +6862,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "action",
             "authz",
             "classifier",
             "complexity",
@@ -7707,6 +8118,14 @@
         "schema_ref": "#/$defs/InputModalityRule"
       },
       {
+        "type": "action",
+        "display_name": "Action",
+        "collection": "actions",
+        "observation_key": "action",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ActionRule"
+      },
+      {
         "type": "decision",
         "display_name": "Decision Model",
         "collection": "decision",
@@ -7717,6 +8136,13 @@
       }
     ],
     "algorithms": [
+      {
+        "type": "cascade",
+        "display_name": "Native Cascade",
+        "description": "Escalate complete typed responses through declared stages.",
+        "tier": "experimental",
+        "execution": "native"
+      },
       {
         "type": "automix",
         "display_name": "AutoMix",
@@ -8115,6 +8541,15 @@
         ]
       },
       {
+        "key": "kv_transfer",
+        "layer": "integrations",
+        "display_name": "Kv Transfer",
+        "path": [
+          "integrations",
+          "kv_transfer"
+        ]
+      },
+      {
         "key": "tools",
         "layer": "integrations",
         "display_name": "Tools",
@@ -8273,6 +8708,15 @@
         "path": [
           "model_catalog",
           "admission"
+        ]
+      },
+      {
+        "key": "signal_timeout_ms",
+        "layer": "model_catalog",
+        "display_name": "Signal Timeout Ms",
+        "path": [
+          "model_catalog",
+          "signal_timeout_ms"
         ]
       }
     ]

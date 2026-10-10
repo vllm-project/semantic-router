@@ -138,7 +138,7 @@ PII uses its own export workflow.
 
 Finally, configure [local model bindings](../model-runtime/deploy.md)
 and send representative requests through
-[route preview](model-runtime/troubleshooting.md). Check the
+[route preview](../model-runtime/troubleshooting.md). Check the
 actual signal and decision as well as model confidence.
 
 The [artifact index](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)

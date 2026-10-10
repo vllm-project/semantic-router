@@ -196,6 +196,7 @@ export interface RecipeProbeExpectedRoute {
   plugin_match?: string
   signals: Record<string, string[]>
   signal_values?: Record<string, { gte?: number; lte?: number }>
+  signal_errors?: Record<string, string>
   forbidden_signals: Record<string, string[]>
   signal_match?: string
 }
@@ -300,12 +301,13 @@ export interface RecipeProbeValidationResult {
     recommended_models: string[]
     matched_signals: Record<string, string[]>
     signal_values?: Record<string, unknown>
+    signal_errors?: Record<string, string>
     trace_decisions: string[]
   }
   checks: Record<
     'decision' | 'model' | 'recipe' | 'algorithm' | 'plugins' | 'signals' | 'alias' | 'trace',
     boolean
-  > & { signal_values?: boolean }
+  > & { signal_values?: boolean; signal_errors?: boolean }
   failures: string[]
   provenance?: {
     status: 'verified' | 'unverified'

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import tempfile
 from typing import Any
+
+import yaml
 
 from cli import __version__
 from cli.config_translator import (
@@ -19,6 +22,7 @@ from cli.consts import (
     DEFAULT_LISTENER_PORT,
     image_tag_for_cli_version,
 )
+from cli.decision_model import configured_decision_model
 from cli.gateway_mode import DEFAULT_GATEWAY, GATEWAY_STANDALONE
 from cli.k8s_env_secret import (
     ENV_SECRET_MANAGER_LABEL,
@@ -231,6 +235,7 @@ class K8sBackend:
             gateway=gateway,
             platform=platform,
         )
+
         self._bind_env_secret_revision(values, secret_name)
         self._bind_dashboard_management_credential(values, secret_plan)
 
@@ -385,6 +390,10 @@ class K8sBackend:
             "--show-desc",
         ]
         helm_result = self._run_display(helm_cmd)
+        decision_model = self._live_decision_model()
+        if decision_model:
+            echo()
+            fields((("Decision model", decision_model),))
         failed = next(
             (
                 result.returncode
@@ -395,6 +404,36 @@ class K8sBackend:
         )
         if failed:
             raise SystemExit(failed)
+
+    def _live_decision_model(self) -> str | None:
+        """The decision model of the release's live Router config, or None."""
+
+        cmd = [
+            *self._kubectl_base_cmd(),
+            "get",
+            "configmap",
+            "--namespace",
+            self.namespace,
+            "-l",
+            f"app.kubernetes.io/instance={self.release_name}",
+            "-o",
+            "json",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except OSError:
+            return None
+        if result.returncode != 0:
+            return None
+        try:
+            for item in json.loads(result.stdout).get("items", []):
+                data = item.get("data") or {}
+                if "config.yaml" in data and "tools_db.json" in data:
+                    document = yaml.safe_load(data["config.yaml"]) or {}
+                    return configured_decision_model(document)
+        except (ValueError, yaml.YAMLError):
+            return None
+        return None
 
     def _dashboard_service_query(self, jsonpath: str) -> str | None:
         cmd = [
