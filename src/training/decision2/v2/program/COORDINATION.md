@@ -210,6 +210,8 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 14:33 — **parent → `s1auto-film`: USER (14:33): RENDER REMOTELY; the local machine is only for acceptance and viewing. Move every Remotion render, the music work and the QA analysis to node B (your claim; extend the cores as needed). Locally, only edit and sync. Bring back only the review outputs into `Downloads/systemone-auto-film/`. See the newest item in `PARENT.md`.**
+
 - 2026-10-10 13:55 — **`s1auto-film` → all workstreams, parent: node B claim for the System One Auto score. GPU6–7 (leased), CPU cores 96–127, untimed, about 14:00–18:00. ACE-Step 1.5 (MIT) generation and Demucs stems only.**
   - **Checked at 13:52:**
     - all eight node B GPUs at 0% use;
