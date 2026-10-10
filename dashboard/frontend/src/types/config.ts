@@ -31,7 +31,7 @@ export interface ProviderModel {
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'openai' | 'responses' | 'anthropic'
+  api_format?: 'openai' | 'responses' | 'anthropic' | 'systemone'
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
@@ -461,6 +461,7 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
+  models?: string[]
   tls?: ListenerTLS
   identity?: ListenerIdentity
 }

@@ -24,3 +24,57 @@ describe('decision algorithm manager mapping', () => {
     expect(mergeAlgorithmFields(algorithm, 'prompt', algorithmFields(algorithm))).toEqual(algorithm)
   })
 })
+
+describe('native algorithm editor', () => {
+  const budget = { deadline: '30s', max_calls: 2 }
+  const quality = {
+    type: 'uncalibrated',
+    acceptance: {
+      rules: [{ question_type: 'choice', field: 'top_probability', predicate: { gte: 0.9 } }],
+    },
+  }
+  const stages = [{ name: 'fast', model: 'decision-kai', kind: 'native' }]
+  it('round-trips cascade budget, quality, and stages at the algorithm level', () => {
+    const algorithm = { type: 'cascade', budget, quality, stages }
+    const fields = algorithmFields(algorithm)
+    expect(fields).toEqual({ budget, quality, stages })
+    expect(mergeAlgorithmFields(algorithm, 'cascade', fields)).toEqual(algorithm)
+    expect(
+      mergeAlgorithmFields(algorithm, 'cascade', {
+        ...fields,
+        budget: { deadline: '45s', max_calls: 3 },
+      }),
+    ).toEqual({ ...algorithm, budget: { deadline: '45s', max_calls: 3 } })
+  })
+  it('preserves calibrated acceptance when editing the execution budget', () => {
+    const algorithm = {
+      type: 'cascade',
+      budget,
+      stages,
+      quality: {
+        type: 'calibrated',
+        calibration: 'validated-kai',
+        loss: 'bundle_error',
+        max_risk: 0.05,
+      },
+    }
+    expect(
+      mergeAlgorithmFields(algorithm, 'cascade', {
+        ...algorithmFields(algorithm),
+        budget: { deadline: '60s', max_calls: 4 },
+      }),
+    ).toEqual({ ...algorithm, budget: { deadline: '60s', max_calls: 4 } })
+  })
+  it('removes incompatible shared fields when switching execution types', () => {
+    expect(
+      mergeAlgorithmFields(
+        { type: 'static', minimum_candidates: 2, on_error: 'fallback' },
+        'cascade',
+        { budget, quality, stages },
+      ),
+    ).toEqual({ type: 'cascade', budget, quality, stages })
+    expect(
+      mergeAlgorithmFields({ type: 'cascade', budget, quality, stages }, 'static', {}),
+    ).toEqual({ type: 'static' })
+  })
+})

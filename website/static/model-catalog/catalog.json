@@ -102608,7 +102608,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449",
+        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -102698,7 +102698,7 @@
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449",
+        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -102791,7 +102791,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449",
+        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -102903,7 +102903,7 @@
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449",
+        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -102973,13 +102973,34 @@
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449",
+        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
     }
   ],
   "protocols": [
+    {
+      "capabilities": [
+        "typed_decisions"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "System One",
+      "id": "vllm-sr/systemone@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/systemone"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/systemone/models"
+        }
+      ],
+      "wire_format": "vllm-sr.systemone.v1"
+    },
     {
       "capabilities": [
         "chat",
@@ -106613,6 +106634,35 @@
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "private_runtime",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_protocol": "vllm-sr/systemone@1",
+      "description": "Connect a concrete decision model through the native System One API.",
+      "display_name": "System One Compatible",
+      "id": "systemone-compatible",
+      "presentation": {
+        "featured": false,
+        "logo": "public:/img/vllm-sr-mark.svg",
+        "monochrome": true,
+        "monogram": "S"
+      },
+      "protocols": [
+        "vllm-sr/systemone@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "vllm-sr/systemone@1#create",
+        "vllm-sr/systemone@1#list_models"
       ]
     },
     {

@@ -317,3 +317,12 @@ ROUTE local_standard (description = "Default local route for non-sensitive tasks
     max_body_bytes: 2048
   }
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}

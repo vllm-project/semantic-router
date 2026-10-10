@@ -29,10 +29,18 @@ import (
 // authoritative source we can only down-weight the least-supported responses, not
 // certify correctness.
 
-// HallucinationDetectFunc returns the unsupported spans of answer relative to
-// context, plus the detector's score: its highest hallucinated-token
-// probability, or 0 when it reports none.
-type HallucinationDetectFunc func(ctx context.Context, contextText, question, answer string) (unsupportedSpans []string, score float32, err error)
+// GroundingEvidence separates an unsupported-answer verdict from optional
+// localization. A model can flag an answer without identifying token spans.
+// Probability, when present, is the probability of unsupported content.
+type GroundingEvidence struct {
+	Unsupported bool
+	Spans       []string
+	Probability *float32
+}
+
+// HallucinationDetectFunc evaluates the answer against the supplied context.
+// Missing or unknown evidence is an error, never an empty successful verdict.
+type HallucinationDetectFunc func(ctx context.Context, contextText, question, answer string) (GroundingEvidence, error)
 
 // GroundingBackends belongs to the request's prepared recipe and generation.
 // Its model handles remain protected by the router's existing generation lease.

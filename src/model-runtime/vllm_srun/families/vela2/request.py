@@ -32,6 +32,7 @@ from ...systemone import (
     listed_options,
     named_options,
     read_question,
+    require_full_input,
 )
 from .calibration import SPAN_HEADS, Calibration
 
@@ -50,7 +51,7 @@ STATE_KEY_ROLES = {
 }
 LABELLED_TYPES = ("set", "span")
 QUESTION_TYPES = (*SYSTEM_ONE_TYPES, *LABELLED_TYPES)
-FAMILY_FIELDS = frozenset({"over", "preset", "overflow"})
+FAMILY_FIELDS = frozenset({"over", "preset", "overflow", "require_full_input"})
 # How a question reads a part longer than one input: whole, in windows up to
 # the request's scan budget (``window``, the default), or its first tokens.
 OVERFLOW = ("window", "truncate")
@@ -116,6 +117,7 @@ class Question:
     head: str | None = None
     span_range: tuple[int, int] | None = None
     truncate: bool = False
+    require_full_input: bool = False
 
     @property
     def names(self) -> list[str]:
@@ -358,6 +360,7 @@ class QuestionReader:
             head=head,
             span_range=span_range,
             truncate=overflow == "truncate",
+            require_full_input=require_full_input(question),
         )
 
     def _expand_preset(
@@ -372,7 +375,14 @@ class QuestionReader:
         name = question["preset"]
         if name not in self.presets:
             raise _invalid(f"preset must be one of {list(self.presets)}")
-        if set(question) - {"preset", "type", "over", "threshold", "overflow"}:
+        if set(question) - {
+            "preset",
+            "type",
+            "over",
+            "threshold",
+            "overflow",
+            "require_full_input",
+        }:
             raise _invalid(
                 "a preset question takes only preset, type, over, threshold and overflow"
             )
@@ -395,7 +405,7 @@ class QuestionReader:
             raise _invalid(f"preset {name} is a {expanded['type']} question")
         kept: dict[str, Any] = {
             key: question[key]
-            for key in ("over", "threshold", "overflow")
+            for key in ("over", "threshold", "overflow", "require_full_input")
             if key in question
         }
         return {**expanded, "preset": name, **kept}, named

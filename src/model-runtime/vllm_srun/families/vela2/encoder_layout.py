@@ -19,7 +19,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
-from .layout import Budget, Row, Tokens, fit, window_words
+from .layout import (
+    Budget,
+    Row,
+    SchemaTooLongError,
+    Tokens,
+    fit,
+    require_window_coverage,
+    window_words,
+)
 from .raw import RawRow, RawSpan
 from .request import Question
 from .words import Words
@@ -109,6 +117,7 @@ class EncoderLayout:
         self, row: Row, tokens: Tokens, in_windows: bool = True
     ) -> list[EncoderSequence]:
         """The row as one sequence, or (with ``windows``) as windows over a labelled part that had to be cut."""
+        row.require_complete_parts()
         compiled = [self._compile(q, tokens) for q in row.questions if q.type != "span"]
         span = row.span
         labels = (
@@ -122,17 +131,22 @@ class EncoderLayout:
         first = self._assemble(row, compiled, labels)
         assert first.budget is not None
         if not first.budget.protected_cut or not in_windows:
+            row.require_budget(first.budget)
             return [first]
         role = self._window_role(row)
         if role is None:
+            row.require_budget(first.budget)
             return [first]
+        row.require_budget(first.budget, window_role=role)
         part = row.part(role)
         total, kept = len(part.ids), first.budget.lengths[role]
         if kept >= total:
+            row.require_budget(first.budget)
             return [first]
         overlap = min(self.overlap, kept // 4)
         stride = max(1, kept - overlap)
         windows = []
+        intervals = []
         for start in range(0, max(1, total - overlap), stride):
             end = min(total, start + kept)
             words = index = None
@@ -140,11 +154,25 @@ class EncoderLayout:
                 words, index = window_words(part.words, start, end)
             window = part.window(start, end, words)
             parts = [window if p.role == role else p for p in row.parts]
-            sequence = self._assemble(Row(row.questions, parts), compiled, labels)
+            window_row = Row(row.questions, parts)
+            sequence = self._assemble(window_row, compiled, labels)
+            assert sequence.budget is not None
+            window_row.require_budget(sequence.budget)
             sequence.word_index = index
             windows.append(sequence)
+            intervals.append((start, end))
             if end >= total:
                 break
+        require_window_coverage(row, part, intervals)
+        if row.requires_full_input and part.words is not None:
+            covered: set[int] = set()
+            for sequence in windows:
+                assert sequence.word_index is not None
+                covered.update(int(index) for index in sequence.word_index)
+            if covered != set(range(len(part.words))):
+                raise SchemaTooLongError(
+                    "full input has words outside the encoder windows"
+                )
         return windows
 
     def combine(
