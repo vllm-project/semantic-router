@@ -29,4 +29,4 @@ the same artwork, including the original yellow and blue V. Both are
 
 `atmosphere.webp` is the generated background plate. `ecosystem.webp` is a static
 export of the homepage ecosystem section for the repository README. Keep its
-logo order and copy synchronized with `EcosystemSection.tsx`.
+logo order and copy synchronized with `EcosystemGrid.tsx`.
