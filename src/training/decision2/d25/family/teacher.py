@@ -83,7 +83,7 @@ def image(args) -> None:
         ]
         codes = [p.wait() for p in procs]
         if any(codes):
-            raise SystemExit(max(codes))
+            raise SystemExit(f"shard workers failed with exit codes {codes}")
     _run([sys.executable, "-m", "d25.omni.eval.run_rows", "merge"] + common)
 
 

@@ -54,6 +54,11 @@ def register() -> None:
 
 
 def worker(args) -> None:
+    import torch
+
+    # The Decision 2.0 runtime launches kernels on the current device; with several workers per pod the
+    # current device must be the worker's own GPU, or kernels fault on another GPU's memory.
+    torch.cuda.set_device(torch.device(args.device))
     register()
     from d25.vega.eval.proxy import run
 
@@ -83,7 +88,7 @@ def run_all(args) -> None:
     ]
     codes = [p.wait() for p in procs]
     if any(codes):
-        raise SystemExit(max(codes))
+        raise SystemExit(f"workers failed with exit codes {codes}")
     from d25.vega.eval.proxy.score import load_results, score_all
 
     results = load_results([str(p) for p in sorted(out.glob("results.shard*.jsonl"))])
