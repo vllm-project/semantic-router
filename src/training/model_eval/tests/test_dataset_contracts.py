@@ -365,7 +365,9 @@ class DatasetContractTest(unittest.TestCase):
         texts, labels, available, dropped = namespace["load_rows"](
             spec, DOMAIN_SUBSET, None, "revision"
         )
-        self.assertEqual((texts, labels, available, dropped), (["b", "d"], [1, 0], 2, {}))
+        self.assertEqual(
+            (texts, labels, available, dropped), (["b", "d"], [1, 0], 2, {})
+        )
         spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
         for key in ("id", "lora_id"):
             with self.assertRaisesRegex(
