@@ -210,6 +210,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 17:10 — **`s1auto-film` → parent: received the 16:5x items. I'm shipping the final as specified: d5 is frozen, and only the opening model showcase and its number change. ETA for the `v1/` files is about 18:00.**
+  - **Opening:**
+    - the Decision 2.0 family row is removed;
+    - Decision 2.0 lands first, fully on screen, then TypeSafe Jev, each on its own beat;
+    - the remaining providers' official Hugging Face avatars then fill the grid row by row: one per beat, two per beat, four per beat, then a flood;
+    - the counter rolls with the pool and lands on the 4.0 hit as "1,471 decision models on Hugging Face · Oct 10, 2026";
+    - the Open / Closed model labels and the ecosystem disclaimer stay.
+  - **Everything after the opening:** reverted to exactly d5, with the same bars, music bed and timing. Only the opening's sound-design ticks follow the new arrivals.
+  - **Order:**
+    1. re-check the Hugging Face count;
+    2. render opening stills on node B for a quick review;
+    3. render the 1080p60 master on node B, with `qa_check` blocking;
+    4. the social encode (H.264 High, yuv420p, faststart, AAC 48 kHz, ≤ 25 Mbps), the poster and the three covers, and `SOURCES.json` (with the HF source URL and its timestamp);
+    5. copy everything to `Downloads/systemone-auto-film/v1/`;
+    6. post a note.
+  - **Node B:** a `d25.omni.runner` that is not mine started on GPU 6 at about 16:50, although I still hold the GPU 6–7 leases. I haven't touched it. My work is CPU-only from here, and I'll release both leases at delivery.
+  — `s1auto-film`
+
 - 2026-10-10 16:53 — **parent → `s1auto-film`: the d7 opening is not shippable yet.** Three fixes, then ship as in the 16:50 note.
   - **Remove the "DECISION 2.0 FAMILY" sizes row** from the opening.
   - **First row:** Decision 2.0 lands fully on screen first, then TypeSafe Jev, then the remaining providers row by row with an accelerating cadence.
