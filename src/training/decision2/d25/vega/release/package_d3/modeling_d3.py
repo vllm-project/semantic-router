@@ -3,9 +3,10 @@
 ``AutoModel.from_pretrained(repo, trust_remote_code=True)`` loads the repository through its own runtime
 (``d3_runtime.py``) and returns a model with ``system_one(state=..., questions={...}, images=[...])``
 (any number of images per request). The
-repository is a standard ``Qwen3_5Model`` checkpoint plus a 255-way answer-code readout, so without
-``trust_remote_code`` the same repository loads as the plain backbone. A directory without
-``decision_config.json`` is not a Decision model and is loaded as a stock ``Qwen3_5Model``.
+repository is a standard ``Qwen3_5Model`` checkpoint (``D3Model``) or ``Qwen3VLModel`` checkpoint
+(``D3Qwen3VLModel``) plus a 255-way answer-code readout, so without ``trust_remote_code`` the same
+repository loads as the plain backbone. A directory without ``decision_config.json`` is not a Decision
+model and is loaded as the stock backbone.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from typing import Any
 import torch
 from transformers import PreTrainedModel
 from transformers.models.qwen3_5.configuration_qwen3_5 import Qwen3_5Config
+from transformers.models.qwen3_vl.configuration_qwen3_vl import Qwen3VLConfig
 
 try:
     from .d3_runtime import DEFAULT_BATCH_SIZE, D3
@@ -122,12 +124,18 @@ class D3Model(PreTrainedModel):
     def _init_weights(self, module: Any) -> None:
         """Every weight comes from the checkpoint; nothing is initialized here."""
 
+    @staticmethod
+    def stock_backbone():
+        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
+
+        return Qwen3_5Model
+
     @classmethod
     def from_pretrained(
         cls,
         pretrained_model_name_or_path: str | os.PathLike,
         *model_args: Any,
-        config: Qwen3_5Config | None = None,
+        config: Qwen3_5Config | Qwen3VLConfig | None = None,
         **kwargs: Any,
     ):
         """Load a Hub repository or a local download through the d3 runtime.
@@ -144,10 +152,8 @@ class D3Model(PreTrainedModel):
             raise ValueError("A d3 checkpoint loads from the repository root")
         revision = _commit(pretrained_model_name_or_path, config, hub)
         if not _is_decision(pretrained_model_name_or_path, revision, hub):
-            from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
-
             original.pop("trust_remote_code", None)
-            return Qwen3_5Model.from_pretrained(
+            return cls.stock_backbone().from_pretrained(
                 pretrained_model_name_or_path, *model_args, config=config, **original
             )
         if model_args:
@@ -170,7 +176,7 @@ class D3Model(PreTrainedModel):
                 f"Unsupported keyword arguments for a d3 model: {sorted(kwargs)}"
             )
         if config is None:
-            config = Qwen3_5Config.from_pretrained(
+            config = cls.config_class.from_pretrained(
                 pretrained_model_name_or_path,
                 **{k: v for k, v in hub.items() if v is not None},
             )
@@ -286,3 +292,19 @@ class D3Model(PreTrainedModel):
 
     def push_to_hub(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError("d3 packages are published by their release pipeline")
+
+
+class D3Qwen3VLModel(D3Model):
+    """A d3 checkpoint on a Qwen3-VL backbone (``config.json`` model_type ``qwen3_vl``).
+
+    Transformers registers a remote model class for the config class it loaded, so the class must name
+    ``Qwen3VLConfig``; the runtime is the same.
+    """
+
+    config_class = Qwen3VLConfig
+
+    @staticmethod
+    def stock_backbone():
+        from transformers.models.qwen3_vl.modeling_qwen3_vl import Qwen3VLModel
+
+        return Qwen3VLModel

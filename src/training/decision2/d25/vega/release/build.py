@@ -112,6 +112,13 @@ D3_FORMAT_FILE = "d3_format.py"
 D3_SCHEMA = "d3-package-manifest/1"
 D3_DECISION = {"format_id": "d3-code-readout-v1", "prompt": "d3"}
 D3_AUTO_MAP = {"AutoModel": "modeling_d3.D3Model"}
+# config.json model_type -> (architectures, AutoModel class of the public package)
+BACKBONES = {
+    "qwen3_5": (["Qwen3_5Model"], "modeling_d3.D3Model"),
+    "qwen3_vl": (["Qwen3VLModel"], "modeling_d3.D3Qwen3VLModel"),
+}
+# Export-only metadata that public packages do not carry (the runtime reads none of it).
+D3_DROPPED = ("architecture", "modalities", "images")
 D3_PIPELINES = {
     "decision": {**CUSTOM_PIPELINES["decision"], "impl": "pipeline_d3.D3Pipeline"}
 }
@@ -284,10 +291,11 @@ def validate_export(export: Path) -> dict[str, Any]:
         if not (export / name).is_file():
             raise FileNotFoundError(f"{export}: missing {name}")
     config = json.loads((export / "config.json").read_text())
-    if config.get("model_type") != "qwen3_5" or config.get("architectures") != [
-        "Qwen3_5Model"
-    ]:
-        raise ValueError("config.json must describe a Qwen3_5Model backbone")
+    kind = config.get("model_type")
+    if kind not in BACKBONES or config.get("architectures") != BACKBONES[kind][0]:
+        raise ValueError(
+            "config.json must describe a Qwen3_5Model or Qwen3VLModel backbone"
+        )
     decision = json.loads((export / "decision_config.json").read_text())
     problems = []
     if decision.get("format_version") != 1:
@@ -299,6 +307,8 @@ def validate_export(export: Path) -> dict[str, Any]:
         "noncausal_full_attention",
     ):
         problems.append("unknown attention_mode")
+    if kind == "qwen3_vl" and decision.get("attention_mode", "causal") != "causal":
+        problems.append("Qwen3-VL backbones run causal attention only")
     if decision.get("pooling", "last") != "last":
         problems.append("pooling must be last")
     if (
@@ -370,18 +380,24 @@ def build(
         (D3_CODE_FILES, D3_FORMAT_FILE) if public else (CODE_FILES, FORMAT_FILE)
     )
     config = json.loads((export / "config.json").read_text())
-    config["auto_map"] = D3_AUTO_MAP if public else AUTO_MAP
+    config["auto_map"] = (
+        {"AutoModel": BACKBONES[config["model_type"]][1]} if public else AUTO_MAP
+    )
     config["custom_pipelines"] = D3_PIPELINES if public else CUSTOM_PIPELINES
     (partial / "config.json").write_text(json.dumps(config, indent=2) + "\n")
     released = dict(decision)
     if no_context_limit:
         released["max_length"] = None
     if public:
-        released.pop("provenance", None)
+        for key in ("provenance", *D3_DROPPED):
+            released.pop(key, None)
         released.update(D3_DECISION)
     else:
         released["provenance"] = sanitize(decision.get("provenance") or {})
     (partial / "decision_config.json").write_text(json.dumps(released, indent=2) + "\n")
+    bases = [decision.get("base_model") or "the base model"]
+    if decision.get("vision_base_model"):
+        bases.append(decision["vision_base_model"])
 
     if public:
         for name in code_files:
@@ -393,9 +409,9 @@ def build(
                 f"{format_file} differs from the internal prompt contract: {differs}"
             )
         shutil.copyfile(D3_SOURCE / "LICENSE", partial / "LICENSE")
-        base = decision.get("base_model") or "the base model"
         (partial / "NOTICE").write_text(
-            D3_NOTICE.format(name=model_name, base=base), encoding="utf-8"
+            D3_NOTICE.format(name=model_name, base=" and ".join(bases)),
+            encoding="utf-8",
         )
     else:
         for name in CODE_FILES:
@@ -496,6 +512,16 @@ def build(
                     "component": decision.get("base_model") or "base model",
                     "licence": "apache-2.0",
                 },
+                *(
+                    [
+                        {
+                            "component": decision["vision_base_model"],
+                            "licence": "apache-2.0",
+                        }
+                    ]
+                    if decision.get("vision_base_model")
+                    else []
+                ),
                 {
                     "component": (
                         f"{model_name} (Decision 3.0) weights, readout and runtime"
@@ -516,9 +542,20 @@ def build(
             schema=D3_SCHEMA,
             format_id=released["format_id"],
             prompt=released["prompt"],
+            backbone=config["model_type"],
             base_model={
                 "repo_id": decision.get("base_model"),
                 "revision": decision.get("revision"),
+                **(
+                    {
+                        "vision": {
+                            "repo_id": decision["vision_base_model"],
+                            "revision": decision.get("vision_revision"),
+                        }
+                    }
+                    if decision.get("vision_base_model")
+                    else {}
+                ),
             },
             runtime={
                 "files_sha256": {

@@ -6,15 +6,19 @@
     python -m d25.family.release hub-new --repo vllm-sr/d3-flash --package <pkg> --out new.json
     python -m d25.family.release hub-final --repo vllm-sr/d3-flash --package <final pkg> --parent <sha> --out final.json
     python -m d25.family.release publish --repo vllm-sr/d3-flash --revision <sha> --out publish.json
+    python -m d25.family.release hub-update --repo vllm-sr/d3-nano --package <final pkg> --parent <main sha> \
+        --tag v3.0.1 --out update.json
     python -m d25.family.release dataset --stage <staged run> --model vllm-sr/d3-flash --revision <sha> --out ds.json
 
 Public repositories get ONE clean commit: ``hub-new`` creates the model repository fresh and private,
 ``hub-final`` commits the final package on top and squashes the history to a single commit named after the
 model, and ``publish`` tags that commit ``v3.0.0`` and makes the repository public (main and the tag must
-resolve to it anonymously). ``dataset`` creates ``vllm-sr/d3-<size>-decision-index`` fresh with the staged
-public run in one commit. ``measured`` writes the card inputs (``d25-measured/1``): the complete public kit run,
-the paired text estimate recomputed with that run's public skills, the paired vision estimate with the
-per-benchmark public scores, and the CUDA latency of the HF Job (placeholders with ``--provisional``).
+resolve to it anonymously). A later revision of a public model is ONE commit on main (``hub-update``: the
+whole package, stale files deleted, tagged ``--tag``). ``dataset`` creates ``vllm-sr/d3-<size>-decision-index``
+fresh with the staged public run in one commit (``--recreate`` deletes an earlier one first). ``measured`` writes
+the card inputs (``d25-measured/1``): the complete public kit run, the paired text estimate recomputed with that
+run's public skills, the paired vision estimate with the per-benchmark public scores, and the latency on one AMD
+Instinct MI325X (``--latency-dir``; placeholders with ``--provisional``).
 """
 
 from __future__ import annotations
@@ -191,6 +195,7 @@ def measured(
     latency_images: dict | None,
     sources: dict[str, str],
     provisional: bool = False,
+    gpu: str = "NVIDIA RTX PRO 6000",
 ) -> dict[str, Any]:
     """``provisional``: inputs of the private first upload only (any earlier public run, placeholder latency)."""
     complete = (
@@ -246,7 +251,7 @@ def measured(
             "source": sources["vgate"],
         },
         "latency": {
-            "gpu": "NVIDIA RTX PRO 6000",
+            "gpu": gpu,
             "text": {
                 "median_ms": latency["median_ms"],
                 "mean_ms": latency["mean_ms"],
@@ -411,8 +416,13 @@ def hub_final(repo: str, package: Path, parent: str, message: str) -> dict[str, 
     }
 
 
-def readback(repo: str, revision: str, package: Path) -> dict[str, Any]:
-    """Fresh download of ``revision`` into a temporary directory; every file re-hashed against the package."""
+def readback(
+    repo: str, revision: str, package: Path, single: bool = True
+) -> dict[str, Any]:
+    """Fresh download of ``revision`` into a temporary directory; every file re-hashed against the package.
+
+    ``single``: the repository must hold exactly one commit (first releases; later revisions keep history).
+    """
     from huggingface_hub import HfApi, snapshot_download
 
     api = HfApi()
@@ -435,7 +445,88 @@ def readback(repo: str, revision: str, package: Path) -> dict[str, Any]:
         "files": len(local),
         "mismatched": bad,
         "extra": extra,
-        "ok": info.sha == revision and len(commits) == 1 and not bad and not extra,
+        "ok": info.sha == revision
+        and (len(commits) == 1 or not single)
+        and not bad
+        and not extra,
+    }
+
+
+def hub_update(
+    repo: str, package: Path, parent: str, tag: str, message: str
+) -> dict[str, Any]:
+    """ONE commit on main of a public model (the whole package; files it no longer has are deleted), tagged.
+
+    Resumable: a main whose head is our commit on ``parent`` (same title) is taken as done; the tag is then
+    created if missing. Main and the tag must resolve to the commit anonymously, with the package's files.
+    """
+    from huggingface_hub import CommitOperationAdd, CommitOperationDelete, HfApi
+
+    api = HfApi()
+    info = api.model_info(repo)
+    if info.private is not False:
+        raise SystemExit(f"{repo} is not public")
+    commits = api.list_repo_commits(repo)
+    local = files(package)
+    changed: list[str] = []
+    stale: list[str] = []
+    ours = (
+        len(commits) >= 2
+        and commits[0].title == message
+        and commits[1].commit_id == parent
+    )
+    if ours:
+        commit = commits[0].commit_id
+    else:
+        if info.sha != parent:
+            raise SystemExit(f"{repo}: main is {info.sha}, expected {parent}")
+        tree = remote_tree(api, repo, parent)
+        changed = [
+            n for n, p in local.items() if n not in tree or not same_remote(tree[n], p)
+        ]
+        stale = sorted(set(tree) - set(local) - {".gitattributes"})
+        if not changed and not stale:
+            raise SystemExit(f"{repo}: main already holds this package")
+        commit = api.create_commit(
+            repo,
+            operations=[CommitOperationAdd(n, str(local[n])) for n in changed]
+            + [CommitOperationDelete(n) for n in stale],
+            commit_message=message,
+            parent_commit=parent,
+        ).oid
+    tags = {t.name: t.target_commit for t in api.list_repo_refs(repo).tags}
+    if tag not in tags:
+        api.create_tag(
+            repo, tag=tag, revision=commit, tag_message=f"{repo.split('/')[1]} {tag}"
+        )
+    anon = HfApi(token=False)
+    for _ in range(30):
+        main = anon.model_info(repo)
+        if main.sha == commit:
+            break
+        time.sleep(10)
+    tagged = anon.model_info(repo, revision=tag)
+    tree = remote_tree(anon, repo, commit)
+    bad = sorted(
+        n for n, p in local.items() if n not in tree or not same_remote(tree[n], p)
+    )
+    refs = api.list_repo_refs(repo)
+    return {
+        "repo": repo,
+        "revision": commit,
+        "parent": parent,
+        "main": main.sha,
+        "tag": {tag: tagged.sha},
+        "tags": {t.name: t.target_commit for t in refs.tags},
+        "changed": changed,
+        "deleted": stale,
+        "files": len(local),
+        "mismatched": bad,
+        "ok": main.private is False
+        and main.sha == tagged.sha == commit
+        and not bad
+        and set(tree) == set(local) | {".gitattributes"}
+        and [b.name for b in refs.branches] == ["main"],
     }
 
 
@@ -482,8 +573,12 @@ def publish(repo: str, revision: str, tag: str) -> dict[str, Any]:
 # ---------------------------------------------------------------- results dataset
 
 
-def dataset(stage: Path, model: str, revision: str, tag: str) -> dict[str, Any]:
+def dataset(
+    stage: Path, model: str, revision: str, tag: str, recreate: bool = False
+) -> dict[str, Any]:
+    """``recreate``: delete an existing results dataset first, so the new one holds only this run."""
     from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download
+    from huggingface_hub.errors import RepositoryNotFoundError
 
     name = model.split("/")[1]
     repo = f"vllm-sr/{name}-decision-index"
@@ -535,6 +630,14 @@ Decision Index 0.3 public suite, run with the unmodified kit
     if TRACE.search(readme):
         raise SystemExit("trace in the dataset README")
     api = HfApi()
+    if recreate:
+        try:
+            old = api.dataset_info(repo)
+            if old.id != repo:
+                raise SystemExit(f"{repo} resolves to {old.id}")
+            api.delete_repo(repo, repo_type="dataset")
+        except RepositoryNotFoundError:
+            pass
     api.create_repo(repo, repo_type="dataset", private=True, exist_ok=False)
     if api.dataset_info(repo).id != repo:
         raise SystemExit(f"{repo} resolves to another repository")
@@ -597,17 +700,28 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--vgate", required=True, type=Path)
     m.add_argument("--board", required=True, type=Path)
     m.add_argument("--cuda-run", help="HF Job run name in the work dataset (latency)")
+    m.add_argument(
+        "--latency-dir",
+        type=Path,
+        help="MI325X latency directory: latency.json (kit-760) and latency-images.json",
+    )
     m.add_argument("--provisional", action="store_true")
     n = sub.add_parser("hub-new")
     f = sub.add_parser("hub-final")
     f.add_argument("--parent", required=True)
-    for p in (n, f):
+    u = sub.add_parser("hub-update")
+    u.add_argument("--parent", required=True)
+    u.add_argument("--message", help="commit title (default: '<name> <tag>')")
+    for p in (n, f, u):
         p.add_argument("--repo", required=True)
         p.add_argument("--package", required=True, type=Path)
     r = sub.add_parser("readback")
     r.add_argument("--repo", required=True)
     r.add_argument("--revision", required=True)
     r.add_argument("--package", required=True, type=Path)
+    r.add_argument(
+        "--history", action="store_true", help="the repository may hold earlier commits"
+    )
     p = sub.add_parser("publish")
     p.add_argument("--repo", required=True)
     p.add_argument("--revision", required=True)
@@ -615,7 +729,10 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--stage", required=True, type=Path)
     d.add_argument("--model", required=True)
     d.add_argument("--revision", required=True)
-    for s in (c, m, n, f, r, p, d):
+    d.add_argument("--recreate", action="store_true")
+    for s in (u, p, d):
+        s.add_argument("--tag", default=TAG)
+    for s in (c, m, n, f, u, r, p, d):
         s.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
     read = lambda path: json.loads(Path(path).read_text())  # noqa: E731
@@ -623,8 +740,24 @@ def main(argv: list[str] | None = None) -> int:
         report = collection(a.add)
     elif a.cmd == "measured":
         latency = images = None
+        gpu = "NVIDIA RTX PRO 6000"
         sources = {"scores": str(a.scores), "vgate": str(a.vgate)}
-        if a.cuda_run:
+        if a.latency_dir:
+            latency = read(a.latency_dir / "latency.json")
+            images = read(a.latency_dir / "latency-images.json")
+            one_image = images["scenarios"]["one_image"]
+            if not (
+                latency["ok"] == latency["timed_rows"] == 750
+                and latency["median_ms"] < 1000
+                and one_image["median_ms"] < 1000
+            ):
+                raise SystemExit(f"latency check failed: {latency}, {one_image}")
+            gpu = "AMD Instinct MI325X"
+            sources["latency"] = (
+                "one AMD Instinct MI325X GPU, one request at a time (kit-760 latency sample; "
+                "100 one-image and 50 four-image requests)"
+            )
+        elif a.cuda_run:
             latency = work_json(a.cuda_run, "latency.json")
             images = work_json(a.cuda_run, "latency-images.json")
             sources["latency"] = f"HF Job run {a.cuda_run} (RTX PRO 6000)"
@@ -638,17 +771,26 @@ def main(argv: list[str] | None = None) -> int:
             images,
             sources,
             a.provisional,
+            gpu,
         )
     elif a.cmd == "hub-new":
         report = hub_new(a.repo, a.package, a.repo.split("/")[1])
     elif a.cmd == "hub-final":
         report = hub_final(a.repo, a.package, a.parent, a.repo.split("/")[1])
+    elif a.cmd == "hub-update":
+        report = hub_update(
+            a.repo,
+            a.package,
+            a.parent,
+            a.tag,
+            a.message or f"{a.repo.split('/')[1]} {a.tag}",
+        )
     elif a.cmd == "readback":
-        report = readback(a.repo, a.revision, a.package)
+        report = readback(a.repo, a.revision, a.package, single=not a.history)
     elif a.cmd == "publish":
-        report = publish(a.repo, a.revision, TAG)
+        report = publish(a.repo, a.revision, a.tag)
     else:
-        report = dataset(a.stage, a.model, a.revision, TAG)
+        report = dataset(a.stage, a.model, a.revision, a.tag, a.recreate)
     write(a.out, report)
     return 0 if report.get("ok", True) else 1
 

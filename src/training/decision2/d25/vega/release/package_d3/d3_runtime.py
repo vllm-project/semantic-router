@@ -13,7 +13,8 @@ probability for every option. No text is generated and no input is truncated.
     model.system_one(state="...", questions={...}, images=["photo.png", "label.jpg"])
 
 The checkpoint directory holds ``config.json`` + ``model*.safetensors`` (a transformers
-``Qwen3_5Model``), ``readout.safetensors`` (``{"weight": [255, hidden]}``), ``decision_config.json``
+``Qwen3_5Model``, or a ``Qwen3VLModel`` when ``config.json`` says ``model_type: qwen3_vl``),
+``readout.safetensors`` (``{"weight": [255, hidden]}``), ``decision_config.json``
 (prompt family, answer codes, attention mode, pooling, temperature, input limit) and the tokenizer.
 ``d3_format.py`` next to this file is the prompt and answer-code contract of the model.
 
@@ -27,10 +28,11 @@ with the vision tower (``visual.*`` weights).
 
 Numerics: BF16 backbone with SDPA attention, FP32 readout and softmax (unless the checkpoint says
 otherwise). A request's questions run in request order, ``batch_size`` per forward pass, each batch
-left-padded to its longest prompt. ``noncausal_full_attention`` lets the full-attention layers see the
-whole prompt while the Gated DeltaNet layers stay causal. The Gated DeltaNet kernels are the ones
-transformers binds at import: flash-linear-attention (and causal-conv1d) when installed, its PyTorch
-reference implementation otherwise.
+left-padded to its longest prompt. ``noncausal_full_attention`` (Qwen3.5 backbones only) lets the
+full-attention layers see the whole prompt while the Gated DeltaNet layers stay causal. The Gated
+DeltaNet kernels are the ones transformers binds at import: flash-linear-attention (and causal-conv1d)
+when installed, its PyTorch reference implementation otherwise. Qwen3-VL backbones have no linear-attention
+layers and run causal attention only.
 
 ``permutation_average=True`` (off by default) also scores every choice question with two or more options
 with its options in reversed order, in the same forward passes as the original order, and answers with
@@ -84,6 +86,7 @@ RUNTIME = "d3-runtime/1"
 FORMAT_VERSION = 1
 PROMPTS = ("d3",)
 ATTENTION_MODES = ("causal", "noncausal_full_attention")
+BACKBONES = ("qwen3_5", "qwen3_vl")
 DEFAULT_BATCH_SIZE = 8
 SCORE_LEVELS = (2, 10)
 MANIFEST = "MODEL_MANIFEST.json"
@@ -509,6 +512,27 @@ def vision_weights_present(root: Path) -> bool:
 # ---------------------------------------------------------------------------------------------
 
 
+def backbone_type(root: Path) -> str:
+    """``model_type`` of the checkpoint's ``config.json``: ``qwen3_5`` or ``qwen3_vl``."""
+    kind = json.loads((Path(root) / "config.json").read_text(encoding="utf-8")).get(
+        "model_type"
+    )
+    if kind not in BACKBONES:
+        raise ValueError(f"unsupported backbone model_type {kind!r}")
+    return kind
+
+
+def backbone_class(kind: str):
+    """The transformers backbone class of a ``model_type``."""
+    if kind == "qwen3_vl":
+        from transformers.models.qwen3_vl.modeling_qwen3_vl import Qwen3VLModel
+
+        return Qwen3VLModel
+    from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
+
+    return Qwen3_5Model
+
+
 def enable_noncausal_full_attention(text_model) -> None:
     """Let the softmax-attention layers see future tokens; keep padding and the causal recurrence.
 
@@ -650,7 +674,6 @@ class D3:
         import torch
         from safetensors.torch import load_file
         from transformers import AutoTokenizer
-        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
 
         self.torch = torch
         self.root = Path(root)
@@ -662,12 +685,20 @@ class D3:
         if config.get("format_version") != FORMAT_VERSION:
             raise ValueError("unsupported decision_config.json format_version")
         self.config = config
+        self.backbone_type = backbone_type(self.root)
         self.prompt = config.get("prompt", "d3")
         if self.prompt not in PROMPTS:
             raise ValueError(f"unknown prompt family {self.prompt!r}")
         self.attention_mode = config.get("attention_mode", "causal")
         if self.attention_mode not in ATTENTION_MODES:
             raise ValueError(f"unknown attention mode {self.attention_mode!r}")
+        if (
+            self.attention_mode == "noncausal_full_attention"
+            and self.backbone_type != "qwen3_5"
+        ):
+            raise ValueError(
+                "noncausal_full_attention is defined for Qwen3.5 backbones only"
+            )
         if config.get("pooling", "last") != "last":
             raise ValueError(f"unsupported pooling {config.get('pooling')!r}")
         self.temperature = float(config.get("temperature", 1.0))
@@ -709,7 +740,7 @@ class D3:
         self.device = torch.device(device)
         if self.device.type == "cuda":
             torch.cuda.set_device(self.device)
-        self.kernels = kernel_report()
+        self.kernels = kernel_report() if self.backbone_type == "qwen3_5" else {}
         if self.device.type == "cpu" and any(
             v.startswith(("fla", "causal_conv1d"))
             for k, v in self.kernels.items()
@@ -720,7 +751,7 @@ class D3:
                 "use an environment without them for CPU inference"
             )
         torch.manual_seed(20260919)
-        self.backbone = Qwen3_5Model.from_pretrained(
+        self.backbone = backbone_class(self.backbone_type).from_pretrained(
             str(self.root),
             dtype=torch.bfloat16,
             attn_implementation="sdpa",

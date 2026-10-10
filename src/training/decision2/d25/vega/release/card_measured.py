@@ -199,6 +199,10 @@ def assemble(
         "repo_id": repo_id,
         "model_sha256": manifest["identity"]["model_sha256"],
         "base_model": manifest["base_model"]["repo_id"],
+        "vision_base_model": (manifest["base_model"].get("vision") or {}).get(
+            "repo_id"
+        ),
+        "backbone": manifest.get("backbone", "qwen3_5"),
         "parameters": manifest["parameters"],
         "size": FAMILY[model_name],
         "text": {
@@ -243,12 +247,21 @@ def assemble(
     }
 
 
+def bases(card: dict) -> list[str]:
+    return [card["base_model"], *filter(None, [card.get("vision_base_model")])]
+
+
 def front_matter(card: dict) -> list[str]:
+    names = bases(card)
     return [
         "---",
         "pipeline_tag: zero-shot-classification",
         "license: apache-2.0",
-        f"base_model: {card['base_model']}",
+        *(
+            [f"base_model: {names[0]}"]
+            if len(names) == 1
+            else ["base_model:", *[f"- {n}" for n in names]]
+        ),
         "library_name: transformers",
         "tags:",
         *[f"- {t}" for t in TAGS],
@@ -456,10 +469,19 @@ def citation(card: dict) -> list[str]:
     ]
 
 
+def built_on(card: dict) -> str:
+    link = lambda n: f"[{n}](https://huggingface.co/{n})"  # noqa: E731
+    base, vision = card["base_model"], card.get("vision_base_model")
+    if vision:
+        return f"Built on {link(base)} with the vision encoder of {link(vision)} (both Apache-2.0)."
+    return f"Built on {link(base)} (Apache-2.0)."
+
+
 def render_readme(card: dict) -> str:
     name, repo = card["model_name"], card["repo_id"]
     previous = card["text"]["previous"]["name"]
-    base = card["base_model"]
+    # The optional kernels speed up Qwen3.5's linear-attention layers; Qwen3-VL backbones have none.
+    pip = PIP if card.get("backbone", "qwen3_5") == "qwen3_5" else PIP[:1]
     return "\n".join(
         [
             *front_matter(card),
@@ -479,7 +501,7 @@ def render_readme(card: dict) -> str:
             "## Quickstart",
             "",
             "```bash",
-            *PIP,
+            *pip,
             "```",
             "",
             "```python",
@@ -506,7 +528,7 @@ def render_readme(card: dict) -> str:
             "",
             "## License",
             "",
-            f"Apache-2.0 ([LICENSE](LICENSE)). Built on [{base}](https://huggingface.co/{base}) (Apache-2.0).",
+            f"Apache-2.0 ([LICENSE](LICENSE)). {built_on(card)}",
             "",
             "## Citation",
             "",
