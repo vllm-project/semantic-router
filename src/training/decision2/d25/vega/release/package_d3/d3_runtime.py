@@ -32,6 +32,12 @@ whole prompt while the Gated DeltaNet layers stay causal. The Gated DeltaNet ker
 transformers binds at import: flash-linear-attention (and causal-conv1d) when installed, its PyTorch
 reference implementation otherwise.
 
+``permutation_average=True`` (off by default) also scores every choice question with two or more options
+with its options in reversed order, in the same forward passes as the original order, and answers with
+the per-option mean of the two distributions. Noul and score questions are scored once. A pass carrying both
+orders that would exceed ``MERGE_TOKENS`` padded tokens runs the reversed prompts in a pass of their own, so
+peak memory stays that of the original order.
+
 The noncausal attention mask hook is adapted from perplexity-ai/pplx-decider-v1.1-27b, Copyright
 Perplexity AI, Apache License 2.0.
 """
@@ -97,6 +103,7 @@ MAX_IMAGE_SOURCE_PIXELS = 16_000_000
 IMAGE_FORMATS = ("PNG", "JPEG", "WEBP")
 DOWNLOAD_TIMEOUT_SECONDS = 30
 MAX_DOWNLOAD_BYTES = 64 << 20
+MERGE_TOKENS = 8192
 
 
 class MaxLengthExceeded(ValueError):
@@ -212,6 +219,21 @@ def image_messages(
             {"role": "user", "content": images + [text]},
         ]
     raise ValueError(f"unknown prompt family {prompt!r}")
+
+
+def reversed_question(question: Question) -> dict[str, Any] | None:
+    """The rendered choice question with its options in reverse order (None when there is nothing to permute)."""
+    if question.kind != "choice" or len(question.keys) < 2:
+        return None
+    criteria = question.rendered["criteria"]
+    return dict(
+        question.rendered, criteria={key: criteria[key] for key in reversed(criteria)}
+    )
+
+
+def average_orders(forward: Sequence[float], backward: Sequence[float]) -> list[float]:
+    """Per-option mean of the original-order and reversed-order distributions, in original option order."""
+    return [(a + b) / 2 for a, b in zip(forward, reversed(backward))]
 
 
 def _canonical(value: Any) -> str:
@@ -600,6 +622,10 @@ class Prepared:
     images: list[Any] = field(default_factory=list)
     texts: dict[str, str] = field(default_factory=dict)
     lengths: dict[str, int] = field(default_factory=dict)
+    # Reversed-option prompts of the choice questions (permutation_average only).
+    reversed_sequences: dict[str, list[int]] = field(default_factory=dict)
+    reversed_texts: dict[str, str] = field(default_factory=dict)
+    reversed_lengths: dict[str, int] = field(default_factory=dict)
 
     @property
     def runnable(self) -> list[str]:
@@ -619,6 +645,7 @@ class D3:
         max_length: int | None = None,
         readout_dtype: str | None = None,
         model_name: str | None = None,
+        permutation_average: bool = False,
     ):
         import torch
         from safetensors.torch import load_file
@@ -657,6 +684,7 @@ class D3:
         self.model_name = (
             model_name or (manifest or {}).get("model_name") or self.root.name
         )
+        self.permutation_average = bool(permutation_average)
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(self.root))
         self.tokenizer.padding_side = "left"
@@ -743,12 +771,14 @@ class D3:
         max_length: int | None = None,
         readout_dtype: str | None = None,
         model_name: str | None = None,
+        permutation_average: bool = False,
     ) -> D3:
         """Load a package directory or Hub repository.
 
         ``verify``: ``fast`` (default) hashes every file of ``MODEL_MANIFEST.json`` up to 64 MiB and checks
         the size of the weight shards; ``full`` hashes every file; ``none`` skips the check. A checkpoint
-        without a manifest (a plain code-readout export) loads unverified.
+        without a manifest (a plain code-readout export) loads unverified. ``permutation_average``: see the
+        module docstring.
         """
         root = resolve_dir(
             name_or_path,
@@ -767,6 +797,7 @@ class D3:
             max_length=max_length,
             readout_dtype=readout_dtype,
             model_name=model_name,
+            permutation_average=permutation_average,
         )
 
     # ------------------------------------------------------------------ requests
@@ -849,7 +880,52 @@ class D3:
                     }
                     continue
                 prepared.sequences[key] = sequence
+        if self.permutation_average:
+            self._prepare_reversed(state, prepared)
         return prepared
+
+    def _prepare_reversed(
+        self, state: Any, prepared: Prepared, visual: int = 0
+    ) -> None:
+        """Render and tokenize the reversed-option prompt of every runnable choice question.
+
+        ``visual``: the image tokens of the request (image path), counted like ``_prepare_images`` counts them.
+        """
+        n_images = len(prepared.images)
+        texts = []
+        for key in prepared.runnable:
+            flipped = reversed_question(prepared.questions[key])
+            if flipped is not None:
+                texts.append(
+                    (
+                        key,
+                        (
+                            self.image_text(state, flipped, n_images)
+                            if n_images
+                            else self.text(state, flipped)
+                        ),
+                    )
+                )
+        if not texts:
+            return
+        tokenizer = self.processor.tokenizer if n_images else self.tokenizer
+        ids = tokenizer([t for _, t in texts], add_special_tokens=False)["input_ids"]
+        for (key, text), sequence in zip(texts, ids):
+            length = len(sequence) - n_images + visual
+            if self.max_length is not None and length > self.max_length:
+                for planned in (prepared.sequences, prepared.texts, prepared.lengths):
+                    planned.pop(key, None)
+                prepared.errors[key] = {
+                    "type": prepared.questions[key].kind,
+                    "error": "max_length_exceeded",
+                    "message": f"the reversed-option prompt has {length} tokens, over the maximum context "
+                    f"length of {self.max_length} tokens; nothing was truncated",
+                }
+            elif n_images:
+                prepared.reversed_texts[key] = text
+                prepared.reversed_lengths[key] = length
+            else:
+                prepared.reversed_sequences[key] = sequence
 
     def _prepare_images(
         self, state: Any, questions: Mapping[str, Any], images: list[Any]
@@ -902,6 +978,8 @@ class D3:
                     continue
                 prepared.texts[key] = text
                 prepared.lengths[key] = length
+        if self.permutation_average:
+            self._prepare_reversed(state, prepared, sum(visual))
         return prepared
 
     def logits(self, sequences: Sequence[Sequence[int]], counts: Sequence[int]):
@@ -996,14 +1074,31 @@ class D3:
         out: dict[str, list[float]] = {}
         for start in range(0, len(keys), self.batch_size):
             chunk = keys[start : start + self.batch_size]
-            probs = self.image_probabilities(
-                [prepared.texts[k] for k in chunk],
-                prepared.images,
-                [len(prepared.questions[k].keys) for k in chunk],
-                max(prepared.lengths[k] for k in chunk),
-            )
+            extra = [k for k in chunk if k in prepared.reversed_texts]
+            texts = [prepared.texts[k] for k in chunk] + [
+                prepared.reversed_texts[k] for k in extra
+            ]
+            counts = [len(prepared.questions[k].keys) for k in chunk + extra]
+            widths = [prepared.lengths[k] for k in chunk] + [
+                prepared.reversed_lengths[k] for k in extra
+            ]
+            n = len(chunk)
+            if extra and len(widths) * max(widths) > MERGE_TOKENS:
+                probs = self.image_probabilities(
+                    texts[:n], prepared.images, counts[:n], max(widths[:n])
+                ) + self.image_probabilities(
+                    texts[n:], prepared.images, counts[n:], max(widths[n:])
+                )
+            else:
+                probs = self.image_probabilities(
+                    texts, prepared.images, counts, max(widths)
+                )
             out.update(zip(chunk, probs))
-        return out, sum(prepared.lengths[k] for k in keys)
+            for key, backward in zip(extra, probs[n:]):
+                out[key] = average_orders(out[key], backward)
+        return out, sum(prepared.lengths[k] for k in keys) + sum(
+            prepared.reversed_lengths.values()
+        )
 
     def run(self, prepared: Prepared) -> tuple[dict[str, list[float]], int]:
         """Probabilities per runnable question (request order, ``batch_size`` per pass) and the input tokens."""
@@ -1013,12 +1108,24 @@ class D3:
         out: dict[str, list[float]] = {}
         for start in range(0, len(keys), self.batch_size):
             chunk = keys[start : start + self.batch_size]
-            probs = self.probabilities(
-                [prepared.sequences[k] for k in chunk],
-                [len(prepared.questions[k].keys) for k in chunk],
-            )
+            extra = [k for k in chunk if k in prepared.reversed_sequences]
+            sequences = [prepared.sequences[k] for k in chunk] + [
+                prepared.reversed_sequences[k] for k in extra
+            ]
+            counts = [len(prepared.questions[k].keys) for k in chunk + extra]
+            n = len(chunk)
+            if extra and len(sequences) * max(map(len, sequences)) > MERGE_TOKENS:
+                probs = self.probabilities(
+                    sequences[:n], counts[:n]
+                ) + self.probabilities(sequences[n:], counts[n:])
+            else:
+                probs = self.probabilities(sequences, counts)
             out.update(zip(chunk, probs))
-        return out, sum(len(prepared.sequences[k]) for k in keys)
+            for key, backward in zip(extra, probs[n:]):
+                out[key] = average_orders(out[key], backward)
+        return out, sum(len(prepared.sequences[k]) for k in keys) + sum(
+            len(s) for s in prepared.reversed_sequences.values()
+        )
 
     def respond(
         self,
@@ -1069,7 +1176,8 @@ class D3:
         lengths: Sequence[int] = (37, 64, 320, 333, 1000, 1024),
         images: bool = True,
     ) -> float:
-        """Compile and autotune the kernels for every batch size up to ``batch_size`` before serving.
+        """Compile and autotune the kernels for every batch size up to ``batch_size`` (twice that with
+        ``permutation_average``) before serving.
 
         The Gated DeltaNet kernels take the batch size as a compile-time constant, and Triton specializes their
         length and chunk-count arguments on being 1 or a multiple of 16; these lengths cover every combination
@@ -1078,7 +1186,8 @@ class D3:
         four 1.6 MP images) also warm the vision tower. Answers are unchanged.
         """
         started = time.perf_counter()
-        for size in range(1, self.batch_size + 1):
+        widest = self.batch_size * (2 if self.permutation_average else 1)
+        for size in range(1, widest + 1):
             for length in lengths:
                 sequences = [
                     [
@@ -1128,7 +1237,7 @@ class D3:
             if (self.root / name).is_file()
         }
         identity = (self.manifest or {}).get("identity", {})
-        return {
+        record = {
             "kind": "d3-code-readout",
             "runtime": RUNTIME,
             "model_name": self.model_name,
@@ -1151,6 +1260,13 @@ class D3:
             "refused); no option filtering; one fixed prompt for every request.",
             "images": self.image_contract(),
         }
+        if self.permutation_average:
+            record["permutation_average"] = True
+            record["policy"] += (
+                " Choice questions with two or more options are also scored with their options in reversed "
+                "order, in the same forward passes, and answered with the per-option mean of both distributions."
+            )
+        return record
 
     def image_contract(self) -> dict[str, Any]:
         """How image inputs are read (or why they are not available)."""

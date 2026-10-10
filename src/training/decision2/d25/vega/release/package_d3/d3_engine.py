@@ -5,8 +5,10 @@
         --option model=d3 --option device=cuda:0 --out runs/d3 --compact
 
 Options: ``model`` (package directory or Hub id), ``revision``, ``device`` (default cuda:0), ``batch_size``
-(questions per forward pass, default 8), ``verify`` (fast | full | none), ``model_name``. A request with a
-question over the checkpoint's input limit is ``Unsupported`` (nothing is truncated).
+(questions per forward pass, default 8), ``verify`` (fast | full | none), ``model_name``,
+``permutation_average`` (0 | 1, default 0: also score each choice question with reversed options and
+average, see d3_runtime.py). A request with a question over the checkpoint's input limit is ``Unsupported``
+(nothing is truncated).
 
 Image requests: ``engine(state, questions, images=[...])`` with any number of images (PIL images, paths,
 http(s) or data URLs) that every question sees.
@@ -47,12 +49,17 @@ class D3Engine(Engine):
         batch_size: int = DEFAULT_BATCH_SIZE,
         verify: str = "fast",
         model_name: str | None = None,
+        permutation_average: str | bool = False,
         **options,
     ):
         if options:
             raise TypeError(f"unknown engine options {sorted(options)}")
         if not model:
             raise ValueError("pass --option model=<package dir or Hub id>")
+        flag = str(permutation_average).strip().lower()
+        if flag not in ("0", "1", "false", "true"):
+            raise ValueError("permutation_average must be 0 or 1")
+        averaged = flag in ("1", "true")
         super().__init__(
             model=model,
             revision=revision,
@@ -60,6 +67,7 @@ class D3Engine(Engine):
             batch_size=batch_size,
             verify=verify,
             model_name=model_name,
+            **({"permutation_average": 1} if averaged else {}),
         )
         self.decision = D3.from_pretrained(
             model,
@@ -68,6 +76,7 @@ class D3Engine(Engine):
             batch_size=int(batch_size),
             verify=verify,
             model_name=model_name,
+            permutation_average=averaged,
         )
         self.provenance = self.decision.provenance()
 
