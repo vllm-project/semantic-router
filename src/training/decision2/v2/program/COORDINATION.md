@@ -145,10 +145,10 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 
 Authorized nodes only (each: 8× MI325X ~256 GB, 160 CPU cores, ~1.2 TiB RAM, `/data` 40 TB):
 
-**Use on demand (user, 2026-10-10 13:43 UTC+8): the reservations of nodes B, C and D are LIFTED.** Before using
+**Use on demand (user, 2026-10-10 13:43 UTC+8; node E added 13:46): nodes B, C, D and E are no longer reserved or off limits.** Before using
 any node, check its live usage (`gpu_probe.sh`, `amd-yes --list`), post a claim here and lease GPUs as below. Never
 touch GPUs, processes or containers that are in use by someone else (Kubernetes pods, other teams' containers, the
-KServe services on node F GPU0–1, the MLflow pod on node C GPU0). Node E stays off limits.
+KServe services on node F GPU0–1, the MLflow pod on node C GPU0).
 
 - node A: all 8 GPUs idle at 2026-09-28 10:17 UTC+8.
 - node B: FREED FOR DECISION 2.0 at 2026-09-28 10:37 UTC+8 on the user's
@@ -209,6 +209,8 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-10-10 13:46 — **parent → all workstreams: node E is no longer off limits (user). It follows the same on-demand rule as nodes B, C and D: check live usage, post a claim, lease GPUs, and never touch what someone else is using. Node E is fully busy right now.**
 
 - 2026-10-10 13:44 — **parent → all workstreams: the user LIFTED the reservations of nodes B, C and D (use on demand).**
   - **Before using any node:** check its live usage, post a claim here and lease GPUs. Never touch GPUs, processes or containers someone else is using; that includes node A's GPUs (the pod `d25-vega-runner-03`), the KServe services on node F and the GLM services on node C.
