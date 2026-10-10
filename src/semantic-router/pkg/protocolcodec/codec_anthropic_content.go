@@ -678,7 +678,9 @@ func encodeAnthropicToolChoice(wire *anthropicRequestWire, request llmprotocol.R
 		default:
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 		}
-		if request.ParallelToolCalls != nil {
+		// Anthropic's none variant accepts only type. Parallel control has no
+		// effect when tool use is forbidden, so omit it rather than emit invalid wire.
+		if request.ParallelToolCalls != nil && request.ToolChoice.Mode != llmprotocol.ToolChoiceNone {
 			disable := !*request.ParallelToolCalls
 			wire.ToolChoice.DisableParallelToolUse = &disable
 		}
