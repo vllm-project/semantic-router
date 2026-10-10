@@ -102,6 +102,9 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 	if cfg == nil {
 		return fmt.Errorf("router configuration is nil")
 	}
+	if err := ValidateDecisionRuleLimits(cfg); err != nil {
+		return err
+	}
 	effective := *cfg
 	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
 	cfg = &effective

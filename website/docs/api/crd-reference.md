@@ -194,6 +194,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `decision_rule_limits` _[DecisionRuleLimitsConfig](#decisionrulelimitsconfig)_ | DecisionRuleLimits bounds each decision's rule tree across all recipes. |  | Optional: \{\} <br /> |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
 | `decision_model` _[DecisionModelBinding](#decisionmodelbinding)_ | DecisionModel selects the declared deployment that answers default judgment tasks.<br />Omitted uses the Router's primary deployment. Artifact identity belongs in<br />model_deployments; the reference never infers a model family or alias. |  | Optional: \{\} <br /> |
 | `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
@@ -287,6 +288,20 @@ _Appears in:_
 | `retry_back_off_base` _string_ | RetryBackOffBase is the base of the randomized exponential wait between<br />retries (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retry_back_off_max` _string_ | RetryBackOffMax caps that wait (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retry_after_max` _string_ | RetryAfterMax honors a response's Retry-After up to this bound<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+
+#### DecisionRuleLimitsConfig
+
+DecisionRuleLimitsConfig configures positive per-decision budgets. The root
+has depth one, and operators and leaves both count toward MaxNodes.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `max_depth` _integer_ | MaxDepth defaults to 16 when omitted. | 16 | Minimum: 1 <br />Optional: \{\} <br /> |
+| `max_nodes` _integer_ | MaxNodes defaults to 256 when omitted. | 256 | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### EmbeddingEndpointConfig
 

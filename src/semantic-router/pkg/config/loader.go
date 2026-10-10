@@ -201,6 +201,9 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	if err != nil {
 		return nil, err
 	}
+	if _, limitsErr := validateRawDecisionRuleLimits(raw); limitsErr != nil {
+		return nil, limitsErr
+	}
 	if normalizeErr := validateAndNormalizeRawConfig(raw); normalizeErr != nil {
 		return nil, normalizeErr
 	}

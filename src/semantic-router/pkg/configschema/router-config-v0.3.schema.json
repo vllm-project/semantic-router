@@ -1095,6 +1095,9 @@
     },
     "CanonicalRouterGlobal": {
       "properties": {
+        "decision_rule_limits": {
+          "$ref": "#/$defs/DecisionRuleLimits"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -2439,6 +2442,22 @@
         },
         "retry_after_max": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionRuleLimits": {
+      "properties": {
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 16
+        },
+        "max_nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 256
         }
       },
       "additionalProperties": false,

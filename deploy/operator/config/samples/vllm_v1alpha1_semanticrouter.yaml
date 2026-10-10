@@ -127,6 +127,9 @@ spec:
 
   # Semantic Router configuration
   config:
+    decision_rule_limits:
+      max_depth: 16
+      max_nodes: 256
     embedding_models:
       mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
       use_cpu: true

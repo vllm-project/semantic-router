@@ -15,9 +15,29 @@ type routingFragmentDocument struct {
 // canonical surface under `routing:`. This intentionally skips provider/global
 // cross-reference checks so DSL compile/decompile flows can round-trip fragments.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
+	return ParseRoutingYAMLBytesWithLimits(data, DecisionRuleLimits{})
+}
+
+// ParseRoutingYAMLBytesWithLimits applies an enclosing document's limits to a
+// routing fragment; standalone fragments use ParseRoutingYAMLBytes defaults.
+func ParseRoutingYAMLBytesWithLimits(data []byte, limits DecisionRuleLimits) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
+	}
+	depth, nodes, err := limits.Effective()
+	if err != nil {
+		return nil, err
+	}
+	budgetDocument := map[string]interface{}{
+		"routing": raw["routing"],
+		"recipes": raw["recipes"],
+		"global": map[string]interface{}{"router": map[string]interface{}{
+			"decision_rule_limits": map[string]interface{}{"max_depth": depth, "max_nodes": nodes},
+		}},
+	}
+	if _, err := validateRawDecisionRuleLimits(budgetDocument); err != nil {
+		return nil, err
 	}
 	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
 		return nil, rejectErr
@@ -43,6 +63,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		}
 	}
 	cfg := DefaultGlobalConfig()
+	cfg.DecisionRuleLimits = limits
 	cfg.RoutingFragmentOnly = true
 	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
 	cfg.Strategy = doc.Routing.Strategy

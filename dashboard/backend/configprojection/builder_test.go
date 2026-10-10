@@ -47,6 +47,26 @@ routing:
           use_reasoning: false
 `
 
+func TestBuildSnapshotDecisionRuleLimits(t *testing.T) {
+	data := testCanonicalYAML + "\nglobal:\n  router:\n    decision_rule_limits:\n      max_depth: 32\n      max_nodes: 512\n"
+	snapshot, err := BuildSnapshot(RefreshInput{YAMLBytes: []byte(data)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugins pluginsProjection
+	if err := json.Unmarshal(snapshot.Plugins, &plugins); err != nil {
+		t.Fatal(err)
+	}
+	depth, nodes, err := plugins.Global.Router.DecisionRuleLimits.Effective()
+	if err != nil || depth != 32 || nodes != 512 {
+		t.Fatalf("projection lost custom limits: %d/%d, %v", depth, nodes, err)
+	}
+	data = strings.Replace(data, "max_nodes: 512", "max_nodes: 1", 1)
+	if _, err := BuildSnapshot(RefreshInput{YAMLBytes: []byte(data)}); err == nil || !strings.Contains(err.Error(), "node count 2 exceeds max_nodes=1") {
+		t.Fatalf("projection accepted oversized candidate: %v", err)
+	}
+}
+
 func TestBuildSnapshotExtractsEntities(t *testing.T) {
 	t.Parallel()
 

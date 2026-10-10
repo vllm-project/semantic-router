@@ -15,9 +15,10 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 
 func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 	return CanonicalRouterGlobal{
-		ConfigSource:      ConfigSourceFile,
-		ListBackendModels: false,
-		ClearRouteCache:   true,
+		DecisionRuleLimits: DefaultDecisionRuleLimits(),
+		ConfigSource:       ConfigSourceFile,
+		ListBackendModels:  false,
+		ClearRouteCache:    true,
 		ModelSelection: ModelSelectionConfig{
 			Enabled: true,
 			Method:  "knn",
