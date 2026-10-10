@@ -73,8 +73,10 @@ global:
 
 直接问模型。单独起一个，或用任意服务它的 runtime：
 
+这些 worker 级示例在含有 `vllm-srun` 的环境里运行（例如 Router 镜像）。Classify、embeddings、rerank 和 bundle 是 worker API；实例前端发布的是 System One 和 decision 请求。
+
 ```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain --device cpu --port 8100
 curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
   -d '{"input": ["What is the derivative of x squared?", "Fix this segfault in my C code."]}'
 ```

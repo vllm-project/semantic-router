@@ -72,26 +72,73 @@ global:
 
 写在 `global.model_catalog.bindings` 下的绑定全局生效。配方可以在自己的 `routing.model_bindings` 下覆盖它。
 
-## 把模型编进进程 {#group-models-into-processes}
+## 放置与扩容副本 {#place-and-scale-replicas}
 
-默认同一块 GPU 上的模型共用一个 runtime 进程，`rocm:0` 上的所有模型一次调用内出结果，显存也用得省。它们排队用 GPU，一次一个设备调用；哪个模型不能等别人，就给它一块独占的 GPU。CPU 模型会摊到多个进程上，一个模型一个，最多到 router 可用核数的一半，这样一个请求的几个模型能并行跑；每个进程分到一样多的核当线程。`VLLM_SRUN_CPU_PROCESSES` 给 CPU 进程数封顶，设 `1` 就把所有 CPU 模型关在一个进程里。能不动就不动：挤在一个进程里，可选的 ONNX Runtime 引擎上的模型和 PyTorch 模型要抢 CPU 线程，负载一高其中一个就答得慢。
+![按部署的副本调度与模型 worker 内的各界面](/img/architecture/system-one/03-serving-engine-and-workers.svg)
 
-`device: auto`（默认）的部署，按 auto 在 router 宿主机上挑中的设备分组。宿主机没有 GPU 那就是 CPU，于是每个部署各占一个 CPU 进程，跟 `device: cpu` 一样。有 GPU 的宿主机上，它们和显式指定这块 GPU 的部署共用首个 GPU（比如 `rocm:0`）的进程；GPU 显存不够时 runtime 仍可能把某个模型放到别的设备上，被放去 CPU 的模型可能会用上 router 的每一个核。`vllm-srun devices` 会告诉你 auto 先挑哪个设备。router 只问一次——某个 auto 部署第一次跑的时候问；runtime 答不上来，auto 部署就共用一个进程直到 router 重启，并且 router 会记一笔 `auto_device_unresolved`。
+用 `-dp` 设置默认部署的独立 worker 数。数值档位和放置位置分开管：
 
-某个部署不想和别人共担故障域或显存，就给它自己的 `process` 名，比如大型决策模型：
+```bash
+# 两个 worker 放在一块显式指定的宿主机 GPU 上。
+vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
+# 两个 worker 分放两块宿主机 GPU。
+vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+```
+
+不给设备 ID 时，新的 GPU 放置用前 N 块可用 GPU，容量不够就拒绝，不会悄悄把每个 worker 都塞到一块卡上。已写明的放置按声明顺序缩改。只指定 MODEL 时保留配置好的副本和档位。这些 flag 写的是下面同一份规范化资源，没有单独的 DP 状态。Kubernetes 上用配置里的分配序，不用宿主机 ID。
+
+每个受管副本各有自己的进程。一个部署的全部副本共用同一制品、revision、档位和能力。一个请求的融合问题批在逻辑模型选定后作为一个单元调度。池子挑就绪且待处理请求字节最少的 worker，并列时挑最近最少分配的。这是本地负载估计，不是挂接 runtime 的队列长度，也不是实测 token 数。原生请求和路由任务共享同一个物理 worker 的负载计量。
 
 ```yaml
 global:
+  router:
+    enabled: false
   model_catalog:
     deployments:
-      decision-lux:
+      primary:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
-        device: rocm:0
-        process: large-decisions
+        artifact: vllm-sr/Vela-2.0-4B
+        profile: exact
+        replicas:
+          - device: rocm:0
+          - device: rocm:1
+    system:
+      decision_model:
+        deployment: primary
 ```
 
-这个进程崩了或者显存耗尽，只有它的部署不可用，router 重启它即可；其他模型照常答题。
+用不同的 GPU 加算力。显式重复同一设备就在该 GPU 上起多个 worker；每个 worker 要为自己的模型留显存。选布局前，用你的输入长度和并发实测吞吐和尾延迟。`batching` 能提高单个 worker 内的跨请求利用率；`max_speed` 还会改变数值，需要单独做质量评估。副本不做权重分片，也不是张量或流水并行。
+
+`replicas` 不要和部署级的 `device`、`endpoint` 或 `served_name` 一起用。省略 `replicas` 保留单 worker 简写，调度和状态契约与显式单副本相同。单 worker 部署保留前端结果缓存；多副本用各自独立的 worker 缓存。副本的放置与绑定无关，路由消费方的变化不会改动 worker 身份。重配先准备好兼容的池再发布，退场的 worker 会排空已有请求。
+
+池子每个 worker 最多接纳 32 个在途 HTTP 请求，没有池级等待队列。就绪副本全满时返回过载。这个上限不是 GPU 前向并发；前向已经开始的，调用方超时后它仍可继续。清单报告期望与就绪副本数、各 worker 的就绪情况、在途请求和重启次数。降级的池仍能靠健康副本继续服务。
+
+### CPU 线程 {#cpu-threads}
+
+每个受管 CPU worker 默认分到 router 可用 CPU 预算的一半（向下取整），至少一个线程、至多 16 个。要改每个 worker 的线程数，在启动栈之前设一个正整数：
+
+```bash
+VLLM_SRUN_CPU_THREADS=8 vllm-sr serve --platform cpu --config config.yaml
+```
+
+该设置受可用 CPU 预算封顶，它不设 worker 数。每个部署或副本仍各有独立的 worker，模式变化不在活跃消费方之间重新分配线程。从默认值开始，用实际输入长度和并发对比延迟和吞吐。几个 CPU 模型都忙时，少些线程能减少争抢；专用核上的长输入可能适合更高的覆盖值。这是每 worker 上限，几个忙 worker 仍可能争同一批核。共享宿主机时给其他服务留核。通过 `endpoint` 挂接的 runtime 自管线程。
+
+## 发布原生 API {#publish-a-native-api}
+
+用上面的 `primary` 部署，给独立 listener 加一份显式授权，客户端就能直接问它：
+
+```yaml
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    systemone:
+      models: [vllm-sr/Vela-2.0-4B]
+```
+
+用 `GET /v1/systemone/models` 发现已发布的原生模型，然后带那个 `model` ID 发 `POST /v1/systemone` 或 `POST /v1/decisions`。部署用它的 Hub 制品 ID，除非设了 `public_name`；本地制品需要显式公开名。客户端要认证时就加 listener `api_keys`。
+
+原生授权与 Chat 的 `listeners[].models` 白名单是两回事，两种启动模式下都有效。模型被替换或扩容时，既有授权不变；想发布另一个模型时再更新它。完整的原生请求见 [quickstart](model-runtime/quickstart.md#3-send-a-request)。发布不保证就绪；用 `vllm-sr instance --config config.yaml models` 检查。
 
 ## 挂到你自己跑的 runtime {#attach-to-a-runtime-you-run}
 

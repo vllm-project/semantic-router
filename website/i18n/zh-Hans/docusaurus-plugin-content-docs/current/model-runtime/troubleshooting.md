@@ -216,7 +216,7 @@ global:
 - 托管 CPU worker 默认使用路由器可用 CPU 预算的一半，向下取整，最少 1 个、最多 16 个线程。
   在 `vllm-sr serve` 启动前设置正整数 `VLLM_SRUN_CPU_THREADS`，即可指定每个 worker 的线程数，上限为完整 CPU 预算。
   用实际输入长度和并发量比较效果：多个模型同时忙碌时，减少线程可能降低争用；有专用核心时，长输入可能受益于更多线程。
-  参见 [CPU 线程](model-runtime/deploy.md#group-models-into-processes)。自行启动并通过 `endpoint` 挂载的运行时使用自己的
+  参见 [CPU 线程](model-runtime/deploy.md#place-and-scale-replicas)。自行启动并通过 `endpoint` 挂载的运行时使用自己的
   `--threads` 设置，同一进程中的模型共享这些线程。
 - 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
   的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。

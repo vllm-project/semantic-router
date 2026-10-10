@@ -44,14 +44,14 @@ vllm-srun plugins
 vllm-srun serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
 ```
 
-`vllm-sr serve` 跑的是 router 镜像里的 runtime，所以它服务的插件来自一个装了这个插件的镜像。示例带一个 Dockerfile，负责把它加进 router 镜像。从仓库根目录：
+对这个只做分类的插件，用一个装了该插件的镜像显式起 worker 容器。实例的 System One 前端需要能决策的模型。示例带一个 Dockerfile，负责把它加进 router 镜像。从仓库根目录：
 
 ```bash
 docker build -t vllm-sr-example src/model-runtime/examples/third_party_plugin
-vllm-sr serve /tmp/keywords --image vllm-sr-example --image-pull-policy ifnotpresent --device example_host --runtime-profile example_one_by_one --port 8100
+docker run --rm -p 127.0.0.1:8100:8100 -v /tmp/keywords:/app/keywords:ro --entrypoint vllm-srun vllm-sr-example serve /app/keywords --device example_host --profile example_one_by_one --host 0.0.0.0 --port 8100
 ```
 
-容器通过只读挂载读 `/tmp/keywords`，CLI 把同样的名字传给 runtime，runtime 自己就挑中了示例的引擎。CLI 只查 `--runtime-profile` 是不是个档位名、内置加速器是不是这个镜像跑得动的。runtime 对没有插件支持的设备或档位会直接拒绝，并列出它有的那些名字。
+容器通过只读挂载读 `/tmp/keywords`。runtime 自己挑中示例的引擎，并拒绝没装的设备或档位。配好的实例可以用 `endpoint` 和模型名挂到这个 worker 上；classify 端点始终是一个独立运作的 worker API。
 
 ## 写自己的插件 {#write-your-own}
 
