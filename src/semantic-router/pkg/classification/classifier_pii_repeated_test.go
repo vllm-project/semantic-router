@@ -141,6 +141,17 @@ func TestClassifyPIIWithDetails_CoversTheRestOfAPartlyDetectedCopy(t *testing.T)
 	}
 }
 
+// Copies of a value can overlap each other: after "Anna Anna" at the start of
+// "Anna Anna Anna", the next whole-word copy starts inside the first one.
+func TestClassifyPIIWithDetails_CoversOverlappingCopies(t *testing.T) {
+	text := "Anna Anna Anna"
+	detections := detectWith(t, text, &fixedSpanPIIInference{spans: [][2]int{{0, 9}}})
+
+	if masked := buildMaskedText(text, detections); masked != "[PERSON]" {
+		t.Fatalf("got %q from %v", masked, spanTexts(text, detections))
+	}
+}
+
 func TestClassifyPIIWithDetails_SingleCharacterValuesAreNotCopied(t *testing.T) {
 	text := "A said hello. Later A left."
 	detections := detectFirstCopies(t, text, map[string]string{"A": "PERSON"})

@@ -250,7 +250,10 @@ func coverRepeatedValues(ctx context.Context, text string, detections []PIIDetec
 			}
 			start := from + index
 			end := start + len(value)
-			from = end
+			// Copies can overlap ("Anna Anna" in "Anna Anna Anna"), so the
+			// next search starts one rune after this match, not at its end.
+			_, size := utf8.DecodeRuneInString(text[start:])
+			from = start + size
 			if wordAligned(text, start, end) && !containsSpan(covered, start, end) {
 				added = append(added, piiSpan{start, end})
 				detections = append(detections, PIIDetection{
