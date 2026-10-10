@@ -38,7 +38,17 @@ export interface SystemOneSpan {
   text: string
   probability: number
 }
+export interface SystemOneRouting {
+  recipe: string
+  decision: string
+  algorithm: string
+  stage: string
+  selected_model: string
+  quality: string
+  model_calls: number
+}
 export interface SystemOneResponse {
+  routing?: SystemOneRouting
   model: string
   answers: Record<string, SystemOneAnswer>
   spans?: Record<string, SystemOneSpan[]>
