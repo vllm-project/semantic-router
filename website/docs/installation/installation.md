@@ -161,6 +161,31 @@ Dashboard answers "Restart required: run `vllm-sr serve` to apply."; the next
 Router, as releases before standalone mode did.
 [Gateway Modes](gateway-modes) explains when you need it.
 
+## What the installer leaves behind
+
+`install.sh` writes these paths (defaults - `--install-root` and `--bin-dir`
+move them):
+
+- `~/.local/share/vllm-sr/venv/`: the CLI's virtual environment.
+- `~/.local/share/vllm-sr/runtime.env`: the container runtime chosen at
+  install time. `vllm-sr` reads it when it selects the runtime;
+  `CONTAINER_RUNTIME` overrides it for one run, and a runtime missing from
+  `PATH` falls back to auto-detection with a warning. Delete the file to
+  return to auto-detection.
+- `~/.local/share/vllm-sr/first-run.log`: kept only when the first
+  `vllm-sr serve` waits for setup or fails.
+- `~/.local/bin/vllm-sr`: the launcher, which pins `VLLM_SR_INSTALL_ROOT`.
+
+Deleting these four paths removes the install, but leaves in place:
+
+- system packages the installer added when missing: Python and its venv
+  support; in serve mode, Homebrew `docker` and `colima` on macOS, or the
+  Docker package, its enabled service and your `docker` group membership on
+  Linux;
+- the containers and images `vllm-sr serve` created.
+
+Run `vllm-sr stop` first so no container is mid-write.
+
 ## Next
 
 - [Connect an agent harness](agent-harness)
