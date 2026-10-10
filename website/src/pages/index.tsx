@@ -211,10 +211,6 @@ export default function Home(): JSX.Element {
           <RuntimeModes />
         </div>
 
-        <div className={styles.bandBlack}>
-          <EcosystemSection />
-        </div>
-
         <div className={styles.bandRaised}>
           <SovereigntyAI />
         </div>
@@ -228,6 +224,12 @@ export default function Home(): JSX.Element {
         <div className={styles.bandGraphite}>
           <ScrollReveal delay={40}>
             <TeamCarousel />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandBlack}>
+          <ScrollReveal delay={40}>
+            <EcosystemSection />
           </ScrollReveal>
         </div>
 
