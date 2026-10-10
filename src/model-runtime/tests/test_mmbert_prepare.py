@@ -51,12 +51,16 @@ runtime = Runtime(
 )
 runtime.start(background=False)
 runtime.stop()
-""" % (PACKAGE,)
+""" % (
+    PACKAGE,
+)
 
 
 def test_mmbert_classifier_verify_returns_before_weights(tmp_path: Path) -> None:
     (tmp_path / "config.json").write_text(json.dumps(CONFIG))
-    with pytest.raises(PackageError, match="package file is missing: model.safetensors"):
+    with pytest.raises(
+        PackageError, match="package file is missing: model.safetensors"
+    ):
         TaskHeadsFamily().verify(PackageRef(root=tmp_path))
     assert not (tmp_path / "model.safetensors").exists()
 
