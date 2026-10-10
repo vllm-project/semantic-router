@@ -1,0 +1,17 @@
+# Decision 2.5 runtime. Validated with transformers 5.17.0 on ROCm (torch 2.13) and CUDA (RTX PRO 6000).
+torch>=2.8
+transformers==5.17.0
+accelerate>=1.10
+safetensors>=0.6
+huggingface_hub>=1.0
+# GPU kernels for the Gated DeltaNet layers; without them transformers runs its slower PyTorch reference.
+flash-linear-attention==0.5.2
+einops
+# Image inputs: PIL decodes the images; the processor's torchvision backend resizes them as in evaluation
+# (install the torchvision build that matches torch; without it transformers falls back to a PIL resize).
+pillow>=10
+torchvision
+# Optional on CUDA: causal-conv1d (the convolution then runs in its CUDA kernel instead of torch conv1d).
+# decision25_server.py only:
+# fastapi
+# uvicorn
