@@ -516,13 +516,19 @@ def render_readme(card: dict) -> str:
     )
 
 
-def check_rendered(readme: str, files: set[str]) -> list[str]:
+def check_rendered(
+    readme: str, files: set[str], names: tuple[str, ...] = ()
+) -> list[str]:
+    """``names``: board entrants quoted in the tables; their names are data, so the wording lint skips them."""
     from d25.vega.release.build import PUBLIC_TRACES, traced
 
-    problems = lint_readme(readme)
+    scrubbed = readme
+    for name in sorted(names, key=len, reverse=True):
+        scrubbed = scrubbed.replace(name, "")
+    problems = lint_readme(scrubbed)
     problems += [
         f"{PUBLIC_TRACES[1]}: {line.strip()[:80]}"
-        for line in readme.splitlines()
+        for line in scrubbed.splitlines()
         if traced(line)
     ]
     problems += [
@@ -612,8 +618,11 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         out / AREAS_CHART,
     )
     readme = render_readme(card)
+    peers = (*card["text"]["peers"], *card["vision"]["peers"])
     problems = check_rendered(
-        readme, {BANNER, PARETO, AREAS_CHART, EXAMPLE_IMAGE, "LICENSE"}
+        readme,
+        {BANNER, PARETO, AREAS_CHART, EXAMPLE_IMAGE, "LICENSE"},
+        tuple(p["name"] for p in peers),
     )
     if problems:
         raise ValueError(f"README failed the card checks: {problems}")
