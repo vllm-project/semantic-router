@@ -147,8 +147,6 @@ def build(
     gradient_checkpointing: bool = True,
 ):
     """Sharded (or, on one process, plain) FP32 model loaded from ``init`` with the arm applied."""
-    from transformers import Qwen3_5Config
-
     from d25.omni.train import arms
     from d25.omni.train.model import OmniDecisionModel, reset_nonpersistent_buffers
 
@@ -156,7 +154,7 @@ def build(
         model = OmniDecisionModel.from_checkpoint(init, attention_mode=attention_mode)
         model.to(distributed.device)
     else:
-        config = Qwen3_5Config.from_pretrained(str(init))
+        config = checkpoint.load_config(init)
         with torch.device("meta"):
             model = OmniDecisionModel.from_config(config, attention_mode)
     counts = arms.apply(model, scales)

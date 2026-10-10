@@ -3,8 +3,9 @@
 ``VisionCodeReadoutModel`` loads a code-readout v1 checkpoint (vega/SPEC.md layout with the vision
 tower) and returns one probability per option for requests ``{state, question, images}``:
 
-- Transformers ``Qwen3_5Model`` + ``Qwen3VLProcessor``, images capped at 1.6 MP (1,638,400 px) by
-  the processor's resize, placed before the text in the user turn;
+- Transformers ``Qwen3_5Model`` (``Qwen3VLModel`` for d3-edge's Qwen3-VL layout) + ``Qwen3VLProcessor``,
+  images capped at 1.6 MP (1,638,400 px) by the processor's resize, placed before the text in the
+  user turn;
 - BF16 backbone on accelerators (FP32 on CPU), FP32 readout and softmax, temperature from
   ``decision_config.json``; ``causal`` or ``noncausal_full_attention``; last-token (or mean)
   pooling;
@@ -117,7 +118,7 @@ class VisionCodeReadoutModel:
         image_root: str | Path | None = None,
         prefetch: bool = True,
     ) -> None:
-        from transformers import AutoProcessor, Qwen3_5Model
+        from transformers import AutoProcessor
 
         self.ckpt_dir = Path(ckpt_dir)
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -168,7 +169,7 @@ class VisionCodeReadoutModel:
         }
         if self.device != "cpu":
             load_kwargs["device_map"] = {"": self.device}
-        self.backbone, info = Qwen3_5Model.from_pretrained(
+        self.backbone, info = checkpoint.backbone_class(self.ckpt_dir).from_pretrained(
             str(self.ckpt_dir), output_loading_info=True, **load_kwargs
         )
         missing = list(info.get("missing_keys") or [])

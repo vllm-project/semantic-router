@@ -55,5 +55,9 @@ def apply_attention_mode(backbone: torch.nn.Module, mode: str):
     if mode not in ATTENTION_MODES:
         raise ValueError(f"unknown attention mode {mode!r}")
     if mode == "noncausal_full_attention":
+        if getattr(backbone.config, "model_type", "") == "qwen3_vl":
+            raise ValueError(
+                "noncausal_full_attention is defined for Qwen3.5 backbones only"
+            )
         return enable_noncausal_full_attention(backbone.language_model)
     return None

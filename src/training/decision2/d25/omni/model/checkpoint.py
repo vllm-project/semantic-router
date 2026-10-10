@@ -287,12 +287,43 @@ class ShardWriter:
         return hashes
 
 
-def expected_backbone_shapes(config) -> dict[str, tuple[int, ...]]:
-    """Persistent state-dict names and shapes of a ``Qwen3_5Model`` built from ``config``."""
+def model_type(source) -> str:
+    """``model_type`` of a config object or of a checkpoint directory's ``config.json``."""
+    if isinstance(source, (str, os.PathLike)):
+        return json.loads((Path(source) / "config.json").read_text()).get(
+            "model_type", ""
+        )
+    return getattr(source, "model_type", "")
+
+
+def backbone_class(source):
+    """Backbone class of a config or checkpoint directory: ``Qwen3_5Model``, or ``Qwen3VLModel`` for
+    the Qwen3-VL layout (d3-edge: Qwen3 text model + Qwen3.5 vision tower, DeepStack off).
+    """
+    if model_type(source) == "qwen3_vl":
+        from transformers import Qwen3VLModel
+
+        return Qwen3VLModel
     from transformers import Qwen3_5Model
 
+    return Qwen3_5Model
+
+
+def load_config(directory: str | Path):
+    """``Qwen3_5Config`` (or ``Qwen3VLConfig``) of a checkpoint directory."""
+    if model_type(directory) == "qwen3_vl":
+        from transformers import Qwen3VLConfig
+
+        return Qwen3VLConfig.from_pretrained(str(directory))
+    from transformers import Qwen3_5Config
+
+    return Qwen3_5Config.from_pretrained(str(directory))
+
+
+def expected_backbone_shapes(config) -> dict[str, tuple[int, ...]]:
+    """Persistent state-dict names and shapes of the backbone built from ``config``."""
     with torch.device("meta"):
-        model = Qwen3_5Model(config)
+        model = backbone_class(config)(config)
     return {name: tuple(tensor.shape) for name, tensor in model.state_dict().items()}
 
 

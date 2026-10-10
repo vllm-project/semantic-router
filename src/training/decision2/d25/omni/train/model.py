@@ -1,4 +1,5 @@
-"""Trainable Omni decision model: ``Qwen3_5Model`` backbone plus the 255-code readout.
+"""Trainable Omni decision model: ``Qwen3_5Model`` (or d3-edge's ``Qwen3VLModel``) backbone plus the
+255-code readout.
 
 The forward pass pools the last token and applies the readout in FP32. With ``vision_sync`` a batch
 without images still runs the vision tower once on a 2x2-patch dummy image whose output joins the
@@ -42,11 +43,11 @@ class OmniDecisionModel(torch.nn.Module):
     def from_config(
         cls, config, attention_mode: str = "causal", vision_sync: bool = True
     ) -> "OmniDecisionModel":
-        from transformers import Qwen3_5Model
-
         for part in (config, config.text_config, config.vision_config):
             part._attn_implementation = "sdpa"
-        return cls(Qwen3_5Model(config), attention_mode, vision_sync)
+        return cls(
+            checkpoint.backbone_class(config)(config), attention_mode, vision_sync
+        )
 
     @classmethod
     def from_checkpoint(
@@ -56,10 +57,8 @@ class OmniDecisionModel(torch.nn.Module):
         dtype: torch.dtype = torch.float32,
         vision_sync: bool = True,
     ) -> "OmniDecisionModel":
-        from transformers import Qwen3_5Model
-
         decision = checkpoint.read_decision_config(directory)
-        backbone, info = Qwen3_5Model.from_pretrained(
+        backbone, info = checkpoint.backbone_class(directory).from_pretrained(
             str(directory),
             dtype=dtype,
             attn_implementation="sdpa",
@@ -140,8 +139,6 @@ def save_checkpoint(
     """
     import shutil
 
-    from transformers import Qwen3_5Config
-
     out, init = Path(directory), Path(init)
     if out.exists() and any(out.iterdir()):
         raise FileExistsError(f"refusing to overwrite {out}")
@@ -149,7 +146,7 @@ def save_checkpoint(
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
-    config = Qwen3_5Config.from_pretrained(str(init))
+    config = checkpoint.load_config(init)
     expected = checkpoint.expected_backbone_shapes(config)
     writer = checkpoint.ShardWriter(tmp)
     vision_digests: dict[str, str] = {}

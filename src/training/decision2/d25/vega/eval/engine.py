@@ -7,7 +7,7 @@ layout in SPEC.md, which is also the layout of perplexity-ai/pplx-decider-v1.1-2
     model = CodeReadoutModel("/path/to/checkpoint", device="cuda:0")
     probs = model.predict([{"state": state, "question": question}, ...])  # options() order per row
 
-- Checkpoint: ``config.json`` + ``model*.safetensors`` (``Qwen3_5Model``), ``readout.safetensors``
+- Checkpoint: ``config.json`` + ``model*.safetensors`` (``Qwen3_5Model``; ``Qwen3VLModel`` for d3-edge), ``readout.safetensors``
   (``{"weight": [255, hidden]}``) and ``decision_config.json``. Its ``prompt`` picks the prompt family:
   ``d25-vega`` (``d25.vega.common.decision_format``) or ``pplx`` (Perplexity's prompt; a config without a
   ``prompt`` field is Perplexity's own layout).
@@ -99,6 +99,18 @@ def option_count(question: dict[str, Any]) -> int:
 def sha256_file(path: Path) -> str:
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def backbone_class(directory: Path):
+    """``Qwen3_5Model``, or ``Qwen3VLModel`` for d3-edge's Qwen3-VL code-readout layout."""
+    config = json.loads((directory / "config.json").read_text())
+    if config.get("model_type") == "qwen3_vl":
+        from transformers import Qwen3VLModel
+
+        return Qwen3VLModel
+    from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
+
+    return Qwen3_5Model
 
 
 def resolve_dir(name: str | os.PathLike, revision: str | None = None) -> Path:
@@ -319,9 +331,10 @@ class CodeReadoutModel:
             del full
         else:
             from safetensors.torch import load_file
-            from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
 
-            self.backbone = Qwen3_5Model.from_pretrained(str(self.dir), **load)
+            self.backbone = backbone_class(self.dir).from_pretrained(
+                str(self.dir), **load
+            )
             weight = load_file(str(self.dir / "readout.safetensors"))["weight"]
         if tuple(weight.shape) != (
             df.MAX_OPTIONS,
@@ -331,6 +344,10 @@ class CodeReadoutModel:
         self.readout = weight.to(self.device, getattr(torch, readout_dtype))
         self.backbone.eval().requires_grad_(False)
         if self.attention_mode == "noncausal_full_attention":
+            if self.backbone.config.model_type == "qwen3_vl":
+                raise ValueError(
+                    "noncausal_full_attention is defined for Qwen3.5 backbones only"
+                )
             enable_noncausal_full_attention(self.backbone.language_model)
         self.loaded_seconds = time.perf_counter() - started
         self.pad_id = self.codec.tokenizer.pad_token_id
