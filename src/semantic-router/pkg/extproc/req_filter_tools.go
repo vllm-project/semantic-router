@@ -416,6 +416,9 @@ func emitToolObservability(response **ext_proc.ProcessingResponse, ctx *RequestC
 	if response == nil || *response == nil {
 		return
 	}
+	if (*response).GetImmediateResponse() != nil {
+		return
+	}
 	if !debugHeadersRequested(ctx) {
 		return
 	}

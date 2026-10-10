@@ -131,6 +131,10 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Pool) (*OpenAIRouter, error) {
+	native, nativeErr := prepareNativeExecutors(cfg)
+	if nativeErr != nil {
+		return nil, nativeErr
+	}
 	if err := config.ValidateStickyToolSelectionSupport(cfg); err != nil {
 		return nil, err
 	}
@@ -144,12 +148,18 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+	router := components.buildRouter()
+	router.nativeExecutors = native
+	return router, nil
 }
 
 // buildOpenAIRouterSharingSignals builds a router for cfg that shares signals,
 // the signal runtime of a generation built from the same signal resources.
 func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Pool, signals *signalRuntime) (*OpenAIRouter, error) {
+	native, nativeErr := prepareNativeExecutors(cfg)
+	if nativeErr != nil {
+		return nil, nativeErr
+	}
 	if err := config.ValidateStickyToolSelectionSupport(cfg); err != nil {
 		return nil, err
 	}
@@ -163,7 +173,9 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+	router := components.buildRouter()
+	router.nativeExecutors = native
+	return router, nil
 }
 
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
