@@ -4,6 +4,28 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "grafana": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "grafana.ini": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "live": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "allowed_origins": {
+                  "type": "string",
+                  "description": "Comma-separated trusted Dashboard origins. Empty preserves Grafana's default origin checks."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "replicaCount": {
       "type": "integer",
       "minimum": 0,
@@ -185,9 +207,12 @@
       "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
     },
     "decisionModel": {
-      "type": "string",
-      "pattern": "^((?i)vela-2\\.0-(0\\.3b|0\\.8b|4b|9b)|(?i)vela-1\\.0)?$",
-      "description": "The Router's decision model (global.model_catalog.system.decision_model): Vela-2.0-0.3B, Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0; empty leaves the config's own."
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {"type": "string", "minLength": 1, "pattern": "^\\S+$"}
+      },
+      "description": "Optional exact default judgment deployment reference; empty preserves the config's own. The deployment declares its artifact, device and revision."
     },
     "configMap": {
       "type": "object",

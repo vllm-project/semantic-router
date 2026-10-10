@@ -21,8 +21,10 @@ const DefaultBundleTasks = 64
 
 // Client calls one runtime through the generated contract client.
 type Client struct {
-	endpoint string
-	api      *api.ClientWithResponses
+	endpoint   string
+	base       string
+	httpClient api.HttpRequestDoer
+	api        *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
 	bundleTasks atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
@@ -41,11 +43,13 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(httpClient))
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	physical := budgetTransport{next: httpClient}
+	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(physical))
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{endpoint: endpoint, api: generated}
+	client := &Client{endpoint: endpoint, base: base, httpClient: physical, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
 	client.apiMinor.Store(-1)
 	return client, nil
@@ -252,6 +256,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.Preset != "" {
 		preset := question.Preset
 		encoded := api.Question{Preset: &preset, Threshold: question.Threshold}
+		if question.RequireFullInput {
+			required := true
+			encoded.RequireFullInput = &required
+		}
 		if question.Truncate {
 			overflow := api.QuestionOverflowTruncate
 			encoded.Overflow = &overflow
@@ -261,6 +269,10 @@ func encodeQuestion(question Question) api.Question {
 	questionType := question.Type
 	var instructions interface{} = question.Instructions
 	encoded := api.Question{Type: &questionType, Instructions: &instructions, Threshold: question.Threshold}
+	if question.RequireFullInput {
+		required := true
+		encoded.RequireFullInput = &required
+	}
 	if len(question.Labels) > 0 {
 		var criteria interface{} = labelCriteria(question.Labels)
 		encoded.Criteria = &criteria
@@ -302,6 +314,7 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 	decoded := Response{Model: body.Model, Answers: make(map[string]Answer, len(questions)), InputTokens: body.Usage.InputTokens}
 	for _, question := range questions {
 		if answer, ok := decodeQuestionAnswer(body, question); ok {
+			answer = requireInputCoverage(question, answer)
 			decoded.Answers[question.ID] = answer
 		}
 	}
@@ -317,6 +330,9 @@ func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer,
 	threshold, _ := lookup(body.Thresholds, id)
 	if set, ok := lookup(body.Sets, id); ok {
 		decoded := Answer{Type: "set", Probabilities: set.Probabilities, Selected: set.Selected, Threshold: threshold}
+		if set.InputCoverage != nil {
+			decoded.InputCoverage = string(*set.InputCoverage)
+		}
 		return checkedAnswer(decoded), true
 	}
 	if spans, ok := lookup(body.Spans, id); ok && answered {
@@ -353,12 +369,32 @@ func lookupString(values *map[string]string, key string) string {
 
 func decodeAnswer(answer api.Answer) Answer {
 	decoded := Answer{}
+	if answer.InputCoverage != nil {
+		decoded.InputCoverage = string(*answer.InputCoverage)
+	}
 	if answer.Type != nil {
 		decoded.Type = *answer.Type
 	}
 	if answer.Error != nil {
 		decoded.Error = string(*answer.Error)
 		return decoded
+	}
+	// Missing scalar values are unknown evidence, never Go's zero/false.
+	switch decoded.Type {
+	case "noul":
+		if answer.Noul == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "score":
+		if answer.Score == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "choice":
+		if answer.Choice == nil || *answer.Choice == "" {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	default:
+		return Answer{Type: decoded.Type, Error: "invalid_model_output"}
 	}
 	if answer.Choice != nil {
 		decoded.Choice = *answer.Choice

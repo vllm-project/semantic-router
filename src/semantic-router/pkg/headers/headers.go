@@ -78,6 +78,10 @@ const (
 	// Example value: "guarded=no_match,strict=fail_request"
 	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
 
+	// VSRDecisionRanking names the matched decision the selected one beat and
+	// the comparison that settled it. Debug surface only (#3658).
+	VSRDecisionRanking = "x-vsr-decision-ranking"
+
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
 	VSRSelectedConfidence = "x-vsr-selected-confidence"
@@ -259,6 +263,10 @@ const (
 	// VSRMatchedLanguage contains comma-separated list of matched language signals.
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
+
+	// VSRMatchedAction contains the single matched action signal name.
+	// Example: "explain"
+	VSRMatchedAction = "x-vsr-matched-action"
 
 	// VSRMatchedContext contains comma-separated list of matched context rule names.
 	// Example: "low_token_count,high_token_count"

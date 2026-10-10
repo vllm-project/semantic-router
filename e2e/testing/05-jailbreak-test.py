@@ -154,7 +154,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         # Check Envoy/ExtProc with longer timeout
         try:
             test_payload = {
-                "model": "auto",
+                "model": "vllm-sr/auto",
                 "messages": [
                     {"role": "user", "content": f"Setup test {str(uuid.uuid4())[:8]}"}
                 ],
@@ -398,7 +398,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         )
 
         payload = {
-            "model": "auto",
+            "model": "vllm-sr/auto",
             "messages": [{"role": "user", "content": jailbreak_content}],
             "temperature": 0.1,
         }
@@ -550,7 +550,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                 routing_bugs.append((test_case["text"], "classified as safe"))
 
             status = "✅" if (is_jailbreak_case == detected_as_jailbreak) else "❌"
-            print(f"  {i+1}. {status} '{test_case['text'][:50]}...'")
+            print(f"  {i + 1}. {status} '{test_case['text'][:50]}...'")
             print(
                 f"     Expected: {'threat detected' if is_jailbreak_case else 'safe'} | "
                 f"Actual: {actual_category} | Confidence: {confidence:.3f}"
@@ -631,7 +631,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
         jailbreak_content = jailbreak_cases[0]["text"]  # CharacterGPT pattern
 
         payload = {
-            "model": "auto",
+            "model": "vllm-sr/auto",
             "messages": [{"role": "user", "content": jailbreak_content}],
             "temperature": 0.1,
             "stream": True,
@@ -746,7 +746,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
 
         # Test non-streaming
         non_streaming_payload = {
-            "model": "auto",
+            "model": "vllm-sr/auto",
             "messages": [{"role": "user", "content": jailbreak_content}],
             "temperature": 0.1,
         }
@@ -760,7 +760,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
 
         # Test streaming
         streaming_payload = {
-            "model": "auto",
+            "model": "vllm-sr/auto",
             "messages": [{"role": "user", "content": jailbreak_content}],
             "temperature": 0.1,
             "stream": True,

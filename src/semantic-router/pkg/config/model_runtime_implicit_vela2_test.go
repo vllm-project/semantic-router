@@ -63,7 +63,7 @@ func deploymentsByArtifact(t *testing.T, raw string) map[string][]string {
 
 func TestBuiltInSignalsShareOneVela2DeploymentOnCPU(t *testing.T) {
 	got := deploymentsByArtifact(t, builtInSignalsYAML(""))
-	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B cpu max_speed"]) != 1 || got["vllm-sr/Vela-2.0-0.3B cpu max_speed"][0] != "@Vela-2.0-0.3B" {
+	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B cpu max_speed"]) != 1 || got["vllm-sr/Vela-2.0-0.3B cpu max_speed"][0] != DefaultDecisionDeployment {
 		t.Fatalf("every built-in signal must run on one Vela 2.0 0.3B CPU deployment under max_speed, got %v", got)
 	}
 }
@@ -79,10 +79,12 @@ func TestBuiltInSignalsOnAnAcceleratorShareOneExactDeployment(t *testing.T) {
       safety:
         safety: {use_cpu: false}
 `
-	raw := strings.Replace(builtInSignalsYAML(global), "      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51}\n",
+	raw := strings.Replace(builtInSignalsYAML(global+`    deployments:
+      primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-0.3B, device: auto, profile: exact}
+`), "      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51}\n",
 		"      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51, classifier: {use_cpu: false}}\n", 1)
 	got := deploymentsByArtifact(t, raw)
-	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B auto exact"]) != 1 || got["vllm-sr/Vela-2.0-0.3B auto exact"][0] != "@Vela-2.0-0.3B/auto" {
+	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B auto exact"]) != 1 || got["vllm-sr/Vela-2.0-0.3B auto exact"][0] != DefaultDecisionDeployment {
 		t.Fatalf("an accelerator default runs one exact Vela 2.0 deployment, got %v", got)
 	}
 }

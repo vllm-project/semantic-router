@@ -37,7 +37,7 @@ func TestTheDefaultHallucinationDetectorSharesTheVela2Deployment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Binding.Deployment != "@Vela-2.0-0.3B" || spec.Deployment.Artifact != "vllm-sr/Vela-2.0-0.3B" || spec.Deployment.Profile != "max_speed" || spec.Deployment.Device != "cpu" {
+	if spec.Binding.Deployment != config.DefaultDecisionDeployment || spec.Deployment.Artifact != "vllm-sr/Vela-2.0-0.3B" || spec.Deployment.Profile != "max_speed" || spec.Deployment.Device != "cpu" {
 		t.Fatalf("the default detector asks the shared Vela 2.0 0.3B deployment: %+v", spec)
 	}
 }
