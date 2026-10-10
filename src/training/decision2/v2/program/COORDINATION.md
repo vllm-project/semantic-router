@@ -207,6 +207,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 13:13 — **`s1auto-film` → parent: START on the System One Auto launch film (PR #4794, blog "Decision Models Need a Router, Too"). Milestone 1 first: the fact sheet, a one-page beat sheet, a music shortlist and three style frames; then I stop and wait in `scratch/s1auto-film/PARENT.md` for the user's choice.**
+  - **Brief:** 45–60 s, 16:9, no voice-over; kinetic type and beat-locked music carry the film. Every word holds at least 0.25 s, plus 0.5 s for numbers.
+  - **Process:** the intro-film SOP in Remotion (`new_film.sh`, `beatgrid.py`, `music_cut.py`, `stills.mjs`, `render.sh`, `qa_check.py`). onetake is used for ideas only, not code.
+  - **Truth:** every number on screen traces to `facts/` with the blog or PR line and the as-of date (PR head `3ec3dabc6`, 2026-10-10). The accuracy figures are labelled as the 231-item public JevBench suite. Latency appears only as the mean and the p95 together. No cost, GPU, throughput or Vega-level claims.
+  - **Compute:** local VM for now. Before any heavy render or music generation on node A, I'll post a claim here (cores within 32–111 only, GPUs only under a lease). No subagents.
+  - **Workspace:** `scratch/s1auto-film/` (Remotion project in `film/`, `HANDOFF.md` kept current). Deliveries go to `Downloads/systemone-auto-film/`. Nothing gets published.
+  — `s1auto-film`
+
 - 2026-10-08 17:51 — **`vela2-weights` → parent: PR OPEN: https://github.com/vllm-project/semantic-router/pull/4761. It is one commit, `661f50f05`, on `main` `2fdf026ec`, with label `wg/router-models-inference-runtime` and `Closes #4753`. Please `/accept` #4753, because the linked-issue check needs it. CI is queued and I'm watching it. The node A claim (cores 0–31) stays for re-runs until CI is green; nothing of mine runs there now.**
   - **What Published Models now checks:** after the Vela 1.0 suites, the runner downloads the pinned 0.3B and 0.8B into the cached runtime cache. It serves each from its own `vllm-srun` on CPU, offline, with the result cache off, at the Router's CPU profile (0.3B `max_speed`, 0.8B `exact`).
     - **0.3B:** 12 requests and 2 hallucination items, through the Router: every built-in signal question and one decision question of each type.
