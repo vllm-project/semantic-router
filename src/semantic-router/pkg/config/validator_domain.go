@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -28,6 +29,39 @@ func validateDomainContracts(cfg *RouterConfig) error {
 }
 
 func validateDeclaredDomain(category Category) error {
+	for _, ms := range category.ModelScores {
+		if math.IsNaN(ms.Score) || math.IsInf(ms.Score, 0) {
+			if ms.Model != "" {
+				return fmt.Errorf(
+					"routing.signals.domains[%q].model_scores for model %q: score must be finite, got %v",
+					category.Name,
+					ms.Model,
+					ms.Score,
+				)
+			}
+			return fmt.Errorf(
+				"routing.signals.domains[%q].model_scores: score must be finite, got %v",
+				category.Name,
+				ms.Score,
+			)
+		}
+		if ms.Score < 0.0 || ms.Score > 1.0 {
+			if ms.Model != "" {
+				return fmt.Errorf(
+					"routing.signals.domains[%q].model_scores for model %q: score must be between 0.0 and 1.0, got %v",
+					category.Name,
+					ms.Model,
+					ms.Score,
+				)
+			}
+			return fmt.Errorf(
+				"routing.signals.domains[%q].model_scores: score must be between 0.0 and 1.0, got %v",
+				category.Name,
+				ms.Score,
+			)
+		}
+	}
+
 	for _, value := range category.MMLUCategories {
 		if IsSupportedRoutingDomainName(value) {
 			continue
