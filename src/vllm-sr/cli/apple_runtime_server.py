@@ -25,6 +25,8 @@ from pathlib import Path
 
 MAX_BYTES = 64 << 20
 LEASE_SECONDS = 45
+MAX_MODELS_PER_PROCESS = 256
+PROCESS_ROUTE_PARTS = 3
 HOP_HEADERS = {
     "connection",
     "keep-alive",
@@ -47,7 +49,7 @@ class Processes:
         self.children: dict[str, dict] = {}
 
     def launch(self, key: str, models: list[dict], *, leased: bool = True) -> int:
-        if not KEY.fullmatch(key) or not models or len(models) > 256:
+        if not KEY.fullmatch(key) or not models or len(models) > MAX_MODELS_PER_PROCESS:
             raise ValueError("invalid process identity or model inventory")
         normalized = []
         for model in models:
@@ -175,7 +177,7 @@ class Processes:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server: "BridgeServer"
+    server: BridgeServer
 
     def log_message(self, *_args) -> None:
         pass  # Requests can contain prompts or credentials; never access-log them.
@@ -224,16 +226,20 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self.reply(200, {"port": port})
                 return
-            parts = self.path.split("/", 3)
-            if len(parts) < 3 or parts[1] != "processes" or not KEY.fullmatch(parts[2]):
+            parts = self.path.split("/", PROCESS_ROUTE_PARTS)
+            if (
+                len(parts) < PROCESS_ROUTE_PARTS
+                or parts[1] != "processes"
+                or not KEY.fullmatch(parts[2])
+            ):
                 self.reply(404, {"error": "unknown bridge route"})
                 return
             key = parts[2]
-            if len(parts) == 3 and self.command == "POST":
+            if len(parts) == PROCESS_ROUTE_PARTS and self.command == "POST":
                 port = self.server.processes.launch(key, json.loads(body)["models"])
                 self.reply(200, {"port": port})
                 return
-            if len(parts) == 3 and self.command == "DELETE":
+            if len(parts) == PROCESS_ROUTE_PARTS and self.command == "DELETE":
                 self.server.processes.stop(key)
                 self.reply(200, {"stopped": True})
                 return
@@ -287,9 +293,10 @@ class Handler(BaseHTTPRequestHandler):
             log.warning("Bridge request failed: %s", type(error).__name__)
             self.reply(503, {"error": str(error)})
 
-    do_GET = dispatch
-    do_POST = dispatch
-    do_DELETE = dispatch
+    # BaseHTTPRequestHandler requires these exact HTTP-method hook names.
+    do_GET = dispatch  # noqa: N815
+    do_POST = dispatch  # noqa: N815
+    do_DELETE = dispatch  # noqa: N815
 
 
 class BridgeServer(ThreadingHTTPServer):
