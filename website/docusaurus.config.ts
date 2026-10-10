@@ -414,6 +414,10 @@ const config: Config = {
               label: 'Leaderboard',
               to: '/community/contributors',
             },
+            {
+              label: 'Ecosystem & Partnerships',
+              to: '/community/ecosystem',
+            },
           ],
         },
         {
