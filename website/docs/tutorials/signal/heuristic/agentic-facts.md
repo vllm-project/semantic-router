@@ -98,6 +98,12 @@ Replay record. This matches the existing behavior for context-window refusals.
 
 ## Dependencies and Limitations
 
+`required_capabilities` accepts only canonical protocol capability names, such
+as `text`, `tools`, `reasoning`, `structured_json`, or `image_input`. Names are
+trimmed and matched without regard to case. An unknown name, including a model
+card alias such as `vision` or `tool_use`, rejects the whole envelope with
+`required_capabilities:malformed`.
+
 `agentic_facts` only evaluates facts accepted at the request boundary; it never
 parses an envelope that arrives without the configured trust marker. See a
 complete example:

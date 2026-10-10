@@ -155,10 +155,20 @@ func TestBuildReplayRouteDiagnosticsNeverStoresAgenticFactsValues(t *testing.T) 
 		{
 			name: "accepted envelope",
 			envelope: fmt.Sprintf(
-				`{"version":"1","delegated_role":%q,"task_phase":%q,"required_capabilities":[%q],"trust_boundary":{"tenant":%q},"lineage":{"root_invocation_id":%q},"expires_at":%q}`,
-				canary, canary, canary, canary, canary, agenticFactsExpiresAt(30*time.Second),
+				`{"version":"1","delegated_role":%q,"task_phase":%q,"required_capabilities":["tools"],"trust_boundary":{"tenant":%q},"lineage":{"root_invocation_id":%q},"expires_at":%q}`,
+				canary, canary, canary, canary, agenticFactsExpiresAt(30*time.Second),
 			),
 			wantStatus: replayAgenticFactsStatusAccepted,
+		},
+		// An unknown capability name is caller text that the validator refuses.
+		// The rejection reason must name the field, never echo the value.
+		{
+			name: "unknown capability",
+			envelope: fmt.Sprintf(
+				`{"version":"1","required_capabilities":[%q],"expires_at":%q}`,
+				canary, agenticFactsExpiresAt(30*time.Second),
+			),
+			wantStatus: replayAgenticFactsStatusRejected,
 		},
 		{
 			name: "rejected envelope",
