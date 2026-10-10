@@ -85,6 +85,7 @@ func AddressKey(namespace, sessionID string) string {
 }
 
 func escapeAddressKeyPart(part string) string {
+	part = strings.ReplaceAll(part, "%", "%25")
 	return strings.ReplaceAll(part, ":", "%3A")
 }
 

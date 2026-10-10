@@ -14,6 +14,60 @@ func TestAddressKeyEscapesColons(t *testing.T) {
 	}
 }
 
+func TestAddressKeyDistinguishesLiteralPercent3AFromColon(t *testing.T) {
+	withColon := AddressKey("ns", "recipe::a:b")
+	withLiteral := AddressKey("ns", "recipe::a%3Ab")
+	if withColon == withLiteral {
+		t.Fatalf("AddressKey collision: %q == %q", withColon, withLiteral)
+	}
+	wantColon := "kv_addr:ns:recipe%3A%3Aa%3Ab"
+	wantLiteral := "kv_addr:ns:recipe%3A%3Aa%253Ab"
+	if withColon != wantColon {
+		t.Fatalf("AddressKey(colon) = %q, want %q", withColon, wantColon)
+	}
+	if withLiteral != wantLiteral {
+		t.Fatalf("AddressKey(literal %%3A) = %q, want %q", withLiteral, wantLiteral)
+	}
+}
+
+func TestMemoryAddressRegistryLiteralPercent3ADoesNotOverwriteColonSession(t *testing.T) {
+	reg := NewMemoryAddressRegistry()
+	colonRecord := AddressRecord{
+		SessionID: "recipe::a:b",
+		SourcePod: "10.0.1.5:8000",
+		Model:     "qwen3-14b",
+		Namespace: "ns",
+		TurnCount: 1,
+	}
+	literalRecord := AddressRecord{
+		SessionID: "recipe::a%3Ab",
+		SourcePod: "10.0.1.6:8000",
+		Model:     "qwen3-14b",
+		Namespace: "ns",
+		TurnCount: 2,
+	}
+	if err := reg.Write(context.Background(), colonRecord); err != nil {
+		t.Fatalf("Write(colon) error = %v", err)
+	}
+	if err := reg.Write(context.Background(), literalRecord); err != nil {
+		t.Fatalf("Write(literal) error = %v", err)
+	}
+	gotColon, err := reg.Lookup(context.Background(), "ns", "recipe::a:b")
+	if err != nil || gotColon == nil {
+		t.Fatalf("Lookup(colon) = (%v, %v), want record", gotColon, err)
+	}
+	if gotColon.SourcePod != colonRecord.SourcePod || gotColon.TurnCount != 1 {
+		t.Fatalf("Lookup(colon) = %+v, want original colon record", gotColon)
+	}
+	gotLiteral, err := reg.Lookup(context.Background(), "ns", "recipe::a%3Ab")
+	if err != nil || gotLiteral == nil {
+		t.Fatalf("Lookup(literal) = (%v, %v), want record", gotLiteral, err)
+	}
+	if gotLiteral.SourcePod != literalRecord.SourcePod || gotLiteral.TurnCount != 2 {
+		t.Fatalf("Lookup(literal) = %+v, want original literal record", gotLiteral)
+	}
+}
+
 func TestMemoryAddressRegistryWriteAndLookup(t *testing.T) {
 	reg := NewMemoryAddressRegistry()
 	record := AddressRecord{
