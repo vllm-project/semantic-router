@@ -13,8 +13,8 @@ import yaml
 
 from cli import apple_runtime
 from cli.apple_runtime_environment import validate_apple_host, validate_local_docker
-from cli.commands.serve_options import explicit
 from cli.commands.runtime_support import apply_container_runtime_override
+from cli.commands.serve_options import explicit
 from cli.container_images import get_container_image
 from cli.container_runtime import get_container_runtime
 from cli.deployment_backend import resolve_target
@@ -23,6 +23,7 @@ from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import echo
 from cli.validator_decision_model import MODEL_RUNTIME_PROFILE
 
+MAX_TCP_PORT = 65535
 
 ROUTER_OPTIONS = (
     "config",
@@ -106,7 +107,7 @@ def run_apple_engine(
             "Apple engine mode exposes TCP on 127.0.0.1; --uds and other bind addresses are unsupported",
             ctx=ctx,
         )
-    if port is not None and not 1 <= port <= 65535:
+    if port is not None and not 1 <= port <= MAX_TCP_PORT:
         raise click.UsageError("--port must be between 1 and 65535", ctx=ctx)
     if models and models_file:
         raise click.UsageError("give MODEL arguments or --models, not both", ctx=ctx)
