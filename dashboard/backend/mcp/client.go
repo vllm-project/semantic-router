@@ -19,10 +19,15 @@ import (
 type Client struct {
 	config *ServerConfig
 
-	mu     sync.RWMutex
-	status ServerStatus
-	err    error
-	tools  []ToolDefinition
+	mu sync.RWMutex
+	// closeMu serializes calls into the SDK client's Close method. The
+	// Streamable HTTP transport checks and closes its channel without
+	// synchronization, so initialization cancellation and shutdown must not
+	// close the same transport concurrently.
+	closeMu sync.Mutex
+	status  ServerStatus
+	err     error
+	tools   []ToolDefinition
 
 	connectedAt *time.Time
 
@@ -96,7 +101,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	_, err = mcpClient.Initialize(ctx, initReq)
 	if err != nil {
 		log.Printf("[MCP-Client] Initialize failed: error_class=%T", err)
-		_ = mcpClient.Close()
+		_ = c.closeMCPClient(mcpClient)
 		c.mu.Lock()
 		c.status = StatusError
 		c.err = err
@@ -125,6 +130,22 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	log.Printf("[MCP-Client] Connect() completed, status: connected, tools: %d", len(tools))
 	return nil
+}
+
+// closeMCPClient serializes transport cleanup across all shutdown paths.
+//
+// The SDK's Streamable HTTP transport performs a check followed by close on
+// its internal channel. If initialization is canceled at the same time as a
+// manager shutdown, both paths can otherwise execute that sequence together
+// and panic with "close of closed channel".
+func (c *Client) closeMCPClient(mcpClient client.MCPClient) error {
+	if mcpClient == nil {
+		return nil
+	}
+
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+	return mcpClient.Close()
 }
 
 // createStreamableHTTPClient creates a Streamable HTTP client
@@ -159,7 +180,7 @@ func (c *Client) Disconnect() error {
 	defer c.mu.Unlock()
 
 	if c.mcpClient != nil {
-		if err := c.mcpClient.Close(); err != nil {
+		if err := c.closeMCPClient(c.mcpClient); err != nil {
 			log.Printf("[MCP-Client] Error closing client: error_class=%T", err)
 		}
 		c.mcpClient = nil
