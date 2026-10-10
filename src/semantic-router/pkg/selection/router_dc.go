@@ -20,12 +20,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -183,13 +185,19 @@ func (r *RouterDCSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 		}
 
 		// Compute embedding for the model description
-		embedding, err := r.embeddingFunc(context.Background(), descText)
+		vector, err := r.embeddingFunc(context.Background(), descText)
+		if errors.Is(err, embedding.ErrModelNotPrepared) {
+			// A generation prepares this embedding model only for decisions that
+			// route with router_dc (or hybrid), so none of its decisions use it.
+			logging.Debugf("[RouterDC] Embedding model not prepared, skipping model descriptions: %v", err)
+			break
+		}
 		if err != nil {
 			logging.Warnf("[RouterDC] Failed to embed model %s: %v", model, err)
 			continue
 		}
 
-		r.modelEmbeddings[model] = embedding
+		r.modelEmbeddings[model] = vector
 		modelsWithDescriptions++
 		logging.ComponentDebugEvent("selection", "router_dc_model_embedding_initialized", map[string]interface{}{
 			"model": model,

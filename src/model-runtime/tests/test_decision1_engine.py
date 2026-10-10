@@ -8,25 +8,25 @@ from pathlib import Path
 import pytest
 import torch
 from torch import nn
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.accel.kernels import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.accel.kernels import (
     ADDITIVE_MASKS,
     AdditiveMaskSDPA,
     Kernel,
     reference_kernels,
     sdpa_ref,
 )
-from vllm_sr_runtime.engines.native import models
-from vllm_sr_runtime.engines.native import reduced as copies
-from vllm_sr_runtime.engines.native.engine import NativeEngine
-from vllm_sr_runtime.engines.native.weights import cast_parameters, load_backbone
-from vllm_sr_runtime.families.decision1 import package as pkg
-from vllm_sr_runtime.families.decision1.family import Decision1Family
-from vllm_sr_runtime.heads.typed import TypeHeadLayer, TypeReadout
-from vllm_sr_runtime.plugins.base import EncoderBatch, EngineOptions, PackageRef
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.testing.decision1 import write_package
-from vllm_sr_runtime.testing.fixtures import modernbert_config, random_backbone, save
+from vllm_srun.engines.native import models
+from vllm_srun.engines.native import reduced as copies
+from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.engines.native.weights import cast_parameters, load_backbone
+from vllm_srun.families.decision1 import package as pkg
+from vllm_srun.families.decision1.family import Decision1Family
+from vllm_srun.heads.typed import TypeHeadLayer, TypeReadout
+from vllm_srun.plugins.base import EncoderBatch, EngineOptions, PackageRef
+from vllm_srun.registry import builtin
+from vllm_srun.testing.decision1 import write_package
+from vllm_srun.testing.fixtures import modernbert_config, random_backbone, save
 
 
 def test_variants_run_only_for_models_that_name_them():

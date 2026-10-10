@@ -52,7 +52,7 @@ ROUTER_SIGNALS = ("domain", "modality", "jailbreak", "safety", "pii", "fact_chec
 
 def router_questions(path: str) -> dict[str, Any]:
     """Explicit System One questions for the router signals of a ``QUESTIONS.json``."""
-    from vllm_sr_runtime.families.decision1.package import presets
+    from vllm_srun.families.decision1.package import presets
 
     expanded = presets(Path(path).parent)
     return {name: expanded[name] for name in ROUTER_SIGNALS if name in expanded}
@@ -121,8 +121,8 @@ class Native:
     """The decision1 family behind a ``Runtime``, with each way of sending it a request."""
 
     def __init__(self, args: argparse.Namespace) -> None:
-        from vllm_sr_runtime.config import ModelConfig, ServeConfig
-        from vllm_sr_runtime.runtime import Runtime
+        from vllm_srun.config import ModelConfig, ServeConfig
+        from vllm_srun.runtime import Runtime
 
         overrides = (
             {"max_batch_tokens": args.max_batch_tokens} if args.max_batch_tokens else {}

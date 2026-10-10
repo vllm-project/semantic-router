@@ -60,7 +60,7 @@ func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
-	t.Setenv("VLLM_SR_PLATFORM", "amd")
+	t.Setenv("VLLM_SR_PLATFORM", "rocm")
 
 	got, err := syncRuntimeConfigForCurrentRuntime(configPath)
 	if err != nil || got != configPath {
@@ -89,13 +89,17 @@ global:
         use_cpu: true
         embedding_config:
           model_type: mmbert
+    modules:
+      classifier:
+        domain:
+          use_cpu: true
 `
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
-	t.Setenv("DASHBOARD_PLATFORM", "amd")
+	t.Setenv("DASHBOARD_PLATFORM", "rocm")
 	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -117,8 +121,8 @@ global:
 	if err != nil {
 		t.Fatalf("read runtime config: %v", err)
 	}
-	if !contains(string(runtimeData), "use_cpu: false") {
-		t.Fatalf("expected AMD runtime override to force GPU defaults, got:\n%s", string(runtimeData))
+	if !contains(string(runtimeData), "use_cpu: false") || !contains(string(runtimeData), "use_cpu: true") {
+		t.Fatalf("expected ROCm classifier GPU defaults and preserved embedding placement, got:\n%s", string(runtimeData))
 	}
 
 	sourceData, err := os.ReadFile(configPath)
@@ -185,49 +189,22 @@ global:
 	}
 }
 
-func TestSyncRuntimeConfigInManagedContainerUsesDashboardVenvPythonForSplitRuntime(t *testing.T) {
-	tempDir := t.TempDir()
-	dockerArgsPath := filepath.Join(tempDir, "docker-args.txt")
-	dockerPath := filepath.Join(tempDir, "docker")
-	dockerScript := "#!/bin/sh\n" +
-		"printf '%s\n' \"$@\" > \"" + dockerArgsPath + "\"\n" +
-		"printf '/app/.vllm-sr/runtime-config.yaml\n'\n"
-	if err := os.WriteFile(dockerPath, []byte(dockerScript), 0o755); err != nil {
-		t.Fatalf("write fake docker binary: %v", err)
+func TestHostDashboardSavesWithoutReachingIntoContainers(t *testing.T) {
+	invocations := trapContainerCLIs(t)
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "")
 
-	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
-	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
-	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
-
-	runtimePath, err := syncRuntimeConfigInManagedContainer()
-	if err != nil {
-		t.Fatalf("syncRuntimeConfigInManagedContainer returned error: %v", err)
+	if got, err := syncRuntimeConfigForCurrentRuntime(configPath); err != nil || got != configPath {
+		t.Fatalf("syncRuntimeConfigForCurrentRuntime() = %q, %v", got, err)
 	}
-	if runtimePath != "/app/.vllm-sr/runtime-config.yaml" {
-		t.Fatalf("runtime config path = %q", runtimePath)
+	if err := propagateConfigToRuntime(configPath, filepath.Dir(configPath)); err != nil {
+		t.Fatalf("propagateConfigToRuntime() = %v", err)
 	}
-
-	argsData, err := os.ReadFile(dockerArgsPath)
-	if err != nil {
-		t.Fatalf("read fake docker args: %v", err)
-	}
-	args := strings.Split(strings.TrimSpace(string(argsData)), "\n")
-	if len(args) < 4 {
-		t.Fatalf("docker exec args too short: %#v", args)
-	}
-	if args[0] != "exec" {
-		t.Fatalf("docker exec argv[0] = %q", args[0])
-	}
-	if args[1] != "lane-a-vllm-sr-dashboard-container" {
-		t.Fatalf("managed container name = %q", args[1])
-	}
-	if args[2] != dashboardVenvPythonPath {
-		t.Fatalf("managed split python binary = %q, want %q", args[2], dashboardVenvPythonPath)
-	}
-	if args[3] != "-c" {
-		t.Fatalf("python exec flag = %q", args[3])
+	if calls := invocations(); len(calls) != 0 {
+		t.Fatalf("the Dashboard ran a container CLI: %q", calls)
 	}
 }
 

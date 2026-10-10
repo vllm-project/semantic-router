@@ -137,9 +137,8 @@ func (c *Client) Decide(ctx context.Context, request DecisionsRequest) (Decision
 	if err := c.post(ctx, "/v1/decisions", request, &response); err != nil {
 		return response, err
 	}
-	for id := range request.Questions {
-		answer, ok := response.Answers[id]
-		if !ok || answer.Error != "" {
+	for id, question := range request.Questions {
+		if answer := response.Answers[id]; answer.Error != "" || !response.answers(id, question.Type) {
 			return response, fmt.Errorf("question %q has no answer: %+v", id, answer)
 		}
 	}

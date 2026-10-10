@@ -56,9 +56,15 @@ routing:
 
 Keep domain names stable because decisions reference those names directly.
 
+Only declared domains match. A classifier label matches the domain that lists
+it in `mmlu_categories`, or the domain named after it. A label no domain lists
+counts as `other`, so the domain that lists `other`, as above, is the fallback
+for every topic you didn't declare; without one, such a request matches no
+domain.
+
 ### Local and remote classifier selection
 
-With no `backend`, the domain classifier (Vela Domain by default) runs in the
+With no `backend`, the domain classifier (Vela 2.0 0.3B by default) runs in the
 [model runtime](../../../model-runtime/guides/classify.md). The runtime reads
 the model's architecture from the package, so there is no local selector to
 set; `vllm-sr config migrate` removes the earlier `variant`, `use_modernbert`
@@ -93,6 +99,6 @@ global:
 ## Dependencies and Limitations
 
 Domain classification uses the configured classifier module and processes the
-request text. Treat `other` as a fallback, and re-evaluate labels and thresholds
-when the classifier changes. See a complete example:
+request text. Declare `other` as the fallback, and re-evaluate labels and
+thresholds when the classifier changes. See a complete example:
 [`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml).

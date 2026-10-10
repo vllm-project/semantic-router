@@ -23,23 +23,20 @@ zh-Hans	community/documentation.md
 zh-Hans	community/model-provider-day-0-support.md
 zh-Hans	community/overview.md
 zh-Hans	community/translation-guide.md
-zh-Hans	fleet-sim/getting-started.md
-zh-Hans	fleet-sim/guide.md
-zh-Hans	fleet-sim/overview.md
-zh-Hans	fleet-sim/power-model.md
-zh-Hans	fleet-sim/related-work.md
-zh-Hans	fleet-sim/sim-algorithms.md
-zh-Hans	fleet-sim/use-cases.md
+zh-Hans	faq.md
+zh-Hans	installation/agent-harness.md
 zh-Hans	installation/agent.md
 zh-Hans	installation/amd-rocm.md
 zh-Hans	installation/backend-target-compatibility.md
 zh-Hans	installation/catalog-backed-models.md
 zh-Hans	installation/configuration-contract.md
+zh-Hans	installation/configuration-management.md
 zh-Hans	installation/configuration-workflows.md
 zh-Hans	installation/configuration.md
 zh-Hans	installation/custom-models.md
 zh-Hans	installation/deployment-options.md
 zh-Hans	installation/docker.md
+zh-Hans	installation/gateway-modes.md
 zh-Hans	installation/installation.md
 zh-Hans	installation/k8s/agentgateway.md
 zh-Hans	installation/k8s/ai-gateway.md
@@ -75,6 +72,7 @@ zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
 zh-Hans	model-runtime/quickstart.md
 zh-Hans	model-runtime/troubleshooting.md
+zh-Hans	overview/component-architecture.md
 zh-Hans	overview/goals.md
 zh-Hans	overview/mom-model-family.md
 zh-Hans	overview/semantic-router-overview.md
@@ -98,6 +96,7 @@ zh-Hans	proposals/prompt-classification-routing.md
 zh-Hans	proposals/router-flow-workflows.md
 zh-Hans	proposals/router-learning-memory-and-adaptations.md
 zh-Hans	proposals/standalone-http-gateway.md
+zh-Hans	proposals/standalone-mode.md
 zh-Hans	proposals/unified-config-contract-v0-3.md
 zh-Hans	proposals/unified-model-catalog-and-evaluation-index.md
 zh-Hans	training/classifier-models.md
@@ -119,6 +118,7 @@ zh-Hans	tutorials/algorithm/looper/remom.md
 zh-Hans	tutorials/algorithm/looper/workflows.md
 zh-Hans	tutorials/algorithm/overview.md
 zh-Hans	tutorials/algorithm/selection/automix.md
+zh-Hans	tutorials/algorithm/selection/decision.md
 zh-Hans	tutorials/algorithm/selection/hybrid.md
 zh-Hans	tutorials/algorithm/selection/kmeans.md
 zh-Hans	tutorials/algorithm/selection/knn.md
@@ -139,6 +139,7 @@ zh-Hans	tutorials/decision/single.md
 zh-Hans	tutorials/global/api-and-observability.md
 zh-Hans	tutorials/global/entrypoints-and-recipes.md
 zh-Hans	tutorials/global/entrypoints.md
+zh-Hans	tutorials/global/model-runtime.md
 zh-Hans	tutorials/global/models-entrypoints-serving.md
 zh-Hans	tutorials/global/overview.md
 zh-Hans	tutorials/global/recipes.md
@@ -182,6 +183,7 @@ zh-Hans	tutorials/signal/heuristic/metadata.md
 zh-Hans	tutorials/signal/heuristic/structure.md
 zh-Hans	tutorials/signal/learned/classifier.md
 zh-Hans	tutorials/signal/learned/complexity.md
+zh-Hans	tutorials/signal/learned/decision.md
 zh-Hans	tutorials/signal/learned/domain.md
 zh-Hans	tutorials/signal/learned/embedding.md
 zh-Hans	tutorials/signal/learned/fact-check.md
@@ -192,5 +194,6 @@ zh-Hans	tutorials/signal/learned/modality.md
 zh-Hans	tutorials/signal/learned/pii.md
 zh-Hans	tutorials/signal/learned/preference.md
 zh-Hans	tutorials/signal/learned/reask.md
+zh-Hans	tutorials/signal/learned/safety.md
 zh-Hans	tutorials/signal/learned/user-feedback.md
 zh-Hans	tutorials/signal/overview.md

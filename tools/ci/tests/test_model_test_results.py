@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import sys
 import tempfile
 import types
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest import mock
 
@@ -16,6 +18,21 @@ import run_model_tests
 import runtime_evidence
 
 SHA = "a" * 40
+# A runtime that records its arguments and answers /health until it is killed.
+FAKE_RUNTIME = """
+import http.server, json, sys
+args = sys.argv[2:]
+open(sys.argv[1], "w").write(json.dumps(args))
+port = int(args[args.index("--port") + 1])
+class Health(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"{}")
+    def log_message(self, *_):
+        pass
+http.server.HTTPServer(("127.0.0.1", port), Health).serve_forever()
+"""
 
 
 def report() -> dict:
@@ -78,6 +95,113 @@ class ModelContractTests(unittest.TestCase):
             )
         )
 
+    def test_each_vela2_size_has_its_own_runtime_and_endpoint(self):
+        suites = run_model_tests.VELA2_SUITES.values()
+        self.assertEqual(
+            [(repo, profile) for repo, profile, _, _ in suites],
+            [
+                ("vllm-sr/Vela-2.0-0.3B", "max_speed"),
+                ("vllm-sr/Vela-2.0-0.8B", "exact"),
+            ],
+        )
+        self.assertEqual(len({env for _, _, env, _ in suites}), len(suites))
+        logs = {filename for _, _, filename in run_model_tests.SELECTIONS}
+        self.assertTrue(set(run_model_tests.VELA2_SUITES) <= logs)
+
+    def test_core_excludes_exactly_the_published_inventory(self):
+        profiles = json.loads(
+            (run_model_tests.ROOT / "tools/ci/core_test_profiles.json").read_text()
+        )
+        excluded = {
+            (record["package"], record["test"])
+            for record in profiles["excluded"]
+            if record["profile"] == "model-runtime"
+        }
+        self.assertEqual(excluded, run_model_tests.required_inventory())
+
+    def test_vela2_sizes_download_their_pinned_files_into_the_runtime_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "weights").write_text("weights")
+            ref = types.SimpleNamespace(root=root, revision="b" * 40)
+            resolver = types.ModuleType("vllm_srun.registry.resolve")
+            resolver.resolve = mock.Mock(return_value=ref)
+            modules = {
+                "vllm_srun": types.ModuleType("vllm_srun"),
+                "vllm_srun.registry": types.ModuleType("vllm_srun.registry"),
+                "vllm_srun.registry.resolve": resolver,
+            }
+            with mock.patch.dict(sys.modules, modules):
+                models = run_model_tests.provision_vela2(root / "cache")
+        self.assertEqual(set(models), set(run_model_tests.VELA2_SUITES))
+        for call in resolver.resolve.call_args_list:
+            self.assertEqual(call.kwargs, {"cache_dir": root / "cache"})
+        for log, model in models.items():
+            repo, profile, env, _ = run_model_tests.VELA2_SUITES[log]
+            self.assertEqual(
+                (model["repo_id"], model["profile"], model["env"], model["revision"]),
+                (repo, profile, env, "b" * 40),
+            )
+            self.assertEqual(model["bytes"], len("weights"))
+
+    def test_a_vela2_runtime_serves_its_pinned_size_offline_until_its_tests_end(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "srun.py").write_text(FAKE_RUNTIME)
+            arguments = root / "args.json"
+            model = {
+                "env": "VLLM_SRUN_VELA2_ENDPOINT",
+                "repo_id": "vllm-sr/Vela-2.0-0.3B",
+                "revision": "b" * 40,
+                "profile": "max_speed",
+            }
+            command = f"{sys.executable} {root / 'srun.py'} {arguments}"
+            with (
+                mock.patch.dict(os.environ, {"VLLM_SRUN_COMMAND": command}),
+                run_model_tests.serve_vela2(
+                    model, root / "cache", root / "runtime.log"
+                ) as endpoint,
+            ):
+                with urllib.request.urlopen(endpoint + "/health") as response:
+                    self.assertEqual(response.status, 200)
+                argv = json.loads(arguments.read_text())
+            with self.assertRaises(OSError):
+                urllib.request.urlopen(endpoint + "/health", timeout=2)
+        self.assertEqual(argv[:2], ["serve", "vllm-sr/Vela-2.0-0.3B"])
+        for flag, value in (
+            ("--revision", "b" * 40),
+            ("--device", "cpu"),
+            ("--profile", "max_speed"),
+            ("--cache-dir", str(root / "cache")),
+            ("--result-cache-entries", "0"),
+        ):
+            self.assertEqual(argv[argv.index(flag) + 1], value)
+        self.assertIn("--offline", argv)
+        self.assertIn("ready_seconds", model)
+
+    def test_a_vela2_runtime_that_exits_fails_every_test_it_serves(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = {
+                "env": "VLLM_SRUN_VELA2_ENDPOINT",
+                "repo_id": "vllm-sr/Vela-2.0-0.3B",
+                "revision": "b" * 40,
+                "profile": "max_speed",
+            }
+            command = f"{sys.executable} -c 'raise SystemExit(3)'"
+            with mock.patch.dict(os.environ, {"VLLM_SRUN_COMMAND": command}):
+                result = run_model_tests.run_vela2_suite(
+                    "./pkg/classification",
+                    ("TestA", "TestB"),
+                    {},
+                    root / "vela2-0.3b.jsonl",
+                    model,
+                    root / "cache",
+                )
+        self.assertFalse(result["success"])
+        self.assertEqual(result["missing"], ["TestA", "TestB"])
+        self.assertIn("exited 3", result["error"])
+
     def test_provisioned_packages_are_plain_directories_at_the_pinned_revision(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -88,15 +212,13 @@ class ModelContractTests(unittest.TestCase):
             (blobs / "weights").write_text("weights")
             (snapshot / "model.safetensors").symlink_to(blobs / "weights")
             ref = types.SimpleNamespace(root=snapshot, revision="b" * 40)
-            resolver = types.ModuleType("vllm_sr_runtime.registry.resolve")
+            resolver = types.ModuleType("vllm_srun.registry.resolve")
             resolver.resolve = mock.Mock(return_value=ref)
             resolver.fetch = mock.Mock(side_effect=lambda ref, patterns, **_: ref)
             modules = {
-                "vllm_sr_runtime": types.ModuleType("vllm_sr_runtime"),
-                "vllm_sr_runtime.registry": types.ModuleType(
-                    "vllm_sr_runtime.registry"
-                ),
-                "vllm_sr_runtime.registry.resolve": resolver,
+                "vllm_srun": types.ModuleType("vllm_srun"),
+                "vllm_srun.registry": types.ModuleType("vllm_srun.registry"),
+                "vllm_srun.registry.resolve": resolver,
             }
             with mock.patch.dict(sys.modules, modules):
                 models = run_model_tests.provision(root / "models")

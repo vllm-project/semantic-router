@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
@@ -280,14 +279,15 @@ func SetupActivateHandler(
 			return
 		}
 
-		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
-		if err != nil {
+		if _, err := syncRuntimeConfigForCurrentRuntime(configPath); err != nil {
 			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_config_sync")
 			return
 		}
 
-		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
-			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_start")
+		// The CLI that owns the stack starts the Router from here on.
+		if err := recordPendingActivation(configPath, yamlData, activationReasonSetup, ""); err != nil {
+			log.Printf("Setup activation could not be recorded: %v", err)
+			failSetupActivation(w, configPath, previousData, setupResolver, "activation_record")
 			return
 		}
 
@@ -295,7 +295,7 @@ func SetupActivateHandler(
 		if err := json.NewEncoder(w).Encode(SetupActivateResponse{
 			Status:    "success",
 			SetupMode: false,
-			Message:   "Setup activated successfully. Router and Envoy are starting.",
+			Message:   setupActivatedMessage(configPath),
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
@@ -593,31 +593,4 @@ func backupCurrentConfig(configPath string, configDir string) error {
 	}
 	cleanupBackups(configBackupDir(configDir))
 	return nil
-}
-
-func restartSetupManagedServices(effectiveConfigPath string) error {
-	if err := refreshManagedSplitEnvoyConfig(effectiveConfigPath); err != nil {
-		return err
-	}
-
-	for _, service := range []string{"router", "envoy"} {
-		if err := restartManagedService(service, 20*time.Second); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func restartSetupRuntimeServices(configPath string, effectiveConfigPath string) error {
-	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		return restartSetupManagedServices(effectiveConfigPath)
-	}
-
-	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
-		getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
-		return nil
-	}
-
-	return restartSetupManagedServices(effectiveConfigPath)
 }

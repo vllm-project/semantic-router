@@ -90,7 +90,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	release.Wait = false
 	release.Timeout = "10m"
 	release.Set = map[string]string{
-		"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
+		"image.repository": "ghcr.io/vllm-project/semantic-router/vllm-sr",
 		"image.tag":        opts.ImageTag,
 		"image.pullPolicy": "Never",
 		"config.global.router.streamed_body.enabled":     "true",

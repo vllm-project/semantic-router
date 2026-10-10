@@ -44,7 +44,7 @@ PAGES = [
     DOCS / "tutorials/signal/learned/decision.md",
     DOCS / "tutorials/algorithm/selection/decision.md",
 ]
-RUNTIME = REPO_ROOT / "src" / "model-runtime" / "vllm_sr_runtime"
+RUNTIME = REPO_ROOT / "src" / "model-runtime" / "vllm_srun"
 FENCE = re.compile(r"^```(\w*)([^\n]*)\n(.*?)^```", re.M | re.S)
 TITLE = re.compile(r'title="([^"]+)"')
 # Runtime surfaces only; router requests (/v1/chat/completions) are covered by E2E.
@@ -149,7 +149,7 @@ def test_kubernetes_manifests_parse_and_run_images_the_repository_builds():
                 _, dockerfile, _ = published[image.split(":")[0]]
                 assert (REPO_ROOT / dockerfile).is_file(), block.where
                 command = [*container.get("command", []), *container.get("args", [])]
-                if command[:1] == ["vllm-sr-runtime"]:
+                if command[:1] == ["vllm-srun"]:
                     runtime_commands.append((block.where, command[1:]))
 
     assert runtime_commands
@@ -237,7 +237,7 @@ def test_router_config_fragments_validate(where, fragment, tmp_path):
 
 def _runtime_config_module():
     spec = importlib.util.spec_from_file_location(
-        "vllm_sr_runtime_config", RUNTIME / "config.py"
+        "vllm_srun_config", RUNTIME / "config.py"
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -255,7 +255,7 @@ def test_models_file_example_loads_with_the_runtime_loader(tmp_path):
     assert [model.name for model in models] == ["vela-domain", "decision-kai"]
 
 
-OPENAPI_URI = "urn:vllm-sr-runtime:openapi"
+OPENAPI_URI = "urn:vllm-srun:openapi"
 
 
 def _openapi_validator(schema_name: str) -> jsonschema.Draft4Validator:
@@ -268,7 +268,8 @@ def _openapi_validator(schema_name: str) -> jsonschema.Draft4Validator:
 
 
 def _validate_request(path: str, body: dict, where: str) -> None:
-    validator = _openapi_validator(REQUEST_SCHEMAS[path])
+    schema_path = "/v1/decisions" if path == "/v1/systemone" else path
+    validator = _openapi_validator(REQUEST_SCHEMAS[schema_path])
     problems = [error.message for error in validator.iter_errors(body)]
     assert problems == [], f"{where} {path}: {problems}"
 
@@ -293,12 +294,31 @@ def test_json_request_examples_follow_the_runtime_contract():
     examples = [block for block in _blocks("json") if block.title.startswith("POST ")]
 
     assert {block.title for block in examples} == {
-        f"POST {path}" for path in REQUEST_SCHEMAS if path != "/v1/decisions"
+        f"POST {path}" for path in REQUEST_SCHEMAS
     }
     for block in examples:
         _validate_request(
             block.title.removeprefix("POST "), json.loads(block.text), block.where
         )
+
+
+def test_reference_decision_responses_have_the_documented_shape():
+    responses = [
+        block
+        for block in _blocks("json")
+        if block.title == "Response" and "reference.md" in str(block.where)
+    ]
+    validator = _openapi_validator("DecisionResponse")
+
+    assert len(responses) >= 2
+    for block in responses:
+        # The examples omit usage; everything they show must conform.
+        problems = [
+            error.message
+            for error in validator.iter_errors(json.loads(block.text))
+            if error.validator != "required"
+        ]
+        assert problems == [], block.where
 
 
 def test_quickstart_response_example_has_the_documented_shape():
@@ -391,7 +411,7 @@ def test_documented_environment_variables_are_read_by_the_runtime_or_router():
     documented = {
         name
         for page in PAGES
-        for name in re.findall(r"\bVLLM_SR_RUNTIME_[A-Z_]+\b", page.read_text())
+        for name in re.findall(r"\bVLLM_SRUN_[A-Z_]+\b", page.read_text())
     }
     router = REPO_ROOT / "src" / "semantic-router" / "pkg"
     sources = "\n".join(
@@ -414,8 +434,8 @@ def _assert_runtime_options(where: str, arguments: list[str]) -> None:
             assert f'"{argument}"' in source, f"{where}: no option {argument}"
 
 
-def test_vllm_sr_runtime_commands_use_real_options():
-    commands = _commands("vllm-sr-runtime")
+def test_vllm_srun_commands_use_real_options():
+    commands = _commands("vllm-srun")
 
     assert commands
     for where, arguments in commands:

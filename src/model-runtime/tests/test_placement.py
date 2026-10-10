@@ -1,11 +1,11 @@
 import pytest
 import torch
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator
-from vllm_sr_runtime.errors import PlacementError, UnsupportedDeviceError
-from vllm_sr_runtime.placement import auto_order, device_kind, parse_device, place
-from vllm_sr_runtime.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.accel.cuda import CUDAAccelerator
+from vllm_srun.accel.rocm import ROCmAccelerator
+from vllm_srun.errors import PlacementError, UnsupportedDeviceError
+from vllm_srun.placement import auto_order, device_kind, parse_device, place
+from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 
 SPEC = ModelSpec("tiny", BackboneSpec("qwen3", {}, ()), DtypePolicy(), 1024)
 GPU = torch.cuda.is_available()
@@ -46,6 +46,33 @@ def test_auto_falls_back_to_cpu_without_gpus():
         place(SPEC, "rocm:0", 1000)
 
 
+@pytest.mark.parametrize(
+    ("device", "reason"),
+    [
+        pytest.param(
+            "rocm:0",
+            "rocm: not available on this host",
+            marks=pytest.mark.skipif(GPU, reason="needs a host without ROCm"),
+        ),
+        ("cpu:7", "cpu: no device 7"),
+    ],
+)
+def test_an_unusable_device_fails_before_the_model_is_resolved(
+    monkeypatch, device, reason
+):
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
+    def resolve(*args, **kwargs):
+        raise AssertionError("the model was resolved before the device was checked")
+
+    monkeypatch.setattr(runtime_module, "resolve", resolve)
+    model = ModelConfig(model="vllm-sr/Decision-2.0-Kai-0.6B", device=device)
+    with pytest.raises(PlacementError, match=reason):
+        Runtime(ServeConfig(models=(model,))).load()
+
+
 def test_cuda_is_marked_unvalidated_and_rocm_validated():
     assert CUDAAccelerator.validated is False
     assert ROCmAccelerator.validated is True
@@ -74,13 +101,20 @@ def test_device_names_and_the_auto_order_come_from_the_accelerators():
         assert device_kind("auto") == "cpu"
 
 
+GATED_DELTA_BACKBONE = BackboneSpec("qwen3_5_text", {}, ())
 GATED_DELTA = ModelSpec(
     "Decision-2.0-Eos-0.8B",
-    BackboneSpec("qwen3_5_text", {}, ()),
+    GATED_DELTA_BACKBONE,
     DtypePolicy(),
     1024,
-    requires={"cpu": ("lapack",)},
+    requires=GATED_DELTA_BACKBONE.requires,
 )
+
+
+def test_only_the_qwen3_5_backbone_requires_lapack_on_the_cpu():
+    assert GATED_DELTA_BACKBONE.requires == {"cpu": ("lapack",)}
+    for model_type in ("qwen3", "modernbert"):
+        assert BackboneSpec(model_type, {}, ()).requires == {}
 
 
 @pytest.mark.parametrize("lapack", [True, False])
@@ -112,10 +146,10 @@ def test_a_pytorch_without_the_private_lapack_flag_still_places_on_the_cpu(
 def test_the_refusal_comes_before_any_weights_load_and_is_final(
     monkeypatch, qwen3_package, qwen35_package
 ):
-    import vllm_sr_runtime.runtime as runtime_module
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.engines.native.engine import NativeEngine
-    from vllm_sr_runtime.runtime import Runtime
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.engines.native.engine import NativeEngine
+    from vllm_srun.runtime import Runtime
 
     monkeypatch.setattr(torch._C, "has_lapack", False)
     loads, placements = [], []
@@ -164,9 +198,9 @@ def test_the_refusal_comes_before_any_weights_load_and_is_final(
 def test_the_qwen3_5_families_require_lapack_on_the_cpu(
     tmp_path, family, variant, requires
 ):
-    from vllm_sr_runtime.plugins import registry
-    from vllm_sr_runtime.plugins.base import PackageRef
-    from vllm_sr_runtime.testing.fixtures import write_fixture
+    from vllm_srun.plugins import registry
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.testing.fixtures import write_fixture
 
     package = write_fixture(tmp_path / "package", family=family, variant=variant)
     plugin = registry.plugin("families", family).load()()

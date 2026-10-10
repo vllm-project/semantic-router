@@ -15,10 +15,9 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 
 func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 	return CanonicalRouterGlobal{
-		ConfigSource:              ConfigSourceFile,
-		AutoModelName:             "MoM",
-		IncludeConfigModelsInList: false,
-		ClearRouteCache:           true,
+		ConfigSource:      ConfigSourceFile,
+		ListBackendModels: false,
+		ClearRouteCache:   true,
 		ModelSelection: ModelSelectionConfig{
 			Enabled: true,
 			Method:  "knn",
@@ -55,10 +54,17 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			Enabled:      false,
-			StoreBackend: "memory",
-			TTLSeconds:   2592000,
-			AsyncWrites:  false,
+			CaptureRequestBody:  canonicalBoolPtr(true),
+			CaptureResponseBody: canonicalBoolPtr(true),
+			CapturePersonalData: canonicalBoolPtr(true),
+			MaxRecords:          canonicalIntPtr(defaultRouterReplayMaxRecords),
+			MaxBodyBytes:        canonicalIntPtr(defaultRouterReplayMaxBodyBytes),
+			MaxToolTraceBytes:   canonicalIntPtr(0),
+			MaxToolTraceSteps:   canonicalIntPtr(defaultRouterReplayMaxToolTraceSteps),
+			Enabled:             false,
+			StoreBackend:        "memory",
+			TTLSeconds:          2592000,
+			AsyncWrites:         false,
 		},
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
@@ -129,7 +135,6 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 			FallbackToEmpty: true,
 		},
 		Looper: LooperConfig{
-			Endpoint:       "http://localhost:8899/v1/chat/completions",
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},
 			Flow: FlowRuntimeConfig{
@@ -154,6 +159,13 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 	if hazard, err := ImplicitModelRuntimeDeployment(catalog.System.Hazard, true); err == nil {
 		hazard.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
 		catalog.Deployments = map[string]ModelDeployment{"hazard": hazard}
+	}
+	primary, err := ImplicitModelRuntimeDeployment(Vela2SignalModel, true)
+	if err == nil {
+		if catalog.Deployments == nil {
+			catalog.Deployments = make(map[string]ModelDeployment)
+		}
+		catalog.Deployments[DefaultDecisionDeployment] = primary
 	}
 	enabledSoftMatching := false
 	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
@@ -256,7 +268,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:   true,
-			Threshold: 0.5,
+			Threshold: 0.75,
 			UseCPU:    true,
 		},
 	}
@@ -267,20 +279,18 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		Domain: CanonicalCategoryModule{
 			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
-				Threshold: 0.5,
+				Threshold: 0.28,
 				UseCPU:    true,
 			},
 		},
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
-				Threshold: 0.9,
+				Threshold: 0.01,
 				UseCPU:    true,
 			},
 		},
-		Preference: PreferenceModelConfig{
-			UseContrastive: canonicalBoolPtr(true),
-		},
+		Preference: PreferenceModelConfig{},
 	}
 }
 
@@ -290,7 +300,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 		FactCheck: CanonicalFactCheckModule{
 			ModelRef: "fact_check_classifier",
 			FactCheckModelConfig: FactCheckModelConfig{
-				Threshold: 0.95,
+				Threshold: 0.93,
 				UseCPU:    true,
 			},
 		},
@@ -312,14 +322,32 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 		ModelRef: "feedback_detector",
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:   true,
-			Threshold: 0.7,
+			Threshold: 0.37,
 			UseCPU:    true,
 		},
 	}
 }
 
-// DefaultSystemModels returns stable capability bindings for built-in runtime models.
+// DefaultSystemModels returns stable capability bindings for built-in runtime
+// models: Vela 2.0 0.3B for every built-in signal it answers, which then share
+// one deployment and one call per request, and Vela 1.0 Hazard.
 func DefaultSystemModels() CanonicalSystemModels {
+	return CanonicalSystemModels{
+		DecisionModel:         DecisionModelBinding{Deployment: DefaultDecisionDeployment},
+		Safety:                Vela2SignalModel,
+		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
+		PromptGuard:           Vela2SignalModel,
+		DomainClassifier:      Vela2SignalModel,
+		PIIClassifier:         Vela2SignalModel,
+		FactCheckClassifier:   Vela2SignalModel,
+		HallucinationDetector: Vela2SignalModel,
+		FeedbackDetector:      Vela2SignalModel,
+	}
+}
+
+// Vela1SystemModels returns the Vela 1.0 specialists the built-in signals ran
+// before Vela 2.0 0.3B; global.model_catalog.system restores them.
+func Vela1SystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
 		Safety:                "models/Vela-1.0-Encoder-307M-Safety",
 		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",

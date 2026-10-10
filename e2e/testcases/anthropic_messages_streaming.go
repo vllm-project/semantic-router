@@ -66,7 +66,7 @@ func testAnthropicMessagesStreaming(ctx context.Context, client *kubernetes.Clie
 	defer stop()
 
 	resp, err := sendAnthropicMessagesStreamingRequest(ctx, anthropicMessagesRequestBody{
-		Model:     "MoM",
+		Model:     "vllm-sr/auto",
 		MaxTokens: 64,
 		Stream:    true,
 		Messages: []anthropicMessage{

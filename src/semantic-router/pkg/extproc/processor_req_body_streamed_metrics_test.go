@@ -22,7 +22,7 @@ var streamedBodyArrivalFamilies = []string{
 	"llm_streamed_body_chunks",
 }
 
-const streamedBodyMetricsTestBody = `{"model":"auto","messages":[{"role":"user","content":"measure how long this streamed body takes to arrive"}]}`
+const streamedBodyMetricsTestBody = `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"measure how long this streamed body takes to arrive"}]}`
 
 // fakeStreamedBodyClock advances by step on every read so the arrival time is
 // exactly (reads - 1) * step between the first chunk and end of stream.
@@ -70,7 +70,7 @@ func TestStreamedBodyDispatchRecordsArrivalStats(t *testing.T) {
 
 			before := streamedBodyArrivalSamples(t, string(config.DefaultRecipeName))
 			ctx := &RequestContext{Headers: make(map[string]string), FullDuplexRequestBody: fullDuplex}
-			dispatchStreamedBodyChunks(t, makeTestRouter("auto"), ctx, chunks)
+			dispatchStreamedBodyChunks(t, makeTestRouter("vllm-sr/auto"), ctx, chunks)
 
 			stats := ctx.StreamedBodyStats
 			assert.True(t, stats.Present)
@@ -125,7 +125,7 @@ func TestFullDuplexTrailersWithoutBodyRecordNoArrivalStats(t *testing.T) {
 func TestBufferedBodyRecordsNoArrivalStats(t *testing.T) {
 	body := []byte(streamedBodyMetricsTestBody)
 	t.Run("router streamed_body disabled", func(t *testing.T) {
-		router := makeTestRouter("auto")
+		router := makeTestRouter("vllm-sr/auto")
 		router.Config.StreamedBodyMode = false
 
 		before := streamedBodyArrivalSamples(t, string(config.DefaultRecipeName))
@@ -150,7 +150,7 @@ func TestBufferedBodyRecordsNoArrivalStats(t *testing.T) {
 					RequestBody: &ext_proc.HttpBody{Body: body, EndOfStream: true},
 				},
 			}
-			require.NoError(t, makeTestRouter("auto").handleProcessRequest(NewMockStream(nil), req, ctx))
+			require.NoError(t, makeTestRouter("vllm-sr/auto").handleProcessRequest(NewMockStream(nil), req, ctx))
 
 			assert.True(t, ctx.BufferedRequestBody)
 			assert.Equal(t, StreamedBodyStats{}, ctx.StreamedBodyStats)
@@ -160,14 +160,14 @@ func TestBufferedBodyRecordsNoArrivalStats(t *testing.T) {
 }
 
 func TestStreamedBodyPoolReuseResetsArrivalStats(t *testing.T) {
-	first := newStreamedBodyHandler(makeTestRouter("auto"), &RequestContext{})
+	first := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), &RequestContext{})
 	_, err := first.HandleChunk(&ext_proc.HttpBody{Body: []byte("partial")}, first.ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, first.chunkCount)
 	require.False(t, first.firstChunkAt.IsZero())
 	first.Release()
 
-	second := newStreamedBodyHandler(makeTestRouter("auto"), &RequestContext{})
+	second := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), &RequestContext{})
 	defer second.Release()
 	assert.Zero(t, second.chunkCount)
 	assert.True(t, second.firstChunkAt.IsZero())
@@ -251,7 +251,7 @@ func TestDecisionEvaluationRecordsPromptCompressionOutcome(t *testing.T) {
 	labels := map[string]string{"recipe": recipe, "outcome": metrics.PromptCompressionSkippedMaxTokens}
 	before := quorumMetricSamples(t, "llm_prompt_compression_total", labels)
 	// No classifier is configured, so evaluation stops after compression.
-	_, _, _, _, err := router.performDecisionEvaluation("auto", signalConversationHistory{currentUserMessage: "short routing text"}, ctx)
+	_, _, _, _, err := router.performDecisionEvaluation("vllm-sr/auto", signalConversationHistory{currentUserMessage: "short routing text"}, ctx)
 	require.Error(t, err)
 	assert.Equal(t, before+1, quorumMetricSamples(t, "llm_prompt_compression_total", labels))
 }

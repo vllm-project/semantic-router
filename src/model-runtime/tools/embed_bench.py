@@ -34,13 +34,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from embed_corpus import embed_scenarios, rerank_scenarios  # noqa: E402
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily  # noqa: E402
-from vllm_sr_runtime.heads.task import Item  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
+from vllm_srun.families.task_heads.family import TaskHeadsFamily  # noqa: E402
+from vllm_srun.heads.task import Item  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     EngineOptions,
     PackageRef,
     RegistryOptions,

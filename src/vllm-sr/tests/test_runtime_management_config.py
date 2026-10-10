@@ -231,6 +231,10 @@ def test_management_readiness_accepts_duplicate_value_when_last_role_can_read():
 
 
 def test_custom_serve_forwards_management_readiness_credential(monkeypatch, tmp_path):
+    monkeypatch.setattr("cli.runtime_lifecycle.get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        "cli.runtime_lifecycle.container_status_strict", lambda _name: "not found"
+    )
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-from vllm_sr_runtime.families.vela2.words import (
+from vllm_srun.families.vela2.words import (
     decode_spans,
     split_words,
     trim,
@@ -101,7 +101,7 @@ def _oracle_words(text, offsets):
 
 
 def _oracle_decode(probs, offs, names, text, thr):
-    from vllm_sr_runtime.families.vela2.words import _UNIT
+    from vllm_srun.families.vela2.words import _UNIT
 
     probs = np.asarray(probs, dtype=np.float32)
     count = len(offs)

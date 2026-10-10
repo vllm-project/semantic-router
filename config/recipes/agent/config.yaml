@@ -33,8 +33,6 @@ global:
         ssl_mode: disable
         table_name: router_replay_records
   router:
-    auto_model_names:
-      - vllm-sr/auto
     learning:
       enabled: true
       adaptation:
@@ -820,7 +818,7 @@ routing:
             - survey the literature and explain conflicting evidence with citations
     pii:
       - name: pii_strict
-        threshold: 0.9
+        threshold: 0.01
         pii_types_allowed:
           - GPE
     domains:
@@ -1434,6 +1432,28 @@ routing:
               - name: agentic_workflow
                 type: projection
             operator: OR
+          # Repetition can raise the learned effort score without changing a
+          # comparison's task. Require independent escalation evidence for it.
+          - operator: OR
+            conditions:
+              - operator: NOT
+                conditions:
+                  - type: keyword
+                    name: comparison_request
+              - type: projection
+                name: balance_reasoning
+              - type: keyword
+                name: reasoning_request_markers
+              - type: keyword
+                name: agentic_request_markers
+              - type: projection
+                name: agentic_workflow
+              - type: structure
+                name: ordered_workflow
+              - type: structure
+                name: numbered_steps
+              - type: structure
+                name: constraint_dense
           - conditions:
               - conditions:
                   - name: code_request_markers
@@ -1530,3 +1550,7 @@ routing:
       modelRefs:
         - model: qwen/qwen3.6-rocm
           use_reasoning: false
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

@@ -57,7 +57,7 @@ class DockerCrossCompilationTests(unittest.TestCase):
             with self.subTest(image=image):
                 _, dockerfile, platforms = DEFINITIONS[image]
                 self.assertEqual(dockerfile, ROUTER_DOCKERFILE)
-                self.assertIn(target, ("extproc", "vllm-sr"))
+                self.assertEqual(target, "vllm-sr")
                 expected = (
                     ["linux/amd64", "linux/arm64"]
                     if accelerator == "cpu"

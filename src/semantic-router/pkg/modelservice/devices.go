@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // autoDevice is the device value that lets the runtime place a model.
@@ -59,4 +62,33 @@ func queryAutoDevice(command []string) (string, error) {
 func lastLine(text string) string {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	return strings.TrimSpace(lines[len(lines)-1])
+}
+
+// refuseGPUOnlyOnCPU fails an implicit deployment of a built-in model that runs
+// on a GPU only when it would land on the CPU: on cpu, or on auto on a host
+// where the runtime finds no GPU.
+func refuseGPUOnlyOnCPU(deployments map[string]config.ModelDeployment, auto string) error {
+	names := make([]string, 0, len(deployments))
+	for name := range deployments {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		deployment := deployments[name].WithDefaults()
+		if !deployment.Managed() || !config.ImplicitDeploymentRequiresGPU(name, deployment) {
+			continue
+		}
+		onCPU := false
+		for _, placement := range deployment.Placements() {
+			if placement.Endpoint == "" && (placement.Device == "cpu" || placement.Device == autoDevice && auto == "cpu") {
+				onCPU = true
+			}
+		}
+		if onCPU {
+			return fmt.Errorf("model_runtime deployment %q: %s runs on a GPU only, and the model runtime finds no GPU on this host; "+
+				"serve the Router on a GPU host (vllm-sr serve --platform rocm or cuda), or choose Vela-2.0-0.3B or Vela-2.0-0.8B as the decision model",
+				name, deployment.Artifact)
+		}
+	}
+	return nil
 }
