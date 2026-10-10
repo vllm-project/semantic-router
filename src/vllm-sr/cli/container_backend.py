@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
-import os
-
 from cli import apple_runtime
-
 from cli.consts import HEALTH_CHECK_TIMEOUT
 from cli.container_cli import container_status
+from cli.container_images import get_runtime_images
 from cli.container_runtime import get_container_runtime
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.gateway_mode import GATEWAY_EXTPROC, runs_envoy
@@ -60,8 +59,6 @@ class ContainerBackend:
                 or ""
             ).strip().lower() == "apple"
             if apple:
-                from cli.container_images import get_runtime_images
-
                 images = get_runtime_images(
                     image=image,
                     router_image=router_image,

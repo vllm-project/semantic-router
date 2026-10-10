@@ -8,6 +8,8 @@ from pathlib import Path
 
 import click
 
+from cli.apple_runtime_engine import run_apple_engine
+from cli.apple_runtime_environment import validate_apple_host, validate_local_docker
 from cli.bootstrap import (
     ensure_bootstrap_workspace,
     is_setup_mode_config,
@@ -54,6 +56,7 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.container_run_command import RESTART_POLICIES, RESTART_POLICY_ENV
+from cli.container_runtime import get_container_runtime
 from cli.deployment_backend import (
     DEFAULT_TARGET,
     TARGET_DOCKER,
@@ -273,12 +276,6 @@ def _execute_serve(
             )
     apply_container_runtime_override(runtime)
     if _platform_hint(platform) == "apple":
-        from cli.apple_runtime_environment import (
-            validate_apple_host,
-            validate_local_docker,
-        )
-        from cli.container_runtime import get_container_runtime
-
         validate_apple_host(resolved_target, get_container_runtime())
         validate_local_docker()
         platform = "apple"
@@ -693,8 +690,6 @@ def serve(
     ctx = click.get_current_context()
     runtime = resolve_container_runtime(ctx, container_runtime, runtime)
     if _platform_hint(platform) == "apple" and (model or models_file):
-        from cli.apple_runtime_engine import run_apple_engine
-
         run_apple_engine(
             ctx,
             (model,) if model else (),
