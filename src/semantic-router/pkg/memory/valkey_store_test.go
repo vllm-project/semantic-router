@@ -789,4 +789,34 @@ func TestStoredValkeyProjectScopeSeparatesExplicitDefault(t *testing.T) {
 		Limit:     5,
 	}, embedding, 5)
 	assert.Contains(t, query[2], "@project_id:{default}")
+	assert.Contains(t, query[2], "EF_RUNTIME 20")
+	assert.Equal(t, []string{"PARAMS", "2", "BLOB", string(valkeyFloat32ToBytes(embedding))}, query[3:7])
+}
+
+func TestValkeyProjectScopeDoesNotWidenPastEfRuntime(t *testing.T) {
+	t.Parallel()
+
+	// A full 4096-row legacy window must not become KNN 8192 / EF_RUNTIME 8192.
+	assert.Equal(t, 0, nextProjectScopedSearchTopK("default", 4_096, 4_096, 0, maxValkeyVectorEfRuntime))
+	assert.Equal(t, 4_096, nextProjectScopedSearchTopK("default", 2_048, 2_048, 0, maxValkeyVectorEfRuntime))
+	// Milvus can keep doubling; its search window is 16384.
+	assert.Equal(t, 8_192, nextProjectScopedSearchTopK("default", 4_096, 4_096, 0, maxProjectScopedSearchTopK))
+
+	store := &ValkeyStore{indexName: "mem_idx"}
+	cmd := store.buildRetrieveSearchCmdWithTopK(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: "default",
+	}, []float32{0.1, 0.2}, 8_192)
+	assert.Contains(t, cmd[2], "KNN 4096 @embedding $BLOB EF_RUNTIME 4096")
+	assert.NotContains(t, cmd[2], "8192")
+	limitAt := -1
+	for i, part := range cmd {
+		if part == "LIMIT" {
+			limitAt = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, limitAt, 0)
+	require.Less(t, limitAt+2, len(cmd))
+	assert.Equal(t, "4096", cmd[limitAt+2])
 }

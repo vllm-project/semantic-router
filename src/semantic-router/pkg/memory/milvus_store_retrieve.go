@@ -40,7 +40,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	searchResult, err := m.searchMemoryVectors(ctx, embedding, retrieveFilterExpr(opts.UserID, opts.ProjectID, opts.Types), retrieveSearchTopK(limit, opts.HybridSearch))
+	searchResult, err := m.searchRetrieveVectors(ctx, embedding, opts, retrieveSearchTopK(limit, opts.HybridSearch))
 	if err != nil {
 		status = "error"
 		return nil, err
@@ -94,21 +94,40 @@ func retrieveFilterExpr(userID, projectID string, types []MemoryType) string {
 	return filterExpr
 }
 
-func retrieveSearchTopK(limit int, hybridSearch bool) int {
-	searchTopK := limit * 4
-	if hybridSearch {
-		searchTopK = limit * 8
+func (m *MilvusStore) searchRetrieveVectors(ctx context.Context, embedding []float32, opts RetrieveOptions, searchTopK int) ([]client.SearchResult, error) {
+	filterExpr := retrieveFilterExpr(opts.UserID, opts.ProjectID, opts.Types)
+	for {
+		searchResult, err := m.searchMemoryVectors(ctx, embedding, filterExpr, searchTopK)
+		if err != nil || len(searchResult) == 0 {
+			return searchResult, err
+		}
+
+		candidates := m.parseCandidates(searchResult[0], opts.UserID)
+		nextTopK := nextProjectScopedSearchTopK(opts.ProjectID, searchTopK, searchResult[0].ResultCount, len(retainProjectMatches(candidates, opts.ProjectID)), maxProjectScopedSearchTopK)
+		if nextTopK == 0 {
+			return searchResult, nil
+		}
+
+		logging.Debugf("MilvusStore.Retrieve: widening project-scoped candidate window from %d to %d", searchTopK, nextTopK)
+		searchTopK = nextTopK
 	}
-	if searchTopK < 20 {
-		searchTopK = 20
+}
+
+// milvusHNSWSearchEf keeps the usual beam for a normal candidate window.
+// Milvus rejects a search whose ef is not strictly larger than k, so a
+// project-scoped window that grows past the legacy rows has to grow ef with it.
+func milvusHNSWSearchEf(searchTopK int) int {
+	const defaultSearchEf = 64
+	if searchTopK < defaultSearchEf {
+		return defaultSearchEf
 	}
-	return searchTopK
+	return searchTopK + 1
 }
 
 func (m *MilvusStore) searchMemoryVectors(ctx context.Context, embedding []float32, filterExpr string, searchTopK int) ([]client.SearchResult, error) {
 	logging.Debugf("MilvusStore.Retrieve: filter expression: %s", filterExpr)
 
-	searchParam, err := entity.NewIndexHNSWSearchParam(64)
+	searchParam, err := entity.NewIndexHNSWSearchParam(milvusHNSWSearchEf(searchTopK))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create search parameters: %w", err)
 	}
