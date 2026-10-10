@@ -9,6 +9,7 @@ from cli.config_contract import (
     SIGNAL_FAMILY_SPECS,
     iter_routing_profiles,
 )
+from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.router_validation import RouterValidationUnavailableError, RouterVerdict
 from cli.terminal import echo, error, fields, heading, success
@@ -101,6 +102,15 @@ def _plugin_summary_lines(decisions) -> list[str]:
     ]
 
 
+def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
+    """Return the semantic and provider projection errors for a parsed config."""
+
+    errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(provider_projection_errors(user_config))
+    return errors
+
+
 def _router_verdict(
     router_verdict: Callable[[], RouterVerdict] | None,
 ) -> tuple[RouterVerdict | None, str]:
@@ -136,11 +146,7 @@ def validate_command(
         error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
-    # Validate config
-    errors = validate_user_config(user_config, log_summary=False)
-    if not errors:
-        errors.extend(provider_projection_errors(user_config))
-
+    errors = collect_config_errors(user_config)
     if errors:
         print_validation_errors(errors)
         sys.exit(1)

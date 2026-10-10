@@ -10,10 +10,10 @@ import styles from './RuntimeModes.module.css'
 
 export default function RuntimeModes(): React.JSX.Element {
   return (
-    <section id="runtime-modes" className={shared.bandSection} aria-labelledby="runtime-modes-title">
+    <section id="runtime-modes" className={styles.compactSection} aria-labelledby="runtime-modes-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={`site-section-intro ${shared.sectionHeader}`}>
+          <header className={`site-section-intro ${shared.sectionHeader} ${styles.compactHeader}`}>
             <SectionLabel>
               <Translate id="homepage.runtimeModes.label">Where it fits</Translate>
             </SectionLabel>
