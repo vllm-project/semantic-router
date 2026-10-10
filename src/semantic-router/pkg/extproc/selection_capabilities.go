@@ -48,7 +48,7 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 
 // candidateCapabilityMismatch uses the same capability contract as final
 // dispatch. Unannotated models retain the existing wire-only qualification.
-func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request *llmprotocol.Request, decision *config.Decision, requirements *config.CandidateRequirements, automaticDemands map[string]selection.CandidateDemand) error {
+func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request *llmprotocol.Request, decision *config.Decision, requirements *config.CandidateRequirements, automaticDemands map[string]selection.CandidateDemand, caller llmprotocol.CapabilitySet) error {
 	if request == nil {
 		return nil // Eval/selector-only callers have no full inference envelope.
 	}
@@ -89,7 +89,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 		demand.InputTokens = rendered.InputTokens
 		demand.MaxOutputTokens = rendered.MaxOutputTokens
 	}
-	if err := r.validateModelDemand(requirements, ref.Model, demand); err != nil {
+	if err := r.validateModelDemand(requirements, ref.Model, demand, caller); err != nil {
 		return err
 	}
 	return r.providerCapabilityMismatch(ref.Model, format, demand.Capabilities)
@@ -128,7 +128,7 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 			onlyUnsupported = false
 			continue
 		}
-		if err := r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands); err != nil {
+		if err := r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands, callerCapabilities(ctx)); err != nil {
 			var protocolErr *llmprotocol.ProtocolError
 			if !errors.As(err, &protocolErr) || protocolErr.Category != llmprotocol.ErrorUnsupportedFeature {
 				onlyUnsupported = false
