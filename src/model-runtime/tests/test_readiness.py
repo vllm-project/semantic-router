@@ -78,6 +78,45 @@ def test_gpu_references_use_the_gpu_tolerance():
     )
 
 
+def test_npu_run_to_run_drift_within_tolerance_passes():
+    """V2.0 GDN decoders drift bitwise across runs on shared hosts (record:
+    npu-parity-ascend910b1); the npu gate compares within the tolerance."""
+    runs = iter(
+        [
+            {"q": {"type": "noul", "noul": 0.3008507118}},
+            {"q": {"type": "noul", "noul": 0.3008507119}},
+        ]
+    )
+    golden = decisions_golden({"npu": answers(0.3008507)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "matched"
+
+
+def test_npu_run_to_run_drift_beyond_tolerance_fails():
+    runs = iter(
+        [
+            {"q": {"type": "noul", "noul": 0.30}},
+            {"q": {"type": "noul", "noul": 0.30 + 2 * GPU_TOLERANCE}},
+        ]
+    )
+    golden = decisions_golden({"npu": answers(0.30)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+    assert result.detail is not None and "not deterministic" in result.detail
+
+
+def test_npu_run_to_run_shape_change_fails():
+    runs = iter(
+        [
+            {"q": {"type": "noul", "noul": 0.3}},
+            {"q": {"other": {"type": "noul", "noul": 0.3}}},
+        ]
+    )
+    golden = decisions_golden({"npu": answers(0.3)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+
+
 def test_a_device_class_without_a_reference_is_unverified():
     other_class_only = decisions_golden({"rocm": answers(0.9)})
     result = golden_check(

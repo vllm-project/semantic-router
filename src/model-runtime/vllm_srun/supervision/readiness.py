@@ -94,6 +94,32 @@ def compare_numbers(
     return checked, matched
 
 
+def drift(a: Any, b: Any) -> float | None:
+    """Largest abs diff between matching float leaves of two golden values, or None when their shapes differ.
+
+    The run-to-run stability check for the npu device class: golden values of a
+    decisions response nest answers per question, so the comparison walks the
+    structure instead of assuming a flat number map.
+    """
+    if isinstance(a, dict):
+        if not isinstance(b, dict) or set(a) != set(b):
+            return None
+        diffs = [drift(a[key], b[key]) for key in a]
+    elif isinstance(a, list):
+        if not isinstance(b, list) or len(a) != len(b):
+            return None
+        diffs = [drift(x, y) for x, y in zip(a, b, strict=True)]
+    elif isinstance(a, bool) or isinstance(b, bool):
+        return 0.0 if a is b else None
+    elif isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(float(a) - float(b))
+    else:
+        return 0.0 if a == b else None
+    if any(diff is None for diff in diffs):
+        return None
+    return max(diffs, default=0.0)
+
+
 def golden_check(
     run: Callable[[str, dict[str, Any]], dict[str, Any]],
     compare: Callable[
@@ -108,8 +134,9 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    References are keyed by device class (``cpu``, ``rocm``, ``cuda``); answers
-    must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
+    References are keyed by device class (``cpu``, ``rocm``, ``cuda``, ``npu``);
+    answers must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on
+    GPUs.
     """
     result = GoldenResult(status="unverified")
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
@@ -117,7 +144,17 @@ def golden_check(
         surface, body = golden["surface"], golden["body"]
         first = run(surface, body)
         second = run(surface, body)
-        if first != second:
+        if device_class == "npu":
+            # NPU GDN decoders drift across runs when the host carries
+            # third-party NPU traffic (record: npu-parity-ascend910b1); the
+            # run-to-run check compares within the tolerance instead of bitwise.
+            unstable = drift(first, second)
+            if unstable is None or unstable > tolerance:
+                return GoldenResult(
+                    status="failed",
+                    detail="golden answers are not deterministic within tolerance",
+                )
+        elif first != second:
             return GoldenResult(
                 status="failed", detail="golden answers are not deterministic"
             )
