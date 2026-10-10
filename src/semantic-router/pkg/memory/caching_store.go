@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -137,6 +138,25 @@ func (c *CachingStore) Forget(ctx context.Context, id string) error {
 		c.invalidate(ctx, owner)
 	}
 	return err
+}
+
+func (c *CachingStore) supportsAtomicGroupReplacement() bool {
+	return supportsAtomicGroupReplacement(c.store)
+}
+
+func (c *CachingStore) replaceCurrentGroup(ctx context.Context, versions []memoryVersion, summary *Memory) (bool, int, error) {
+	replacer, ok := c.store.(atomicGroupReplacer)
+	if !ok {
+		return false, 0, fmt.Errorf("memory store does not support atomic consolidation")
+	}
+	replaced, deleted, err := replacer.replaceCurrentGroup(ctx, versions, summary)
+	// A committed merge must invalidate even when the first reply was lost
+	// and a retry observed the already-written summary. Backends report that
+	// replay as replaced.
+	if replaced {
+		c.invalidate(ctx, summary.UserID)
+	}
+	return replaced, deleted, err
 }
 
 // ForgetByScope implements Store; delegates then invalidates cache for the scope's user.

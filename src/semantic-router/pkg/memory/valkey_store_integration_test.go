@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
@@ -371,15 +372,19 @@ func TestValkeyStoreInteg_Update(t *testing.T) {
 	}
 	require.NoError(t, store.Store(ctx, original))
 	time.Sleep(200 * time.Millisecond)
+	require.NoError(t, store.recordRetrieval(ctx, id))
+	beforeUpdate, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	require.Positive(t, beforeUpdate.AccessCount)
 
-	// Update content and importance
+	// Update content and importance without supplying access metadata.
 	updated := &Memory{
 		Content:    "Updated content after modification",
 		UserID:     "update_user",
 		Type:       MemoryTypeSemantic,
 		Importance: 0.9,
 	}
-	err := store.Update(ctx, id, updated)
+	err = store.Update(ctx, id, updated)
 	require.NoError(t, err)
 
 	time.Sleep(200 * time.Millisecond)
@@ -390,6 +395,8 @@ func TestValkeyStoreInteg_Update(t *testing.T) {
 	assert.Equal(t, "Updated content after modification", retrieved.Content)
 	assert.InDelta(t, 0.9, float64(retrieved.Importance), 0.01)
 	assert.False(t, retrieved.CreatedAt.IsZero(), "CreatedAt should be preserved")
+	assert.Equal(t, beforeUpdate.AccessCount, retrieved.AccessCount, "AccessCount should be preserved")
+	assert.Equal(t, beforeUpdate.LastAccessed, retrieved.LastAccessed, "LastAccessed should be preserved")
 }
 
 // ---------------------------------------------------------------------------
@@ -718,17 +725,216 @@ func TestValkeyStoreInteg_ConsolidateUser(t *testing.T) {
 		ID: fmt.Sprintf("mem_c_%s_3", userID), Type: MemoryTypeSemantic,
 		Content: "Python is installed at /usr/bin/python3", UserID: userID,
 	}))
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		list, err := store.List(ctx, ListOptions{UserID: userID, Limit: 100})
+		return err == nil && list.Total == 3
+	}, 5*time.Second, 50*time.Millisecond)
 
 	merged, deleted, err := ConsolidateUser(ctx, store, userID)
 	require.NoError(t, err)
+	require.Equal(t, 1, merged)
+	require.Equal(t, 2, deleted)
+	require.Eventually(t, func() bool {
+		list, listErr := store.List(ctx, ListOptions{UserID: userID, Limit: 100})
+		return listErr == nil && list.Total == 2
+	}, 5*time.Second, 50*time.Millisecond)
+}
 
-	// The two similar memories should be merged
-	assert.GreaterOrEqual(t, merged, 0, "merged count should be non-negative")
-	assert.GreaterOrEqual(t, deleted, 0, "deleted count should be non-negative")
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_AtomicConsolidationLeavesUpdatedSources(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	userID := fmt.Sprintf("conditional_%d", time.Now().UnixNano())
+	idA := userID + "_a"
+	idB := userID + "_b"
 
-	// The total should be reduced
-	list, err := store.List(ctx, ListOptions{UserID: userID, Limit: 100})
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: idA, Type: MemoryTypeSemantic, UserID: userID,
+		Content: "original source content", Importance: 0.3,
+	}))
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: idB, Type: MemoryTypeSemantic, UserID: userID,
+		Content: "another original source", Importance: 0.4,
+	}))
+	originalA, err := store.Get(ctx, idA)
 	require.NoError(t, err)
-	t.Logf("ConsolidateUser: merged=%d, deleted=%d, remaining=%d", merged, deleted, list.Total)
+	originalB, err := store.Get(ctx, idB)
+	require.NoError(t, err)
+
+	require.NoError(t, store.Update(ctx, idB, &Memory{
+		Type: MemoryTypeSemantic, UserID: userID,
+		Content: "updated source content", Importance: 0.8,
+	}))
+	replaced, deleted, err := store.replaceCurrentGroup(ctx,
+		[]memoryVersion{versionOf(originalA), versionOf(originalB)},
+		&Memory{
+			ID: "summary_" + userID, Type: MemoryTypeSemantic, UserID: userID,
+			Content: "combined summary", Embedding: originalA.Embedding,
+		},
+	)
+	require.NoError(t, err)
+	require.False(t, replaced)
+	require.Zero(t, deleted)
+
+	liveA, err := store.Get(ctx, idA)
+	require.NoError(t, err)
+	require.Equal(t, "original source content", liveA.Content)
+	liveB, err := store.Get(ctx, idB)
+	require.NoError(t, err)
+	require.Equal(t, "updated source content", liveB.Content)
+	require.InDelta(t, 0.8, liveB.Importance, 0.001)
+	_, err = store.Get(ctx, "summary_"+userID)
+	require.Error(t, err)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_QueuedTrackingAndStaleUpdateDoNotRecreateConsolidatedSource(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	userID := fmt.Sprintf("conditional_update_%d", time.Now().UnixNano())
+	idA := userID + "_a"
+	idB := userID + "_b"
+	summaryID := "summary_" + userID
+
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: idA, Type: MemoryTypeSemantic, UserID: userID,
+		Content: "original source content", Importance: 0.3,
+	}))
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: idB, Type: MemoryTypeSemantic, UserID: userID,
+		Content: "another source content", Importance: 0.4,
+	}))
+	originalA, err := store.Get(ctx, idA)
+	require.NoError(t, err)
+	originalB, err := store.Get(ctx, idB)
+	require.NoError(t, err)
+
+	// This simulates consolidation completing after Update read originalA but
+	// before its conditional write reaches Valkey.
+	replaced, deleted, err := store.replaceCurrentGroup(ctx,
+		[]memoryVersion{versionOf(originalA), versionOf(originalB)},
+		&Memory{
+			ID: summaryID, Type: MemoryTypeSemantic, UserID: userID,
+			Content: "combined summary", Embedding: originalA.Embedding,
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, replaced)
+	require.Equal(t, 2, deleted)
+
+	// This simulates retrieval tracking that was queued before consolidation
+	// but reaches Valkey after the source hash has been deleted.
+	require.NoError(t, store.recordRetrieval(ctx, idA))
+	_, err = store.Get(ctx, idA)
+	require.Error(t, err)
+
+	staleUpdate := *originalA
+	staleUpdate.Content = "stale update must not recreate the source"
+	staleUpdate.UpdatedAt = time.Now()
+	err = store.upsert(ctx, &staleUpdate)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "memory not found")
+
+	_, err = store.Get(ctx, idA)
+	require.Error(t, err)
+	merged, err := store.Get(ctx, summaryID)
+	require.NoError(t, err)
+	assert.Equal(t, "combined summary", merged.Content)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_SearchRoundTripKeepsAccessFields(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	userID := fmt.Sprintf("access_rt_%d", time.Now().UnixNano())
+	lastAccessed := time.UnixMilli(1_700_000_200_123).UTC()
+	content := "travel budget is ten thousand and airfare budget is twenty thousand"
+	mem := &Memory{
+		ID:           userID + "_mem",
+		Type:         MemoryTypeSemantic,
+		Content:      content,
+		UserID:       userID,
+		AccessCount:  4,
+		LastAccessed: lastAccessed,
+	}
+	require.NoError(t, store.Store(ctx, mem))
+
+	require.Eventually(t, func() bool {
+		list, err := store.List(ctx, ListOptions{UserID: userID, Limit: 10})
+		return err == nil && list.Total == 1
+	}, 5*time.Second, 50*time.Millisecond)
+
+	// List before Retrieve. Retrieval tracking updates the hash after the
+	// search snapshot is returned, so a later List would no longer match
+	// the stored access fields.
+	list, err := store.List(ctx, ListOptions{UserID: userID, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, list.Memories, 1)
+	assert.Equal(t, lastAccessed, list.Memories[0].LastAccessed.UTC())
+	assert.Equal(t, 4, list.Memories[0].AccessCount)
+
+	var retrieved *Memory
+	require.Eventually(t, func() bool {
+		results, retrieveErr := store.Retrieve(ctx, RetrieveOptions{
+			Query:     content,
+			UserID:    userID,
+			Limit:     5,
+			Threshold: 0.3,
+		})
+		if retrieveErr != nil || len(results) != 1 {
+			return false
+		}
+		retrieved = results[0].Memory
+		return retrieved.ID == mem.ID
+	}, 5*time.Second, 50*time.Millisecond)
+	assert.Equal(t, lastAccessed, retrieved.LastAccessed.UTC())
+	assert.Equal(t, 4, retrieved.AccessCount)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_RetrievalPreservesWriteVersion(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	id := fmt.Sprintf("retrieval_version_%d", time.Now().UnixNano())
+
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: id, Type: MemoryTypeSemantic, UserID: "retrieval-version-user",
+		Content: "the stored write version must survive retrieval", Importance: 0.3,
+	}))
+	before, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	time.Sleep(time.Millisecond)
+
+	require.NoError(t, store.recordRetrieval(ctx, id))
+	after, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, before.UpdatedAt, after.UpdatedAt)
+	require.Equal(t, before.AccessCount+1, after.AccessCount)
+	require.True(t, after.LastAccessed.After(before.LastAccessed))
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_ConsolidationRunnerMergesAfterEnqueue(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	userID := fmt.Sprintf("consol_runner_%d", time.Now().UnixNano())
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: fmt.Sprintf("mem_r_%s_1", userID), Type: MemoryTypeSemantic,
+		Content: "The user prefers dark mode in all applications", UserID: userID,
+	}))
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID: fmt.Sprintf("mem_r_%s_2", userID), Type: MemoryTypeSemantic,
+		Content: "The user prefers dark mode in all their applications and IDEs", UserID: userID,
+	}))
+	time.Sleep(500 * time.Millisecond)
+
+	runner := NewConsolidationRunner(store, ConsolidationOptions{
+		Cooldown: time.Hour, Timeout: 5 * time.Second, Concurrency: 1,
+	})
+	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
+	before := testutil.ToFloat64(MemoryConsolidationTotal.WithLabelValues("completed", "finished"))
+	runner.Enqueue(userID)
+	require.Eventually(t, func() bool {
+		return testutil.ToFloat64(MemoryConsolidationTotal.WithLabelValues("completed", "finished")) > before
+	}, 5*time.Second, 50*time.Millisecond)
 }
