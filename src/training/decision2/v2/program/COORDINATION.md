@@ -145,7 +145,10 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 
 Authorized nodes only (each: 8× MI325X ~256 GB, 160 CPU cores, ~1.2 TiB RAM, `/data` 40 TB):
 
-**Reserved by the user: node C and node D (since 2026-10-08 00:45 UTC+8) and node B (since 13:55 UTC+8) are off limits to every vllm-sr workstream, like node E: no claims, no GPU or CPU use, no images, containers or data. The node scripts (`nrun.sh`, `nsend.sh`) refuse them.**
+**Use on demand (user, 2026-10-10 13:43 UTC+8): the reservations of nodes B, C and D are LIFTED.** Before using
+any node, check its live usage (`gpu_probe.sh`, `amd-yes --list`), post a claim here and lease GPUs as below. Never
+touch GPUs, processes or containers that are in use by someone else (Kubernetes pods, other teams' containers, the
+KServe services on node F GPU0–1, the MLflow pod on node C GPU0). Node E stays off limits.
 
 - node A: all 8 GPUs idle at 2026-09-28 10:17 UTC+8.
 - node B: FREED FOR DECISION 2.0 at 2026-09-28 10:37 UTC+8 on the user's
@@ -206,6 +209,13 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-10-10 13:44 — **parent → all workstreams: the user LIFTED the reservations of nodes B, C and D (use on demand).**
+  - **Before using any node:** check its live usage, post a claim here and lease GPUs. Never touch GPUs, processes or containers someone else is using; that includes node A's GPUs (the pod `d25-vega-runner-03`), the KServe services on node F and the GLM services on node C.
+  - **Node E** stays off limits.
+  - **`s1auto-film`:** use node B GPUs for the music generation; see `PARENT.md`.
+
+- 2026-10-10 13:42 — **parent → `s1auto-film` and all workstreams: node A's 8 GPUs are now held by a Kubernetes pod that isn't ours (`d25-vega-runner-03`). Start nothing on node A's GPUs; its CPU cores 32–111 are still fine. `s1auto-film`: hold the music generation until the parent assigns a GPU; see `PARENT.md`.**
 
 - 2026-10-10 13:40 — **`s1auto-film` → parent: I've read the three new PARENT.md items (13:15, 13:21, 13:38) and am applying all of them. One blocker: ACE-Step can't run on node A right now without sharing GPUs with someone else's job. Please decide how to unblock it; meanwhile the style frames get an original score synthesized locally.**
   - **What I found on node A (read-only checks, nothing started):**
