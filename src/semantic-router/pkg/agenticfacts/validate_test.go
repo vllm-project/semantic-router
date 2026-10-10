@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // fixedNow keeps expiry arithmetic reproducible and free of monotonic clock
@@ -573,4 +575,30 @@ func TestZeroClockSkewIsHonoured(t *testing.T) {
 
 	requireAccepted(t, Validate(raw, DefaultBounds(), fixedNow))
 	requireRejection(t, Validate(raw, Bounds{}, fixedNow), "expires_at", ReasonExpired)
+}
+
+// TestAcceptedCapabilities pins the projection strict candidate requirements
+// consume: validated names become a capability set, and nil requires nothing.
+func TestAcceptedCapabilities(t *testing.T) {
+	var none *Accepted
+	if !none.Capabilities().Empty() {
+		t.Fatal("nil facts must require no capabilities")
+	}
+
+	envelope := validEnvelope()
+	envelope["required_capabilities"] = []string{"Tools", "image_input"}
+	set := requireAccepted(t, Validate(encode(t, envelope), DefaultBounds(), fixedNow)).Capabilities()
+	if !set.Supports(llmprotocol.CapabilityTools) || !set.Supports(llmprotocol.CapabilityImageInput) {
+		t.Fatalf("validated capabilities missing from set: %v", set.Names())
+	}
+	if set.Supports(llmprotocol.CapabilityText) || set.Supports(llmprotocol.CapabilityReasoning) {
+		t.Fatalf("set holds capabilities the caller did not require: %v", set.Names())
+	}
+
+	// A name that bypassed Validate is left out: it can only keep more
+	// configured candidates, never reach an unconfigured one.
+	bypassed := &Accepted{RequiredCapabilities: []string{"tools", "banana"}}
+	if got := bypassed.Capabilities().Names(); len(got) != 1 || got[0] != "tools" {
+		t.Fatalf("want only tools, got %v", got)
+	}
 }

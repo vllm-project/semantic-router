@@ -3,6 +3,8 @@ package agenticfacts
 import (
 	"sort"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // acceptedScalars holds every validated scalar fact. It is split out from
@@ -55,6 +57,29 @@ func (a *Accepted) IsEmpty() bool {
 	}
 	return a.acceptedScalars == acceptedScalars{} &&
 		len(a.RequiredCapabilities) == 0
+}
+
+// Capabilities returns RequiredCapabilities as a protocol capability set, the
+// form strict candidate requirements compare against model cards. A nil
+// receiver requires nothing.
+//
+// Validate accepts only canonical names, so every entry parses. Should a name
+// ever fail to parse, it is left out rather than turned into an error: the
+// result can then only keep more of the configured candidates, never reach a
+// model outside them.
+func (a *Accepted) Capabilities() llmprotocol.CapabilitySet {
+	var set llmprotocol.CapabilitySet
+	if a == nil {
+		return set
+	}
+	for _, name := range a.RequiredCapabilities {
+		parsed, err := llmprotocol.ParseCapabilities([]string{name})
+		if err != nil {
+			continue
+		}
+		set = set.Union(parsed)
+	}
+	return set
 }
 
 // dedupSorted returns values with duplicates removed and the remainder sorted,
