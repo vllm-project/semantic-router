@@ -8,7 +8,7 @@ import (
 // acceptedScalars holds every validated scalar fact. It is split out from
 // Accepted so that it stays a comparable struct: Go allows == on a struct only
 // when all its fields are comparable, and slices are not. That lets IsEmpty
-// test all sixteen scalars with one comparison against the zero value instead
+// test all 17 scalars with one comparison against the zero value instead
 // of a chain that would need editing every time a field is added.
 //
 // Each optional numeric fact carries an XxxKnown companion rather than being a
