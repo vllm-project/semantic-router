@@ -21,10 +21,9 @@ func memoryMetadataJSON(memory *Memory) ([]byte, error) {
 }
 
 func normalizedMemoryScopeFields(memory *Memory) (projectID, source string) {
+	// Leave an empty project id empty. Indexing it as "default" makes an
+	// explicit project named default indistinguishable from unscoped memory.
 	projectID = memory.ProjectID
-	if projectID == "" {
-		projectID = "default"
-	}
 	source = memory.Source
 	if source == "" {
 		source = "extraction"

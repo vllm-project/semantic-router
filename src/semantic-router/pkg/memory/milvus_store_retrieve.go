@@ -40,7 +40,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	searchResult, err := m.searchMemoryVectors(ctx, embedding, retrieveFilterExpr(opts.UserID, opts.Types), retrieveSearchTopK(limit, opts.HybridSearch))
+	searchResult, err := m.searchRetrieveVectors(ctx, embedding, opts, retrieveSearchTopK(limit, opts.HybridSearch))
 	if err != nil {
 		status = "error"
 		return nil, err
@@ -83,29 +83,51 @@ func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, th
 	return limit, threshold, nil
 }
 
-func retrieveFilterExpr(userID string, types []MemoryType) string {
+func retrieveFilterExpr(userID, projectID string, types []MemoryType) string {
 	filterExpr := milvusUserScopeFilter(userID)
+	if projectID != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, milvusEqString("project_id", projectID))
+	}
 	if tf := buildTypeFilter(types); tf != "" {
 		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 	return filterExpr
 }
 
-func retrieveSearchTopK(limit int, hybridSearch bool) int {
-	searchTopK := limit * 4
-	if hybridSearch {
-		searchTopK = limit * 8
+func (m *MilvusStore) searchRetrieveVectors(ctx context.Context, embedding []float32, opts RetrieveOptions, searchTopK int) ([]client.SearchResult, error) {
+	filterExpr := retrieveFilterExpr(opts.UserID, opts.ProjectID, opts.Types)
+	for {
+		searchResult, err := m.searchMemoryVectors(ctx, embedding, filterExpr, searchTopK)
+		if err != nil || len(searchResult) == 0 {
+			return searchResult, err
+		}
+
+		candidates := m.parseCandidates(searchResult[0], opts.UserID)
+		nextTopK := nextProjectScopedSearchTopK(opts.ProjectID, searchTopK, searchResult[0].ResultCount, len(retainProjectMatches(candidates, opts.ProjectID)), maxProjectScopedSearchTopK)
+		if nextTopK == 0 {
+			return searchResult, nil
+		}
+
+		logging.Debugf("MilvusStore.Retrieve: widening project-scoped candidate window from %d to %d", searchTopK, nextTopK)
+		searchTopK = nextTopK
 	}
-	if searchTopK < 20 {
-		searchTopK = 20
+}
+
+// milvusHNSWSearchEf keeps the usual beam for a normal candidate window.
+// Milvus rejects a search whose ef is not strictly larger than k, so a
+// project-scoped window that grows past the legacy rows has to grow ef with it.
+func milvusHNSWSearchEf(searchTopK int) int {
+	const defaultSearchEf = 64
+	if searchTopK < defaultSearchEf {
+		return defaultSearchEf
 	}
-	return searchTopK
+	return searchTopK + 1
 }
 
 func (m *MilvusStore) searchMemoryVectors(ctx context.Context, embedding []float32, filterExpr string, searchTopK int) ([]client.SearchResult, error) {
 	logging.Debugf("MilvusStore.Retrieve: filter expression: %s", filterExpr)
 
-	searchParam, err := entity.NewIndexHNSWSearchParam(64)
+	searchParam, err := entity.NewIndexHNSWSearchParam(milvusHNSWSearchEf(searchTopK))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create search parameters: %w", err)
 	}
@@ -134,7 +156,7 @@ func (m *MilvusStore) searchMemoryVectors(ctx context.Context, embedding []float
 }
 
 func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts RetrieveOptions, limit int, threshold float32) []*RetrieveResult {
-	candidates := m.parseCandidates(sr, opts.UserID)
+	candidates := retainProjectMatches(m.parseCandidates(sr, opts.UserID), opts.ProjectID)
 	if opts.HybridSearch && len(candidates) > 1 {
 		candidates = hybridRerankCandidates(candidates, opts)
 	}
@@ -151,6 +173,24 @@ func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts Retri
 		go m.recordRetrievalBatch(ids)
 	}
 	return results
+}
+
+// retainProjectMatches keeps candidates whose stored project id equals the
+// requested scope. Metadata is the source of truth: older rows indexed an
+// empty project as "default", so a query for the explicit project named
+// default would otherwise return unscoped memories. An empty request does
+// not filter.
+func retainProjectMatches(candidates []*RetrieveResult, projectID string) []*RetrieveResult {
+	if projectID == "" || len(candidates) == 0 {
+		return candidates
+	}
+	matched := make([]*RetrieveResult, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate != nil && candidate.Memory != nil && candidate.Memory.ProjectID == projectID {
+			matched = append(matched, candidate)
+		}
+	}
+	return matched
 }
 
 // qdrantRetrieveQuery widens the candidate window when hybrid fusion or

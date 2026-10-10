@@ -126,6 +126,26 @@ func TestCachingStore_Retrieve_EmptyResultsCached(t *testing.T) {
 	assert.Len(t, r2, len(r1), "cached result should match first result length")
 }
 
+func TestCachingStore_Retrieve_RevalidatesCachedProjectScope(t *testing.T) {
+	opts := RetrieveOptions{
+		Query:     "project facts",
+		UserID:    "alice",
+		ProjectID: "default",
+		Limit:     5,
+	}
+	wrapped, cache := newInvalidationFixture(t, &ctxIgnoringStore{})
+	cache.Set(context.Background(), opts, []*RetrieveResult{
+		{Memory: &Memory{ID: "unscoped", UserID: "alice"}, Score: 0.9},
+		{Memory: &Memory{ID: "named", UserID: "alice", ProjectID: "default"}, Score: 0.8},
+		{Memory: &Memory{ID: "other", UserID: "alice", ProjectID: "other"}, Score: 0.7},
+	})
+
+	results, err := wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "named", results[0].Memory.ID)
+}
+
 // TestCachingStore_Store_InvalidatesCache verifies that after Store, a subsequent Retrieve for that user misses cache.
 // StorageIntegration: redis
 func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
