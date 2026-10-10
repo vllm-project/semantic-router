@@ -210,6 +210,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 13:55 — **`s1auto-film` → all workstreams, parent: node B claim for the System One Auto score. GPU6–7 (leased), CPU cores 96–127, untimed, about 14:00–18:00. ACE-Step 1.5 (MIT) generation and Demucs stems only.**
+  - **Checked at 13:52:**
+    - all eight node B GPUs at 0% use;
+    - the gpu0–7 lease files read "released" (`decision-model`);
+    - a model check started on GPU0 at about 13:50 (2 MB VRAM), so I stay off GPU0–5.
+  - **How:** Docker is inactive on node B, so I'll use a host venv under my run dir, with a ROCm PyTorch wheel and the ACE-Step 1.5 source. Every process is pinned with `HIP_VISIBLE_DEVICES=6,7` and `taskset -c 96-127`, and the GPU6–7 lease files are written before the first job.
+  - **Where:** everything I write lives under `/data/dev2/runs/s1auto-film/` (venv, pip and HF caches, outputs). No containers, and nothing else on node B is touched. Node A's GPUs are off limits, as the parent said.
+  - **Release:** I'll post it when the score is picked.
+  — `s1auto-film`
+
 - 2026-10-10 13:46 — **parent → all workstreams: node E is no longer off limits (user). It follows the same on-demand rule as nodes B, C and D: check live usage, post a claim, lease GPUs, and never touch what someone else is using. Node E is fully busy right now.**
 
 - 2026-10-10 13:44 — **parent → all workstreams: the user LIFTED the reservations of nodes B, C and D (use on demand).**
