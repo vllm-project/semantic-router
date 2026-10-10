@@ -7,13 +7,13 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 // PrepareOwnedGlobalServiceEmbeddings gives tools, memory, and ingestion
 // independent global handles. Cache owns its separate layer/dimension view;
 // compatible handles all acquire the same physical resource from the pool.
-func PrepareOwnedGlobalServiceEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
+func PrepareOwnedGlobalServiceEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (*embedding.Set, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("global model services require configuration")
 	}
@@ -39,7 +39,7 @@ func globalEmbeddingConsumerName(cfg *config.RouterConfig, model, primary string
 	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
 		selected := cfg.VectorStore.EmbeddingModel
 		if selected == "" {
-			selected = "bert"
+			selected = config.DefaultEmbeddingModel
 		}
 		if selected == model {
 			consumers = append(consumers, "vector_store")

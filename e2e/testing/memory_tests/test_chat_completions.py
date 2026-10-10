@@ -18,7 +18,11 @@ def _chat_headers(user_id: str) -> dict:
 
 
 def _chat_payload(messages: list, user_id: str) -> dict:
-    return {"model": "MoM", "messages": messages, "metadata": {"user_id": user_id}}
+    return {
+        "model": "vllm-sr/auto",
+        "messages": messages,
+        "metadata": {"user_id": user_id},
+    }
 
 
 class ChatCompletionsMemoryTest(MemoryFeaturesTest):

@@ -9,6 +9,7 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
+	"cascade":       "native",
 	"automix":       "selection",
 	"confidence":    "looper",
 	"fusion":        "looper",
@@ -25,6 +26,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"svm":           "selection",
 	"workflows":     "looper",
 	"prompt":        "selection",
+	"decision":      "selection",
 }
 
 var retiredAlgorithmTutorialDocs = []string{

@@ -145,7 +145,7 @@ def main() -> int:
                 args.directory, json.loads(args.variants), json.loads(args.jobs)
             )
         evidence.update(
-            runtime="none" if args.kind == "operator-unit" else "candle",
+            runtime="none" if args.kind == "operator-unit" else "model-runtime",
             device="none" if args.kind == "operator-unit" else "cpu",
             platform=actual_platform(),
         )

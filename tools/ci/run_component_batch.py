@@ -65,9 +65,10 @@ def commands(target: str, output: Path) -> list[list[str]]:
         ]
     if target == "test-e2e-unit":
         return [["make", target, f"E2E_UNIT_REPORT_DIR={output}"]]
+    if target == "model-runtime-test":
+        return [["make", "model-runtime-install"], ["make", target]]
     if target in {
         "vllm-sr-test",
-        "vllm-sr-sim-test",
         "harness-check",
         "onnx-artifact-test",
         "ck-rewrite-test",

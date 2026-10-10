@@ -5,7 +5,7 @@ Standalone fine-tuning script for hallucination detection using ModernBERT-32K.
 This script trains a token classification model to detect hallucinated spans
 in LLM-generated responses.
 
-Model: llm-semantic-router/modernbert-base-32k (32K context window)
+Model: vllm-sr/modernbert-base-32k (32K context window)
 Task: Token Classification (2 classes: Supported=0, Hallucinated=1)
 
 Best Configuration (from research):
@@ -698,7 +698,7 @@ def parse_args():
     parser.add_argument(
         "--model-name",
         type=str,
-        default="llm-semantic-router/modernbert-base-32k",
+        default="vllm-sr/modernbert-base-32k",
         help="Name or path of the pretrained model",
     )
     parser.add_argument(

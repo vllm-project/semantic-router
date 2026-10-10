@@ -32,7 +32,7 @@ const (
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
 	// This prevents "silent double injection" when applications use SDK-managed memory
-	// systems like Mem0, LangMem, LangGraph, or OpenClaw.
+	// systems like Mem0, LangMem or LangGraph.
 	// Value: "true" to disable router memory, any other value or absence enables it.
 	// Example use case: App with Mem0 sends this header to prevent duplicate memory injection.
 	DisableRouterMemory = "x-disable-router-memory"
@@ -68,7 +68,8 @@ const (
 	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
-	// This is the final routing decision made by the DecisionEngine.
+	// This is the final routing decision made by the DecisionEngine. It is
+	// omitted when no decision matched and the request went to the default model.
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
@@ -76,6 +77,10 @@ const (
 	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
 	// Example value: "guarded=no_match,strict=fail_request"
 	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
+
+	// VSRDecisionRanking names the matched decision the selected one beat and
+	// the comparison that settled it. Debug surface only (#3658).
+	VSRDecisionRanking = "x-vsr-decision-ranking"
 
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
@@ -316,6 +321,12 @@ const (
 	// Example: "image_input,audio_input"
 	VSRMatchedInputModality = "x-vsr-matched-input-modality"
 
+	// VSRMatchedDecisionModel contains comma-separated list of matched decision
+	// signals answered by a decision model: noul and score rule names, and
+	// "rule:choice" for choice questions.
+	// Example: "needs_reasoning,request_kind:code"
+	VSRMatchedDecisionModel = "x-vsr-matched-decision-model"
+
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
 	VSRMatchedProjection = "x-vsr-matched-projections"
@@ -437,26 +448,14 @@ const (
 	VSROutcomePrincipal = "x-vsr-outcome-principal"
 )
 
-// Looper Request Headers
-// These headers are added to looper internal requests to identify them
-// and allow the extproc to lookup decision configuration and apply plugins.
+// Retired Looper hop headers. Looper hops run in process with their context
+// typed, so nothing reads these; the Router still drops them from client
+// requests so that no client can pose as a hop.
 const (
-	// VSRLooperRequest indicates this is an internal looper request.
-	// When present, extproc should lookup the decision and execute configured plugins.
-	// Value: "true"
-	VSRLooperRequest = "x-vsr-looper-request"
-
-	// VSRLooperIteration indicates the current iteration number in the looper loop.
-	// Value: "1", "2", "3", etc.
+	VSRLooperRequest   = "x-vsr-looper-request"
 	VSRLooperIteration = "x-vsr-looper-iteration"
-
-	// VSRLooperDecision indicates the decision name for looper internal requests.
-	// Used by extproc to lookup decision configuration and apply plugins.
-	// Value: decision name (e.g., "remom_low_effort")
-	VSRLooperDecision = "x-vsr-looper-decision"
-
-	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
-	VSRFusionDepth = "x-vsr-fusion-depth"
+	VSRLooperDecision  = "x-vsr-looper-decision"
+	VSRFusionDepth     = "x-vsr-fusion-depth"
 )
 
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)

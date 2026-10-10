@@ -1,0 +1,87 @@
+# A runtime the Router attaches to: one process serving two fixture models,
+# started the way an operator starts a shared runtime. The profile creates the
+# model-runtime-e2e ConfigMap (the fixture script and the models file) before
+# the Helm release, so the managed runtimes and this pod use the same files.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-runtime-attached
+  namespace: vllm-semantic-router-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-runtime-attached
+  template:
+    metadata:
+      labels:
+        app: model-runtime-attached
+    spec:
+      containers:
+        - name: runtime
+          image: semantic-router-ci/model-runtime:e2e-test
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/opt/vsr-e2e/runtime_with_fixtures.py"]
+          args:
+            - serve
+            - --models
+            - /opt/vsr-e2e/attached-models.yaml
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8100"
+            - --offline
+            - --threads
+            - "2"
+          env:
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: VSR_E2E_FIXTURES
+              value: /tmp/vsr-fixtures
+          ports:
+            - name: http
+              containerPort: 8100
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 150
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: e2e-files
+              mountPath: /opt/vsr-e2e
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: e2e-files
+          configMap:
+            name: model-runtime-e2e
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-runtime-attached
+  namespace: vllm-semantic-router-system
+spec:
+  selector:
+    app: model-runtime-attached
+  ports:
+    - name: http
+      port: 8100
+      targetPort: http

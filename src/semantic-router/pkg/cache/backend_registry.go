@@ -38,7 +38,6 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				HNSWEfConstruction:  config.HNSWEfConstruction,
 				EmbeddingModel:      config.EmbeddingModel,
 				EmbeddingProvider:   config.EmbeddingProvider,
-				PolarityGuard:       config.PolarityGuard,
 			}), nil
 		},
 	},

@@ -68,6 +68,7 @@ type SignalResults struct {
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedClassifierRules    []string // Matched generic classifier label names
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
+	MatchedDecisionRules      []string // Matched decision-model answers: noul/score rule names, "rule:choice" for choices
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
 	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
@@ -83,8 +84,11 @@ type SignalResults struct {
 	JailbreakScoreAvailable bool
 
 	// PII detection metadata (populated when PII signal is evaluated)
-	PIIDetected bool     // Whether any PII was detected
-	PIIEntities []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
+	// PIIContentVerified is true only after complete, successful classification with no personal entities.
+	PIIContentVerified bool
+	PIIEvidence        []PrivacyEvidence
+	PIIDetected        bool     // Whether any PII was detected
+	PIIEntities        []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
 
 	SignalConfidences  map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
 	SignalValues       map[string]float64 // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4
@@ -120,4 +124,5 @@ type SignalMetricsCollection struct {
 	Metadata      SignalMetrics `json:"metadata"`
 	Classifier    SignalMetrics `json:"classifier"`
 	InputModality SignalMetrics `json:"input_modality"`
+	Decision      SignalMetrics `json:"decision"`
 }

@@ -4,11 +4,34 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
+
+// vela1SpecialistsConfig is the default configuration with every module the
+// published-model runner provisions on its Vela 1.0 specialist, at the
+// threshold calibrated for that model, as decision_model Vela-1.0 resolves it.
+// The Router defaults name Vela 2.0 0.3B, which the runner does not provide.
+func vela1SpecialistsConfig() config.RouterConfig {
+	cfg := config.DefaultGlobalConfig()
+	vela1 := config.Vela1SystemModels()
+	cfg.PromptGuard.ModelID = vela1.PromptGuard
+	cfg.PromptGuard.Threshold = config.ModuleThresholdsOf(vela1.PromptGuard).PromptGuard
+	cfg.CategoryModel.ModelID = vela1.DomainClassifier
+	cfg.CategoryModel.Threshold = config.ModuleThresholdsOf(vela1.DomainClassifier).Domain
+	cfg.PIIModel.ModelID = vela1.PIIClassifier
+	cfg.PIIModel.Threshold = config.ModuleThresholdsOf(vela1.PIIClassifier).PII
+	factCheck := &cfg.HallucinationMitigation.FactCheckModel
+	factCheck.ModelID = vela1.FactCheckClassifier
+	factCheck.Threshold = config.ModuleThresholdsOf(vela1.FactCheckClassifier).FactCheck
+	cfg.FeedbackDetector.ModelID = vela1.FeedbackDetector
+	cfg.FeedbackDetector.Threshold = config.ModuleThresholdsOf(vela1.FeedbackDetector).Feedback
+	return cfg
+}
 
 // Real-model execution requires an explicit path. A populated local cache must
 // not change core-test behavior. The published-model runner supplies every path
@@ -43,15 +66,39 @@ func requireRealModel(t *testing.T, override, defaultPath string) string {
 			t.Fatalf("real model %s is incomplete: %v", model.RepoID, err)
 		}
 	}
+	// The published-model runner stamps each package with the revision it
+	// provisioned, so a test that resolves another model's registry entry
+	// fails here instead of running that model's policy on these weights.
+	if stamp, err := os.ReadFile(filepath.Join(path, ".complete")); err == nil {
+		if provisioned := strings.TrimSpace(string(stamp)); provisioned != model.Revision {
+			t.Fatalf("real model %s registers revision %s, but %s holds revision %s", model.RepoID, model.Revision, path, provisioned)
+		}
+	}
 	t.Logf("real model=%s registered_revision=%s path=%s", model.RepoID, model.Revision, path)
 	return path
 }
 
+// managedRuntimeOptions serves a test's consumers from managed model_runtime
+// processes, as the router does.
+func managedRuntimeOptions(t *testing.T) RecipeRuntimeOptions {
+	t.Helper()
+	return RecipeRuntimeOptions{Runtime: servingtest.Managed(t)}
+}
+
+// managedModelRuntime is managedRuntimeOptions for a standalone consumer.
+func managedModelRuntime(t *testing.T) *classifierModelRuntime {
+	t.Helper()
+	models, err := newClassifierModelRuntime(&config.RouterConfig{}, managedRuntimeOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return models
+}
+
 func assertRealModelCPU(t *testing.T, capability binding.Capability) {
 	t.Helper()
-	provider, _ := config.DefaultModelExecution(true)
-	if capability.Provider != provider || capability.Device != "cpu" {
-		t.Fatalf("expected %s CPU execution, got %+v", provider, capability)
+	if capability.Provider != config.ModelRuntimeProvider || capability.Device != "cpu" {
+		t.Fatalf("expected %s CPU execution, got %+v", config.ModelRuntimeProvider, capability)
 	}
 	t.Logf("prepared provider=%s device=%s precision=%s labels=%v", capability.Provider, capability.Device, capability.Precision, capability.Labels)
 }

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -49,7 +49,7 @@ func TestPreparedInventoryPublishesSourceNamesAndActualInputLimits(t *testing.T)
 		t.Fatalf("inventory lost prepared models: %+v", inventory.Summary)
 	}
 	for _, model := range inventory.Models {
-		want := "llm-semantic-router/Vela-1.0-Encoder-307M-" + model.Name
+		want := "vllm-sr/Vela-1.0-Encoder-307M-" + model.Name
 		if model.Registry == nil || model.Registry.RepoID != want || model.Metadata["registry_match"] != "source_revision" {
 			t.Fatalf("derived artifact lost its declared source identity: %+v", model)
 		}

@@ -72,7 +72,7 @@ def get_target_modules_for_model(model_name: str) -> list[str]:
     elif model_name in [
         "mmbert-32k",
         "mmbert-32k-yarn",
-        "llm-semantic-router/mmbert-32k-yarn",
+        "vllm-sr/mmbert-32k-yarn",
     ]:
         # mmBERT-32K YaRN - Extended context (32K tokens) with YaRN RoPE scaling
         # Same architecture as mmBERT/ModernBERT, but with 32K context support
@@ -97,7 +97,7 @@ def get_target_modules_for_model(model_name: str) -> list[str]:
             "jhu-clsp/mmBERT-base",
             "mmbert-32k",
             "mmbert-32k-yarn",
-            "llm-semantic-router/mmbert-32k-yarn",
+            "vllm-sr/mmbert-32k-yarn",
             "distilbert-base-uncased",
         ]
         raise ValueError(
@@ -400,8 +400,8 @@ def get_model_mapping() -> dict[str, str]:
         "modernbert-base": "answerdotai/ModernBERT-base",
         "modernbert-large": "answerdotai/ModernBERT-large",
         "mmbert-base": "jhu-clsp/mmBERT-base",  # Multilingual ModernBERT (1800+ languages, 8K context)
-        "mmbert-32k": "llm-semantic-router/mmbert-32k-yarn",  # 32K context with YaRN RoPE (RECOMMENDED)
-        "mmbert-32k-yarn": "llm-semantic-router/mmbert-32k-yarn",  # Alias for mmbert-32k
+        "mmbert-32k": "vllm-sr/mmbert-32k-yarn",  # 32K context with YaRN RoPE (RECOMMENDED)
+        "mmbert-32k-yarn": "vllm-sr/mmbert-32k-yarn",  # Alias for mmbert-32k
         "bert-base-uncased": "bert-base-uncased",
         "bert-large-uncased": "bert-large-uncased",
         "roberta-base": "roberta-base",
@@ -426,7 +426,7 @@ def get_max_length_for_model(model_name: str) -> int:
     if model_name in [
         "mmbert-32k",
         "mmbert-32k-yarn",
-        "llm-semantic-router/mmbert-32k-yarn",
+        "vllm-sr/mmbert-32k-yarn",
     ]:
         return 32768
     # mmBERT supports 8192 tokens

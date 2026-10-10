@@ -36,11 +36,20 @@ def clear_runtime_image_env(monkeypatch):
         ("0.4.0", "v0.4.0"),
         ("0.4.1", "v0.4.1"),
         ("0.4.0.dev20260924000100", "latest"),
+        # `main` carries the next version before its release snapshot exists.
+        ("0.5.0", "latest"),
+        ("0.5.0.dev20261007063125", "latest"),
         ("unknown", "latest"),
     ],
 )
 def test_official_image_tag_follows_stable_cli_version(cli_version, image_tag):
     assert image_tag_for_cli_version(cli_version) == image_tag
+
+
+def test_a_release_build_runs_its_release_images():
+    assert (
+        image_tag_for_cli_version("0.5.0", released={"v0.5"}.__contains__) == "v0.5.0"
+    )
 
 
 def test_default_runtime_images_match_installed_cli_release(monkeypatch):
@@ -49,8 +58,8 @@ def test_default_runtime_images_match_installed_cli_release(monkeypatch):
 
     for platform, repository in (
         ("cpu", "vllm-sr"),
-        ("amd", "vllm-sr-rocm"),
-        ("nvidia", "vllm-sr-cuda"),
+        ("rocm", "vllm-sr-rocm"),
+        ("cuda", "vllm-sr-cuda"),
     ):
         images = container_images.get_runtime_images(
             pull_policy="never", platform=platform
@@ -185,7 +194,7 @@ def test_get_runtime_images_derives_official_envoy_image_from_rocm_base(monkeypa
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = container_images.get_runtime_images(pull_policy="never", platform="amd")
+    images = container_images.get_runtime_images(pull_policy="never", platform="rocm")
 
     assert images == {
         "router": VLLM_SR_CONTAINER_IMAGE_ROCM,
@@ -204,7 +213,7 @@ def test_select_image_source_picks_cuda_default_for_nvidia(monkeypatch):
     monkeypatch.delenv("VLLM_SR_IMAGE_NVIDIA", raising=False)
 
     assert (
-        container_images._select_image_source(None, "nvidia")
+        container_images._select_image_source(None, "cuda")
         == VLLM_SR_CONTAINER_IMAGE_CUDA
     )
 
@@ -214,7 +223,7 @@ def test_select_image_source_honors_nvidia_env_override(monkeypatch):
     monkeypatch.setenv("VLLM_SR_IMAGE_NVIDIA", "my-registry/vllm-sr-cuda:pinned")
 
     assert (
-        container_images._select_image_source(None, "nvidia")
+        container_images._select_image_source(None, "cuda")
         == "my-registry/vllm-sr-cuda:pinned"
     )
 
@@ -232,7 +241,7 @@ def test_get_runtime_images_derives_official_service_images_from_cuda_base(monke
         lambda image, pull_policy: ensured.append((image, pull_policy)),
     )
 
-    images = container_images.get_runtime_images(pull_policy="never", platform="nvidia")
+    images = container_images.get_runtime_images(pull_policy="never", platform="cuda")
 
     assert images == {
         "router": VLLM_SR_CONTAINER_IMAGE_CUDA,
@@ -476,7 +485,7 @@ def test_get_runtime_images_upgrades_router_override_to_rocm_on_amd(monkeypatch)
     images = container_images.get_runtime_images(
         router_image="ghcr.io/vllm-project/semantic-router/vllm-sr:custom",
         pull_policy="never",
-        platform="amd",
+        platform="rocm",
     )
 
     assert (
@@ -494,7 +503,7 @@ def test_resolve_selected_image_upgrades_cpu_image_to_cuda_on_nvidia(monkeypatch
     monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
 
     upgraded = container_images._resolve_selected_image(
-        "ghcr.io/vllm-project/semantic-router/vllm-sr:custom", "nvidia"
+        "ghcr.io/vllm-project/semantic-router/vllm-sr:custom", "cuda"
     )
 
     assert upgraded == "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:custom"
@@ -505,7 +514,7 @@ def test_resolve_selected_image_leaves_nonofficial_image_unchanged_on_nvidia(
 ):
     monkeypatch.delenv("VLLM_SR_IMAGE", raising=False)
 
-    unchanged = container_images._resolve_selected_image("myco/router:custom", "nvidia")
+    unchanged = container_images._resolve_selected_image("myco/router:custom", "cuda")
 
     assert unchanged == "myco/router:custom"
 
@@ -526,7 +535,7 @@ def test_get_runtime_images_upgrades_router_override_to_cuda_on_nvidia(monkeypat
     images = container_images.get_runtime_images(
         router_image="ghcr.io/vllm-project/semantic-router/vllm-sr:custom",
         pull_policy="never",
-        platform="nvidia",
+        platform="cuda",
     )
 
     assert (
@@ -558,7 +567,7 @@ def test_get_runtime_images_leaves_nonofficial_router_override_unchanged_on_amd(
     images = container_images.get_runtime_images(
         router_image="router:custom",
         pull_policy="never",
-        platform="amd",
+        platform="rocm",
     )
 
     assert images["router"] == "router:custom"

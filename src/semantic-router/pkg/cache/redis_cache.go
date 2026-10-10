@@ -35,7 +35,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
@@ -244,6 +244,8 @@ func (c *RedisCache) initializeIndex() error {
 func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
+
+func (c *RedisCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
 
 func (c *RedisCache) embeddingDimension() int {
 	if c == nil || c.config == nil {

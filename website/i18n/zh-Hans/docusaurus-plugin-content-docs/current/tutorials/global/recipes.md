@@ -2,7 +2,7 @@
 title: 配方
 description: 在同一 Semantic Router 部署中定义隔离的路由策略，同时共享提供商模型和平台服务。
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/recipes.md"
   outdated: false
 ---
@@ -15,7 +15,9 @@ translation:
 
 ## 解决什么问题？
 
-配方避免两种糟糕的扩展模式：把无关策略混进一张决策图，或为每个路由目标复制整台 Router 部署。它们在复用昂贵模型端点和共享服务的同时，把策略与运行时状态分开。
+配方为不同目标隔离策略和运行时状态，同时共享模型端点和服务。它控制路由与有界
+多模型工作流；[Agent Harness](../../installation/agent-harness) 管理外层循环、工具和
+任务状态。
 
 ## 何时使用
 

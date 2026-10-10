@@ -83,7 +83,7 @@ func sendTracedRequest(ctx context.Context, client *kubernetes.Clientset, opts p
 
 	// Send request with trace headers
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{
 				"role":    "user",

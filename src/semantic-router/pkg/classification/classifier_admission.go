@@ -12,13 +12,12 @@ import (
 )
 
 const (
-	admissionDeploymentPromptGuard            = "prompt_guard"
-	admissionDeploymentDomainClassifier       = "domain_classifier"
-	admissionDeploymentPIIClassifier          = "pii_classifier"
-	admissionDeploymentFactCheckClassifier    = "fact_check_classifier"
-	admissionDeploymentHallucinationDetector  = "hallucination_detector"
-	admissionDeploymentHallucinationExplainer = "hallucination_explainer"
-	admissionDeploymentFeedbackDetector       = "feedback_detector"
+	admissionDeploymentPromptGuard           = "prompt_guard"
+	admissionDeploymentDomainClassifier      = "domain_classifier"
+	admissionDeploymentPIIClassifier         = "pii_classifier"
+	admissionDeploymentFactCheckClassifier   = "fact_check_classifier"
+	admissionDeploymentHallucinationDetector = "hallucination_detector"
+	admissionDeploymentFeedbackDetector      = "feedback_detector"
 )
 
 func buildAdmissionRegistry(cfg *config.RouterConfig) *admission.Registry {
