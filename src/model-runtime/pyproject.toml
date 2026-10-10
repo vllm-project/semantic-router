@@ -112,4 +112,5 @@ testpaths = ["tests"]
 markers = [
   "gpu: needs a CUDA or ROCm device; skipped on CPU-only hosts",
   "reference: needs the Transformers reference implementation",
+  "prod_weights: needs full model checkpoints under models/ at the repository root",
 ]
