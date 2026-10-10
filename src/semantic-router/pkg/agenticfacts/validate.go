@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Context portability values the Router understands. Anything else is rejected
@@ -201,6 +203,12 @@ func (v *validator) checkBudget(envelope Envelope) {
 // checkCapabilities bounds the capability list and normalizes entries to lower
 // case, since capabilities are symbolic tokens matched against model card
 // metadata.
+//
+// Only canonical protocol capability names are accepted, the same vocabulary
+// strict candidate requirements match model cards against. An unknown name is
+// rejected rather than ignored: ignoring it would tell the caller its request
+// was narrowed when it was not. Model card aliases such as "vision" are not
+// accepted, so each capability has one spelling in this contract.
 func (v *validator) checkCapabilities(envelope Envelope) {
 	if len(envelope.RequiredCapabilities) > v.bounds.MaxCapabilities {
 		v.result.reject("required_capabilities", ReasonTooMany)
@@ -215,12 +223,25 @@ func (v *validator) checkCapabilities(envelope Envelope) {
 			v.result.reject("required_capabilities", ReasonMalformed)
 		case len(value) > v.bounds.MaxStringLength:
 			v.result.reject("required_capabilities", ReasonTooLong)
+		case !knownCapability(value):
+			v.result.reject("required_capabilities", ReasonMalformed)
 		default:
 			values = append(values, value)
 		}
 	}
 
 	v.accepted.RequiredCapabilities = dedupSorted(values)
+}
+
+// knownCapability reports whether name is a canonical protocol capability.
+// "chat" is the one alias ParseCapabilities accepts itself, so it is refused
+// here to keep a single spelling per capability.
+func knownCapability(name string) bool {
+	if name == "chat" {
+		return false
+	}
+	_, err := llmprotocol.ParseCapabilities([]string{name})
+	return err == nil
 }
 
 // checkTrustBoundary bounds the tenant, residency, and label identifiers.
