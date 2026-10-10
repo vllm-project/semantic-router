@@ -34,6 +34,7 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/kv_connector/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		bench/redteam \
 		src/training/model_eval/test_provenance.py \

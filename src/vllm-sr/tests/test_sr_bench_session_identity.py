@@ -194,9 +194,12 @@ def test_preview_report_stays_stateless_without_live_subject_calls(
     assert report["summary"]["targets"][0]["continuity"]["session_mode"] == STATELESS
 
 
-def test_plan_rejects_unknown_session_mode(endpoint: ThreadingHTTPServer) -> None:
+@pytest.mark.parametrize("session_mode", ["per_request", None, 7, [], {}])
+def test_plan_rejects_unknown_session_mode(
+    endpoint: ThreadingHTTPServer, session_mode: object
+) -> None:
     with pytest.raises(ValueError, match="session_mode must be"):
-        plan(_manifest(endpoint, {"id": "mom", "session_mode": "per_request"}))
+        plan(_manifest(endpoint, {"id": "mom", "session_mode": session_mode}))
 
 
 def test_registered_session_aware_target_freezes_through_service(

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -399,11 +400,20 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 		}
 
 		// Serve the first output file (or specific one if index is provided)
+		if len(pathParts) > 2 {
+			http.Error(w, "Invalid file index", http.StatusBadRequest)
+			return
+		}
 		fileIdx := 0
 		if len(pathParts) > 1 && pathParts[1] != "" {
-			_, _ = fmt.Sscanf(pathParts[1], "%d", &fileIdx)
+			var err error
+			fileIdx, err = strconv.Atoi(pathParts[1])
+			if err != nil {
+				http.Error(w, "Invalid file index", http.StatusBadRequest)
+				return
+			}
 		}
-		if fileIdx >= len(job.OutputFiles) {
+		if fileIdx < 0 || fileIdx >= len(job.OutputFiles) {
 			http.Error(w, "File index out of range", http.StatusBadRequest)
 			return
 		}
