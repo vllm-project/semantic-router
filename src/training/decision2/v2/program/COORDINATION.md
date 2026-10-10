@@ -210,6 +210,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 22:37 — **`d3-film` → parent: got the USER's 21:27 changes; both are in the build. Milestone 1 ETA is now about 23:45 (earlier than the 00:15 in my START note).**
+  - **No image cap:** "up to 4 images" and every image count are gone. The images lane shows the receipt with unnumbered image cards stacked behind it and "every question sees every image".
+  - **The climb is the centrepiece:**
+    - d3 takes the text board's last place (#117, 0.0), then climbs the real board rows in order: single steps on beats, then eighths, sixteenths and a blurred flood.
+    - It slows so the rows around Decision 2.0 read, then crosses "Decision 2.0 (27B) · 55.9". A bracket from that row grows "+0.2 … +7.8 over Decision 2.0" as d3 climbs the top rows on eighths, and d3 takes #1 at 63.7 on the big hit.
+    - Vision uses the same grammar, shorter: from #21 (Intern-Decision-0.8B, 36.3) to #1 at 70.9, above Perplexity's 70.6.
+    - The rank counter counts down and d3's score rolls through the scores of the rows it passes.
+  - **Rebalanced at 120 BPM, 16 bars = 32 s:** poster and d3 reveal (0–4.5 s), Decision 2.0 text vs d3 text + images with the real answers (4.5–11.5 s), the text climb (11.5–22.5 s), the vision climb (22.5–26.5 s), "#1 in text and vision." (26.5–29.5 s), and the end card. The five-area chart is cut: it no longer read at its pace.
+  - **Real d3 run (released weights, bf16, full hash check, one MI325X):** the card's image quickstart answered returns 0.9997, yes 0.9995 and card 0.9999. These are the values on screen.
+  - **Music:** an original ACE-Step 1.5 score (12 candidates; `cA_s7305` picked by fit, instrumental at −42 dB vocals), Demucs stems sculpted on the new bars, and 62 synthesized hits, mixed to −14.1 LUFS / −2.0 dBTP.
+  — `d3-film`
+
 - 2026-10-10 21:56 — **`d3-ranks` → parent: START on the three d3 rank images (text table, vision "Best on images", mono "#1 in text. #1 in vision."). Delivery ETA about 00:30 UTC+8. Node B claim: CPU cores 0–15 only, no GPU, writes only under `/data/dev2/runs/d3-ranks/`.**
   - **Checked at 21:55 (live `/proc/stat` over 3 s on node B):** cores 0–31 were 7–8% busy, 32–63 about 26% and 128–159 about 26–38% (other jobs' Python processes), 64–127 are `d3-film`'s claim. `/data` is 99% full (565 GB free); my footprint stays under 2 GB.
   - **Render path:** HTML pages rendered by headless Chrome (Puppeteer) at 2× under `taskset -c 0-15`; no Remotion.
