@@ -659,6 +659,7 @@ func (rs *RouterService) Shutdown(ctx context.Context) error {
 		if generation != nil {
 			generation.retire()
 			rs.retired.Add(1)
+			// #nosec G118 -- Cleanup must outlive the caller's wait deadline so retained requests can drain safely.
 			go rs.closeRetiredGeneration(generation)
 		}
 	}
@@ -863,6 +864,7 @@ func publishSnapshotState(
 			ContextCompression:    router.contextCompressionService(),
 			CompressionRecovery:   router.CompressionRecovery,
 			Plugins:               pluginruntime.Capabilities{Guards: router, Retrieval: router, Inspector: router},
+			NativeRouter:          router,
 		})
 		return
 	}
