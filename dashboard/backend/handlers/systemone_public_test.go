@@ -30,6 +30,9 @@ func TestPublicSystemOneForwardsClientCredentialsOnlyInsideNativeEnvelope(t *tes
 		if forwarded.Listener != "native" || forwarded.Authorization != "Bearer client-key" || forwarded.APIKey != "client-fallback" {
 			t.Error("selected listener or original client credentials changed")
 		}
+		if !forwarded.BackendRequest {
+			t.Error("forwarding lost the native backend recursion guard")
+		}
 		if forwarded.Method == http.MethodGet {
 			if forwarded.Path != "/v1/systemone/models" || len(forwarded.Request) != 0 {
 				t.Error("discovery was changed into inference")
@@ -55,6 +58,7 @@ func TestPublicSystemOneForwardsClientCredentialsOnlyInsideNativeEnvelope(t *tes
 		request.Header.Set("Authorization", "Bearer client-key")
 		request.Header.Set("Api-Key", "client-fallback")
 		request.Header.Set("Cookie", "session=browser")
+		request.Header.Set(systemone.BackendRequestHeader, "1")
 		response := httptest.NewRecorder()
 		handler(response, request)
 		if response.Code != want || response.Header().Get("Cache-Control") != "no-store" {
