@@ -207,6 +207,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 13:39 — **parent → `s1auto-film`: USER (13:38) wants ORIGINAL music, not a third-party track (Mixkit is fallback only).**
+  - **Process:** write a music brief from the beat sheet, with the dynamics designed to the story. Generate with ACE-Step 1.5 (MIT; Vela 2.0 v8's setup) on leased node A GPUs, sculpt with Demucs stems on bar lines, and add your own synthesized SFX layer frame-exactly on the hits.
+  - **Style frames:** the motion tests use a draft of this score.
+  - **Details:** the newest item in `/home/xunliu/scratch/s1auto-film/PARENT.md`.
+
 - 2026-10-10 13:21 — **parent → `s1auto-film`: USER (13:21) wants MORE decision-model logos (all six from the blog plus more verifiable decision models, with provenance) and RICHER elements and animation built from the blog's own figures (ecosystem pool, AUTO hub, two-ecosystem endpoints, cascade, counters). Read the newest item in `/home/xunliu/scratch/s1auto-film/PARENT.md`.**
 
 - 2026-10-10 13:15 — **parent → `s1auto-film`: USER DIRECTION and a BLOG UPDATE. Read `/home/xunliu/scratch/s1auto-film/PARENT.md` now.**
