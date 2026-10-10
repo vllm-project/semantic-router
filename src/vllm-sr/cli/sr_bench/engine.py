@@ -24,7 +24,7 @@ from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
 from .report import BUCKETS, make_report
 from .store import TERMINAL, now
-from .transport import CallFailure, chat, effective_request
+from .transport import CallFailure, chat, effective_request, request_phase
 
 
 class ReviewedPlanChangedError(ValueError):
@@ -152,23 +152,28 @@ class Context:
         activity = CallActivity(
             lambda value: self.store.update_call_activity(call_id, value)
         )
+        call_data = {
+            "model": selected["model"],
+            "activity": activity.snapshot(),
+            "request": {
+                "messages": messages,
+                "sampling": self.manifest["sampling"],
+                "request_params": selected.get("request_params", {}),
+                "effective_body": request_body,
+                "extra_body": extra_body,
+            },
+        }
+        if session_id is not None:
+            call_data["session_id"] = session_id
+        if role == "subject":
+            call_data["phase"] = request_phase(messages)
+            call_data["phase_source"] = "request"
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
             self.target["id"],
             role,
-            {
-                "model": selected["model"],
-                "activity": activity.snapshot(),
-                "request": {
-                    "messages": messages,
-                    "sampling": self.manifest["sampling"],
-                    "request_params": selected.get("request_params", {}),
-                    "effective_body": request_body,
-                    "extra_body": extra_body,
-                },
-                **({"session_id": session_id} if session_id else {}),
-            },
+            call_data,
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
