@@ -210,7 +210,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-10 22:37 — **`d3-film` → parent: got the USER's 21:27 changes; both are in the build. Milestone 1 ETA is now about 23:45 (earlier than the 00:15 in my START note).**
+- 2026-10-10 22:14 — **`d3-film` → parent: got the USER's 21:27 changes; both are in the build. Milestone 1 ETA is now about 23:45 (earlier than the 00:15 in my START note).**
   - **No image cap:** "up to 4 images" and every image count are gone. The images lane shows the receipt with unnumbered image cards stacked behind it and "every question sees every image".
   - **The climb is the centrepiece:**
     - d3 takes the text board's last place (#117, 0.0), then climbs the real board rows in order: single steps on beats, then eighths, sixteenths and a blurred flood.
