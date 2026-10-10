@@ -89,7 +89,6 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	ctx.SemanticRequest = request
 	// Per-model accounting keys off the validated concrete dispatch model.
 	ctx.RequestModel = dispatch.logicalModel
-	ctx.UpstreamBackendAddress = dispatch.backendAddress
 
 	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
