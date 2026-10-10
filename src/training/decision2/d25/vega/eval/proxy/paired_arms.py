@@ -205,6 +205,10 @@ def main(argv=None):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     cal = json.loads(Path(a.calibration).read_text())
+    if cal["final"]["O_model"] != "O1":
+        raise SystemExit(
+            "the paired gate is pre-registered with the O1 map; pass an O1 calibration"
+        )
     _, build_rows = load_build(a.proxy_build)
     tab_r = o_tables(build_rows, load_ours_proxy(a.proxy_build, a.ref_probs))
     o_r, per_r = o_from(tab_r)

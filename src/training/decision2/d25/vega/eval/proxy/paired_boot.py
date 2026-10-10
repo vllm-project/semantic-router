@@ -389,6 +389,10 @@ def main(argv=None):
     out = Path(a.out)
     (out / "boot").mkdir(parents=True, exist_ok=True)
     cal = json.loads(Path(a.calibration).read_text())
+    if cal["final"]["O_model"] != "O1":
+        raise SystemExit(
+            "the paired gate is pre-registered with the O1 map; pass an O1 calibration"
+        )
     t0 = time.time()
     suite = Suite(a.suite, "0.3")
     rows = list(suite.rows(apply_exclusions=True))

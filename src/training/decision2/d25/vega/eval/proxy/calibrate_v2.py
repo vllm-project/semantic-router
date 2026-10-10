@@ -87,6 +87,15 @@ ANCHOR_BOARD = {
     "deck31b": "deck31b",
     "decider-gemma4-31b": "decider-chat-gemma4-31b",
     "decider-qwen36-27b": "decider-chat-qwen3.6-27b",
+    "eikos": "eikos-27b-fp8",
+    "clef-flash": "clef-flash",
+    "xor-26b": "xor-26b-a4b",
+    "xor12": "xor-1.2",
+    "decider-4b": "decider-4b",
+    "decisio-qwen": "decisio-0.4.0-qwen3.6-35b-a3b",
+    "decisio-gemma12": "decisio-0.4.0-gemma-4-12b",
+    "ajev": "ajev-lora5",
+    "jiwo-4b": "jiwo-4b",
 }
 FAMILY = {
     "pplx": "qwen3.8 full FT",
@@ -105,6 +114,15 @@ FAMILY = {
     "deck31b": "gemma-4 stock + readout",
     "decider-gemma4-31b": "gemma-4 stock + readout",
     "decider-qwen36-27b": "qwen3.6 stock + readout",
+    "eikos": "qwen3.8 LoRA",
+    "clef-flash": "qwen3.5-9B full FT",
+    "xor-26b": "gemma-4 MoE LoRA",
+    "xor12": "qwen3.6 MoE LoRA",
+    "decider-4b": "qwen3.5-4B full FT",
+    "decisio-qwen": "qwen3.6 stock + readout",
+    "decisio-gemma12": "gemma-4 stock + readout",
+    "ajev": "gemma-4 LoRA",
+    "jiwo-4b": "qwen3.5-4B full FT",
 }
 PRIVATE = sorted(s_weights())
 INDEX_IDS = sorted({n for ids in AREAS.values() for n in ids})
