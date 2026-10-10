@@ -215,6 +215,17 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 		}
 	}
 
+	for _, listener := range c.Listeners {
+		if listener.SystemOne == nil {
+			continue
+		}
+		for _, model := range listener.SystemOne.Models {
+			if entrypoint, ok := c.ResolveEntrypoint(SystemOneAPI, model); ok {
+				reachable[entrypoint.Recipe] = struct{}{}
+			}
+		}
+	}
+
 	if len(c.Recipes) == 0 {
 		if _, ok := reachable[DefaultRecipeName]; !ok {
 			return nil

@@ -24,6 +24,7 @@ func PublicSystemOneHandler(upstream string, providers ...routerauth.CredentialP
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		forwarded := systemone.ForwardRequest{Listener: os.Getenv("VLLM_SR_SYSTEMONE_LISTENER"), Method: r.Method, Path: r.URL.Path, Authorization: r.Header.Get("Authorization"), APIKey: r.Header.Get("Api-Key")}
+		forwarded.BackendRequest = r.Header.Get(systemone.BackendRequestHeader) != ""
 		if !forwarded.ValidOperation() {
 			decisionModelError(w, 405, "method_not_allowed", "Unsupported native operation")
 			return
