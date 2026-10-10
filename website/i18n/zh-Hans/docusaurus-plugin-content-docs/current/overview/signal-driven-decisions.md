@@ -3,7 +3,7 @@ sidebar_position: 4
 title: 路由流水线
 description: 信号、投影、决策、插件、算法和模型池如何把一次请求变成执行路径。
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/signal-driven-decisions.md"
   outdated: false
 ---
@@ -75,6 +75,8 @@ flowchart LR
 
 提供方把逻辑模型名绑定到物理推理端点。池中可以包含本地 vLLM 或 Ollama 服务、Kubernetes 托管模型，或远程 OpenAI 兼容提供方。Semantic Router 选择模型路径；模型服务器或后端调度器执行它，并拥有副本放置。
 
+需要模型的信号会使用模型运行时中的 deployment；多个任务可以共用同一部署和副本池。算法选择回答用户的后端模型，运行时副本池则为某个部署选择可用 worker，两者是不同的调度层。见[组件架构](component-architecture)。
+
 能力和运行时元数据只在策略边界内有用。如果快速后端无法满足请求的模态、上下文、工具或本地性要求，它就不合格。
 
 ## 配方保持策略隔离
@@ -89,7 +91,7 @@ flowchart LR
 
 Harness 发送对话、工具定义和虚拟模型名。入口选择配方；信号识别编码请求及其对话事实。决策确定路由与候选集，再经过能力与上下文检查缩小候选集，由算法选择模型。配置后，路由插件可以应用工具策略或上下文压缩。响应返回 harness，由它执行工具并推进下一任务步骤。
 
-多轮路由需要明确配置会话身份与保护。活跃工具循环或不可迁移的提供方状态会限制模型切换；被策略排除的候选不能仅为了维持连续性而恢复。集成边界见 [agent harness 指南](/zh-Hans/docs/installation/agent-harness)。
+多轮路由需要明确配置会话身份与保护。活跃工具循环或不可迁移的提供方状态会限制模型切换；被策略排除的候选不能仅为了维持连续性而恢复。集成边界见 [agent harness 指南](../installation/agent-harness)。
 
 ## 工作负载、Router 与模型池
 

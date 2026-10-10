@@ -15,7 +15,6 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
-    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -23,6 +22,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
+        'overview/component-architecture',
         'overview/use-cases',
         'overview/signal-driven-decisions',
         'overview/mom-model-family',
@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/gateway-modes',
             'installation/support-matrix',
           ],
         },
@@ -173,6 +174,13 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/workflows',
               ],
             },
+            {
+              type: 'category',
+              label: 'System One',
+              items: [
+                'tutorials/algorithm/native/cascade',
+              ],
+            },
           ],
         },
         {
@@ -290,6 +298,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/configuration-management',
             'installation/recipe-lifecycle',
             {
               type: 'category',
@@ -449,6 +458,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/open-intelligence-index-and-model-arena',
             'proposals/unified-model-catalog-and-evaluation-index',
+            'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -546,19 +556,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Troubleshooting',
       collapsed: false,
       items: [
@@ -581,6 +578,7 @@ const sidebars: SidebarsConfig = {
         'community/code-style',
       ],
     },
+    'faq',
   ],
 }
 

@@ -1,14 +1,14 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType, DecisionModelSignal, SafetySignal } from '../types/config'
+import bundledCatalog from '../modelCatalogMetadata'
+import type {
+  DecisionConditionType,
+  DecisionModelSignal,
+  Listener,
+  SafetySignal,
+} from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
-export interface ListenerConfig {
-  name: string
-  address: string
-  port: number
-  timeout?: string
-}
+export type ListenerConfig = Listener
 
 export interface VLLMEndpoint {
   name: string
@@ -127,6 +127,17 @@ export interface ProviderReliability {
   health_check_path?: string
   health_check_interval?: string
   health_check_timeout?: string
+  connect_timeout?: string
+  total_timeout?: string
+  idle_timeout?: string
+  per_try_timeout?: string
+  first_byte_timeout?: string
+  retriable_status_codes?: number[]
+  retry_back_off_base?: string
+  retry_back_off_max?: string
+  retry_after_max?: string
+  retry_budget_percent?: number
+  retry_budget_min_concurrency?: number
 }
 
 export interface LoRAAdapter {
@@ -295,6 +306,8 @@ export interface DecisionConfig {
   algorithm?: Record<string, unknown>
   action?: { type: string; destination: string }
   adaptations?: Record<string, unknown>
+  reliability?: Record<string, unknown>
+  fallback?: Record<string, unknown>
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
   emits?: Array<Record<string, unknown>>
@@ -415,6 +428,13 @@ export interface RouterReplayConfig {
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
+  capture_request_body?: boolean
+  capture_response_body?: boolean
+  capture_personal_data?: boolean
+  max_records?: number
+  max_body_bytes?: number
+  max_tool_trace_bytes?: number
+  max_tool_trace_steps?: number
 }
 
 export interface MemoryMilvusConfig {
@@ -688,6 +708,9 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
+  decision_model?: { deployment: string }
+  safety?: string
+  hazard?: string
   prompt_guard?: string
   domain_classifier?: string
   pii_classifier?: string
@@ -757,9 +780,7 @@ export interface CanonicalEmbeddingCatalogConfig {
 export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
-  auto_model_name?: string
-  auto_model_names?: string[]
-  include_config_models_in_list?: boolean
+  list_backend_models?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }
@@ -810,7 +831,23 @@ export interface CanonicalModelModulesConfig {
   modality_detector?: ModalityDetectorConfig
 }
 
+export interface CanonicalModelDeployment {
+  artifact?: string
+  revision?: string
+  external_model?: string
+  provider?: string
+  device?: string
+  input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
+  profile?: string
+  endpoint?: string
+  replicas?: Array<{ device?: string; endpoint?: string; served_name?: string }>
+  served_name?: string
+  public_name?: string
+}
+
 export interface CanonicalModelCatalogConfig {
+  bindings?: Record<string, { deployment: string; contract: string }>
+  deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
   external?: ExternalModelConfig[]
@@ -1377,6 +1414,8 @@ export interface DecisionFormState {
   action: Record<string, unknown>
   algorithm?: Record<string, unknown>
   adaptations: Record<string, unknown>
+  reliability: Record<string, unknown>
+  fallback: Record<string, unknown>
   declarative: Record<string, unknown>
 }
 

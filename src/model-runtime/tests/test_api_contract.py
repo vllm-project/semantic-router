@@ -11,6 +11,7 @@ import yaml
 from starlette.testclient import TestClient
 from vllm_srun.api.app import API_VERSION, OPENAPI_PATH, create_app
 from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.plugins.base import PackageRef
 from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
@@ -74,6 +75,66 @@ def test_decisions_response_matches_the_contract(client):
     assert meta["profile"] == "exact" and meta["numerics"] == "exact"
 
 
+@pytest.mark.parametrize("repo_id", [None, "fixture-owner/Decision-2.0-Tiny-Qwen3"])
+def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(
+    qwen3_package, monkeypatch, repo_id
+):
+    revision = "a" * 40 if repo_id else None
+    if repo_id:
+        # Resolve the repository to tiny local weights; package verification and
+        # the family's ModelInfo construction still use the real loading path.
+        def resolve_fixture(model, **options):
+            assert model == repo_id and options["revision"] == revision
+            return PackageRef(qwen3_package, repo_id, revision)
+
+        monkeypatch.setattr("vllm_srun.runtime.resolve", resolve_fixture)
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=repo_id or str(qwen3_package),
+                    name="public-alias",
+                    revision=revision,
+                    device="cpu",
+                ),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        request = {
+            "model": "public-alias",
+            "state": STATE,
+            "questions": QUESTIONS,
+            "states": {"second": {"state": STATE, "questions": QUESTIONS}},
+            "options": {"return_meta": True},
+        }
+        client = TestClient(create_app(runtime))
+        response = post(client, request, "/v1/systemone")
+        assert response.status_code == 200
+        body = response.json()
+        check("DecisionResponse", body)
+        info = runtime.lookup("public-alias").model.info
+        assert info.id == "Decision-2.0-Tiny-Qwen3" and info.repo == repo_id
+        expected_id = repo_id or info.id
+        for envelope in (body, body["states"]["second"]):
+            assert envelope["model"] == "public-alias"
+            assert envelope["meta"]["model_id"] == expected_id
+            assert envelope["meta"]["revision"] == revision
+            assert envelope["meta"]["model_sha256"] == info.model_sha256
+        request["options"] = {"return_meta": False}
+        response = post(client, request, "/v1/systemone")
+        hidden = response.json()
+        assert response.status_code == 200 and "meta" not in hidden
+        assert "meta" not in hidden["states"]["second"]
+        assert hidden["answers"] == body["answers"]
+        assert (
+            hidden["states"]["second"]["answers"] == body["states"]["second"]["answers"]
+        )
+    finally:
+        runtime.stop()
+
+
 def test_systemone_alias_answers_identically(client):
     first = post(client, {"state": STATE, "questions": QUESTIONS}).json()
     second = post(
@@ -100,9 +161,30 @@ def test_per_question_errors_do_not_fail_siblings(client):
     )
     body = post(client, {"state": STATE, "questions": questions}).json()
     check("DecisionResponse", body)
-    assert body["answers"]["bad"] == {"type": "set", "error": "invalid_question"}
-    assert body["answers"]["tiny"] == {"type": "choice", "error": "invalid_question"}
+    bad, tiny = body["answers"]["bad"], body["answers"]["tiny"]
+    assert (bad["type"], bad["error"]) == ("set", "invalid_question")
+    assert (tiny["type"], tiny["error"]) == ("choice", "invalid_question")
+    # Each failed question says why, naming the field.
+    assert bad["message"] and "criteria" in tiny["message"]
     assert "error" not in body["answers"]["domain"]
+
+
+def test_a_request_without_a_valid_question_is_refused(client):
+    response = post(
+        client,
+        {
+            "state": STATE,
+            "questions": {
+                "bad": {"type": "noul", "instructions": "x", "colour": "blue"},
+                "worse": {"type": "rank", "instructions": "x"},
+            },
+        },
+    )
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "invalid_request"
+    assert "bad: noul questions do not take ['colour']" in error["message"]
+    assert "worse: type must be one of" in error["message"]
 
 
 CHOICES = [{"key": "a"}, {"key": "b"}]
@@ -222,7 +304,9 @@ def test_overlong_question_is_rejected_not_truncated(client):
     body = post(
         client, {"state": "word " * 5000, "questions": {"q": QUESTIONS["reasoning"]}}
     ).json()
-    assert body["answers"]["q"] == {"type": "noul", "error": "max_length_exceeded"}
+    answer = body["answers"]["q"]
+    assert (answer["type"], answer["error"]) == ("noul", "max_length_exceeded")
+    assert "exceeds max_length" in answer["message"]
 
 
 def test_deadline_exceeded_is_reported_per_question(client):

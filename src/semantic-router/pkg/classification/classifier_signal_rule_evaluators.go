@@ -107,10 +107,10 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
-	categoryName := ""
+	topLabel, categoryName := "", ""
 	if err == nil {
 		if name, ok := c.CategoryMapping.GetCategoryFromIndex(domainResult.Class); ok {
-			categoryName = c.translateMMLUToGeneric(name)
+			topLabel, categoryName = name, c.translateMMLUToGeneric(name)
 		}
 	}
 	results.DomainClassification = &DomainClassificationResult{
@@ -137,7 +137,7 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 		}
 		recordSignalRuleErrors(results, mu, config.SignalTypeDomain, names, domainEvaluationFailedCode)
 	} else {
-		matched := c.matchDomainCategories(domainResult, categoryName)
+		matched := c.matchDomainCategories(domainResult, topLabel)
 		mu.Lock()
 		for _, cat := range matched {
 			c.recordSignalMatch(config.SignalTypeDomain, cat.Category)
@@ -264,12 +264,16 @@ func (c *Classifier) applyUserFeedbackSignalResult(results *SignalResults, mu *s
 }
 
 func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
+	c.evaluateReaskSignalContext(context.Background(), results, mu, currentUserText, priorUserMessages)
+}
+
+func (c *Classifier) evaluateReaskSignalContext(ctx context.Context, results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
 	names := c.applicableReaskRuleNames(currentUserText, priorUserMessages)
 	if len(names) == 0 {
 		return
 	}
 	start := time.Now()
-	matchedRules, err := c.reaskClassifier.Classify(currentUserText, priorUserMessages)
+	matchedRules, err := c.reaskClassifier.ClassifyContext(ctx, currentUserText, priorUserMessages)
 	elapsed := time.Since(start)
 
 	results.Metrics.Reask.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

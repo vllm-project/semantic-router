@@ -89,10 +89,10 @@ release: v9.9
     def test_github_outputs_expose_validated_catalog_snapshot(self) -> None:
         contract = release_contract.ReleaseContract(
             pyproject_version="9.8.7",
-            sim_version="0.1.0",
             helm_chart_version="9.8.7",
             helm_app_version="latest",
             release_images=("vllm-sr",),
+            chart_images=(),
         )
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "github-output"

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
-
-import torch
+from typing import Any, cast
 
 from ...errors import (
     INVALID_MODEL_OUTPUT,
@@ -13,6 +11,7 @@ from ...errors import (
     MAX_LENGTH_EXCEEDED,
     PackageError,
     QuestionError,
+    question_error,
 )
 from ...plugins.base import (
     BackboneSpec,
@@ -28,8 +27,9 @@ from ...plugins.base import (
 from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 
 __all__ = ["Decision2Family", "Decision2Model"]
-from ...heads.candidate import forward_logits, load_head
+from ...heads.candidate import CandidateHead, forward_logits, load_head
 from ...registry import builtin, policy
+from ...registry.artifacts import read_json
 from ...registry.resolve import download_base
 from ...systemone import (
     GOLDEN_STATE,
@@ -69,7 +69,7 @@ class Decision2Family(ModelFamily):
         root = package.root
         pointer, manifest, manifest_sha256 = pkg.verify_manifest(root)
         licence = policy.check(manifest, self.options.accept_licences)
-        decision_config = pkg.read_json(root / "decision_config.json")
+        decision_config = read_json(root / "decision_config.json")
         backbone_type = pkg.check_decision_config(decision_config)
         base_root = None
         if manifest["profile"] == "qwen-adapter":
@@ -96,7 +96,7 @@ class Decision2Family(ModelFamily):
             raise PackageError("a qwen-full package cannot hold a LoRA checkpoint")
         model_sha256 = pkg.model_identity(root, decision_config, base_root)
         identity = (
-            manifest.get("identity")
+            cast(dict[str, Any], manifest.get("identity"))
             if isinstance(manifest.get("identity"), dict)
             else {}
         )
@@ -145,7 +145,7 @@ class Decision2Family(ModelFamily):
         details: pkg.Decision2Package = package.details["package"]
         root = details.root
         if details.profile == "qwen-full":
-            config = pkg.read_json(root / "backbone" / "config.json")
+            config = read_json(root / "backbone" / "config.json")
             files = tuple(sorted((root / "backbone").glob("*.safetensors")))
             backbone = BackboneSpec(
                 model_type=_model_type(config, details.backbone_type),
@@ -155,12 +155,12 @@ class Decision2Family(ModelFamily):
         else:
             base_root = details.base_root
             assert base_root is not None
-            full = pkg.read_json(base_root / "config.json")
+            full = read_json(base_root / "config.json")
             config = full.get("text_config", full)
             files = tuple(sorted(base_root.glob("*.safetensors")))
             contract = details.decision_config["lora"]
             lora = LoRASpec(
-                adapter_config=pkg.read_json(root / "adapter" / "adapter_config.json"),
+                adapter_config=read_json(root / "adapter" / "adapter_config.json"),
                 weight_files=(root / "adapter" / "adapter_model.safetensors",),
                 rank=int(contract["rank"]),
                 alpha=float(contract["alpha"]),
@@ -177,7 +177,9 @@ class Decision2Family(ModelFamily):
         return ModelSpec(
             name=package.model_name,
             backbone=backbone,
-            dtype=DtypePolicy(),
+            # cuda-fused-approximate.md: no decision changed with CUDA's
+            # approximate fused kernels.
+            dtype=DtypePolicy(approximate_kernels=True),
             max_input_tokens=package.max_input_tokens,
             requires=backbone.requires,
         )
@@ -193,7 +195,7 @@ class Decision2Family(ModelFamily):
             details.decision_config["head_dim"],
         )
         head = head.to(engine_model.device)
-        tokenizer = Tokenizer.from_package(details.root)
+        tokenizer = Tokenizer.from_package(details.root, package.max_input_tokens)
         parameters = engine_model.parameter_count() + sum(
             p.numel() for p in head.parameters()
         )
@@ -243,15 +245,16 @@ def _model_type(config: dict[str, Any], declared: str) -> str:
         raise PackageError(
             f"backbone config model_type {model_type!r} differs from decision_config ({declared})"
         )
-    return model_type
+    checked: str = model_type
+    return checked
 
 
-class Decision2Model(DecisionModel):
+class Decision2Model(DecisionModel[RenderedItem, list[float] | None]):
     def __init__(
         self,
         info: ModelInfo,
         engine_model: EngineModel,
-        head: torch.nn.Module,
+        head: CandidateHead,
         tokenizer: Tokenizer,
         details: pkg.Decision2Package,
     ):
@@ -264,7 +267,9 @@ class Decision2Model(DecisionModel):
     def forward_token_budget(self) -> int | None:
         return self.engine_model.max_forward_tokens()
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
+    def plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None = None
+    ) -> RequestPlan[RenderedItem]:
         if not valid_state(state):
             raise ValueError("state must be text, an object, or an array")
         items: list[RenderedItem] = []
@@ -283,16 +288,15 @@ class Decision2Model(DecisionModel):
                     self.info.limits["max_input_tokens"],
                 )
             except QuestionError as exc:
-                errors[question_id] = {
-                    "type": (
-                        question.get("type") if isinstance(question, dict) else None
-                    ),
-                    "error": (
+                errors[question_id] = question_error(
+                    question.get("type") if isinstance(question, dict) else None,
+                    exc,
+                    (
                         exc.code
                         if exc.code in (INVALID_QUESTION, MAX_LENGTH_EXCEEDED)
                         else INVALID_QUESTION
                     ),
-                }
+                )
                 continue
             tokens += len(encoded["ids"])
             items.append(
@@ -307,6 +311,13 @@ class Decision2Model(DecisionModel):
                 )
             )
         return RequestPlan(
+            complete_inputs=frozenset(
+                key
+                for key, question in questions.items()
+                if isinstance(question, dict)
+                and question.get("require_full_input") is True
+                and key not in errors
+            ),
             question_ids=list(questions),
             items=items,
             errors=errors,

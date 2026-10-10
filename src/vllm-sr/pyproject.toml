@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-sr"
-version = "0.4.0"
+version = "0.5.0"
 description = "vLLM Semantic Router - Intelligent routing for Mixture-of-Models"
 authors = [{name = "vLLM-SR Team"}]
 readme = "README.md"
@@ -43,10 +43,10 @@ dev = [
 vllm-sr = "cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/vllm-project/vllm-semantic-router"
-Documentation = "https://github.com/vllm-project/vllm-semantic-router/blob/main/README.md"
-Repository = "https://github.com/vllm-project/vllm-semantic-router"
-Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
+Homepage = "https://vllm-sr.ai"
+Documentation = "https://vllm-sr.ai/docs/intro"
+Repository = "https://github.com/vllm-project/semantic-router"
+Issues = "https://github.com/vllm-project/semantic-router/issues"
 
 [tool.setuptools]
 packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.sr_bench", "cli.config_schema"]
@@ -64,3 +64,6 @@ sdist = "build_support.SDist"
 [tool.pytest.ini_options]
 addopts = ["-v"]
 testpaths = ["tests"]
+markers = [
+    "router_image: runs `config validate` with the Router image validation enabled",
+]
