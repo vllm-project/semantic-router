@@ -23,7 +23,7 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("milvus: %w", gateErr)
@@ -102,7 +102,7 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("milvus: %w", gateErr)
@@ -150,7 +150,7 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("milvus: %w", gateErr)

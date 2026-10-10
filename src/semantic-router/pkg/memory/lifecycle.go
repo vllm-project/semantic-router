@@ -8,34 +8,52 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// storeCloseWait bounds how long Close waits for in-flight work before it
-// releases the client anyway; every store call already carries its own timeout.
-const storeCloseWait = 10 * time.Second
+// defaultStoreCloseWait bounds how long Close blocks. Work still running after
+// that keeps the client alive; it is released once the work stops.
+const defaultStoreCloseWait = 10 * time.Second
 
-// storeLifecycle admits store operations until close, and lets Close wait for
-// in-flight operations and background jobs before the store releases its client.
-// The zero value is ready to use.
+// storeLifecycle admits store operations until close. Close cancels them and
+// releases the client only after every operation and background job has
+// returned, so no call runs against a released client. Zero value is ready.
 type storeLifecycle struct {
-	mu     sync.Mutex
-	closed bool
-	ops    sync.WaitGroup
-	jobs   sync.WaitGroup
-	jobCtx context.Context
-	stop   context.CancelFunc
+	mu        sync.Mutex
+	closed    bool
+	ops       sync.WaitGroup
+	jobs      sync.WaitGroup
+	stopCtx   context.Context
+	stop      context.CancelFunc
+	closeWait time.Duration
 }
 
-// begin admits one operation; the caller must run the returned release.
-func (l *storeLifecycle) begin(enabled bool) (func(), error) {
+func (l *storeLifecycle) stopContextLocked() context.Context {
+	if l.stopCtx == nil {
+		l.stopCtx, l.stop = context.WithCancel(context.Background())
+	}
+	return l.stopCtx
+}
+
+// begin admits one operation. The returned context is also cancelled when Close
+// starts; the caller must use it and must run release.
+func (l *storeLifecycle) begin(ctx context.Context, enabled bool) (context.Context, func(), error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
-		return nil, ErrStoreClosed
+		return ctx, nil, ErrStoreClosed
 	}
 	if !enabled {
-		return nil, ErrStoreDisabled
+		return ctx, nil, ErrStoreDisabled
 	}
 	l.ops.Add(1)
-	return l.ops.Done, nil
+	opCtx, cancel := context.WithCancel(ctx)
+	unhook := context.AfterFunc(l.stopContextLocked(), cancel)
+	var once sync.Once
+	return opCtx, func() {
+		once.Do(func() {
+			unhook()
+			cancel()
+			l.ops.Done()
+		})
+	}, nil
 }
 
 func (l *storeLifecycle) isClosed() bool {
@@ -44,17 +62,14 @@ func (l *storeLifecycle) isClosed() bool {
 	return l.closed
 }
 
-// goBackground runs job on a context that close cancels; close waits for it.
+// goBackground runs job on a context that Close cancels; Close waits for it.
 func (l *storeLifecycle) goBackground(job func(context.Context)) {
 	l.mu.Lock()
 	if l.closed {
 		l.mu.Unlock()
 		return
 	}
-	if l.jobCtx == nil {
-		l.jobCtx, l.stop = context.WithCancel(context.Background())
-	}
-	ctx := l.jobCtx
+	ctx := l.stopContextLocked()
 	l.jobs.Add(1)
 	l.mu.Unlock()
 	go func() {
@@ -63,19 +78,23 @@ func (l *storeLifecycle) goBackground(job func(context.Context)) {
 	}()
 }
 
-// close stops admitting work, cancels background jobs, and waits (bounded) for
-// both. It reports false when the store was already closed.
-func (l *storeLifecycle) close(backend string) bool {
+// close stops admitting work, cancels it, and runs release once every admitted
+// operation and job has returned. It runs only once; later calls return nil.
+func (l *storeLifecycle) close(backend string, release func() error) error {
 	l.mu.Lock()
 	if l.closed {
 		l.mu.Unlock()
-		return false
+		return nil
 	}
 	l.closed = true
 	if l.stop != nil {
 		l.stop()
 	}
+	wait := l.closeWait
 	l.mu.Unlock()
+	if wait <= 0 {
+		wait = defaultStoreCloseWait
+	}
 
 	drained := make(chan struct{})
 	go func() {
@@ -85,8 +104,15 @@ func (l *storeLifecycle) close(backend string) bool {
 	}()
 	select {
 	case <-drained:
-	case <-time.After(storeCloseWait):
-		logging.Warnf("Memory %s store: closing with work still in flight after %s", backend, storeCloseWait)
+		return release()
+	case <-time.After(wait):
+		logging.Warnf("Memory %s store: work still running %s after Close; the client is released when it stops", backend, wait)
+		go func() {
+			<-drained
+			if err := release(); err != nil {
+				logging.Warnf("Memory %s store: deferred client close failed: %v", backend, err)
+			}
+		}()
+		return nil
 	}
-	return true
 }

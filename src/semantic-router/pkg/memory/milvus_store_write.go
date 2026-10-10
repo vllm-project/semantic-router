@@ -22,7 +22,7 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("milvus: %w", gateErr)

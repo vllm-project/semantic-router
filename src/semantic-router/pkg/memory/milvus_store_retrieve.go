@@ -25,7 +25,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		status = "error"
 		return nil, fmt.Errorf("milvus: %w", gateErr)

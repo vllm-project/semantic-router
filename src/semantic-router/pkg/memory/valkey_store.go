@@ -217,7 +217,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("valkey: %w", gateErr)
@@ -367,7 +367,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		status = "error"
 		return nil, fmt.Errorf("valkey: %w", gateErr)
@@ -430,7 +430,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 // Get retrieves a memory by ID from Valkey.
 func (v *ValkeyStore) Get(ctx context.Context, id string) (*Memory, error) {
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("valkey: %w", gateErr)
 	}
@@ -480,7 +480,7 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("valkey: %w", gateErr)
@@ -553,7 +553,7 @@ func (v *ValkeyStore) upsert(ctx context.Context, memory *Memory) error {
 // which reports the full match count regardless of LIMIT, so we only fetch the
 // requested page.
 func (v *ValkeyStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("valkey: %w", gateErr)
 	}
@@ -650,7 +650,7 @@ func (v *ValkeyStore) Forget(ctx context.Context, id string) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("valkey: %w", gateErr)
@@ -699,7 +699,7 @@ func (v *ValkeyStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		status = "error"
 		return fmt.Errorf("valkey: %w", gateErr)
@@ -780,7 +780,7 @@ func (v *ValkeyStore) IsEnabled() bool {
 
 // CheckConnection verifies the Valkey connection is healthy.
 func (v *ValkeyStore) CheckConnection(ctx context.Context) error {
-	release, gateErr := v.life.begin(v.enabled)
+	ctx, release, gateErr := v.life.begin(ctx, v.enabled)
 	if gateErr != nil {
 		return fmt.Errorf("valkey: %w", gateErr)
 	}
@@ -802,8 +802,10 @@ func (v *ValkeyStore) CheckConnection(ctx context.Context) error {
 // Close owns the client: the router builds one per store, and nothing else
 // closes it. Later calls return ErrStoreClosed; a second Close is a no-op.
 func (v *ValkeyStore) Close() error {
-	if v.life.close("valkey") && v.client != nil {
-		v.client.Close()
-	}
-	return nil
+	return v.life.close("valkey", func() error {
+		if v.client != nil {
+			v.client.Close()
+		}
+		return nil
+	})
 }

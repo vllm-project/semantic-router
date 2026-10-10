@@ -10,7 +10,7 @@ import (
 )
 
 func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("milvus: %w", gateErr)
 	}
@@ -56,7 +56,7 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	release, gateErr := m.life.begin(m.enabled)
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("milvus: %w", gateErr)
 	}

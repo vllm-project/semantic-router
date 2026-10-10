@@ -127,7 +127,7 @@ func (m *MilvusStore) IsEnabled() bool {
 }
 
 func (m *MilvusStore) CheckConnection(ctx context.Context) error {
-	release, err := m.life.begin(m.enabled)
+	ctx, release, err := m.life.begin(ctx, m.enabled)
 	if err != nil {
 		return fmt.Errorf("milvus: %w", err)
 	}
@@ -153,10 +153,12 @@ func (m *MilvusStore) CheckConnection(ctx context.Context) error {
 // Close owns the client: the router builds one per store, and nothing else
 // closes it. Later calls return ErrStoreClosed; a second Close is a no-op.
 func (m *MilvusStore) Close() error {
-	if !m.life.close("milvus") || m.client == nil {
-		return nil
-	}
-	return m.client.Close()
+	return m.life.close("milvus", func() error {
+		if m.client == nil {
+			return nil
+		}
+		return m.client.Close()
+	})
 }
 
 func isTransientError(err error) bool {

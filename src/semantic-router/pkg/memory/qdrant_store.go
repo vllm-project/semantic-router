@@ -244,7 +244,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -296,7 +296,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 }
 
 func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -368,7 +368,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 }
 
 func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -390,7 +390,7 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -430,7 +430,7 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 }
 
 func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -538,7 +538,7 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 }
 
 func (s *QdrantStore) Forget(ctx context.Context, id string) error {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -563,7 +563,7 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 }
 
 func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -605,7 +605,7 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 func (s *QdrantStore) IsEnabled() bool { return s.enabled && !s.life.isClosed() }
 
 func (s *QdrantStore) CheckConnection(ctx context.Context) error {
-	release, gateErr := s.life.begin(s.enabled)
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
 	if gateErr != nil {
 		return fmt.Errorf("qdrant: %w", gateErr)
 	}
@@ -620,8 +620,10 @@ func (s *QdrantStore) CheckConnection(ctx context.Context) error {
 // Close releases the client once. The Qdrant client panics if used after its
 // own Close, so every method checks the lifecycle gate before touching it.
 func (s *QdrantStore) Close() error {
-	if !s.life.close("qdrant") || s.client == nil {
-		return nil
-	}
-	return s.client.Close()
+	return s.life.close("qdrant", func() error {
+		if s.client == nil {
+			return nil
+		}
+		return s.client.Close()
+	})
 }
