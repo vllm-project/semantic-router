@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestCompileModelBindingsPreservesResourceAndTaskIdentity(t *testing.T) {
 		t.Fatalf("domain=%+v", domain)
 	}
 	pii, ok := plan.Lookup("support", "pii_classifier")
-	if !ok || pii.Deployment != domain.Deployment || pii.Binding.Head == domain.Binding.Head {
+	if !ok || !reflect.DeepEqual(pii.Deployment, domain.Deployment) || pii.Binding.Head == domain.Binding.Head {
 		t.Fatalf("head/resource identities conflated: %+v", pii)
 	}
 	if _, ok := plan.Lookup("coding", "pii_classifier"); ok {
@@ -127,7 +128,7 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 	}
 	var roundTrip RouterConfig
 	applyCanonicalModelCatalogGlobal(&roundTrip, decoded)
-	if roundTrip.ModelDeployments["other-encoder"] != cfg.ModelDeployments["other-encoder"] {
+	if !reflect.DeepEqual(roundTrip.ModelDeployments["other-encoder"], cfg.ModelDeployments["other-encoder"]) {
 		t.Fatal("deployment lost during canonical round trip")
 	}
 	recipes := canonicalRecipesFromRouterConfig(cfg)

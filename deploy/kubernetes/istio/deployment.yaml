@@ -123,7 +123,7 @@ spec:
               mountPath: /app/models
       containers:
         - name: semantic-router
-          image: ghcr.io/vllm-project/semantic-router/extproc:latest
+          image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
           args: ["--secure=true"]
           securityContext:
             runAsNonRoot: false
@@ -148,7 +148,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: VLLM_SR_CONFIG_BACKUP_DIR
-              value: /app/models/.vllm-sr/config-backups
+              value: /tmp/vllm-sr/config-history
           volumeMounts:
             - name: config-volume
               mountPath: /app/config/config.yaml

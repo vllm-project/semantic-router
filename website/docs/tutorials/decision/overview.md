@@ -69,8 +69,9 @@ When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
 `on_error` and prompt-guard `on_error` behavior is retained, and the router
 warns at startup about classifier conditions that set neither. Applied policies
 appear in the `x-vsr-applied-unknown-policy` response header and the
-`llm_decision_unknown_total{decision, policy}` metric; the `fail_request` 503
-message names the fix.
+`llm_decision_unknown_total{decision, policy}` metric. The `fail_request` 503
+carries the code [`decision_unresolved`](../../api/router.md#routing-errors),
+and the Router's log line for it names the fix.
 
 Decision matching stays separate from:
 
@@ -135,8 +136,9 @@ final tie-break, so ranking never depends on map or file order.
 
 The eval API reports how one request was ranked under `decision_ranking`: the
 strategy that ran, the tier the winner came from, whether that pool was
-comparable and which decision made it incomparable, and the key that separated
-the winner from the decision behind it.
+comparable and which decision made it incomparable, the key that separated
+the winner from the decision behind it, that decision as `runner_up`, and a
+`reason` stating the values compared, such as `priority 150 > 100`.
 
 A catch-all ranks after every real match under either strategy, whatever
 priority it carries, so an unconditional fallback stays a fallback. The

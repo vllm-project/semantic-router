@@ -17,7 +17,7 @@ from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
 
 
-def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases():
+def test_migrate_preserves_named_entries_and_removes_retired_empty_auto_aliases():
     source = {
         "version": "v0.3",
         "providers": {"defaults": {}, "models": []},
@@ -35,7 +35,7 @@ def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases()
 
     assert migrated["entrypoints"] == source["entrypoints"]
     assert migrated["recipes"] == source["recipes"]
-    assert migrated["global"]["router"]["auto_model_names"] == []
+    assert "auto_model_names" not in migrated["global"]["router"]
 
 
 def test_migrate_is_idempotent_for_catalog_and_custom_provider_models():
@@ -281,7 +281,7 @@ def test_migrate_relocates_legacy_flat_empty_auto_aliases():
         }
     )
 
-    assert migrated["global"]["router"]["auto_model_names"] == []
+    assert "auto_model_names" not in migrated["global"]["router"]
     assert "auto_model_names" not in migrated["global"]
 
 
@@ -297,7 +297,9 @@ def test_migrate_prefers_canonical_auto_aliases_over_legacy_flat_value():
         }
     )
 
-    assert migrated["global"]["router"]["auto_model_names"] == ["router/canonical"]
+    assert migrated["entrypoints"] == [
+        {"model_names": ["router/canonical"], "recipe": "default"}
+    ]
     assert "auto_model_names" not in migrated["global"]
 
 
@@ -581,6 +583,131 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     ]
 
 
+def _legacy_config_with_pii_plugin() -> dict:
+    return {
+        "version": "v0.2.0",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {
+            "default_model": "gpt-4o-mini",
+            "models": [
+                {
+                    "name": "gpt-4o-mini",
+                    "endpoints": [
+                        {
+                            "name": "primary",
+                            "endpoint": "host.docker.internal:8000",
+                            "protocol": "http",
+                        }
+                    ],
+                }
+            ],
+        },
+        "decisions": [
+            {
+                "name": "default-route",
+                "description": "fallback",
+                "priority": 100,
+                "rules": {"operator": "AND", "conditions": []},
+                "modelRefs": [{"model": "gpt-4o-mini"}],
+                "plugins": [
+                    {
+                        "type": "pii",
+                        "configuration": {"enabled": True, "pii_types_allowed": []},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_cli_config_migrate_reports_non_canonical_output_without_writing(
+    tmp_path: Path,
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(_legacy_config_with_pii_plugin(), sort_keys=False)
+    )
+
+    result = CliRunner().invoke(
+        main, ["config", "migrate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 1
+    assert "Configuration migrated" not in result.stdout
+    assert "routing.decisions.0.plugins.0.type" in result.stderr
+    assert "No output was written" in result.stderr
+    assert not (tmp_path / "config.migrated.yaml").exists()
+
+
+def test_cli_config_migrate_force_keeps_existing_output_on_failure(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(_legacy_config_with_pii_plugin(), sort_keys=False)
+    )
+    output_path = tmp_path / "out.yaml"
+    output_path.write_text("previous: output\n")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "config",
+            "migrate",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output_path),
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert output_path.read_text() == "previous: output\n"
+
+
+def test_cli_config_migrate_rejects_hnsw_fields_without_writing(tmp_path: Path):
+    source = {
+        "version": "v0.2.0",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {
+            "default_model": "m",
+            "models": [
+                {
+                    "name": "m",
+                    "endpoints": [
+                        {
+                            "name": "p",
+                            "endpoint": "host.docker.internal:8000",
+                            "protocol": "http",
+                        }
+                    ],
+                }
+            ],
+        },
+        "decisions": [
+            {
+                "name": "d",
+                "description": "x",
+                "priority": 1,
+                "rules": {"operator": "AND", "conditions": []},
+                "modelRefs": [{"model": "m"}],
+            }
+        ],
+        "semantic_cache": {"enabled": True, "hnsw_config": {"hnsw_m": 16}},
+    }
+    config_path = tmp_path / "legacy.yaml"
+    config_path.write_text(yaml.safe_dump(source, sort_keys=False))
+
+    result = CliRunner().invoke(
+        main, ["config", "migrate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 1
+    assert "Configuration migrated" not in result.stdout
+    assert "hnsw_config" in result.stderr
+    assert "No output was written" in result.stderr
+    assert not (tmp_path / "legacy.migrated.yaml").exists()
+
+
 def test_migrate_config_data_moves_global_modules_under_model_catalog():
     legacy = {
         "version": "v0.3",
@@ -717,3 +844,21 @@ def test_parse_user_config_rejects_legacy_flat_signal_blocks(tmp_path: Path):
         assert "keyword_rules" in str(exc)
     else:
         raise AssertionError("expected ConfigParseError")
+
+
+def test_migrate_replaces_router_aliases_and_discovery_flag_once():
+    source = {
+        "version": "v0.3",
+        "global": {
+            "router": {
+                "auto_model_names": ["one", "two"],
+                "include_config_models_in_list": True,
+            }
+        },
+    }
+    migrated = migrate_config_data(source)
+    assert migrated["entrypoints"] == [
+        {"model_names": ["one", "two"], "recipe": "default"}
+    ]
+    assert migrated["global"]["router"] == {"list_backend_models": True}
+    assert migrate_config_data(migrated) == migrated

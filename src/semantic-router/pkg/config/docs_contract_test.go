@@ -58,7 +58,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "configuration-workflows.md"),
 		needles: []string{
 			"Choose one primary source of truth",
-			"vllm-sr serve --target k8s --config config.yaml",
+			"vllm-sr serve --target kubernetes --config config.yaml",
 			"`spec.config.routing`",
 			"Routing DSL",
 			"Avoid split ownership",
@@ -167,7 +167,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
 		needles: []string{
-			"Envoy presents the request to the Router.",
+			"The standalone frontend, or an ExtProc gateway, presents it to the Router.",
 			"**Entrypoint**",
 			"**Recipe**",
 			"direct selection",

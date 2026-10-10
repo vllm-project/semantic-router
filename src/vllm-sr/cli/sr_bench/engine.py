@@ -5,9 +5,10 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import socket
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from http import HTTPStatus
 
 import requests
@@ -16,7 +17,7 @@ from cli.routing_preview import build_preview_request, case_request_fields
 
 from .activity import CallActivity
 from .adapters import get_adapter
-from .contracts import digest, plan, planned_cells
+from .contracts import SESSION_AWARE, digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
 from .native_output import capacity as native_capacity
 from .native_output import validate_recipes as validate_native_recipes
@@ -57,6 +58,11 @@ class Context:
             self.store.root / "runs" / run_id / digest([case["id"], target["id"]])[:24]
         )
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.session_id: str | None = (
+            f"{run_id}-{digest([case['id'], target['id']])[:24]}"
+            if target.get("session_mode") == SESSION_AWARE
+            else None
+        )
 
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
@@ -78,6 +84,7 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
+        session_id: str | None = self.session_id if role == "subject" else None
         if role == "subject" and not any(
             call["role"] == "subject" for call in self.calls
         ):
@@ -160,6 +167,7 @@ class Context:
                     "effective_body": request_body,
                     "extra_body": extra_body,
                 },
+                **({"session_id": session_id} if session_id else {}),
             },
         )
         call_record = {"id": call_id, "role": role}
@@ -174,6 +182,7 @@ class Context:
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
+                session_id=session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -388,18 +397,40 @@ class Engine:
                         "preview_context": manifest["preview_context"],
                     }
                 )
+                if ctx.cancelled():
+                    raise CallFailure("Run cancelled or wall-time budget exhausted")
                 response = requests.post(
                     url,
                     json=payload,
                     headers=headers,
+                    stream=True,
                     timeout=min(
                         manifest["limits"]["total_timeout_s"],
                         manifest["limits"]["idle_timeout_s"],
+                        max(0.1, ctx.deadline - time.monotonic()),
                     ),
                 )
-                if response.status_code >= HTTPStatus.BAD_REQUEST:
-                    raise ValueError(f"Preview HTTP {response.status_code}")
-                routing = response.json()
+                stop = threading.Event()
+
+                def watch():
+                    while not stop.wait(0.1):
+                        if ctx.cancelled():
+                            with suppress(AttributeError, OSError):
+                                response.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+                            return
+
+                watcher = threading.Thread(target=watch, daemon=True)
+                watcher.start()
+                try:
+                    if response.status_code >= HTTPStatus.BAD_REQUEST:
+                        raise ValueError(f"Preview HTTP {response.status_code}")
+                    routing = response.json()
+                    if ctx.cancelled():
+                        raise CallFailure("Run cancelled or wall-time budget exhausted")
+                finally:
+                    stop.set()
+                    response.close()
+                    watcher.join()
                 if (
                     target.get("config_hash")
                     and routing.get("config_hash") != target["config_hash"]

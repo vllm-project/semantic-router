@@ -1,0 +1,2632 @@
+{
+  "tolerance": 0.001,
+  "models": {
+    "Vela-2.0-0.3B": {
+      "repo_id": "vllm-sr/Vela-2.0-0.3B",
+      "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+      "model_sha256": "7e786f91413961d76a8b85318f70fea1509124fe33709a8c12d6badf8d2ccda4",
+      "profile": "max_speed",
+      "items": {
+        "account-organization": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.9588126,
+                    "choice": "business",
+                    "confidence": 0.2721218,
+                    "probabilities": {
+                      "biology": 0.002116,
+                      "business": 0.5545642,
+                      "chemistry": 0.0010627,
+                      "computer science": 0.2824424,
+                      "economics": 0.0017738,
+                      "engineering": 0.0033547,
+                      "health": 0.0096082,
+                      "history": 0.0004475,
+                      "law": 0.0112459,
+                      "math": 0.0022592,
+                      "other": 0.1011879,
+                      "philosophy": 0.0127608,
+                      "physics": 0.001008,
+                      "psychology": 0.0161688
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.4297156,
+                      "1": 0.0861671,
+                      "2": 0.4841173
+                    },
+                    "score": 1.0544017,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.9682529,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0182453,
+                    "choice": "NO_FACT_CHECK_NEEDED",
+                    "confidence": 0.9044823,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.0477588,
+                      "NO_FACT_CHECK_NEEDED": 0.9522412
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.8141926,
+                    "choice": "AR",
+                    "confidence": 0.997812,
+                    "probabilities": {
+                      "AR": 0.9987274,
+                      "BOTH": 0.0009154,
+                      "DIFFUSION": 0.0003572
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.9995184,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0223846,
+                    "choice": "benign",
+                    "confidence": 0.0431983,
+                    "probabilities": {
+                      "benign": 0.5215992,
+                      "jailbreak": 0.4784008
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0000022,
+                    "choice": "unsafe",
+                    "confidence": 0.430272,
+                    "probabilities": {
+                      "safe": 0.284864,
+                      "unsafe": 0.715136
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.2769123,
+                    "choice": "formal",
+                    "confidence": 0.179633,
+                    "probabilities": {
+                      "casual": 0.1298384,
+                      "formal": 0.5248973,
+                      "upset": 0.3452643
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.8839417,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0002253,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0006356,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0001912,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.3146495,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.8839417,
+                      "billing": 0.0002253,
+                      "medication": 0.0006356,
+                      "shipping": 0.0001912
+                    },
+                    "selected": [
+                      "account"
+                    ]
+                  }
+                },
+                "spans": {
+                  "entities": [
+                    {
+                      "end": 80,
+                      "label": "organization",
+                      "probability": 0.627023,
+                      "start": 74,
+                      "text": "Lisbon"
+                    },
+                    {
+                      "end": 100,
+                      "label": "organization",
+                      "probability": 0.8696035,
+                      "start": 88,
+                      "text": "of Acme Corp"
+                    }
+                  ],
+                  "pii_classifier:pii": [
+                    {
+                      "end": 80,
+                      "label": "ORGANIZATION",
+                      "probability": 0.91515,
+                      "start": 74,
+                      "text": "Lisbon"
+                    },
+                    {
+                      "end": 101,
+                      "label": "ORGANIZATION",
+                      "probability": 0.9925278,
+                      "start": 88,
+                      "text": "of Acme Corp."
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.6990786,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 788,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "creative": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.9766717,
+                    "choice": "other",
+                    "confidence": 0.4295025,
+                    "probabilities": {
+                      "biology": 0.1663653,
+                      "business": 0.0101754,
+                      "chemistry": 0.0023212,
+                      "computer science": 0.0081883,
+                      "economics": 0.0012848,
+                      "engineering": 0.0013392,
+                      "health": 0.0484968,
+                      "history": 0.002223,
+                      "law": 0.0048274,
+                      "math": 0.0080384,
+                      "other": 0.5958678,
+                      "philosophy": 0.080167,
+                      "physics": 0.0124595,
+                      "psychology": 0.0582459
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.791602,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8710515,
+                      "1": 0.1192093,
+                      "2": 0.0097393
+                    },
+                    "score": 0.1386878,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0436891,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0000039,
+                    "choice": "NO_FACT_CHECK_NEEDED",
+                    "confidence": 0.9995886,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.0002057,
+                      "NO_FACT_CHECK_NEEDED": 0.9997943
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.2098885,
+                    "choice": "AR",
+                    "confidence": 0.9507252,
+                    "probabilities": {
+                      "AR": 0.9725074,
+                      "BOTH": 0.0057105,
+                      "DIFFUSION": 0.0217822
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0005679,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0052907,
+                    "choice": "benign",
+                    "confidence": 0.9522305,
+                    "probabilities": {
+                      "benign": 0.9761152,
+                      "jailbreak": 0.0238848
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0000013,
+                    "choice": "safe",
+                    "confidence": 0.8561843,
+                    "probabilities": {
+                      "safe": 0.9280922,
+                      "unsafe": 0.0719078
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0054187,
+                    "choice": "casual",
+                    "confidence": 0.5860692,
+                    "probabilities": {
+                      "casual": 0.7278005,
+                      "formal": 0.1417313,
+                      "upset": 0.1304681
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0000145,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0000018,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0000248,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0000061,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.2157965,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0000145,
+                      "billing": 0.0000018,
+                      "medication": 0.0000248,
+                      "shipping": 0.0000061
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 758,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "feedback-three-states": {
+          "states": {
+            "history:1": {
+              "questions_sha256": "df8e8803b19fbc0005a6c3546103a4441cc877cbbca0cf578cec2ee5173fcfd9",
+              "answer": {
+                "answers": {
+                  "pii_classifier:pii": {
+                    "noul": 0.9845977,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0002345,
+                    "choice": "benign",
+                    "confidence": 0.5572512,
+                    "probabilities": {
+                      "benign": 0.7786256,
+                      "jailbreak": 0.2213744
+                    },
+                    "type": "choice"
+                  }
+                },
+                "spans": {
+                  "pii_classifier:pii": [
+                    {
+                      "end": 11,
+                      "label": "AGE",
+                      "probability": 0.9845977,
+                      "start": 9,
+                      "text": "23"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "pii_classifier:pii": 0.75
+                },
+                "usage": {
+                  "input_tokens": 267,
+                  "output_tokens": 0
+                }
+              }
+            },
+            "history:2": {
+              "questions_sha256": "df8e8803b19fbc0005a6c3546103a4441cc877cbbca0cf578cec2ee5173fcfd9",
+              "answer": {
+                "answers": {
+                  "pii_classifier:pii": {
+                    "noul": 0.9999994,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0000906,
+                    "choice": "benign",
+                    "confidence": 0.8175169,
+                    "probabilities": {
+                      "benign": 0.9087584,
+                      "jailbreak": 0.0912416
+                    },
+                    "type": "choice"
+                  }
+                },
+                "spans": {
+                  "pii_classifier:pii": [
+                    {
+                      "end": 19,
+                      "label": "AGE",
+                      "probability": 0.9407682,
+                      "start": 17,
+                      "text": "23"
+                    },
+                    {
+                      "end": 43,
+                      "label": "PERSON",
+                      "probability": 0.9999992,
+                      "start": 32,
+                      "text": "Anna Müller"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "pii_classifier:pii": 0.75
+                },
+                "usage": {
+                  "input_tokens": 270,
+                  "output_tokens": 0
+                }
+              }
+            },
+            "request": {
+              "questions_sha256": "3b83175c4e6976e99160fd1161dd4978e5840fdfd319d9b7bfd695db5238cdaa",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.99979,
+                    "choice": "computer science",
+                    "confidence": 0.1031669,
+                    "probabilities": {
+                      "biology": 0.0092267,
+                      "business": 0.103925,
+                      "chemistry": 0.006553,
+                      "computer science": 0.3378375,
+                      "economics": 0.0241058,
+                      "engineering": 0.0154455,
+                      "health": 0.0446904,
+                      "history": 0.002034,
+                      "law": 0.0267048,
+                      "math": 0.2346706,
+                      "other": 0.0346851,
+                      "philosophy": 0.1047069,
+                      "physics": 0.007516,
+                      "psychology": 0.0478986
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.5453587,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8911788,
+                      "1": 0.032657,
+                      "2": 0.0761642
+                    },
+                    "score": 0.1849854,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0000258,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.9999928,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.5437259,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.7718629,
+                      "NO_FACT_CHECK_NEEDED": 0.2281371
+                    },
+                    "type": "choice"
+                  },
+                  "feedback_detector:feedback": {
+                    "abstain_probability": 0.0001693,
+                    "choice": "WRONG_ANSWER",
+                    "confidence": 0.9995949,
+                    "probabilities": {
+                      "NEED_CLARIFICATION": 0.0000023,
+                      "NO_FEEDBACK": 0.0001961,
+                      "SAT": 0.0000061,
+                      "WANT_DIFFERENT": 0.0000044,
+                      "WRONG_ANSWER": 0.9997911
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.9989694,
+                    "choice": "AR",
+                    "confidence": 0.9939834,
+                    "probabilities": {
+                      "AR": 0.9964964,
+                      "BOTH": 0.002513,
+                      "DIFFUSION": 0.0009905
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0000508,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.9993621,
+                    "choice": "benign",
+                    "confidence": 0.6504331,
+                    "probabilities": {
+                      "benign": 0.8252165,
+                      "jailbreak": 0.1747835
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.000286,
+                    "choice": "safe",
+                    "confidence": 0.0299629,
+                    "probabilities": {
+                      "safe": 0.5149814,
+                      "unsafe": 0.4850186
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.9994868,
+                    "choice": "formal",
+                    "confidence": 0.103768,
+                    "probabilities": {
+                      "casual": 0.2230603,
+                      "formal": 0.4403538,
+                      "upset": 0.3365858
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0000347,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0001161,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0000161,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0000118,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.0389056,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0000347,
+                      "billing": 0.0001161,
+                      "medication": 0.0000161,
+                      "shipping": 0.0000118
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 857,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "harmful": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.5884916,
+                    "choice": "other",
+                    "confidence": 0.3789688,
+                    "probabilities": {
+                      "biology": 0.0196116,
+                      "business": 0.0284737,
+                      "chemistry": 0.0047724,
+                      "computer science": 0.1060284,
+                      "economics": 0.0045747,
+                      "engineering": 0.0047972,
+                      "health": 0.0889994,
+                      "history": 0.004018,
+                      "law": 0.0921609,
+                      "math": 0.0105913,
+                      "other": 0.4849972,
+                      "philosophy": 0.0793677,
+                      "physics": 0.002711,
+                      "psychology": 0.0688964
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.3863508,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8104166,
+                      "1": 0.0881886,
+                      "2": 0.1013948
+                    },
+                    "score": 0.2909782,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0102938,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.9356973,
+                    "choice": "NO_FACT_CHECK_NEEDED",
+                    "confidence": 0.6585535,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.1707232,
+                      "NO_FACT_CHECK_NEEDED": 0.8292768
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.9555978,
+                    "choice": "AR",
+                    "confidence": 0.9854842,
+                    "probabilities": {
+                      "AR": 0.9903615,
+                      "BOTH": 0.0048773,
+                      "DIFFUSION": 0.0047612
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0002013,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0000336,
+                    "choice": "benign",
+                    "confidence": 0.9495081,
+                    "probabilities": {
+                      "benign": 0.9747541,
+                      "jailbreak": 0.0252459
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0,
+                    "choice": "unsafe",
+                    "confidence": 0.9567312,
+                    "probabilities": {
+                      "safe": 0.0216344,
+                      "unsafe": 0.9783656
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0021728,
+                    "choice": "upset",
+                    "confidence": 0.4995024,
+                    "probabilities": {
+                      "casual": 0.1840542,
+                      "formal": 0.1323891,
+                      "upset": 0.6835566
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0031265,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0033917,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0085544,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0003966,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.223402,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0031265,
+                      "billing": 0.0033917,
+                      "medication": 0.0085544,
+                      "shipping": 0.0003966
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 762,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "history-two-states": {
+          "states": {
+            "history:1": {
+              "questions_sha256": "df8e8803b19fbc0005a6c3546103a4441cc877cbbca0cf578cec2ee5173fcfd9",
+              "answer": {
+                "answers": {
+                  "pii_classifier:pii": {
+                    "noul": 0.9999954,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0000103,
+                    "choice": "benign",
+                    "confidence": 0.6936268,
+                    "probabilities": {
+                      "benign": 0.8468134,
+                      "jailbreak": 0.1531866
+                    },
+                    "type": "choice"
+                  }
+                },
+                "spans": {
+                  "pii_classifier:pii": [
+                    {
+                      "end": 45,
+                      "label": "PERSON",
+                      "probability": 0.9999253,
+                      "start": 36,
+                      "text": "Tom Baker"
+                    },
+                    {
+                      "end": 70,
+                      "label": "EMAIL_ADDRESS",
+                      "probability": 0.9989955,
+                      "start": 49,
+                      "text": "tom.baker@example.com"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "pii_classifier:pii": 0.75
+                },
+                "usage": {
+                  "input_tokens": 272,
+                  "output_tokens": 0
+                }
+              }
+            },
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.9293873,
+                    "choice": "business",
+                    "confidence": 0.719218,
+                    "probabilities": {
+                      "biology": 0.0006148,
+                      "business": 0.8269536,
+                      "chemistry": 0.0004871,
+                      "computer science": 0.0200313,
+                      "economics": 0.0003342,
+                      "engineering": 0.0005609,
+                      "health": 0.0039733,
+                      "history": 0.0001911,
+                      "law": 0.0021819,
+                      "math": 0.0015388,
+                      "other": 0.1077356,
+                      "philosophy": 0.0164999,
+                      "physics": 0.0003314,
+                      "psychology": 0.0185661
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.6097933,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8912368,
+                      "1": 0.0488174,
+                      "2": 0.0599458
+                    },
+                    "score": 0.168709,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0687584,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.2185317,
+                    "choice": "NO_FACT_CHECK_NEEDED",
+                    "confidence": 0.8601176,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.0699412,
+                      "NO_FACT_CHECK_NEEDED": 0.9300588
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.2434641,
+                    "choice": "AR",
+                    "confidence": 0.9993034,
+                    "probabilities": {
+                      "AR": 0.9996112,
+                      "BOTH": 0.0003078,
+                      "DIFFUSION": 0.000081
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0002489,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.4024542,
+                    "choice": "benign",
+                    "confidence": 0.9511608,
+                    "probabilities": {
+                      "benign": 0.9755804,
+                      "jailbreak": 0.0244196
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0000027,
+                    "choice": "safe",
+                    "confidence": 0.8723179,
+                    "probabilities": {
+                      "safe": 0.9361589,
+                      "unsafe": 0.0638411
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0051021,
+                    "choice": "formal",
+                    "confidence": 0.6482367,
+                    "probabilities": {
+                      "casual": 0.1600969,
+                      "formal": 0.8083337,
+                      "upset": 0.0315694
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0001945,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0001624,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0000644,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0003663,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.4009898,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0001945,
+                      "billing": 0.0001624,
+                      "medication": 0.0000644,
+                      "shipping": 0.0003663
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 764,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "image": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.9977484,
+                    "choice": "other",
+                    "confidence": 0.1167365,
+                    "probabilities": {
+                      "biology": 0.0640945,
+                      "business": 0.0177697,
+                      "chemistry": 0.0058004,
+                      "computer science": 0.2286561,
+                      "economics": 0.0017545,
+                      "engineering": 0.0136135,
+                      "health": 0.0192363,
+                      "history": 0.0304209,
+                      "law": 0.0101252,
+                      "math": 0.0087231,
+                      "other": 0.3453926,
+                      "philosophy": 0.0360155,
+                      "physics": 0.1770324,
+                      "psychology": 0.0413653
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.094758,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.6660565,
+                      "1": 0.1571384,
+                      "2": 0.1768051
+                    },
+                    "score": 0.5107486,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0078892,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0287526,
+                    "choice": "NO_FACT_CHECK_NEEDED",
+                    "confidence": 0.9602822,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.0198589,
+                      "NO_FACT_CHECK_NEEDED": 0.9801411
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.0075047,
+                    "choice": "DIFFUSION",
+                    "confidence": 0.9951601,
+                    "probabilities": {
+                      "AR": 0.0021556,
+                      "BOTH": 0.0005287,
+                      "DIFFUSION": 0.9973157
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0077704,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.625413,
+                    "choice": "benign",
+                    "confidence": 0.4506306,
+                    "probabilities": {
+                      "benign": 0.7253153,
+                      "jailbreak": 0.2746847
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0001143,
+                    "choice": "unsafe",
+                    "confidence": 0.0481799,
+                    "probabilities": {
+                      "safe": 0.4759101,
+                      "unsafe": 0.5240899
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.8187121,
+                    "choice": "casual",
+                    "confidence": 0.0318259,
+                    "probabilities": {
+                      "casual": 0.3833643,
+                      "formal": 0.2650974,
+                      "upset": 0.3515384
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0001107,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0000262,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.000366,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0000391,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.217112,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0001107,
+                      "billing": 0.0000262,
+                      "medication": 0.000366,
+                      "shipping": 0.0000391
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 772,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "math": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.1693483,
+                    "choice": "math",
+                    "confidence": 0.5078086,
+                    "probabilities": {
+                      "biology": 0.0035496,
+                      "business": 0.0066505,
+                      "chemistry": 0.0045566,
+                      "computer science": 0.0633063,
+                      "economics": 0.0113995,
+                      "engineering": 0.0027002,
+                      "health": 0.0103,
+                      "history": 0.0003893,
+                      "law": 0.0074373,
+                      "math": 0.6626478,
+                      "other": 0.0433652,
+                      "philosophy": 0.1548392,
+                      "physics": 0.009838,
+                      "psychology": 0.0190202
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.5574168,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8586083,
+                      "1": 0.0759041,
+                      "2": 0.0654876
+                    },
+                    "score": 0.2068793,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0047214,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.7836174,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.7451441,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.8725721,
+                      "NO_FACT_CHECK_NEEDED": 0.1274279
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.0086072,
+                    "choice": "AR",
+                    "confidence": 0.9992916,
+                    "probabilities": {
+                      "AR": 0.9995552,
+                      "BOTH": 0.0002636,
+                      "DIFFUSION": 0.0001813
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0005023,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0020645,
+                    "choice": "benign",
+                    "confidence": 0.7569987,
+                    "probabilities": {
+                      "benign": 0.8784994,
+                      "jailbreak": 0.1215006
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 5e-7,
+                    "choice": "safe",
+                    "confidence": 0.5430534,
+                    "probabilities": {
+                      "safe": 0.7715267,
+                      "unsafe": 0.2284733
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0047234,
+                    "choice": "formal",
+                    "confidence": 0.1631513,
+                    "probabilities": {
+                      "casual": 0.2477287,
+                      "formal": 0.4577113,
+                      "upset": 0.29456
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0001648,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0001331,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0001846,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0000295,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.2991825,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0001648,
+                      "billing": 0.0001331,
+                      "medication": 0.0001846,
+                      "shipping": 0.0000295
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 764,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "medication-phone": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.0772606,
+                    "choice": "health",
+                    "confidence": 0.9246871,
+                    "probabilities": {
+                      "biology": 0.0049648,
+                      "business": 0.0004069,
+                      "chemistry": 0.0006724,
+                      "computer science": 0.0006911,
+                      "economics": 0.0001371,
+                      "engineering": 0.0002873,
+                      "health": 0.9537229,
+                      "history": 0.0000377,
+                      "law": 0.000476,
+                      "math": 0.0005297,
+                      "other": 0.0290358,
+                      "philosophy": 0.0014051,
+                      "physics": 0.0001542,
+                      "psychology": 0.0074791
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.2376023,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8215339,
+                      "1": 0.0337086,
+                      "2": 0.1447575
+                    },
+                    "score": 0.3232236,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0046675,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.4845817,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.9256681,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.9628341,
+                      "NO_FACT_CHECK_NEEDED": 0.0371659
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.1676386,
+                    "choice": "AR",
+                    "confidence": 0.9993617,
+                    "probabilities": {
+                      "AR": 0.9996144,
+                      "BOTH": 0.0002527,
+                      "DIFFUSION": 0.0001329
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 1,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0111264,
+                    "choice": "benign",
+                    "confidence": 0.5487681,
+                    "probabilities": {
+                      "benign": 0.774384,
+                      "jailbreak": 0.225616
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.000001,
+                    "choice": "unsafe",
+                    "confidence": 0.5327153,
+                    "probabilities": {
+                      "safe": 0.2336424,
+                      "unsafe": 0.7663576
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0395226,
+                    "choice": "upset",
+                    "confidence": 0.3085638,
+                    "probabilities": {
+                      "casual": 0.1814321,
+                      "formal": 0.2550021,
+                      "upset": 0.5635658
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0017885,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0002999,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.8920263,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0004389,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.4327641,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0017885,
+                      "billing": 0.0002999,
+                      "medication": 0.8920263,
+                      "shipping": 0.0004389
+                    },
+                    "selected": [
+                      "medication"
+                    ]
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": [
+                    {
+                      "end": 86,
+                      "label": "PHONE_NUMBER",
+                      "probability": 1,
+                      "start": 71,
+                      "text": "+1 415 555 0134"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.3968089,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 808,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "multilingual-pii": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.9850076,
+                    "choice": "other",
+                    "confidence": 0.0576202,
+                    "probabilities": {
+                      "biology": 0.0026316,
+                      "business": 0.0340505,
+                      "chemistry": 0.001932,
+                      "computer science": 0.3629275,
+                      "economics": 0.0024166,
+                      "engineering": 0.002793,
+                      "health": 0.0140272,
+                      "history": 0.0007099,
+                      "law": 0.0132573,
+                      "math": 0.1093521,
+                      "other": 0.4205477,
+                      "philosophy": 0.008116,
+                      "physics": 0.0036873,
+                      "psychology": 0.0235514
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.449271,
+                      "1": 0.0730522,
+                      "2": 0.4776769
+                    },
+                    "score": 1.0284059,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.8653444,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0804032,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.9825718,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.9912859,
+                      "NO_FACT_CHECK_NEEDED": 0.0087141
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.6133606,
+                    "choice": "AR",
+                    "confidence": 0.9883229,
+                    "probabilities": {
+                      "AR": 0.9930386,
+                      "BOTH": 0.0047157,
+                      "DIFFUSION": 0.0022457
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.9999994,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0740445,
+                    "choice": "benign",
+                    "confidence": 0.3924169,
+                    "probabilities": {
+                      "benign": 0.6962085,
+                      "jailbreak": 0.3037915
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0000717,
+                    "choice": "unsafe",
+                    "confidence": 0.4596036,
+                    "probabilities": {
+                      "safe": 0.2701982,
+                      "unsafe": 0.7298018
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.6203995,
+                    "choice": "formal",
+                    "confidence": 0.5823211,
+                    "probabilities": {
+                      "casual": 0.1361763,
+                      "formal": 0.7230724,
+                      "upset": 0.1407513
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0050291,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0011861,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0008237,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.5392304,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.4892856,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0050291,
+                      "billing": 0.0011861,
+                      "medication": 0.0008237,
+                      "shipping": 0.5392304
+                    },
+                    "selected": [
+                      "shipping"
+                    ]
+                  }
+                },
+                "spans": {
+                  "entities": [
+                    {
+                      "end": 11,
+                      "label": "location",
+                      "probability": 0.8653444,
+                      "start": 9,
+                      "text": "上海"
+                    }
+                  ],
+                  "pii_classifier:pii": [
+                    {
+                      "end": 11,
+                      "label": "GPE",
+                      "probability": 0.9987304,
+                      "start": 9,
+                      "text": "上海"
+                    },
+                    {
+                      "end": 21,
+                      "label": "PERSON",
+                      "probability": 0.9999962,
+                      "start": 19,
+                      "text": "李华"
+                    },
+                    {
+                      "end": 36,
+                      "label": "PHONE_NUMBER",
+                      "probability": 0.9999914,
+                      "start": 25,
+                      "text": "13800138000"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.4374654,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 804,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "prompt-attack": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.5534351,
+                    "choice": "computer science",
+                    "confidence": 0.800965,
+                    "probabilities": {
+                      "biology": 0.0031176,
+                      "business": 0.0155364,
+                      "chemistry": 0.0020046,
+                      "computer science": 0.8467826,
+                      "economics": 0.0016563,
+                      "engineering": 0.0458176,
+                      "health": 0.0090815,
+                      "history": 0.0006947,
+                      "law": 0.0035498,
+                      "math": 0.0013655,
+                      "other": 0.0110975,
+                      "philosophy": 0.0298351,
+                      "physics": 0.0015635,
+                      "psychology": 0.0278972
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.4587808,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.8631743,
+                      "1": 0.0446886,
+                      "2": 0.092137
+                    },
+                    "score": 0.2289627,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0121941,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0001264,
+                    "choice": "NO_FACT_CHECK_NEEDED",
+                    "confidence": 0.9852088,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.0073956,
+                      "NO_FACT_CHECK_NEEDED": 0.9926044
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.0054731,
+                    "choice": "AR",
+                    "confidence": 0.9967679,
+                    "probabilities": {
+                      "AR": 0.9980705,
+                      "BOTH": 0.000627,
+                      "DIFFUSION": 0.0013026
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0051042,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0,
+                    "choice": "jailbreak",
+                    "confidence": 0.9731656,
+                    "probabilities": {
+                      "benign": 0.0134172,
+                      "jailbreak": 0.9865828
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 1e-7,
+                    "choice": "unsafe",
+                    "confidence": 0.518705,
+                    "probabilities": {
+                      "safe": 0.2406475,
+                      "unsafe": 0.7593525
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0058651,
+                    "choice": "upset",
+                    "confidence": 0.1214494,
+                    "probabilities": {
+                      "casual": 0.3053521,
+                      "formal": 0.2678464,
+                      "upset": 0.4268015
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0114044,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0005146,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0034415,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0004358,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.3846524,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0114044,
+                      "billing": 0.0005146,
+                      "medication": 0.0034415,
+                      "shipping": 0.0004358
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 768,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "support-pii": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.9927235,
+                    "choice": "other",
+                    "confidence": 0.3643694,
+                    "probabilities": {
+                      "biology": 0.0075641,
+                      "business": 0.1616051,
+                      "chemistry": 0.0042026,
+                      "computer science": 0.056803,
+                      "economics": 0.0084062,
+                      "engineering": 0.0078701,
+                      "health": 0.0363397,
+                      "history": 0.0045144,
+                      "law": 0.0693217,
+                      "math": 0.0202773,
+                      "other": 0.5259744,
+                      "philosophy": 0.0507993,
+                      "physics": 0.0066067,
+                      "psychology": 0.0397155
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.190586,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.7380534,
+                      "1": 0.1131579,
+                      "2": 0.1487887
+                    },
+                    "score": 0.4107353,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.8505912,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0579664,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.9172784,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.9586392,
+                      "NO_FACT_CHECK_NEEDED": 0.0413608
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.2741159,
+                    "choice": "AR",
+                    "confidence": 0.9914277,
+                    "probabilities": {
+                      "AR": 0.9953528,
+                      "BOTH": 0.0039251,
+                      "DIFFUSION": 0.0007221
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.9999709,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.1130305,
+                    "choice": "benign",
+                    "confidence": 0.6129028,
+                    "probabilities": {
+                      "benign": 0.8064514,
+                      "jailbreak": 0.1935486
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0000015,
+                    "choice": "safe",
+                    "confidence": 0.0734679,
+                    "probabilities": {
+                      "safe": 0.536734,
+                      "unsafe": 0.463266
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0139405,
+                    "choice": "formal",
+                    "confidence": 0.2891825,
+                    "probabilities": {
+                      "casual": 0.2449251,
+                      "formal": 0.5341076,
+                      "upset": 0.2209674
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0093792,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.5157716,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.002868,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.5627042,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.4029449,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0093792,
+                      "billing": 0.5157716,
+                      "medication": 0.002868,
+                      "shipping": 0.5627042
+                    },
+                    "selected": [
+                      "billing",
+                      "shipping"
+                    ]
+                  }
+                },
+                "spans": {
+                  "entities": [
+                    {
+                      "end": 107,
+                      "label": "location",
+                      "probability": 0.8505912,
+                      "start": 101,
+                      "text": "Berlin"
+                    }
+                  ],
+                  "pii_classifier:pii": [
+                    {
+                      "end": 17,
+                      "label": "PERSON",
+                      "probability": 0.9999325,
+                      "start": 8,
+                      "text": "Tom Baker"
+                    },
+                    {
+                      "end": 40,
+                      "label": "EMAIL_ADDRESS",
+                      "probability": 0.9987033,
+                      "start": 19,
+                      "text": "tom.baker@example.com"
+                    },
+                    {
+                      "end": 107,
+                      "label": "GPE",
+                      "probability": 0.9997706,
+                      "start": 101,
+                      "text": "Berlin"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.4604647,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 802,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "technical": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.0562702,
+                    "choice": "computer science",
+                    "confidence": 0.9261757,
+                    "probabilities": {
+                      "biology": 0.0011781,
+                      "business": 0.0011712,
+                      "chemistry": 0.0001208,
+                      "computer science": 0.9497069,
+                      "economics": 0.000092,
+                      "engineering": 0.0235312,
+                      "health": 0.0007559,
+                      "history": 0.0000578,
+                      "law": 0.0003084,
+                      "math": 0.0001886,
+                      "other": 0.020646,
+                      "philosophy": 0.001178,
+                      "physics": 0.0002373,
+                      "psychology": 0.0008277
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.8336271,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.0772269,
+                      "1": 0.8873381,
+                      "2": 0.035435
+                    },
+                    "score": 0.9582081,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.0391293,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.9921796,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.4360011,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.7180005,
+                      "NO_FACT_CHECK_NEEDED": 0.2819995
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.702465,
+                    "choice": "AR",
+                    "confidence": 0.9625432,
+                    "probabilities": {
+                      "AR": 0.9810231,
+                      "BOTH": 0.0184799,
+                      "DIFFUSION": 0.000497
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0219086,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.05611,
+                    "choice": "benign",
+                    "confidence": 0.9226874,
+                    "probabilities": {
+                      "benign": 0.9613437,
+                      "jailbreak": 0.0386563
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 3e-7,
+                    "choice": "safe",
+                    "confidence": 0.6258576,
+                    "probabilities": {
+                      "safe": 0.8129288,
+                      "unsafe": 0.1870712
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.6769868,
+                    "choice": "formal",
+                    "confidence": 0.3655237,
+                    "probabilities": {
+                      "casual": 0.2268231,
+                      "formal": 0.5923467,
+                      "upset": 0.1808302
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0000688,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0000108,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0000813,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0000249,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.1734021,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0000688,
+                      "billing": 0.0000108,
+                      "medication": 0.0000813,
+                      "shipping": 0.0000249
+                    },
+                    "selected": []
+                  }
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.5,
+                  "pii_classifier:pii": 0.75,
+                  "topics": 0.3
+                },
+                "usage": {
+                  "input_tokens": 766,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "hallucination": {
+        "grounded": {
+          "questions_sha256": "bde84afab25c866080ad2d663a04d2bab42afb5c41c722ed6cc4239cb4219230",
+          "answer": {
+            "answers": {
+              "hallucination_detector:halu": {
+                "noul": 0.0137599,
+                "type": "noul"
+              }
+            },
+            "spans": {
+              "hallucination_detector:halu": []
+            },
+            "thresholds": {
+              "hallucination_detector:halu": 0.55
+            },
+            "usage": {
+              "input_tokens": 51,
+              "output_tokens": 0
+            }
+          }
+        },
+        "unsupported-dose": {
+          "questions_sha256": "bde84afab25c866080ad2d663a04d2bab42afb5c41c722ed6cc4239cb4219230",
+          "answer": {
+            "answers": {
+              "hallucination_detector:halu": {
+                "noul": 0.9943959,
+                "type": "noul"
+              }
+            },
+            "spans": {
+              "hallucination_detector:halu": [
+                {
+                  "end": 29,
+                  "label": "unsupported",
+                  "probability": 0.7865546,
+                  "start": 19,
+                  "text": "to 6 grams"
+                }
+              ]
+            },
+            "thresholds": {
+              "hallucination_detector:halu": 0.55
+            },
+            "usage": {
+              "input_tokens": 65,
+              "output_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    "Vela-2.0-0.8B": {
+      "repo_id": "vllm-sr/Vela-2.0-0.8B",
+      "revision": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+      "model_sha256": "e231da382b5d3d45f253e9b3ff12afe7044b56d95afa4c2c0ec412c036024949",
+      "profile": "exact",
+      "items": {
+        "feedback-three-states": {
+          "states": {
+            "history:1": {
+              "questions_sha256": "df8e8803b19fbc0005a6c3546103a4441cc877cbbca0cf578cec2ee5173fcfd9",
+              "answer": {
+                "answers": {
+                  "pii_classifier:pii": {
+                    "noul": 0.5494358,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0001127,
+                    "choice": "benign",
+                    "confidence": 0.9948233,
+                    "probabilities": {
+                      "benign": 0.9974116,
+                      "jailbreak": 0.0025884
+                    },
+                    "type": "choice"
+                  }
+                },
+                "span_heads": {
+                  "pii_classifier:pii": "router"
+                },
+                "spans": {
+                  "pii_classifier:pii": [
+                    {
+                      "end": 2,
+                      "label": "STREET_ADDRESS",
+                      "probability": 0.3125517,
+                      "start": 0,
+                      "text": "17"
+                    },
+                    {
+                      "end": 11,
+                      "label": "AGE",
+                      "probability": 0.3558416,
+                      "start": 9,
+                      "text": "23"
+                    },
+                    {
+                      "end": 18,
+                      "label": "AGE",
+                      "probability": 0.5494359,
+                      "start": 15,
+                      "text": "381"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "pii_classifier:pii": 0.2914
+                },
+                "usage": {
+                  "input_tokens": 638,
+                  "output_tokens": 0
+                }
+              }
+            },
+            "history:2": {
+              "questions_sha256": "df8e8803b19fbc0005a6c3546103a4441cc877cbbca0cf578cec2ee5173fcfd9",
+              "answer": {
+                "answers": {
+                  "pii_classifier:pii": {
+                    "noul": 0.9900926,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0001037,
+                    "choice": "benign",
+                    "confidence": 0.9601889,
+                    "probabilities": {
+                      "benign": 0.9800945,
+                      "jailbreak": 0.0199055
+                    },
+                    "type": "choice"
+                  }
+                },
+                "span_heads": {
+                  "pii_classifier:pii": "router"
+                },
+                "spans": {
+                  "pii_classifier:pii": [
+                    {
+                      "end": 10,
+                      "label": "PERSON",
+                      "probability": 0.9682647,
+                      "start": 8,
+                      "text": "17"
+                    },
+                    {
+                      "end": 19,
+                      "label": "PERSON",
+                      "probability": 0.8878047,
+                      "start": 17,
+                      "text": "23"
+                    },
+                    {
+                      "end": 43,
+                      "label": "PERSON",
+                      "probability": 0.9874858,
+                      "start": 32,
+                      "text": "Anna Müller"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "pii_classifier:pii": 0.2914
+                },
+                "usage": {
+                  "input_tokens": 646,
+                  "output_tokens": 0
+                }
+              }
+            },
+            "request": {
+              "questions_sha256": "3b83175c4e6976e99160fd1161dd4978e5840fdfd319d9b7bfd695db5238cdaa",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.0328471,
+                    "choice": "math",
+                    "confidence": 0.8109127,
+                    "probabilities": {
+                      "biology": 0.0019977,
+                      "business": 0.0033627,
+                      "chemistry": 0.0054105,
+                      "computer science": 0.0434255,
+                      "economics": 0.0032601,
+                      "engineering": 0.0019277,
+                      "health": 0.0047744,
+                      "history": 0.0022265,
+                      "law": 0.0032107,
+                      "math": 0.8543382,
+                      "other": 0.0426374,
+                      "philosophy": 0.0227255,
+                      "physics": 0.0039912,
+                      "psychology": 0.0067119
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.3862166,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.4195769,
+                      "1": 0.485446,
+                      "2": 0.0949771
+                    },
+                    "score": 0.6754001,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.2105076,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0095232,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.9268749,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.9634375,
+                      "NO_FACT_CHECK_NEEDED": 0.0365625
+                    },
+                    "type": "choice"
+                  },
+                  "feedback_detector:feedback": {
+                    "abstain_probability": 0.000168,
+                    "choice": "WRONG_ANSWER",
+                    "confidence": 0.9995244,
+                    "probabilities": {
+                      "NEED_CLARIFICATION": 0.0001079,
+                      "NO_FEEDBACK": 0.000077,
+                      "SAT": 0.0000164,
+                      "WANT_DIFFERENT": 0.0001372,
+                      "WRONG_ANSWER": 0.9996616
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.3012431,
+                    "choice": "AR",
+                    "confidence": 0.9235121,
+                    "probabilities": {
+                      "AR": 0.9542718,
+                      "BOTH": 0.0307597,
+                      "DIFFUSION": 0.0149684
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.0008695,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.000158,
+                    "choice": "benign",
+                    "confidence": 0.9876249,
+                    "probabilities": {
+                      "benign": 0.9938124,
+                      "jailbreak": 0.0061876
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0001414,
+                    "choice": "safe",
+                    "confidence": 0.8646318,
+                    "probabilities": {
+                      "safe": 0.9323159,
+                      "unsafe": 0.0676841
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.1006821,
+                    "choice": "upset",
+                    "confidence": 0.192486,
+                    "probabilities": {
+                      "casual": 0.1028757,
+                      "formal": 0.3523191,
+                      "upset": 0.5448052
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0005466,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.0025256,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0027059,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.0008455,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.2263081,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0005466,
+                      "billing": 0.0025256,
+                      "medication": 0.0027059,
+                      "shipping": 0.0008455
+                    },
+                    "selected": []
+                  }
+                },
+                "span_heads": {
+                  "entities": "broad",
+                  "pii_classifier:pii": "router"
+                },
+                "spans": {
+                  "entities": [],
+                  "pii_classifier:pii": []
+                },
+                "thresholds": {
+                  "entities": 0.35,
+                  "pii_classifier:pii": 0.2914,
+                  "topics": 0.2
+                },
+                "usage": {
+                  "input_tokens": 2285,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        },
+        "support-pii": {
+          "states": {
+            "request": {
+              "questions_sha256": "5c4c91aeb60c6098381e00b78aa763f1de577edd02aae56d8b3df414cbbec5a3",
+              "answer": {
+                "answers": {
+                  "domain_classifier:domain": {
+                    "abstain_probability": 0.2037078,
+                    "choice": "business",
+                    "confidence": 0.0623795,
+                    "probabilities": {
+                      "biology": 0.0049867,
+                      "business": 0.3517126,
+                      "chemistry": 0.0154911,
+                      "computer science": 0.1091923,
+                      "economics": 0.0164117,
+                      "engineering": 0.0133396,
+                      "health": 0.0159069,
+                      "history": 0.0346999,
+                      "law": 0.075721,
+                      "math": 0.023815,
+                      "other": 0.2893331,
+                      "philosophy": 0.0147193,
+                      "physics": 0.0147054,
+                      "psychology": 0.0199654
+                    },
+                    "type": "choice"
+                  },
+                  "effort": {
+                    "confidence": 0.3045739,
+                    "legend": {
+                      "0": "A one-line answer",
+                      "1": "A short explanation",
+                      "2": "A detailed multi-step answer"
+                    },
+                    "probabilities": {
+                      "0": 0.1831182,
+                      "1": 0.5244284,
+                      "2": 0.2924535
+                    },
+                    "score": 1.1093353,
+                    "type": "score"
+                  },
+                  "entities": {
+                    "noul": 0.9305993,
+                    "type": "noul"
+                  },
+                  "fact_check_classifier:factcheck": {
+                    "abstain_probability": 0.0012636,
+                    "choice": "FACT_CHECK_NEEDED",
+                    "confidence": 0.7294827,
+                    "probabilities": {
+                      "FACT_CHECK_NEEDED": 0.8647414,
+                      "NO_FACT_CHECK_NEEDED": 0.1352586
+                    },
+                    "type": "choice"
+                  },
+                  "modality_detector:modality": {
+                    "abstain_probability": 0.1403311,
+                    "choice": "AR",
+                    "confidence": 0.8913043,
+                    "probabilities": {
+                      "AR": 0.9369554,
+                      "BOTH": 0.0456511,
+                      "DIFFUSION": 0.0173936
+                    },
+                    "type": "choice"
+                  },
+                  "pii_classifier:pii": {
+                    "noul": 0.9994655,
+                    "type": "noul"
+                  },
+                  "prompt_guard:attack": {
+                    "abstain_probability": 0.0001748,
+                    "choice": "benign",
+                    "confidence": 0.9073321,
+                    "probabilities": {
+                      "benign": 0.953666,
+                      "jailbreak": 0.046334
+                    },
+                    "type": "choice"
+                  },
+                  "safety.unsafe:p_harm": {
+                    "abstain_probability": 0.0001256,
+                    "choice": "safe",
+                    "confidence": 0.3595545,
+                    "probabilities": {
+                      "safe": 0.6797773,
+                      "unsafe": 0.3202227
+                    },
+                    "type": "choice"
+                  },
+                  "tone": {
+                    "abstain_probability": 0.0546911,
+                    "choice": "upset",
+                    "confidence": 0.0818245,
+                    "probabilities": {
+                      "casual": 0.286737,
+                      "formal": 0.3157193,
+                      "upset": 0.3975438
+                    },
+                    "type": "choice"
+                  },
+                  "topics.account": {
+                    "noul": 0.0028332,
+                    "type": "noul"
+                  },
+                  "topics.billing": {
+                    "noul": 0.5324335,
+                    "type": "noul"
+                  },
+                  "topics.medication": {
+                    "noul": 0.0014263,
+                    "type": "noul"
+                  },
+                  "topics.shipping": {
+                    "noul": 0.8915356,
+                    "type": "noul"
+                  },
+                  "urgent": {
+                    "noul": 0.1439698,
+                    "type": "noul"
+                  }
+                },
+                "sets": {
+                  "topics": {
+                    "probabilities": {
+                      "account": 0.0028332,
+                      "billing": 0.5324335,
+                      "medication": 0.0014263,
+                      "shipping": 0.8915356
+                    },
+                    "selected": [
+                      "billing",
+                      "shipping"
+                    ]
+                  }
+                },
+                "span_heads": {
+                  "entities": "broad",
+                  "pii_classifier:pii": "router"
+                },
+                "spans": {
+                  "entities": [
+                    {
+                      "end": 17,
+                      "label": "location",
+                      "probability": 0.761853,
+                      "start": 8,
+                      "text": "Tom Baker"
+                    },
+                    {
+                      "end": 40,
+                      "label": "location",
+                      "probability": 0.7740046,
+                      "start": 19,
+                      "text": "tom.baker@example.com"
+                    },
+                    {
+                      "end": 107,
+                      "label": "location",
+                      "probability": 0.9305993,
+                      "start": 101,
+                      "text": "Berlin"
+                    }
+                  ],
+                  "pii_classifier:pii": [
+                    {
+                      "end": 17,
+                      "label": "PERSON",
+                      "probability": 0.9985936,
+                      "start": 8,
+                      "text": "Tom Baker"
+                    },
+                    {
+                      "end": 40,
+                      "label": "EMAIL_ADDRESS",
+                      "probability": 0.9969431,
+                      "start": 19,
+                      "text": "tom.baker@example.com"
+                    },
+                    {
+                      "end": 107,
+                      "label": "GPE",
+                      "probability": 0.9228897,
+                      "start": 101,
+                      "text": "Berlin"
+                    }
+                  ]
+                },
+                "thresholds": {
+                  "entities": 0.35,
+                  "pii_classifier:pii": 0.2914,
+                  "topics": 0.2
+                },
+                "usage": {
+                  "input_tokens": 2133,
+                  "output_tokens": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

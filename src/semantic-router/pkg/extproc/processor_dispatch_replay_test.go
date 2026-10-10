@@ -62,7 +62,7 @@ func TestProviderDispatchReplayPersistsFinalDemand(t *testing.T) {
 			if tc.specified {
 				response, err = r.handleSpecifiedModelRouting(ctx.SemanticRequest, model, "", ctx)
 			} else {
-				response, err = r.handleEntrypointModelRouting(ctx.SemanticRequest, "auto", ctx.VSRSelectedDecision.Name, reasoning, model, ctx)
+				response, err = r.handleEntrypointModelRouting(ctx.SemanticRequest, "vllm-sr/auto", ctx.VSRSelectedDecision.Name, reasoning, model, ctx)
 			}
 			require.NoError(t, err)
 			body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
@@ -145,7 +145,7 @@ func TestProviderDispatchReplaySurvivesFinalizerFailure(t *testing.T) {
 		}
 		normalRender(w, req)
 	})
-	response, err := r.handleEntrypointModelRouting(ctx.SemanticRequest, "auto", ctx.VSRSelectedDecision.Name, entropy.ReasoningDecision{}, model, ctx)
+	response, err := r.handleEntrypointModelRouting(ctx.SemanticRequest, "vllm-sr/auto", ctx.VSRSelectedDecision.Name, entropy.ReasoningDecision{}, model, ctx)
 	require.Nil(t, response)
 	require.ErrorIs(t, err, selection.ErrNoEligibleCandidates)
 	require.Equal(t, 3, calls, "failure must occur in the finalizer, after dispatch preparation")
@@ -248,10 +248,10 @@ func dispatchReplayFixture(t *testing.T, explicit bool, handler http.HandlerFunc
 	if explicit {
 		ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
 	}
-	captureRequestDemand(ctx, requestDemandStageOriginal, ctx.SemanticRequest, "auto")
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
-	captureRequestDemand(ctx, requestDemandStagePostContext, ctx.SemanticRequest, "auto")
-	captureRequestDemand(ctx, requestDemandStagePostToolPolicy, ctx.SemanticRequest, "auto")
+	captureRequestDemand(ctx, requestDemandStageOriginal, ctx.SemanticRequest, "vllm-sr/auto")
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
+	captureRequestDemand(ctx, requestDemandStagePostContext, ctx.SemanticRequest, "vllm-sr/auto")
+	captureRequestDemand(ctx, requestDemandStagePostToolPolicy, ctx.SemanticRequest, "vllm-sr/auto")
 	return r, ctx, model
 }
 

@@ -54,7 +54,7 @@ def test_the_table_pins_every_size() -> None:
     assert [model.backbone for model in MODELS] == ["modernbert"] + ["qwen3_5_text"] * 3
     for model in MODELS:
         assert re.fullmatch(r"[0-9a-f]{40}", model.revision), model.repo_id
-        assert model.access == "private"
+        assert model.access == "public"
         assert builtin.lookup(model.repo_id.split("/", 1)[1]) is model
         assert builtin.by_identity(model.model_sha256) is model
     for smaller, larger in itertools.pairwise(MODELS):

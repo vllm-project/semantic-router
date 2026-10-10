@@ -72,7 +72,6 @@ func recipeProgramWithSharedModels(parent, recipe *Program) *Program {
 	return &Program{
 		Strategy:              recipe.Strategy,
 		CandidateRequirements: recipe.CandidateRequirements.Clone(),
-		DataPolicy:            recipe.DataPolicy.Clone(),
 		ModelBindings:         cloneModelBindings(recipe.ModelBindings),
 		Signals:               recipe.Signals,
 		ProjectionPartitions:  recipe.ProjectionPartitions,

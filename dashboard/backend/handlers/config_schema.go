@@ -23,7 +23,7 @@ const (
 // reachable and falls back to the exact contract bundled with this Dashboard.
 // Both sources support the same progressive full/index/section/surface views.
 func ConfigSchemaHandler(routerAPIURL string, credentialProvider routerauth.CredentialProvider) http.HandlerFunc {
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.0.0
+  version: 2.2.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
@@ -18,7 +18,7 @@ paths:
   /v1/decisions:
     post:
       operationId: createDecisions
-      summary: Answer typed Choice, Noul, Score, Set and Span questions about one state
+      summary: Answer typed Choice, Noul, Score, Set and Span questions about one or more states
       requestBody:
         required: true
         content:
@@ -27,7 +27,12 @@ paths:
               $ref: '#/components/schemas/DecisionRequest'
       responses:
         '200':
-          description: One answer per question, in request order; a failed question carries its own error.
+          description: |
+            One answer per question, in request order; a failed question carries its own error. A request in which
+            no question, of its own or of its `states`, is valid is answered 400 invalid_request, with each
+            question's reason in the message.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -52,6 +57,8 @@ paths:
       responses:
         '200':
           description: Same as /v1/decisions.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -76,6 +83,8 @@ paths:
       responses:
         '200':
           description: One result per input, in input order; a failed input carries its own error.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -100,6 +109,8 @@ paths:
       responses:
         '200':
           description: One embedding per input, in input order.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -124,6 +135,8 @@ paths:
       responses:
         '200':
           description: Documents by descending relevance.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -148,6 +161,8 @@ paths:
       responses:
         '200':
           description: One result per task, in task order, each with the status it would have had alone.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -206,9 +221,26 @@ paths:
               schema:
                 type: string
 components:
+  headers:
+    ServerTiming:
+      description: |
+        The runtime's own time for the request in milliseconds, as a W3C Server Timing list:
+        `parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur=4.871, post;dur=0.034,
+        serialize;dur=0.019, total;dur=5.141`. `parse` reads and decodes the body. `tokenize` validates,
+        renders and tokenizes the request. `queue` is the time it waited for its model, before and between
+        its forwards. `forward` runs its forwards, readout included. `post` assembles the answers.
+        `serialize` encodes the response. `total` runs from the handler's start until the response is ready
+        to send; what it holds beyond the phases is the server's own overhead. A bundle whose tasks go to
+        several models reports the queue, forward and post of the model answered last. A client's time for
+        the call minus `total` is the transport: its own encoding and decoding, the connection and the HTTP
+        exchange.
+      schema:
+        type: string
   responses:
     Error:
       description: A request-level error.
+      headers:
+        Server-Timing: {$ref: '#/components/headers/ServerTiming'}
       content:
         application/json:
           schema:
@@ -233,16 +265,40 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        states:
+          type: object
+          description: |
+            Further states, each with its own questions, answered in the same call: a client asks every question it
+            has for one model in one request. Each entry is read exactly as a request with its state, its questions
+            and this request's model and options would be, and its answers come back under the same name in the
+            response's `states`. Question IDs are unique within an entry.
+          additionalProperties:
+            $ref: '#/components/schemas/DecisionState'
         options:
           $ref: '#/components/schemas/RequestOptions'
+    DecisionState:
+      type: object
+      additionalProperties: false
+      required: [state, questions]
+      properties:
+        state:
+          description: The context this entry's questions are about, as a request's `state`.
+        questions:
+          type: object
+          description: Named questions about this state; answers keep this order.
+          minProperties: 1
+          additionalProperties:
+            $ref: '#/components/schemas/Question'
     Question:
       type: object
       additionalProperties: false
       description: |
         One question. `instructions` is required unless `preset` names a question the model defines (see
         `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
-        its type's fields (`choices` for Choice and Noul, `levels` for Score, `over`, `head` and `threshold`
-        where the model reads them), and any other field is answered with invalid_question.
+        its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
+        `head` and `threshold` where the model reads them), and any other field is answered with
+        invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
+        a question takes one or the other.
       properties:
         type:
           type: string
@@ -266,11 +322,33 @@ components:
           type: array
           description: Ordered Score level descriptions, an alternative to a criteria list.
           items: {}
+        labels:
+          type: array
+          description: Ordered Set or Span labels, an alternative to a criteria object.
+          items:
+            $ref: '#/components/schemas/ChoiceOption'
         over:
           description: |
             The state field a question reads (typed-part models): a field name, or a list of field names it reads
             together in state order; default the whole state, or for a span the answer if present, else the
             request. A span reads one field.
+        require_full_input:
+          type: boolean
+          default: false
+          description: |
+            Require every supplied state part to be read completely, including context outside `over`.
+            Clipping fails this question with max_length_exceeded unless complete window coverage is
+            guaranteed. Cannot be combined with overflow truncate. Success includes input_coverage complete;
+            absence of that proof must not be treated as full coverage by clients. Omitted or false retains
+            the model's ordinary input-fitting behavior.
+        overflow:
+          type: string
+          enum: [window, truncate]
+          description: |
+            Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+            than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+            `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+            both kinds share their model inputs unless one has to be read in windows.
         head:
           type: string
           enum: [router, broad]
@@ -314,9 +392,63 @@ components:
         return_meta:
           type: boolean
           description: Include meta in the response (default false).
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: |
+            Scan budget: the most tokens of one state part a question reads whole (default its card's
+            `limits.max_scan_tokens`; a part that fits one model input is always read). A longer part fails the
+            questions that read it whole with `scan_budget_exceeded`. Only a model whose card has `max_scan_tokens`
+            takes it.
     DecisionResponse:
       type: object
       required: [model, answers, usage]
+      properties:
+        model:
+          type: string
+        answers:
+          type: object
+          description: One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+          additionalProperties:
+            $ref: '#/components/schemas/Answer'
+        spans:
+          type: object
+          description: Span answers by question ID.
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/Span'
+        sets:
+          type: object
+          description: Set answers by question ID.
+          additionalProperties:
+            $ref: '#/components/schemas/SetAnswer'
+        thresholds:
+          type: object
+          description: The threshold applied to each Set or Span question.
+          additionalProperties:
+            type: number
+            format: double
+        span_heads:
+          type: object
+          description: The span head (router or broad) that answered each Span question, on models with a broad span head.
+          additionalProperties:
+            type: string
+        usage:
+          $ref: '#/components/schemas/Usage'
+        states:
+          type: object
+          description: |
+            The answers about each entry of the request's `states`, as that entry's own request would get them. The
+            response's own fields answer the request's `state`, and its `usage` counts that state alone.
+          additionalProperties:
+            $ref: '#/components/schemas/DecisionStateResponse'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    DecisionStateResponse:
+      type: object
+      required: [model, answers, usage]
+      description: The answers about one entry of a request's `states`, with the fields of a response of its own.
       properties:
         model:
           type: string
@@ -357,8 +489,13 @@ components:
       required: [type]
       description: |
         One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-        level), probabilities, confidence, legend. A failed question has only type and error.
+        level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
+        knows why, message.
       properties:
+        input_coverage:
+          type: string
+          enum: [complete]
+          description: Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
         type:
           type: string
           nullable: true
@@ -388,9 +525,17 @@ components:
             type: string
         error:
           $ref: '#/components/schemas/ItemError'
+        message:
+          type: string
+          description: Why the question failed, naming the field, such as "set questions do not take ['colour']".
     ItemError:
       type: string
-      enum: [invalid_question, invalid_input, max_length_exceeded, invalid_model_output, deadline_exceeded, unavailable]
+      enum: [invalid_question, invalid_input, max_length_exceeded, scan_budget_exceeded, invalid_model_output, deadline_exceeded, unavailable]
+      description: |
+        Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+        request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+        `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+        scanned.
     Span:
       type: object
       required: [label, start, end, text, probability]
@@ -411,6 +556,10 @@ components:
       type: object
       required: [selected, probabilities]
       properties:
+        input_coverage:
+          type: string
+          enum: [complete]
+          description: Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
         selected:
           type: array
           items:
@@ -431,6 +580,9 @@ components:
     ResponseMeta:
       type: object
       properties:
+        model_id:
+          type: string
+          description: The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
         revision:
           type: string
           nullable: true
@@ -668,16 +820,22 @@ components:
     InputUsage:
       type: object
       required: [tokens, processed_tokens, truncated]
-      description: Tokenizer facts of one input, including special tokens.
+      description: |
+        Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+        the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+        `tokens_lower_bound` is true.
       properties:
         tokens:
           type: integer
-          description: Tokens of the complete input.
+          description: Tokens of the complete input, or a lower bound when `tokens_lower_bound` is true.
         processed_tokens:
           type: integer
           description: Tokens the model read (windows counted once per content token).
         truncated:
           type: boolean
+        tokens_lower_bound:
+          type: boolean
+          description: The input was read in part, so `tokens` is a lower bound of its tokens.
         windows:
           type: integer
           description: Windows the input was read in.
@@ -1202,6 +1360,17 @@ components:
       properties:
         max_input_tokens:
           type: integer
+        max_scan_tokens:
+          type: integer
+          description: |
+            Decision models that read a long state part in windows (Vela 2.0): the most tokens of one part a question
+            reads whole, by default four inputs on a CPU and 32 on a GPU. A longer part fails its questions with
+            `scan_budget_exceeded`.
+        truncate_tokens:
+          type: integer
+          description: |
+            The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
+            CPU (one forward) and the scan budget on a GPU.
         min_options:
           type: integer
         max_options:

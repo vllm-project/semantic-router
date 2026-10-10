@@ -243,6 +243,9 @@ func validateDecisionAnnotations(decision Decision) error {
 }
 
 func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
+	if decision.Algorithm.IsNative() {
+		return validateNativeDecisionSurfaces(decision)
+	}
 	for i, modelRef := range decision.ModelRefs {
 		if modelRef.Model == "" {
 			return fmt.Errorf("decision '%s', modelRefs[%d]: model name cannot be empty", decision.Name, i)
@@ -465,12 +468,6 @@ func validateDecisionContextCompressionRecovery(
 		!compression.Recovery.Enabled {
 		return nil
 	}
-	if !cfg.Looper.IsEnabled() {
-		return fmt.Errorf(
-			"decision %q: context_compression recovery requires global.integrations.looper.endpoint",
-			decision.Name,
-		)
-	}
 	store := strings.TrimSpace(compression.Recovery.Store)
 	if store == "response_cache" {
 		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
@@ -513,6 +510,9 @@ func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
 func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {
 	if algorithm == nil {
 		return nil
+	}
+	if err := validateNativeAlgorithmConfig(decisionName, modelRefs, algorithm); err != nil {
+		return err
 	}
 
 	normalizedType, displayType, err := normalizeDecisionAlgorithmType(
@@ -696,6 +696,9 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
 	case "multi_factor":
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
+	}
+	if _, registered, err := DecodeDecisionAlgorithm(decisionName, algorithm); registered {
+		return err
 	}
 	return nil
 }

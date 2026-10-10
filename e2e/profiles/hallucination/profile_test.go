@@ -28,7 +28,8 @@ func TestProfileUsesCanonicalFactCheckBindingWithRemoteDetector(t *testing.T) {
 	if modelID, exists := factCheck["model_id"]; exists && modelID != "" {
 		t.Fatalf("fact-check must inherit the catalog model instead of overriding it with %v", modelID)
 	}
-	if factCheck["threshold"] != 0.65 || factCheck["use_cpu"] != true {
+	// 0.86 on Vela 2.0 0.3B keeps Vela 1.0 FactCheck's operating point at 0.65.
+	if factCheck["threshold"] != 0.86 || factCheck["use_cpu"] != true {
 		t.Fatalf("fact-check execution policy changed: %#v", factCheck)
 	}
 	if _, retired := factCheck["use_mmbert_32k"]; retired {
