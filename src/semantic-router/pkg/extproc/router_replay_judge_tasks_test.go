@@ -73,6 +73,34 @@ func TestRouterReplayJudgeTasksCarryTheRecordedText(t *testing.T) {
 	}
 }
 
+// The stored request is the body sent upstream, which names the physical
+// model. The judge reads it without that name, and each task carries the
+// digest of the input it shows.
+func TestRouterReplayJudgeTasksHideTheModelTheRequestWasSentTo(t *testing.T) {
+	record := judgedReplayRecord(t, "replay-1", openAIChatBody("primary answer"), "shadow answer")
+	record.RequestBody = `{"model":"primary-upstream-id","messages":[{"role":"user","content":"replay-1"}]}`
+	response := judgeTasks(newDatasetExportRouter(t, record), judgeTasksQuery)
+
+	assertIntField(t, judgeTaskCounts(t, response), "pairs", 1)
+	body := string(response.GetImmediateResponse().Body)
+	for _, identity := range []string{"primary-upstream-id", "primary-model", "candidate-model"} {
+		if strings.Contains(body, identity) {
+			t.Fatalf("judge tasks carry %q: %s", identity, body)
+		}
+	}
+	tasks, ok := decodeJSONBody(t, response.GetImmediateResponse().Body)["tasks"].([]interface{})
+	if !ok || len(tasks) != 2 {
+		t.Fatalf("expected two tasks: %s", body)
+	}
+	for _, raw := range tasks {
+		task := raw.(map[string]interface{})
+		input, _ := task["input"].(string)
+		if !strings.Contains(input, "replay-1") || task["input_digest"] != sha256Hex(input) {
+			t.Fatalf("task input %q with digest %v", input, task["input_digest"])
+		}
+	}
+}
+
 // The record does not say which client format its response body is in, so the
 // route tries each and keeps the decoding that hashes to the recorded digest.
 func TestRouterReplayJudgeTasksReadAnAnthropicResponse(t *testing.T) {

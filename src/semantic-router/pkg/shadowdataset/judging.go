@@ -1,6 +1,7 @@
 package shadowdataset
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -49,11 +50,13 @@ type Candidate struct {
 // Every pair is emitted twice with the sides swapped, under one Pair ID, so a
 // verdict that follows the slot rather than the answer is measurable.
 type JudgeTask struct {
-	ID     string    `json:"id"`
-	Pair   string    `json:"pair"`
-	Input  string    `json:"input"`
-	First  Candidate `json:"first"`
-	Second Candidate `json:"second"`
+	ID    string `json:"id"`
+	Pair  string `json:"pair"`
+	Input string `json:"input"`
+	// InputDigest is the example's input digest, the digest of Input.
+	InputDigest string    `json:"input_digest"`
+	First       Candidate `json:"first"`
+	Second      Candidate `json:"second"`
 }
 
 // JudgeTaskCounts reports what BuildJudgeTasks kept and dropped, by pair.
@@ -108,9 +111,10 @@ func BuildJudgeTasks(m Manifest, texts map[string]ExampleText, key string) (Judg
 				NamesOwnModel: namesModel(text.Shadows[index], shadow.Model),
 			}
 			pair := opaqueID(key, "pair", example.ID, fmt.Sprint(index))
+			input := judgeInput(text.Input)
 			set.Tasks = append(set.Tasks,
-				JudgeTask{ID: opaqueID(key, "task", pair, "0"), Pair: pair, Input: text.Input, First: primary, Second: candidate},
-				JudgeTask{ID: opaqueID(key, "task", pair, "1"), Pair: pair, Input: text.Input, First: candidate, Second: primary},
+				JudgeTask{ID: opaqueID(key, "task", pair, "0"), Pair: pair, Input: input, InputDigest: example.InputDigest, First: primary, Second: candidate},
+				JudgeTask{ID: opaqueID(key, "task", pair, "1"), Pair: pair, Input: input, InputDigest: example.InputDigest, First: candidate, Second: primary},
 			)
 			set.Counts.Pairs++
 		}
@@ -139,7 +143,7 @@ func pairTextFault(example Example, text ExampleText, found bool, shadow int) st
 	if text.Input == "" {
 		return ExcludeJudgeInputMissing
 	}
-	if digestOf(text.Input) != example.InputDigest {
+	if digestOf(judgeInput(text.Input)) != example.InputDigest {
 		return ExcludeJudgeInputMismatch
 	}
 	if digestOf(text.Primary) != example.Primary.OutputDigest ||
@@ -147,6 +151,23 @@ func pairTextFault(example Example, text ExampleText, found bool, shadow int) st
 		return ExcludeJudgeTextMismatch
 	}
 	return ""
+}
+
+// judgeInput is the request a judge reads, and the text an input digest covers.
+// A stored request body names the model the router sent it to, so its
+// top-level model field is removed. Any other input is read as it is, which
+// leaves an input without that field unchanged.
+func judgeInput(input string) string {
+	var body map[string]json.RawMessage
+	if json.Unmarshal([]byte(input), &body) != nil || body["model"] == nil {
+		return input
+	}
+	delete(body, "model")
+	neutral, err := json.Marshal(body)
+	if err != nil {
+		return input
+	}
+	return string(neutral)
 }
 
 // namesModel reports whether text names a model, by its full reference or by
