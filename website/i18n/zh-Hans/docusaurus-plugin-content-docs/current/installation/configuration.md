@@ -2,9 +2,9 @@
 title: 配置
 description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配方、服务和密钥应放在哪里。
 translation:
-  source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/configuration.md"
-  outdated: true
+  outdated: false
 ---
 
 # 配置
@@ -29,11 +29,11 @@ global:
 | 节 | 拥有 |
 | --- | --- |
 | `version` | Canonical schema 版本。使用 `v0.3`。 |
-| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key、可选的请求模型白名单（`models`，为空时接受所有模型），以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
+| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key、可选的 Chat 模型允许列表（`models`，为空时接受所有模型）、独立的原生 System One 权限（`systemone.models`，省略时不发布原生模型），以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
 | `providers` | 逻辑 provider 模型、物理后端端点、定价、能力和默认值。 |
 | `evaluation` | 可选的运维人员拥有的基准定义、带版本的索引 DAG，以及与模型关联的记录。 |
 | `routing` | 默认配方：model card、信号、投影、决策、strategy、算法和路由插件。 |
-| `entrypoints` | 映射到命名配方的公共虚拟模型别名。 |
+| `entrypoints` | 映射到默认配方或命名配方的公共虚拟模型别名。 |
 | `recipes` | 共享 providers 和全局基础设施的额外隔离路由配置。 |
 | `global` | Router 服务、存储、集成、可观测性、学习和 Router 拥有的模型资产。 |
 
@@ -249,6 +249,8 @@ api_key: ${MODEL_API_KEY}
 对于自定义配方，用 `--recipe-env NAME` 显式授权所需的主机变量。Kubernetes 部署将敏感环境值放入 Secret，而不是 ConfigMap 或 Helm values。参见[安全加固](security-hardening)。
 
 ## 入口点和配方
+
+未显式配置 `recipe: default` 的入口时，顶层 routing 配方默认以 `vllm-sr/auto` 发布。要替换该名称，在 `entrypoints` 中声明 `recipe: default` 及其 `model_names`；命名配方需要各自的入口。`MoM` 不再具有隐式特殊含义。
 
 入口点将一个或多个公共模型别名映射到配方。配方拥有其信号、投影、决策、算法、插件、缓存、回放、学习和路由状态。Providers、存储和 Router 拥有的分类器资产可以共享，而不允许策略状态跨越配方边界。
 

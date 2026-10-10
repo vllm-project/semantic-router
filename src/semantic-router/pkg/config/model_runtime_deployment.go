@@ -81,6 +81,22 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 			continue
 		}
 		for _, publicName := range listener.SystemOne.Models {
+			if cfg.IsSystemOneBackend(publicName) {
+				if deployment := cfg.ModelConfig[publicName].Deployment; deployment != "" {
+					mark(deployment)
+				}
+			}
+			if entrypoint, ok := cfg.ResolveEntrypoint(SystemOneAPI, publicName); ok && cfg.RoutingEnabled() {
+				if recipe := findRecipe(cfg.Recipes, entrypoint.Recipe); recipe != nil {
+					for _, decision := range recipe.Profile.Decisions {
+						for _, alias := range decision.Algorithm.NativeStageModels() {
+							if deployment := cfg.ModelConfig[alias].Deployment; deployment != "" {
+								mark(deployment)
+							}
+						}
+					}
+				}
+			}
 			if name, _, err := cfg.ResolveSystemOneDeployment(publicName); err == nil {
 				mark(name)
 			}

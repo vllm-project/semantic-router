@@ -361,7 +361,7 @@ func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	DeployPreviewHandler(configPath)(w, req)
+	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d. body=%s", w.Code, w.Body.String())
@@ -401,6 +401,27 @@ func TestDeployHandler_MethodValidation(t *testing.T) {
 				t.Errorf("Expected 405, got %d", w.Code)
 			}
 		})
+	}
+}
+
+func TestDeployPreviewHandler_ReadonlyMode(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	body := DeployRequest{YAML: "test: value"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath, true)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected 403, got %d. Body: %s", w.Code, w.Body.String())
+	}
+	if !contains(w.Body.String(), "readonly_mode") {
+		t.Errorf("Expected readonly_mode error, got: %s", w.Body.String())
 	}
 }
 
@@ -766,7 +787,7 @@ routing:
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	DeployPreviewHandler(configPath)(w, req)
+	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
@@ -961,7 +982,7 @@ func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRouting(t *testing.T) 
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	DeployPreviewHandler(configPath)(w, req)
+	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for a partial fragment without routing, got %d: %s", w.Code, w.Body.String())

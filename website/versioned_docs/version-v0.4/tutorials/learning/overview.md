@@ -1,0 +1,190 @@
+# Router Learning
+
+## Overview
+
+Router Learning is the router layer for cross-request routing intelligence. It
+adjusts the model proposed by semantic decisions without making online state
+part of `decision.algorithm`.
+
+The public concepts are:
+
+- `global.router.learning.adaptation`: online model-choice learning.
+- `global.router.learning.protection`: session and conversation stability.
+- `routing.decisions[].adaptations`: per-decision apply, observe, or bypass
+  controls.
+- Router Replay: optional diagnostics and outcomes for offline recipe learning;
+  persistence requires a durable replay backend.
+
+Use Router Learning when a decision should remain semantic, but repeated
+requests should consider current model, tool-loop state, prefix-cache evidence,
+handoff cost, switch history, or runtime outcomes.
+
+## Key Advantages
+
+- Keeps semantic decisions readable and request-local.
+- Gives online model-choice learning and stability protection one shared
+  runtime pipeline.
+- Lets hard policy decisions bypass learning without changing route rules.
+- Records compact response headers and, when replay is enabled, detailed
+  Router Replay diagnostics.
+- Supports offline analysis that can identify routing problems and evaluate
+  recipe changes before deployment.
+
+## What Problem Does It Solve?
+
+Semantic decisions are good at matching the current request, but they do not
+remember whether a model was overprovisioned, underpowered, unstable, or expensive in
+similar agent flows. Router Learning adds bounded online state and replay-linked
+outcomes so the router can improve model choice while keeping recipes in
+control.
+
+## When to Use
+
+- Your recipe has multiple candidate models and runtime evidence should improve
+  the choice.
+- Agent sessions need stability across tool loops, prefix cache, or provider
+  state.
+- Sensitive decisions need an explicit bypass from online learning.
+- You want explicitly configured replay and outcomes to power offline recipe
+  experiments.
+
+## Configuration
+
+When configuration omits a setting, the defaults are:
+
+| Setting | Default |
+| --- | --- |
+| `global.router.learning.enabled` | `false`; the master switch must be enabled. |
+| `adaptation.enabled` and `protection.enabled` | `true`, subject to the master switch. |
+| `adaptation.candidate_set` | `decision` |
+| `protection.scope` | `conversation` |
+| Protection identity headers | `x-session-id` and `x-conversation-id` |
+
+Initializing a built-in recipe with `vllm-sr recipe builtin init` enables
+conversation protection and leaves online adaptation off unless your base
+configuration already sets these values. Existing settings, including explicit
+`false` values, custom identity headers, and tuning, are preserved. These are
+configuration-wide defaults; decision-level `bypass` controls still apply.
+
+Clients must send stable session and conversation identities for protection to
+retain a model. Missing identities leave routing unprotected and produce a
+diagnostic. See [session identification](../../api/session-identification).
+
+The reference `config/config.yaml` enables both components. To also enable online
+adaptation and share protection state across replicas, configure:
+
+```yaml
+global:
+  router:
+    learning:
+      enabled: true
+      adaptation:
+        enabled: true
+        strategy: routing_sampling
+        candidate_set: decision
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+          switch_margin: 0.05
+          stability_weight: 1.0
+      state_store:
+        backend: redis
+        ttl_seconds: 86400
+        timeout_ms: 50
+        redis:
+          address: redis:6379
+          database: 2
+          key_prefix: "vsr:router-session:v1:"
+```
+
+The shared store is optional. Request-time reads use a strict timeout and fail
+open to the bounded local store. Response-side updates write the same snapshot
+to Redis so another replica can recover conversation protection state.
+
+After an upgrade from an older Redis snapshot format, each session establishes
+a new protection baseline on its next routed request. Use a durable Replay
+store to retain conversation traces across router restarts.
+
+Decision-local controls are sparse. Most decisions inherit global behavior:
+
+```yaml
+adaptations:
+  mode: bypass
+```
+
+Use `bypass` for privacy, security, local-only, compliance, or any other hard
+policy route. Use component-level controls when one component should observe or
+bypass independently:
+
+```yaml
+adaptations:
+  adaptation:
+    mode: observe
+  protection:
+    mode: apply
+    stability_weight: 1.5
+```
+
+## Runtime Flow
+
+```text
+base selector
+  -> protection preflight
+  -> adaptation
+  -> protection switch guard
+  -> final model
+```
+
+Adaptation answers which model looks better from experience. Protection answers
+whether exploration or switching is safe now.
+
+## Header And Replay
+
+The `x-vsr-learning-*` header family is intentionally compact:
+
+```http
+x-vsr-learning-methods: adaptation,protection
+x-vsr-learning-actions: adaptation=propose_switch,protection=allow_switch
+x-vsr-learning-scopes: protection=conversation
+x-vsr-learning-reasons: adaptation=sampled_win,protection=switch_allowed
+```
+
+When Router Replay is enabled, detailed fields such as base model, proposal
+model, final model, cache warmth, switch cost, candidate scores, sampling
+values, and hashed identity diagnostics are stored there and keyed by
+`x-vsr-replay-id`.
+
+## Related Pages
+
+- [Adaptation](./adaptations) explains `routing_sampling` and candidate sets.
+- [Protection](./protection) explains conversation and session stability.
+- [Decision Adaptations](./decision-adaptations) explains decision-local
+  controls.
+- [Memory And Replay](./memory-and-replay) explains diagnostics and outcomes.
+
+## Evaluate Recipe Changes Offline
+
+Router Learning does not rewrite deployed recipes on the request path. Use the
+offline recipe-learning command to turn replay and outcomes into findings,
+metrics, candidate variants, experiment estimates, suggested changes, and
+experience seed packs:
+
+```bash
+vllm-sr optimize recipe-learning \
+  --endpoint http://localhost:8080 \
+  --recipe-file config.yaml \
+  --output-dir ./router-learning-report
+```
+
+`--endpoint` targets the Router management API, never the public inference
+listener. Export `VSR_MGMT_TOKEN` first when management bearer auth is enabled.
+
+For air-gapped or CI workflows, export replay JSON first and pass it with
+`--replay-file`. Add `--cases-file` when eval cases include expected decisions
+or models.

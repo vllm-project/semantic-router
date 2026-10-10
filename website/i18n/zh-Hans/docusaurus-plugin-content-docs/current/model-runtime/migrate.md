@@ -3,7 +3,7 @@ title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
 description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名或 NLI 解释器的配置。
 translation:
-  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/migrate.md"
   outdated: false
 ---
@@ -11,11 +11,12 @@ translation:
 # 从原生绑定迁移
 
 早期版本在路由器内部用三种后端运行模型：candle、ONNX Runtime（`ort`）和 OpenVINO。
-这些后端已经移除。现在每个模型都运行在[模型运行时](model-runtime/overview.md)中，默认在 CPU 上，
-你要求时在 GPU 上。该版本的全部破坏性变更见[发布说明](release-notes/built-in-model-runtime.md)。
+这些本地绑定已经由[模型运行时](model-runtime/overview.md)替代；显式配置的外部服务仍单独调用。
+设备由 deployment 和启动时的平台选择决定。该版本的全部破坏性变更见[发布说明](release-notes/built-in-model-runtime.md)。
 
-**大多数配置无需修改。** 如果你只是开启功能（`domain` 信号、语义缓存、PII 检测），
-从未指定后端，路由器会选择与以前相同的 Vela 模型，并在运行时中运行它们。
+**升级后请重新验证路由结果。** 未指定模型的判断任务现在使用默认 Vela 2.0 部署；
+这不保证与旧 Vela 1.0 专用模型得出相同结果。检查[默认模型与任务绑定](choose-a-model.md)，
+用自己的请求验证阈值和准确度。
 
 如果你的配置包含以下任何一项，就需要迁移：
 
