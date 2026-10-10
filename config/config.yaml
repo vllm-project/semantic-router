@@ -243,6 +243,8 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
+        - name: business-adapter
+          description: Adapter specialized for business strategy and operations prompts.
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -865,6 +867,12 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+        # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
+        - model: qwen3-32b
+          lora_name: business-adapter
+          use_reasoning: true
+          reasoning_mode: enabled
+          reasoning_effort: low
       candidateIterations:
         - variable: candidate
           source: models
