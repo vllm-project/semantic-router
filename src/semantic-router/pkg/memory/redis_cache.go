@@ -145,13 +145,24 @@ func (c *RedisCache) holdKey(userID string) string {
 	return c.prefix + "h:" + userID
 }
 
-// generation returns the user's invalidation generation. ok is false when the
-// cache cannot be used safely for this user.
+// generation admits a retrieval for caching and returns the user's invalidation
+// generation. ok is false when the cache cannot be used safely: no user, a Redis
+// error, or a post-write hold, since a read begun then may be stale when it ends.
 func (c *RedisCache) generation(ctx context.Context, userID string) (string, bool) {
 	if c == nil || c.client == nil || userID == "" {
 		return "", false
 	}
-	generation, err := c.client.Get(ctx, c.generationKey(userID)).Result()
+	pipe := c.client.TxPipeline()
+	generationCmd := pipe.Get(ctx, c.generationKey(userID))
+	holdCmd := pipe.Exists(ctx, c.holdKey(userID))
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		logging.Debugf("Memory Redis cache generation read error: %v", err)
+		return "", false
+	}
+	if holdCmd.Val() > 0 {
+		return "", false
+	}
+	generation, err := generationCmd.Result()
 	if errors.Is(err, redis.Nil) {
 		return "0", true
 	}

@@ -126,11 +126,41 @@ func TestRedisCacheInvalidationBumpsGenerationAndHolds(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "0", generation)
 	require.NoError(t, cache.InvalidateByUser(ctx, "u"))
-	generation, _ = cache.generation(ctx, "u")
-	require.Equal(t, "1", generation)
 	require.True(t, mr.Exists(cache.holdKey("u")))
 	require.LessOrEqual(t, mr.TTL(cache.holdKey("u")), cacheWriteHold)
+	_, ok = cache.generation(ctx, "u")
+	require.False(t, ok, "retrievals admitted during the hold are not cacheable")
+
+	mr.FastForward(cacheWriteHold + time.Second)
+	generation, ok = cache.generation(ctx, "u")
+	require.True(t, ok)
+	require.Equal(t, "1", generation)
 
 	_, ok = cache.generation(ctx, "")
 	require.False(t, ok, "results without an owner cannot be invalidated, so they are never cached")
+}
+
+func TestCachingStoreReadBegunDuringHoldIsNotCachedAfterIt(t *testing.T) {
+	ctx := context.Background()
+	read, gate := make(chan struct{}), make(chan struct{})
+	store := &fenceStore{mem: &Memory{ID: "secret", UserID: "u"}, stale: true}
+	mr, cached, cache := newFenceFixture(t, store)
+	opts := RetrieveOptions{Query: "q", UserID: "u", Limit: 5}
+	require.NoError(t, cached.Forget(ctx, "secret"))
+
+	store.mu.Lock()
+	store.read, store.gate = read, gate
+	store.mu.Unlock()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = cached.Retrieve(ctx, opts) // admitted during the hold, reads a stale row
+	}()
+	<-read
+	mr.FastForward(cacheWriteHold + time.Second)
+	close(gate)
+	<-done
+
+	_, hit := cache.Get(ctx, opts)
+	require.False(t, hit, "a read begun during the hold must not be cached after it expires")
 }
