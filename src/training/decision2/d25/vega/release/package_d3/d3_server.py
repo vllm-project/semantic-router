@@ -4,8 +4,8 @@
     python d3_server.py --model <package dir or Hub id> [--device cuda:0] [--host 127.0.0.1] [--port 8000]
 
 Request ``{"model", "state", "questions", "images"}``, response ``{"model", "answers", "usage"}``: the wire
-format of the Decision Index ``http`` engine. ``images`` (optional) lists up to 4 base64 PNG, JPEG or WebP data
-URLs (``data:image/png;base64,...``) that every question sees, each at most 8,000,000 bytes and 16,000,000
+format of the Decision Index ``http`` engine. ``images`` (optional) lists any number of base64 PNG, JPEG or WebP
+data URLs (``data:image/png;base64,...``) that every question sees, each at most 8,000,000 bytes and 16,000,000
 pixels (the model reads it at up to 1.6 MP). A question over the input limit refuses the whole request with
 HTTP 422 naming the maximum context length (the Index records it as unsupported; nothing is truncated);
 malformed requests and invalid images also get 422. Requests are served one at a time. With
@@ -35,7 +35,6 @@ os.environ.setdefault("TRITON_CACHE_AUTOTUNING", "1")
 from d3_runtime import (  # noqa: E402
     DEFAULT_BATCH_SIZE,
     IMAGE_MAX_PIXELS,
-    MAX_IMAGES,
     D3,
 )
 
@@ -129,7 +128,6 @@ def build_app(args: argparse.Namespace):
             "modalities": modalities(model),
         }
         if reads_images(model):
-            entry["max_images"] = MAX_IMAGES
             entry["image_max_pixels"] = IMAGE_MAX_PIXELS
         return {"models": [entry]}
 

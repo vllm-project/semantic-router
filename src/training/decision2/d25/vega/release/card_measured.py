@@ -223,9 +223,10 @@ def front_matter(card: dict) -> list[str]:
 
 def pitch(card: dict) -> str:
     return (
-        f"**{card['model_name']}** is the {card['size']} model of Decision {GENERATION}, the decision models of "
-        f"[vLLM Semantic Router]({PROJECT_URL}). Give it an input (text or JSON, with up to "
-        f"{card['images']['max_images']} images) and the questions you need answered: pick one of several options, "
+        f"**{card['model_name']}** is the {card['size']} multimodal foundation decision model of Decision "
+        f"{GENERATION}, the decision models of "
+        f"[vLLM Semantic Router]({PROJECT_URL}). Give it an input (text or JSON, optionally with images) and "
+        "the questions you need answered: pick one of several options, "
         "say yes or no, or rate on a scale. It answers them all in one call and returns a probability for every "
         "answer, without generating text."
     )
@@ -237,7 +238,7 @@ def at_a_glance(card: dict) -> list[str]:
         "| | |",
         "| --- | --- |",
         f"| **Parameters** | {p['loaded'] / 1e9:.2f}B, including the {p['vision'] / 1e9:.2f}B vision encoder |",
-        f"| **Inputs** | Text or JSON, plus up to {card['images']['max_images']} images per request |",
+        "| **Inputs** | Text or JSON, plus images (several per request) |",
         "| **Decision types** | Choice · Yes / No · Score |",
         "| **License** | Apache-2.0 |",
     ]
@@ -263,8 +264,8 @@ def highlights(card: dict) -> list[str]:
         f"unsupported. The official Full scores on the text and vision boards are {PENDING}.",
         f"**+{one(text['public'] - previous['public'])} on the public suite over Decision 2.0** "
         f"(its 27B model: {previous['public']:.2f} on the board), ahead in {areas_ahead}.",
-        f"**Reads images:** up to {card['images']['max_images']} images per request (PNG, JPEG or WebP: paths, "
-        "URLs, PIL images or base64 data URLs); every question of the request sees all of them.",
+        "**Reads images:** multiple images per request (PNG, JPEG or WebP), given as paths, URLs, PIL images or "
+        "base64 data URLs; every question of the request sees all of them.",
         f"**Speed:** text requests take a median of {ms(t['median_ms'])} (mean {ms(t['mean_ms'])}, 80th percentile "
         f"{ms(t['p80_ms'])}); requests with an image a median of {ms(one_image['median_ms'])} (mean "
         f"{ms(one_image['mean_ms'])}, 80th percentile {ms(one_image['p80_ms'])}). One {latency['gpu']}, one "
@@ -303,7 +304,7 @@ def quickstart(repo: str) -> str:
             "# Text",
             call(QUICKSTART, None),
             "",
-            "# Text and an image (up to 4 per request)",
+            "# Text and an image (or several)",
             f'receipt = hf_hub_download("{repo}", "{EXAMPLE_IMAGE}")',
             call(QUICKSTART_IMAGE, "[receipt]"),
             "",
@@ -318,9 +319,7 @@ def image_note(card: dict) -> str:
     images = card["images"]
     return (
         f"Images go before the text of the request, each read at up to {images['max_pixels'] / 1e6:.1f} "
-        "megapixels; every question of the request sees all of them. The included server "
-        f"(`d3_server.py`) takes base64 data URLs of up to {images['server_max_bytes'] // 1_000_000} MB "
-        f"and {images['server_max_pixels'] // 1_000_000} megapixels each."
+        "megapixels; every question of the request sees all of them."
     )
 
 
@@ -415,8 +414,7 @@ def citation(card: dict) -> list[str]:
     return [
         "```bibtex",
         f"@misc{{{key}_{CITATION_YEAR},",
-        f"  title        = {{{{{name}}}: A Decision {GENERATION} Model for Structured Decisions over Text and "
-        "Images},",
+        f"  title        = {{{{{name}}}: A Multimodal Foundation Decision Model}},",
         f"  author       = {{{{{AUTHOR}}}}},",
         f"  year         = {{{CITATION_YEAR}}},",
         f"  howpublished = {{\\url{{https://huggingface.co/{repo}}}}}",
@@ -475,8 +473,7 @@ def render_readme(card: dict) -> str:
             "",
             "## License",
             "",
-            f"Apache-2.0 ([LICENSE](LICENSE)). Built on [{base}](https://huggingface.co/{base}) (Apache-2.0). The "
-            f"example receipt (`{EXAMPLE_IMAGE}`) is our own render of an invented store.",
+            f"Apache-2.0 ([LICENSE](LICENSE)). Built on [{base}](https://huggingface.co/{base}) (Apache-2.0).",
             "",
             "## Citation",
             "",
@@ -494,6 +491,13 @@ def check_rendered(readme: str, files: set[str]) -> list[str]:
         f"{PUBLIC_TRACES[1]}: {line.strip()[:80]}"
         for line in readme.splitlines()
         if PUBLIC_TRACES[0].search(line)
+    ]
+    problems += [
+        f"image count cap: {line.strip()[:80]}"
+        for line in readme.splitlines()
+        if re.search(
+            r"up to \d+ (images|per request)|at most \d+ images|max_images", line
+        )
     ]
     if not readme.startswith("---\n") or "\n---\n" not in readme[4:]:
         problems.append("missing YAML front matter")

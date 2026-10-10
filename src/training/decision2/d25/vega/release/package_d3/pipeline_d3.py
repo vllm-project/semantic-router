@@ -1,7 +1,7 @@
 """The ``decision`` pipeline for d3 models (``trust_remote_code=True``).
 
 ``pipeline("decision", model=repo, trust_remote_code=True)`` loads the model with ``AutoModel`` and answers
-``{"state": ..., "questions": {...}}`` requests, optionally with ``"images": [...]`` (0 to 4 images per
+``{"state": ..., "questions": {...}}`` requests, optionally with ``"images": [...]`` (any number of images per
 request), or ``state=..., questions=..., images=...`` keywords, or a list of requests, with the model's
 ``system_one`` response. The model batches the questions of one request itself.
 """

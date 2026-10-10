@@ -245,6 +245,7 @@ def stage(
     revision: str,
     hardware: str,
     settings: str,
+    note: str | None = None,
 ) -> dict[str, Any]:
     if out.exists():
         raise SystemExit(f"{out} exists")
@@ -286,6 +287,7 @@ def stage(
         f"{str(scores['complete']).lower()}.",
         "- Re-scoring `results.jsonl.gz` with `decision_index score --edition 0.3` reproduces `scores.json`, `index.json`"
         " and `benchmark-summary.json` (apart from `generated_utc`).",
+        *([f"- {note}"] if note else []),
         "",
     ]
     (out / "RUN_NOTES.md").write_text("\n".join(notes))
@@ -428,6 +430,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--repo", required=True)
     g.add_argument("--revision", required=True)
     g.add_argument("--hardware", required=True)
+    g.add_argument("--note", help="one more line for RUN_NOTES.md")
     g.add_argument(
         "--settings",
         default="BF16 backbone with SDPA attention, FP32 readout and softmax, temperature 1 "
@@ -463,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
             a.revision,
             a.hardware,
             a.settings,
+            a.note,
         )
     elif a.cmd == "upload":
         out = upload(a.stage, a.dataset, a.name, a.allow_public)

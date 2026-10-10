@@ -10,14 +10,14 @@ probability for every option. No text is generated and no input is truncated.
     # {"model": ..., "answers": {"route": {"type": "choice", "choice": ..., "probabilities": {...},
     #                                     "confidence": ...}}, "usage": {"input_tokens": n, "output_tokens": 0}}
 
-    model.system_one(state="...", questions={...}, images=["photo.png"])  # 0 to 4 images
+    model.system_one(state="...", questions={...}, images=["photo.png", "label.jpg"])
 
 The checkpoint directory holds ``config.json`` + ``model*.safetensors`` (a transformers
 ``Qwen3_5Model``), ``readout.safetensors`` (``{"weight": [255, hidden]}``), ``decision_config.json``
 (prompt family, answer codes, attention mode, pooling, temperature, input limit) and the tokenizer.
 ``d3_format.py`` next to this file is the prompt and answer-code contract of the model.
 
-Images: a request takes 0 to 4 images (PIL images, local paths, http(s) URLs or base64
+Images: a request takes any number of images (PIL images, local paths, http(s) URLs or base64
 ``data:image/...`` URLs), shared by all of its questions. They go before the text in the user turn,
 one image placeholder per image in list order, and the checkpoint's own processor (``AutoProcessor``,
 torchvision backend) resizes each to at most 1,638,400 pixels (1.6 MP) and at least 65,536, keeping
@@ -86,7 +86,6 @@ VERIFY_MODES = ("fast", "full", "none")
 # "fast" verification hashes every file up to this size and checks the size of larger ones.
 FAST_HASH_BYTES = 64 << 20
 ERRORS = ("invalid_question", "max_length_exceeded", "invalid_model_output")
-MAX_IMAGES = 4
 IMAGE_MIN_PIXELS = 65_536
 IMAGE_MAX_PIXELS = 1_638_400
 IMAGE_TOKEN = "<|image_pad|>"
@@ -102,10 +101,6 @@ MAX_DOWNLOAD_BYTES = 64 << 20
 
 class MaxLengthExceeded(ValueError):
     """A question prompt is longer than the checkpoint's input limit; nothing is truncated."""
-
-
-class ImageLimitExceeded(ValueError):
-    """A request carries more images than the checkpoint accepts (a capacity limit)."""
 
 
 # ---------------------------------------------------------------------------------------------
@@ -207,10 +202,8 @@ def image_messages(
     n_images: int,
 ) -> list[dict[str, Any]]:
     """The prompt family's messages with one image placeholder per image before the user text."""
-    if not 0 < n_images <= MAX_IMAGES:
-        raise ValueError(
-            f"an image prompt takes 1 to {MAX_IMAGES} images, got {n_images}"
-        )
+    if n_images < 1:
+        raise ValueError(f"an image prompt takes at least 1 image, got {n_images}")
     images: list[dict[str, Any]] = [{"type": "image"} for _ in range(n_images)]
     if prompt == "d3":
         text = {"type": "text", "text": user_prompt(state, question, codes)}
@@ -790,13 +783,9 @@ class D3:
         )
 
     def load_images(self, images: Sequence[Any], *, strict: bool = False) -> list[Any]:
-        """Decode a request's images (RGB PIL); raises ``ImageLimitExceeded`` over 4, ValueError otherwise."""
+        """Decode a request's images (RGB PIL), any number; raises ValueError for an image it cannot read."""
         if not images:
             return []
-        if len(images) > MAX_IMAGES:
-            raise ImageLimitExceeded(
-                f"the request has {len(images)} images; at most {MAX_IMAGES} images per request"
-            )
         if self.image_unavailable is not None:
             raise ValueError(
                 f"image inputs are not available: {self.image_unavailable}"
@@ -817,8 +806,8 @@ class D3:
     ) -> Prepared:
         """Validate and tokenize one request; malformed ``state``, ``questions`` or ``images`` raise ValueError.
 
-        ``images`` (a list of 0 to 4 images shared by every question) select the image path; more than four
-        raise ``ImageLimitExceeded``. Without images the request takes the text path unchanged.
+        ``images`` (a list of any number of images shared by every question) select the image path. Without
+        images the request takes the text path unchanged.
         """
         if not isinstance(questions, Mapping) or not questions:
             raise ValueError(
@@ -1066,7 +1055,7 @@ class D3:
     ) -> dict[str, Any]:
         """Typed Choice / Noul / Score answers about one state: ``{"model", "answers", "usage"}``.
 
-        ``images``: 0 to 4 images (PIL images, paths, http(s) or data URLs) that every question sees.
+        ``images``: any number of images (PIL images, paths, http(s) or data URLs) that every question sees.
         A question that cannot be answered gets ``{"type", "error", "message"}`` with ``error`` one of
         ``invalid_question``, ``max_length_exceeded`` (never truncated) or ``invalid_model_output``; the
         other questions of the request are still answered.
@@ -1085,8 +1074,8 @@ class D3:
         The Gated DeltaNet kernels take the batch size as a compile-time constant, and Triton specializes their
         length and chunk-count arguments on being 1 or a multiple of 16; these lengths cover every combination
         (chunks of 64 tokens). A fresh process otherwise pays several seconds on the first request of each new
-        class. With ``images`` (and a vision tower) three image requests (one small image, one at the 1.6 MP
-        cap, four at the cap) also warm the vision tower. Answers are unchanged.
+        class. With ``images`` (and a vision tower) three image requests (one small image, one 1.6 MP image,
+        four 1.6 MP images) also warm the vision tower. Answers are unchanged.
         """
         started = time.perf_counter()
         for size in range(1, self.batch_size + 1):
@@ -1104,7 +1093,7 @@ class D3:
 
             small = Image.new("RGB", (448, 336), (128, 128, 128))
             large = Image.new("RGB", (1280, 1280), (96, 160, 224))
-            for batch in ([small], [large], [large] * MAX_IMAGES):
+            for batch in ([small], [large], [large] * 4):
                 self.system_one(
                     state="warm-up", questions={"q": {"type": "noul"}}, images=batch
                 )
@@ -1167,7 +1156,6 @@ class D3:
         """How image inputs are read (or why they are not available)."""
         contract: dict[str, Any] = {
             "supported": self.image_unavailable is None,
-            "max_images": MAX_IMAGES,
             "min_pixels": IMAGE_MIN_PIXELS,
             "max_pixels": IMAGE_MAX_PIXELS,
             "placement": "before the text of the user turn, one placeholder per image, request order",

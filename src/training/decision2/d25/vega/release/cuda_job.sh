@@ -5,7 +5,9 @@
 # also when a step fails. Steps:
 #   1. environment: pinned transformers, flash-linear-attention (+ causal-conv1d when a wheel exists)
 #   2. the package: MODEL=<repo> at REVISION, or MODEL=standin (pplx-decider-v1.1-27b, public, built into
-#      a package with our runtime by build.py; same layout and architecture as ours)
+#      a package with our runtime by build.py; same layout and architecture as ours); OVERLAY=<dir in the work
+#      dataset> turns the download into a new code revision of the same weights before it is uploaded
+#      (step revparity: the downloaded revision's text answers are identical)
 #   3. the rows: the latency-v1-style samples drawn from the private suite dataset (checked by run-id hash)
 #   4. smoke: AutoModel remote code, pipeline, /v1/systemone server (and the card Quickstart if any)
 #   5. latency protocol: the kit runner, one request at a time, 10 warm-up + 750 timed rows
@@ -104,6 +106,26 @@ else
     || retry python -m d25.vega.release.hub fetch --repo "$MODEL" --revision "$REVISION" --out $PKG --receipt "$OUT/fetch.json" \
     || fail "download $MODEL"
 fi
+# OVERLAY: <dir>/package/ holds the files that differ from the download, <dir>/SHA256SUMS every file of the built
+# package. $PKG becomes that package (links into the download plus the overlay files); the download stays $PKG_OLD.
+PKG_OLD=
+if [ -n "${OVERLAY:-}" ]; then
+  retry hf download "$WORK" --repo-type dataset --include "$OVERLAY/*" --local-dir /tmp/overlay > /dev/null \
+    || fail "overlay download"
+  PKG_OLD=$PKG; PKG=/tmp/pkg-new
+  python - "$PKG_OLD" "/tmp/overlay/$OVERLAY" "$PKG" <<'PY' || fail "overlay view"
+import os, sys
+from pathlib import Path
+old, overlay, new = (Path(p) for p in sys.argv[1:])
+for line in (overlay / "SHA256SUMS").read_text().splitlines():
+    name = line.split(None, 1)[1].lstrip("*").strip()
+    source = overlay / "package" / name
+    (new / name).parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(source if source.exists() else old / name, new / name)
+PY
+  (cd $PKG && sha256sum -c --quiet "/tmp/overlay/$OVERLAY/SHA256SUMS") || fail "overlay view differs from the built package"
+  echo "overlay $OVERLAY over $REVISION: $(cd "/tmp/overlay/$OVERLAY/package" && find . -type f | sort | tr '\n' ' ')"
+fi
 du -sh $PKG
 # A d3-family package names its runtime d3_* and uses public format and prompt ids; the reference engines (engine.py,
 # the image engine) read the same files with the internal ids, through a view that differs only in decision_config.json.
@@ -173,6 +195,11 @@ if [ -n "$REFERENCE" ]; then
     && python -m d25.vega.release.compare answers --results "$OUT/kit-760/results.jsonl" \
       --reference /tmp/work/reference.jsonl.gz --out "$OUT/answers-vs-reference.json" | head -14
 fi
+fi
+if has revparity && [ -n "$PKG_OLD" ]; then
+step "text-parity-vs-$REVISION"
+python -m d25.vega.release.text_parity_rev --old $PKG_OLD --new $PKG --rows $ROWS/parity-600.jsonl.gz --device cuda:0 \
+  --out "$OUT/text-parity-rev.json" || echo "TEXT PARITY vs $REVISION FAILED (see text-parity-rev.json)"
 fi
 
 if has images; then

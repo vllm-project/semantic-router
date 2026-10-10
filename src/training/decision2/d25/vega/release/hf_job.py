@@ -128,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="a newer d25/omni tree to ship over this one (image runtime checks)",
     )
+    ap.add_argument(
+        "--overlay",
+        default="",
+        help="dir in the work dataset with package/ and SHA256SUMS: a new code revision of --revision's weights",
+    )
     args = ap.parse_args(argv)
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
     from huggingface_hub import HfApi, get_token
@@ -149,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         "TORCH_SPEC": args.torch,
         "STEPS": args.steps,
         "IMAGE_CHECKS": args.image_checks,
+        "OVERLAY": args.overlay,
         "PROBE_IDS": args.probe_ids,
         "PROBE_RUNTIME": args.probe_runtime,
         "TORCH_INDEX": args.torch_index,

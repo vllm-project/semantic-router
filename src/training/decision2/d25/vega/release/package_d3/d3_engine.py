@@ -8,8 +8,8 @@ Options: ``model`` (package directory or Hub id), ``revision``, ``device`` (defa
 (questions per forward pass, default 8), ``verify`` (fast | full | none), ``model_name``. A request with a
 question over the checkpoint's input limit is ``Unsupported`` (nothing is truncated).
 
-Image requests: ``engine(state, questions, images=[...])`` with up to 4 images (PIL images, paths, http(s)
-or data URLs) that every question sees; more than 4 images are ``Unsupported``.
+Image requests: ``engine(state, questions, images=[...])`` with any number of images (PIL images, paths,
+http(s) or data URLs) that every question sees.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ os.environ.setdefault("TRITON_CACHE_AUTOTUNING", "1")
 from d3_runtime import (  # noqa: E402
     DEFAULT_BATCH_SIZE,
     D3,
-    ImageLimitExceeded,
 )
 
 
@@ -83,10 +82,7 @@ class D3Engine(Engine):
         self.decision.synchronize()
 
     def __call__(self, state, questions, images=None):
-        try:
-            prepared = self.decision.prepare(state, questions, images)
-        except ImageLimitExceeded as exc:
-            raise Unsupported(str(exc)) from exc
+        prepared = self.decision.prepare(state, questions, images)
         over = [
             e["message"]
             for e in prepared.errors.values()

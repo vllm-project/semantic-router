@@ -390,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
     torch.cuda.empty_cache()
     if args.server:
         report["server"] = server_checks(
-            package_dir, args.device, checks["quickstart"]["response"], over
+            package_dir, args.device, checks["quickstart"]["response"], over, uncapped
         )
     if args.plain:
         plain = AutoModel.from_pretrained(args.model, device_map=args.device, **hub)

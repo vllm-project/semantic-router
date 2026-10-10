@@ -2,7 +2,7 @@
 
 ``AutoModel.from_pretrained(repo, trust_remote_code=True)`` loads the repository through its own runtime
 (``d3_runtime.py``) and returns a model with ``system_one(state=..., questions={...}, images=[...])``
-(0 to 4 images per request). The
+(any number of images per request). The
 repository is a standard ``Qwen3_5Model`` checkpoint plus a 255-way answer-code readout, so without
 ``trust_remote_code`` the same repository loads as the plain backbone. A directory without
 ``decision_config.json`` is not a Decision model and is loaded as a stock ``Qwen3_5Model``.
@@ -232,7 +232,7 @@ class D3Model(PreTrainedModel):
 
         ``questions`` maps question IDs to ``{"type": "choice" | "noul" | "score", "instructions": ...,
         "criteria": ...}``; a question over the input limit is answered ``max_length_exceeded``, never
-        truncated. ``images``: up to 4 images every question sees (PIL images, local paths, http(s) URLs or
+        truncated. ``images``: any number of images every question sees (PIL images, local paths, http(s) URLs or
         base64 ``data:image/...`` URLs), placed before the text and read at up to 1.6 MP each.
         """
         return self._require().system_one(
