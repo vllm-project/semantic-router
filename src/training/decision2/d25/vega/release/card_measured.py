@@ -8,8 +8,8 @@
 writes ``<dir>/README.md``, ``<dir>/assets/{banner,index-pareto,index-areas,example-receipt}.png``, the assembled
 input (``card-input.json``) and ``card-assets.json`` (input and output digests). ``measured.json`` (schema
 ``d25-measured/1``) holds the public text index and its areas from a complete official-kit run, per-benchmark vision
-scores on our reconstruction of the public vision suite, latency on one RTX PRO 6000, and the internal evaluation
-shown in d3's board rows under one label (the Highlights say the official Full scores are pending); peers come
+scores on our reconstruction of the public vision suite, latency on one AMD Instinct MI325X, and the internal evaluation
+shown in the model's board rows under one label ("<model>: internal evaluation"); peers come
 from the live boards' data files (Space ``data/index.json`` and ``data/vision.json``).
 
 README, in order: YAML metadata; the banner; the title; one product paragraph; the at-a-glance table; Highlights;
@@ -52,7 +52,7 @@ FAMILY = {
     "d3-lite": "0.8B",
     "d3-edge": "0.6B",
 }
-PENDING = "pending official evaluation"
+TRAINED_ON = "Trained on AMD Instinct MI325X GPUs."
 TAGS = (
     "zero-shot-classification",
     "decision-model",
@@ -294,15 +294,13 @@ def highlights(card: dict) -> list[str]:
     return [
         f"**Jev Decision Index {text['edition']}, public suite: {text['public']:.2f}**, measured with the official "
         f"{text['edition']} kit on the released weights: all {text['requests']:,} public requests answered, none "
-        f"unsupported. The official Full scores on the text and vision boards are {PENDING}.",
+        "unsupported.",
         f"**+{one(text['public'] - previous['public'])} on the public suite over Decision 2.0** "
         f"(its {previous['size']} model: {previous['public']:.2f} on the board), ahead in {areas_ahead}.",
         "**Reads images:** multiple images per request (PNG, JPEG or WebP), given as paths, URLs, PIL images or "
         "base64 data URLs; every question of the request sees all of them.",
-        f"**Speed:** text requests take a median of {ms(t['median_ms'])} (mean {ms(t['mean_ms'])}, 80th percentile "
-        f"{ms(t['p80_ms'])}); requests with an image a median of {ms(one_image['median_ms'])} (mean "
-        f"{ms(one_image['mean_ms'])}, 80th percentile {ms(one_image['p80_ms'])}). One {latency['gpu']}, one "
-        "request at a time.",
+        f"**Speed:** a median of {ms(t['median_ms'])} for a text request and {ms(one_image['median_ms'])} for a "
+        f"request with an image, on one {latency['gpu']} GPU, one request at a time.",
         "**Many questions, one call:** Choice, Yes / No and Score questions about the same input are answered "
         "together, each from its own forward pass over the input, with a probability for every option.",
     ]
@@ -511,6 +509,8 @@ def render_readme(card: dict) -> str:
             "## Citation",
             "",
             *citation(card),
+            "",
+            TRAINED_ON,
             "",
         ]
     )
