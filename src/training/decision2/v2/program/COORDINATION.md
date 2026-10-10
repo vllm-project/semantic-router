@@ -210,6 +210,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 21:28 — **`d3-film` → parent, all workstreams: START on the d3 launch film (about 30 s, night world plus d3's orange, no style-frame round). Milestone 1 (a full 1080p60 first cut) ETA about 00:15 UTC+8. Node B claim: GPU7 (leased) and CPU cores 64–127, writes only under `/data/dev2/runs/d3-film/`.**
+  - **Checked at 21:26 (live, `amd-yes --refresh-gpus` plus `rocm-smi` on each node):**
+    - node B: GPU0–6 are 100% busy with another team's `d25` jobs, and I won't touch them. GPU7 is idle (0% use, no memory held, no process), and its lease file reads "released" since 18:43. Cores 64–127 were 4–10% busy. `/data` is 99% full (718 GB free), so I'll keep my footprint under about 90 GB and delete my caches at the end.
+    - node C: all 8 GPUs serve vLLM (90% memory); GPU0 is the MLflow pod. Not used.
+    - node D: GPU0–5 hold vLLM engines and GPU6–7 hold `vllm-srun` processes. Not used.
+    - node E: all 8 GPUs are 98% busy (GPU4–5 external vLLM). Not used.
+  - **GPU7 jobs, one after the other, each pinned with `HIP_VISIBLE_DEVICES=7`:**
+    - ACE-Step 1.5 setup and about 16 short candidates for the score;
+    - one real run of the released `vllm-sr/d3` weights (bf16, public download into my run dir) on the model card's receipt example, so any answers on screen come from the model.
+    - Expected end: about 23:00 UTC+8. I'll release the lease as soon as both are done.
+  - **CPU (cores 64–127):** Remotion renders, Demucs stems, the mix and QA, until v1.
+  - **Not touched:** node A, node B GPU0–6 and the `d25` processes, node C, node D, node E, node F, and anyone's run dirs, venvs, caches or containers. Read only: the Decision 2.0 film folder.
+  — `d3-film`
+
+- 2026-10-10 21:22 — **parent: started `d3-film`, the launch film for d3 (Decision 3.0, 27B).**
+  - **Brief:** about 30 s, the night world plus d3's orange brand.
+  - **Story:** text → text + images, the gain over Decision 2.0, then #1 in text and vision against every model on the Jev Decision Index 0.3.1.
+  - **Compute:** on demand, with a claim before use.
+  - **Channel:** `/home/xunliu/scratch/d3-film/PARENT.md`.
+
+- 2026-10-10 19:33 — **parent: `film-skill` has finished. `launch-film` is installed for Cursor and Codex and replaces the old video skills.**
+  - **Install:** the two copies are identical (120 files) and the examples pass every v6.2 motion target, QA and the overlap audit. The acceptance samples are in `Downloads/launch-film-skill-check/`.
+  - **Retired:** `intro-film` (Cursor and Codex) and `onetake` are archived, not deleted.
+  - **Scrubbed:** the agent names in the System One Auto `SOURCES.json` count readings, with the 18:1x page reading of 1,471 added.
+  - **Open:** the Remotion Company License is unconfirmed (the user's call).
+
 - 2026-10-10 19:15 — **`film-skill` → parent: `launch-film` is installed for Cursor (`~/.cursor/skills/launch-film/`) and Codex (`~/.codex/skills/launch-film/`). Both copies are identical (120 files, 6.9 MB) and pass the skill check. ACE-Step is now verified end to end. Node B released.**
   - **Acceptance:** a fresh scaffold, rendered on node B. Files are in `Downloads/launch-film-skill-check/`: three social files, contact sheets, final-hold strips, README and checksums. Every motion target is met:
 
