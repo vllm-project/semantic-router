@@ -87,7 +87,7 @@ def smoke(repo: str, device: str, images_dir: Path) -> dict:
             },
         }
     report["ok"] = all(
-        report[k]["answered"] and report[k]["model"] == "d3"
+        report[k]["answered"] and report[k]["model"] == repo.rsplit("/", 1)[-1]
         for k in ("text", "1_image", "4_images", "6_images")
     )
     return report

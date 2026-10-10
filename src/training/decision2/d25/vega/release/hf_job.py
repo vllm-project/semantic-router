@@ -98,6 +98,11 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="path in the work dataset of an MI325X kit-760 results file",
     )
+    ap.add_argument(
+        "--image-reference",
+        default="pack",
+        help='image probabilities to compare with: "pack", "none" or a path in the work dataset',
+    )
     ap.add_argument("--variants", default="batch16 batch64 noconv nofla")
     ap.add_argument("--variant-rows", type=int, default=150)
     ap.add_argument("--steps", default="smoke latency parity variants")
@@ -154,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
         "TORCH_SPEC": args.torch,
         "STEPS": args.steps,
         "IMAGE_CHECKS": args.image_checks,
+        "IMAGE_REFERENCE": args.image_reference,
         "OVERLAY": args.overlay,
         "PROBE_IDS": args.probe_ids,
         "PROBE_RUNTIME": args.probe_runtime,

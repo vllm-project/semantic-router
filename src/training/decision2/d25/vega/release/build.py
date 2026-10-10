@@ -125,6 +125,14 @@ PUBLIC_TRACES = (
     ),
     "internal name or training trace",
 )
+# Public board entrants whose names contain a traced word; family cards list them as same-size peers.
+PUBLIC_NAMES = ("Jev-Omni", "d1-omni-600M", "GLiNER2.5-Decide")
+
+
+def traced(line: str) -> bool:
+    for name in PUBLIC_NAMES:
+        line = line.replace(name, "")
+    return bool(PUBLIC_TRACES[0].search(line))
 
 
 def same_contract(public: Path, internal: Path) -> list[str]:
@@ -416,7 +424,7 @@ def build(
                 problems += [
                     f"{name}:{n}: {PUBLIC_TRACES[1]} ({line.strip()[:80]})"
                     for n, line in enumerate(text.splitlines(), 1)
-                    if PUBLIC_TRACES[0].search(line)
+                    if traced(line)
                 ]
     if public:
         problems += [

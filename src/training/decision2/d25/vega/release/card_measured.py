@@ -33,7 +33,6 @@ from typing import Any
 from d25.vega.release.card import PROJECT_URL, AUTHOR, CITATION_YEAR, lint_readme, one
 from d25.vega.release.card_input import (
     AREAS,
-    PREVIOUS_ENGINE,
     board_point,
     decision_name,
 )
@@ -82,7 +81,17 @@ TEXT_PEERS = (
 )
 VISION_PEERS = 3
 PPLX_VISION = "pplx-decider-v1.1-27b"
-PREVIOUS_NAME = "Decision 2.0 (27B)"
+# The Decision 2.0 model of the same size (text board engine ids); cards name it "Decision 2.0 (<size>)".
+PREVIOUS = {
+    "d3": "decision-2.0-vega-27b",
+    "d3-flash": "decision-2.0-lux-9b",
+    "d3-mini": "decision-2.0-nox-4b",
+    "d3-nano": "decision-2.0-sol-2b",
+    "d3-lite": "decision-2.0-eos-0.8b",
+    "d3-edge": "decision-2.0-kai-0.6b",
+}
+# Smaller sizes compare with the strongest entrants of their own size class (d25.family.sizes) on each board.
+CLASS_TEXT_PEERS = 4
 
 
 def sha256_file(path: Path) -> str:
@@ -144,8 +153,12 @@ def assemble(
         m["engine"]: {**board_point(m), "name": m["v03"].get("name") or m["name"]}
         for m in models
     }
-    previous = {**points[PREVIOUS_ENGINE], "name": PREVIOUS_NAME}
-    peers = [points[e] for e in TEXT_PEERS]
+    previous_size = PREVIOUS[model_name].rsplit("-", 1)[1].upper()
+    previous = {
+        **points[PREVIOUS[model_name]],
+        "name": f"Decision 2.0 ({previous_size})",
+        "size": previous_size,
+    }
     others = [p for e, p in points.items() if not e.startswith("decision-2.0-")]
     family = [
         {**points[e], "name": decision_name(e)}
@@ -153,6 +166,26 @@ def assemble(
         if e.startswith("decision-2.0-") and points[e]["parameters"]
     ]
     ranked_vision = sorted(vision_board["entrants"], key=lambda e: -e["full"])
+    if model_name == "d3":
+        peers = [points[e] for e in TEXT_PEERS]
+        vision_peers = ranked_vision[:VISION_PEERS]
+    else:
+        from d25.family.sizes import size_class
+
+        own_class = model_name.split("-", 1)[1]
+        peers = sorted(
+            (
+                p
+                for p in others
+                if p["parameters"] and size_class(p["parameters"]) == own_class
+            ),
+            key=lambda p: -p["full"],
+        )[:CLASS_TEXT_PEERS]
+        vision_peers = [
+            e
+            for e in ranked_vision
+            if e.get("params") and size_class(float(e["params"])) == own_class
+        ][:VISION_PEERS]
     pplx = next(e for e in vision_board["entrants"] if e["engine"] == PPLX_VISION)
     benchmarks = []
     for row in measured["vision"]["benchmarks"]:
@@ -194,7 +227,7 @@ def assemble(
                     "public": e["pub"],
                     "private": e["priv"],
                 }
-                for e in ranked_vision[:VISION_PEERS]
+                for e in vision_peers
             ],
             "benchmarks": benchmarks,
             "index": {**measured["vision"]["index"], "pplx_board": pplx["pub"]},
@@ -263,7 +296,7 @@ def highlights(card: dict) -> list[str]:
         f"{text['edition']} kit on the released weights: all {text['requests']:,} public requests answered, none "
         f"unsupported. The official Full scores on the text and vision boards are {PENDING}.",
         f"**+{one(text['public'] - previous['public'])} on the public suite over Decision 2.0** "
-        f"(its 27B model: {previous['public']:.2f} on the board), ahead in {areas_ahead}.",
+        f"(its {previous['size']} model: {previous['public']:.2f} on the board), ahead in {areas_ahead}.",
         "**Reads images:** multiple images per request (PNG, JPEG or WebP), given as paths, URLs, PIL images or "
         "base64 data URLs; every question of the request sees all of them.",
         f"**Speed:** text requests take a median of {ms(t['median_ms'])} (mean {ms(t['mean_ms'])}, 80th percentile "
@@ -484,13 +517,13 @@ def render_readme(card: dict) -> str:
 
 
 def check_rendered(readme: str, files: set[str]) -> list[str]:
-    from d25.vega.release.build import PUBLIC_TRACES
+    from d25.vega.release.build import PUBLIC_TRACES, traced
 
     problems = lint_readme(readme)
     problems += [
         f"{PUBLIC_TRACES[1]}: {line.strip()[:80]}"
         for line in readme.splitlines()
-        if PUBLIC_TRACES[0].search(line)
+        if traced(line)
     ]
     problems += [
         f"image count cap: {line.strip()[:80]}"
@@ -528,7 +561,11 @@ def chart_view(card: dict) -> dict[str, Any]:
     return {
         "own": {
             "name": card["model_name"],
-            "parameters": text["previous"]["parameters"],
+            "parameters": (
+                text["previous"]["parameters"]
+                if card["model_name"] == "d3"
+                else card["parameters"]["loaded"]
+            ),
             "full": card["internal"]["text"]["full"],
         },
         "previous": text["previous"],

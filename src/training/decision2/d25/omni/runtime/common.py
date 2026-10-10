@@ -50,6 +50,13 @@ def load_module(name: str, path: Path):
 def load_runtime(package: Path, name: str = "decision25_runtime"):
     if str(package) not in sys.path:
         sys.path.insert(0, str(package))
+    if (Path(package) / "d3_runtime.py").is_file():
+        module = load_module(
+            "d3_runtime" if name == "decision25_runtime" else name,
+            Path(package) / "d3_runtime.py",
+        )
+        module.Decision25 = module.D3
+        return module
     return load_module(name, package / "decision25_runtime.py")
 
 

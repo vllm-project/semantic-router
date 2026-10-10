@@ -212,9 +212,17 @@ IMAGE_CHECKS=${IMAGE_CHECKS:-"smoke parity latency"}
 case " $IMAGE_CHECKS " in *" smoke "*)
 python -m d25.omni.runtime.smoke --package "$PKG" --suite "$PACKP" --example "$PKG/assets/example-receipt.png" \
   --out "$OUT/smoke-images.json" || echo "image smoke: FAILED (see smoke-images.json)";; esac
+# IMAGE_REFERENCE: "pack" (the pack's MI325X probabilities, d3 27B), "none", or a --save-probs file in the work dataset.
+IMAGE_REF=()
+case "${IMAGE_REFERENCE:-pack}" in
+  pack) IMAGE_REF=(--reference "$PACKP/pack-reference.json") ;;
+  none) ;;
+  *) retry curl -sfL -H "Authorization: Bearer $HF_TOKEN" -o /tmp/image-reference.json \
+       "https://huggingface.co/datasets/$WORK/resolve/main/$IMAGE_REFERENCE" && IMAGE_REF=(--reference /tmp/image-reference.json) ;;
+esac
 case " $IMAGE_CHECKS " in *" parity "*)
 python -m d25.omni.runtime.parity_image --engine-ckpt "$REF" --package "$PKG" --suite "$PACKP" --rows 64 --min-multi 16 \
-  --kinds-rows 8 --sequential --reference "$PACKP/pack-reference.json" --out "$OUT/parity-images.json" \
+  --kinds-rows 8 --sequential "${IMAGE_REF[@]}" --save-probs "$OUT/image-probs.json" --out "$OUT/parity-images.json" \
   || echo "image parity: FAILED (see parity-images.json)";; esac
 case " $IMAGE_CHECKS " in *" latency "*)
 python -m d25.omni.runtime.latency --package "$PKG" --suite "$PACKP" --timed 100 --timed-four 50 \
