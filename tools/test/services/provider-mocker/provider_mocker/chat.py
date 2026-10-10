@@ -1,11 +1,10 @@
-"""Native Chat Completions HTTP boundary and fixture selection."""
-
+import asyncio
 import json
 import time
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 from . import ollama_fixture, openrouter_fixture, vllm_fixture, workflow_chat
@@ -24,6 +23,7 @@ from .chat_wire import (
     generate_chat_tool_stream,
     mock_chat_tool_response,
 )
+from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_keys
 from .provider_boundary import (
     SESSION_HEADER,
     invalid_request_response,
@@ -113,6 +113,29 @@ async def chat_completions(request: Request):
         field = ".".join(str(part) for part in detail.get("loc", ())) or None
         return invalid_request_response(detail["msg"], field)
 
+    fault_tracker = getattr(request.app.state, "fault_tracker", None)
+    fault = None
+    if fault_tracker is not None:
+        schedule_key, counter_key = get_fault_keys(request.headers)
+        if schedule_key or counter_key:
+            _, fault = fault_tracker.record_call_and_match(schedule_key, counter_key)
+            if fault is not None:
+                if fault.delay and fault.delay > 0:
+                    await asyncio.sleep(fault.delay)
+                if fault.status is not None:
+                    return JSONResponse(
+                        status_code=fault.status,
+                        content={
+                            "error": {
+                                "message": f"fault schedule injected {fault.status}",
+                                "type": "fault_schedule_injected",
+                                "param": None,
+                                "code": f"fault_{fault.status}",
+                            }
+                        },
+                        headers={FAULT_INJECTED_HEADER: "true"},
+                    )
+
     await apply_fixture_delay()
     created_ts = int(time.time())
     scenario_response = await respond_to_scenario(request, req, created_ts)
@@ -186,15 +209,26 @@ async def chat_completions(request: Request):
         content = build_chat_content(req)
     usage = build_chat_usage(req, content)
     response = build_chat_response(req, content, usage, created_ts)
+    fault_headers = {FAULT_INJECTED_HEADER: "true"} if fault is not None else {}
     if not req.stream:
+        if fault is not None:
+            return JSONResponse(content=response, headers=fault_headers)
         return response
 
     if chat_contains(req, "__mock_midstream_error__"):
         return StreamingResponse(
             generate_chat_midstream_error(req, response, created_ts),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                **fault_headers,
+            },
         )
+
+    is_complete = not chat_contains(req, "__mock_incomplete_stream__")
+    if fault is not None and fault.stream_cut_short:
+        is_complete = False
 
     return StreamingResponse(
         generate_chat_stream(
@@ -203,11 +237,12 @@ async def chat_completions(request: Request):
             content,
             usage,
             created_ts,
-            complete=not chat_contains(req, "__mock_incomplete_stream__"),
+            complete=is_complete,
         ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            **fault_headers,
         },
     )

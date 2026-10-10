@@ -167,6 +167,141 @@ def continuity(
     }
 
 
+def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
+    """Separate faulted and unfaulted tasks, reporting Router decisions, models, and outcomes."""
+    execution_calls: dict[tuple[Any, str], list[dict]] = {}
+    for call in subject_calls:
+        cid = call.get("case_id")
+        if cid:
+            tid = call.get("target_id")
+            execution_calls.setdefault((tid, cid), []).append(call)
+
+    results_by_execution: dict[tuple[Any, str], dict] = {}
+    for r in results:
+        cid = r.get("case_id")
+        if cid:
+            tid = r.get("target_id")
+            results_by_execution[(tid, cid)] = r
+
+    if planned_case_ids:
+        tid = next((r.get("target_id") for r in results if r.get("target_id")), None)
+        if tid is None:
+            tid = next(
+                (c.get("target_id") for c in subject_calls if c.get("target_id")),
+                None,
+            )
+        all_executions = [(tid, cid) for cid in planned_case_ids]
+    else:
+        seen = set()
+        all_executions = []
+        for r in results:
+            cid = r.get("case_id")
+            if cid:
+                key = (r.get("target_id"), cid)
+                if key not in seen:
+                    seen.add(key)
+                    all_executions.append(key)
+        for key in execution_calls:
+            if key not in seen:
+                seen.add(key)
+                all_executions.append(key)
+
+    faulted_task_records = []
+    unfaulted_executions = []
+
+    for tid, case_id in all_executions:
+        c_calls = execution_calls.get((tid, case_id), [])
+        c_res = results_by_execution.get((tid, case_id), {})
+
+        faulted_calls = []
+        for idx, call in enumerate(c_calls):
+            is_fault = call.get("fault_injected") is True
+            if is_fault:
+                fault_info = call.get("injected_fault")
+                if fault_info is None:
+                    fault_info = {
+                        "status": call.get("response_status"),
+                        "injected": True,
+                    }
+                selected_model = _observed_model(call) or call.get("model")
+                faulted_calls.append(
+                    {
+                        "call_id": call.get("id"),
+                        "call_index": call.get("call_index", idx),
+                        "injected_fault": fault_info,
+                        "selected_model": selected_model,
+                        "router_response": {
+                            "status": call.get("response_status"),
+                            "call_status": call.get("status"),
+                            "decision": call.get("decision"),
+                            "error": call.get("error") or call.get("failure"),
+                        },
+                    }
+                )
+
+        if faulted_calls:
+            record = {
+                "case_id": case_id,
+                "outcome": c_res.get("status", "unknown"),
+                "status": c_res.get("status", "unknown"),
+                "correct": c_res.get("correct"),
+                "error": c_res.get("error") or c_res.get("failure"),
+                "quality_failure": c_res.get("quality_failure"),
+                "latency_s": c_res.get("latency_s"),
+                "total_calls": len(c_calls),
+                "fault_count": len(faulted_calls),
+                "faulted_calls": faulted_calls,
+            }
+            if tid is not None:
+                record["target_id"] = tid
+            faulted_task_records.append(record)
+        else:
+            unfaulted_executions.append((tid, case_id))
+
+    unfaulted_results = [
+        results_by_execution[key]
+        for key in unfaulted_executions
+        if key in results_by_execution
+    ]
+    unfaulted_completed = [
+        r for r in unfaulted_results if r.get("status") == "completed"
+    ]
+    unfaulted_correct = sum(1 for r in unfaulted_completed if r.get("correct") is True)
+    faulted_completed = sum(
+        1 for t in faulted_task_records if t.get("outcome") == "completed"
+    )
+    faulted_correct = sum(1 for t in faulted_task_records if t.get("correct") is True)
+    faulted_total = len(faulted_task_records)
+    unfaulted_total = (
+        max(0, total - faulted_total)
+        if total is not None and total >= faulted_total
+        else len(unfaulted_executions)
+    )
+
+    unfaulted_case_ids = [cid for _, cid in unfaulted_executions]
+
+    return {
+        "faulted_tasks": {
+            "total": faulted_total,
+            "completed": faulted_completed,
+            "failed": faulted_total - faulted_completed,
+            "correct": faulted_correct,
+            "accuracy": faulted_correct / faulted_total if faulted_total else None,
+            "tasks": faulted_task_records,
+        },
+        "unfaulted_tasks": {
+            "total": unfaulted_total,
+            "completed": len(unfaulted_completed),
+            "failed": unfaulted_total - len(unfaulted_completed),
+            "correct": unfaulted_correct,
+            "accuracy": (
+                unfaulted_correct / unfaulted_total if unfaulted_total else None
+            ),
+            "case_ids": unfaulted_case_ids,
+        },
+    }
+
+
 def metric(
     target_id: str,
     results: list[dict[str, Any]],
@@ -254,6 +389,9 @@ def metric(
         ),
         "decisions": dict(Counter(c["decision"] for c in subject if c.get("decision"))),
         "continuity": continuity(results, subject, session_mode),
+        "fault_summary": fault_summary(
+            results, subject, total, planned_case_ids=planned_case_ids
+        ),
         "queue_wait_p50_s": percentile(
             [r["queue_wait_s"] for r in results if r.get("queue_wait_s") is not None],
             0.5,
@@ -504,6 +642,13 @@ def make_report(store, run_id):
         datetime.fromisoformat(run["updated_at"])
         - datetime.fromisoformat(run["created_at"])
     ).total_seconds()
+    overall_faults = (
+        metrics[0]["fault_summary"]
+        if len(metrics) == 1
+        else fault_summary(
+            results, [c for c in calls if c["role"] == "subject"], len(cells)
+        )
+    )
     return {
         "version": VERSION,
         "run_id": run_id,
@@ -532,7 +677,9 @@ def make_report(store, run_id):
                     else None
                 )
             ),
+            "fault_summary": overall_faults,
         },
+        "fault_summary": overall_faults,
         "benchmarks": benchmarks,
         "limitations": limitations,
         "provenance": {

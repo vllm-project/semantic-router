@@ -171,6 +171,27 @@ class Context:
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
+        task_schedules = (
+            self.manifest.get("fault_schedules")
+            or self.manifest.get("fault_schedule")
+            or {}
+        )
+        case_schedule = (
+            self.case.get("fault_schedule") or task_schedules.get(self.case["id"]) or []
+        )
+        subject_calls = [c for c in self.calls if c.get("role") == "subject"]
+        call_index = len(subject_calls) - 1 if role == "subject" else 0
+        scheduled_fault = None
+        fault_schedule_id = None
+        fault_session_id = None
+        if role == "subject":
+            fault_schedule_id = self.case["id"]
+            fault_session_id = f"{self.run_id}:{self.target['id']}:{self.case['id']}"
+            if case_schedule:
+                for item in case_schedule:
+                    if isinstance(item, dict) and item.get("call_index") == call_index:
+                        scheduled_fault = item
+                        break
         try:
             result = chat(
                 selected,
@@ -182,6 +203,8 @@ class Context:
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
                 session_id=session_id,
+                fault_schedule_id=fault_schedule_id,
+                fault_session_id=fault_session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -207,6 +230,15 @@ class Context:
                     "Auxiliary model output was truncated; grading is incomplete",
                     result,
                 )
+            if scheduled_fault is not None:
+                result["scheduled_fault"] = scheduled_fault
+                result["call_index"] = call_index
+            if result.get("fault_injected") is True:
+                result["injected_fault"] = (
+                    scheduled_fault
+                    if scheduled_fault is not None
+                    else {"status": result.get("response_status"), "injected": True}
+                )
             self.store.finish_call(call_id, "completed", result)
             call_record.update(result)
             with self.engine.lock:
@@ -218,10 +250,23 @@ class Context:
                 self.quality_failure = "output_limit"
             return result
         except CallFailure as exc:
+            if scheduled_fault is not None:
+                exc.partial["scheduled_fault"] = scheduled_fault
+                exc.partial["call_index"] = call_index
+            if exc.partial.get("fault_injected") is True:
+                exc.partial["injected_fault"] = (
+                    scheduled_fault
+                    if scheduled_fault is not None
+                    else {
+                        "status": exc.partial.get("response_status"),
+                        "injected": True,
+                    }
+                )
+            exc.partial.setdefault("error", str(exc))
             self.store.finish_call(
                 call_id,
                 "cancelled" if self.cancelled() else "failed",
-                {**exc.partial, "error": str(exc)},
+                exc.partial,
             )
             call_record.update(exc.partial)
             with self.engine.lock:
@@ -467,8 +512,17 @@ class Engine:
                     }
                     self.first_failures[run_id] = failure
                     self.store.event(run_id, "failure_observed", failure)
-            # Fail closed: no new cases are dispatched after a transport/harness failure.
-            cancel.set()
+            # Fail closed: no new cases are dispatched after an unexpected transport/harness failure.
+            # Intended faults confirmed by the provider on the failing call do not abort other tasks.
+            failing_call = getattr(exc, "partial", None)
+            is_expected_fault = (
+                isinstance(exc, CallFailure)
+                and failing_call is not None
+                and failing_call.get("fault_injected") is True
+                and failing_call.get("injected_fault") is not None
+            )
+            if not is_expected_fault:
+                cancel.set()
 
     def _completed_case(self, ctx, result, started):
         if ctx.quality_failure:

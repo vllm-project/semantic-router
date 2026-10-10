@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import yaml
@@ -263,6 +264,62 @@ def validate_request_params(params, limits, label="request_params"):
     for name in ("ignore_eos", "skip_special_tokens", "spaces_between_special_tokens"):
         if name in params and not isinstance(params[name], bool):
             raise ValueError(f"{label}.{name} must be boolean")
+
+
+_MIN_HTTP_STATUS = 100
+_MAX_HTTP_STATUS = 599
+
+
+def validate_fault_schedule_entry(entry: Any, label: str) -> dict:
+    if not isinstance(entry, dict):
+        raise ValueError(f"{label} entries must be objects")
+    call_index = entry.get("call_index", 0)
+    if (
+        isinstance(call_index, bool)
+        or not isinstance(call_index, int)
+        or call_index < 0
+    ):
+        raise ValueError(f"{label} call_index must be a non-negative integer")
+    status = entry.get("status") or entry.get("status_code") or entry.get("http_status")
+    if status is not None and (
+        isinstance(status, bool)
+        or not isinstance(status, int)
+        or not (_MIN_HTTP_STATUS <= status <= _MAX_HTTP_STATUS)
+    ):
+        raise ValueError(f"{label} status must be a valid HTTP status code integer")
+    delay = entry.get("delay") or entry.get("delay_s")
+    if delay is None and "delay_ms" in entry:
+        delay = float(entry["delay_ms"]) / 1000.0
+    elif delay is not None:
+        if isinstance(delay, bool) or not isinstance(delay, (int, float)) or delay < 0:
+            raise ValueError(f"{label} delay must be a non-negative number")
+        delay = float(delay)
+    stream_cut_short = (
+        entry.get("stream_cut_short")
+        or entry.get("cut_short")
+        or entry.get("fault") == "stream_cut_short"
+        or entry.get("type") == "stream_cut_short"
+    )
+    if stream_cut_short is not None and not isinstance(stream_cut_short, bool):
+        raise ValueError(f"{label} stream_cut_short must be a boolean")
+    stream_cut_short = bool(stream_cut_short)
+    if (
+        status is None
+        and delay is None
+        and not stream_cut_short
+        and not entry.get("fault")
+    ):
+        raise ValueError(
+            f"{label} entry must specify at least one fault: status, delay, or stream_cut_short"
+        )
+    normalized = {"call_index": call_index}
+    if status is not None:
+        normalized["status"] = status
+    if delay is not None:
+        normalized["delay"] = delay
+    if stream_cut_short:
+        normalized["stream_cut_short"] = True
+    return normalized
 
 
 def resolve_dataset(manifest):
@@ -578,6 +635,49 @@ def plan(manifest, *, policy=None):
     m["sampling"] = sampling
     if "experiment" in m:
         validate_role(m, m["experiment"]["role"])
+    case_ids = {c["id"] for c in cases}
+    for c in cases:
+        if "fault_schedule" in c:
+            fs = c["fault_schedule"]
+            if not isinstance(fs, list):
+                raise ValueError(
+                    f"case {c['id']} fault_schedule must be a list of entries"
+                )
+            c["fault_schedule"] = [
+                validate_fault_schedule_entry(entry, f"case {c['id']} fault_schedule")
+                for entry in fs
+            ]
+
+    raw_schedules = m.get("fault_schedules") or m.get("fault_schedule")
+    if raw_schedules is not None:
+        if not isinstance(raw_schedules, dict):
+            raise ValueError(
+                "fault_schedules must be an object mapping task IDs to lists of fault entries"
+            )
+        normalized_schedules = {}
+        for task_id, entries in raw_schedules.items():
+            if task_id not in case_ids:
+                raise ValueError(
+                    f"fault_schedule task ID '{task_id}' not found in manifest cases"
+                )
+            if isinstance(entries, list):
+                norm_entries = [
+                    validate_fault_schedule_entry(e, f"task {task_id} fault_schedule")
+                    for e in entries
+                ]
+            elif isinstance(entries, dict):
+                norm_entries = [
+                    validate_fault_schedule_entry(
+                        {"call_index": int(k), **v}, f"task {task_id} fault_schedule"
+                    )
+                    for k, v in entries.items()
+                ]
+            else:
+                raise ValueError(
+                    f"task {task_id} fault_schedule must be a list of entries"
+                )
+            normalized_schedules[task_id] = norm_entries
+        m["fault_schedules"] = normalized_schedules
     m["case_sha256"] = digest(cases)
     expected_weights = {
         **BENCHMARK_WEIGHTS,

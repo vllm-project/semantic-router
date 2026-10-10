@@ -212,6 +212,8 @@ def chat(
     output_policy="bounded",
     activity=None,
     session_id: str | None = None,
+    fault_schedule_id=None,
+    fault_session_id=None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -234,6 +236,10 @@ def chat(
         headers["X-SR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
     if session_id:
         headers[SESSION_ID_HEADER] = session_id
+    if fault_schedule_id:
+        headers["x-vsr-fault-schedule-id"] = fault_schedule_id
+    if fault_session_id:
+        headers["x-vsr-fault-session-id"] = fault_session_id
     content = ""
     reasoning = ""
     usage = None
@@ -257,10 +263,30 @@ def chat(
         stream_file = open(stream_path, "xb", buffering=8192)  # noqa: SIM115
 
     def partial():
+        resp_model = (
+            (response.headers.get("x-vsr-selected-model") or model)
+            if response is not None
+            else model
+        )
+        resp_decision = (
+            response.headers.get("x-vsr-selected-decision")
+            if response is not None
+            else None
+        )
+        resp_status = response.status_code if response is not None else None
+        fault_injected = (
+            response.headers.get("x-vsr-fault-injected") == "true"
+            if response is not None
+            else False
+        )
         return {
             "final": final_content(content),
             "reasoning": reasoning,
             "model": model,
+            "selected_model": resp_model,
+            "decision": resp_decision,
+            "response_status": resp_status,
+            "fault_injected": fault_injected,
             "usage": usage,
             "latency_s": time.monotonic() - started,
             "ttft_s": ttft,
@@ -464,6 +490,10 @@ def chat(
         ) or response.headers.get("x-vsr-config-hash")
         result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
         result["decision"] = response.headers.get("x-vsr-selected-decision")
+        result["response_status"] = response.status_code
+        result["fault_injected"] = (
+            response.headers.get("x-vsr-fault-injected") == "true"
+        )
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:
             raise CallFailure(
                 "Runtime configuration identity acknowledgement missing or mismatched",
