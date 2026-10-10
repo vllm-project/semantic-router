@@ -1,3 +1,4 @@
+# ruff: noqa: PLR2004
 """sr-bench public CLI contract (the retired evaluation commands are absent)."""
 
 import json
