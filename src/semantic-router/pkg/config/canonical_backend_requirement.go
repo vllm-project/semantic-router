@@ -18,7 +18,7 @@ func validateRouterOwnedPhysicalBackend(
 	routerOwnsTransport bool,
 	modelIndex int,
 ) error {
-	if !routerOwnsTransport || len(model.BackendRefs) != 0 {
+	if !routerOwnsTransport || len(model.BackendRefs) != 0 || model.Deployment != "" {
 		return nil
 	}
 	if catalogID := strings.TrimSpace(model.Catalog); catalogID != "" {
