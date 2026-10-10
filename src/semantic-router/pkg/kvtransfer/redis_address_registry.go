@@ -34,7 +34,7 @@ func NewRedisAddressRegistry(options RedisAddressRegistryOptions) (AddressRegist
 	}
 	timeout := options.Timeout
 	if timeout <= 0 {
-		timeout = 50 * time.Millisecond
+		timeout = defaultAddressRegistryTimeout
 	}
 	ttl := options.TTL
 	if ttl <= 0 {
@@ -86,15 +86,11 @@ func redisOptionsFromConfig(cfg *config.RedisConfig) RedisAddressRegistryOptions
 	if cfg == nil {
 		return RedisAddressRegistryOptions{}
 	}
-	timeout := time.Duration(cfg.Connection.Timeout) * time.Millisecond
-	if timeout <= 0 {
-		timeout = 50 * time.Millisecond
-	}
 	return RedisAddressRegistryOptions{
 		Address:  fmt.Sprintf("%s:%d", cfg.Connection.Host, cfg.Connection.Port),
 		Password: cfg.Connection.Password,
 		Database: cfg.Connection.Database,
-		Timeout:  timeout,
+		Timeout:  connectionTimeoutSeconds(cfg.Connection.Timeout),
 	}
 }
 
@@ -102,16 +98,19 @@ func valkeyOptionsFromConfig(cfg *config.ValkeyConfig) RedisAddressRegistryOptio
 	if cfg == nil {
 		return RedisAddressRegistryOptions{}
 	}
-	timeout := time.Duration(cfg.Connection.Timeout) * time.Millisecond
-	if timeout <= 0 {
-		timeout = 50 * time.Millisecond
-	}
 	return RedisAddressRegistryOptions{
 		Address:  fmt.Sprintf("%s:%d", cfg.Connection.Host, cfg.Connection.Port),
 		Password: cfg.Connection.Password,
 		Database: cfg.Connection.Database,
-		Timeout:  timeout,
+		Timeout:  connectionTimeoutSeconds(cfg.Connection.Timeout),
 	}
+}
+
+func connectionTimeoutSeconds(seconds int) time.Duration {
+	if seconds <= 0 {
+		return defaultAddressRegistryTimeout
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (r *redisAddressRegistry) Write(ctx context.Context, record AddressRecord) error {

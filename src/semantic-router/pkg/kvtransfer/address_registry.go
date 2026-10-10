@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const defaultAddressRegistryTTL = time.Hour
+const (
+	defaultAddressRegistryTTL     = time.Hour
+	defaultAddressRegistryTimeout = 5 * time.Second
+)
 
 // AddressRecord is the Redis/Valkey payload for kv_addr:{namespace}:{session_id}.
 type AddressRecord struct {
