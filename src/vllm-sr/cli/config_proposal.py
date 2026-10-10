@@ -26,7 +26,6 @@ from cli.catalog_provider_projection import provider_projection_errors
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.model_catalog_validation import (
-    find_embedded_secret_literals,
     redact_embedded_secret_literals,
 )
 from cli.parser import ConfigParseError, parse_user_config
@@ -71,6 +70,9 @@ _CREDENTIAL_KEY_PATTERN = re.compile(
     r"cookie|client_?secret|password|secret|token|private_?key|x_?api_?key)$"
 )
 _CREDENTIAL_COLLECTION_KEYS = frozenset({"api_keys"})
+# Lines shorter than this are ordinary words. The same floor is used for
+# embedded api_key literals in catalog validation.
+_MIN_SECRET_LINE_LENGTH = 8
 _URL_IN_TEXT = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"']+", re.IGNORECASE)
 _PRIVATE_PATH = re.compile(r"(?:~|/(?:home|Users|root|private)/)[^\s\"']+")
 
@@ -163,9 +165,18 @@ def propose(
             )
 
     secrets = _secret_literals(loaded) | _secret_literals(candidate)
-    before_yaml = _mask_known_literals(_dump_yaml(_redact(loaded)), secrets)
-    after_yaml = _mask_known_literals(_dump_yaml(_redact(candidate)), secrets)
-    diff = _mask_known_literals(_unified_diff(before_yaml, after_yaml), secrets)
+    # Mask copied values before pattern redaction. A URL or PEM pattern would
+    # otherwise rewrite part of the credential and the exact value would miss.
+    # Multiline secrets are not replaced again after dumping: their trailing
+    # newline is also the YAML line break, so that second pass splices lines.
+    emitted = _single_line_secrets(secrets)
+    before_yaml = _mask_known_literals(
+        _dump_yaml(_redact(_mask_known_values(loaded, secrets))), emitted
+    )
+    after_yaml = _mask_known_literals(
+        _dump_yaml(_redact(_mask_known_values(candidate, secrets))), emitted
+    )
+    diff = _mask_known_literals(_unified_diff(before_yaml, after_yaml), emitted)
     validation = _validation_receipt(candidate, secrets)
 
     return {
@@ -323,9 +334,29 @@ def _attach_algorithm(
 def _mask_known_literals(text: str, secrets: set[str]) -> str:
     """Replace credential values copied out of secret fields."""
 
-    for secret in sorted((item for item in secrets if item), key=len, reverse=True):
+    for secret in _ordered_secrets(secrets):
         text = text.replace(secret, "***")
     return text
+
+
+def _mask_known_values(value: Any, secrets: set[str]) -> Any:
+    """Mask known credentials inside string values before YAML serialization."""
+
+    if isinstance(value, dict):
+        return {key: _mask_known_values(item, secrets) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_mask_known_values(item, secrets) for item in value]
+    if isinstance(value, str):
+        return _mask_known_literals(value, secrets)
+    return value
+
+
+def _ordered_secrets(secrets: set[str]) -> list[str]:
+    return sorted((item for item in secrets if item), key=len, reverse=True)
+
+
+def _single_line_secrets(secrets: set[str]) -> set[str]:
+    return {item for item in secrets if item and "\n" not in item and "\r" not in item}
 
 
 def _dump_yaml(data: Any) -> str:
@@ -339,12 +370,14 @@ def _dump_yaml(data: Any) -> str:
 
 
 def _redact(value: Any, parent_key: str = "") -> Any:
-    if isinstance(value, dict):
-        return {key: _redact(item, key) for key, item in value.items()}
     if isinstance(value, list):
         if _is_secret_key(parent_key):
             return [_redact_secret_item(item) for item in value]
         return [_redact(item, parent_key) for item in value]
+    if isinstance(value, dict):
+        if _is_secret_key(parent_key):
+            return "***"
+        return {key: _redact(item, key) for key, item in value.items()}
     if _is_secret_key(parent_key) and value not in (None, ""):
         return "***"
     if isinstance(value, str):
@@ -378,21 +411,43 @@ def _redact_text(text: str) -> str:
 def _secret_literals(value: Any, parent_key: str = "") -> set[str]:
     found: set[str] = set()
     if isinstance(value, dict):
+        if _is_secret_key(parent_key):
+            _remember_secret_text(found, value)
+            return found
         for key, item in value.items():
             found.update(_secret_literals(item, key))
         return found
     if isinstance(value, list):
         for item in value:
-            if _is_secret_key(parent_key) and isinstance(item, str) and item:
-                found.add(item)
+            if _is_secret_key(parent_key):
+                _remember_secret_text(found, item)
             else:
                 found.update(_secret_literals(item, parent_key))
         return found
-    if isinstance(value, str) and value:
-        if _is_secret_key(parent_key):
-            found.add(value)
-        found.update(find_embedded_secret_literals(value))
+    if isinstance(value, str) and value and _is_secret_key(parent_key):
+        _remember_secret_text(found, value)
     return found
+
+
+def _remember_secret_text(found: set[str], value: Any) -> None:
+    """Record a credential and each substantial line of a multiline one."""
+
+    if isinstance(value, str) and value:
+        found.add(value)
+        if "\n" in value or "\r" in value:
+            normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+            for raw_line in normalized.split("\n"):
+                stripped = raw_line.strip()
+                if len(stripped) >= _MIN_SECRET_LINE_LENGTH:
+                    found.add(stripped)
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _remember_secret_text(found, item)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _remember_secret_text(found, item)
 
 
 def _redact_diagnostics(

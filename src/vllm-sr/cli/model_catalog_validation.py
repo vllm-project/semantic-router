@@ -191,7 +191,14 @@ _SECRET_KEY_TERMS = frozenset(
         "secret",
     }
 )
+# The full block must be first. Replacing only the BEGIN marker leaves the
+# key body and END line in redacted proposal output.
+_PEM_BLOCK = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
 _SECRET_LITERAL_PATTERNS = (
+    _PEM_BLOCK,
     re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)https?://[^\s/:@]+:[^\s/@]+@"),

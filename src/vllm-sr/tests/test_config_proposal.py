@@ -475,6 +475,156 @@ def test_opaque_credential_copied_into_description_is_masked(tmp_path):
     assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
 
 
+PEM_BODY = "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5"
+PEM_BLOCK = f"-----BEGIN PRIVATE KEY-----\n{PEM_BODY}\n-----END PRIVATE KEY-----"
+MULTILINE_SECRET = "line-one-credential-aaa\nline-two-credential-bbb"
+
+
+def test_multiline_pem_in_description_is_removed(tmp_path):
+    loaded = yaml.safe_load(BASE_CONFIG)
+    loaded["routing"]["decisions"][0]["description"] = f"notes\n{PEM_BLOCK}\nend"
+    config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    rendered = json.dumps(document)
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    description = candidate["routing"]["decisions"][0]["description"]
+    assert document["provenance"]["candidate_redacted"] is True
+    assert document["validation"]["status"] == "valid"
+    assert PEM_BODY not in rendered
+    assert "END PRIVATE KEY" not in rendered
+    assert "BEGIN PRIVATE KEY" not in rendered
+    assert PEM_BODY not in description
+    assert "PRIVATE KEY" not in description
+    assert "***" in description
+
+
+def test_multiline_credential_copied_into_description_is_masked(tmp_path):
+    loaded = yaml.safe_load(BASE_CONFIG)
+    loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = MULTILINE_SECRET
+    loaded["routing"]["decisions"][0]["description"] = f"copied\n{MULTILINE_SECRET}"
+    config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    rendered = json.dumps(document)
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    description = candidate["routing"]["decisions"][0]["description"]
+    assert document["provenance"]["candidate_redacted"] is True
+    assert document["validation"]["status"] == "valid"
+    assert "line-one-credential-aaa" not in rendered
+    assert "line-two-credential-bbb" not in rendered
+    assert "line-one-credential-aaa" not in description
+    assert "line-two-credential-bbb" not in description
+    assert "***" in description
+    assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
+
+
+def test_credential_containing_a_url_is_masked_in_full(tmp_path):
+    secret = (
+        "prefix-opaque-value http://user:URLSECRET99@example.com/v1 tail-opaque-9911"
+    )
+    loaded = yaml.safe_load(BASE_CONFIG)
+    loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = secret
+    loaded["routing"]["decisions"][0]["description"] = f"copied {secret}"
+    config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    rendered = json.dumps(document)
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    description = candidate["routing"]["decisions"][0]["description"]
+    assert "prefix-opaque-value" not in rendered
+    assert "tail-opaque-9911" not in rendered
+    assert "URLSECRET99" not in rendered
+    assert "prefix-opaque-value" not in description
+    assert "tail-opaque-9911" not in description
+
+
+def test_one_line_of_a_multiline_credential_is_masked(tmp_path):
+    loaded = yaml.safe_load(BASE_CONFIG)
+    loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = (
+        MULTILINE_SECRET + "\n"
+    )
+    loaded["routing"]["decisions"][0]["description"] = "only line-one-credential-aaa"
+    config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    rendered = json.dumps(document)
+    assert "line-one-credential-aaa" not in rendered
+    assert "line-two-credential-bbb" not in rendered
+    assert "line-one-credential-aaa" not in (
+        candidate["routing"]["decisions"][0]["description"]
+    )
+
+
+def test_api_key_list_stays_a_list_of_redacted_items(tmp_path):
+    secret = "demo-api-key-123"
+    loaded = yaml.safe_load(BASE_CONFIG)
+    loaded["listeners"][0]["api_keys"] = [secret]
+    config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    assert candidate["listeners"][0]["api_keys"] == ["***"]
+    assert secret not in json.dumps(document)
+
+
+def test_nested_api_key_mapping_is_redacted(tmp_path):
+    loaded = yaml.safe_load(BASE_CONFIG)
+    loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = {
+        "inline": "nested-opaque-credential-77"
+    }
+    loaded["routing"]["decisions"][0][
+        "description"
+    ] = "sees nested-opaque-credential-77"
+    config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
+
+    document = propose(
+        config_path,
+        "selection.latency-aware",
+        "default-route",
+        repo_root=REPO_ROOT,
+    )
+
+    rendered = json.dumps(document)
+    candidate = yaml.safe_load(document["candidate_yaml"])
+    assert "nested-opaque-credential-77" not in rendered
+    assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
+    assert "nested-opaque-credential-77" not in (
+        candidate["routing"]["decisions"][0]["description"]
+    )
+
+
 def test_credential_header_values_are_redacted(tmp_path):
     text = BASE_CONFIG.replace(
         f"api_key: {SECRET}",
