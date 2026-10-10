@@ -102,6 +102,8 @@ type OpenAPIMedia struct {
 
 // OpenAPISchema describes a schema.
 type OpenAPISchema struct {
+	Not                  *OpenAPISchema           `json:"not,omitempty"`
+	MinItems             *int64                   `json:"minItems,omitempty"`
 	Minimum              *int64                   `json:"minimum,omitempty"`
 	OneOf                []OpenAPISchema          `json:"oneOf,omitempty"`
 	Nullable             bool                     `json:"nullable,omitempty"`

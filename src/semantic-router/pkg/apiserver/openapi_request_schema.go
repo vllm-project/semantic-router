@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 var (
@@ -33,6 +34,43 @@ func openAPIRequestSchemaFor[T any]() *OpenAPISchema {
 }
 
 func openAPISchemaFromType(valueType reflect.Type, visiting map[reflect.Type]bool) OpenAPISchema {
+	if valueType == reflect.TypeFor[services.ClassificationInput]() || valueType == reflect.TypeFor[*services.ClassificationInput]() {
+		fields := openAPIObjectSchema(reflect.TypeFor[services.ClassificationInput](), visiting).Properties
+		variants := make([]OpenAPISchema, 0, 2)
+		for _, variant := range []struct{ kind, payload string }{{"text", "text"}, {"image", "image_url"}} {
+			payload := fields[variant.payload]
+			payload.Nullable = false
+			variants = append(variants, OpenAPISchema{
+				Type: "object", Required: []string{"type", variant.payload}, AdditionalProperties: false,
+				Properties: map[string]OpenAPISchema{"type": {Type: "string", Enum: []string{variant.kind}}, variant.payload: payload},
+			})
+		}
+		return OpenAPISchema{OneOf: variants, Description: "Exactly one typed text or inline base64 image input. Remote image URLs and file paths are rejected."}
+	}
+
+	if valueType == reflect.TypeFor[BatchClassificationRequest]() {
+		schema := openAPIObjectSchema(valueType, visiting)
+		minimum := int64(1)
+		for _, name := range []string{"texts", "inputs"} {
+			field := schema.Properties[name]
+			field.Nullable, field.MinItems = false, &minimum
+			schema.Properties[name] = field
+		}
+		// Both branches matching is invalid: exactly one input form is required.
+		schema.OneOf = []OpenAPISchema{{Required: []string{"texts"}}, {Required: []string{"inputs"}}}
+		return schema
+	}
+	if valueType == reflect.TypeFor[services.IntentRequest]() {
+		schema := openAPIObjectSchema(valueType, visiting)
+		schema.OneOf = []OpenAPISchema{
+			{Required: []string{"input"}, Properties: map[string]OpenAPISchema{
+				"text": {Not: &OpenAPISchema{}}, "messages": {Not: &OpenAPISchema{}},
+			}},
+			{Not: &OpenAPISchema{Required: []string{"input"}}},
+		}
+		return schema
+	}
+
 	if valueType.Kind() == reflect.Pointer {
 		schema := openAPISchemaFromType(valueType.Elem(), visiting)
 		schema.Nullable = true
