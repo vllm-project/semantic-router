@@ -22,11 +22,13 @@ from d25.vega.eval.proxy import gate as G
 
 
 def reference(name: str, cal: dict, o_proxy: float | None) -> dict:
+    from d25.family.anchors import EXTRA
+
     anchor = next((a for a in cal["anchor_points"] if a["name"] == name), None)
-    engine = anchor["engine"] if anchor else name
+    engine = anchor["engine"] if anchor else EXTRA[name][2] if name in EXTRA else name
     bench, model = G._board_bench(engine)
-    full = anchor["full"] if anchor else model["v"]
-    public = anchor["public"] if anchor else model["pub"]
+    full = anchor["full"] if anchor else model["full"]
+    public = anchor["public"] if anchor else model["public"]
     o = o_proxy if o_proxy is not None else (anchor or {}).get("O_proxy")
     if o is None:
         raise SystemExit(f"{name}: no O_proxy in the anchors; pass --ref-o-proxy")
