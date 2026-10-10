@@ -39,6 +39,10 @@ plugins:
         - admin.delete
 ```
 
+In `filtered` mode, `allow_tools` and `block_tools` also bound the tools that
+semantic selection or the `tool_selection` plugin adds from the tools
+database, whether or not `advanced_filtering` is enabled.
+
 Set `mode: none` with `strip_tool_history: true` when the selected backend must not receive prior
 assistant tool/function calls or tool/function result messages. The router
 applies this policy after signal and decision evaluation, so it does not change

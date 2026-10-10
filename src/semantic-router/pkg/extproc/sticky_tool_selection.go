@@ -83,7 +83,8 @@ func (r *OpenAIRouter) newStickyToolScope(
 		stateless:       r.stickyToolHardConstraint(request, ctx, toolsCfg),
 	}
 	advanced := mergeToolSelectionAdvanced(ts, r.Config.Tools.AdvancedFiltering, toolsCfg)
-	if reason := scope.resolveCatalog(catalog, advanced); reason != "" && scope.stateless == "" {
+	allowTools, blockTools := effectiveToolNameFilters(advanced, toolsCfg)
+	if reason := scope.resolveCatalog(catalog, allowTools, blockTools); reason != "" && scope.stateless == "" {
 		scope.stateless = reason
 	}
 	scope.fingerprints = sessiontools.Fingerprints{
@@ -122,15 +123,12 @@ func (r *OpenAIRouter) stickyToolHardConstraint(request *llmprotocol.Request, ct
 	return ""
 }
 
-// resolveCatalog keeps the catalog tools the decision's allow and block lists
-// permit, matched like retrieval matches them. A duplicate name makes the
-// catalog ambiguous, so only its first definition stays eligible and session
-// state is not used.
-func (s *stickyToolScope) resolveCatalog(catalog []llmprotocol.Tool, advanced *config.AdvancedToolFilteringConfig) string {
-	var allow, block map[string]struct{}
-	if advanced != nil && advanced.Enabled {
-		allow, block = stickyToolNameSet(advanced.AllowTools), stickyToolNameSet(advanced.BlockTools)
-	}
+// resolveCatalog keeps the catalog tools the effective allow and block lists
+// permit, matched like retrieval matches them, whether or not advanced
+// filtering is enabled. A duplicate name makes the catalog ambiguous, so only
+// its first definition stays eligible and session state is not used.
+func (s *stickyToolScope) resolveCatalog(catalog []llmprotocol.Tool, allowTools, blockTools []string) string {
+	allow, block := stickyToolNameSet(allowTools), stickyToolNameSet(blockTools)
 	reason := ""
 	s.byName = make(map[string]stickyCatalogEntry, len(catalog))
 	s.eligible = make([]llmprotocol.Tool, 0, len(catalog))

@@ -384,7 +384,9 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 	}
 
 	if advanced == nil || !advanced.Enabled {
-		selected, convertErr := selectTopKTools(retrieved.Tools, topK)
+		allowTools, blockTools := effectiveToolNameFilters(advanced, toolsCfg)
+		candidates := tools.ApplyAllowBlockFilters(retrieved.Tools, allowTools, blockTools)
+		selected, convertErr := selectTopKTools(candidates, topK)
 		return selected, retrieved.StrategyID, retrieved.Confidence, latency, convertErr
 	}
 
@@ -525,6 +527,21 @@ func mergeAdvancedToolFiltering(base *config.AdvancedToolFilteringConfig, toolsC
 	merged.AllowTools = allowTools
 	merged.BlockTools = blockTools
 	return &merged
+}
+
+// effectiveToolNameFilters returns the allow and block lists that bound which
+// tools retrieval may select. Enabled advanced filtering already carries the
+// decision's lists merged into its own. Disabling advanced filtering turns off
+// its own lists and ranking but not the decision's: those authorize tools, so
+// they still apply.
+func effectiveToolNameFilters(advanced *config.AdvancedToolFilteringConfig, toolsCfg *config.ToolsPluginConfig) ([]string, []string) {
+	if advanced != nil && advanced.Enabled {
+		return advanced.AllowTools, advanced.BlockTools
+	}
+	if toolsCfg == nil || toolsCfg.EffectiveMode() != config.ToolsPluginModeFiltered {
+		return nil, nil
+	}
+	return toolsCfg.AllowTools, toolsCfg.BlockTools
 }
 
 func mergeToolFilters(base *config.AdvancedToolFilteringConfig, toolsCfg *config.ToolsPluginConfig) ([]string, []string) {
