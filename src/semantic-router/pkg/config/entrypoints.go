@@ -3,8 +3,8 @@ package config
 import "strings"
 
 // InferenceAPI identifies an inference contract independently of its HTTP path.
-// Only ChatAPI has recipe routing today; SystemOneAPI is a separate native
-// contract and must never inherit Chat aliases or fallback behavior.
+// Chat and System One have separate routing namespaces; neither inherits the
+// other API's aliases or fallback behavior.
 type InferenceAPI string
 
 const (
@@ -23,7 +23,7 @@ const (
 // config remain source declarations so exporting a document never freezes an
 // inherited default name into a user override.
 func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMapping {
-	if api != ChatAPI {
+	if api != ChatAPI && api != SystemOneAPI {
 		return nil
 	}
 	var declared []EntrypointMapping
@@ -33,13 +33,18 @@ func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMappin
 	result := make([]EntrypointMapping, 0, len(declared)+1)
 	hasDefault := false
 	for _, entrypoint := range declared {
-		entrypoint.API = ChatAPI
+		if entrypoint.API == "" {
+			entrypoint.API = ChatAPI
+		}
+		if entrypoint.API != api {
+			continue
+		}
 		entrypoint.Source = EntrypointExplicit
 		entrypoint.ModelNames = append([]string(nil), entrypoint.ModelNames...)
 		result = append(result, entrypoint)
 		hasDefault = hasDefault || entrypoint.Recipe == DefaultRecipeName
 	}
-	if !hasDefault {
+	if api == ChatAPI && !hasDefault {
 		result = append([]EntrypointMapping{{
 			API: ChatAPI, Source: EntrypointBuiltin,
 			ModelNames: []string{DefaultEntrypointModel}, Recipe: DefaultRecipeName,

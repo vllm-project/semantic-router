@@ -144,6 +144,7 @@ func apiRoutes() []apiRoute {
 		applyRouteContract(apiResponseCacheRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiContextCompressionRoutes(), routeContract("plugins", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiSystemOneRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiSystemOneRoutingRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiModelDiagnosticRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiPluginRoutes(), routeContract("plugins", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiManagementAuditRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceOperator)),

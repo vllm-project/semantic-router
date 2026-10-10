@@ -87,7 +87,11 @@ func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
 	if cfg == nil || !cfg.ListBackendModels {
 		return
 	}
-	b.appendAll(cfg.GetAllModels(), upstreamEndpointOwner, "", passthroughRoute())
+	for _, model := range cfg.GetAllModels() {
+		if !cfg.IsSystemOneBackend(model) {
+			b.append(model, upstreamEndpointOwner, "", passthroughRoute())
+		}
+	}
 }
 
 func (b *modelListBuilder) appendAll(
