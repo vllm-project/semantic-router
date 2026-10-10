@@ -2,8 +2,8 @@
 
     python -m d25.vega.latency.package --package <released package dir> --out <new dir>
 
-Unchanged files are hard-linked (copied across file systems); the runtime files (``build.D3_CODE_FILES`` and
-the format file) come from ``release/package_d3``; ``MODEL_MANIFEST.json`` gets their hashes and sizes in
+Unchanged files are hard-linked (copied across file systems); ``--files`` (default: the fast-path runtime files)
+come from ``release/package_d3``; ``MODEL_MANIFEST.json`` gets their hashes and sizes in
 ``files_sha256`` / ``files_bytes`` / ``runtime.files_sha256`` and a new ``built_utc``. ``identity`` (weights,
 tokenizer, decision config) is unchanged. The result is checked with the runtime's own full verification.
 """
@@ -21,14 +21,16 @@ from d25.vega.release.build import D3_CODE_FILES, D3_FORMAT_FILE, sha256_file
 
 SOURCE = Path(__file__).resolve().parents[1] / "release" / "package_d3"
 MANIFEST = "MODEL_MANIFEST.json"
+FAST_FILES = ("d3_runtime.py", "d3_fast.py", "d3_kernels.py")
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--package", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--files", nargs="+", default=list(FAST_FILES))
     args = ap.parse_args(argv)
-    code = (*D3_CODE_FILES, D3_FORMAT_FILE)
+    code = tuple(args.files)
     if args.out.exists():
         raise SystemExit(f"{args.out} exists")
     for path in sorted(args.package.rglob("*")):
@@ -61,7 +63,9 @@ def main(argv: list[str] | None = None) -> int:
         for n in files
     }
     manifest["files_bytes"] = {n: (args.out / n).stat().st_size for n in files}
-    manifest["runtime"]["files_sha256"] = {n: manifest["files_sha256"][n] for n in code}
+    manifest["runtime"]["files_sha256"] = {
+        n: manifest["files_sha256"][n] for n in (*D3_CODE_FILES, D3_FORMAT_FILE)
+    }
     manifest["built_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     (args.out / MANIFEST).write_text(
         json.dumps(manifest, indent=1) + "\n", encoding="utf-8"
