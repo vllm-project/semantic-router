@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from cli.sr_bench.candidate_plans import candidate_manifest
-from cli.sr_bench.contracts import plan
+from cli.sr_bench.contracts import SESSION_AWARE, STATELESS, plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.offline import replay
 from cli.sr_bench.provenance import capture_runner
@@ -558,6 +558,139 @@ def test_continuity_counts_switches_between_known_subject_selections(
     assert {key: block[key] for key in expected} == expected
 
 
+def test_continuity_counts_switches_by_resulting_request_phase() -> None:
+    calls = [
+        _request("task", "small", phase="user_turn"),
+        _request("task", "large", phase="tool_loop"),
+        _request("task", "small", phase="tool_loop"),
+    ]
+    block = metric("mom", [], calls, 1)["continuity"]
+    assert block["model_switches"] == 2
+    assert block["model_switches_by_phase"] == {"tool_loop": 2}
+
+
+def test_legacy_calls_keep_unknown_phase_and_cache_observation() -> None:
+    calls = [_request("task", "small"), _request("task", "large")]
+    result = metric("mom", [], calls, 1)
+    assert result["continuity"]["model_switches_by_phase"] == {"unknown": 1}
+    assert result["cache_read_call_count"] == 0
+    assert result["cache_read_ratio"] is None
+
+
+def test_cache_read_ratio_uses_only_reported_provider_fields() -> None:
+    calls = [
+        _request(
+            "task-1",
+            "model",
+            usage={
+                "input_tokens": 4,
+                "cached_input_tokens": 2,
+                "cache_write_tokens": 0,
+                "output_tokens": 1,
+            },
+            cache_read_reported=True,
+            cache_write_reported=True,
+        ),
+        _request(
+            "task-2",
+            "model",
+            usage={
+                "input_tokens": 10,
+                "cached_input_tokens": 100,
+                "cache_write_tokens": 0,
+                "output_tokens": 1,
+            },
+            cache_read_reported=False,
+            cache_write_reported=False,
+        ),
+    ]
+    result = metric("mom", [], calls, 2)
+    assert result["cache_read_call_count"] == 1
+    assert result["cache_read_tokens"] == 2
+    assert result["cache_read_prompt_tokens"] == 6
+    assert result["cache_read_ratio"] == 2 / 6
+
+
+def test_cache_read_count_includes_reported_calls_without_complete_usage() -> None:
+    result = metric(
+        "mom",
+        [],
+        [_request("task", "model", usage=None, cache_read_reported=True)],
+        1,
+    )
+    assert result["cache_read_call_count"] == 1
+    assert result["cache_read_ratio"] is None
+    assert result["cache_read_tokens"] is None
+    assert result["cache_read_prompt_tokens"] is None
+
+
+def test_cache_read_report_keeps_unknown_observation_unknown() -> None:
+    result = metric(
+        "mom",
+        [],
+        [
+            _request(
+                "task",
+                "model",
+                usage={
+                    "input_tokens": 8,
+                    "cached_input_tokens": 0,
+                    "cache_write_tokens": 0,
+                    "output_tokens": 2,
+                },
+                cache_read_usage=None,
+                cache_read_reported=True,
+            )
+        ],
+        1,
+    )
+    assert result["cache_read_call_count"] == 1
+    assert result["cache_read_ratio"] is None
+    assert result["cache_read_tokens"] is None
+    assert result["cache_read_prompt_tokens"] is None
+
+
+def test_cache_read_ratio_keeps_reported_mom_child_calls() -> None:
+    calls = [
+        _request(
+            "task",
+            "model",
+            usage={
+                "input_tokens": 10,
+                "cached_input_tokens": 4,
+                "cache_write_tokens": 0,
+                "output_tokens": 2,
+            },
+            cache_read_reported=False,
+            model_usage=[
+                {
+                    "usage": {
+                        "input_tokens": 5,
+                        "cached_input_tokens": 3,
+                        "cache_write_tokens": 0,
+                        "output_tokens": 1,
+                    },
+                    "cache_read_reported": True,
+                },
+                {
+                    "usage": {
+                        "input_tokens": 5,
+                        "cached_input_tokens": 1,
+                        "cache_write_tokens": 0,
+                        "output_tokens": 1,
+                    },
+                    "cache_read_reported": False,
+                },
+            ],
+        )
+    ]
+    result = metric("mom", [], calls, 1)
+    assert result["cache_read_call_count"] == 1
+    assert result["cache_read_tokens"] == 3
+    assert result["cache_read_prompt_tokens"] == 8
+    assert result["cache_read_ratio"] == 3 / 8
+
+
 def _routed_run(routes: dict[str, list[str]]) -> dict:
     calls = [
         _request(task, model) for task, models in routes.items() for model in models
@@ -591,6 +724,7 @@ def test_continuity_separates_steady_and_switching_runs_with_equal_accuracy() ->
         "mean_switches_per_task": 0.0,
         "max_switches_per_task": 0,
         "decision_changed_tasks": 0,
+        "model_switches_by_phase": {},
         **unchanged,
     }
     assert switching["continuity"] == {
@@ -603,6 +737,7 @@ def test_continuity_separates_steady_and_switching_runs_with_equal_accuracy() ->
         "mean_switches_per_task": 1.0,
         "max_switches_per_task": 1,
         "decision_changed_tasks": 2,
+        "model_switches_by_phase": {"unknown": 2},
         **unchanged,
     }
     assert mixed["continuity"]["switched_accuracy"] == 1.0
@@ -624,23 +759,52 @@ def test_report_continuity_follows_stored_call_order(tmp_path: Path) -> None:
     store.result(
         run["id"], "one", "balance", "completed", {"correct": True, "score": 1}
     )
-    for role, model in (
-        ("subject", "a"),
-        ("judge", "flash"),
-        ("subject", "b"),
-        ("subject", "b"),
-    ):
+    calls = (
+        ("subject", "a", "user_turn", True, 2),
+        ("judge", "flash", None, None, 0),
+        ("subject", "b", "tool_loop", True, 2),
+        ("subject", "c", "user_turn", False, 0),
+    )
+    for role, model, phase, cache_reported, cached_tokens in calls:
         call = store.start_call(run["id"], "one", "balance", role, {"model": "balance"})
+        data = {
+            "selected_model": model,
+            "decision": model,
+            "inference_call_count": 1,
+        }
+        if role == "subject":
+            data.update(
+                phase=phase,
+                cache_read_reported=cache_reported,
+                usage={
+                    "input_tokens": 7,
+                    "cached_input_tokens": cached_tokens,
+                    "cache_write_tokens": 1,
+                    "output_tokens": 3,
+                },
+            )
         store.finish_call(
             call,
             "completed",
-            {"selected_model": model, "decision": model, "inference_call_count": 1},
+            data,
         )
     report = make_report(store, run["id"])
-    target = report["summary"]["targets"][0]["continuity"]
-    assert report["benchmarks"][0]["continuity"] == target
-    assert (target["switched_tasks"], target["model_switches"]) == (1, 1)
-    assert (target["switched_accuracy"], target["decision_changed_tasks"]) == (1.0, 1)
+    target = report["summary"]["targets"][0]
+    continuity = target["continuity"]
+    assert report["benchmarks"][0]["continuity"] == continuity
+    assert (continuity["switched_tasks"], continuity["model_switches"]) == (1, 2)
+    assert (continuity["switched_accuracy"], continuity["decision_changed_tasks"]) == (
+        1.0,
+        1,
+    )
+    assert continuity["model_switches_by_phase"] == {
+        "tool_loop": 1,
+        "user_turn": 1,
+    }
+    assert target["cache_read_call_count"] == 2
+    assert target["cache_read_tokens"] == 4
+    assert target["cache_read_prompt_tokens"] == 20
+    assert target["cache_read_ratio"] == 0.2
 
 
 @pytest.mark.parametrize("change", ["prices", "limits", "native-profile", "judge"])
@@ -692,6 +856,7 @@ def test_learning_preview_distribution_and_replay_rejection(tmp_path):
             "id": "balance",
             "kind": "mom",
             "preview_url": "http://127.0.0.1:1/api/v1/routing/preview",
+            "session_mode": SESSION_AWARE,
         }
     ]
     frozen = plan(manifest)
@@ -710,6 +875,7 @@ def test_learning_preview_distribution_and_replay_rejection(tmp_path):
     )
     store.status(preview["id"], "completed")
     report = make_report(store, preview["id"])
+    assert report["summary"]["targets"][0]["continuity"]["session_mode"] == STATELESS
     assert report["summary"]["targets"][0]["selection_statuses"] == {
         "execution_required": 1
     }
