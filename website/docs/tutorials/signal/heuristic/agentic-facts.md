@@ -93,8 +93,34 @@ names and reason codes. To see which rule matched, read `signals.agentic_facts`,
 which lists the operator's rule names. Callers without the `replay.detail`
 permission see the status, but `agentic_facts_reasons` is returned empty.
 
-A request refused with `422` because no candidate model is eligible writes no
-Replay record. This matches the existing behavior for context-window refusals.
+A request refused because required capabilities leave no eligible model still
+writes a record, with lifecycle `failed`, terminal reason `selection_rejected`,
+and `agentic_facts_status: accepted`.
+
+## Required Capabilities
+
+An accepted envelope may list `required_capabilities`. They narrow the models a
+decision already lists in `modelRefs`; they never add one. They apply only in a
+recipe that opts into strict candidate requirements:
+
+```yaml
+recipes:
+  - name: agent-workloads
+    routing:
+      candidate_requirements:
+        capabilities: declared
+```
+
+In that mode a model stays a candidate only when its model card declares every
+capability the request needs, both those derived from the request itself and
+those the caller requires. A model that declares no capabilities is excluded,
+so every model the recipe can route to must declare them. Without this opt-in,
+`required_capabilities` is validated but changes nothing.
+
+A route action's destination is checked the same way. If it lacks a required
+capability, a capable model from the decision's `modelRefs` serves the request.
+When no model qualifies, the request fails with `503` and the code
+`no_eligible_model`. The response names no model and no capability.
 
 ## Dependencies and Limitations
 
