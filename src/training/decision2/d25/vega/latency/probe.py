@@ -378,12 +378,14 @@ def cmd_image(args) -> int:
                 if name == "new":
                     tokens.append(used)
     for name, _ in models:
+        if not times[name]:
+            continue
         report[name] = {
             **stats(times[name]),
             **{k: round(statistics.median(v), 1) for k, v in phases[name].items()},
         }
     report["input_tokens_median"] = statistics.median(tokens)
-    report["fast"] = model.fast_report()
+    report["fast"] = model.fast_report() if hasattr(model, "fast_report") else None
     if args.reference_runtime:
         exact = flips = questions_n = 0
         worst = 0.0
