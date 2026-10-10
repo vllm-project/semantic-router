@@ -22627,6 +22627,9 @@
                           "input": {
                             "type": "string"
                           },
+                          "input_digest": {
+                            "type": "string"
+                          },
                           "pair": {
                             "type": "string"
                           },
@@ -22653,6 +22656,7 @@
                           "id",
                           "pair",
                           "input",
+                          "input_digest",
                           "first",
                           "second"
                         ]

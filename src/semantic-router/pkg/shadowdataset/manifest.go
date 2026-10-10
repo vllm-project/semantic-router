@@ -415,7 +415,7 @@ func buildExample(rec store.Record) (Example, string) {
 		return Example{}, ExcludeNoPrimaryArm
 	}
 
-	inputDigest := digestOf(rec.RequestBody)
+	inputDigest := digestOf(judgeInput(rec.RequestBody))
 	return Example{
 		ID:          exampleID(inputDigest, primary.Model, rec.ID),
 		InputDigest: inputDigest,
