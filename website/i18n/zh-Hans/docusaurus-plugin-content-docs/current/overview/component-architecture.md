@@ -84,7 +84,7 @@ Worker 内部由 model family 定义输入和类型化输出，profile 规划任
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
-DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](/docs/model-runtime/deploy)和 [Profiles](/docs/model-runtime/profiles)。
+DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](../model-runtime/deploy)和 [Profiles](../model-runtime/profiles)。
 
 ## Roadmap：让 System One 在判断模型之间路由 {#roadmap-route-system-one-across-decision-models}
 
@@ -99,4 +99,4 @@ DP 复制模型，不通过张量并行或流水线并行拆分权重。增加�
 - [系统概览](semantic-router-overview)：配置与部署背景。
 - [快速开始](../installation/installation.md)：发送经过路由的 Chat 请求。
 - [模型运行时快速开始](../model-runtime/quickstart.md)：直接提出类型化问题。
-- [前端与运行时部署](/docs/model-runtime/deploy)：绑定、副本放置和就绪状态。
+- [前端与运行时部署](../model-runtime/deploy)：绑定、副本放置和就绪状态。

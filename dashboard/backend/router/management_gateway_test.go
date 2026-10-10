@@ -24,7 +24,7 @@ func TestManagementGatewaySharesRBACAndReadonlyPolicy(t *testing.T) {
 	defer upstream.Close()
 	for _, readonly := range []bool{false, true} {
 		mux := http.NewServeMux()
-		cfg := &config.Config{RouterAPIURL: upstream.URL, ReadonlyMode: readonly}
+		cfg := &config.Config{RouterAPIURL: upstream.URL, ReadonlyMode: readonly, RuntimeConfigWritable: true}
 		provider := routerProxyCredentialProvider{token: "router-management"}
 		registerRouterAPIProxy(mux, cfg, nil, nil, nil, provider)
 		for _, policy := range routercontract.ManagementPolicies() {
@@ -39,14 +39,15 @@ func TestManagementGatewaySharesRBACAndReadonlyPolicy(t *testing.T) {
 			response := httptest.NewRecorder()
 			before := calls
 			mux.ServeHTTP(response, request)
+			blocked := readonly && (policy.Mutation || path == classifierInventoryGatewayPath)
 			want := http.StatusNoContent
-			if readonly && policy.Mutation {
+			if blocked {
 				want = http.StatusForbidden
 			}
 			if response.Code != want {
 				t.Fatalf("readonly=%v %s %s = %d want %d: %s", readonly, policy.Method, path, response.Code, want, response.Body.String())
 			}
-			if (calls == before) != (readonly && policy.Mutation) {
+			if (calls == before) != blocked {
 				t.Fatalf("readonly mutation forwarding mismatch: %+v", policy)
 			}
 		}
