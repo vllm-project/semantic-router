@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="881.28pt" height="538.56pt" viewBox="0 0 881.28 538.56" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>vLLM Semantic Router</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 538.56 
+L 881.28 538.56 
+L 881.28 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 220.32 376.992 
+L 828.4032 376.992 
+L 828.4032 129.2544 
+L 220.32 129.2544 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 220.32 376.992 
+L 220.32 129.2544 
+" clip-path="url(#p688a1de5a9)" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #5f6b76" x="220.32" y="398.14825" transform="rotate(-0 220.32 398.14825)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 372.3408 376.992 
+L 372.3408 129.2544 
+" clip-path="url(#p688a1de5a9)" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #5f6b76" x="372.3408" y="398.14825" transform="rotate(-0 372.3408 398.14825)">25</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 524.3616 376.992 
+L 524.3616 129.2544 
+" clip-path="url(#p688a1de5a9)" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #5f6b76" x="524.3616" y="398.14825" transform="rotate(-0 524.3616 398.14825)">50</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 676.3824 376.992 
+L 676.3824 129.2544 
+" clip-path="url(#p688a1de5a9)" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #5f6b76" x="676.3824" y="398.14825" transform="rotate(-0 676.3824 398.14825)">75</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 828.4032 376.992 
+L 828.4032 129.2544 
+" clip-path="url(#p688a1de5a9)" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #5f6b76" x="828.4032" y="398.14825" transform="rotate(-0 828.4032 398.14825)">100</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #5f6b76" x="524.3616" y="422.629813" transform="rotate(-0 524.3616 422.629813)">Exact-label accuracy (%)</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_11"/>
+     <g id="text_7">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; fill: #172430" transform="translate(133.8675 172.983169)">Direct Kai</text>
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; fill: #172430" transform="translate(174.8975 192.186294)">0.6B</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; fill: #172430" transform="translate(71.7575 250.399919)">System One Auto</text>
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; fill: #172430" transform="translate(123.77 269.604294)">Kai → Vega</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_13"/>
+     <g id="text_9">
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; fill: #172430" transform="translate(118.82 327.819169)">Direct Vega</text>
+      <text style="font-size: 16px; font-family: 'DejaVu Sans'; fill: #172430" transform="translate(179.9825 347.022294)">27B</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 220.32 376.992 
+L 828.4032 376.992 
+" style="fill: none; stroke: #e7ebef; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 220.32 200.09187 
+L 620.44401 200.09187 
+L 620.44401 151.31853 
+L 220.32 151.31853 
+z
+" clip-path="url(#p688a1de5a9)" style="fill: #63798b"/>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 22px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #ffffff" x="608.282346" y="181.420044" transform="rotate(-0 608.282346 181.420044)">65.80%</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #ffffff" x="232.481664" y="179.341919" transform="rotate(-0 232.481664 179.341919)">152 / 231</text>
+   </g>
+   <g id="patch_5">
+    <path d="M 220.32 277.50987 
+L 720.475013 277.50987 
+L 720.475013 228.73653 
+L 220.32 228.73653 
+z
+" clip-path="url(#p688a1de5a9)" style="fill: #d55e00"/>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 22px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #ffffff" x="708.313349" y="258.838044" transform="rotate(-0 708.313349 258.838044)">82.25%</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #ffffff" x="232.481664" y="256.759919" transform="rotate(-0 232.481664 256.759919)">190 / 231</text>
+   </g>
+   <g id="patch_6">
+    <path d="M 220.32 354.92787 
+L 754.696145 354.92787 
+L 754.696145 306.15453 
+L 220.32 306.15453 
+z
+" clip-path="url(#p688a1de5a9)" style="fill: #0072b2"/>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 22px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #ffffff" x="742.534481" y="336.256044" transform="rotate(-0 742.534481 336.256044)">87.88%</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #ffffff" x="232.481664" y="334.177919" transform="rotate(-0 232.481664 334.177919)">203 / 231</text>
+   </g>
+  </g>
+  <g id="text_16">
+   <text style="font-weight: 700; font-size: 29px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172430" x="52.8768" y="40.392" transform="rotate(-0 52.8768 40.392)">More accuracy. Selective escalation.</text>
+  </g>
+  <g id="text_17">
+   <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="52.8768" y="75.3984" transform="rotate(-0 52.8768 75.3984)">The same 231 public JevBench requests · exact-label accuracy</text>
+  </g>
+  <g id="text_18">
+   <text style="font-weight: 700; font-size: 25px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #d55e00" x="220.32" y="455.0832" transform="rotate(-0 220.32 455.0832)">+16.45 pp</text>
+  </g>
+  <g id="text_19">
+   <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="220.32" y="482.0112" transform="rotate(-0 220.32 482.0112)">vs Kai · 95% CI 11.34–21.72</text>
+  </g>
+  <g id="text_20">
+   <text style="font-weight: 700; font-size: 25px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #0072b2" x="572.832" y="455.0832" transform="rotate(-0 572.832 455.0832)">−5.63 pp</text>
+  </g>
+  <g id="text_21">
+   <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="572.832" y="482.0112" transform="rotate(-0 572.832 482.0112)">vs Vega · 95% CI −8.89 to −2.59</text>
+  </g>
+  <g id="text_22">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="52.8768" y="519.7104" transform="rotate(-0 52.8768 519.7104)">195 source groups · paired source-group bootstrap · public suite, not the sealed v1.6.1 composite</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p688a1de5a9">
+   <rect x="220.32" y="129.2544" width="608.0832" height="247.7376"/>
+  </clipPath>
+ </defs>
+</svg>
