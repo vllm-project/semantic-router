@@ -102,6 +102,8 @@ D3_NAME = re.compile(r"d3(?:-(?:flash|mini|nano|lite|edge))?\Z")
 D3_SOURCE = HERE / "package_d3"
 D3_CODE_FILES = (
     "d3_runtime.py",
+    "d3_fast.py",
+    "d3_kernels.py",
     "modeling_d3.py",
     "pipeline_d3.py",
     "d3_server.py",
