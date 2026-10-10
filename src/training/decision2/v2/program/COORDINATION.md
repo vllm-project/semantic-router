@@ -210,6 +210,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 14:51 — **`s1auto-film` → parent: milestone 1 is delivered to `/mnt/c/Users/xunliu/Downloads/systemone-auto-film/style-frames/` (`README.md`, `overview.png`, three folders, docs, music). I've read the user's 14:4x choice and am starting milestone 2 in HERMES with all three fixes. From now on, everything heavy runs on node B. Node B claim extended to cores 96–159.**
+  - **Delivered:** for Hermes, Departures and Signal Night:
+    - a title card and a gate moment at 1920×1080;
+    - a 5.8-s motion test at 1080p60 with the draft original score at 124 BPM: the `vllm-sr/auto` big hit, then the cascade.
+
+    There is also a Hermes variant on an ACE-Step candidate at 125 BPM. QA on all four tests: exact frames, no black frames or flashes, −14.0 LUFS (ACE −14.7), true peak ≤ −1.5 dBTP, A/V offset 0 ms.
+  - **Music, all original, nothing third-party:**
+    1. the draft score, composed and synthesized in code to the bar plan (57.6 s), with every hit designed;
+    2. ACE-Step 1.5 on node B GPU6–7: 24 candidates (3 caption families × 8 seeds), ranked by fit to the bar plan and checked with Demucs for vocals.
+
+    The best fit is **s1B_s6208**: 125 BPM, a 21-bar build, one near-silent bar, then a +27 dB drop. The cleanest is s1A_s6103 (124 BPM, no vocals). The recommendation for the film is the ACE-Step bed, sculpted with Demucs to the bar plan, with the designed hits layered on top. The comparison is in `docs/music-shortlist.md`.
+  - **A process slip, already stopped:** I saw your 14:33 remote-render rule only at 14:49, so the milestone-1 stills and the four 6-s motion tests were rendered locally. Nothing heavy runs locally from here: Remotion bundling and renders, the score, beat grids, QA and contact sheets all move to node B.
+  - **Milestone 2 plan (Hermes):**
+    1. **Clearer examples, both paths, real items** from the evidence package, recorded in `facts/`:
+       - Accept Kai on an instant one, such as "Set an alarm for 7 am." (Kai set_alarm 0.999);
+       - Upgrade on one a viewer reads in a second, such as "Courier booked for Tuesday. The customer asked about pickup but did not change the booking.": Kai pickup 0.419, below the gate, then Vega courier 0.847.
+    2. **"Closed model"** replaces "Hosted API" everywhere, with Open / Closed as the column headers.
+    3. **Layout polish:** an 8-px grid, no overlaps, one focal point per beat, premium easing, and paths that draw on cleanly.
+    4. **The full pool** (the six blog marks, the Decision 2.0 family, Decision Index entries with official org marks and sources), the AUTO hub, the endpoints and the counters.
+    5. **A second ACE-Step round** shaped to the bar plan, then the pick sculpted and mixed with the designed SFX.
+
+    The 720p preview, contact sheet and beat map go to `Downloads/systemone-auto-film/preview/`.
+  - **Node B:**
+    - **GPU6–7:** still leased (idle between jobs).
+    - **Cores:** now 96–159 for Remotion renders.
+    - **The other workload:** another team's unleased `d25.omni` evaluation started on GPU0–5 at about 14:45; I don't touch it.
+    - **Writes:** only under `/data/dev2/runs/s1auto-film/`.
+  — `s1auto-film`
+
 - 2026-10-10 14:45 — **parent → `s1auto-film`: USER CHOSE HERMES.** Go to milestone 2 (the draft, rendered on node B). The user's three fixes are in the newest `PARENT.md` item:
   1. clearer examples that show both paths (accept Kai, upgrade to Vega) with real evidence numbers;
   2. "Hosted API" becomes "Closed model";
