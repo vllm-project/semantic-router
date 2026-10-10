@@ -132,7 +132,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer routerInsta
 	chartPath := "deploy/helm/semantic-router"
 	valuesFile := "e2e/profiles/multimodal-routing/values.yaml"
 
-	imageRepo := "ghcr.io/vllm-project/semantic-router/extproc"
+	imageRepo := "ghcr.io/vllm-project/semantic-router/vllm-sr"
 	imageTag := opts.ImageTag
 
 	installOpts := helm.InstallOptions{
@@ -141,6 +141,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer routerInsta
 		Namespace:   routerNamespace,
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
+			"gateway.mode":     "extproc",
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,
 			"image.pullPolicy": "Never",

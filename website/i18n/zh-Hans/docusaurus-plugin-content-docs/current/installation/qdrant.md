@@ -1,7 +1,7 @@
 ---
 sidebar_position: 7
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/installation/qdrant.md"
   outdated: false
 ---
@@ -159,7 +159,7 @@ global:
       backend_type: qdrant
       similarity_threshold: 0.90
       ttl_seconds: 7200
-      embedding_model: bert
+      embedding_model: mmbert
       qdrant:
         host: qdrant                   # 服务名或主机名
         port: 6334
@@ -180,14 +180,16 @@ global:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 384               # 必须与嵌入模型匹配
-      embedding_model: bert
+        dimension: 256               # mmbert：64、128、256、512 或 768
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-这是 `bert`（`mom-embedding-light`）使用原始余弦检索时的起点。
-请结合已回答、无关和已更正的事实查询校准实际数据；其他嵌入模型的分数范围不同。
+`dimension` 必须是嵌入模型提供的维度之一。若设为其他值，Router 会记录
+`Failed to create memory store: … Memory will be disabled`，并在没有记忆的情况下运行。
+0.30 阈值是原始余弦检索的起点，而不是校准值。请结合已回答、无关和已更正的事实查询校准实际数据；
+每种嵌入模型和向量维度都有各自的分数范围。
 
 ### 已上传文档的向量存储
 

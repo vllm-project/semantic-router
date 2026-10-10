@@ -3,11 +3,25 @@
 import re
 
 from cli import __version__
+from cli.model_catalog import available_catalog_versions
 
 
-def image_tag_for_cli_version(cli_version: str) -> str:
-    """Keep stable CLI installations on their matching release images."""
-    if re.fullmatch(r"\d+\.\d+\.\d+", cli_version):
+def _release_catalog_installed(release: str) -> bool:
+    return release in available_catalog_versions()
+
+
+def image_tag_for_cli_version(
+    cli_version: str, released=_release_catalog_installed
+) -> str:
+    """Keep released CLI installations on their matching release images.
+
+    A release build ships its vMAJOR.MINOR catalog snapshot, which the release
+    contract requires before the tag. `main` already carries the next version
+    without that snapshot, so a source install of it runs the main-channel
+    images, as dev builds do.
+    """
+    match = re.fullmatch(r"(\d+)\.(\d+)\.\d+", cli_version)
+    if match and released(f"v{match.group(1)}.{match.group(2)}"):
         return f"v{cli_version}"
     return "latest"
 
@@ -29,8 +43,8 @@ VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
     f"ghcr.io/vllm-project/semantic-router/dashboard:{_DEFAULT_IMAGE_TAG}"
 )
 DEFAULT_STACK_NAME = "vllm-sr"
-PLATFORM_AMD = "amd"
-PLATFORM_NVIDIA = "nvidia"
+PLATFORM_ROCM = "rocm"
+PLATFORM_CUDA = "cuda"
 RUNTIME_TOPOLOGY_ENV = "VLLM_SR_TOPOLOGY"
 RUNTIME_TOPOLOGY_SPLIT = "split"
 DEFAULT_RUNTIME_TOPOLOGY = RUNTIME_TOPOLOGY_SPLIT

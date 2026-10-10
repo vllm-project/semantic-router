@@ -4,12 +4,14 @@ description: 提出结合关键词、正则、嵌入和分类器信号的路由�
 created: 2025-10-08
 status: 提案
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/prompt-classification-routing.md"
   outdated: false
 ---
 
 > **状态：** 提案 · **创建日期：** 2025-10-08
+
+具名信号、投影和决策流水线已经实现。本页保留原始设计动机与后续问题；支持的配置以[当前信号指南](../tutorials/signal/overview.md)为准。正则匹配属于 keyword 规则，未知观察由显式决策策略处理。
 
 ## 问题 {#problem}
 

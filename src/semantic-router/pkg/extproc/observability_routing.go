@@ -51,6 +51,35 @@ func observeRoutingStage(ctx *RequestContext, stage string, started time.Time) {
 	}
 }
 
+// Streamed body arrival is observed once, after entrypoint resolution, so the
+// recipe label is known. Passthrough requests are recorded under the unknown
+// recipe; a body the ingress codec rejects never reaches this point.
+func observeStreamedBodyArrival(ctx *RequestContext) {
+	stats := ctx.StreamedBodyStats
+	if !stats.Present || stats.Observed || ctx.learningPreview != nil {
+		return
+	}
+	ctx.StreamedBodyStats.Observed = true
+	metrics.ObserveStreamedBodyArrival(string(ctx.Routing.RecipeName()), stats.Arrival.Seconds(), stats.Bytes, stats.Chunks)
+	tracing.SetSpanAttributes(ctx.RequestSpan,
+		attribute.Int("streamed_body.bytes", stats.Bytes),
+		attribute.Int("streamed_body.chunks", stats.Chunks),
+		attribute.Int64("streamed_body.arrival_ms", stats.Arrival.Milliseconds()))
+}
+
+// Prompt compression uses the same recording conditions as the other routing
+// stages. Duration is observed only when compression actually ran.
+func observePromptCompression(ctx *RequestContext, outcome string, elapsed time.Duration) {
+	if outcome == "" || ctx.Routing.SelectedRecipe() == nil || ctx.learningPreview != nil || ctx.RequestSpan == nil {
+		return
+	}
+	recipe := string(ctx.Routing.RecipeName())
+	metrics.RecordPromptCompressionOutcome(recipe, outcome)
+	if outcome == metrics.PromptCompressionCompressed {
+		metrics.ObserveRoutingStage(recipe, metrics.RoutingStagePromptCompression, elapsed.Seconds())
+	}
+}
+
 // Signal evidence contains only actual finite numeric results. Presence flags
 // distinguish missing evidence from a legitimate zero; configured keys and the
 // number of events are bounded independently of user input.

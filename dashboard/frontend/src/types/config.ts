@@ -50,6 +50,17 @@ export interface ProviderModel {
     health_check_path?: string
     health_check_interval?: string
     health_check_timeout?: string
+    connect_timeout?: string
+    total_timeout?: string
+    idle_timeout?: string
+    per_try_timeout?: string
+    first_byte_timeout?: string
+    retriable_status_codes?: number[]
+    retry_back_off_base?: string
+    retry_back_off_max?: string
+    retry_after_max?: string
+    retry_budget_percent?: number
+    retry_budget_min_concurrency?: number
   }
 }
 
@@ -114,7 +125,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean // Ask the detector for span-level NLI explanations
   description?: string
 }
 
@@ -220,6 +230,28 @@ export interface InputModalitySignal {
   modality: 'text' | 'image' | 'audio' | 'video'
 }
 
+export interface DecisionModelChoice {
+  key: string
+  description?: string
+}
+
+export interface DecisionModelSignal {
+  name: string
+  description?: string
+  deployment: string
+  question: {
+    type: 'choice' | 'noul' | 'score' | 'set' | 'span'
+    instructions: string
+    choices?: DecisionModelChoice[]
+    levels?: string[]
+    labels?: DecisionModelChoice[]
+    threshold?: number
+    head?: 'router' | 'broad'
+  }
+  predicate?: NumericPredicate
+  timeout_ms?: number
+}
+
 export interface ComplexityCandidates {
   candidates: string[]
 }
@@ -314,6 +346,7 @@ export interface Signals {
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
   input_modality?: InputModalitySignal[]
+  decision?: DecisionModelSignal[]
 }
 
 // =============================================================================
@@ -343,6 +376,7 @@ export type DecisionConditionType =
   | 'metadata'
   | 'classifier'
   | 'input_modality'
+  | 'decision'
   | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
@@ -411,11 +445,25 @@ export interface Decision {
 // LISTENERS - Network configuration
 // =============================================================================
 
+export interface ListenerTLS {
+  cert_file: string
+  key_file: string
+}
+
+export interface ListenerIdentity {
+  trust_headers?: boolean
+  trusted_peers?: string[]
+}
+
 export interface Listener {
   name: string
   address: string
   port: number
   timeout?: string
+  api_keys?: string[]
+  models?: string[]
+  tls?: ListenerTLS
+  identity?: ListenerIdentity
 }
 
 // =============================================================================
@@ -444,7 +492,6 @@ export interface LegacyVLLMEndpoint {
 
 export interface LegacyModelConfig {
   model_id: string
-  use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
   category_mapping_path?: string
@@ -627,11 +674,4 @@ export function hasFlatSignals(config: unknown): boolean {
  */
 export function isPythonCLIFormat(config: unknown): config is PythonCLIConfig {
   return detectConfigFormat(config) === 'python-cli'
-}
-
-/**
- * Check if config is in legacy format
- */
-export function isLegacyFormat(config: unknown): config is LegacyConfig {
-  return detectConfigFormat(config) === 'legacy'
 }

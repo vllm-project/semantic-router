@@ -277,6 +277,9 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	if ragConfig.MaxContextLength != nil {
 		maxLength = *ragConfig.MaxContextLength
 	}
+	if maxLength < 0 {
+		return fmt.Errorf("max_context_length must not be negative, got %d", maxLength)
+	}
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)
 		retrievedContext = string(runes[:maxLength]) + "..."

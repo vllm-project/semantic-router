@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,6 +15,18 @@ import (
 const (
 	kindStorageNodeMountPath     = "/mnt"
 	WorkspaceModelsNodeMountPath = "/opt/semantic-router/workspace-models"
+
+	// kindClusterBootstrapAttempts allows one retry after a failed bootstrap.
+	// Bootstrapping reaches the Docker daemon and the node image registry, so a
+	// single transient failure must not fail a whole CI profile.
+	kindClusterBootstrapAttempts = 2
+
+	// kindClusterBootstrapDelay gives Docker time to release the deleted
+	// cluster's containers and networks before the retry starts.
+	kindClusterBootstrapDelay = 30 * time.Second
+
+	// kindClusterReadyTimeout bounds how long the nodes may take to become Ready.
+	kindClusterReadyTimeout = 5 * time.Minute
 )
 
 // KindCluster manages Kind cluster lifecycle
@@ -22,13 +35,18 @@ type KindCluster struct {
 	Verbose            bool
 	GPUEnabled         bool // Enable GPU support for the cluster
 	WorkspaceModelsDir string
+
+	// bootstrapDelay is the pause between bootstrap attempts. It is a field so
+	// tests can drop the wait instead of sleeping in a unit test.
+	bootstrapDelay time.Duration
 }
 
 // NewKindCluster creates a new Kind cluster manager
 func NewKindCluster(name string, verbose bool) *KindCluster {
 	return &KindCluster{
-		Name:    name,
-		Verbose: verbose,
+		Name:           name,
+		Verbose:        verbose,
+		bootstrapDelay: kindClusterBootstrapDelay,
 	}
 }
 
@@ -70,14 +88,8 @@ func (k *KindCluster) Create(ctx context.Context) error {
 	}
 	defer removeFile(configFile)
 
-	if err := k.runCreateClusterCommand(ctx, configFile); err != nil {
-		return fmt.Errorf("failed to create cluster: %w", err)
-	}
-
-	// Wait for cluster to be ready
-	k.log("Waiting for cluster to be ready...")
-	if err := k.WaitForReady(ctx, 5*time.Minute); err != nil {
-		return fmt.Errorf("cluster failed to become ready: %w", err)
+	if err := k.bootstrap(ctx, configFile); err != nil {
+		return err
 	}
 
 	// Configure storage provisioner to use /mnt (75GB) instead of /tmp (limited space)
@@ -94,6 +106,72 @@ func (k *KindCluster) Create(ctx context.Context) error {
 
 	k.log("Cluster %s created successfully", k.Name)
 	return nil
+}
+
+// bootstrap creates the cluster and waits for its nodes to become Ready. A
+// failed attempt leaves a partial cluster behind, so the retry deletes it first
+// and then waits before trying again.
+func (k *KindCluster) bootstrap(ctx context.Context, configFile string) error {
+	var lastErr error
+	for attempt := 1; attempt <= kindClusterBootstrapAttempts; attempt++ {
+		if attempt > 1 {
+			k.log(
+				"Retrying Kind cluster bootstrap (attempt %d/%d)",
+				attempt, kindClusterBootstrapAttempts,
+			)
+			k.deleteBestEffort(ctx)
+			if err := sleep(ctx, k.bootstrapDelay); err != nil {
+				return errors.Join(err, lastErr)
+			}
+		}
+
+		lastErr = k.createAndWait(ctx, configFile)
+		if lastErr == nil {
+			return nil
+		}
+		k.log(
+			"Kind cluster bootstrap attempt %d/%d failed: %v",
+			attempt, kindClusterBootstrapAttempts, lastErr,
+		)
+	}
+	return lastErr
+}
+
+// createAndWait runs `kind create cluster` and waits for the nodes to be Ready.
+func (k *KindCluster) createAndWait(ctx context.Context, configFile string) error {
+	if err := k.runCreateClusterCommand(ctx, configFile); err != nil {
+		return fmt.Errorf("failed to create cluster: %w", err)
+	}
+	k.allowPodARP(ctx)
+
+	k.log("Waiting for cluster to be ready...")
+	if err := k.WaitForReady(ctx, kindClusterReadyTimeout); err != nil {
+		return fmt.Errorf("cluster failed to become ready: %w", err)
+	}
+	return nil
+}
+
+// deleteBestEffort removes the cluster before a retry. The cluster may not exist
+// at all, which is not an error here.
+func (k *KindCluster) deleteBestEffort(ctx context.Context) {
+	if err := k.Delete(ctx); err != nil {
+		k.log("Warning: could not delete cluster before retry: %v", err)
+	}
+}
+
+// sleep waits for the delay, or returns early when the context is cancelled.
+func sleep(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (k *KindCluster) runCreateClusterCommand(ctx context.Context, configFile string) error {
@@ -119,6 +197,26 @@ func (k *KindCluster) createClusterArgs(configFile string) []string {
 		k.log("Using Kind config with /mnt mount for storage")
 	}
 	return args
+}
+
+// podARPScript lets every interface of a node answer ARP for its own /32.
+// Hosts that set net.ipv4.conf.default.arp_ignore=2 pass it to Kind's nodes;
+// Kind resets only net.ipv4.conf.all, but an interface's effective value is
+// the larger of the two, so kindnet's /32 veths would ignore their pods' ARP
+// requests and every pod would lose its network.
+const podARPScript = `sysctl -qw net.ipv4.conf.default.arp_ignore=0 && for setting in /proc/sys/net/ipv4/conf/*/arp_ignore; do echo 0 > "$setting"; done`
+
+func (k *KindCluster) allowPodARP(ctx context.Context) {
+	output, err := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", k.Name).Output() //nolint:gosec // The cluster name comes from the E2E run, never from a request.
+	if err != nil {
+		k.log("Warning: list Kind nodes: %v", err)
+		return
+	}
+	for _, node := range strings.Fields(string(output)) {
+		if err := exec.CommandContext(ctx, "docker", "exec", node, "sh", "-c", podARPScript).Run(); err != nil {
+			k.log("Warning: reset arp_ignore on %s: %v", node, err)
+		}
+	}
 }
 
 func (k *KindCluster) configureStorageProvisioner(ctx context.Context) error {

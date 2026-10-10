@@ -23,6 +23,13 @@ helm upgrade --install semantic-router ./deploy/helm/semantic-router \
   --create-namespace
 ```
 
+Every image the chart deploys defaults to the chart's `appVersion`. A checkout
+of `main` deploys the development images (`latest`), the same images as the
+published `0.0.0-latest` chart; a release tag's chart deploys that release's
+images. In production, install a published release chart with `--version`, as
+the [upgrade runbook](../../website/docs/installation/upgrade-rollback.md)
+shows, and pin a digest where you need immutability.
+
 The CLI translates canonical Router YAML into chart values and invokes Helm.
 Helm users can instead set `configOverride` to a complete canonical Router
 document. Do not maintain a second, hand-converted configuration.

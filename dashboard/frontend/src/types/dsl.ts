@@ -115,6 +115,7 @@ export interface ASTModelRef {
   model: string
   reasoning?: boolean
   effort?: string
+  mode?: string
   lora?: string
   paramSize?: string
   weight?: number
@@ -186,7 +187,6 @@ export interface ASTRecipeDecl {
 
 export interface ASTProgram {
   candidateRequirements?: { capabilities?: 'declared'; context?: 'known_limits' }
-  dataPolicy?: { replay?: boolean }
   modelBindings?: Record<string, Record<string, string>>
   strategy?: string
   entrypoints?: ASTEntrypointDecl[]

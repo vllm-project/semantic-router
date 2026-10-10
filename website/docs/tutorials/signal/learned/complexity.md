@@ -124,6 +124,21 @@ and their scores. With compression enabled, `max_prototypes: 0` uses the default
 cap of 8. These settings affect local prototype scoring, not a remote scorer's
 returned score; thresholds and explicit difficulty boundaries are unchanged.
 
+### Decision-model scoring
+
+Authored `hard`/`easy` prototype banks keep embedding comparison by default.
+To use a judgment task instead, set
+`routing.model_bindings.complexity: {deployment: primary, contract: decision.v1}`.
+Rules without prototype banks can also use the default decision deployment.
+The deployment must support `score` questions.
+
+The task asks for easy, medium and hard levels, then normalizes the native
+level score to `[0, 1]` for explicit `easy_below`/`hard_above` boundaries (or
+`hard_below`/`easy_above`). With only `threshold`, it maps that score to
+`[-1, 1]` before applying the symmetric band. These are model judgments, not
+cosine margins or calibrated correctness probabilities; recalibrate boundaries
+when changing the task or model.
+
 ### Local and remote scoring
 
 With no `backend`, complexity keeps its existing local behaviour: the `hard`
@@ -188,7 +203,7 @@ For a model whose score falls as difficulty rises - one predicting the chance
 of a correct answer, for instance - use `hard_below` with `easy_above`
 instead. Encoding the direction in the field names means there is no separate
 direction setting to keep in sync, and an overlapping band cannot be written
-by accident. Those two fields require a `score.v1` backend: the local margin is
+by accident. Those two fields work with score-based backends or decision-model scoring. The local prototype margin is
 hard-minus-easy, so a higher value is harder by construction, and to invert it
 locally you swap the candidate lists.
 
@@ -219,9 +234,9 @@ Give every rung an explicit `priority`, and give the stricter rung the higher
 number. `priority` may be omitted, and two decisions that both match at the
 same priority are separated by confidence - which `score.v1` never reports, so
 the comparison falls through to the decisions' names in alphabetical order.
-Renaming a decision would then change which model a request reaches, and
-nothing reports that it happened - #3658 tracks making the comparison that
-settled a request observable.
+Renaming a decision would then change which model a request reaches. Send
+`x-vsr-debug: true` and `x-vsr-decision-ranking` names the decision that lost
+and ends in `decision name ordering` when that is what settled it.
 
 `score.v1` reports no confidence. A score just short of `hard_above` is the
 least certain position rather than a strong one, so no confidence is derived
@@ -300,7 +315,7 @@ decisions:
 `match` sends a request you could not grade to the stronger model, which is
 usually the safer default; `fail_request` refuses it outright. `on_unknown`
 belongs on the root `rules` node and applies to the whole decision - the
-per-condition `on_error` field is accepted only on `classifier` conditions,
+per-condition `on_error` field is accepted only on `classifier` and `decision` conditions,
 so putting it on a `complexity` condition is rejected at config load.
 
 The scorer's number is published as `complexity:<rule>:score`, in the model's

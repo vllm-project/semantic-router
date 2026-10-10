@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/tutorials/algorithm/selection/knn.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 `knn` 从在最相似的已记录请求上表现良好的模型中，选择一个候选。
 
-**实现**：通过 [Linfa](https://github.com/rust-ml/linfa)（`linfa-nn`）用 Rust 实现高性能最近邻搜索。
+**实现**：在路由器内部用 Go 运行。
 
 ## 主要优势
 

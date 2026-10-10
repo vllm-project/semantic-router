@@ -1,4 +1,4 @@
-# Explicit AMD deployments: ROCm for Guard/Embedding/Reranker, MIGraphX for other classifiers.
+# Explicit AMD deployments: the built-in model runtime serves every model on rocm:0.
 # All-signals Preview is limited to 8192 tokens; task-specific budgets include special tokens.
 # Replace vs_your_documents after creating and indexing a vector store for RAG.
 version: v0.3
@@ -33,7 +33,6 @@ routing:
       deployment: guard-amd
       contract: label_distribution.v1
       adapter: modernbert
-      head: onnx/model_rocm_8k.onnx
       mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
     feedback_detector:
       deployment: feedback-amd
@@ -55,7 +54,6 @@ routing:
       deployment: embedding-amd
       contract: embedding.v1
       adapter: mmbert
-      head: onnx/model_fa.onnx
     rag.reranker:
       deployment: reranker-amd
       contract: relevance_scores.v1
@@ -63,7 +61,6 @@ routing:
       pair_scorer:
         layer: 22
         dimension: 768
-      head: onnx/model_fa.onnx
     classifier.content-risk:
       deployment: hazard-amd
       contract: label_scores.v1
@@ -323,8 +320,6 @@ routing:
     - text
 global:
   router:
-    auto_model_names:
-    - vela-auto
     model_selection:
       enabled: false
   services:
@@ -348,104 +343,95 @@ global:
   model_catalog:
     deployments:
       domain-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Domain
-        provider: ort
-        device: migraphx:0
-        precision: native
-        input:
-          max_tokens: 8192
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         revision: f6354f54adcf38770f635ad903be2b00577f6c11
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 8192
+          overflow: reject
       pii-amd:
-        artifact: models/Vela-1.0-Encoder-307M-PII
-        provider: ort
-        device: migraphx:0
-        precision: native
-        input:
-          max_tokens: 8192
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
         revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 8192
+          overflow: reject
       guard-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Guard
-        provider: ort
-        device: rocm:0
-        precision: native
-        input:
-          max_tokens: 8192
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
         revision: 087f9e401012df839c83717b746967ac7aebfa3e
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 8192
+          overflow: reject
       feedback-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Feedback
-        provider: ort
-        device: migraphx:0
-        precision: native
-        input:
-          max_tokens: 8192
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback
         revision: 47434a7fd7c245c0c7c17564a000b3c56ccfec41
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 8192
+          overflow: reject
       factcheck-amd:
-        artifact: models/Vela-1.0-Encoder-307M-FactCheck
-        provider: ort
-        device: migraphx:0
-        precision: native
-        input:
-          max_tokens: 8192
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-FactCheck
         revision: 99ede1aba1563e59e416f744d25b3f6b7e9d8274
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 8192
+          overflow: reject
       modality-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Modality
-        provider: ort
-        device: migraphx:0
-        precision: native
-        input:
-          max_tokens: 8192
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Modality
         revision: 5384b8997e3cbb79ca3a670e869577f4e4f4997e
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
-      safety-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Safety
-        provider: ort
-        device: migraphx:0
-        precision: native
+        device: rocm:0
+        profile: exact
         input:
           max_tokens: 8192
           overflow: reject
+      safety-amd:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
         revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 8192
+          overflow: reject
       embedding-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Embedding
-        provider: ort
-        device: rocm:0
-        precision: native
-        input:
-          max_tokens: 32768
-          overflow: reject
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         revision: 1e57cebf5a7b7fec6e6973f05bbca97c5cca4436
-        custom_ops_profile: ck_flash_attention
-      reranker-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: ort
         device: rocm:0
-        precision: native
+        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
+      reranker-amd:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        custom_ops_profile: ck_flash_attention
-      hazard-amd:
-        artifact: models/Vela-1.0-Encoder-307M-Hazard
-        provider: ort
-        device: migraphx:0
-        precision: native
+        device: rocm:0
+        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
+      hazard-amd:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
-        compilation_cache_dir: /app/.vllm-sr/compilation-cache
+        device: rocm:0
+        profile: exact
+        input:
+          max_tokens: 32768
+          overflow: reject
     system:
       domain_classifier: models/Vela-1.0-Encoder-307M-Domain
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
@@ -489,16 +475,18 @@ global:
         enabled: true
         model_ref: feedback_detector
         threshold: 0.7
-        use_mmbert_32k: true
       hallucination_mitigation:
         enabled: false
         fact_check:
           model_ref: fact_check_classifier
           threshold: 0.95
-          use_mmbert_32k: true
       modality_detector:
         enabled: true
         method: classifier
         classifier:
           model_path: models/Vela-1.0-Encoder-307M-Modality
         confidence_threshold: 0.7
+
+entrypoints:
+- model_names: ["vela-auto"]
+  recipe: default

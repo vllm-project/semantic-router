@@ -87,14 +87,11 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
-            # No local selectors: model_id empty and use_mmbert_32k false, so
-            # the candle PII path cannot run and every span comes from the
-            # backend below.
+            # No local model: model_id is empty, so the model runtime serves
+            # no PII model and every span comes from the backend below.
             model_ref: ""
             model_id: ""
-            use_mmbert_32k: false
             # The mapping is still required: it is what the token_spans
             # decoder resolves provider labels against, and a label outside
             # it is a rejected response rather than a silent pass.

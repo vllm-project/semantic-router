@@ -1,0 +1,68 @@
+.main {
+  display: grid;
+  gap: 2rem;
+  min-width: 0;
+}
+
+/* The showcase keeps the homepage composition: the wordmark above the
+ * logo grid on a dark plate in dark mode, the site surface in light. */
+.showcase {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(2rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3rem);
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+}
+
+:global([data-theme='dark']) .showcase {
+  background: #050607;
+}
+
+.wordmark {
+  display: block;
+  width: min(31rem, 80%);
+  height: auto;
+  margin: 0 auto clamp(2rem, 4vw, 2.75rem);
+  object-fit: contain;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem 1.5rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.footer p {
+  margin: 0;
+  color: var(--site-muted);
+}
+
+.footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--site-text-strong);
+  text-decoration-color: var(--site-border-strong);
+  text-underline-offset: 0.25em;
+}
+
+.footer a:hover {
+  color: var(--site-text-strong);
+  text-decoration: underline;
+}
+
+.footer a:focus-visible {
+  outline: 2px solid var(--site-text-strong);
+  outline-offset: 0.4rem;
+}
+
+@media (max-width: 480px) {
+  .wordmark {
+    width: 88%;
+  }
+}
