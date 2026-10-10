@@ -42,8 +42,9 @@ func writeJSON(t *testing.T, dir, name string, value any) string {
 // scratch directory, and returns their paths with the tasks it built.
 func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgmentsPath string, tasks shadowdataset.JudgeTaskSet) {
 	t.Helper()
-	// The request as stored, naming the upstream model the judge must not see.
-	request := `{"model":"primary-upstream","messages":[{"role":"user","content":"secret prompt"}]}`
+	// The request as the recorder stores it, naming the upstream model the judge
+	// must not see.
+	request := `{"Model":"primary-upstream","Messages":[{"Role":"user","Content":[{"Kind":"text","Text":"secret prompt"}]}]}`
 	record := store.Record{
 		ID: "r1", RequestID: "req-r1", Recipe: "vault", Decision: "guard",
 		Timestamp:     time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC),
