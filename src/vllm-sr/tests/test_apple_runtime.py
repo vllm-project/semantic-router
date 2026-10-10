@@ -10,9 +10,9 @@ import time
 from contextlib import contextmanager
 
 import pytest
-from click.testing import CliRunner
-
 from cli import apple_runtime
+from cli import apple_runtime_engine as engine
+from cli import apple_runtime_environment as environment
 from cli.apple_runtime_environment import validate_apple_host
 from cli.apple_runtime_server import BridgeServer
 from cli.container_backend import ContainerBackend
@@ -20,6 +20,7 @@ from cli.container_gpu_isolation import router_runtime_env
 from cli.container_run_command import append_env_vars
 from cli.container_start import _sensitive_runtime_env_names
 from cli.main import main
+from click.testing import CliRunner
 
 
 @pytest.mark.parametrize(
@@ -59,8 +60,6 @@ def test_private_host_credential_is_inherited_without_docker_argv_leak(monkeypat
 
 
 def test_docker_context_overrides_docker_host_for_apple_preflight(monkeypatch):
-    from cli import apple_runtime_environment as environment
-
     monkeypatch.setenv("DOCKER_HOST", "unix:///local.sock")
     monkeypatch.setenv("DOCKER_CONTEXT", "remote-context")
     calls = []
@@ -249,8 +248,6 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
 def test_engine_resolves_relative_model_paths_before_host_handoff(
     monkeypatch, tmp_path, models_file
 ):
-    from cli import apple_runtime_engine as engine
-
     monkeypatch.chdir(tmp_path)
     directory = tmp_path / "my-model"
     directory.mkdir()
