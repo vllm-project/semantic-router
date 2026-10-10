@@ -1,11 +1,25 @@
 # System One Auto — figure sources
 
-These figures use the frozen public evidence accompanying the article. The
-charts are data-driven Matplotlib output; the cascade call-flow and routing
-comparison are repository-native SVG. These system diagrams depict
+The article's responsive results, ecosystem comparison and cascade illustrations live in
+`website/src/components/SystemOneAuto`. Each illustration uses a landscape SVG canvas
+sized for its content, keeping the composition intact at every viewport size. The article offers a full-size view for reading labels on small
+screens. The results component reads
+`figure-data.json` directly, so its accuracy bars and latency comparison
+use the same frozen evidence as the downloadable charts. It makes each
+baseline explicit and keeps the mean-latency and p95 tradeoff visible.
+The cost-saving annotation is a separate, explicit
+accounting estimate: all Vega calls have equal unit cost and Kai cost is treated
+as negligible. It uses `1 - 106 / 231 = 54.11%`; with nonzero Kai cost, subtract
+`C_kai / C_vega`, because every request calls Kai. This derived presentation
+does not alter the frozen observations or claim measured GPU-billing savings.
+
+The original standalone figures remain available for download and replay.
+Their charts are data-driven Matplotlib output; their cascade call-flow and
+routing comparison are repository-native SVG. These system diagrams depict
 request flow, not neural model internals. `diagram_assets.py` owns their
 editable shapes, typography and connections; `generate_blog_assets.py` owns
-the measured charts and shared export checks.
+the measured charts and shared export checks. Regenerating these exports
+does not change the responsive article components.
 
 From the Semantic Router repository root:
 
@@ -26,10 +40,19 @@ embedded-font PDF and 300-DPI PNG; the SVG diagrams export vector PDF
 at their declared canvas size. The call-flow and comparison rasters are PNG.
 DejaVu Sans is used throughout these generated figures.
 
-The article's `hero.jpg` is a separate ImageGen marketing cover, visually
+The article's `hero.png` is a separate ImageGen marketing cover, visually
 reviewed as a raster asset. It has no editable vector equivalent and is not
 an experimental figure. This offline generator neither regenerates nor
 overwrites the cover; its receipt includes only the charts and system diagrams.
+
+The current cover follows the v0.4 Hermes release identity: white, electric blue,
+amber and the full vLLM Semantic Router mark. The cover focuses on the
+decision-model ecosystem; a separate responsive figure inside the article
+compares LLM routing and System One routing with their distinct protocols.
+The article links the
+primary model sources and distinguishes hosted GLiDE from currently released
+open checkpoints. Third-party logos are ecosystem references, not a claim of
+measured integration or partnership. See `branding.md` for source attribution.
 
 Outputs:
 
@@ -44,7 +67,7 @@ Outputs:
 `generation-receipt.json` records file hashes, image dimensions and automated
 text-boundary checks. The renderer checks real browser text bounds,
 text-to-text overlap and declared text containers for the system diagrams.
-`layout-review.json` records the final visual and PDF checks. Visual review
+`layout-review.json` records the standalone figures' visual and PDF checks. Visual review
 remains necessary: geometry checks do not validate every connector or model
 claim. The article evidence
 archive includes the unchanged upstream scorer replay and underlying safe
