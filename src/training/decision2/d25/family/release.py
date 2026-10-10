@@ -352,27 +352,41 @@ def hub_final(repo: str, package: Path, parent: str, message: str) -> dict[str, 
 
     api = HfApi()
     info = api.model_info(repo)
-    if info.sha != parent or info.private is not True:
-        raise SystemExit(
-            f"{repo}: main is {info.sha} (private {info.private}), expected private {parent}"
-        )
-    tree = remote_tree(api, repo, parent)
-    local = files(package)
-    changed = [
-        n for n, p in local.items() if n not in tree or not same_remote(tree[n], p)
-    ]
-    stale = sorted(set(tree) - set(local) - {".gitattributes"})
-    if changed or stale:
-        api.create_commit(
-            repo,
-            operations=[CommitOperationAdd(n, str(local[n])) for n in changed]
-            + [CommitOperationDelete(n) for n in stale],
-            commit_message=message,
-            parent_commit=parent,
-        )
-    api.super_squash_history(repo_id=repo, commit_message=message)
-    info = api.model_info(repo)
     commits = api.list_repo_commits(repo)
+    local = files(package)
+    changed: list[str] = []
+    stale: list[str] = []
+    squashed = (
+        len(commits) == 1
+        and commits[0].title == message
+        and commits[0].commit_id != parent
+    )
+    if not squashed:
+        if info.sha != parent or info.private is not True:
+            raise SystemExit(
+                f"{repo}: main is {info.sha} (private {info.private}), expected private {parent}"
+            )
+        tree = remote_tree(api, repo, parent)
+        changed = [
+            n for n, p in local.items() if n not in tree or not same_remote(tree[n], p)
+        ]
+        stale = sorted(set(tree) - set(local) - {".gitattributes"})
+        if changed or stale:
+            api.create_commit(
+                repo,
+                operations=[CommitOperationAdd(n, str(local[n])) for n in changed]
+                + [CommitOperationDelete(n) for n in stale],
+                commit_message=message,
+                parent_commit=parent,
+            )
+        api.super_squash_history(repo_id=repo, commit_message=message)
+    # Right after a squash the Hub can report the old main for a while; wait until main is the single commit.
+    for _ in range(30):
+        info = api.model_info(repo)
+        commits = api.list_repo_commits(repo)
+        if len(commits) == 1 and commits[0].commit_id == info.sha:
+            break
+        time.sleep(10)
     tree = remote_tree(api, repo, info.sha)
     bad = sorted(
         n for n, p in local.items() if n not in tree or not same_remote(tree[n], p)
