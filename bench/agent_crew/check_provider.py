@@ -27,10 +27,9 @@ from typing import Any
 
 MAX_FINGERPRINT_CHARS = 256
 
-# Go measures the stop reason string in bytes and decodes numbers into int64.
-MAX_STOP_REASON_BYTES = 128
-INT64_MIN = -(2**63)
-INT64_MAX = 2**63 - 1
+# Go decodes a numeric stop reason into int64; a string only has to be non-empty.
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 ALLOWED = {
     "response": {
@@ -275,17 +274,16 @@ def problems(body: dict[str, Any]) -> list[str]:
 
 
 def stop_reason_problems(reason: Any, index: int) -> list[str]:
-    """The codec measures the string in UTF-8 bytes and decodes numbers as int64."""
+    """The codec accepts a non-empty string and decodes numbers as int64."""
     if reason is None:
         return []
     if isinstance(reason, int) and not isinstance(reason, bool):
         if INT64_MIN <= reason <= INT64_MAX:
             return []
-    elif isinstance(reason, str) and 1 <= len(reason.encode()) <= MAX_STOP_REASON_BYTES:
+    elif isinstance(reason, str) and reason:
         return []
     return [
-        f"choices[{index}].stop_reason must be a signed 64-bit integer or a string "
-        f"of 1 to {MAX_STOP_REASON_BYTES} UTF-8 bytes"
+        f"choices[{index}].stop_reason must be a signed 64-bit integer or a non-empty string"
     ]
 
 

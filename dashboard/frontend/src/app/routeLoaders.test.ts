@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   lazyRoutePage,
   loadDashboardPage,
+  loadDecisionModelPage,
   preloadDashboardRoute,
   resetDashboardRouteLoader,
 } from './routeLoaders'
@@ -20,8 +21,26 @@ describe('lazy route pages', () => {
 })
 
 describe('route preloading', () => {
+  it('can fetch the requested static route before authentication without requesting protected data', async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    try {
+      resetDashboardRouteLoader(loadDecisionModelPage)
+      await preloadDashboardRoute('/decision-model')
+      expect(fetcher).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
   it('ignores paths outside the dashboard route registry', () => {
-    expect(preloadDashboardRoute('/not-a-dashboard-route')).toBeUndefined()
+    for (const path of [
+      '/not-a-dashboard-route',
+      '/knowledge-bases/bases',
+      '/knowledge-bases/privacy_kb/map',
+      '/taxonomy',
+    ]) {
+      expect(preloadDashboardRoute(path)).toBeUndefined()
+    }
   })
 
   it('deduplicates repeated route preload requests', () => {

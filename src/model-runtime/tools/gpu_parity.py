@@ -28,24 +28,24 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.autotune import KernelChoices  # noqa: E402
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.families.decision2.family import Decision2Family  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.accel.autotune import KernelChoices  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_srun.families.decision2.family import Decision2Family  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     EngineOptions,
     Job,
     PackageRef,
     RegistryOptions,
 )
-from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
-from vllm_sr_runtime.profiles.shared_context import (  # noqa: E402
+from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
+from vllm_srun.profiles.shared_context import (  # noqa: E402
     SharedContextProfile,
     SharePolicy,
 )
-from vllm_sr_runtime.registry import builtin  # noqa: E402
+from vllm_srun.registry import builtin  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}

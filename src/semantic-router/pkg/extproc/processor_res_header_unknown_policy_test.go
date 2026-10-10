@@ -6,6 +6,9 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -24,7 +27,9 @@ func TestAppliedUnknownPolicyHeaderSortsPairs(t *testing.T) {
 	}
 }
 
-func TestRespondDecisionUnresolvedExposesPolicyAndFix(t *testing.T) {
+func TestRespondDecisionUnresolvedExposesPolicyAndLogsFix(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{RequestID: "unresolved", VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
 		AppliedUnknownPolicies: map[string]string{"guarded": "fail_request"},
@@ -36,11 +41,15 @@ func TestRespondDecisionUnresolvedExposesPolicyAndFix(t *testing.T) {
 	if immediate == nil {
 		t.Fatal("expected an immediate response")
 	}
-	if body := string(immediate.GetBody()); !strings.Contains(body, "rules.on_unknown") {
-		t.Fatalf("body = %q, want fix hint", body)
+	if body := string(immediate.GetBody()); !strings.Contains(body, `"code":"decision_unresolved"`) || strings.Contains(body, "guarded") {
+		t.Fatalf("body = %q, want the reason code without the decision", body)
 	}
 	if got := immediateHeaderValue(resp, headers.VSRAppliedUnknownPolicy); got != "guarded=fail_request" {
 		t.Fatalf("policy header = %q", got)
+	}
+	logged := logs.FilterField(zap.String("request_id", "unresolved")).FilterMessage("decision_unresolved").All()
+	if len(logged) != 1 || !strings.Contains(logged[0].ContextMap()["error"].(string), "rules.on_unknown") {
+		t.Fatalf("the log does not name the fix: %v", logged)
 	}
 }
 

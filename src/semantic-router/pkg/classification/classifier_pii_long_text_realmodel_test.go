@@ -11,7 +11,7 @@ import (
 
 func setupRealPIIClassifier(t *testing.T) *Classifier {
 	t.Helper()
-	defaults := config.DefaultGlobalConfig()
+	defaults := vela1SpecialistsConfig()
 	modelPath := requireRealModel(t, "VLLM_SR_PII_MODEL", defaults.PIIModel.ModelID)
 	mappingPath := filepath.Join(modelPath, "pii_mapping.json")
 	mapping, err := LoadPIIMapping(mappingPath)

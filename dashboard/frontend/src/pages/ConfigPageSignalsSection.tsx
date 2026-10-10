@@ -1,3 +1,11 @@
+import { useDecisionTasks, type DecisionTasks } from './useDecisionTasks'
+import {
+  signalAvailability,
+  signalCapabilitySchema,
+  decisionQuestionTypes,
+  signalBindings,
+  type SignalCapabilityScope,
+} from './signalCapabilities'
 import React from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -123,10 +131,26 @@ function buildLegacySignals(config: ConfigData | null): ConfigSignals | undefine
 function SignalDefinitionEditor({
   value,
   onChange,
+  scope,
+  name,
+  capabilityRef,
 }: {
   value: SignalDefinition
   onChange: (value: SignalDefinition) => void
+  scope: SignalCapabilityScope
+  name: string
+  capabilityRef: React.MutableRefObject<DecisionTasks | null>
 }) {
+  const { data, error, refresh } = useDecisionTasks()
+  capabilityRef.current = data
+  const availability = signalAvailability(data, scope, value.type, name, value.fields)
+  const schema =
+    value.type === 'decision'
+      ? signalCapabilitySchema(
+          getSignalFieldSchema(value.type),
+          decisionQuestionTypes(data, scope, value.fields),
+        )
+      : getSignalFieldSchema(value.type)
   return (
     <div className={signalStyles.definitionEditor}>
       <label className={signalStyles.definitionType}>
@@ -137,15 +161,34 @@ function SignalDefinitionEditor({
             onChange({ type: event.target.value as CanonicalSignalType, fields: {} })
           }
         >
-          {SIGNAL_CATALOG.map((candidate) => (
-            <option key={candidate.type} value={candidate.type}>
-              {candidate.label}
-            </option>
-          ))}
+          {SIGNAL_CATALOG.map((candidate) => {
+            const status = signalAvailability(data, scope, candidate.type, name)
+            return (
+              <option
+                key={candidate.type}
+                value={candidate.type}
+                disabled={!status.supported}
+                title={status.reason}
+              >
+                {candidate.label}
+                {status.supported ? '' : ' · unavailable'}
+              </option>
+            )
+          })}
         </select>
       </label>
+      {(error || availability.reason) && (
+        <p role="status">
+          {error || availability.reason}{' '}
+          {error && (
+            <button type="button" onClick={refresh}>
+              Retry
+            </button>
+          )}
+        </p>
+      )}
       <ConfigPageSchemaFieldsEditor
-        schema={getSignalFieldSchema(value.type)}
+        schema={schema}
         value={value.fields}
         onChange={(fields) => onChange({ ...value, fields })}
       />
@@ -230,7 +273,16 @@ export default function ConfigPageSignalsSection({
     { key: 'summary', header: 'Summary', render: (signal) => signal.summary },
   ]
 
+  const capabilityRef = React.useRef<DecisionTasks | null>(null)
+
   const openSignalEditor = (mode: 'add' | 'edit', signal?: ManagedSignal) => {
+    capabilityRef.current = null
+    const scope: SignalCapabilityScope = {
+      recipe: selectedScope?.isDefault ? 'default' : selectedScope?.id || 'default',
+      bindings: signalBindings(selectedScope?.routing.model_bindings),
+      globalBindings: config?.global?.model_catalog?.bindings,
+      defaultDeployment: config?.global?.model_catalog?.system?.decision_model?.deployment,
+    }
     const initialData: SignalFormState = {
       name: signal?.name || '',
       definition: {
@@ -255,10 +307,13 @@ export default function ConfigPageSignalsSection({
         type: 'custom',
         required: true,
         description: 'Fields are driven by the same canonical signal schema used by Builder.',
-        customRender: (value, onChange) => (
+        customRender: (value, onChange, form) => (
           <SignalDefinitionEditor
             value={(value as SignalDefinition | undefined) || initialData.definition}
             onChange={(next) => onChange(next)}
+            scope={scope}
+            name={form?.name || ''}
+            capabilityRef={capabilityRef}
           />
         ),
       },
@@ -274,6 +329,14 @@ export default function ConfigPageSignalsSection({
         const name = formData.name.trim()
         if (!name) throw new Error('Name is required.')
         const definition = formData.definition
+        const availability = signalAvailability(
+          capabilityRef.current,
+          scope,
+          definition.type,
+          name,
+          definition.fields,
+        )
+        if (!availability.supported) throw new Error(availability.reason)
         const catalog = signalCatalogByType(definition.type)
         const schemaErrors = requiredSchemaFieldErrors(
           getSignalFieldSchema(definition.type),

@@ -1,12 +1,12 @@
 ---
 sidebar_position: 1
 sidebar_label: Introduction
-description: Build a programmable Mixture-of-Models system behind one stable model API.
+description: An open, programmable decision layer for models and compute.
 ---
 
 import ThemedImage from '@theme/ThemedImage';
 
-# Welcome to vLLM Semantic Router
+# Intelligence beyond any one model.
 
 <div className="docs-intro-brand">
   <ThemedImage
@@ -17,69 +17,55 @@ import ThemedImage from '@theme/ThemedImage';
       dark: '/img/vllm-sr-logo.white.png',
     }}
   />
-  <p className="docs-intro-brand__tagline">Make your Mixture-of-Models programmable.</p>
+  <p className="docs-intro-brand__tagline">An open, programmable <strong>decision layer</strong> for models and compute.</p>
 </div>
 
-vLLM Semantic Router is an open-source routing and control layer for building
-Mixture-of-Models systems across heterogeneous AI infrastructure. Applications
-call a stable OpenAI- or Anthropic-compatible endpoint while the serving layer
-chooses—or composes—the capability path for each request.
+Give your agent harness a stable model API. vLLM Semantic Router selects or
+combines models through explicit policy, behind an OpenAI- or Anthropic-compatible
+endpoint. Change the models and policy without rewriting the harness integration.
 
-## The problem: an AI request is more than traffic
+Applications can also call [System One](model-runtime/quickstart) directly for
+typed judgments. Router and Engine modes share a frontend and model runtime;
+recipes add the optional routing layer. See the [component architecture](overview/component-architecture)
+for the module boundaries and replica pools.
 
-Modern AI applications rarely rely on one interchangeable model. A request may
-need a fast local model, a specialist or frontier model, retrieval, memory,
-tools, a verifier, or several models working together. Those paths may span
-the cloud, a data center, or the edge.
+## Why route?
 
-Each path carries different tradeoffs in capability, latency, cost, and trust.
-The right choice can also change with the request, user, session, and available
-infrastructure.
+One call needs a fast local model; another needs a specialist, longer context,
+or verification across models. Capability, latency, cost, and trust vary with the
+request, user, session, and available infrastructure. Shared routing policy keeps
+these choices out of each harness's code.
 
-When every application hard-codes these choices, product code becomes coupled
-to the current model fleet. The same routing logic is repeated across clients,
-and it becomes difficult to change, explain, or evaluate as the system grows.
+## What you can program
 
-## The idea: make intelligence programmable
+An entrypoint selects an isolated recipe. Its signals capture intent, difficulty,
+context, modality, identity, risk, preference, and configured runtime observations.
+Use those signals to:
 
-Semantic Router moves that decision into a shared layer in the request path. It
-can observe the work in front of it—intent, difficulty, context, modality,
-identity, risk, preference, and system state—then resolve a stable entrypoint
-to an isolated recipe.
+- **Select or combine models:** choose a local model or specialist, escalate
+  through a cascade, or run a bounded multi-model workflow.
+- **Add route behavior:** prompts, retrieval, memory, tool filtering, caching,
+  safety checks, and verification.
+- **Choose an execution path:** configured cloud, data-center, or edge backends
+  across heterogeneous hardware.
+- **Inspect and improve decisions:** routing metadata, feedback, replay, and
+  evaluation.
 
-A recipe can choose one model, escalate through a cascade, coordinate a bounded
-multi-model workflow, or attach behavior such as retrieval, memory, tool
-filtering, caching, safety checks, and verification. The application keeps one
-familiar API while the capability path can evolve behind it.
+The harness owns the agent loop, tool execution, and task state. The Router owns
+per-call policy and bounded model collaboration. The standalone frontend carries
+requests by default; Envoy is an optional transport integration. The model runtime
+executes judgment and feature-extraction tasks, while external inference platforms
+run the Chat backends and manage their placement, batching, and capacity.
 
-The result is more than a model name:
+## Start here
 
-- **The right model path:** direct, specialist, local, cascade, or collaborative.
-- **The right supporting capabilities:** retrieval, memory, tools, prompts,
-  caching, or verification where the request needs them.
-- **The right execution boundary:** configured cloud, data center, or edge
-  backends across heterogeneous hardware.
-- **Evidence for what happened:** routing metadata plus configured feedback,
-  replay, and evaluation workflows.
-
-vLLM Semantic Router does not replace the gateway or the model servers. Envoy
-continues to carry traffic, and inference runtimes continue to generate
-responses. The Router coordinates the semantic work between them.
-
-## Start with what you want to do
-
-- **Run it locally:** follow the [Quickstart](/docs/installation) and send a
-  request through the Router.
-- **Find the pattern for your workload:** explore [use cases](overview/use-cases)
-  from cloud and data center to edge and enterprise deployments.
-- **Understand the system:** read the [System
-  Overview](overview/semantic-router-overview) and [Routing
-  Pipeline](overview/signal-driven-decisions).
-- **Create a stable model experience:** learn how [entrypoints and
-  recipes](tutorials/global/entrypoints-and-recipes) turn one shared model pool
-  into purpose-built virtual models.
-- **Choose an environment:** compare [Docker, Kubernetes, and hardware
-  paths](installation/deployment-options).
+- [Run the Quickstart](/docs/installation).
+- [Connect an agent harness](installation/agent-harness).
+- Explore [use cases](overview/use-cases).
+- Read the [System Overview](overview/semantic-router-overview) and
+  [Routing Pipeline](overview/signal-driven-decisions).
+- Build virtual models with [entrypoints and recipes](tutorials/global/entrypoints-and-recipes).
+- Compare [deployment options](installation/deployment-options).
 
 ## Project
 

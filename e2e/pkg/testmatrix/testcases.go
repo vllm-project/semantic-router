@@ -51,6 +51,9 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// Unknown names fail even with a global default (issue #4653). The
+	// routing-errors profile covers no_route without that fallback configured.
+	"unknown-model-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
@@ -78,6 +81,8 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2794: OpenAPI rendered from the route registration.
+	"dashboard-openapi",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints
@@ -128,6 +133,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
 	"protocol-codec-anthropic-backend-agent-client-replay",
+	// An empty POST fails closed at the Router before any dispatch (issue #4292)
+	"public-listener-empty-body-rejected",
 }
 
 // Combine preserves order while removing duplicate testcase names.

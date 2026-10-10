@@ -3,8 +3,8 @@
 #
 # - managed: the Router starts runtime processes itself, the cpu device
 #   group (domain, PII, guard and modality classifiers, an embedder on device
-#   auto and a reranker) and the "decisions" process group (a Decision 2.0
-#   model), through VLLM_SR_RUNTIME_COMMAND;
+#   auto and a reranker), each in its own worker, plus a Decision 2.0
+#   model), through VLLM_SRUN_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
 #   classifier in one process, selected by served_name;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -123,6 +123,35 @@ config:
             instructions: Is this request about software?
           predicate:
             gte: 0
+        # testcases/decision_runtime_set_span.go asks the attached Vela 2.0
+        # fixture these questions. A zero threshold makes every label count,
+        # so the random weights still select labels and mark spans.
+        - name: topics
+          description: Which support topics the request mentions.
+          deployment: attached-vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: Payments, invoices or refunds
+              - key: shipping
+                description: Deliveries, parcels or returns
+            threshold: 0
+          timeout_ms: 10000
+        - name: names
+          description: Where the request names a city or a person.
+          deployment: attached-vela2
+          question:
+            type: span
+            instructions: Which spans name a city or a person?
+            labels:
+              - key: city
+                description: A city name
+              - key: person
+                description: A person's name
+            threshold: 0
+          timeout_ms: 10000
     model_bindings:
       classifier.user_reaction:
         deployment: attached-feedback
@@ -225,6 +254,10 @@ config:
             - {type: decision, name: request_kind, label: code}
             - {type: decision, name: request_kind, label: math}
             - {type: decision, name: request_kind, label: chat}
+            - {type: decision, name: topics, label: billing}
+            - {type: decision, name: topics, label: shipping}
+            - {type: decision, name: names, label: city}
+            - {type: decision, name: names, label: person}
             # A BOTH condition needs an AR and a diffusion model; the BOTH rule
             # still reports a BOTH answer.
             - {type: modality, name: AR}
@@ -254,12 +287,11 @@ config:
             target_layer: 0
             target_dimension: 0
       deployments:
-        # Managed: the "decisions" process group.
+        # Managed: one independent decision-model worker.
         decision-fixture:
           provider: model_runtime
           artifact: /tmp/vsr-fixtures/decision
           device: cpu
-          process: decisions
         # Managed: the cpu device group.
         vela-domain:
           provider: model_runtime
@@ -317,6 +349,10 @@ config:
           input:
             max_tokens: 512
             overflow: truncate
+        attached-vela2:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          served_name: vela2-a
         decision-offline:
           provider: model_runtime
           endpoint: http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100
@@ -370,9 +406,9 @@ config:
         embeddings: {enabled: true}
 
 extraEnv:
-  - name: VLLM_SR_RUNTIME_COMMAND
+  - name: VLLM_SRUN_COMMAND
     value: python3 /opt/vsr-e2e/runtime_with_fixtures.py
-  - name: VLLM_SR_RUNTIME_DIR
+  - name: VLLM_SRUN_DIR
     value: /tmp/vsr-runtime
   - name: HF_HUB_OFFLINE
     value: "1"

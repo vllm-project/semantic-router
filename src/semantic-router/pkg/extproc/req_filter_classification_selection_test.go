@@ -165,7 +165,7 @@ func TestSelectionEvidenceReasoningReachesRouteDiagnostics(t *testing.T) {
 	if err != nil || selected == nil || selected.Model != "model-b" {
 		t.Fatalf("selection = %#v, %v", selected, err)
 	}
-	diagnostics := buildReplayRouteDiagnostics(requestContext, "auto", selected.Model, "test", 0, 0)
+	diagnostics := buildReplayRouteDiagnostics(requestContext, "vllm-sr/auto", selected.Model, "test", 0, 0)
 	if diagnostics.SelectionReasoning != reasoning {
 		t.Fatalf("selection reasoning = %q", diagnostics.SelectionReasoning)
 	}

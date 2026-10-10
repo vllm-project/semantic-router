@@ -91,7 +91,7 @@ decisions:
         query: Give a formal proof that sqrt(2) cannot be expressed as a ratio of integers.
         tags: [paraphrase, proof]
       - id: infinite_primes
-        query: Prove by contradiction that there are infinitely many prime numbers.
+        query: Prove that there are infinitely many prime numbers by assuming a largest prime exists.
         tags: [robustness, proof]
       - id: odd_integer_sum_proof
         query: Prove that the sum of the first n odd positive integers is n squared.
@@ -404,8 +404,8 @@ decisions:
     objective: Inputs outside every classified context and specialist band reach the absolute fallback.
     variants:
       - id: long_unclassified_fallback
-        query: zxqv nplm ordinary neutral placeholder
-        repeat: 3000
+        query: ordinary neutral placeholder text
+        repeat: 5400
         expected_signals:
           context: [long_context]
         tags: [fallback, boundary, stress:long-input, negative]

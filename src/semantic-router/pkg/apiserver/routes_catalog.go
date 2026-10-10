@@ -446,7 +446,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 			errorResponses(500),
 			mediaResponse(http.StatusOK, "Canonical configuration document; field schemas are available at /api/v1/config/schema?view=full", "application/json", OpenAPISchema{Type: "object", AdditionalProperties: true}),
-			etagResponseHeaders(http.StatusOK),
+			activeConfigResponseHeaders(http.StatusOK),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config without writing it"},

@@ -72,6 +72,9 @@ var benchClassifier *signalClassifier
 func initClassifier(b *testing.B) {
 	b.Helper()
 	classifierOnce.Do(func() {
+		// benchmarkModel stops this benchmark (b.Fatalf) inside Do, and Do still
+		// counts as done, so later benchmarks fail on this error unless setup ends.
+		classifierErr = errors.New("an earlier benchmark stopped while preparing them")
 		ctx := context.Background()
 		classifier := &signalClassifier{}
 		var err error
@@ -85,6 +88,7 @@ func initClassifier(b *testing.B) {
 			return
 		}
 		benchClassifier = classifier
+		classifierErr = nil
 	})
 	if classifierErr != nil {
 		b.Fatalf("prepare the Vela signal classifiers: %v", classifierErr)

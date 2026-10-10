@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from vllm_sr_runtime.plugins.base import Batch, Job, LoadedModel, Profile
-from vllm_sr_runtime.scheduler.planner import exact_split
+from vllm_srun.plugins.base import Batch, Job, LoadedModel, Profile
+from vllm_srun.scheduler.planner import exact_split
 
 
 class OneByOneProfile(Profile):
