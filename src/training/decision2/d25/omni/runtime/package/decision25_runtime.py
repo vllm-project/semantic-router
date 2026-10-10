@@ -771,9 +771,8 @@ class Decision25:
         else:
             try:
                 self.processor = load_processor(self.root)
-            except (
-                Exception
-            ) as exc:  # noqa: BLE001 - text requests do not use the processor
+            except Exception as exc:  # noqa: BLE001
+                # Text requests do not use the processor; image requests report why it is missing.
                 self.image_unavailable = (
                     f"the image processor failed to load ({type(exc).__name__}: {exc})"
                 )
