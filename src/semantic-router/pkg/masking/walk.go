@@ -170,16 +170,15 @@ func maskToolResult(
 	return nil
 }
 
-// isStructuredJSONPayload reports whether text is a JSON object or array that
-// decoding represents faithfully. Anything else is ordinary text and belongs
-// on the text path, where the whole string is scanned. Bare scalars stay on
-// the text path too, so a plain result is never reserialised.
+// isStructuredJSONPayload reports whether text is one complete JSON object or
+// array. Those are masked as decoded JSON, which fails closed on a repeated
+// member, since the text path never decodes escapes. Anything else is text.
 func isStructuredJSONPayload(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
 		return false
 	}
-	return validateJSONDocument(trimmed) == nil
+	return json.Valid([]byte(trimmed))
 }
 
 // jsonFrame tracks one open object or array while walking tokens. Only object

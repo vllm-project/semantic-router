@@ -69,12 +69,9 @@ The masking walk touches message content, system/developer instructions, tool-ca
 
 Tool payloads are masked according to their kind. A function call's JSON arguments and a structured tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
 
-A tool result counts as structured only when decoding represents it faithfully: exactly one JSON object or array, nothing after it, and no object repeating a member name. Two payloads fall outside that and are masked as text instead, which scans the whole string:
+A tool result counts as structured when it is exactly one JSON object or array with nothing after it. Mixed text such as `{"note":"safe"} alice@example.com` is masked as text instead, which scans the whole string.
 
-- `{"note":"safe"} alice@example.com` — mixed text. Decoding would read only the leading value and leave the remainder unscanned.
-- `{"value":"alice@example.com","value":"safe"}` — a repeated member name. Decoding keeps only the last one, so the earlier value would never be scanned yet would still be forwarded.
-
-Function-call arguments must be a single JSON object, so either shape fails closed there rather than being re-serialised with content dropped.
+A structured payload, like function-call arguments, fails closed when an object repeats a member name, for example `{"value":"alice@example.com","value":"safe"}`. Decoding keeps only the last one, and the text path never decodes escapes, so neither path could mask it faithfully.
 
 Specifically left alone:
 

@@ -752,47 +752,27 @@ func toolResultRequest(text string) *llmprotocol.Request {
 	}
 }
 
-// Decoding keeps only the last of a repeated member name, so the earlier value
-// is never scanned. Such a payload is masked as text instead.
-func TestApply_ToolResultDuplicateMemberIsMasked(t *testing.T) {
-	request := toolResultRequest(`{"value":"alice@example.com","value":"safe"}`)
-
-	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Changed {
-		t.Fatal("result reported no change, so the shadowed member was never scanned")
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"value":"[EMAIL_ADDRESS_0]","value":"safe"}`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
-// The surviving member is masked without dropping the shadowed one.
-func TestApply_ToolResultDuplicateMemberKeepsBothMembers(t *testing.T) {
-	request := toolResultRequest(`{"value":"safe","value":"alice@example.com"}`)
-
-	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"value":"safe","value":"[EMAIL_ADDRESS_0]"}`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
-// A duplicate nested below the root hides a value just as effectively.
-func TestApply_ToolResultNestedDuplicateMemberIsMasked(t *testing.T) {
-	request := toolResultRequest(`{"outer":{"value":"alice@example.com","value":"safe"}}`)
-
-	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"outer":{"value":"[EMAIL_ADDRESS_0]","value":"safe"}}`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
+// Decoding keeps only the last of a repeated member name, and the text path
+// never decodes escapes, so a tool result repeating a member fails closed.
+func TestApply_ToolResultDuplicateMemberFailsClosed(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+	}{
+		{"shadowed first member", `{"value":"alice@example.com","value":"safe"}`},
+		{"escaped last member", `{"value":"safe","value":"ali\u0063e@example.com"}`},
+		{"nested duplicate", `{"outer":{"value":"alice@example.com","value":"safe"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := toolResultRequest(tc.input)
+			_, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+			if err == nil {
+				t.Fatal("a tool result with a duplicate member was accepted")
+			}
+			if !strings.Contains(err.Error(), `duplicate member "value"`) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
