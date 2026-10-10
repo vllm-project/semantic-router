@@ -19,7 +19,9 @@ import {
 # Quickstart
 
 Install vLLM Semantic Router, connect one model, and send your first routed
-request.
+request. To serve typed decision questions without a Chat backend, follow the
+[System One quickstart](../model-runtime/quickstart.md) instead. Both paths use
+the same [frontend and model runtime](../overview/component-architecture).
 
 `vllm-sr serve` runs a local stack in Docker: the Router, which serves an
 OpenAI-compatible API on port 8899 itself (standalone mode, the default), the
@@ -33,7 +35,9 @@ in the Dashboard.
 These pages follow `main`. Standalone mode and the built-in model runtime came
 after `vllm-sr` 0.4.0, the current stable release, which puts Envoy in front
 of the Router and has no `--gateway` option. To follow these pages today,
-install the development channel: pass `--channel dev` to the curl installer.
+use the development channel. The installation tabs below select it: the curl
+installer uses `--channel dev`, and pip/uv allow prereleases. Stable-release
+upgrade instructions are separate from this `main` quickstart.
 :::
 
 ## Requirements
@@ -52,7 +56,7 @@ For the curl installer, pass `--runtime podman` to force Podman or
 `--runtime skip` to skip container-runtime preparation. For example:
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --runtime skip
 ```
 
 These are installer options. `vllm-sr serve --container-runtime` selects a

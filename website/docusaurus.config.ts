@@ -68,14 +68,15 @@ const config: Config = {
         // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
         // native module that ships prebuilt binaries.
         language: ['en', 'zh'],
-        // v1 scope: index the current docs version only, per the decision on #2737.
+        // v1 scope: index the default docs version only (v0.4, the stable
+        // release), per the decision on #2737.
         // To make archived versions searchable later, drop this and add
-        // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // searchContextByPaths: ['docs', 'docs/next', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
         // so results stay scoped to the version the reader is on.
         // NOTE: ignoreFiles matches the route *without* a leading slash (the
         // plugin strips baseUrl, which is "/" here, off the front) and without
         // the base URL itself, so the pattern must not anchor on "/".
-        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        ignoreFiles: [/^docs\/(v\d+\.\d+|next)\//],
         // styling is handled in a later phase
       },
     ],
@@ -89,10 +90,15 @@ const config: Config = {
           beforeDefaultRemarkPlugins: [[remarkMath, {}]],
           beforeDefaultRehypePlugins: [[rehypeKatex, {}]],
           sidebarPath: './sidebars.ts',
-          lastVersion: 'current',
+          lastVersion: 'v0.4',
           versions: {
             'current': {
-              label: 'Latest',
+              label: 'Latest (unreleased)',
+              path: 'next',
+              badge: true,
+            },
+            'v0.4': {
+              label: 'v0.4',
               path: '',
               badge: true,
             },
@@ -160,41 +166,45 @@ const config: Config = {
             from: '/blog/introduce-vela',
             to: '/blog/vela-models',
           },
+          // The model-runtime section exists only in the unreleased (next)
+          // docs, and several of these source paths are live v0.4 pages at
+          // the root, so these redirects are scoped to /docs/next instead of
+          // shadowing the stable pages or pointing at a missing root target.
           {
             from: [
-              '/docs/installation/native-backends',
-              '/docs/installation/runtime/engines-and-hardware',
+              '/docs/next/installation/native-backends',
+              '/docs/next/installation/runtime/engines-and-hardware',
             ],
-            to: '/docs/model-runtime/overview',
-          },
-          {
-            from: [
-              '/docs/installation/runtime/in-process',
-              '/docs/installation/runtime/models-and-bindings',
-            ],
-            to: '/docs/model-runtime/deploy',
-          },
-          {
-            from: '/docs/installation/runtime/openvino',
-            to: '/docs/model-runtime/migrate',
+            to: '/docs/next/model-runtime/overview',
           },
           {
             from: [
-              '/docs/installation/runtime/safety',
-              '/docs/tutorials/global/safety-models-and-policy',
+              '/docs/next/installation/runtime/in-process',
+              '/docs/next/installation/runtime/models-and-bindings',
             ],
-            to: '/docs/model-runtime/guides/safety',
+            to: '/docs/next/model-runtime/deploy',
+          },
+          {
+            from: '/docs/next/installation/runtime/openvino',
+            to: '/docs/next/model-runtime/migrate',
           },
           {
             from: [
-              '/docs/installation/runtime/embeddings',
-              '/docs/tutorials/global/remote-embeddings',
+              '/docs/next/installation/runtime/safety',
+              '/docs/next/tutorials/global/safety-models-and-policy',
             ],
-            to: '/docs/model-runtime/guides/embeddings',
+            to: '/docs/next/model-runtime/guides/safety',
           },
           {
-            from: '/docs/installation/runtime/lifecycle-diagnostics',
-            to: '/docs/model-runtime/troubleshooting',
+            from: [
+              '/docs/next/installation/runtime/embeddings',
+              '/docs/next/tutorials/global/remote-embeddings',
+            ],
+            to: '/docs/next/model-runtime/guides/embeddings',
+          },
+          {
+            from: '/docs/next/installation/runtime/lifecycle-diagnostics',
+            to: '/docs/next/model-runtime/troubleshooting',
           },
           {
             from: '/docs/installation/kubernetes',
@@ -403,6 +413,10 @@ const config: Config = {
             {
               label: 'Leaderboard',
               to: '/community/contributors',
+            },
+            {
+              label: 'Ecosystem & Partnerships',
+              to: '/community/ecosystem',
             },
           ],
         },

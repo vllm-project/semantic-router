@@ -365,7 +365,7 @@ An HTTP `200` response header alone does not make a streaming record
 
 | Task | Surface |
 | --- | --- |
-| Send model traffic | Configured Envoy listener; `8899` in the standard local stack |
+| Send model traffic | Standalone frontend, or Envoy with `--gateway extproc`; `8899` in the standard local stack |
 | List public models | `GET /v1/models` on the inference listener |
 | Check health or readiness | Management API on `8080` |
 | Read or change configuration | Management API on `8080` |
