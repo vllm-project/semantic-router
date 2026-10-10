@@ -70,6 +70,80 @@ func TestZeroTokenEndIsNoop(t *testing.T) {
 	End("m1", tok)
 }
 
+func TestDuplicateEndDoesNotRemoveNewRequestAfterStateIsDeleted(t *testing.T) {
+	Reset()
+	oldToken := Begin("m1")
+	End("m1", oldToken)
+
+	newToken := Begin("m1")
+	if newToken == oldToken {
+		t.Fatalf("Begin reused token %d after the previous model state was deleted", oldToken)
+	}
+	End("m1", oldToken)
+	if got := Get("m1"); got != 1 {
+		t.Errorf("duplicate End removed a newer request: count = %d, want 1", got)
+	}
+	End("m1", newToken)
+}
+
+func TestLateEndAfterEvictionDoesNotRemoveNewRequest(t *testing.T) {
+	Reset()
+	SetMaxAge(5 * time.Millisecond)
+	oldToken := Begin("m1")
+	time.Sleep(20 * time.Millisecond)
+	if got := Get("m1"); got != 0 {
+		t.Fatalf("expired request count = %d, want 0", got)
+	}
+
+	newToken := Begin("m1")
+	if newToken == oldToken {
+		t.Fatalf("Begin reused token %d after the previous request was evicted", oldToken)
+	}
+	End("m1", oldToken)
+	if got := Get("m1"); got != 1 {
+		t.Errorf("late End removed a newer request: count = %d, want 1", got)
+	}
+	End("m1", newToken)
+}
+
+func TestBeginPanicsBeforeReusingTokenAfterExhaustion(t *testing.T) {
+	Reset()
+	const maxTokenID = ^uint64(0)
+	mu.Lock()
+	previousTokenID := nextTokenID
+	nextTokenID = maxTokenID - 1
+	mu.Unlock()
+	t.Cleanup(func() {
+		mu.Lock()
+		nextTokenID = previousTokenID
+		mu.Unlock()
+	})
+
+	lastToken := Begin("m1")
+	if lastToken != maxTokenID {
+		t.Fatalf("last available token = %d, want %d", lastToken, maxTokenID)
+	}
+	End("m1", lastToken)
+
+	var returnedToken uint64
+	var panicValue any
+	func() {
+		defer func() {
+			panicValue = recover()
+		}()
+		returnedToken = Begin("m1")
+	}()
+	if panicValue == nil {
+		t.Errorf("Begin returned token %d after token space exhaustion; want panic", returnedToken)
+	}
+	mu.RLock()
+	_, stateExists := states["m1"]
+	mu.RUnlock()
+	if stateExists {
+		t.Error("Begin created model state after token space exhaustion")
+	}
+}
+
 func TestSelfHealingViaMaxAge(t *testing.T) {
 	Reset()
 	SetMaxAge(50 * time.Millisecond)

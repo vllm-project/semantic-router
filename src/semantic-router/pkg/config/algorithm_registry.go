@@ -40,6 +40,7 @@ func NewDecisionAlgorithmType[P any](catalog AlgorithmCatalogEntry, opts Algorit
 // retiredAlgorithmTypes are types the Router refuses with a pointer to what
 // replaced them, so no Router build may register them again.
 var retiredAlgorithmTypes = []string{
+	"policy",
 	"session_aware", "elo", "rl_driven", "gmtrouter", "bandit", "personalization", "thompson", "router_r1",
 }
 
