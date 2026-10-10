@@ -205,6 +205,21 @@ class KVMapperConnector(KVConnectorBase_V1):
                 logger.warning("Source snapshot disabled: %s", exc)
             return
 
+        if (
+            self._consumer
+            and getattr(
+                getattr(vllm_config, "cache_config", None),
+                "enable_prefix_caching",
+                True,
+            )
+            is not False
+        ):
+            logger.warning(
+                "Mapper cache reuse requires consumer prefix caching to be "
+                "disabled; set --no-enable-prefix-caching"
+            )
+            return
+
         artifact_path = extra.get("artifact_path")
         if getattr(vllm_config, "use_v2_model_runner", False):
             logger.warning(

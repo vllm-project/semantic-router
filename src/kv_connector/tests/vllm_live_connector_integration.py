@@ -101,7 +101,9 @@ class LiveConnectorTests(unittest.TestCase):
                         ),
                     ),
                     parallel_config=SimpleNamespace(tensor_parallel_size=1),
-                    cache_config=SimpleNamespace(block_size=2),
+                    cache_config=SimpleNamespace(
+                        block_size=2, enable_prefix_caching=False
+                    ),
                 )
 
             hint = {
@@ -112,6 +114,7 @@ class LiveConnectorTests(unittest.TestCase):
             source_config = config(
                 "source", source_rev, "kv_producer", {"snapshot_root": str(snapshots)}
             )
+            source_config.cache_config.enable_prefix_caching = True
             source = KVMapperConnector(source_config, KVConnectorRole.SCHEDULER, None)
             source_worker = KVMapperConnector(
                 source_config, KVConnectorRole.WORKER, None
@@ -172,6 +175,29 @@ class LiveConnectorTests(unittest.TestCase):
                 lora_request=None,
             )
             self.assertEqual(target.get_num_new_matched_tokens(request, 0), (4, False))
+
+            for cache_config in (
+                SimpleNamespace(block_size=2, enable_prefix_caching=True),
+                SimpleNamespace(block_size=2),
+                None,
+            ):
+                with self.subTest(cache_config=cache_config):
+                    unsafe_config = SimpleNamespace(
+                        **{**target_config.__dict__, "cache_config": cache_config}
+                    )
+                    for role in (KVConnectorRole.SCHEDULER, KVConnectorRole.WORKER):
+                        unsafe = KVMapperConnector(unsafe_config, role, None)
+                        self.assertIsNone(unsafe.artifact)
+                        self.assertEqual(
+                            unsafe.get_num_new_matched_tokens(request, 0), (0, False)
+                        )
+                        unsafe.update_state_after_alloc(request, None, 0)
+                        self.assertEqual(
+                            unsafe.build_connector_meta(
+                                SimpleNamespace(scheduled_new_reqs=[])
+                            ).loads,
+                            [],
+                        )
             wrong_theta_config = config(
                 "target",
                 target_rev,

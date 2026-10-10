@@ -84,6 +84,7 @@ class VllmConnectorTests(unittest.TestCase):
                     ),
                 ),
                 parallel_config=SimpleNamespace(tensor_parallel_size=1),
+                cache_config=SimpleNamespace(enable_prefix_caching=False),
             )
             cls = KVConnectorFactory.get_connector_class(transfer)
             config.use_v2_model_runner = True
