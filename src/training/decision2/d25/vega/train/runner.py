@@ -22,6 +22,11 @@ init_kind, attention_mode, lr, readout_lr, warmup_ratio, schedule, min_lr_ratio,
 rows_per_update, max_length, teacher, teacher_weight, brier_weight, export_fractions,
 evals {"intermediate": [...], "final": [...]}, wait_for, wait_timeout_h, prepare
 [{"run": cmd, "creates": path}], save_every, keep_dcp, token_budget, trainer_args, max_attempts.
+
+``"defer": "skip"`` (arms and tools): while the item's inputs are missing (train candidates not
+ready, ``wait_for`` paths absent) later pending items run first; without it an item waits in place
+(up to ``wait_timeout_h``) and blocks the queue. Tool items (``"kind": "tool"``, ``"steps": [{"run":
+cmd, "timeout_h": h}]``) also honour ``wait_for``.
 """
 
 from __future__ import annotations
@@ -145,17 +150,42 @@ class Runner:
             time.sleep(60)
 
     # -- queue ---------------------------------------------------------------------------------
+    def spec_ready(self, spec: dict) -> bool:
+        """Whether an item could start now: ``wait_for`` paths exist and (arms) a train candidate is ready."""
+        if not all(Path(p).exists() for p in spec.get("wait_for") or []):
+            return False
+        if spec.get("kind") == "tool" or not spec.get("train"):
+            return True
+        candidates = (
+            spec["train"] if isinstance(spec["train"], list) else [spec["train"]]
+        )
+        return any(self.ready(c) for c in candidates)
+
     def next_item(self) -> Path | None:
+        """The running item, else the first pending one; ``"defer": "skip"`` items wait without blocking."""
         running = sorted(self.queue.glob("running/*.json"))
         if running:
             return running[0]
+        deferred = []
         for path in sorted(self.queue.glob("pending/*.json")):
+            try:
+                spec = json.loads(path.read_text())
+            except Exception:  # noqa: BLE001 - run_item fails unreadable specs
+                spec = {}
+            if spec.get("defer") == "skip" and not self.spec_ready(spec):
+                deferred.append(path.name)
+                continue
             target = self.queue / "running" / path.name
             try:
                 os.rename(path, target)
             except FileNotFoundError:
                 continue
             return target
+        if deferred != getattr(self, "_deferred", None):
+            self._deferred = deferred
+            if deferred:
+                self.log(f"deferred (inputs not ready): {', '.join(deferred)}")
+        self.status["deferred"] = deferred
         return None
 
     def finish(self, item: Path, outcome: str, reason: str = "") -> None:
@@ -295,7 +325,21 @@ class Runner:
             self.log(f"upgrade check failed: {exc}")
 
     def run_tool(self, spec: dict, state_dir: Path) -> tuple[str, str]:
-        """``kind: tool`` items: run shell steps in order (markers make them restartable)."""
+        """``kind: tool`` items: wait for ``wait_for``, then run shell steps in order (markers make them restartable)."""
+        waits = spec.get("wait_for") or []
+        deadline = time.time() + float(spec.get("wait_timeout_h", 12)) * 3600
+        while not all(Path(p).exists() for p in waits):
+            if time.time() > deadline:
+                return (
+                    "failed",
+                    f"inputs not ready after {spec.get('wait_timeout_h', 12)} h: {waits}",
+                )
+            if STOPPING["flag"]:
+                raise SystemExit(143)
+            self.status["phase"] = (
+                f"tool waiting for {next(p for p in waits if not Path(p).exists())}"
+            )
+            time.sleep(POLL_DATA_S)
         code = self.code_dir()
         for i, step in enumerate(spec.get("steps", [])):
             marker = state_dir / f"step-{i}.done"
@@ -694,7 +738,14 @@ class Runner:
         while not STOPPING["flag"]:
             item = self.next_item()
             if item is None:
-                self.status.update(item=None, phase="idle")
+                self.status.update(
+                    item=None,
+                    phase=(
+                        "idle (deferred items wait for inputs)"
+                        if self.status.get("deferred")
+                        else "idle"
+                    ),
+                )
                 self.maybe_upgrade()
                 time.sleep(60)
                 continue

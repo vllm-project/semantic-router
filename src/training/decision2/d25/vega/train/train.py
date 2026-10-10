@@ -95,7 +95,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=0.1,
         help="Decay floor as a fraction of the peak",
     )
-    r.add_argument("--epochs", type=int, default=1)
+    r.add_argument(
+        "--epochs",
+        type=float,
+        default=1,
+        help="Passes over the data; fractions train on the first part of the epoch-0 order with the full schedule",
+    )
     r.add_argument("--seed", type=int, default=20260920)
     r.add_argument(
         "--rows-per-update",

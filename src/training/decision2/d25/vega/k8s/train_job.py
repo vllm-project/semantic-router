@@ -72,13 +72,16 @@ def base_path(node: str) -> str:
 
 
 STAGED = ("__init__.py", "vega/__init__.py", "vega/common", "vega/train", "vega/k8s")
+OVERLAY = ("vega/train", "vega/k8s")
 
 
-def package_tar(full: bool = False) -> tuple[bytes, str]:
+def package_tar(
+    full: bool = False, entries: tuple[str, ...] | None = None
+) -> tuple[bytes, str]:
     """The trainer's import closure, or (``full``) the whole ``d25`` package incl. ws-measure's eval code."""
     buffer = io.BytesIO()
     files = []
-    for entry in ("",) if full else STAGED:
+    for entry in entries or (("",) if full else STAGED):
         path = PACKAGE_ROOT / entry
         files.extend([path] if path.is_file() else path.rglob("*"))
     files = sorted(
@@ -102,7 +105,84 @@ def package_tar(full: bool = False) -> tuple[bytes, str]:
     return buffer.getvalue(), digest.hexdigest()
 
 
+def stage_overlay(args: argparse.Namespace) -> None:
+    """New tag = the node's current tag with this worktree's train/ and k8s/ on top (eval code untouched)."""
+    payload, digest = package_tar(entries=OVERLAY)
+    ssh = node_info(args.node)["ssh"]
+    base = subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", ssh, "readlink /data/d25/vega/src/current"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if not base or "/" in base:
+        sys.exit(f"unexpected current tag {base!r} on node {args.node}")
+    content = f"{base}+{digest}"
+    tag = f"o-{hashlib.sha256(content.encode()).hexdigest()[:12]}"
+    remote = f"/data/d25/vega/src/{tag}"
+    existing = subprocess.run(
+        [
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            ssh,
+            f"cat {remote}/CONTENT_SHA256 2>/dev/null || true",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if existing != content:
+        tmp = Path(f"/tmp/d25-vega-{tag}.tar.gz")
+        tmp.write_bytes(payload)
+        local_sha = hashlib.sha256(payload).hexdigest()
+        subprocess.run(
+            [
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                ssh,
+                f"rm -rf {remote}.incoming && mkdir -p {remote}.incoming",
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "scp",
+                "-q",
+                "-o",
+                "BatchMode=yes",
+                str(tmp),
+                f"{ssh}:{remote}.incoming/overlay.tar.gz",
+            ],
+            check=True,
+        )
+        script = (
+            f'set -e; cd {remote}.incoming; test "$(sha256sum overlay.tar.gz | cut -c1-64)" = {local_sha}; '
+            f"cp -a /data/d25/vega/src/{base}/d25 .; find d25 -name __pycache__ -prune -exec rm -rf {{}} +; "
+            f"tar -xzf overlay.tar.gz; rm overlay.tar.gz; echo {content} > CONTENT_SHA256; "
+            f"rm -rf {remote}; mv {remote}.incoming {remote}; ls {remote}/d25/vega/train | wc -l"
+        )
+        subprocess.run(["ssh", "-o", "BatchMode=yes", ssh, script], check=True)
+        tmp.unlink()
+    if args.set_current:
+        set_current(ssh, tag)
+    print(
+        json.dumps(
+            {
+                "node": args.node,
+                "tag": tag,
+                "base": base,
+                "overlay_sha256": digest,
+                "current": bool(args.set_current),
+            }
+        )
+    )
+
+
 def stage(args: argparse.Namespace) -> None:
+    if args.overlay:
+        return stage_overlay(args)
     payload, digest = package_tar(full=args.full)
     tag = args.tag or f"{'f' if args.full else 't'}-{digest[:12]}"
     ssh = node_info(args.node)["ssh"]
@@ -196,7 +276,11 @@ def q(value: str) -> str:
     return json.dumps(value)
 
 
-def resources(gpus: int) -> tuple[int, int]:
+def resources(
+    gpus: int, cpu: int | None = None, mem_gi: int | None = None
+) -> tuple[int, int]:
+    if cpu and mem_gi:
+        return cpu, mem_gi
     if gpus >= 8:
         return 120, 1000
     if gpus == 0:
@@ -229,9 +313,12 @@ def job_yaml(
     restart_policy: str = "Never",
     backoff: int = 0,
     extra_labels: dict[str, str] | None = None,
+    cpu: int | None = None,
+    mem_gi: int | None = None,
+    hf_token: bool = True,
 ) -> str:
     info = node_info(node)
-    cpu, mem = resources(gpus)
+    cpu, mem = resources(gpus, cpu, mem_gi)
     src = f"/data/d25/vega/src/{tag}"
     env = {
         "PYTHONPATH": f"{FLA_OVERLAY}:{src}",
@@ -272,6 +359,11 @@ def job_yaml(
             f"\n        - {{name: base, mountPath: {BASE_MOUNT}, readOnly: true}}"
         )
         base_volume = f"\n      - {{name: base, hostPath: {{path: {q(info['base_hostpath'])}, type: Directory}}}}"
+    token_yaml = (
+        "\n        - {name: HF_TOKEN, valueFrom: {secretKeyRef: {name: hf-token, key: HF_TOKEN}}}"
+        if hf_token
+        else ""
+    )
     script = f"set -euo pipefail\ncd {src}\n{command}\n"
     script_yaml = "\n".join("          " + line for line in script.splitlines())
     return f"""apiVersion: batch/v1
@@ -302,8 +394,7 @@ spec:
         - |
 {script_yaml}
         env:
-{env_yaml}
-        - {{name: HF_TOKEN, valueFrom: {{secretKeyRef: {{name: hf-token, key: HF_TOKEN}}}}}}
+{env_yaml}{token_yaml}
         resources:
           requests: {{cpu: "{cpu}", memory: {mem}Gi{gpu_req}}}
           limits: {{cpu: "{cpu}", memory: {mem}Gi{gpu_req}}}
@@ -409,6 +500,48 @@ def runner(args: argparse.Namespace) -> None:
     )
 
 
+def xfer(args: argparse.Namespace) -> None:
+    """Per-node export server + background puller (CPU only) and its ClusterIP Service."""
+    name = f"d25-vega-train-xfer-{args.node}"
+    job = job_yaml(
+        name=name,
+        node=args.node,
+        gpus=0,
+        tag="current",
+        command="exec python -m d25.vega.train.xfer serve --port 8080",
+        shm_gi=1,
+        grace=30,
+        mount_base=False,
+        restart_policy="OnFailure",
+        backoff=20,
+        ttl=7 * 86400,
+        extra_labels={"d25/xfer": args.node},
+        cpu=args.cpu,
+        mem_gi=args.mem_gi,
+        hf_token=False,
+    )
+    service = f"""---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {name}
+  namespace: {NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: "decision-2.5"
+    d25/campaign: "vega"
+    d25/ws: "{WS}"
+    d25/xfer: "{args.node}"
+spec:
+  type: ClusterIP
+  selector:
+    d25/ws: "{WS}"
+    d25/xfer: "{args.node}"
+  ports:
+  - {{name: http, port: 8080, targetPort: 8080, protocol: TCP}}
+"""
+    print(job + service)
+
+
 def tool(args: argparse.Namespace) -> None:
     command = (
         " ".join(shlex.quote(part) for part in args.command)
@@ -448,6 +581,15 @@ def main() -> None:
         action="store_true",
         help="Point /data/d25/vega/src/current at the tag",
     )
+    s.add_argument(
+        "--overlay",
+        action="store_true",
+        help="Copy the node's current tag and replace only train/ and k8s/ (keeps the deployed eval code)",
+    )
+    x = sub.add_parser("xfer")
+    x.add_argument("--node", required=True)
+    x.add_argument("--cpu", type=int, default=4)
+    x.add_argument("--mem-gi", type=int, default=16)
     r = sub.add_parser("runner")
     r.add_argument("--node", required=True)
     r.add_argument("--gpus", type=int, default=8)
@@ -520,7 +662,9 @@ def main() -> None:
     args = parser.parse_args()
     if args.cmd == "tool" and args.command[:1] == ["--"]:
         args.command = args.command[1:]
-    {"stage": stage, "arm": arm, "tool": tool, "runner": runner}[args.cmd](args)
+    {"stage": stage, "arm": arm, "tool": tool, "runner": runner, "xfer": xfer}[
+        args.cmd
+    ](args)
 
 
 if __name__ == "__main__":

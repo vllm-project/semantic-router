@@ -31,48 +31,34 @@ AGREE = (
 )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("--ckpt", action="append", required=True)
-    parser.add_argument(
-        "--weights", help="Comma-separated, normalised to sum 1 (default uniform)"
-    )
-    parser.add_argument("--out", required=True)
-    args = parser.parse_args()
+def build_soup(
+    members: list[Path], weights: list[float] | None, out: Path, name: str | None = None
+) -> dict:
+    """Write the FP32 weighted average of ``members`` to ``out`` (atomic); returns a summary."""
     from safetensors import safe_open
     from safetensors.torch import load_file
 
     began = time.time()
-    members = [Path(p) for p in args.ckpt]
-    weights = (
-        [float(w) for w in args.weights.split(",")]
-        if args.weights
-        else [1.0] * len(members)
-    )
+    members = [Path(p) for p in members]
+    weights = list(weights) if weights else [1.0] * len(members)
     if len(weights) != len(members) or any(w < 0 for w in weights) or sum(weights) <= 0:
-        raise SystemExit("need one non-negative weight per checkpoint")
+        raise ValueError("need one non-negative weight per checkpoint")
     weights = [w / sum(weights) for w in weights]
     configs = [json.loads((m / "decision_config.json").read_text()) for m in members]
     for key in AGREE:
         if any(c.get(key) != configs[0].get(key) for c in configs[1:]):
-            raise SystemExit(f"members disagree on {key}")
-    handles = []
+            raise ValueError(f"members disagree on {key}")
     keymaps = []
     for member in members:
-        files = M._weight_files(member)
         keymap = {}
-        opened = {}
-        for path in files:
-            opened[path] = safe_open(str(path), framework="pt")
-            for key in opened[path].keys():
-                keymap[key] = opened[path]
-        handles.append(opened)
+        for path in M._weight_files(member):
+            handle = safe_open(str(path), framework="pt")
+            for key in handle.keys():
+                keymap[key] = handle
         keymaps.append(keymap)
     keys = sorted(keymaps[0])
     if any(sorted(k) != keys for k in keymaps[1:]):
-        raise SystemExit("members have different tensor names")
+        raise ValueError("members have different tensor names")
     text_prefix, visual_prefix = M._prefixes(keys)
     text, visual = {}, {}
     for key in keys:
@@ -85,13 +71,14 @@ def main() -> int:
         elif key.startswith(visual_prefix):
             visual[key[len(visual_prefix) :]] = acc.to(torch.bfloat16)
         else:
-            raise SystemExit(f"unexpected tensor {key}")
+            raise ValueError(f"unexpected tensor {key}")
     readout = sum(
         w * load_file(str(m / "readout.safetensors"))["weight"].float()
         for w, m in zip(weights, members)
     )
     base = configs[0]
     provenance = {
+        "run": name or Path(out).name,
         "soup": [
             {"path": str(m.resolve()), "weight": w, "provenance": c.get("provenance")}
             for m, w, c in zip(members, weights, configs)
@@ -107,7 +94,7 @@ def main() -> int:
         provenance=provenance,
     )
     M.export_checkpoint(
-        args.out,
+        out,
         config=M.load_config(members[0]),
         text_state=text,
         visual_state=visual,
@@ -115,16 +102,30 @@ def main() -> int:
         tokenizer_source=members[0],
         decision_config=decision,
     )
-    print(
-        json.dumps(
-            {
-                "out": args.out,
-                "members": len(members),
-                "weights": weights,
-                "seconds": time.time() - began,
-            }
-        )
+    return {
+        "out": str(out),
+        "members": [str(m) for m in members],
+        "weights": weights,
+        "seconds": round(time.time() - began, 1),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    parser.add_argument("--ckpt", action="append", required=True)
+    parser.add_argument(
+        "--weights", help="Comma-separated, normalised to sum 1 (default uniform)"
+    )
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+    weights = [float(w) for w in args.weights.split(",")] if args.weights else None
+    try:
+        summary = build_soup([Path(p) for p in args.ckpt], weights, Path(args.out))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(json.dumps(summary))
     return 0
 
 

@@ -35,10 +35,16 @@ BANDS = 16
 MASK61 = np.uint64((1 << 61) - 1)
 
 
-def collect(work_dirs: list[Path]) -> tuple[list[dict], list[str]]:
+def collect(
+    work_dirs: list[Path], first: int = 0, last: int | None = None
+) -> tuple[list[dict], list[str]]:
+    """Accepted rows of the sealed shards whose index is in [first, last) (a fixed seed count per release)."""
     rows, shards = [], []
     for work in work_dirs:
         for shard in sorted((work / "shards").glob("*")):
+            index = int(shard.name)
+            if index < first or (last is not None and index >= last):
+                continue
             if (shard / "DONE").exists():
                 shards.append(str(shard))
                 rows += list(util.read_jsonl(shard / "rows.jsonl.gz"))
@@ -251,6 +257,11 @@ def stats(rows: list[dict]) -> dict:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--work", nargs="+", type=Path, required=True)
+    ap.add_argument(
+        "--shards",
+        default=None,
+        help="first:last shard indices to include (default: every sealed shard)",
+    )
     ap.add_argument("--index", nargs="*", default=[], help="decontam index directories")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--rows-per-file", type=int, default=25000)
@@ -258,7 +269,8 @@ def main(argv=None) -> None:
     ap.add_argument("--seed", type=int, default=20261010)
     ap.add_argument("--code-tag", default="")
     a = ap.parse_args(argv)
-    rows, shards = collect(a.work)
+    first, last = (int(x) for x in a.shards.split(":")) if a.shards else (0, None)
+    rows, shards = collect(a.work, first, last)
     log: dict = {"collected": len(rows), "shards": len(shards)}
     seen, unique = set(), []
     for row in sorted(rows, key=lambda r: r["id"]):

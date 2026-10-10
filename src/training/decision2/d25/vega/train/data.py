@@ -260,7 +260,7 @@ class Schedule:
         self,
         n: int,
         rows_per_update: int,
-        epochs: int,
+        epochs: float,
         seed: int,
         skip: np.ndarray | None = None,
     ):
@@ -271,7 +271,7 @@ class Schedule:
         self.keep = np.ones(n, dtype=bool) if skip is None else ~skip
         self.kept = int(self.keep.sum())
         self.per_epoch = math.ceil(self.kept / rows_per_update)
-        self.total = self.per_epoch * epochs
+        self.total = max(1, math.ceil(self.per_epoch * epochs - 1e-9))
         self._cache: dict[int, np.ndarray] = {}
 
     def _order(self, epoch: int) -> np.ndarray:

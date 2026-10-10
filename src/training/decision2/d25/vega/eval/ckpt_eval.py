@@ -30,7 +30,9 @@ from pathlib import Path
 KIT = "/data/d25/shared/decision-index-kit"
 SUITE = "/data/d25/shared/index-suite-0.3"
 PROXY = "/data/d25/vega/proxy/final/pv1"
-CALIBRATION = Path(__file__).parent / "proxy" / "calibration_pv1.json"
+CALIBRATION = Path(__file__).parent / "proxy" / "calibration_pv2.json"
+if not CALIBRATION.exists():
+    CALIBRATION = CALIBRATION.with_name("calibration_pv1.json")
 
 
 def _env():
@@ -224,7 +226,9 @@ def summarize_proxy(sc: dict) -> dict:
     }
 
 
-def gate_part(public_index, proxy: dict, calibration: Path) -> dict | None:
+def gate_part(
+    public_index, proxy: dict, calibration: Path, public_bench: dict | None = None
+) -> dict | None:
     if public_index is None or not calibration.exists():
         return None
     from d25.vega.eval.proxy.gate import gate
@@ -235,6 +239,7 @@ def gate_part(public_index, proxy: dict, calibration: Path) -> dict | None:
         proxy["O_proxy"],
         calibration,
         proxy.get("S_proxy_clean"),
+        public_bench,
     )
     return {
         "S_hat": g["S_hat"],
@@ -316,7 +321,12 @@ def main(argv=None):
     public_index = (
         (result["public"] or {}).get("index") if result["public"] else a.public
     )
-    result["gate"] = gate_part(public_index, result["proxy"], Path(a.calibration))
+    result["gate"] = gate_part(
+        public_index,
+        result["proxy"],
+        Path(a.calibration),
+        (result.get("public") or {}).get("per_benchmark"),
+    )
     result["wall_s"] = round(result["wall_s"] + time.time() - t0, 1)
     save()
     print(

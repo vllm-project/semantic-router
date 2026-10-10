@@ -38,6 +38,7 @@ REPOS = {
     "jade": "theunnecessarythings/JADE",
     "quyet": "chinhnc/Quyet-1.0-Large",
     "kev": "jaredpalmer/kev-27b",
+    "kev9": "jaredpalmer/kev-9b",
     "eikos": "caiovicentino1/Eikos-27B-FP8",
     "deck31b": "google/gemma-4-31B-it",
 }
@@ -52,6 +53,7 @@ BOARD = {
     "jade": "jade",
     "quyet": "quyet-1.0-large",
     "kev": "kev-27b",
+    "kev9": "kev-9b-v2",
     "eikos": "eikos-27b-fp8",
     "deck31b": "deck31b",
 }
@@ -252,7 +254,12 @@ class JadeEngine:
     """vLLM-based (run one shard per 1-GPU pod)."""
 
     def __init__(self, device):
-        path = local_repo("jade")
+        # the release validator refuses symlinks, so use a real copy (like the Decision 2.0 packages)
+        path = os.path.join(MODELS, "JADE@8e9f9a3a")
+        if not os.path.isdir(path):
+            from huggingface_hub import snapshot_download
+
+            snapshot_download(REPOS["jade"], local_dir=path)
         sys.path.insert(0, path)
         from jade.engine import JadeEngine as Native
 
@@ -365,32 +372,31 @@ class ServerEngine:
             raise RuntimeError(f"HTTP {e.code}: {text[:300]}") from e
 
 
-def kev_engine(device):
+KEV_COMMIT = (
+    "5e42a7a03f28134853dd3ff77461457e921e5ec1"  # the commit the kev-27b anchor ran with
+)
+
+
+def kev_engine(device, name="kev", port=8008):
     import subprocess
 
     src = "/data/d25/vega/proxy/src/kev"
     if not os.path.isdir(src):
         subprocess.check_call(
-            [
-                "git",
-                "clone",
-                "--depth",
-                "1",
-                "https://github.com/jaredpalmer/kev.git",
-                src,
-            ]
+            ["git", "clone", "https://github.com/jaredpalmer/kev.git", src]
         )
+        subprocess.check_call(["git", "-C", src, "checkout", KEV_COMMIT])
     rev = subprocess.check_output(
         ["git", "-C", src, "rev-parse", "HEAD"], text=True
     ).strip()
     print(f"kev source commit {rev}", flush=True)
     env = {"PYTHONPATH": src + ":" + os.environ.get("PYTHONPATH", "")}
     return ServerEngine(
-        [sys.executable, "-m", "kev.serve", "--run", REPOS["kev"], "--port", "8008"],
-        8008,
+        [sys.executable, "-m", "kev.serve", "--run", REPOS[name], "--port", str(port)],
+        port,
         cwd=src,
         env=env,
-        model="kev-27b",
+        model=BOARD[name],
     )
 
 
@@ -409,4 +415,5 @@ def make_engine(name: str, device: str = "cuda:0", options: dict | None = None):
         "jade": JadeEngine,
         "quyet": QuyetEngine,
         "kev": kev_engine,
+        "kev9": lambda d: kev_engine(d, "kev9", 8009),
     }[name](device)

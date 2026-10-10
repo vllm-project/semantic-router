@@ -14,6 +14,8 @@ unattended per-node runner that works through a queue of arm specs.
 | `export.py` | offline DCP -> export conversion; export reload parity (trainer code, Perplexity-style reference, ws-measure engine) |
 | `merge_lora.py` | Decision 2.0 Vega LoRA merged into Qwen3.8-27B in FP32 (warm start) |
 | `soup.py` | FP32 weighted averages of exports (same export format) |
+| `souplan.py` | soup plans: pull members from other nodes, build soups, proxy-eval all, full-eval the best |
+| `xfer.py` | per-node export server + background puller; sha256-verified, resumable pulls over the pod network |
 | `probe_env.py`, `bench_comm.py`, `smoke_data.py` | environment probe, RCCL/GEMM benchmark, smoke rows |
 | `../k8s/train_job.py` | code staging, runner Jobs, one-off arm/tool Jobs |
 
@@ -47,6 +49,12 @@ paths), `wait_timeout_h` 12, `prepare` (`[{"run": "<bash>", "creates": "<path>"}
 trainer flags), `max_attempts` 3, `parity` true. A train path is ready when it is a file or a
 directory with a `VERIFIED` (or `READY`) file; the first ready candidate is pinned for the arm.
 
+`"defer": "skip"` lets an item wait for its inputs without blocking the queue: while its train
+candidates are not ready (or a `wait_for` path is missing) the runner starts the next ready pending
+item instead and re-checks every minute. Without it an item waits in place (up to `wait_timeout_h`).
+Use it for arms on data that is not published yet (M3T-a/-b/M3T) and for soup items whose inputs come
+from other nodes; put a ready arm after it so the node never idles.
+
 Tool items run shell steps on the node's GPUs without training:
 
 ```json
@@ -55,7 +63,58 @@ Tool items run shell steps on the node's GPUs without training:
 ```
 
 Steps run with cwd = the node's current code tag and PYTHONPATH = FLA overlay + tag; env has
-`D25_BASE_DIR`, `D25_CODE_DIR`, `HF_HOME`, `HF_TOKEN`.
+`D25_BASE_DIR`, `D25_CODE_DIR`, `HF_HOME`, `HF_TOKEN`. Tool items honour `wait_for` too.
+
+## Moving exports between nodes (`xfer.py`)
+
+Each training node runs `d25-vega-train-xfer-<NN>` (CPU-only Job + ClusterIP Service, port 8080;
+`train_job.py xfer --node NN`). It serves finished export roots read-only (`ckpt/<arm>/step-NNNNNN`,
+`ckpt/soups/<name>`; served once `decision_config.json` exists, no `.partial` sibling, nothing modified
+in the last 2 min), with a sha256 manifest and HTTP Range for resume. Measured: 52 GB node 06 -> 04 in
+46 s (1.1 GB/s), every file verified.
+
+```bash
+# background pull on the destination node (its xfer pod fetches as soon as the source has it)
+echo '{"src_node": "06", "path": "ckpt/w1-g2-nc/step-005135"}' > /data/d25/vega/xfer/wanted/06-g2-final.json
+#   -> /data/d25/vega/imports/06/w1-g2-nc/step-005135/ (+ XFER_VERIFIED.json); status in /data/d25/vega/xfer/status/
+# or synchronously from any pod with the d25 code (e.g. a runner tool step); --wait-h polls the source
+python -m d25.vega.train.xfer pull --src-node 06 --path ckpt/w1-g2-nc/step-005135 --wait-h 6
+```
+
+A copy is complete only when `XFER_VERIFIED.json` exists (written after every file matched the source
+manifest; files land in `<dest>.partial/` and the directory is renamed at the end). Interrupted
+transfers resume from `*.part`. If a source node's xfer pod is gone, re-apply
+`vega/ws-train/jobs/xfer-<NN>.yaml` (no state; restarts are harmless).
+
+## Soups (`soup.py`, `souplan.py`)
+
+A soup plan builds FP32 weight averages of exports from any node, evaluates them and picks the best
+for `full`. Queue it as a tool item on the node that should hold the soups (it uses that node's GPUs
+for the evals):
+
+```json
+{"name": "w1-soups", "kind": "tool",
+ "steps": [{"run": "python -m d25.vega.train.souplan --plan /data/d25/vega/xfer/plans/w1-soups.json --node 04", "timeout_h": 9}]}
+```
+
+```json
+{"name": "w1-soups",
+ "inputs": {"t2-final": {"local": "/data/d25/vega/ckpt/w1-t2-nc/step-005135"},
+            "g2-final": {"node": "06", "path": "ckpt/w1-g2-nc/step-005135"}},
+ "soups": [{"name": "soup-b-t2-g2-5135", "members": ["t2-final", "g2-final"], "weights": null}],
+ "proxy": true, "full_top": 2, "rank_by": "O_proxy", "wait_h": 5, "gpus": 8}
+```
+
+Soups are built in plan order (local-only ones first is cheapest); remote members are pulled with
+`xfer` (or picked up from `imports/` if the node's xfer pod already fetched them: add `wanted` specs
+when you queue the plan). A soup whose members are still missing `wait_h` after the plan started is
+skipped; the rest continue. Every soup gets `proxy`, then the best `full_top` by `rank_by` get `full`.
+Outputs: `/data/d25/vega/ckpt/soups/<soup>/` (normal export, provenance lists members + weights),
+`results/<soup>/soup/result.json`, `results/index/<soup>-soup.json`, events in `results/events.jsonl`
+(also mirrored best effort to the HF results dataset), summary `results/soups/<plan>.json`. Reruns
+skip finished builds and evals. A soup item whose inputs come from other nodes should be
+`"defer": "skip"` with `wait_for` on the local `XFER_VERIFIED.json` paths (see node 03's seed soup).
+Direct use: `python -m d25.vega.train.soup --ckpt A --ckpt B [--weights 0.7,0.3] --out DIR`.
 
 ## What a runner does per arm
 
@@ -86,6 +145,7 @@ when `src/current` carries a new `runner.py` that imports cleanly.
 ## Launching runners and staging code (from the worktree, `src/training/decision2`)
 
 ```bash
+python3 d25/vega/k8s/train_job.py stage --node 06 --overlay --set-current  # node's current tag + this worktree's train/ and k8s/ -> o-<sha12> (keeps the deployed eval code)
 python3 d25/vega/k8s/train_job.py stage --node 06 --full --set-current   # whole d25 package -> /data/d25/vega/src/f-<sha12>, current -> it
 python3 d25/vega/k8s/train_job.py runner --node 06 > runner-06.yaml       # Job d25-vega-runner-06 (8 GPUs)
 kubectl --context vllm-sr apply -f runner-06.yaml                         # after a free-GPU check + ledger line
@@ -103,7 +163,9 @@ python -m d25.vega.train.launch --nproc 8 --log-dir <out>/logs d25.vega.train.tr
   --token-budget 49152 --reshard-after-forward off --export-fractions 0.3333,0.6667,1.0
 ```
 
-Key flags: `--lr/--readout-lr/--weight-decay/--warmup-ratio/--schedule/--min-lr-ratio/--epochs/--seed`,
+Key flags: `--lr/--readout-lr/--weight-decay/--warmup-ratio/--schedule/--min-lr-ratio/--epochs/--seed`
+(`--epochs` takes fractions: 0.3333 trains on the first third of the epoch-0 order with the whole
+warmup + cosine schedule fitted to it),
 `--rows-per-update`, `--max-length` (longer rows are dropped and counted, never truncated),
 `--teacher/--teacher-weight`, `--brier-weight`, `--shuffle-options`, `--ac full|none|every:N|first:N`,
 `--reduce-dtype fp32|bf16`, `--save-every/--keep-dcp/--dcp-threads`, `--export-steps/--export-fractions`,
