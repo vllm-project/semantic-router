@@ -2,7 +2,6 @@ package agenticfacts
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,12 +57,19 @@ func requireAccepted(t *testing.T, result Result) *Accepted {
 	return result.Accepted
 }
 
+// canonicalCapabilityNames lists distinct protocol capabilities the validator
+// accepts. It is longer than the default MaxCapabilities so cap tests can go one
+// past the bound with names that would otherwise be valid.
+var canonicalCapabilityNames = []string{
+	"text", "image_input", "image_output", "audio_input", "audio_output",
+	"video_input", "video_output", "file_input", "file_output", "tools",
+	"parallel_tools", "reasoning", "structured_json", "strict_json_schema",
+	"strict_tool_schema", "streaming", "stop_sequences",
+}
+
+// namedCapabilities returns n distinct canonical capability names.
 func namedCapabilities(n int) []string {
-	out := make([]string, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, fmt.Sprintf("cap-%02d", i))
-	}
-	return out
+	return append([]string(nil), canonicalCapabilityNames[:n]...)
 }
 
 func TestValidateAcceptsCompleteEnvelope(t *testing.T) {
@@ -83,7 +89,7 @@ func TestValidateAcceptsCompleteEnvelope(t *testing.T) {
 			"remaining_time_ms": 30000,
 			"remaining_cost":    1.5,
 		},
-		"required_capabilities": []string{"Tools", "VISION", "tools"},
+		"required_capabilities": []string{"Tools", "IMAGE_INPUT", "tools"},
 		"context_portability":   "STICKY",
 		"trust_boundary": map[string]any{
 			"tenant":    "acme",
@@ -418,7 +424,7 @@ func TestValidateRejectsOverCapListsRatherThanTruncating(t *testing.T) {
 	t.Run("duplicate capabilities over cap", func(t *testing.T) {
 		duplicates := make([]string, 0, 40)
 		for i := 0; i < 40; i++ {
-			duplicates = append(duplicates, "vision")
+			duplicates = append(duplicates, "image_input")
 		}
 
 		envelope := validEnvelope()
@@ -445,8 +451,12 @@ func TestValidateListEntries(t *testing.T) {
 		values []string
 		reason string
 	}{
-		{"empty capability", "required_capabilities", []string{"vision", ""}, ReasonMalformed},
+		{"empty capability", "required_capabilities", []string{"image_input", ""}, ReasonMalformed},
 		{"over-long capability", "required_capabilities", []string{strings.Repeat("a", 200)}, ReasonTooLong},
+		{"unknown capability", "required_capabilities", []string{"tools", "banana"}, ReasonMalformed},
+		{"model card alias", "required_capabilities", []string{"vision"}, ReasonMalformed},
+		{"tool_use alias", "required_capabilities", []string{"tool_use"}, ReasonMalformed},
+		{"chat alias", "required_capabilities", []string{"chat"}, ReasonMalformed},
 	}
 
 	for _, test := range tests {
@@ -464,11 +474,11 @@ func TestValidateListEntries(t *testing.T) {
 // case, are trimmed, deduplicated, and sorted.
 func TestValidateNormalizesLists(t *testing.T) {
 	envelope := validEnvelope()
-	envelope["required_capabilities"] = []string{"Tools", "VISION", "tools", " vision "}
+	envelope["required_capabilities"] = []string{"Tools", "IMAGE_INPUT", "tools", " image_input "}
 
 	accepted := requireAccepted(t, Validate(encode(t, envelope), DefaultBounds(), fixedNow))
 
-	wantCapabilities := []string{"tools", "vision"}
+	wantCapabilities := []string{"image_input", "tools"}
 	if !reflect.DeepEqual(accepted.RequiredCapabilities, wantCapabilities) {
 		t.Fatalf("want %#v, got %#v", wantCapabilities, accepted.RequiredCapabilities)
 	}
