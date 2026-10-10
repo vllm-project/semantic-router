@@ -1,3 +1,6 @@
+# The gateway in front of the Router calls it over ext_proc.
+gateway:
+  mode: extproc
 config:
   version: v0.3
   listeners: []

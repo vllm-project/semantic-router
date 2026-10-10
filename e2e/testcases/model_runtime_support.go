@@ -28,22 +28,18 @@ const (
 	mrModalityDeployment  = "vela-modality"
 	mrAttachedDecisions   = "attached-decisions"
 	mrAttachedFeedback    = "attached-feedback"
+	mrAttachedVela2       = "attached-vela2"
 	mrOfflineDeployment   = "decision-offline"
 	mrAttachedService     = "model-runtime-attached"
-	mrDecisionsProcess    = "decisions"
-	mrDeviceProcess       = "cpu"
 	mrReadyTimeout        = 5 * time.Minute
 	mrRequestTimeout      = 60 * time.Second
 )
 
 var (
 	// Sorted, as the lifecycle case compares it with each process's models.
-	mrDeviceGroup = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
-	// The device group's deployments on device auto, which the node without a
-	// GPU resolves to the CPU.
-	mrAutoDeployments     = []string{mrEmbeddingDeployment}
+	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
-	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback}
+	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback, mrAttachedVela2}
 )
 
 // modelRuntimeSession holds the connections the model-runtime contracts use.
@@ -189,7 +185,7 @@ func (s *modelRuntimeSession) preview(ctx context.Context, text string) (routing
 func (s *modelRuntimeSession) previewConversation(ctx context.Context, messages []map[string]string) (routingPreview, error) {
 	var preview routingPreview
 	err := s.postAPI(ctx, "/api/v1/routing/preview?trace=true", map[string]interface{}{
-		"model":    "auto",
+		"model":    "vllm-sr/auto",
 		"messages": messages,
 	}, &preview)
 	return preview, err
@@ -197,7 +193,7 @@ func (s *modelRuntimeSession) previewConversation(ctx context.Context, messages 
 
 // chat sends one user message through the gateway with the debug headers on.
 func (s *modelRuntimeSession) chat(ctx context.Context, text string) (*localChatCompletionResponse, error) {
-	response, err := sendLocalChatCompletion(ctx, s.gatewayPort, "auto", text, mrRequestTimeout)
+	response, err := sendLocalChatCompletion(ctx, s.gatewayPort, "vllm-sr/auto", text, mrRequestTimeout)
 	if err != nil {
 		return nil, err
 	}

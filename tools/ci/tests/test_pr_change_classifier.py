@@ -30,6 +30,22 @@ MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+        for path in (
+            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/testcases/routing_error_codes.go",
+            "src/semantic-router/pkg/extproc/routing_failure.go",
+            "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
+        self.assertIn("e2e.routing-errors", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+            "verifications"
+        ][0]
+        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
+
     def test_image_calibration_inputs_select_the_platform_verification(self):
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",
@@ -124,7 +140,6 @@ class SelectionTests(unittest.TestCase):
         )
         for job in (
             "image-router",
-            "image-local",
             "image-fixtures",
             "image-distribution",
             "package",
@@ -230,7 +245,7 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([path], source_sha=SHA)
         self.assertIn("operator", plan["expected_verification_ids"])
         self.assertTrue(
-            {"operator", "operator-bundle", "extproc", "provider-mocker"}
+            {"operator", "operator-bundle", "vllm-sr", "provider-mocker"}
             <= set(plan["images"])
         )
         self.assertNotIn(
@@ -253,7 +268,6 @@ class SelectionTests(unittest.TestCase):
     def test_component_tools_have_execution_owners_after_quality_split(self):
         cases = {
             "src/vllm-sr/cli/core.py": "cli-unit",
-            "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
             "src/training/tests/test_export.py": "training",
             "tools/ci/training-test-requirements.txt": "training",
             "bench/redteam/test_datasets.py": "training",
@@ -299,9 +313,9 @@ class SelectionTests(unittest.TestCase):
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))
                 self.assertEqual(plan["expected_verification_ids"], [identifier])
                 self.assertEqual(
-                    plan["verifications"][0]["images"], ["extproc", "provider-mocker"]
+                    plan["verifications"][0]["images"], ["vllm-sr", "provider-mocker"]
                 )
-                self.assertEqual(set(plan["images"]), {"extproc", "provider-mocker"})
+                self.assertEqual(set(plan["images"]), {"vllm-sr", "provider-mocker"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
@@ -354,7 +368,7 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(record["runtime"], "model-runtime")
                 self.assertEqual(record["device"], "cpu")
                 self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["extproc", "provider-mocker"])
+                self.assertEqual(record["images"], ["vllm-sr", "provider-mocker"])
         for path in (
             "e2e/profiles/local-classifier-backend/profile.go",
             "e2e/testcases/local_classifier_routing.go",
@@ -400,7 +414,20 @@ class SelectionTests(unittest.TestCase):
             performance_base("0.4.0", ["v0.3.0"]),
             "12597be5ffae2319d856f230d61ca26248eb9b3b",
         )
-        self.assertEqual(performance_base("0.5.0", ["v0.4.0"]), "v0.4.0")
+        # v0.4.0 predates the model runtime; #4707 runs the current harness.
+        self.assertEqual(
+            performance_base("0.5.0", ["v0.3.0", "v0.4.0"]),
+            "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+        )
+
+    def test_later_cycles_compare_with_a_release_that_has_the_model_runtime(self):
+        tags = ["v0.3.0", "v0.4.0", "v0.5.0", "v0.5.1"]
+        self.assertEqual(performance_base("0.6.0", tags), "v0.5.1")
+        self.assertEqual(performance_base("0.5.2", tags), "v0.5.1")
+        with self.assertRaisesRegex(ValueError, "declare the 0.4.1 base"):
+            performance_base("0.4.1", tags)
+        with self.assertRaisesRegex(ValueError, "predates the model runtime"):
+            performance_base("0.6.0", ["v0.3.0", "v0.4.0"])
 
     def test_shared_artifact_loaders_select_their_runtime_consumers(self):
         for path in (

@@ -39,7 +39,13 @@ class Qwen3Attention(nn.Module):
         self.q_norm = RMSNorm(self.head_dim, config["rms_norm_eps"])
         self.k_norm = RMSNorm(self.head_dim, config["rms_norm_eps"])
 
-    def forward(self, hidden_states, rotary, mask, kernels: KernelSet):
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
         query = self.q_norm(self.q_proj(hidden_states).view(hidden_shape)).transpose(
@@ -53,7 +59,8 @@ class Qwen3Attention(nn.Module):
             kernels, query, key, value, mask, groups=self.groups, scaling=self.scaling
         )
         output = output.reshape(*input_shape, -1).contiguous()
-        return self.o_proj(output)
+        out: torch.Tensor = self.o_proj(output)
+        return out
 
 
 class Qwen3Layer(nn.Module):
@@ -66,7 +73,13 @@ class Qwen3Layer(nn.Module):
             config["hidden_size"], config["rms_norm_eps"]
         )
 
-    def forward(self, hidden_states, rotary, mask, kernels: KernelSet):
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         hidden_states = self.self_attn(hidden_states, rotary, mask, kernels)
@@ -78,6 +91,8 @@ class Qwen3Layer(nn.Module):
 
 
 class Qwen3Rotary(nn.Module):
+    inv_freq: torch.Tensor
+
     def __init__(self, config: dict[str, Any]):
         super().__init__()
         rope = config.get("rope_parameters") or {
@@ -95,7 +110,9 @@ class Qwen3Rotary(nn.Module):
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor, position_ids: torch.Tensor):
+    def forward(
+        self, x: torch.Tensor, position_ids: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         inv_freq_expanded = (
             self.inv_freq[None, :, None]
             .float()
@@ -148,7 +165,8 @@ class Qwen3Backbone(nn.Module):
         rotary = self.rotary_emb(hidden_states, position_ids)
         for layer in self.layers:
             hidden_states = layer(hidden_states, rotary, mask, self.kernels)
-        return self.norm(hidden_states)
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed
 
     def forward_tree(self, input_ids: torch.Tensor, tree: Tree) -> torch.Tensor:
         """The packed shared-context row ([1, L] ids) through every layer; [1, L, hidden]."""
@@ -157,4 +175,5 @@ class Qwen3Backbone(nn.Module):
         rotary = self.rotary_emb(hidden_states, tree.positions)
         for layer in self.layers:
             hidden_states = layer(hidden_states, rotary, tree, self.kernels)
-        return self.norm(hidden_states)
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed

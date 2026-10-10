@@ -4,16 +4,20 @@
 
 `decision` asks a decision model a typed question about the request and turns the answer into a routing fact.
 You write the question in plain language: pick one of a few options
-(`choice`), yes or no (`noul`), or a level on a scale (`score`). The model
-runs in the [built-in model runtime](model-runtime/overview.md),
+(`choice`), yes or no (`noul`), or a level on a scale (`score`). Models that
+answer them, such as Vela 2.0, also take `set` questions (which of these
+labels apply?) and `span` questions (where in the text is each label?). The
+model runs in the [built-in model runtime](../../../model-runtime/overview.md),
 which the router starts for you.
 
 ## Key Advantages
 
 - A new question works as soon as you write it; there is no classifier to train.
 - Answers come with probabilities, so routes can require a confident answer.
-- All decision questions of one request travel in one call to the model.
-- A late or failed answer makes the signal unknown; the request still goes through.
+- Questions sharing a deployment and compatible input can be grouped in one
+  request-stage call, including the [`pii` signal](pii.md#vela-20).
+- A late or failed answer makes the signal unknown; the decision's failure
+  policy determines whether routing continues or rejects the request.
 
 ## What Problem Does It Solve?
 
@@ -30,7 +34,32 @@ your question.
 
 ## Configuration
 
-Name the model as a `model_runtime` deployment, then ask it questions:
+A question that names no `deployment` asks the Router's decision model,
+`global.model_catalog.system.decision_model` (Vela 2.0 0.3B unless you
+[choose a size](../../../model-runtime/choose-a-model.md#choose-a-size)). It joins the
+request-stage batch with compatible built-in questions. Reusing a deployment
+avoids loading another copy of the model; it does not guarantee one forward
+pass for the complete routed request:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: needs_tools
+        question:
+          type: noul
+          instructions: Does answering this request need a tool call?
+        predicate:
+          gte: 0.7
+```
+
+The binding uses `{deployment: primary}` and can select Vela or Decision
+1.0/2.0. The model must support every requested question type. The
+[`decision` selection algorithm](../../algorithm/selection/decision.md)
+uses the same default binding, so the resource can also choose a backend.
+
+To ask another model, such as a Decision 2.0 model, name it as a
+`model_runtime` deployment and give each question its `deployment`:
 
 ```yaml
 global:
@@ -94,13 +123,155 @@ routing:
 | `noul` | the probability of yes meets `predicate` (default `gte: 0.5`) | `decision:<name>` = P(yes) |
 | `score` | the expected level meets `predicate` (required; levels count from 0) | `decision:<name>` = expected level |
 | `choice` | a condition's `label` is the chosen option, and its probability meets `predicate` when one is set | `decision:<name>:<key>` = P(key), `decision:<name>` = P(chosen) |
+| `set` | the probability of the condition's `label` meets `predicate`; without one, the model selected the label | `decision:<name>:<key>` = P(key), `decision:<name>` = the highest P |
+| `span` | a span with the condition's `label` has a probability that meets `predicate`; without one, the model found a span with the label | `decision:<name>:<key>` = the label's most probable span (0 when none), `decision:<name>` = the highest probability any word reached |
 
-A condition may add its own `predicate`; for a `choice` condition with a
-`label`, it reads that option's probability.
+A condition may add its own `predicate`; for a `choice`, `set` or `span`
+condition with a `label`, it reads that label's value.
+
+A [projection score](../../projection/scores.md) reads the same values
+with `value_source: raw`: `name: <question>` reads `decision:<name>`, and
+`name: <question>:<key>` reads one option or label of a `choice`, `set` or
+`span` question. The question is asked whenever a used projection reads it:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: difficulty
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer well?
+          levels: [none, a little, multi-step, expert]
+        predicate:
+          gte: 2
+      - name: needs
+        question:
+          type: set
+          instructions: What does a good answer need?
+          labels:
+            - key: deliberation
+              description: a derivation, proof or careful step-by-step check
+            - key: tools
+              description: calling external tools or functions
+  projections:
+    scores:
+      - name: effort
+        method: weighted_sum
+        inputs:
+          - type: decision
+            name: difficulty
+            weight: 0.3
+            value_source: raw
+          - type: decision
+            name: needs:deliberation
+            weight: 0.4
+            value_source: raw
+    mappings:
+      - name: effort_band
+        source: effort
+        method: threshold_bands
+        outputs:
+          - name: effort_high
+            gte: 0.9
+  decisions:
+    - name: deliberate
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: effort_high
+      modelRefs:
+        - model: large-reasoner
+```
+
+### Set and span questions
+
+A `set` question names labels and asks which apply; a `span` question asks
+where in the request each label occurs. Both take `labels` instead of
+`choices`, each with a `key` and an optional `description`, and conditions on
+them name a label:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+
+routing:
+  signals:
+    decision:
+      - name: support_topics
+        deployment: vela2
+        question:
+          type: set
+          instructions: Which topics does the request mention?
+          labels:
+            - key: billing
+              description: payments, invoices or refunds
+            - key: shipping
+              description: deliveries, tracking or returns
+      - name: account_ids
+        deployment: vela2
+        question:
+          type: span
+          instructions: Which spans are account or order numbers?
+          labels:
+            - key: account_number
+              description: a customer account or order number
+          head: router
+
+  decisions:
+    - name: billing-with-account
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: decision
+            name: support_topics
+            label: billing
+          - type: decision
+            name: account_ids
+            label: account_number
+      modelRefs:
+        - model: support-model
+```
+
+- `threshold` (0 to 1) replaces the model's own decision threshold for the
+  question. Without it the model applies its calibrated threshold, which is
+  what decides `selected` labels and found spans.
+- `head` (`span` only) names the span head that answers on models with two:
+  `router` (trained on PII, unsupported claims and toxic spans) or `broad`
+  (open extraction). Without it the model chooses by its own rule.
+- A rule's `predicate` replaces the model's selection: `gte: 0.8` on a `set`
+  rule matches the labels whose probability is at least 0.8.
+- A native `set` question is used when the model supports it. Otherwise the
+  Router can compose the set from one `noul` question per label. The task
+  catalog reports this as `composed_noul`, rather than native Set support.
+
+Preparation checks the model's actual capabilities. Decision 1.0/2.0 can
+therefore answer a routing `set` task through their Noul capability, but cannot
+produce `span` locations without a span-capable model. Unsupported tasks fail
+preparation. Structural support does not establish task accuracy: evaluate
+your questions and thresholds with the selected model. The public native
+System One API still accepts only the question types that model serves.
 
 While the model is loading, overloaded or slower than `timeout_ms`, the signal
 is unknown. `rules.on_unknown` on the decision, or `on_error: match | no_match`
-on a condition, decides what an unknown answer means. Matched decision signals
+on a condition, decides what an unknown answer means. Compatible questions
+share a batch; distinct input states and later selection or response stages
+can require additional calls and forwards. A shared call can remain active
+while another caller still needs it. A deadline ends the caller's wait but
+does not guarantee that an active model forward stops immediately.
+
+Decision signals may truncate their routing view to the deployment's scan
+budget. This does not shorten the request sent to the selected Chat backend;
+use the dedicated PII or Reask tasks when complete-input coverage is required.
+Matched decision signals
 are listed in the `x-vsr-matched-decision-model` response header.
 
 To choose a model, size and hardware, or to run the model on your own GPU

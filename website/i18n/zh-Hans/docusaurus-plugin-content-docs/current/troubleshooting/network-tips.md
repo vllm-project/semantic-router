@@ -2,7 +2,7 @@
 title: 受限网络环境
 sidebar_label: 受限网络
 translation:
-  source_commit: "8d971517501f80107607162e8aebcc084ca71923"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/troubleshooting/network-tips.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 Semantic Router 可能因三种不同原因需要网络访问：
 
-1. 容器运行时拉取 Router、控制面板、Envoy 和支持镜像；
+1. 容器运行时拉取 Router、控制面板和支持镜像（`--gateway extproc` 还需要 Envoy）；
 2. Router 下载分类器或嵌入产物；以及
 3. 被路由的请求调用你配置的模型提供方。
 
@@ -25,14 +25,14 @@ Semantic Router 可能因三种不同原因需要网络访问：
 vllm-sr serve --config config.yaml
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy  # --gateway extproc only
 ```
 
 | 现象 | 可能的层 |
 |---------|--------------|
 | 镜像拉取或仓库身份验证错误 | 容器仓库 |
 | Router 已启动，但在加载模型产物时等待 | Hugging Face 或本地模型路径 |
-| Router 和 Envoy 已就绪，但 completions 返回连接错误 | 提供方端点或防火墙 |
+| 服务栈已就绪，但 completions 返回连接错误 | 提供方端点或防火墙 |
 | Kubernetes Pod 停留在 `ImagePullBackOff` | 集群节点访问仓库 |
 
 ## 容器镜像
@@ -52,7 +52,7 @@ VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
   vllm-sr serve --config config.yaml --image-pull-policy never
 ```
 
-对于 AMD 或 NVIDIA 构建，选择对应的 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像，并传入 `--platform amd` 或 `--platform nvidia`。如果自定义了构建 tag 或仓库，请使用实际值；完整本地流程见[开发指南](../community/development)。
+对于 AMD 或 NVIDIA 构建，选择对应的 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像，并传入 `--platform rocm` 或 `--platform cuda`。如果自定义了构建 tag 或仓库，请使用实际值；完整本地流程见[开发指南](../community/development)。
 
 从源码构建项目时，通过组织已批准的代理或镜像配置包管理器和容器运行时。避免把区域端点、凭据或本地代理地址提交到仓库。
 
