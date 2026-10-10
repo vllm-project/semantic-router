@@ -118,8 +118,10 @@ def build(init, distributed, *args, **kwargs):
     model, counts = _build(init, distributed, *args, **kwargs)
     if not linearize_patch_embed(model.backbone):
         raise RuntimeError("vision patch embedding not found")
-    if model.attention_mode != "causal":
-        raise ValueError("d3-edge trains with causal attention")
+    if model.attention_mode != "causal" and not OPTIONS["masked_forward"]:
+        raise ValueError(
+            "the right-padded forward needs causal attention; use --masked-forward"
+        )
     if not OPTIONS["masked_forward"]:
         model.forward = types.MethodType(right_padded_forward, model)
     if not distributed.sharded and distributed.device.type == "cuda":
