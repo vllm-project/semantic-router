@@ -31,8 +31,6 @@ type Result struct {
 
 // Rejected reports whether a presented envelope failed validation. The request
 // still routes normally; the caller records the reasons as diagnostics.
-// Rejected reports whether a presented envelope failed validation. The request
-// still routes normally; the caller records the reasons as diagnostics.
 func (r Result) Rejected() bool {
 	return len(r.Rejections) > 0
 }

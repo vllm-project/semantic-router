@@ -57,6 +57,9 @@ routing:
 `field` is one of `delegated_role` or `task_phase`. Exactly one predicate
 comparator, `equals` or `in`, is required per rule.
 
+Matching is exact and case-sensitive, the same as the `metadata` signal:
+`equals: reviewer` does not match a declared role of `Reviewer`.
+
 ## Replay
 
 When [Router Replay](../../learning/memory-and-replay) is enabled, each record
