@@ -264,12 +264,16 @@ func (c *Classifier) applyUserFeedbackSignalResult(results *SignalResults, mu *s
 }
 
 func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
+	c.evaluateReaskSignalContext(context.Background(), results, mu, currentUserText, priorUserMessages)
+}
+
+func (c *Classifier) evaluateReaskSignalContext(ctx context.Context, results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
 	names := c.applicableReaskRuleNames(currentUserText, priorUserMessages)
 	if len(names) == 0 {
 		return
 	}
 	start := time.Now()
-	matchedRules, err := c.reaskClassifier.Classify(currentUserText, priorUserMessages)
+	matchedRules, err := c.reaskClassifier.ClassifyContext(ctx, currentUserText, priorUserMessages)
 	elapsed := time.Since(start)
 
 	results.Metrics.Reask.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

@@ -63,3 +63,32 @@ routing:
   modelCards:
     - name: m
 `
+
+func TestSystemOneListenerScopeNeverInheritsChatModels(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.ModelDeployments = map[string]ModelDeployment{
+		"private-key": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.3B", PublicName: "judgment"},
+	}
+	listener := Listener{Name: "public", Models: []string{"chat-only"}}
+	if err := validateListenerSystemOne(cfg, listener); err != nil {
+		t.Fatal(err)
+	}
+	for _, names := range [][]string{{}, {"private-key"}, {"unknown"}, {" judgment "}, {"judgment", "judgment"}} {
+		listener.SystemOne = &ListenerSystemOne{Models: names}
+		if err := validateListenerSystemOne(cfg, listener); err == nil {
+			t.Fatalf("accepted invalid public scope %v", names)
+		}
+	}
+	listener.SystemOne = &ListenerSystemOne{Models: []string{"judgment"}}
+	if err := validateListenerSystemOne(cfg, listener); err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := cfg.ResolveSystemOneDeployment("judgment")
+	if err != nil || key != "private-key" {
+		t.Fatalf("resolved %q: %v", key, err)
+	}
+	cfg.ModelDeployments["second-key"] = cfg.ModelDeployments["private-key"]
+	if err := validateListenerSystemOne(cfg, listener); err == nil {
+		t.Fatal("ambiguous public model accepted")
+	}
+}

@@ -67,7 +67,7 @@ var GatewayCapabilities = extension.NewRegistry[GatewayCapability]("gateway capa
 // CheckGatewayCapabilities lists every use in cfg of a capability that mode
 // does not serve, in registration order.
 func CheckGatewayCapabilities(cfg *RouterConfig, mode GatewayMode) []CapabilityViolation {
-	if cfg == nil {
+	if !cfg.RoutingEnabled() {
 		return nil
 	}
 	var violations []CapabilityViolation

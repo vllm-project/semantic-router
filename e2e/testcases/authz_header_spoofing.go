@@ -190,7 +190,7 @@ func testSingleAuthzSpoofing(ctx context.Context, testCase AuthzSpoofingTestCase
 
 func createAuthzSpoofingRequest(ctx context.Context, testCase AuthzSpoofingTestCase, localPort string) (*http.Request, error) {
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, this is a test message"},
 		},

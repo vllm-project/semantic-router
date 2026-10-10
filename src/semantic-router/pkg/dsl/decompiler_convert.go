@@ -389,10 +389,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
 		}
-		// Pull param_size from model_config.
-		if mc, ok := d.cfg.ModelConfig[mr.Model]; ok {
-			ref.ParamSize = mc.ParamSize
-		}
+		ref.ParamSize = routeParamSize(d.cfg.ModelConfig, mr.Model)
 		route.Models = append(route.Models, ref)
 	}
 
@@ -553,11 +550,18 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	if mr.Weight != 0 {
 		opts = append(opts, fmt.Sprintf("weight = %g", mr.Weight))
 	}
-	// Pull param_size from model_config.
-	if mc, ok := modelConfig[mr.Model]; ok {
-		if mc.ParamSize != "" {
-			opts = append(opts, fmt.Sprintf("param_size = %q", mc.ParamSize))
-		}
+	if size := routeParamSize(modelConfig, mr.Model); size != "" {
+		opts = append(opts, fmt.Sprintf("param_size = %q", size))
 	}
 	return strings.Join(opts, ", ")
+}
+
+// routeParamSize is the param_size a route repeats from model_config. A
+// catalog-backed model's size belongs to its built-in card, not to the route.
+func routeParamSize(modelConfig map[string]config.ModelParams, model string) string {
+	mc, ok := modelConfig[model]
+	if !ok || mc.Catalog != "" {
+		return ""
+	}
+	return mc.ParamSize
 }

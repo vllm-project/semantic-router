@@ -77,11 +77,11 @@
 {{- if not (get $config "version") -}}
 {{- $_ := set $config "version" "v0.3" -}}
 {{- end -}}
-{{- $decisionModel := trim (.Values.decisionModel | default "") -}}
+{{- $decisionModel := trim (get (.Values.decisionModel | default (dict)) "deployment" | default "") -}}
 {{- if $decisionModel -}}
 {{- $catalog := (get $global "model_catalog") | default (dict) -}}
 {{- $system := (get $catalog "system") | default (dict) -}}
-{{- $_ := set $system "decision_model" $decisionModel -}}
+{{- $_ := set $system "decision_model" (dict "deployment" $decisionModel) -}}
 {{- $_ := set $catalog "system" $system -}}
 {{- $_ := set $global "model_catalog" $catalog -}}
 {{- end -}}
@@ -104,7 +104,14 @@ data:
   {{- $liveGlobal := (get $live "global") | default (dict) }}
   {{- $liveCatalog := (get $liveGlobal "model_catalog") | default (dict) }}
   {{- $liveSystem := (get $liveCatalog "system") | default (dict) }}
-  {{- $_ := set $liveSystem "decision_model" $decisionModel }}
+  {{- $desiredCatalog := (get $global "model_catalog") | default (dict) }}
+  {{- $desiredDeployments := (get $desiredCatalog "deployments") | default (dict) }}
+  {{- if hasKey $desiredDeployments $decisionModel }}
+  {{- $liveDeployments := (get $liveCatalog "deployments") | default (dict) }}
+  {{- $_ := set $liveDeployments $decisionModel (get $desiredDeployments $decisionModel) }}
+  {{- $_ := set $liveCatalog "deployments" $liveDeployments }}
+  {{- end }}
+  {{- $_ := set $liveSystem "decision_model" (dict "deployment" $decisionModel) }}
   {{- $_ := set $liveCatalog "system" $liveSystem }}
   {{- $_ := set $liveGlobal "model_catalog" $liveCatalog }}
   {{- $_ := set $live "global" $liveGlobal }}

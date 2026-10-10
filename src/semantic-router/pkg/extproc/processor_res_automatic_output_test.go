@@ -42,7 +42,7 @@ func TestAutomaticOutputResponseHeadersMatchFinalSelectedDispatch(t *testing.T) 
 					ctx.VSRSelectedDecision.ModelRefs = []config.ModelRef{{Model: model}}
 				}
 				ctx.SemanticRequest.Stream = contentType == "text/event-stream"
-				require.NoError(t, router.prepareDecisionContextOverflow(ctx, "auto"))
+				require.NoError(t, router.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 				_, err := router.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
 				require.NoError(t, err)
 				candidateInput := ctx.AutomaticCandidateDemands[model].InputTokens

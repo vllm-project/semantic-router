@@ -4,7 +4,7 @@ description: Router 自己提供 OpenAI 兼容接口并在进程内执行路由�
 created: 2026-10-06
 status: Implemented
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/standalone-mode.md"
   outdated: false
 ---
@@ -37,23 +37,23 @@ looper 执行器的分析继续适用。
    `/ready`。operator 也默认 standalone，它的 `spec.gateway` 集成会选择 extproc。接入 Envoy Gateway、AI Gateway、
    Istio、KServe 时仍可选 `extproc`（50051 端口上的 ext_proc Service 和那条五个 header 的规则）。
 4. 一切都跑在容器里：`--target docker`（默认）或 `--target kubernetes`（v0.4.0 已发布的 `k8s` 保留一个版本作为隐藏
-   别名，使用时给出警告），没有裸机 target。`--platform cpu|amd|nvidia` 对两个 target 都生效：docker 上选择镜像和
+   别名，使用时给出警告），没有裸机 target。`--platform cpu|rocm|cuda` 对两个 target 都生效：docker 上选择镜像和
    GPU 透传，kubernetes 上选择同一个镜像，并在生成的 Helm values 里加上 GPU 资源请求（`amd.com/gpu` 或
-   `nvidia.com/gpu`）。engine 模式（`vllm-sr serve MODEL`）在 docker target 上用同一个镜像在容器里跑模型 runtime，
-   因为 ROCm 或 CUDA 栈的逐字节一致只能由镜像保证。
+   `nvidia.com/gpu`）。engine 模式（`vllm-sr serve MODEL --engine`）在 docker target 上用同一个镜像在容器里跑模型 runtime，
+   使用发布版本固定的 ROCm 或 CUDA 依赖；数值一致性仍须按硬件与 profile 验证。
 5. PyPI 上只发布 `vllm-sr`。Router 二进制和模型 runtime（`vllm-srun`）只随一个镜像家族发布：`vllm-sr`（CPU，
    amd64 和 arm64）、`vllm-sr-rocm` 和 `vllm-sr-cuda`（amd64），覆盖 docker 和 kubernetes、两种模式以及 engine 模式。
    原来的 `extproc` 和 `extproc-rocm` 镜像在一个版本内作为同一 digest 的别名 tag。上游 Envoy 只用于 docker 上的
    `extproc`。
 6. Router 与模型 runtime 之间仍是 Unix 域套接字上的 HTTP/JSON；测出开销之后再考虑二进制快路径。在 CPU 上测得
-   传输约占一次 runtime 调用的 2%，所以不做快路径（见[结果](#结果)）。
+   传输约占一次 runtime 调用的 2%，所以不做快路径（见[结果](#results)）。
 7. 首发必须支持 timeout、retry、fallback。
 8. looper 请求图完全在 Router 内部闭环，不再绕回 Envoy。
 9. 配置体系模块化、版本化，支持热更新和回滚，借鉴 Envoy 配置设计的核心思想。
 
 ## 背景
 
-今天一个请求的链路：
+standalone 实现前的请求链路：
 
 ```text
 client -> Envoy -> ext_proc（gRPC，默认整包缓冲 body）-> Router（Go）-> 通过 Unix 套接字调用模型 runtime
@@ -78,13 +78,13 @@ Envoy listener，再进入 ext_proc，被识别为内部请求后才派发到后
 
 ## 模式
 
-只有“客户端流量从哪进”这一个维度叫**模式**，其余都是正交的部署参数。
+网关传输（`--gateway`）与服务能力（`--engine`）是独立选择。默认 Router 模式；传入 `MODEL` 只改变判断模型，不会关闭路由。Engine 模式禁用 recipe 路由，仍保留前端和原生模型 API。
 
 | 命令 | 运行什么 | 客户端流量入口 | 适用 |
 | --- | --- | --- | --- |
 | `vllm-sr serve`（= `--gateway standalone`，默认） | Router 容器，它托管的 runtime 进程在容器内 | Router 自己的 OpenAI 兼容端口 | 单机、开发、边缘、多数自托管 |
 | `vllm-sr serve --gateway extproc` | `vllm-sr` 起的 Envoy 容器，在 Router 容器（ext_proc）前面 | Envoy | 需要限流、mTLS、复杂路由匹配等 Envoy 能力 |
-| `vllm-sr serve MODEL ...` | 只有 runtime，用同一个镜像跑在容器里（engine 模式） | runtime 的 HTTP API | 在自己的代码里调用模型 |
+| `vllm-sr serve MODEL --engine` | 持久前端与模型 worker（Engine 模式） | 前端的 System One API | 在自己的代码里调用模型 |
 
 两种 gateway 模式共用一个路由核心：standalone 使用 HTTP 适配器，extproc 模式（下文称 Envoy 模式）使用 ext_proc
 适配器。Kubernetes 上 `--target kubernetes` 以任一模式安装 Helm chart，你自己运行的 Envoy 类网关（Envoy
@@ -93,7 +93,7 @@ Gateway、AI Gateway、Istio、KServe）以 extproc 模式接入。
 正交参数：
 
 - `--target docker|kubernetes`：默认 `docker`。
-- `--platform cpu|amd|nvidia`：两个 target 上都选择镜像；docker 上透传 GPU，kubernetes 上加 GPU 资源请求。
+- `--platform cpu|rocm|cuda`：两个 target 上都选择镜像；docker 上透传 GPU，kubernetes 上加 GPU 资源请求。
 - `--container-runtime docker|podman`（原 `--runtime`，保留一个版本作为隐藏别名，使用时给出警告）。
 - `serve` 的每个参数属于一个分组，分组写明它适用于哪里：docker、kubernetes、engine 模式或其中几种。
   `--platform`、`--image`、`--log-level` 三者通用；`--minimal`、`--readonly` 两个 target 通用；
@@ -466,7 +466,9 @@ looper 不再是“绕回 Envoy”的特殊流程，而是在 Router 内部执�
 - **打包：** 在只装了 Docker 的干净主机上，`pip install vllm-sr` 之后 `vllm-sr serve`（standalone 模式）和
   `vllm-sr serve MODEL`（engine 模式）在 CPU 上直接可用。
 
-### 结果
+### 结果 {#results}
+
+以下测量记录当时的实现和硬件，不代表当前默认模型、副本池或所有 profile 的性能。
 
 合入前在最终代码上记录，单节点（AMD EPYC 9575F、Docker 29.8.1、Envoy 1.35.3），后端为 fake backend：
 
