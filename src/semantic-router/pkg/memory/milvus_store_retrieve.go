@@ -25,6 +25,13 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
+	release, gateErr := m.life.begin(m.enabled)
+	if gateErr != nil {
+		status = "error"
+		return nil, fmt.Errorf("milvus: %w", gateErr)
+	}
+	defer release()
+
 	limit, threshold, err := m.normalizeRetrieveOpts(opts)
 	if err != nil {
 		status = "error"
@@ -63,9 +70,6 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 }
 
 func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, threshold float32, err error) {
-	if !m.enabled {
-		return 0, 0, fmt.Errorf("milvus store is not enabled")
-	}
 	limit = opts.Limit
 	if limit <= 0 {
 		limit = m.config.DefaultRetrievalLimit
@@ -148,7 +152,7 @@ func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts Retri
 		for i, r := range results {
 			ids[i] = r.Memory.ID
 		}
-		go m.recordRetrievalBatch(ids)
+		m.life.goBackground(func(ctx context.Context) { m.recordRetrievalBatch(ctx, ids) })
 	}
 	return results
 }

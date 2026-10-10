@@ -10,9 +10,11 @@ import (
 )
 
 func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
-	if !m.enabled {
-		return nil, fmt.Errorf("milvus store is not enabled")
+	release, gateErr := m.life.begin(m.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if id == "" {
 		return nil, fmt.Errorf("memory ID is required")
@@ -54,9 +56,11 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	if !m.enabled {
-		return nil, fmt.Errorf("milvus store is not enabled")
+	release, gateErr := m.life.begin(m.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if opts.UserID == "" {
 		return nil, fmt.Errorf("user ID is required for listing memories")

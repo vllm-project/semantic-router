@@ -37,20 +37,24 @@ func NewInMemoryStoreWithConfig(embeddingConfig EmbeddingConfig) *InMemoryStore 
 
 // IsEnabled returns whether the store is enabled.
 func (s *InMemoryStore) IsEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.enabled
 }
+
+// errInMemoryClosed is returned once Close has run; the store has no disabled mode.
+var errInMemoryClosed = fmt.Errorf("in-memory: %w", ErrStoreClosed)
 
 // Store saves a new memory.
 func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !s.enabled {
-		return nil
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.enabled {
+		return errInMemoryClosed
+	}
 
 	// Generate embedding if not already set
 	if err := ctx.Err(); err != nil {
@@ -81,12 +85,11 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 
 // Retrieve performs semantic search for relevant memories.
 func (s *InMemoryStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
-	if !s.enabled {
-		return nil, nil
-	}
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if !s.enabled {
+		return nil, errInMemoryClosed
+	}
 
 	// Generate embedding for query using unified embedding configuration
 	queryEmbedding, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
@@ -149,16 +152,15 @@ func (s *InMemoryStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*
 
 // List returns memories matching the filter criteria, sorted by created_at descending.
 func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if !s.enabled {
-		return nil, fmt.Errorf("store not enabled")
+		return nil, errInMemoryClosed
 	}
 
 	if opts.UserID == "" {
 		return nil, fmt.Errorf("user ID is required for listing memories")
 	}
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	// Collect matching memories
 	var matching []*Memory
@@ -200,12 +202,11 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 
 // Get retrieves a memory by ID.
 func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
-	if !s.enabled {
-		return nil, fmt.Errorf("store not enabled")
-	}
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if !s.enabled {
+		return nil, errInMemoryClosed
+	}
 
 	mem, exists := s.memories[id]
 	if !exists {
@@ -217,12 +218,11 @@ func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 
 // Update modifies an existing memory.
 func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) error {
-	if !s.enabled {
-		return fmt.Errorf("store not enabled")
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.enabled {
+		return errInMemoryClosed
+	}
 
 	// Check if memory exists
 	existing, exists := s.memories[id]
@@ -256,12 +256,11 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 
 // Forget deletes a memory by ID.
 func (s *InMemoryStore) Forget(ctx context.Context, id string) error {
-	if !s.enabled {
-		return fmt.Errorf("store not enabled")
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.enabled {
+		return errInMemoryClosed
+	}
 
 	if _, exists := s.memories[id]; !exists {
 		return fmt.Errorf("memory not found: %s", id)
@@ -274,12 +273,11 @@ func (s *InMemoryStore) Forget(ctx context.Context, id string) error {
 
 // ForgetByScope deletes all memories matching the scope.
 func (s *InMemoryStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
-	if !s.enabled {
-		return fmt.Errorf("store not enabled")
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.enabled {
+		return errInMemoryClosed
+	}
 
 	var toDelete []string
 	for id, mem := range s.memories {
@@ -321,8 +319,10 @@ func (s *InMemoryStore) ForgetByScope(ctx context.Context, scope MemoryScope) er
 // CheckConnection verifies the store connection is healthy.
 // For in-memory store, this is always healthy (no external connection).
 func (s *InMemoryStore) CheckConnection(ctx context.Context) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if !s.enabled {
-		return fmt.Errorf("store not enabled")
+		return errInMemoryClosed
 	}
 	// In-memory store has no external connection to check
 	return nil

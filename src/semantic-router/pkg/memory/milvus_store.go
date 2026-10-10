@@ -33,6 +33,7 @@ type MilvusStore struct {
 	// within this store so concurrent background retrieval batches cannot lose
 	// access-count increments by reading the same previous record.
 	retrievalUpdateMu sync.Mutex
+	life              storeLifecycle
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore
@@ -122,13 +123,15 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 }
 
 func (m *MilvusStore) IsEnabled() bool {
-	return m.enabled
+	return m.enabled && !m.life.isClosed()
 }
 
 func (m *MilvusStore) CheckConnection(ctx context.Context) error {
-	if !m.enabled {
-		return nil
+	release, err := m.life.begin(m.enabled)
+	if err != nil {
+		return fmt.Errorf("milvus: %w", err)
 	}
+	defer release()
 
 	if m.client == nil {
 		return fmt.Errorf("milvus client is not initialized")
@@ -147,10 +150,13 @@ func (m *MilvusStore) CheckConnection(ctx context.Context) error {
 	return nil
 }
 
+// Close owns the client: the router builds one per store, and nothing else
+// closes it. Later calls return ErrStoreClosed; a second Close is a no-op.
 func (m *MilvusStore) Close() error {
-	// Note: We don't close the client here as it might be shared
-	// The caller is responsible for managing the client lifecycle
-	return nil
+	if !m.life.close("milvus") || m.client == nil {
+		return nil
+	}
+	return m.client.Close()
 }
 
 func isTransientError(err error) bool {
