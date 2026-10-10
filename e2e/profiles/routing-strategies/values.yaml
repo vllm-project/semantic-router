@@ -48,6 +48,13 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
+      - name: agentic-default-model
+        provider_model_id: base-model
+        backend_refs:
+          - name: local-vllm-agentic-default
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
   entrypoints:
     - model_names: [vllm-sr/metadata-policy]
       recipe: metadata-policy
@@ -145,6 +152,11 @@ config:
       description: Deterministic agentic facts trust, validation, and capability narrowing probe.
       routing:
         strategy: priority
+        # Caller-declared capabilities apply only on the strict path, which
+        # also excludes any model that declares no capabilities. Every model
+        # this recipe can route to therefore declares them.
+        candidate_requirements:
+          capabilities: declared
         signals:
           agentic_facts:
             - name: reviewer_role
@@ -179,7 +191,7 @@ config:
               operator: AND
               conditions: []
             modelRefs:
-              - model: base-model
+              - model: agentic-default-model
                 use_reasoning: false
   evaluation:
     records:
@@ -461,9 +473,11 @@ config:
       - name: premium-model
       - name: economy-model
       - name: agentic-preferred-model
-        capabilities: [e2e_preferred_only]
+        capabilities: [text]
       - name: agentic-alternate-model
-        capabilities: [e2e_alternate_only]
+        capabilities: [text, tools]
+      - name: agentic-default-model
+        capabilities: [text]
   global:
     model_catalog:
       kbs: []
