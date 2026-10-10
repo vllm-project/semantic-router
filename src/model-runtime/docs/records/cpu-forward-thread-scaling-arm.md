@@ -90,6 +90,22 @@ Vela 2.0 default's four-signal call at its production input size is 1.56×
 faster at 8 threads than at the 16-thread default. No static thread count is
 optimal across hosts and input sizes; the crossover moves with both.
 
+### The optimum tracks host load, not just the host
+
+The 950 became quiet (one-minute load 2.7 after a reboot) and both windows
+were re-measured end to end through a real server, same cpuset and payloads:
+
+| Workload (950) | 1 thread | 8 threads | 16 threads |
+| --- | --- | --- | --- |
+| Vela 1.0, 29 tokens (quiet) | 96.2 ms | — | **85.0 ms** |
+| Vela 2.0, 662 tokens, 4 signals (quiet) | — | 707.8 ms | **524.2 ms** |
+
+Both loaded-window inversions disappear: on the quiet host the 16-thread
+default is the optimum for both workloads. The crossover is a function of
+current load as much as of host and input size — on a shared host the
+loaded-window numbers are the realistic ones for production, and the
+optimum drifts with the neighbors' load.
+
 ### Responses are bit-identical across thread counts
 
 Byte-comparing the same inputs across thread counts: Vela 1.0 at 29 and
@@ -122,10 +138,17 @@ overhead above, not by GEMM.
 
 - The request pipeline and the tokenizer are not worth optimizing for small
   inputs; the forward's per-op overhead is.
-- An input-adaptive intra-op thread count is exact-safe and would have
-  saved 1.56× on the Vela 2.0 default at its production input size on the
-  950 — but the optimum is host-dependent, so an adaptive mechanism must
-  calibrate on the host rather than ship a fixed table.
+- An input-adaptive intra-op thread count is exact-safe. The optimum is
+  host- and load-dependent — on the loaded 950 the default budget was 1.56×
+  off for the Vela 2.0 call at its production input size, on the quiet host
+  the default is optimal — so a resolver must calibrate against the
+  prevailing load rather than ship a fixed table. A research resolver that
+  explores the allowed counts over the first requests and then serves each
+  token bucket with its fastest count converged to the static optimum in
+  both windows (16-thread default: 85.5 vs 85.0 ms quiet, 562.8 vs 524.2 ms
+  for the Vela 2.0 call mid-convergence), with a bounded exploration tax
+  (the first ~40 requests, part of it the OpenMP team rebuild each count
+  switch pays).
 - Schema tokens (473 of 662 in the four-signal call) remain the largest
   single lever for the Vela 2.0 default's CPU cost.
 

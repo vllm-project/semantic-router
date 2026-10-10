@@ -55,6 +55,16 @@
       "vela2_4signal": {"threads": [4, 8, 16], "max_float_diff": 0.0}
     }
   },
+  "quiet_host_replication": {
+    "note": "950 after reboot, one-minute load 2.7; same cpuset and payloads, real server",
+    "vela1_29tok": {"threads": {"16": 85.0, "1": 96.2}, "n": 12},
+    "vela2_662tok_4signal": {"threads": {"16": 524.2, "8": 707.8}, "n": 30},
+    "adaptive_resolver_end_to_end": {
+      "note": "explore-then-serve resolver (VLLM_SRUN_CPU_ADAPTIVE_THREADS), 16-thread budget",
+      "vela1_29tok": {"static16": 85.0, "converged": 85.5, "exploration_req0_39": [125.7, 128.5]},
+      "vela2_4signal": {"static16": 524.2, "converged_req40_59": 562.8}
+    }
+  },
   "omp_wait_policy": {
     "host": "kunpeng920",
     "passive": {"threads_16_ms": 189.8, "threads_8_ms": 234.5},
