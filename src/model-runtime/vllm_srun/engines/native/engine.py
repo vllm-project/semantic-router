@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ from ...plugins.base import (
 )
 from ...scheduler.planner import padded
 from . import fast, models
+from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
 from .models.lora import attach
@@ -127,6 +129,14 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self.threads_resolver = (
+            adaptive_threads.AdaptiveThreads(
+                options.threads or torch.get_num_threads()
+            )
+            if self.device.type == "cpu" and adaptive_threads.enabled()
+            else None
+        )
+        self._applied_threads: int | None = None
         self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
         self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
         if self.device.type == "cuda" and not spec.encoder:
@@ -298,7 +308,37 @@ class NativeEngineModel(EngineModel):
         )
         return blocks
 
+    def _apply_threads(self, tokens: int) -> None:
+        """Run this batch with the resolver's count (no-op when not adaptive).
+
+        Called on the CPU device thread, where the OpenMP team lives; a
+        repeated count is a no-op, so steady-state traffic rarely touches
+        ``torch.set_num_threads``.
+        """
+        resolver = self.threads_resolver
+        if resolver is None:
+            return
+        count = resolver.pick(tokens)
+        if count != self._applied_threads:
+            torch.set_num_threads(count)
+            self._applied_threads = count
+
+    def _sample_threads(self, tokens: int, started: float) -> None:
+        if self.threads_resolver is not None:
+            self.threads_resolver.record(
+                tokens, (time.perf_counter() - started) * 1000.0
+            )
+
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
+        tokens = batch.input_ids.numel()
+        self._apply_threads(tokens)
+        started = time.perf_counter()
+        try:
+            return self._forward(batch)
+        finally:
+            self._sample_threads(tokens, started)
+
+    def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
             return self._forward_tree(batch)
         input_ids = batch.input_ids.to(self.device)
@@ -329,6 +369,15 @@ class NativeEngineModel(EngineModel):
         stack's reduced copy when one is loaded, and every stack has its graphs.
         A batch that names a tower runs it on its named inputs.
         """
+        tokens = batch.input_ids.numel()
+        self._apply_threads(tokens)
+        started = time.perf_counter()
+        try:
+            return self._encode(batch)
+        finally:
+            self._sample_threads(tokens, started)
+
+    def _encode(self, batch: EncoderBatch) -> EncoderOutput:
         if batch.tower is not None:
             return self._encode_tower(batch)
         stack = self.backbone if batch.branch is None else self.branches[batch.branch]
