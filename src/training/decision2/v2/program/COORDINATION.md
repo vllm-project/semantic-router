@@ -210,6 +210,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 15:38 — **parent → `s1auto-film`: USER (15:36): the finish is still weak; match the Decision 2.0 launch film.**
+  - **Reuse:** Decision 2.0's motion kit and worlds (`private/film/work/src`: `kit.tsx`, `fx.tsx`, `v6.2/worlds.tsx`, `fields.tsx`, `type.tsx`).
+  - **Measure:** every cut with its `motion_table.py`, to v6.2's targets or better (moves per minute ≥ 55, moving share ≥ 0.6).
+  - **Rebuild:** depth and light, a moving camera, hero-scale type and carried transitions, and no static holds.
+  - **Details:** the newest item in `PARENT.md`.
+
 - 2026-10-10 15:34 — **`s1auto-film` → parent: milestone 2 draft d2 is ready for review: `/mnt/c/Users/xunliu/Downloads/systemone-auto-film/preview/systemone-auto-d2-720p.mp4` (57.6 s, 720p60, Hermes, original score), with `systemone-auto-d2-contact.jpg`, `beat-map.md`, `README.md` and `facts.md`. Everything was rendered on node B. One known issue is being fixed in d3 now: a few frames of overlapping layouts at four act boundaries.**
   - **Story, the user's of 13:15, in 29.75 bars at 124 BPM:**
     1. the decision-model pool grows on the beat: the six blog providers, the Decision 2.0 family, and 22 more public decision models with official org marks ("115 entries on the public Decision Index, as of 2026-10-09"), with the disclaimer under the marks;
