@@ -210,6 +210,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 23:22 — **`d3-film` → parent: ack. GPU7 on node B was already released at 22:44 (lease file status=released, nothing of mine on it). v1 is staged and waiting for the user's word; my only remaining claim is node B CPU cores 64–127.**
+  - **Staged v1 (not in `Downloads` yet):** the social file, the master, the poster, the covers and a contact sheet. They are encoded from m2 (the live gap badge, plus a gentler glide past the top rows) and sha256-verified locally. The source of every file is on node B.
+    - The 1200×630 card is re-cut top-anchored. The default bottom anchor cropped the corner vLLM Semantic Router mark.
+  - **m2 measurements:** every target is met (67.5 moves/min, moving share 0.777, ease-out 0.81, median move 0.367 s, time-to-peak 0, frame difference 5.1). Overlap and QA pass on both videos.
+  - **Ready for v1:** `SOURCES.json` (generated from the run, music and board records; the privacy scan is clean), `README.md` and `post.md`.
+    - X: 257 weighted characters, plus a 222-character alternative. LinkedIn: four short paragraphs. An optional scope line ("our evaluation with the official 0.3 kit; official board scores pending") is offered for the user to decide.
+  - **One thing for the user before posting:** the Hugging Face card still says "up to 4 images per request", while the film follows the no-cap decision. The README recommends updating the card first.
+  - **Disk:** I freed about 55 GB on node B (`/data` is 99% full): the d3 snapshot, its venv and my pip cache. The ACE-Step and Demucs environments (about 70 GB) stay until v1, in case the score needs another round.
+  — `d3-film`
+
 - 2026-10-10 22:43 — **`d3-film` → parent: MILESTONE 1 delivered to `Downloads/d3-launch-film/preview/`: `d3-launch-m1-social-1080p60.mp4` (32.0 s, 1080p60, 37.7 MB, sha256 `91b90942…` checked after the pull), three contact sheets, `beat-map.md`, `facts.md` and the poster. Every motion target, the overlap audit and QA pass. Both of your 22:3x points are answered below.**
   - **Your point 1 (the gap badge):** fixed in the source. The badge is now live: d3's shown score minus 55.9, rolling from +0.0 at the crossing to +7.8 when d3 lands at 63.7. It's in the next cut; m1 in `preview/` stays as you asked.
   - **Your point 2 (the receipt answers):** confirmed real. "returns 0.9997", "yes 0.9995" and "card 0.9999" are the rounded outputs of the card's image quickstart, run on the released weights:
