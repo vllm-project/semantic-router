@@ -29,6 +29,7 @@ import torch
 
 from d25.omni.common import vision_format
 from d25.omni.model import checkpoint, inputs
+from d25.omni.model.patch_embed import linearize_patch_embed
 from d25.omni.model.attention import ATTENTION_MODES, apply_attention_mode
 from d25.vega.common import decision_format as text_format
 
@@ -176,6 +177,8 @@ class VisionCodeReadoutModel:
         if other:
             raise ValueError(f"{self.ckpt_dir}: backbone weights missing: {other[:5]}")
         self.backbone.to(self.device).eval().requires_grad_(False)
+        if self.has_vision and not linearize_patch_embed(self.backbone):
+            raise RuntimeError("vision patch embedding not found")
         self.readout_dtype = resolve_dtype(readout_dtype, "cpu")
         self.readout = checkpoint.load_readout(self.ckpt_dir).to(
             self.device, self.readout_dtype
