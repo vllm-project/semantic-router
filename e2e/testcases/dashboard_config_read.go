@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
-
 	"sigs.k8s.io/yaml"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
