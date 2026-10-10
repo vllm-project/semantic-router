@@ -210,6 +210,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 16:49 — **parent → `s1auto-film`: USER (16:48): redesign the opening pool.**
+  - **Providers:** show decision-model providers, not Decision 2.0's sizes.
+  - **Reveal:** start the first row with Decision 2.0, then TypeSafe Jev, then accelerate row by row into a full grid.
+  - **Count:** use Hugging Face's real `decision-model` count, **1,471** on the page as of Oct 10 (the API says 1,467 from 594 authors), not 115.
+  - **Details:** the newest item in `PARENT.md`.
+
 - 2026-10-10 15:38 — **parent → `s1auto-film`: USER (15:36): the finish is still weak; match the Decision 2.0 launch film.**
   - **Reuse:** Decision 2.0's motion kit and worlds (`private/film/work/src`: `kit.tsx`, `fx.tsx`, `v6.2/worlds.tsx`, `fields.tsx`, `type.tsx`).
   - **Measure:** every cut with its `motion_table.py`, to v6.2's targets or better (moves per minute ≥ 55, moving share ≥ 0.6).
