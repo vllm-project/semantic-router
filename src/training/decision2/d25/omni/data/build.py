@@ -737,6 +737,10 @@ def cmd_decontam(args) -> None:
     if problems["errors"]:
         log("validation FAILED", json.dumps(problems)[:800])
         raise SystemExit(3)
+    quota = sum(t[2] for t in {(f, 0, q) for f, _, q in tasks})
+    if manifest["rows"] < 0.5 * quota:
+        log(f"NOT READY: kept {manifest['rows']} of a {quota}-row quota")
+        raise SystemExit(4)
     digest = hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
     (out / "READY").write_text(f"{digest}  manifest.json\n")
     log(f"READY {out} rows={manifest['rows']} manifest sha256={digest}")

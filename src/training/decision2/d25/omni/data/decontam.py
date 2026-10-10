@@ -488,11 +488,15 @@ def calibrate_images(
     bank: ImageIndex | None = None,
     seed: int = 20261009,
     crops: dict[str, tuple[float, float, float, float]] | None = None,
+    max_fp_rate: float = 0.01,
 ) -> dict[str, Any]:
-    """Pick the Hamming rule that catches every planted copy with the fewest clean false positives.
+    """Pick the Hamming rule that catches the most planted copies within ``max_fp_rate`` clean flags.
 
     Planted originals enter the reference as bank entries with their crop variants (``crops``,
     default ``BANK_CROPS``); false positives are measured against those entries plus ``bank``.
+    Against a reference of ~10^6 hashes, catching every crop and pad copy needs Hamming distances that
+    flag every clean image, so recall is maximised under the false-positive cap instead (ties: fewer
+    clean flags, then the stricter rule).
     """
     rng = random.Random(seed)
     grid = BANK_CROPS if crops is None else crops
@@ -522,24 +526,19 @@ def calibrate_images(
             frontiers[:, rule.strict] < 99
         )
 
-    best: tuple[int, int, Rule] | None = None
+    budget = int(max_fp_rate * len(clean_f))
+    best: tuple[int, int, int, Rule] | None = None
     for strict in range(0, 9):
-        loose = planted_f[:, strict] >= 99
         for ph in range(strict, 33):
-            if not loose.any():
-                need = 0
-            else:
-                values = planted_f[loose, ph]
-                if (values >= 99).any():
-                    continue
-                need = int(values.max())
-            if need > 32:
-                continue
-            rule = Rule(ph, need, strict)
-            fp = int(caught(clean_f, rule).sum())
-            if best is None or (fp, ph + need) < best[:2]:
-                best = (fp, ph + need, rule)
-    rule = best[2] if best else Rule(32, 32, 8)
+            for need in range(0, 33):
+                rule = Rule(ph, need, strict)
+                fp = int(caught(clean_f, rule).sum())
+                if fp > budget:
+                    break
+                key = (-int(caught(planted_f, rule).sum()), fp, ph + need)
+                if best is None or key < best[:3]:
+                    best = (*key, rule)
+    rule = best[3] if best else Rule(0, 0, 0)
     fp = int(caught(clean_f, rule).sum())
     hit = caught(planted_f, rule)
     per_variant: dict[str, dict[str, int]] = {}
