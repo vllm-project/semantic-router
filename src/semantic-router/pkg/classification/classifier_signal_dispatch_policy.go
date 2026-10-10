@@ -90,6 +90,10 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			func(context.Context) { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
+			config.SignalTypeAgenticFacts, "AgenticFacts",
+			func(context.Context) { c.evaluateAgenticFactsSignal(results, mu, requestFacts, usedSignals) },
+		},
+		{
 			config.SignalTypeInputModality, "InputModality",
 			func(context.Context) { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},

@@ -113,6 +113,7 @@ type CanonicalSignals struct {
 	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
 	Actions       []ActionRule           `yaml:"actions,omitempty"`
 	Decision      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	AgenticFacts  []AgenticFactsRule     `yaml:"agentic_facts,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -563,6 +564,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
 		ActionRules:        append([]ActionRule(nil), signals.Actions...),
 		DecisionRules:      append([]DecisionSignalRule(nil), signals.Decision...),
+		AgenticFactsRules:  append([]AgenticFactsRule(nil), signals.AgenticFacts...),
 	}
 
 	if len(result.Categories) == 0 {

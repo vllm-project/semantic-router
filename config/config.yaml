@@ -794,6 +794,20 @@ routing:
         model: external-sequence-classifier
         labels: [SAFE, RISKY]
 
+    agentic_facts:
+      - name: reviewer_role
+        description: Caller declared itself as a reviewer subagent.
+        field: delegated_role
+        predicate:
+          equals: reviewer
+      - name: execution_phase
+        description: Caller is in an execution or verification task phase.
+        field: task_phase
+        predicate:
+          in:
+            - execute
+            - verify
+
   projections:
     partitions:
       - name: support_intents
@@ -2078,7 +2092,19 @@ global:
           password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
           database: 2
           key_prefix: "vsr:router-session:v1:"
-
+    agentic_facts:
+      enabled: false
+      carrier_header: x-vsr-agentic-facts
+      trust:
+        marker_header: x-vsr-agentic-facts-trusted
+        marker_value: "1"
+      bounds:
+        max_envelope_bytes: 8192
+        max_depth: 16
+        max_capabilities: 16
+        max_string_length: 128
+        max_lifetime: 5m
+        clock_skew: 5s
   services:
     api:
       routing_preview:

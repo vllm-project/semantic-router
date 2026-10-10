@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agenticfacts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -147,6 +148,15 @@ type RequestContext struct {
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold
+
+	// AgenticFacts holds the outcome of validating the caller-presented
+	// selection-facts envelope. Its zero value (no Accepted, no Rejections)
+	// means no envelope was presented or the contract is disabled. An envelope
+	// that arrives without the configured trust marker is not zero: it carries
+	// one ReasonUntrusted rejection and is never parsed. AgenticFacts.Accepted
+	// is nil whenever AgenticFacts.Rejected() is true: a presented envelope that
+	// failed validation contributes nothing to selection, by construction.
+	AgenticFacts agenticfacts.Result
 
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
@@ -323,6 +333,7 @@ type RequestContext struct {
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
+	VSRMatchedAgenticFacts    []string // Matched agentic facts rule names (delegated_role, task_phase)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64

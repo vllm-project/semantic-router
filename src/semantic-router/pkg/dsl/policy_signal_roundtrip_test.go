@@ -216,6 +216,63 @@ ROUTE "x" (on_unknown = "allow") {
 	t.Fatalf("no diagnostic mentions on_unknown: %#v", diagnostics)
 }
 
+func TestPolicyAgenticFactsSignalRoundTrip(t *testing.T) {
+	input := `
+SIGNAL agentic_facts "reviewer" {
+  description: "reviewer role check"
+  field: "delegated_role"
+  predicate: { equals: "reviewer" }
+}
+
+SIGNAL agentic_facts "execution_phase" {
+  field: "task_phase"
+  predicate: { in: ["execute", "verify"] }
+}
+
+ROUTE "policy-route" {
+  PRIORITY 100
+  WHEN agentic_facts("reviewer") OR agentic_facts("execution_phase")
+  MODEL "model-a"
+}`
+	cfg := mustCompilePolicyDSL(t, input)
+	if len(cfg.AgenticFactsRules) != 2 {
+		t.Fatalf("expected 2 agentic_facts rules, got %d", len(cfg.AgenticFactsRules))
+	}
+
+	reviewer := cfg.AgenticFactsRules[0]
+	if reviewer.Field != config.AgenticFactsFieldDelegatedRole ||
+		reviewer.Predicate.Equals == nil || *reviewer.Predicate.Equals != "reviewer" {
+		t.Fatalf("unexpected reviewer rule: %+v", reviewer)
+	}
+
+	phase := cfg.AgenticFactsRules[1]
+	if phase.Field != config.AgenticFactsFieldTaskPhase ||
+		len(phase.Predicate.In) != 2 {
+		t.Fatalf("unexpected task_phase rule: %+v", phase)
+	}
+
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	for _, expected := range []string{
+		`SIGNAL agentic_facts reviewer`,
+		`field: "delegated_role"`,
+		`predicate: { equals: "reviewer" }`,
+		`SIGNAL agentic_facts execution_phase`,
+		`field: "task_phase"`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("decompiled source missing %q:\n%s", expected, source)
+		}
+	}
+
+	roundTrip := mustCompilePolicyDSL(t, source)
+	if len(roundTrip.AgenticFactsRules) != 2 {
+		t.Fatalf("round-trip: expected 2 agentic_facts rules, got %d", len(roundTrip.AgenticFactsRules))
+	}
+}
+
 func assertPolicyDSLSource(t *testing.T, source string) {
 	t.Helper()
 	for _, expected := range []string{

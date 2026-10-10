@@ -123,6 +123,13 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
+`global.router.agentic_facts` declares the versioned selection-facts contract
+presented by external agent runtimes at a trusted request boundary. The block is
+disabled by default, and every bound has a router-owned default, so an omitted or
+partial block is valid. Facts may narrow the candidate models a decision already
+declares in `modelRefs`; they never widen that set or relax authorization,
+safety, or residency policy.
+
 Built-in model resources live in `global.model_catalog.deployments`; the default
 judgment deployment is selected by `system.decision_model`. Runtime modules own
 task policy, global bindings supply shared consumer defaults, and a recipe's

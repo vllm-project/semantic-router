@@ -3,6 +3,7 @@ package extproc
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agenticfacts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -14,6 +15,8 @@ const (
 	replaySessionActionStay              = "stay"
 	replaySessionActionSwitch            = "switch"
 	replaySessionActionHardLock          = "hard_lock"
+	replayAgenticFactsStatusAccepted     = "accepted"
+	replayAgenticFactsStatusRejected     = "rejected"
 )
 
 func buildReplayRouteDiagnostics(
@@ -77,6 +80,7 @@ func buildReplayRouteDiagnostics(
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}
+	diagnostics.AgenticFactsStatus, diagnostics.AgenticFactsReasons = replayAgenticFactsOutcome(ctx.AgenticFacts)
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
 		diagnostics.SessionPolicyApplied = policy.Mode == config.DecisionAdaptationModeApply &&
@@ -207,4 +211,46 @@ func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionR
 		RunnerUp:   trace.RunnerUp,
 		Reason:     trace.Reason,
 	}
+}
+
+// replayAgenticFactsOutcome reports whether the agentic facts envelope was
+// accepted or rejected, and why. It returns empty values when no envelope was
+// presented or the contract is disabled, so those requests write no fields
+// and their Replay rows stay unchanged.
+//
+// The status records what the validator decided, not whether the facts
+// changed routing. The matched rule names in Signals already show that.
+func replayAgenticFactsOutcome(result agenticfacts.Result) (string, []string) {
+	if result.Rejected() {
+		return replayAgenticFactsStatusRejected, replayAgenticFactsReasons(result.Rejections)
+	}
+	if result.Accepted != nil {
+		return replayAgenticFactsStatusAccepted, nil
+	}
+	return "", nil
+}
+
+// replayAgenticFactsReasons renders each rejection as "field:reason", or as a
+// bare reason code when the whole envelope failed. Both parts come from the
+// validator's schema and its closed set of codes, never from a value the
+// caller sent, so the result is safe to store.
+//
+// Repeated entries are dropped. The validator records one rejection per bad
+// capability, so without this an envelope with many bad entries would repeat
+// the same line many times.
+func replayAgenticFactsReasons(rejections []agenticfacts.Rejection) []string {
+	reasons := make([]string, 0, len(rejections))
+	seen := make(map[string]struct{}, len(rejections))
+	for _, rejection := range rejections {
+		reason := rejection.Reason
+		if rejection.Field != "" {
+			reason = rejection.Field + ":" + rejection.Reason
+		}
+		if _, ok := seen[reason]; ok {
+			continue
+		}
+		seen[reason] = struct{}{}
+		reasons = append(reasons, reason)
+	}
+	return reasons
 }

@@ -88,6 +88,8 @@ func (p *Profile) GetTestCases() []string {
 		"decision-scoped-multi-factor",
 		"metadata-routing",
 		"input-modality-routing",
+		"agentic-facts-routing",
+		"agentic-facts-eligibility",
 	}
 }
 

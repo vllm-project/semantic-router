@@ -22,6 +22,7 @@ func (d *decompiler) decompileSignals() {
 	d.decompileKBSignals()
 	d.decompileEventSignals()
 	d.decompileMetadataSignals()
+	d.decompileAgenticFactsSignals()
 	d.decompileClassifierSignals()
 	d.decompileInputModalitySignals()
 	d.decompileDecisionModelSignals()

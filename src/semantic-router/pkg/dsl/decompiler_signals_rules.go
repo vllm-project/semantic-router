@@ -217,6 +217,28 @@ func (d *decompiler) decompileMetadataSignals() {
 	}
 }
 
+func (d *decompiler) decompileAgenticFactsSignals() {
+	for _, rule := range d.cfg.AgenticFactsRules {
+		d.write("SIGNAL agentic_facts %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		d.write("  field: %q\n", rule.Field)
+		predicate := map[string]interface{}{}
+		switch {
+		case rule.Predicate.Equals != nil:
+			predicate["equals"] = *rule.Predicate.Equals
+		case len(rule.Predicate.In) > 0:
+			predicate["in"] = rule.Predicate.In
+		}
+		d.write(
+			"  predicate: %s\n",
+			formatPluginConfigValue(predicate),
+		)
+		d.write("}\n\n")
+	}
+}
+
 func (d *decompiler) decompileInputModalitySignals() {
 	for _, rule := range d.cfg.InputModalityRules {
 		d.write("SIGNAL input_modality %s {\n", quoteName(rule.Name))

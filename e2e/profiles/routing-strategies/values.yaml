@@ -34,11 +34,34 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
+      - name: agentic-preferred-model
+        provider_model_id: base-model
+        backend_refs:
+          - name: local-vllm-agentic-preferred
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: agentic-alternate-model
+        provider_model_id: base-model
+        backend_refs:
+          - name: local-vllm-agentic-alternate
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: agentic-default-model
+        provider_model_id: base-model
+        backend_refs:
+          - name: local-vllm-agentic-default
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
   entrypoints:
     - model_names: [vllm-sr/metadata-policy]
       recipe: metadata-policy
     - model_names: [vllm-sr/input-modality-probe]
       recipe: input-modality-probe
+    - model_names: [vllm-sr/agentic-facts-policy]
+      recipe: agentic-facts-policy
   recipes:
     - name: input-modality-probe
       description: Deterministic structural input-modality routing probe.
@@ -125,6 +148,51 @@ config:
             modelRefs:
               - model: base-model
                 use_reasoning: false
+    - name: agentic-facts-policy
+      description: Deterministic agentic facts trust, validation, and capability narrowing probe.
+      routing:
+        strategy: priority
+        # Caller-declared capabilities apply only on the strict path, which
+        # also excludes any model that declares no capabilities. Every model
+        # this recipe can route to therefore declares them.
+        candidate_requirements:
+          capabilities: declared
+        signals:
+          agentic_facts:
+            - name: reviewer_role
+              description: Caller declared itself as a reviewer subagent.
+              field: delegated_role
+              predicate:
+                equals: reviewer
+        decisions:
+          - name: agentic_reviewer_decision
+            description: Route an accepted reviewer delegation.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: agentic_facts
+                  name: reviewer_role
+            modelRefs:
+              - model: agentic-preferred-model
+              - model: agentic-alternate-model
+            algorithm:
+              type: multi_factor
+              multi_factor:
+                weights:
+                  quality: 1
+                  latency: 0
+                  cost: 0
+                  load: 0
+          - name: agentic_default_decision
+            description: Route everything else, including rejected envelopes.
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: agentic-default-model
+                use_reasoning: false
   evaluation:
     records:
       - model: premium-model
@@ -132,6 +200,14 @@ config:
         metrics:
           score: 0.9
       - model: economy-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.1
+      - model: agentic-preferred-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.9
+      - model: agentic-alternate-model
         benchmark: vllm-sr/operator-rating@1.0.0
         metrics:
           score: 0.1
@@ -396,11 +472,19 @@ config:
       - name: base-model
       - name: premium-model
       - name: economy-model
+      - name: agentic-preferred-model
+        capabilities: [text]
+      - name: agentic-alternate-model
+        capabilities: [text, tools]
+      - name: agentic-default-model
+        capabilities: [text]
   global:
     model_catalog:
       kbs: []
     router:
       strategy: priority
+      agentic_facts:
+        enabled: true
     services:
       api:
         batch_classification:

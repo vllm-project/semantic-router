@@ -34,6 +34,14 @@ type RequestFacts struct {
 	// InputModality carries structural input-modality presence counts for the
 	// input_modality signal family.
 	InputModality InputModalityFacts
+
+	// AgenticFactsDelegatedRole and AgenticFactsTaskPhase carry validated,
+	// trusted facts about a delegated request, accepted at the request
+	// boundary. Both are empty when no envelope was accepted: the contract is
+	// disabled, no envelope was presented, or the presented envelope was
+	// untrusted or failed validation.
+	AgenticFactsDelegatedRole string
+	AgenticFactsTaskPhase     string
 }
 
 // InputModalityFacts counts content parts per input modality across the

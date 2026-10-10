@@ -37,6 +37,7 @@ type Signal struct {
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
+	AgenticFacts  []string `json:"agentic_facts,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -227,6 +228,8 @@ type RouteDiagnostics struct {
 	MemoryFallbackReason           string                               `json:"memory_fallback_reason,omitempty"`
 	MemoryFailOpen                 bool                                 `json:"memory_fail_open,omitempty"`
 	MemoryResultCount              int                                  `json:"memory_result_count,omitempty"`
+	AgenticFactsStatus             string                               `json:"agentic_facts_status,omitempty"`
+	AgenticFactsReasons            []string                             `json:"agentic_facts_reasons,omitempty"`
 	ContextCompressionApplied      bool                                 `json:"context_compression_applied,omitempty"`
 	ContextCompressionBefore       int                                  `json:"context_compression_tokens_before,omitempty"`
 	ContextCompressionAfter        int                                  `json:"context_compression_tokens_after,omitempty"`
@@ -661,6 +664,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	cloned.AgenticFactsReasons = cloneStringSlice(value.AgenticFactsReasons)
 	if value.DecisionRanking != nil {
 		ranking := *value.DecisionRanking
 		cloned.DecisionRanking = &ranking

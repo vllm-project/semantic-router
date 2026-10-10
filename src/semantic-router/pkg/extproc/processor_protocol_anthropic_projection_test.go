@@ -46,7 +46,7 @@ func TestAnthropicAdaptiveRequestDispatchesToChatAndResponses(t *testing.T) {
 			if dispatch.targetFormat != target {
 				t.Fatalf("target = %q, want %q", dispatch.targetFormat, target)
 			}
-			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil); err != nil {
+			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil, llmprotocol.CapabilitySet{}); err != nil {
 				t.Fatalf("selection disagrees with dispatch: %v", err)
 			}
 			body, err := router.encodeDispatchRequest(ctx)

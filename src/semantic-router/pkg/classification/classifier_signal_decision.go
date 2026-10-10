@@ -88,6 +88,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		InputModalityRules: signals.MatchedInputModalityRules,
 		ActionRules:        signals.MatchedActionRules,
 		DecisionRules:      signals.MatchedDecisionRules,
+		AgenticFactsRules:  signals.MatchedAgenticFactsRules,
 		ProjectionRules:    signals.MatchedProjectionRules,
 		SignalValues:       signals.SignalValues,
 		SignalErrors:       signals.SignalErrors,
