@@ -195,7 +195,9 @@ class ComponentBatchTests(unittest.TestCase):
         job = data["jobs"]["tests"]
         self.assertEqual(job["name"], "Execute Contracts")
         go = next(
-            step for step in job["steps"] if step.get("uses") == "./.github/actions/setup-go-ci"
+            step
+            for step in job["steps"]
+            if step.get("uses") == "./.github/actions/setup-go-ci"
         )
         self.assertEqual(go["if"], "fromJSON(inputs.batch).go")
         uploads = [
@@ -309,6 +311,7 @@ class ComponentBatchTests(unittest.TestCase):
                 with self.assertRaises(FileExistsError):
                     runner.run_batch(batch, output)
             return passed, plan, receipts, raw, calls
+
 
 if __name__ == "__main__":
     unittest.main()
