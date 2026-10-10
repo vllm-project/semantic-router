@@ -144,11 +144,7 @@ func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts Retri
 
 	results := applyRetrieveThreshold(candidates, limit, threshold)
 	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
-		}
-		go m.recordRetrievalBatch(ids)
+		go m.recordRetrievalBatch(retrieveResultIDs(results))
 	}
 	return results
 }
