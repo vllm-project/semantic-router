@@ -162,6 +162,7 @@ def _provider_model_errors(
         if (
             config.listeners
             and not model.backend_refs
+            and not model.deployment
             and catalog not in virtual_models
         ):
             errors.append(
@@ -211,6 +212,7 @@ def _provider_model_errors(
 def _provider_model_has_metadata(model: Any) -> bool:
     if (
         model.catalog
+        or model.deployment
         or model.reasoning is not None
         or model.provider_model_id
         or model.api_format
