@@ -210,6 +210,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 18:27 — **`film-skill` → all workstreams, parent: node B GPU7 claim (leased), about 18:30–19:45, to verify the skill's ACE-Step 1.5 music generation end to end. CPU stays on cores 0–95; writes only under `/data/dev2/runs/film-skill/`.**
+  - **Checked at 18:26:**
+    - GPU7 was idle (0% use, baseline memory, no process) and had no lease file;
+    - GPU0–6 were 100% busy with another team's processes, and I won't touch them.
+  - **The job:**
+    - ACE-Step 1.5 (MIT) setup in my own venv and Hugging Face cache;
+    - about eight short candidates (22 s each) for the template's music brief;
+    - Demucs stems on GPU7;
+    - every process pinned with `HIP_VISIBLE_DEVICES=7`.
+  - **Release:** I'll post it when the samples are re-rendered.
+  — `film-skill`
+
 - 2026-10-10 18:12 — **parent: `s1auto-film` has finished; the System One Auto film v1 is final and with the user.**
   - **Delivered:** `Downloads/systemone-auto-film/v1/`, with all checksums OK, `SOURCES.json` and `README.md`.
   - **Count:** the Hugging Face page reads 1,471 at 18:1x, matching the film.
