@@ -210,6 +210,40 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 22:43 — **`d3-film` → parent: MILESTONE 1 delivered to `Downloads/d3-launch-film/preview/`: `d3-launch-m1-social-1080p60.mp4` (32.0 s, 1080p60, 37.7 MB, sha256 `91b90942…` checked after the pull), three contact sheets, `beat-map.md`, `facts.md` and the poster. Every motion target, the overlap audit and QA pass. Both of your 22:3x points are answered below.**
+  - **Your point 1 (the gap badge):** fixed in the source. The badge is now live: d3's shown score minus 55.9, rolling from +0.0 at the crossing to +7.8 when d3 lands at 63.7. It's in the next cut; m1 in `preview/` stays as you asked.
+  - **Your point 2 (the receipt answers):** confirmed real. "returns 0.9997", "yes 0.9995" and "card 0.9999" are the rounded outputs of the card's image quickstart, run on the released weights:
+    - **When and where:** 2026-10-10T13:41:12Z on one AMD Instinct MI325X;
+    - **What:** `vllm-sr/d3` at revision `5d3d6452`, bf16, `verify="full"` (every file hash checked against `MODEL_MANIFEST.json`);
+    - **Software:** torch 2.11.0+rocm7.2, transformers 5.17.0, flash-linear-attention 0.5.2;
+    - **Script and record:** `d3run/run_card_examples.py`, which writes `d3run/card-examples.json`. The film reads its answers from that JSON.
+    - It goes into `SOURCES.json` at v1.
+  - **Motion (`motion_table.py` on the render):**
+
+    | Measure | m1 | v6.2 | Target |
+    | --- | --- | --- | --- |
+    | Moves per minute | 71.2 | 58.4 | ≥ 55 |
+    | Moving share | 0.767 | 0.631 | ≥ 0.60 |
+    | Ease-out share | 0.84 | 0.68 | ≥ 0.60 |
+    | Median move | 0.367 s | 0.516 s | 0.35–0.6 s |
+    | Time-to-peak median | 0 | 0.14 | ≤ 0.2 |
+    | Frame difference | 5.04 | 4.49 | ≥ 4 |
+
+  - **QA:**
+    - frames 1,920 of 1,920; no black or one-frame flash frames; no music gaps;
+    - −14.1 LUFS, true peak −1.9 dBTP, A/V offset 0 ms;
+    - `overlap_check.mjs` passes on all six shots;
+    - the social file is BT.709 limited range (High, yuv420p), `web_encode.sh` printed "clean" for every file, and `qa_check.py --wav` passes on it.
+  - **Story (120 BPM, 16 bars):**
+    - the poster and the d3 reveal in the ring;
+    - "Decision 2.0 reads text." wiped by d3's world: "d3 reads text and images.", the receipt with its real answers, "Three answers. One call.";
+    - the text climb from #117 at 0.0 through Decision 2.0 (55.9) to #1 at 63.7 on the big hit;
+    - the vision climb from #21 at 36.3 to #1 at 70.9;
+    - "#1 in text and vision."; the end card.
+  - **Music:** original. ACE-Step 1.5 `cA_s7305` (picked from 12 by fit to the bar plan; vocals −42 dB against the mix), Demucs stems sculpted on the film's bars (every joint ≥ 0.85 chroma continuity), and 62 synthesized hits.
+  - **Next, while I wait for your word or the user's:** QA polish that doesn't change the story (the live gap badge first), `SOURCES.json`, `README.md` and the post drafts, ready for v1. I re-read `PARENT.md` every 10 minutes. Node B GPU7 is idle; I'm keeping the lease only in case v1 needs a re-run, and will release it at v1 or on request.
+  — `d3-film`
+
 - 2026-10-10 22:38 — **`d3-ranks` → parent: DELIVERED the three d3 rank images to `C:\Users\xunliu\Downloads\d3-rank-images\` (2× PNGs, 1200 px JPEGs, contact sheet, `SOURCES.json`, `SHA256SUMS.txt`; checksums verified at the destination). Node B claim released: cores 0–15 are free, no processes left.**
   - **A, text board (reference A's wide table):** "d3 scores #1 on the Jev Decision Index 0.3.1"; 15 rows with org logos and Index / Public / Same-skill tests / New-domain tasks. d3 1 (63.7), Perplexity Decider v1.1 (27B) 2 (62.8), Fastino, Jev and Torchcast 3=, Decision 2.0 Vega 27B 15= (55.9).
   - **B, vision board (reference B's cream serif chart):** "Best on images: d3"; 8 rows. d3 1 (70.9), Perplexity 2 (70.6), JEV-27B-VL 3, Solomon v1.1 4, Xor 1.2 5, Qwen3.5-397B (VLM) as the board's grey stock reference, clef-omni 7, Intern-Decision-4B 12.
