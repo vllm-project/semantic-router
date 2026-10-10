@@ -4,12 +4,30 @@ export interface APIError {
   message: string
 }
 
+export interface ArchitectureDriverDescriptor {
+  id: CapabilityID
+  family: string
+  display_name: string
+  supported_targets: Array<Target>
+  supported_formats: Array<CapabilityID>
+  supported_runtimes: Array<CapabilityID>
+  required_model_files?: Array<string>
+}
+
 export interface Artifact {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   provenance: Provenance
   profile: Profile
+}
+
+export interface ArtifactFormatDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  file_extensions: Array<string>
+  direct_runtimes: Array<CapabilityID>
 }
 
 export interface ArtifactResult {
@@ -19,7 +37,7 @@ export interface ArtifactResult {
 }
 
 export interface ArtifactVariant {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   artifact_id: string
@@ -33,7 +51,7 @@ export interface ArtifactVariantSpec {
 }
 
 export interface Attempt {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   number: number
@@ -45,7 +63,7 @@ export interface Attempt {
 }
 
 export interface BindingProposal {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   variant_id: string
@@ -58,6 +76,21 @@ export interface BindingProposalSpec {
   qualification_id: string
   name: string
 }
+
+export interface CapabilityCatalog {
+  schema_version: "semantic-router.training/v2"
+  targets: Array<TargetDescriptor>
+  trainers: Array<TrainerDescriptor>
+  architectures: Array<ArchitectureDriverDescriptor>
+  executors: Array<ExecutorDescriptor>
+  formats: Array<ArtifactFormatDescriptor>
+  runtimes: Array<RuntimeAdapterDescriptor>
+  precisions: Array<PrecisionDescriptor>
+  hardware: Array<HardwareProviderDescriptor>
+  conversions?: Array<ConversionRule>
+}
+
+export type CapabilityID = string
 
 export interface Catalog {
   asset_request: DataAssetSpec
@@ -84,6 +117,9 @@ export interface Catalog {
   error: APIError
   event_page: EventPage
   worker_submission: WorkerSubmission
+  capability_catalog: CapabilityCatalog
+  plan_request: TrainingPlanRequest
+  plan_response: TrainingPlanResponse
 }
 
 export interface ClassifierProfile {
@@ -108,8 +144,15 @@ export interface Component {
   version: string
 }
 
+export interface ConversionRule {
+  source_format: CapabilityID
+  target_format: CapabilityID
+  executor: CapabilityID
+  hardware: Array<CapabilityID>
+}
+
 export interface DataAsset {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   name: string
@@ -122,7 +165,7 @@ export interface DataAssetSpec {
 }
 
 export interface DataSnapshot {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   asset_id: string
@@ -133,8 +176,12 @@ export interface DataSnapshot {
   content: File
 }
 
+export type DiagnosticCode = "UNSUPPORTED_TARGET" | "UNKNOWN_CAPABILITY" | "INCOMPATIBLE_ARCHITECTURE" | "INCOMPATIBLE_EXECUTOR" | "INCOMPATIBLE_HARDWARE" | "INCOMPATIBLE_PRECISION" | "MISSING_FORMAT_CONVERSION" | "UNSUPPORTED_QUALIFICATION" | "INVALID_PARAMETER"
+
+export type DiagnosticSeverity = "error" | "warning"
+
 export interface Evaluation {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   provenance: Provenance
@@ -165,8 +212,17 @@ export interface EventPage {
   next_after: number
 }
 
+export interface ExecutorDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  supported_hardware: Array<CapabilityID>
+  min_memory_bytes?: number
+  isolation_level: string
+}
+
 export interface Experiment {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   name: string
@@ -203,8 +259,16 @@ export interface Fixture {
   proposal: BindingProposal
 }
 
+export interface HardwareProviderDescriptor {
+  id: CapabilityID
+  provider: string
+  device_type: string
+  display_name: string
+  supported_precisions: Array<CapabilityID>
+}
+
 export interface Metadata {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
 }
@@ -212,6 +276,46 @@ export interface Metadata {
 export interface ModelRef {
   repository: string
   revision: string
+}
+
+export interface ParameterConstraint {
+  type: string
+  required: boolean
+  default?: unknown
+  description?: string
+  enum?: Array<string>
+  minimum?: number
+  maximum?: number
+}
+
+export interface PlanDiagnostic {
+  code: DiagnosticCode
+  severity: DiagnosticSeverity
+  field?: string
+  message: string
+  remediation?: string
+}
+
+export interface PlannedQualification {
+  key: string
+  task_key: string
+  runtime: CapabilityID
+  hardware: CapabilityID
+  precision: CapabilityID
+  connector: string
+}
+
+export interface PlannedVariant {
+  key: string
+  format: CapabilityID
+  producing_task: string
+  qualifications: Array<PlannedQualification>
+}
+
+export interface PrecisionDescriptor {
+  id: CapabilityID
+  name: string
+  bits_per_element: number
 }
 
 export type Profile =
@@ -229,7 +333,7 @@ export interface Provenance {
 }
 
 export interface Qualification {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   provenance: Provenance
@@ -244,6 +348,25 @@ export interface QualificationSpec {
   runtime: Component
   compatible: boolean
   receipt: File
+}
+
+export interface QualificationTargetRequest {
+  key: string
+  runtime: CapabilityID
+  hardware: CapabilityID
+  precision: CapabilityID
+}
+
+export interface ResolvedTrainingPlan {
+  target_contract: Target
+  trainer: CapabilityID
+  architecture?: CapabilityID
+  executor: CapabilityID
+  training_hardware: CapabilityID
+  training_precision: CapabilityID
+  tasks: Array<TaskSpec>
+  artifact_variants: Array<PlannedVariant>
+  resolved_parameters: Record<string, unknown>
 }
 
 export interface RunGraph {
@@ -269,13 +392,24 @@ export interface RunSpec {
 }
 
 export interface RunTask {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   run_id: string
   spec: TaskSpec
   status: Status
   attempts: Array<Attempt>
+}
+
+export interface RuntimeAdapterDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  supported_targets: Array<Target>
+  accepted_formats: Array<CapabilityID>
+  supported_hardware: Array<CapabilityID>
+  supported_precisions: Array<CapabilityID>
+  connector: string
 }
 
 export interface SelectorProfile {
@@ -299,12 +433,19 @@ export interface SpanProfile {
 export type Status = "pending" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled" | "skipped"
 
 export interface SubmitRunRequest {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   idempotency_key: string
   spec: RunSpec
 }
 
 export type Target = "selector.model-choice/v1" | "signal.label-scores/v1" | "signal.spans/v1"
+
+export interface TargetDescriptor {
+  id: CapabilityID
+  target_contract: Target
+  display_name: string
+  description?: string
+}
 
 export interface TaskSpec {
   key: string
@@ -312,8 +453,40 @@ export interface TaskSpec {
   executor: Component
 }
 
+export interface TrainerDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  supported_targets: Array<Target>
+  supported_architectures?: Array<CapabilityID>
+  supported_executors: Array<CapabilityID>
+  supported_hardware: Array<CapabilityID>
+  supported_precisions: Array<CapabilityID>
+  produced_formats: Array<CapabilityID>
+  parameters?: Record<string, ParameterConstraint>
+}
+
+export interface TrainingPlanRequest {
+  schema_version: "semantic-router.training/v2"
+  target_contract: Target
+  architecture?: CapabilityID
+  trainer: CapabilityID
+  executor?: CapabilityID
+  training_hardware: CapabilityID
+  training_precision: CapabilityID
+  parameters?: Record<string, unknown>
+  qualification_targets?: Array<QualificationTargetRequest>
+}
+
+export interface TrainingPlanResponse {
+  schema_version: "semantic-router.training/v2"
+  valid: boolean
+  plan?: ResolvedTrainingPlan
+  diagnostics?: Array<PlanDiagnostic>
+}
+
 export interface TrainingRun {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   spec: RunSpec
@@ -322,7 +495,7 @@ export interface TrainingRun {
 }
 
 export interface Upload {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   handle: string
@@ -331,7 +504,7 @@ export interface Upload {
 }
 
 export interface ValidationRequest {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   spec: RunSpec
 }
 
@@ -342,7 +515,7 @@ export interface ValidationResponse {
 export interface WorkerRequest {
   base_model?: ModelRef
   run_id: string
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   attempt_id: string
   task_id: string
   executor: Component
@@ -353,7 +526,7 @@ export interface WorkerRequest {
 }
 
 export interface WorkerResult {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   status: "running" | "succeeded" | "failed" | "cancelled"
   diagnostic?: string
   artifacts?: Array<ArtifactResult>
@@ -362,6 +535,6 @@ export interface WorkerResult {
 }
 
 export interface WorkerSubmission {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   worker_handle: string
 }

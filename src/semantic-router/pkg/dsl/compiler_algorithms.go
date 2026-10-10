@@ -5,6 +5,7 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 type algorithmSubConfigCompiler func(*Compiler, *config.AlgorithmConfig, map[string]Value)
 
 var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
+	"cascade": compileCascadeAlgorithm,
 	"confidence": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Confidence = c.compileConfidenceAlgo(fields)
 	},
@@ -38,6 +39,9 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"prompt": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Prompt = c.compilePromptAlgo(fields)
 	},
+	"decision": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Decision = c.compileDecisionModelAlgo(fields)
+	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
@@ -65,8 +69,43 @@ func (c *Compiler) compilePromptAlgo(
 	return cfg
 }
 
+func (c *Compiler) compileDecisionModelAlgo(
+	fields map[string]Value,
+) *config.DecisionSelectionConfig {
+	cfg := &config.DecisionSelectionConfig{}
+	decision, ok := fields["decision"].(ObjectValue)
+	if !ok {
+		return cfg
+	}
+	if value, ok := getStringField(decision.Fields, "deployment"); ok {
+		cfg.Deployment = value
+	}
+	if value, ok := getStringField(decision.Fields, "instructions"); ok {
+		cfg.Instructions = value
+	}
+	if value, ok := getIntField(decision.Fields, "timeout_ms"); ok {
+		cfg.TimeoutMs = value
+	}
+	if candidates, ok := decision.Fields["candidates"].(ObjectValue); ok {
+		cfg.Candidates = make(map[string]string, len(candidates.Fields))
+		for name := range candidates.Fields {
+			if value, ok := getStringField(candidates.Fields, name); ok {
+				cfg.Candidates[name] = value
+			}
+		}
+	}
+	return cfg
+}
+
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
+	if spec.AlgoType != config.DecisionAlgorithmCascade {
+		for _, name := range []string{"budget", "stages"} {
+			if _, present := spec.Fields[name]; present {
+				c.addError(spec.Pos, "algorithm.%s requires cascade", name)
+			}
+		}
+	}
 	if minimum, ok := getIntField(spec.Fields, "minimum_candidates"); ok {
 		algo.MinimumCandidates = minimum
 	}

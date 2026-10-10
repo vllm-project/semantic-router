@@ -53,7 +53,7 @@ class ContractTests(unittest.TestCase):
 
     def test_schema_and_openapi_references(self):
         Draft202012Validator.check_schema(SCHEMA)
-        api = yaml.safe_load((CONTRACT_ROOT / "training-v1.openapi.yaml").read_text())
+        api = yaml.safe_load((CONTRACT_ROOT / "training-v2.openapi.yaml").read_text())
         operation_ids = []
         for path, methods in api["paths"].items():
             for method, operation in methods.items():
@@ -68,7 +68,7 @@ class ContractTests(unittest.TestCase):
             if isinstance(value, dict):
                 if "$ref" in value:
                     ref = value["$ref"]
-                    if ref.startswith("./training-v1.schema.json#/$defs/"):
+                    if ref.startswith("./training-v2.schema.json#/$defs/"):
                         self.assertIn(ref.rsplit("/", 1)[1], SCHEMA["$defs"])
                     else:
                         resolved = api
@@ -130,6 +130,171 @@ class ContractTests(unittest.TestCase):
             },
             "Profile",
         )
+
+    def test_capabilities_fixture(self):
+        fixture = json.loads((CONTRACT_ROOT / "testdata/capabilities.json").read_text())
+        validate(fixture, "CapabilityCatalog")
+
+    def test_capability_catalog_schema(self):
+        catalog = {
+            "schema_version": "semantic-router.training/v2",
+            "targets": [
+                {
+                    "id": "target/selector.model-choice@v1",
+                    "target_contract": "selector.model-choice/v1",
+                    "display_name": "Model Selector",
+                }
+            ],
+            "trainers": [
+                {
+                    "id": "trainer/selector@v1",
+                    "component": {"name": "selector", "version": "1"},
+                    "display_name": "Model Selector",
+                    "supported_targets": ["selector.model-choice/v1"],
+                    "supported_executors": ["executor/train@v1"],
+                    "supported_hardware": ["hardware/cpu@v1"],
+                    "supported_precisions": ["precision/fp32@v1"],
+                    "produced_formats": ["format/selector-v2@v1"],
+                }
+            ],
+            "architectures": [
+                {
+                    "id": "architecture/selector-tabular@v1",
+                    "family": "selector",
+                    "display_name": "Selector Tabular",
+                    "supported_targets": ["selector.model-choice/v1"],
+                    "supported_formats": ["format/selector-v2@v1"],
+                    "supported_runtimes": ["runtime/native@v1"],
+                }
+            ],
+            "executors": [
+                {
+                    "id": "executor/train@v1",
+                    "component": {"name": "train", "version": "1"},
+                    "display_name": "Standard Trainer",
+                    "supported_hardware": ["hardware/cpu@v1"],
+                    "isolation_level": "container",
+                }
+            ],
+            "formats": [
+                {
+                    "id": "format/selector-v2@v1",
+                    "component": {"name": "selector-v2", "version": "1"},
+                    "display_name": "Selector V2",
+                    "file_extensions": [".json"],
+                    "direct_runtimes": ["runtime/native@v1"],
+                }
+            ],
+            "runtimes": [
+                {
+                    "id": "runtime/native@v1",
+                    "component": {"name": "native", "version": "1"},
+                    "display_name": "Native Runtime",
+                    "supported_targets": ["selector.model-choice/v1"],
+                    "accepted_formats": ["format/selector-v2@v1"],
+                    "supported_hardware": ["hardware/cpu@v1"],
+                    "supported_precisions": ["precision/fp32@v1"],
+                    "connector": "sr.native.embedded.v1",
+                }
+            ],
+            "precisions": [
+                {
+                    "id": "precision/fp32@v1",
+                    "name": "float32",
+                    "bits_per_element": 32,
+                }
+            ],
+            "hardware": [
+                {
+                    "id": "hardware/cpu@v1",
+                    "provider": "cpu",
+                    "device_type": "cpu",
+                    "display_name": "Host CPU",
+                    "supported_precisions": ["precision/fp32@v1"],
+                }
+            ],
+        }
+        validate(catalog, "CapabilityCatalog")
+
+    def test_training_plan_request_and_response_schema(self):
+        plan_req = {
+            "schema_version": "semantic-router.training/v2",
+            "target_contract": "selector.model-choice/v1",
+            "trainer": "trainer/selector@v1",
+            "training_hardware": "hardware/cpu@v1",
+            "training_precision": "precision/fp32@v1",
+            "parameters": {"seed": 42},
+            "qualification_targets": [
+                {
+                    "key": "native",
+                    "runtime": "runtime/native@v1",
+                    "hardware": "hardware/cpu@v1",
+                    "precision": "precision/fp32@v1",
+                }
+            ],
+        }
+        validate(plan_req, "TrainingPlanRequest")
+
+        plan_resp = {
+            "schema_version": "semantic-router.training/v2",
+            "valid": True,
+            "plan": {
+                "target_contract": "selector.model-choice/v1",
+                "trainer": "trainer/selector@v1",
+                "architecture": "architecture/selector-tabular@v1",
+                "executor": "executor/train@v1",
+                "training_hardware": "hardware/cpu@v1",
+                "training_precision": "precision/fp32@v1",
+                "tasks": [
+                    {"key": "train", "executor": {"name": "train", "version": "1"}},
+                    {
+                        "key": "evaluate",
+                        "depends_on": ["train"],
+                        "executor": {"name": "evaluate", "version": "1"},
+                    },
+                    {
+                        "key": "qualify-native",
+                        "depends_on": ["evaluate"],
+                        "executor": {"name": "qualify", "version": "1"},
+                    },
+                ],
+                "artifact_variants": [
+                    {
+                        "key": "primary",
+                        "format": "format/selector-v2@v1",
+                        "producing_task": "train",
+                        "qualifications": [
+                            {
+                                "key": "native",
+                                "task_key": "qualify-native",
+                                "runtime": "runtime/native@v1",
+                                "hardware": "hardware/cpu@v1",
+                                "precision": "precision/fp32@v1",
+                                "connector": "sr.native.embedded.v1",
+                            }
+                        ],
+                    }
+                ],
+                "resolved_parameters": {"seed": 42, "normalize": True},
+            },
+            "diagnostics": [],
+        }
+        validate(plan_resp, "TrainingPlanResponse")
+
+        plan_reject = {
+            "schema_version": "semantic-router.training/v2",
+            "valid": False,
+            "diagnostics": [
+                {
+                    "code": "INCOMPATIBLE_HARDWARE",
+                    "severity": "error",
+                    "field": "training_hardware",
+                    "message": "trainer does not support hardware/cuda@v1",
+                    "remediation": "Select hardware/cpu@v1",
+                }
+            ],
+        }
+        validate(plan_reject, "TrainingPlanResponse")
 
 
 class ClassifierProvenanceTests(unittest.TestCase):
@@ -221,7 +386,7 @@ class ClassifierProvenanceTests(unittest.TestCase):
         }
         validate(
             {
-                "schema_version": "semantic-router.training/v1",
+                "schema_version": "semantic-router.training/v2",
                 "status": "succeeded",
                 "artifacts": [{"profile": self.profile, "variants": [self.variant]}],
             },

@@ -115,18 +115,11 @@ const modelModule = (label: string, detector = false): RouterStructuredSchema =>
     model_id: text('Model ID'),
     threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
     use_cpu: boolean('Use CPU'),
-    use_mmbert_32k: boolean('Use mmBERT 32K'),
     ...(detector
       ? {
           min_span_length: number('Min Span Length', { min: 1 }),
           min_span_confidence: number('Min Span Confidence', { min: 0, max: 1, step: 0.01 }),
           context_window_size: number('Context Window Size', { min: 1 }),
-          enable_nli_filtering: boolean('Enable NLI Filtering'),
-          nli_entailment_threshold: number('NLI Entailment Threshold', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
         }
       : {}),
   })
@@ -153,8 +146,6 @@ const classifierModelSchema = (
     model_id: text('Model ID'),
     threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
     use_cpu: boolean('Use CPU'),
-    use_modernbert: boolean('Use ModernBERT'),
-    use_mmbert_32k: boolean('Use mmBERT 32K'),
     ...(mappingField ? { [mappingField]: text('Mapping Path') } : {}),
     ...(mappingField === 'category_mapping_path'
       ? { fallback_category: text('Fallback Category') }
@@ -193,12 +184,15 @@ const metricsSchema = object('Metrics', {
 export const ROUTER_STRUCTURED_FIELDS: Partial<
   Record<RouterSystemKey, Record<string, RouterStructuredFieldDefinition>>
 > = {
-  router_core: {
-    auto_model_names: {
-      label: 'Auto Model Aliases',
-      description: 'Accepted aliases for automatic model routing.',
-      schema: stringList('Alias', 'vllm-sr/auto'),
+  system_models: {
+    decision_model: {
+      label: 'Default Decision Deployment',
+      description:
+        'Reference a declared deployment. Models and task overrides are managed in System One → Decision Models.',
+      schema: object('Decision Model', { deployment: text('Deployment', { required: true }) }),
     },
+  },
+  router_core: {
     streamed_body: {
       label: 'Streamed Body',
       description: 'Limits for streamed ext-proc request bodies.',
@@ -481,13 +475,8 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
     detector: {
       label: 'Detector Module',
-      description: 'Hallucination detector model and span/NLI thresholds.',
+      description: 'Hallucination detector model and span thresholds.',
       schema: modelModule('Detector Module', true),
-    },
-    explainer: {
-      label: 'Explainer Module',
-      description: 'Hallucination explainer model binding and threshold.',
-      schema: modelModule('Explainer Module'),
     },
   },
   external_models: {
@@ -497,7 +486,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       schema: objectList(
         'External Model',
         {
-          llm_provider: text('Provider', { required: true }),
+          llm_provider: text('Provider'),
           model_role: text('Model Role', { required: true }),
           llm_endpoint: object('Endpoint', {
             address: text('Address'),
@@ -562,7 +551,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
   looper: {
     headers: {
       label: 'Headers',
-      description: 'Headers sent to the Looper endpoint.',
+      description: 'Headers added to every Looper model call.',
       schema: stringMap('Header'),
     },
   },

@@ -42,9 +42,18 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 		modelVerificationAuditor: options.modelVerificationAuditor,
 	})
 	registerToolRoutes(mux, cfg)
-	registerStatusRoutes(mux, cfg, options.statusHandler, store)
+	for _, operation := range []string{"compile", "validate", "parse", "decompile", "format"} {
+		registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/dsl/"+operation, auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.DSLEditorHandler(operation))
+	}
+	registerStatusRoutes(mux, cfg, options.statusHandler, stackState(cfg, setupResolver), store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
+	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
+		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
+	}
+	registerRouteFunc(mux, auth.PublicRoute("/v1/systemone/models", http.MethodGet), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
 }
 
 func registerRecipeRoutes(mux routeRegistrar, cfg *config.Config, stores ...*recipe.Store) {
@@ -108,14 +117,14 @@ func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.C
 
 func registerHealthAndSetupRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *setupmode.Resolver) {
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
-	registerRouteFunc(mux, auth.PublicRoute("/healthz", http.MethodGet), handlers.HealthCheck)
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/settings", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.SettingsHandler(cfg, setupResolver))
-	registerRouteFunc(mux, auth.PublicRoute("/api/setup/state", http.MethodGet), handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/setup/import-remote", auth.PermConfigWrite, "setup.import_remote", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 64<<10, http.MethodPost), handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/setup/validate", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver))
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/setup/activate", auth.PermConfigDeploy, "setup.activate", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir, setupResolver))
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/setup/presets", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.PresetsHandler())
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/setup/presets/delta", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.PresetDeltaHandler())
+	registerRouteFunc(mux, auth.PublicRoute("/healthz", http.MethodGet).Describe(http.MethodGet, healthzOperation), handlers.HealthCheck)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/settings", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet).Describe(http.MethodGet, settingsOperation), handlers.SettingsHandler(cfg, setupResolver))
+	registerRouteFunc(mux, auth.PublicRoute("/api/setup/state", http.MethodGet).Describe(http.MethodGet, setupStateOperation), handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/setup/import-remote", auth.PermConfigWrite, "setup.import_remote", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 64<<10, http.MethodPost).Describe(http.MethodPost, setupImportRemoteOperation), handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/setup/validate", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 16<<20, http.MethodPost).Describe(http.MethodPost, setupValidateOperation), handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver))
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/setup/activate", auth.PermConfigDeploy, "setup.activate", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost).Describe(http.MethodPost, setupActivateOperation), handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir, setupResolver))
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/setup/presets", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet).Describe(http.MethodGet, setupPresetsOperation), handlers.PresetsHandler())
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/setup/presets/delta", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, 2<<20, http.MethodPost).Describe(http.MethodPost, setupPresetDeltaOperation), handlers.PresetDeltaHandler())
 }
 
 func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions ...configRouteOptions) {
@@ -128,6 +137,14 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
+	decisionModel := handlers.DecisionModelHandler(cfg.RouterAPIURL, store)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/tasks", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.DecisionTaskCatalogHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/capabilities", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), decisionModel)
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/decision-model/test", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), decisionModel)
+	nativeRoutes := auth.ProtectedRoute("/api/decision-model/routes", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet)
+	nativeRoutes.Policies = append(nativeRoutes.Policies, auth.ProtectedBoundedRoute("/api/decision-model/routes", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost).Policies...)
+	nativeRoutes = nativeRoutes.Describe(http.MethodGet, decisionRoutesOperation).Describe(http.MethodPost, decisionRouteRunOperation)
+	registerRouteFunc(mux, nativeRoutes, handlers.DecisionModelRoutesHandler(cfg.RouterAPIURL, store))
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/models/catalog", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/models/discover", auth.PermConfigWrite, "model.discover", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.ModelDiscoveryHandler(nil))
 	registerRouteFunc(mux, auth.ProtectedDelegatedAuditRoute("/api/models/verify", auth.PermEvalRun, "model.inference_verify", auth.SensitivitySensitive, auth.ResourceOwnerInference, 2<<20, http.MethodPost), handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
@@ -135,9 +152,9 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath)},
+		{"/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly)},
 		{"/api/router/config/schema", handlers.ConfigSchemaHandler(cfg.RouterAPIURL, store)},
-		{"/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath)},
+		{"/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly)},
 		{"/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath)},
 		{"/api/router/config/deployments", handlers.ConfigDeploymentsHandler()},
 		{"/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler()},
@@ -146,7 +163,7 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 		registerRouteFunc(mux, auth.ProtectedRoute(route.path, auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, http.MethodGet), route.handler)
 	}
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/update", auth.PermConfigWrite, "config.update", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost, http.MethodPut), handlers.UpdateConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/router/config/deploy/preview", auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.DeployPreviewHandler(cfg.AbsConfigPath))
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/router/config/deploy/preview", auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.DeployPreviewHandler(cfg.AbsConfigPath, runtimeConfigReadonly))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/deploy", auth.PermConfigDeploy, "config.deploy", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.DeployHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/rollback", auth.PermConfigDeploy, "config.rollback", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost), handlers.RollbackHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/schema, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
@@ -155,7 +172,6 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/global/update", auth.PermConfigWrite, "config.global.update", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost, http.MethodPut), handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/router/config/global/raw", auth.PermConfigRead, auth.SensitivitySecret, auth.ResourceOwnerConfig, http.MethodGet), handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/router/config/global/raw/update", auth.PermConfigWrite, "config.global_raw.update", auth.SensitivitySecret, auth.ResourceOwnerConfig, 16<<20, http.MethodPost, http.MethodPut), handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	registerKnowledgeBaseRoutes(mux, cfg, store)
 	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update")
 }
 
@@ -203,16 +219,20 @@ func resolveToolsDBPath(cfg *config.Config) string {
 	return filepath.Join(projectRoot, toolSelection.ToolsDBPath)
 }
 
-func registerStatusRoutes(mux routeRegistrar, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
+func registerStatusRoutes(mux routeRegistrar, cfg *config.Config, statusHandler http.HandlerFunc, stack handlers.StackState, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
 	if statusHandler == nil {
-		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, store)
+		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, stack, store)
 	}
 	registerRouteFunc(mux, auth.PublicRoute("/api/status", http.MethodGet), statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
 
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/logs", auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet), handlers.LogsHandler(cfg.RouterAPIURL))
 	log.Printf("Logs API endpoint registered: /api/logs")
+}
+
+func stackState(cfg *config.Config, setupResolver *setupmode.Resolver) handlers.StackState {
+	return handlers.StackState{ConfigPath: cfg.AbsConfigPath, Setup: setupResolver}
 }
 
 func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialProvider ...*recipe.Store) {
@@ -222,7 +242,10 @@ func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialPr
 }
 
 func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store) {
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/availability", auth.PermMlPipeline, auth.SensitivityOperational, auth.ResourceOwnerML, http.MethodGet), handlers.MLPipelineAvailabilityHandler(cfg))
 	if !cfg.MLPipelineEnabled {
+		cfg.MLPipelineAvailable = false
+		cfg.MLPipelineUnavailableReason = "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true."
 		log.Printf("ML Pipeline feature disabled")
 		return
 	}
@@ -251,6 +274,8 @@ func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workfl
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/download/", auth.PermMlPipeline, auth.SensitivitySecret, auth.ResourceOwnerML, http.MethodGet), mlHandler.DownloadOutputHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/stream/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.StreamProgressHandler())
 	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
+	cfg.MLPipelineAvailable = true
+	cfg.MLPipelineUnavailableReason = ""
 
 	if trainingDir != "" {
 		log.Printf("ML Training scripts directory: %s", trainingDir)

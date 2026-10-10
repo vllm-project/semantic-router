@@ -1733,9 +1733,7 @@ global:
   router:
     config_source: file
     strategy: priority
-    auto_model_name: MoM
-    auto_model_names: []
-    include_config_models_in_list: false
+    list_backend_models: false
     clear_route_cache: true
     model_selection:
       enabled: true
@@ -1809,7 +1807,6 @@ global:
       eviction_policy: fifo
   integrations:
     looper:
-      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1200
       flow:
         state:
@@ -1839,7 +1836,6 @@ global:
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
       hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
-      hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     modules:
       prompt_guard:
@@ -1847,7 +1843,6 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Guard
         threshold: 0.7
         use_cpu: true
-        variant: mmbert32k
         max_sequence_length: 32768
         window:
           size: 512
@@ -1860,7 +1855,6 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
-          use_mmbert_32k: true
           pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           model_ref: pii_classifier
       complexity:
@@ -1875,7 +1869,6 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-FactCheck
           threshold: 0.85
           use_cpu: true
-          use_mmbert_32k: true
           model_ref: fact_check_classifier
         detector:
           model_id: models/Vela-1.0-Encoder-307M-Halu
@@ -1884,20 +1877,11 @@ global:
           min_span_length: 1
           min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: false
-          nli_entailment_threshold: 0.75
           model_ref: hallucination_detector
-        explainer:
-          model_id: models/mom-halugate-explainer
-          threshold: 0.9
-          use_cpu: true
-          model_ref: hallucination_explainer
       feedback_detector:
         enabled: true
         model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.5
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
         feedback_mapping_path: ''
         model_ref: feedback_detector

@@ -155,7 +155,7 @@ def main():
         "Feedback Detector",
         "src/training/model_classifier/user_feedback_classifier/train_feedback_detector.py",
         [
-            "--model_name", "llm-semantic-router/mmbert-32k-yarn",
+            "--model_name", "vllm-sr/mmbert-32k-yarn",
             "--output_dir", f"{models_dir}/feedback-detector",
             "--epochs", feedback_epochs,
             "--batch_size", batch_size,

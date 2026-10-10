@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -34,7 +34,7 @@ func TestQdrantExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 		EmbeddingProvider: cacheTestEmbeddingProvider(),
 		Enabled:           true,
 		TTLSeconds:        60,
-		EmbeddingModel:    "bert",
+		EmbeddingModel:    "qwen3",
 		Config: &config.QdrantConfig{
 			Host:           host,
 			Port:           port,

@@ -92,7 +92,7 @@ logger = logging.getLogger(__name__)
 
 MODALITY_DATASET_ID = os.getenv(
     "MODALITY_DATASET_ID",
-    "llm-semantic-router/modality-routing-dataset",
+    "vllm-sr/modality-routing-dataset",
 )
 TEXT_TASKS = tuple(
     sorted(

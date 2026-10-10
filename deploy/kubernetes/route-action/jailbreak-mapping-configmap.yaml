@@ -1,6 +1,6 @@
 # The route-action profile runs prompt_guard with backend.protocol: http_classify
-# against a deliberately unreachable endpoint - it never runs local (candle)
-# jailbreak inference, so it doesn't need the real
+# against a deliberately unreachable endpoint - it never runs local jailbreak
+# inference, so it doesn't need the real
 # mmbert32k-jailbreak-detector-merged model weights. It still needs *a*
 # jailbreak_type_mapping.json on disk (see the jailbreak-onerror profile);
 # this ConfigMap supplies a minimal stand-in mapping via

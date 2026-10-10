@@ -1,13 +1,13 @@
 {
   "asset": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "asset_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "name": "neural",
     "target_contract": "signal.label-scores/v1"
   },
   "upload": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "upload_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "handle": "file_neural-data",
@@ -15,7 +15,7 @@
     "size_bytes": 7
   },
   "snapshot": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "snapshot_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "asset_id": "asset_neural",
@@ -46,14 +46,14 @@
     }
   },
   "experiment": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "experiment_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "name": "neural",
     "target_contract": "signal.label-scores/v1"
   },
   "submit": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "idempotency_key": "neural-fixture",
     "spec": {
       "experiment_id": "experiment_neural",
@@ -108,7 +108,7 @@
   },
   "graph": {
     "run": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "run_neural",
       "created_at": "2026-09-23T00:00:00Z",
       "spec": {
@@ -166,7 +166,7 @@
     },
     "tasks": [
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "task_neural-train",
         "created_at": "2026-09-23T00:00:00Z",
         "run_id": "run_neural",
@@ -180,7 +180,7 @@
         "status": "succeeded",
         "attempts": [
           {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "id": "attempt_neural-train",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
@@ -192,7 +192,7 @@
         ]
       },
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "task_neural-evaluate",
         "created_at": "2026-09-23T00:00:00Z",
         "run_id": "run_neural",
@@ -209,7 +209,7 @@
         "status": "succeeded",
         "attempts": [
           {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "id": "attempt_neural-evaluate",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
@@ -221,7 +221,7 @@
         ]
       },
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "task_neural-qualify",
         "created_at": "2026-09-23T00:00:00Z",
         "run_id": "run_neural",
@@ -238,7 +238,7 @@
         "status": "succeeded",
         "attempts": [
           {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "id": "attempt_neural-qualify",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
@@ -263,11 +263,11 @@
     }
   },
   "worker_request": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "run_id": "run_neural",
     "attempt_id": "attempt_neural-train",
     "snapshot": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "snapshot_neural",
       "created_at": "2026-09-23T00:00:00Z",
       "asset_id": "asset_neural",
@@ -320,7 +320,7 @@
     }
   },
   "train_result": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "status": "succeeded",
     "artifacts": [
       {
@@ -372,7 +372,7 @@
     ]
   },
   "artifact": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "artifact_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "profile": {
@@ -401,7 +401,7 @@
     }
   },
   "variant": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "variant_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "artifact_id": "artifact_neural",
@@ -433,11 +433,11 @@
     }
   },
   "evaluate_request": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "run_id": "run_neural",
     "attempt_id": "attempt_neural-evaluate",
     "snapshot": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "snapshot_neural",
       "created_at": "2026-09-23T00:00:00Z",
       "asset_id": "asset_neural",
@@ -469,7 +469,7 @@
     },
     "inputs": [
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "variant_neural",
         "created_at": "2026-09-23T00:00:00Z",
         "artifact_id": "artifact_neural",
@@ -524,7 +524,7 @@
     }
   },
   "evaluate_result": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "status": "succeeded",
     "evaluations": [
       {
@@ -541,7 +541,7 @@
     ]
   },
   "evaluation": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "evaluation_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "variant_id": "variant_neural",
@@ -570,7 +570,7 @@
     }
   },
   "qualify_result": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "status": "succeeded",
     "qualifications": [
       {
@@ -589,7 +589,7 @@
     ]
   },
   "qualification": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "qualification_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "variant_id": "variant_neural",
@@ -620,7 +620,7 @@
     }
   },
   "proposal": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "proposal_neural",
     "created_at": "2026-09-23T00:00:00Z",
     "variant_id": "variant_neural",

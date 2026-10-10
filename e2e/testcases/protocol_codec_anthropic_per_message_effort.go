@@ -40,7 +40,7 @@ func testProtocolCodecAnthropicPerMessageEffort(ctx context.Context, client *kub
 
 func testProtocolCodecAnthropicPerMessageEffortBackend(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runProtocolCodecAnthropicPerMessageEffort(ctx, client, opts, []perMessageEffortBackend{
-		{model: "MoM", format: "anthropic.messages.v1", reply: protocolCodecAnthropicReply},
+		{model: "vllm-sr/auto", format: "anthropic.messages.v1", reply: protocolCodecAnthropicReply},
 	})
 }
 

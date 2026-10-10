@@ -9,6 +9,7 @@ import React, {
 import { useAuth } from './AuthContext'
 import { preloadPlatformAssets } from '../utils/platformAssets'
 import { decodeDashboardSettings } from './dashboardSettings'
+import { withRequestTimeout } from '../utils/boundedRequest'
 
 interface ReadonlyContextType {
   isReadonly: boolean
@@ -23,6 +24,9 @@ interface ReadonlyContextType {
   routerEvalEndpoint: string
   srBenchAvailable: boolean
   srBenchUnavailableReason: string
+  mlPipelineAvailable: boolean
+  mlPipelineUnavailableReason: string
+  mlPipelineAvailabilityChecked: boolean
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
@@ -38,6 +42,9 @@ const ReadonlyContext = createContext<ReadonlyContextType>({
   routerEvalEndpoint: '',
   srBenchAvailable: false,
   srBenchUnavailableReason: 'Evaluation availability has not been loaded.',
+  mlPipelineAvailable: false,
+  mlPipelineUnavailableReason: 'ML setup availability has not been loaded.',
+  mlPipelineAvailabilityChecked: false,
 })
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -65,6 +72,11 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [srBenchUnavailableReason, setSrBenchUnavailableReason] = useState(
     'Evaluation availability has not been loaded.',
   )
+  const [mlPipelineAvailable, setMLPipelineAvailable] = useState(false)
+  const [mlPipelineUnavailableReason, setMLPipelineUnavailableReason] = useState(
+    'ML setup availability has not been loaded.',
+  )
+  const [mlPipelineAvailabilityChecked, setMLPipelineAvailabilityChecked] = useState(false)
 
   const refreshSettings = useCallback(() => {
     setIsReadonly(true)
@@ -72,6 +84,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     setRuntimeConfigWritable(false)
     setRecipeStoreWritable(false)
     setSrBenchAvailable(false)
+    setMLPipelineAvailable(false)
     setSettingsError(null)
     setIsLoading(true)
     setSettingsRevision((revision) => revision + 1)
@@ -85,6 +98,8 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setRecipeStoreWritable(false)
       setSrBenchAvailable(false)
       setSrBenchUnavailableReason('Evaluation is unavailable without an authenticated session.')
+      setMLPipelineAvailable(false)
+      setMLPipelineUnavailableReason('ML setup is unavailable without an authenticated session.')
       setPlatform('')
       setEnvoyUrl('')
       setRouterEvalEndpoint('')
@@ -94,6 +109,33 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     }
 
     const controller = new AbortController()
+    // General settings require config.read, which can be granted independently
+    // of mlpipeline.manage. ML Setup availability therefore also lives on the
+    // ML surface itself, so an ML-authorized user without config.read still
+    // gets an answer instead of a permanently closed gate.
+    const readMLPipelineAvailabilityFromMLSurface = async (signal: AbortSignal) => {
+      try {
+        const data = await withRequestTimeout(async (requestSignal) => {
+          const response = await fetch('/api/ml-pipeline/availability', { signal: requestSignal })
+          if (!response.ok) throw new Error('ML availability is unavailable.')
+          return (await response.json()) as {
+            mlPipelineAvailable?: boolean
+            mlPipelineUnavailableReason?: string
+          }
+        }, signal)
+        if (signal.aborted) return
+        setMLPipelineAvailable(data.mlPipelineAvailable === true)
+        setMLPipelineUnavailableReason(
+          typeof data.mlPipelineUnavailableReason === 'string'
+            ? data.mlPipelineUnavailableReason
+            : '',
+        )
+        setMLPipelineAvailabilityChecked(true)
+      } catch {
+        // Availability stays fail-closed; the settings failure already explains why.
+      }
+    }
+
     const fetchSettings = async () => {
       setIsLoading(true)
       setSettingsError(null)
@@ -106,17 +148,22 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setRecipeStoreWritable(false)
       setSrBenchAvailable(false)
       setSrBenchUnavailableReason('Evaluation availability is being checked.')
+      setMLPipelineAvailable(false)
+      setMLPipelineUnavailableReason('ML setup availability is being checked.')
+      setMLPipelineAvailabilityChecked(false)
       let failureMessage = 'Dashboard access settings are unavailable. Refresh access to retry.'
       try {
-        const response = await fetch('/api/settings', { signal: controller.signal })
-        if (!response.ok) {
-          if (response.status === 403) {
-            failureMessage =
-              'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
+        const data = await withRequestTimeout(async (signal) => {
+          const response = await fetch('/api/settings', { signal })
+          if (!response.ok) {
+            if (response.status === 403) {
+              failureMessage =
+                'Access to Dashboard settings was denied. Refresh access or contact an administrator.'
+            }
+            throw new Error(`Dashboard settings request failed (${response.status})`)
           }
-          throw new Error(`Dashboard settings request failed (${response.status})`)
-        }
-        const data = decodeDashboardSettings(await response.json())
+          return decodeDashboardSettings(await response.json())
+        }, controller.signal)
         if (controller.signal.aborted) return
         setSettingsError(null)
         setIsReadonly(data.readonlyMode)
@@ -125,6 +172,9 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         setRecipeStoreWritable(data.recipeStoreWritable)
         setSrBenchAvailable(data.srBenchAvailable)
         setSrBenchUnavailableReason(data.srBenchUnavailableReason)
+        setMLPipelineAvailable(data.mlPipelineAvailable)
+        setMLPipelineUnavailableReason(data.mlPipelineUnavailableReason)
+        setMLPipelineAvailabilityChecked(true)
         const platformValue = data.platform
         setPlatform(platformValue)
         setEnvoyUrl(data.envoyUrl)
@@ -134,6 +184,9 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         if (!controller.signal.aborted) {
           setSettingsError(failureMessage)
           setSrBenchUnavailableReason('Dashboard settings are unavailable.')
+          // ML availability can recover independently; it must not hold the
+          // access-settings retry state open for another network round trip.
+          void readMLPipelineAvailabilityFromMLSurface(controller.signal)
           console.warn('Failed to fetch dashboard settings:', error)
         }
       } finally {
@@ -160,6 +213,9 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         routerEvalEndpoint,
         srBenchAvailable,
         srBenchUnavailableReason,
+        mlPipelineAvailable,
+        mlPipelineUnavailableReason,
+        mlPipelineAvailabilityChecked,
       }}
     >
       {children}

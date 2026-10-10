@@ -44,13 +44,6 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 		add("replay_store", r.ReplayRecorder != nil || r.ReplayRecorders[config.RoutingDecisionKey(binding.Recipe, binding.Decision)] != nil)
 	case *config.HallucinationPluginConfig:
 		add("hallucination_detector", classifier != nil && classifier.IsHallucinationDetectorReady())
-		useNLI := policy.UseNLI
-		if rules := r.hallucinationRules(request); len(rules) > 0 {
-			useNLI = hallucinationRulesUseNLI(rules)
-		}
-		if useNLI {
-			add("nli", classifier != nil && classifier.IsHallucinationExplainerReady())
-		}
 	case *config.ResponseJailbreakPluginConfig:
 		add("response_jailbreak_classifier", classifier != nil && classifier.IsJailbreakEnabled())
 	case *config.ToolsPluginConfig:

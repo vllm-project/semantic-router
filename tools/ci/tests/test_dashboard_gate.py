@@ -188,41 +188,20 @@ class DashboardGateTest(unittest.TestCase):
         self.assertIn("playwright install --with-deps chromium", recipe)
         self.assertIn("npm run test:e2e:evaluation", recipe)
 
-    def test_wizmap_compilation_is_shared_with_the_embedded_build(self) -> None:
-        build = TARGETS["dashboard-build-wizmap"]
-        self.assertIn("dashboard-wizmap-deps", build.prereqs)
-        self.assertIn("npm run build", " ".join(build.recipe))
-        self.assertIn("dashboard-build-wizmap", TARGETS["dashboard-type-check"].prereqs)
-        frontend = TARGETS["dashboard-build-frontend"]
-        self.assertIn("dashboard-build-wizmap", frontend.prereqs)
-        recipe = _expand(" ".join(frontend.recipe), VARIABLES)
-        self.assertIn(
-            "cp -R dashboard/wizmap/dist/. dashboard/frontend/dist/embedded/wizmap/",
-            recipe,
-        )
-        self.assertLess(recipe.index("npm run build"), recipe.index("cp -R"))
-        self.assertNotIn("build:embedded", recipe)
-        self.assertNotIn("npx tsc", " ".join(build.recipe))
-
-    def test_parallel_dashboard_targets_reuse_compiled_wizmap_and_fail_closed(self):
+    def test_parallel_dashboard_targets_build_frontend_and_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for path in ("bin", "dashboard/frontend", "dashboard/wizmap"):
+            for path in ("bin", "dashboard/frontend"):
                 (root / path).mkdir(parents=True)
             npm = root / "bin" / "npm"
             npm.write_text(
                 "#!/bin/sh\nset -eu\n"
                 'if [ "$*" != "run build" ]; then exit 0; fi\n'
-                'if [ "${PWD##*/}" = wizmap ]; then\n'
-                '  echo wizmap >> "$BUILD_CALLS"\n'
-                '  test "${FAIL_WIZMAP:-0}" = 0\n'
-                "  mkdir -p dist\n"
-                "  echo compiled-map > dist/index.html\n"
-                "else\n"
-                "  rm -rf dist\n"
-                "  mkdir -p dist\n"
-                "  echo frontend > dist/index.html\n"
-                "fi\n"
+                'echo frontend >> "$BUILD_CALLS"\n'
+                'test "${FAIL_FRONTEND:-0}" = 0\n'
+                "rm -rf dist\n"
+                "mkdir -p dist\n"
+                "echo frontend > dist/index.html\n"
             )
             npm.chmod(0o755)
             makefile = root / "Makefile"
@@ -250,23 +229,22 @@ class DashboardGateTest(unittest.TestCase):
                             "dashboard-build-frontend",
                         ],
                         cwd=root,
-                        env=dict(env, FAIL_WIZMAP=str(int(fail))),
+                        env=dict(env, FAIL_FRONTEND=str(int(fail))),
                         capture_output=True,
                         text=True,
                         check=False,
                         timeout=15,
                     )
-                    self.assertEqual((root / "build-calls.txt").read_text(), "wizmap\n")
+                    self.assertEqual(
+                        (root / "build-calls.txt").read_text(), "frontend\n"
+                    )
                     if fail:
                         self.assertNotEqual(result.returncode, 0)
                     else:
                         self.assertEqual(result.returncode, 0, result.stderr)
                         self.assertEqual(
-                            (
-                                root
-                                / "dashboard/frontend/dist/embedded/wizmap/index.html"
-                            ).read_text(),
-                            "compiled-map\n",
+                            (root / "dashboard/frontend/dist/index.html").read_text(),
+                            "frontend\n",
                         )
 
     def test_dashboard_workflow_reuses_the_browser_make_target(self) -> None:

@@ -16,7 +16,7 @@ checked training configurations.
 ## Published Vela checkpoints
 
 Current Vela embedding and reranking checkpoints use the shared
-[Vela Base](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M).
+[Vela Base](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M).
 Their model cards provide native loading examples. The BGE/AllNLI and
 BGE/Quora/FEVER configurations below describe the original mmBERT training
 recipes; they do not reproduce a current Vela checkpoint.

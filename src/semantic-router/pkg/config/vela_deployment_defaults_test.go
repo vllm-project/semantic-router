@@ -9,7 +9,7 @@ import (
 )
 
 func TestVelaDeploymentDownloadsMatchRegistryPinsAndPaths(t *testing.T) {
-	pattern := regexp.MustCompile(`\("(llm-semantic-router/Vela-[^"]+)", "(Vela-[^"]+)", "([a-f0-9]{40})"\)`)
+	pattern := regexp.MustCompile(`\("(vllm-sr/Vela-[^"]+)", "(Vela-[^"]+)", "([a-f0-9]{40})"\)`)
 	// OpenShift's provider fixtures share one Router deployment and its pinned preloads.
 	for _, asset := range []string{"deploy/kserve/deployment.yaml", "deploy/openshift/deployment.yaml"} {
 		t.Run(asset, func(t *testing.T) {

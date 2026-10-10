@@ -45,6 +45,25 @@ func TestSettingsHandlerReportsSRBenchConfiguration(t *testing.T) {
 	}
 }
 
+func TestSettingsHandlerReportsMLPipelineConfiguration(t *testing.T) {
+	t.Parallel()
+	authContext := adminSettingsAuthContext("ml-pipeline-admin")
+
+	available := requestSettings(t, &config.Config{
+		MLPipelineAvailable: true,
+	}, authContext)
+	if !available.MLPipelineAvailable || available.MLPipelineUnavailableReason != "" {
+		t.Fatalf("available ML pipeline response = %#v", available)
+	}
+
+	unavailable := requestSettings(t, &config.Config{
+		MLPipelineUnavailableReason: "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true.",
+	}, authContext)
+	if unavailable.MLPipelineAvailable || unavailable.MLPipelineUnavailableReason == "" {
+		t.Fatalf("unavailable ML pipeline response = %#v", unavailable)
+	}
+}
+
 func requestSettings(t *testing.T, cfg *config.Config, authContext auth.AuthContext) SettingsResponse {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)

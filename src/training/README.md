@@ -16,7 +16,7 @@ MOM artifacts retain their original training owners.
 | `model_eval/` | cross-family evaluation utilities |
 | `model_experiment/` | experiments that are not release owners |
 | `model_selection/` | learned model-selection research |
-| `kv_mapper/` | cross-model KV ridge-mapper artifacts (#2976) |
+| `kv_mapper/` | cross-model KV mapper artifacts, ridge fit and distillation (#2976) |
 
 Each release-owning family has a focused directory with a README,
 machine-readable configuration, explicit data/output paths, train and export
@@ -29,20 +29,22 @@ data preparation, commands, evaluation, and artifact format.
 
 ## Training control-plane contract
 
-`semantic-router.training/v1` defines shared resources and messages for selector
+`semantic-router.training/v2` defines shared resources and messages for selector
 training and neural fine-tuning. This is a contract for future management and
 worker implementations; HTTP routes, persistence, scheduling and Console training
-flows are not implemented by this package.
+flows are not implemented by this package. v2 replaced v1 when the Router's
+embedded Candle and ONNX Runtime runtimes were removed: classifiers qualify on the
+model runtime, and v1 documents are refused.
 
 The canonical [Go contract](../semantic-router/pkg/trainingcontract/) generates
-[JSON Schema](../semantic-router/pkg/trainingcontract/training-v1.schema.json) and
+[JSON Schema](../semantic-router/pkg/trainingcontract/training-v2.schema.json) and
 [Console types](../../dashboard/frontend/src/generated/trainingContract.ts).
 [Python validation](control_plane/contracts.py) consumes that schema directly.
-The [OpenAPI contract](../semantic-router/pkg/trainingcontract/training-v1.openapi.yaml)
+The [OpenAPI contract](../semantic-router/pkg/trainingcontract/training-v2.openapi.yaml)
 defines management operations, ownership, output discovery, submission idempotency,
 cancellation and retry semantics.
 
-`APIError.code` is an open string. New codes may be added within v1 without a
+`APIError.code` is an open string. New codes may be added within v2 without a
 contract-version bump; existing codes retain their meanings. Clients must accept
 unknown codes and handle them as generic errors using HTTP status and `message`.
 The OpenAPI error response lists the well-known codes and their HTTP statuses.
@@ -99,11 +101,31 @@ resources, run output IDs and task outcome together. Evaluation and qualificatio
 reuse published variant IDs. A protocol-invalid final result becomes a failed
 attempt with diagnostics.
 
+### Capability catalog and planning
+
+The capability layer resolves a requested training outcome across independently extensible
+trainer, architecture, hardware, artifact, and runtime capabilities without central switch
+statements or hard-coded UI enums. Capability IDs follow `<domain>/<name>@<version>`
+(e.g. `trainer/hf-peft@v1`, `architecture/hf-modernbert@v1`, `hardware/rocm@v1`, `runtime/model-runtime@v1`).
+
+Training hardware requirements remain distinct from inference qualification hardware requirements:
+a neural model trained on CUDA/ROCm GPUs may be planned and qualified across multiple runtime targets
+(such as `runtime/model-runtime@v1`, the model runtime's OpenAPI 2.x contract, on a CPU or an AMD GPU).
+The built-in catalog qualifies ModernBERT label-score and span classifiers from Safetensors
+checkpoints on the model runtime and selectors on the native runtime. When a registered runtime
+accepts only another format, the planner schedules the conversion a registered rule provides.
+
+Clients query `GET /capabilities` to discover supported descriptors and `POST /capabilities/plan`
+to validate proposed combinations. Unsupported combinations return stable machine-readable reason
+codes (such as `INCOMPATIBLE_HARDWARE`, `INCOMPATIBLE_ARCHITECTURE`, `UNSUPPORTED_TARGET`,
+`MISSING_FORMAT_CONVERSION`) and actionable remediation messages.
+
 ### Generate and verify
 
 From the repository root, run `make training-contract-generate` after changing Go
-types, then `make training-contract-check` to check generated drift, Go semantics,
-Python schema validation and provenance compatibility. In `dashboard/frontend`,
+types or the default capability descriptors, then `make training-contract-check`
+to check generated drift, Go semantics, Python schema validation and provenance
+compatibility. In `dashboard/frontend`,
 run `npx vitest run src/utils/trainingContract.test.ts` for Console consumption.
 
 The shared [selector and neural fixtures](../semantic-router/pkg/trainingcontract/testdata/)

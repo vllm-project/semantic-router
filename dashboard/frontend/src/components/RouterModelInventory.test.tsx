@@ -15,6 +15,7 @@ import {
   getRouterModelDevice,
   getRouterModelDisplayName,
   getRouterModelInputLimits,
+  getRouterModelKind,
   getRouterModelPreviewName,
 } from './routerModelPresentation'
 import { filterAndSortRouterModels } from './routerModelInventorySupport'
@@ -36,10 +37,10 @@ const models: RouterModelInfo[] = [
   loaded: true,
   model_path: `models/local-ckfa/${task}-0123456789ab`,
   registry: {
-    repo_id: `llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    repo_id: `vllm-sr/Vela-1.0-Encoder-307M-${task}`,
     revision: 'test-registry-revision',
     max_context_length: 32768,
-    model_card_url: `https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    model_card_url: `https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-${task}`,
   },
   metadata: {
     binding: name,
@@ -52,7 +53,7 @@ const models: RouterModelInfo[] = [
     forward_max_tokens: '32768',
     overflow: 'truncate',
     precision: 'native',
-    provider: 'ort',
+    provider: 'model_runtime',
   },
 }))
 
@@ -76,7 +77,7 @@ describe('router model presentation', () => {
       models.map((model) => model.registry!.repo_id!.split('/')[1]).sort(),
     )
     expect(headings(markup)).toHaveLength(8)
-    expect(markup.match(/>llm-semantic-router<\/p>/g)).toHaveLength(8)
+    expect(markup.match(/>vllm-sr<\/p>/g)).toHaveLength(8)
     expect(markup).not.toContain('Vela Embedding')
     expect(markup).not.toContain('0123456789ab')
     expect(markup).not.toContain('models/local-ckfa')
@@ -109,6 +110,44 @@ describe('router model presentation', () => {
     expect(detail).not.toContain('Open model card')
     const resolved = { ...model, resolved_model_path: '/models/derived/current' }
     expect(getRouterModelArtifactPath(resolved)).toBe('/models/derived/current')
+  })
+
+  it('identifies a shared decision runtime from its reported implicit deployment', () => {
+    const consumers = ['pii_classifier', 'jailbreak_classifier', 'safety.unsafe_request'].map(
+      (name): RouterModelInfo => ({
+        ...models[5],
+        name,
+        registry: undefined,
+        model_path: 'opaque-artifact-fingerprint',
+        metadata: {
+          ...models[5].metadata,
+          binding: name,
+          deployment: '@Vela-2.0-4B/auto',
+          resource_id: 'shared-decision-runtime',
+        },
+      }),
+    )
+    const markup = render(consumers)
+    expect(headings(markup)).toEqual(['Vela-2.0-4B'])
+    expect(markup).toContain('Shared decision model runtime')
+    expect(markup).toContain('Shared by 3 consumers')
+    expect(markup).not.toContain('opaque-artifact-fingerprint')
+    expect(getRouterModelKind(consumers[0])).toBe('Decision model')
+    expect(getRouterModelDisplayName(consumers[0])).toBe('Vela-2.0-4B')
+    expect(filterAndSortRouterModels(consumers, 'Vela-2.0-4B', 'all', 'name')).toHaveLength(3)
+    expect(render(consumers, 'detail')).toContain('opaque-artifact-fingerprint')
+  })
+
+  it('does not infer a decision model from arbitrary deployment labels or binding names', () => {
+    for (const deployment of ['Vela-2.0-4B', '@Vela-2.0-4B-other/auto', '@other/auto']) {
+      const model = {
+        ...models[5],
+        registry: undefined,
+        metadata: { ...models[5].metadata, deployment },
+      }
+      expect(getRouterModelDisplayName(model)).toBe(model.name)
+      expect(getRouterModelKind(model)).not.toBe('Decision model')
+    }
   })
 
   it('separates a 262K document budget from the actual 32K physical window', () => {
@@ -203,9 +242,13 @@ describe('router model presentation', () => {
     expect(render([cpu], 'detail')).not.toContain('amd-logo.png')
     expect(render([models[3]], 'detail')).toContain('ROCm 0')
     expect(render([models[3]])).not.toContain('AMD GPU')
-    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'migraphx:2' } })).toEqual({
-      label: 'MIGraphX 2',
+    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'rocm:2' } })).toEqual({
+      label: 'ROCm 2',
       isAmd: true,
+    })
+    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'xpu:1' } })).toEqual({
+      label: 'XPU 1',
+      isAmd: false,
     })
     expect(getRouterModelDevice({ ...cpu, metadata: {} })).toEqual({
       label: 'Device not reported',

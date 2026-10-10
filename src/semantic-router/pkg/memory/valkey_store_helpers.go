@@ -1,5 +1,3 @@
-//go:build !riscv64
-
 package memory
 
 import (
@@ -15,7 +13,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 // ---------------------------------------------------------------------------
@@ -62,58 +59,6 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	}
 
 	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Hybrid re-ranking
-// ---------------------------------------------------------------------------
-
-// hybridRerank applies BM25 + n-gram scoring on top of vector results.
-func (v *ValkeyStore) hybridRerank(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {
-	pseudoChunks := make(map[string]vectorstore.EmbeddedChunk, len(candidates))
-	vectorScores := make(map[string]float64, len(candidates))
-	keyToCandidate := make(map[string]*RetrieveResult, len(candidates))
-
-	for i, c := range candidates {
-		key := fmt.Sprintf("_mem_%d", i)
-		pseudoChunks[key] = vectorstore.EmbeddedChunk{ID: key, Content: c.Memory.Content}
-		vectorScores[key] = float64(c.Score)
-		keyToCandidate[key] = c
-	}
-
-	hybridCfg := &vectorstore.HybridSearchConfig{Mode: opts.HybridMode}
-
-	bm25K1 := hybridCfg.BM25K1
-	if bm25K1 == 0 {
-		bm25K1 = 1.2
-	}
-	bm25B := hybridCfg.BM25B
-	if bm25B == 0 {
-		bm25B = 0.75
-	}
-	ngramSize := hybridCfg.NgramSize
-	if ngramSize <= 0 {
-		ngramSize = 3
-	}
-
-	bm25Idx := vectorstore.NewBM25Index(pseudoChunks)
-	bm25Scores := bm25Idx.Score(opts.Query, bm25K1, bm25B)
-
-	ngramIdx := vectorstore.NewNgramIndex(pseudoChunks, ngramSize)
-	ngramScores := ngramIdx.Score(opts.Query)
-
-	fused := vectorstore.FuseScores(vectorScores, bm25Scores, ngramScores, hybridCfg)
-
-	reranked := make([]*RetrieveResult, 0, len(fused))
-	for _, fc := range fused {
-		c, ok := keyToCandidate[fc.ChunkID]
-		if !ok {
-			continue
-		}
-		c.Score = float32(fc.FinalScore)
-		reranked = append(reranked, c)
-	}
-	return reranked
 }
 
 // ---------------------------------------------------------------------------

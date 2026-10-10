@@ -3,16 +3,14 @@ sidebar_position: 5
 title: 多模型混合
 description: 虚拟模型如何把共享的独立模型池变成稳定、面向目标的 AI 服务。
 translation:
-  source_commit: "6e177d91a30a4336a105ff82310f0f5d3a85b8dd"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/mom-model-family.md"
   outdated: false
 ---
 
 # 多模型混合
 
-**Mixture of Models（MoM）** 是一种服务架构：若干独立部署的模型作为一个系统工作。路由策略决定由哪个模型、级联、评审组或工作流处理每次请求。
-
-客户端不必知道哪个物理后端胜出。它请求的是代表期望行为的稳定虚拟模型。
+**Mixture of Models（MoM）** 将独立部署的模型呈现为一个虚拟模型。配方为每次请求选择模型、级联、评审组或有界工作流。Harness 使用稳定的模型名，保留自己的任务循环与工具。
 
 ```mermaid
 flowchart LR
@@ -33,11 +31,11 @@ MoM 可以组合稠密模型、MoE 模型、托管 API 和本地模型。它们�
 
 | 种类 | 示例 | 角色 |
 | --- | --- | --- |
-| **提供方模型** | vLLM、Ollama 或托管模型端点 | 生成应用响应。 |
+| **提供方模型** | vLLM、Ollama 或托管模型端点 | 生成推理响应。 |
 | **虚拟模型** | `vllm-sr/mom-v1-flash` | 为客户端给出稳定目标，并选择配方。 |
 | **Router 系统模型** | 嵌入或分类器资产 | 帮助检测意图、风险、相似度或其他路由信号。 |
 
-Router 系统模型支撑决策过程；它们本身不是面向客户端的 Mixture of Models 产品。
+Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 System One 直接发布。在多个判断模型间路由 System One 使用显式声明的[原生配方](component-architecture#route-system-one-across-decision-models)，与 Chat Mixture of Models 分开。
 
 ## 执行模式
 
@@ -88,7 +86,7 @@ recipes:
 
 ## MoM V1
 
-MoM V1 提供五个内置配方。连接自己的后端，再选择适合应用的策略：
+MoM V1 提供五个内置配方。连接自己的后端，再选择适合 harness 模型调用的策略：
 
 | 公开模型 | 配方 | 决策 |
 | --- | --- | --- |
@@ -100,7 +98,9 @@ MoM V1 提供五个内置配方。连接自己的后端，再选择适合应用�
 
 Balance 综合任务难度、重要建议和回答纠错信号。Speed 与 Cost 使用更轻量的路由信号。Accuracy 通常选择一个强模型；独立评审和工作流需要明确的执行意图。长输入或领域标签本身不会触发多模型执行。
 
-Vault 的每条路径都禁用客户端工具和 Router 内容存储。`guard` 会直接拦截检测到的提示攻击。Safety 和 Hazard 将内容风险交给 `sensitive` 的高质量私有模型池，让后端可以提供安全的支持、分析或必要的拒绝；PII 和保密信息也使用这个池。其他请求走 `private`。这些路径需要分配满足隐私要求的后端；配方无法保证后端的物理位置或提供方的数据保留行为。
+Vault 的每条路径都禁用客户端工具、记忆、响应缓存和新的 Responses 对象写入。回放采集单独配置且默认开启，详见 [Router Replay](../tutorials/plugin/router-replay)。`guard` 会直接拦截检测到的提示攻击。Safety 和 Hazard 将内容风险交给 `sensitive`，让已批准的模型提供负责任的帮助、解释风险材料，或拒绝有害协助。Hazard 使用模型发布的类别阈值。其他决策也需要分配满足隐私要求的后端；配方无法保证后端的物理位置或提供方的数据保留行为。
+
+Vault 的 Guard 和 PII 运行在默认的 Vela 2.0 0.3B 上，它最多读取 8,192 个 token，超出部分截断。Hazard 任务有 32,768 token 的分流输入预算，包含该任务评估的对话文本。此检查先于后端上下文检查；超出预算时会拒绝请求：Preview 返回 HTTP 503、信号错误，且不选择模型。更大的后端上下文窗口不会增加分流预算。Hazard 默认在 CPU 上运行，即使请求未超预算，也应测量长输入分流延迟；加速部署需要单独验证。
 
 启动或恢复服务：
 
