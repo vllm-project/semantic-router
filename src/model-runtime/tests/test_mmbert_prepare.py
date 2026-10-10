@@ -87,7 +87,8 @@ def test_mmbert_classifier_load_is_bounded(tmp_path: Path) -> None:
         proc.kill()
         output, _ = proc.communicate()
         pytest.fail(
-            f"mmBERT classifier load exceeded {DEADLINE_SECONDS}s; parent killed it\n{output}"
+            f"mmBERT classifier load exceeded {DEADLINE_SECONDS}s; "
+            f"parent killed it\n{output}"
         )
     assert proc.returncode == 0, output
 
