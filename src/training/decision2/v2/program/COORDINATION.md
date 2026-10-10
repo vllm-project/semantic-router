@@ -210,6 +210,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-10 18:06 — **`s1auto-film` → parent: v1 DELIVERED to `C:\Users\xunliu\Downloads\systemone-auto-film\v1\` — the social encode for X and LinkedIn, the master, the poster, three covers and `SOURCES.json`; both videos pass QA.**
+
+  **What changed from d5:** only the opening, as approved at 17:2x. After the opening, the bars, music and timing are d5 unchanged; the contact sheet confirms it frame by frame.
+  - Your two fixes are in. The disclaimer now sits bottom-right below the counter pill, and nothing passes under it. The counter pill rises once the first row is under way and starts at 10, so it never reads "1 decision models".
+  - The optional Liquid AI d1 label is not added. That would have meant a re-render and a fact check of its licence, which I can do on request.
+
+  **Files** (all checksums verified after the transfer):
+
+  | File | Spec |
+  | --- | --- |
+  | `systemone-auto-v1-social-1080p60.mp4` (**post this one**) | 1920×1080 60 fps, H.264 High 4.2, yuv420p BT.709 limited range, `+faststart`, AAC 48 kHz 192 kbps; 6.5 Mbps, 47.6 MB |
+  | `systemone-auto-v1-master-1080p60.mp4` | same format at CRF 14, AAC 256 kbps; 10.2 Mbps, 74.7 MB |
+  | `poster.jpg`, `cover-1920x1080.png`, `cover-1280x720.png`, `cover-1200x630.png` | the cover frame; the 1200×630 card is bottom-anchored so the disclaimer stays whole |
+  | `systemone-auto-v1-contact.jpg`, `SOURCES.json`, `SHA256SUMS.txt`, `README.md` | contact sheet, provenance, checksums, a one-page guide |
+
+  **QA (`qa_check.py`, blocking, on both videos):** all eight checks pass.
+  - 3,513 of 3,513 frames, 58.55 s.
+  - No black frames, no one-frame flashes, no music gaps.
+  - −14.9 LUFS integrated; true peak −1.7 dBTP (master) and −1.4 dBTP (social).
+  - A/V offset 0.0 ms against the score.
+
+  Two delivery fixes beyond the render:
+  - The render came out full-range BT.601, which platforms often mis-handle. Both deliverables are re-encoded to tagged BT.709 limited range.
+  - Every tool tag is stripped: the renderer's "Made with …" comment, the encoder tags, the x264 settings SEI and the AAC encoder string. A string scan of every file returns zero.
+
+  **The count:** the film shows "1,471 decision models on Hugging Face · Oct 10, 2026", as the user asked. My re-check of https://huggingface.co/models?other=decision-model right before the master read **1,469** at 09:24:36Z. Earlier readings were 1,467 (yours) and 1,468 (09:16Z), so the count is still climbing. All readings are in `facts/facts.md` and `SOURCES.json`. If the user wants the live figure instead, it's one number: about 25 minutes including the transfer.
+
+  **Also available on request** (d5 was frozen, so none of these are in v1): the small d5 issues that d8 had fixed, namely the "System One API" label under "decisions.", request 2's panel timing, the configure headline cut, and the end card's Kai tile over GLiDE.
+
+  **Logistics:**
+  - The link from node B fell to about 34 KB/s per connection, so I fetched files as byte ranges over 8 to 12 connections. That's why delivery landed at 18:05 instead of 18:00.
+  - `logo_sheet.mjs` ran on node B: 48 marks on light and dark grounds.
+  - I'm releasing my GPU 6–7 leases and the node B CPU claim now.
+  - The `d25.omni.runner --gpus 6` job on node B is not mine; I left it alone.
+
+- 2026-10-10 18:00 — **parent: the System One Auto v1 social cut is delivered to the user** (`Downloads/systemone-auto-film/v1/`; sha256 matches node B). Covers, poster and `SHA256SUMS.txt` are delivered too. `s1auto-film` is still pulling the master.
+
 - 2026-10-10 17:50 — **`film-skill` → parent: the `launch-film` template renders on node B. Both house-world examples meet every Decision 2.0 v6.2 motion target and pass the overlap and QA checks. Next: the references and samples, an acceptance run from a fresh scaffold, then the install.**
   - **The ruler is calibrated.** `motion_table.py` re-measures the v6.2 master at exactly its published numbers: 58.4 moves per minute, moving share 0.631, ease-out share 0.68, median move 0.516 s, time-to-peak 0.14, frame difference 4.49 and 72 moves. A 60 fps master is read at v6.2's 30 fps, so the two compare directly.
   - **The examples** are 7 s each at 120 BPM, 1080p60, with a synthesized placeholder bed and our own sound effects. Round 6 results:
