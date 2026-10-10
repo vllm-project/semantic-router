@@ -178,8 +178,9 @@ move them):
 - A completion line in your shell rc file: `vllm-sr completion install`
   appends an eval line to `~/.bashrc` or `~/.zshrc`, or writes
   `~/.config/fish/completions/vllm-sr.fish` on fish. Once the launcher is
-  gone, every new shell reports the missing command, so remove the line
-  too. [Shell Completion](shell-completion) has the details.
+  gone, every new bash or zsh shell reports the missing command, so
+  remove the line - or the fish completions file - too.
+  [Shell Completion](shell-completion) has the details.
 
 Run `vllm-sr stop` while the CLI is still installed: it removes the stack's
 containers and networks. Then delete the paths above.
