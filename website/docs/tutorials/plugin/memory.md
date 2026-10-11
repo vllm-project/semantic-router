@@ -67,8 +67,8 @@ inventory covers this implementation only, as an initial slice of
 
 | Operation | Enabled behavior and supported options | Observed behavior after `Close` |
 | --- | --- | --- |
-| `Store` | Insert by unique ID; reject duplicates. Use a supplied embedding or generate one through the configured provider. Assign `CreatedAt` if absent. | No data is stored and no embedding is requested. Currently returns `nil` for an uncanceled context; see the unresolved error contract below. |
-| `Retrieve` | Cosine similarity, score descending; optional `UserID`, `ProjectID`, and `Types` filters. Apply the supplied `Threshold`; truncate only for a positive `Limit`. Hybrid search and adaptive threshold options are not implemented. | No results and no embedding work; currently returns `nil, nil`. |
+| `Store` | Insert by unique ID; reject duplicates. Use a supplied embedding or generate one through the configured provider. Assign `CreatedAt` if absent. | No data is stored and no embedding is requested. Currently returns `nil` for an uncanceled context; error alignment is tracked in [#4842](https://github.com/vllm-project/semantic-router/pull/4842). |
+| `Retrieve` | Cosine similarity, score descending. A nonempty `UserID` restricts results to that user; an empty `UserID` searches all users. Optional `ProjectID` and `Types` filters still apply. Apply the supplied `Threshold`; truncate only for a positive `Limit`. Hybrid search and adaptive threshold options are not implemented. | No results and no embedding work; currently returns `nil, nil`. Error alignment is tracked in #4842. |
 | `Get` | Look up an ID; missing IDs return an error. | Disabled error, no memory. |
 | `Update` | Require an existing ID. Update content, type, and update time; regenerate the embedding when content changes. Apply nonempty project and source values. | Disabled error. |
 | `List` | Require `UserID`; optional `Types` filter. Use the shared limit/offset and ordering contract from [#4325](https://github.com/vllm-project/semantic-router/issues/4325). | Disabled error, no page. |
@@ -77,6 +77,12 @@ inventory covers this implementation only, as an initial slice of
 | `IsEnabled` | `true` immediately after construction; no background initialization. | `false`. |
 | `CheckConnection` | `nil`; there is no external connection or remote health probe. | Disabled error. |
 | `Close` | Clear retained memories and disable the instance. | Repeated calls succeed. |
+
+Unlike Milvus and Valkey, which reject an empty retrieval `UserID`, the in-memory
+implementation treats it as an omitted user filter. Callers requiring user
+isolation must supply a nonempty `UserID`; project and type filters alone do not
+isolate users. The scope test below records this backend-specific behavior, not
+a shared contract for all stores.
 
 Each instance has its own process-local map. Data is visible to subsequent
 operations on that instance, but a new instance starts empty; there is no disk
@@ -89,17 +95,22 @@ not a concurrent close/drain or router reload guarantee.
 
 The closed-state error behavior is inconsistent: `Store` and `Retrieve` currently
 return success-shaped no-ops, while the other data operations return disabled
-errors. Whether to preserve these no-ops or align the errors is an open contract
-question in #4393. The lifecycle tests assert no retained data or embedding work
+errors. [#4842](https://github.com/vllm-project/semantic-router/pull/4842) tracks
+alignment to `ErrStoreDisabled` / `ErrStoreClosed` across all backends, including
+moving the in-memory enabled checks under the lock to fix the `Store` vs `Close`
+race. Until that change lands, these are observations of the current
+implementation. The lifecycle tests assert no retained data or embedding work
 after close without establishing the current `nil` errors as a write/retrieval
-guarantee.
+guarantee or depending on the disabled error wording.
 
 ### Verification coverage
 
 `src/semantic-router/pkg/memory/inmemory_store_lifecycle_test.go` uses small
 precomputed vectors and an injected function provider, with no database or model
 downloads. It checks resource release, repeated close, disabled operations,
-post-close writes, fresh-instance isolation, and provider reuse. Cancellation
+post-close writes, fresh-instance isolation, and provider reuse.
+`inmemory_store_retrieve_scope_test.go` checks explicit and empty user IDs,
+including project and type filters with memories from two users. Cancellation
 coverage stays in `embedding_cancellation_test.go`, including
 `TestCanceledStoreDoesNotPersistPrecomputedEmbedding`; this slice does not add a
 new cancellation or pagination contract. After building the native libraries
@@ -107,7 +118,7 @@ required by the Router module, run the focused checks from its directory:
 
 ```bash
 go test ./pkg/memory \
-  -run '^(TestInMemoryStore(CloseReleasesMemories|ClosedOperations|ClosedWritesDoNotPersist|LifetimeAndEmbeddingOwnership)|TestCanceledStoreDoesNotPersistPrecomputedEmbedding)$' \
+  -run '^(TestInMemoryStore(CloseReleasesMemories|ClosedOperations|ClosedWritesDoNotPersist|LifetimeAndEmbeddingOwnership|RetrieveUserScope)|TestCanceledStoreDoesNotPersistPrecomputedEmbedding)$' \
   -count=1
 ```
 

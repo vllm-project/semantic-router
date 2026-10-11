@@ -25,11 +25,13 @@ func TestInMemoryStoreCloseReleasesMemories(t *testing.T) {
 		require.NoError(t, store.Close(), "Close must be idempotent")
 		require.Empty(t, store.memories, "Close must release the store's retained memories")
 		require.False(t, store.IsEnabled())
-		require.ErrorContains(t, store.CheckConnection(ctx), "not enabled")
+		require.Error(t, store.CheckConnection(ctx))
 	}
 }
 
 func TestInMemoryStoreClosedOperations(t *testing.T) {
+	// #4842 covers the specific disabled/closed sentinel errors. These lifecycle
+	// assertions verify rejection without depending on the current error wording.
 	ctx := context.Background()
 	provider, err := embedding.NewFuncProvider("test", 1, func(context.Context, string) ([]float32, error) {
 		t.Fatal("closed operations must not request embeddings")
@@ -44,12 +46,12 @@ func TestInMemoryStoreClosedOperations(t *testing.T) {
 
 	t.Run("Get", func(t *testing.T) {
 		memory, err := store.Get(ctx, "remembered")
-		require.ErrorContains(t, err, "not enabled")
+		require.Error(t, err)
 		require.Nil(t, memory)
 	})
 	t.Run("List", func(t *testing.T) {
 		page, err := store.List(ctx, ListOptions{UserID: "user-1"})
-		require.ErrorContains(t, err, "not enabled")
+		require.Error(t, err)
 		require.Nil(t, page)
 	})
 	t.Run("Retrieve", func(t *testing.T) {
@@ -66,7 +68,7 @@ func TestInMemoryStoreClosedOperations(t *testing.T) {
 			return store.ForgetByScope(ctx, MemoryScope{UserID: "user-1"})
 		},
 	} {
-		t.Run(name, func(t *testing.T) { require.ErrorContains(t, operation(), "not enabled") })
+		t.Run(name, func(t *testing.T) { require.Error(t, operation()) })
 	}
 }
 
@@ -89,8 +91,8 @@ func TestInMemoryStoreClosedWritesDoNotPersist(t *testing.T) {
 				memory.Embedding = []float32{1}
 			}
 
-			// #4393 leaves the closed-write error contract for maintainer agreement.
-			// Verify no persistence without treating the current nil error as a guarantee.
+			// #4842 aligns disabled/closed errors across backends. Until it lands,
+			// verify no persistence without establishing nil as the error contract.
 			_ = store.Store(context.Background(), memory)
 			require.Empty(t, store.memories)
 			require.False(t, store.IsEnabled(), "a write must not reopen the store")
