@@ -412,6 +412,16 @@ type DecisionRequest struct {
 	// and this request's model and options would be, and its answers come back under the same name in the
 	// response's `states`. Question IDs are unique within an entry.
 	States *map[string]DecisionState `json:"states,omitempty"`
+
+	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
+	// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+	// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+	// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+	// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+	// every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+	// at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed or over-limit video.
+	Videos *DecisionVideos `json:"videos,omitempty"`
 }
 
 // DecisionResponse defines model for DecisionResponse.
@@ -453,6 +463,16 @@ type DecisionState struct {
 
 	// State The context this entry's questions are about, as a request's `state`.
 	State interface{} `json:"state"`
+
+	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
+	// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+	// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+	// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+	// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+	// every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+	// at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed or over-limit video.
+	Videos *DecisionVideos `json:"videos,omitempty"`
 }
 
 // DecisionStateResponse The answers about one entry of a request's `states`, with the fields of a response of its own.
@@ -475,6 +495,16 @@ type DecisionStateResponse struct {
 	Thresholds *map[string]float64 `json:"thresholds,omitempty"`
 	Usage      Usage               `json:"usage"`
 }
+
+// DecisionVideos Videos every question of the state sees, after its images, for models whose card lists the `video`
+// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+// every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+// at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+// invalid_request, as it does a malformed or over-limit video.
+type DecisionVideos = []string
 
 // Embedding defines model for Embedding.
 type Embedding struct {
@@ -712,7 +742,7 @@ type ModelCard struct {
 	Limits               *ModelLimits   `json:"limits,omitempty"`
 	ManifestSha256       *string        `json:"manifest_sha256,omitempty"`
 
-	// Modalities Decision models only; the inputs a decisions request may carry (`text`, and `image` for `images`).
+	// Modalities Decision models only; the inputs a decisions request may carry (`text`, `image` for `images`, `video` for `videos`).
 	Modalities  *[]string     `json:"modalities,omitempty"`
 	ModelSha256 *string       `json:"model_sha256,omitempty"`
 	Object      string        `json:"object"`
@@ -775,6 +805,27 @@ type ModelLimits struct {
 	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
 	// CPU (one forward) and the scan budget on a GPU.
 	TruncateTokens *int `json:"truncate_tokens,omitempty"`
+
+	// VideoFps Models that read videos; the frames per second the model samples.
+	VideoFps *float32 `json:"video_fps,omitempty"`
+
+	// VideoMaxBytes Models that read videos; the most bytes one supplied video may have.
+	VideoMaxBytes *int `json:"video_max_bytes,omitempty"`
+
+	// VideoMaxFrames Models that read videos; the most frames the model reads of one video.
+	VideoMaxFrames *int `json:"video_max_frames,omitempty"`
+
+	// VideoMaxPixels Models that read videos; the most pixels the model reads of one frame (larger frames are resized).
+	VideoMaxPixels *int `json:"video_max_pixels,omitempty"`
+
+	// VideoMaxSeconds Models that read videos; the longest supplied video, in seconds.
+	VideoMaxSeconds *int `json:"video_max_seconds,omitempty"`
+
+	// VideoMaxTokens Models that read videos; the most input tokens the videos of one request may take.
+	VideoMaxTokens *int `json:"video_max_tokens,omitempty"`
+
+	// VideoSourceMaxPixels Models that read videos; the most pixels one frame of a supplied video may have.
+	VideoSourceMaxPixels *int `json:"video_source_max_pixels,omitempty"`
 }
 
 // ModelList defines model for ModelList.

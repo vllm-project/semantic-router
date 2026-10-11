@@ -29,8 +29,11 @@ SYSTEM_PROMPT = (
 NOUL_DESCRIPTIONS = ("No / false", "Yes / true")
 DEFAULT_INSTRUCTIONS = "Choose the best matching option."
 IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
+VIDEO_PLACEHOLDER = "<|vision_start|><|video_pad|><|vision_end|>"
 IMAGE_TOKEN = "<|image_pad|>"
 VIDEO_TOKEN = "<|video_pad|>"
+VISION_START = "<|vision_start|>"
+VISION_END = "<|vision_end|>"
 # Chat templates whose rendering of a system turn, a user turn (text, or images
 # then text) and the thinking-off generation prompt is the format below.
 KNOWN_CHAT_TEMPLATES = frozenset(
@@ -80,11 +83,11 @@ def user_prompt(
     return "\n".join(lines)
 
 
-def render(user: str, images: int = 0) -> str:
-    """The chat-templated prompt: system turn, user turn (``images`` placeholders first), generation prompt."""
+def render(user: str, images: int = 0, videos: int = 0) -> str:
+    """The chat-templated prompt: system turn, user turn (``images``, then ``videos`` placeholders first), generation prompt."""
     return (
         f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n"
-        f"<|im_start|>user\n{IMAGE_PLACEHOLDER * images}{user}<|im_end|>\n"
+        f"<|im_start|>user\n{IMAGE_PLACEHOLDER * images}{VIDEO_PLACEHOLDER * videos}{user}<|im_end|>\n"
         "<|im_start|>assistant\n<think>\n\n</think>\n\n"
     )
 

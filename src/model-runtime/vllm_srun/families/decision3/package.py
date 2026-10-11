@@ -69,6 +69,7 @@ MODEL_FILES = (
     *IDENTITY_FILES,
 )
 IMAGE_FILES = ("preprocessor_config.json",)
+VIDEO_FILES = ("video_preprocessor_config.json",)
 WEIGHT_INDEX = "model.safetensors.index.json"
 VISION_PREFIXES = ("visual.", "model.visual.")
 TEXT_PREFIXES = ("language_model.", "model.language_model.")
@@ -86,6 +87,7 @@ class Decision3Package:
     text_prefix: str
     vision_prefix: str | None
     processor_config: dict[str, Any] | None
+    video_config: dict[str, Any] | None
     model_sha256: str
     max_input_tokens: int
 
@@ -292,6 +294,26 @@ def check_processor(config: Any) -> dict[str, Any]:
         raise PackageError(
             f"unsupported image processor {config.get('image_processor_type')!r}"
         )
+    return _check_pixels(config, "preprocessor_config.json")
+
+
+def check_video_processor(config: Any) -> dict[str, Any]:
+    """``video_preprocessor_config.json`` of the Qwen3-VL video processor with the settings the family reproduces.
+
+    The runtime replaces its frame sampling and pixel budget (``videos.py``).
+    """
+    if not isinstance(config, dict):
+        raise PackageError("video_preprocessor_config.json must be an object")
+    if config.get("video_processor_type") != "Qwen3VLVideoProcessor":
+        raise PackageError(
+            f"unsupported video processor {config.get('video_processor_type')!r}"
+        )
+    if config.get("do_center_crop"):
+        raise PackageError("unsupported video processor settings: ['do_center_crop']")
+    return _check_pixels(config, "video_preprocessor_config.json")
+
+
+def _check_pixels(config: dict[str, Any], name: str) -> dict[str, Any]:
     defaults = {
         "do_resize": True,
         "do_rescale": True,
@@ -304,10 +326,10 @@ def check_processor(config: Any) -> dict[str, Any]:
         key for key, value in defaults.items() if config.get(key, value) != value
     )
     if changed:
-        raise PackageError(f"unsupported image processor settings: {changed}")
+        raise PackageError(f"unsupported {name} settings: {changed}")
     for key in ("patch_size", "temporal_patch_size", "merge_size"):
         if type(config.get(key)) is not int or config[key] < 1:
-            raise PackageError(f"preprocessor_config.json needs a positive {key}")
+            raise PackageError(f"{name} needs a positive {key}")
     for key in ("image_mean", "image_std"):
         values = config.get(key)
         if (
@@ -315,7 +337,7 @@ def check_processor(config: Any) -> dict[str, Any]:
             or len(values) != COLOUR_CHANNELS
             or any(type(v) not in (int, float) or not math.isfinite(v) for v in values)
         ):
-            raise PackageError(f"preprocessor_config.json needs three {key} values")
+            raise PackageError(f"{name} needs three {key} values")
     if any(v == 0 for v in config["image_std"]):
         raise PackageError("image_std must not contain zero")
     return config
@@ -329,8 +351,10 @@ def verify(root: Path) -> tuple[Decision3Package, str]:
     weights = weight_files(root)
     vision_config = config.get("vision_config")
     names = [*MODEL_FILES, *weights]
-    if vision_config is not None and (root / IMAGE_FILES[0]).is_file():
-        names.append(IMAGE_FILES[0])
+    if vision_config is not None:
+        names += [
+            name for name in (*IMAGE_FILES, *VIDEO_FILES) if (root / name).is_file()
+        ]
     hashes = verify_files(root, manifest, names)
     identity_files = {
         name: hashes[name]
@@ -364,12 +388,14 @@ def verify(root: Path) -> tuple[Decision3Package, str]:
         parameters.get(key) != value for key, value in expected.items()
     ):
         raise PackageError("tensor counts differ from the manifest's parameter counts")
-    processor = None
+    processor = video = None
     if vision_prefix is not None:
         if vision_config is None:
             raise PackageError("the checkpoint has vision weights but no vision_config")
         if IMAGE_FILES[0] in names:
             processor = check_processor(read_json(root / IMAGE_FILES[0]))
+        if processor is not None and VIDEO_FILES[0] in names:
+            video = check_video_processor(read_json(root / VIDEO_FILES[0]))
     limit = decision.get("max_length") or config["text_config"].get(
         "max_position_embeddings"
     )
@@ -384,6 +410,7 @@ def verify(root: Path) -> tuple[Decision3Package, str]:
         text_prefix=text_prefix,
         vision_prefix=vision_prefix,
         processor_config=processor,
+        video_config=video,
         model_sha256=model_sha256,
         max_input_tokens=limit,
     )
