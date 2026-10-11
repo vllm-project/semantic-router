@@ -106,3 +106,14 @@ func TestAnthropicEmptyTextNormalizationIsRequestOnly(t *testing.T) {
 		t.Fatalf("empty response changed: %s", result.Body)
 	}
 }
+
+func TestAnthropicEmptyHistoryTurnIsNotSilentlyDropped(t *testing.T) {
+	for _, messages := range []string{
+		`[{"role":"user","content":"a"},{"role":"assistant","content":""},{"role":"user","content":"b"}]`,
+		`[{"role":"user","content":""}]`,
+	} {
+		_, err := NewBuiltinEngine().TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1,
+			[]byte(`{"model":"m","max_tokens":20,"messages":`+messages+`}`), nil)
+		assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "empty_anthropic_message")
+	}
+}

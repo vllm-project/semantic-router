@@ -68,3 +68,34 @@ func TestChatEmptyTextToolHistoryDispatchesToAnthropic(t *testing.T) {
 		t.Fatal("provider encoding mutated the neutral request")
 	}
 }
+
+func TestEmptyInstructionNormalizationPreservesPromptCacheMarker(t *testing.T) {
+	request := promptCacheTestRequest()
+	request.Instructions[0].Content = append(request.Instructions[0].Content,
+		llmprotocol.Content{Kind: llmprotocol.ContentText})
+	request.Tools = nil
+	ctx := &RequestContext{
+		SourceFormat:        llmprotocol.OpenAIChatV1,
+		TargetFormat:        llmprotocol.AnthropicMessagesV1,
+		SemanticRequest:     request,
+		VSRSelectedDecision: promptCacheTestDecision(map[string]interface{}{"enabled": true, "ttl": "1h"}),
+	}
+	body, err := (&OpenAIRouter{}).encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire promptCacheWireRequest
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire.System) != 2 || wire.System[0].Text != "stable preface" ||
+		wire.System[1].Text != "reusable instructions" || wire.System[0].CacheControl != nil ||
+		wire.System[1].CacheControl == nil || wire.System[1].CacheControl.Type != "ephemeral" ||
+		wire.System[1].CacheControl.TTL != "1h" {
+		t.Fatalf("normalized instructions or cache boundary changed: %s", body)
+	}
+	assertPromptCacheReceipt(t, ctx, promptCacheActionInserted, 1, 0)
+	if len(request.Instructions[0].Content) != 3 || countPromptCacheMarkers(*request) != 0 {
+		t.Fatal("provider normalization changed the retained request")
+	}
+}
