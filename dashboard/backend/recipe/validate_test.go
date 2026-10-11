@@ -152,6 +152,16 @@ func TestCompareEvalResponseRejectsInvalidSelectionContracts(t *testing.T) {
 			wantFailure: `selection_method="fusion", want "static"`,
 		},
 		{
+			name: "single shortcut not widened to latency_aware", algorithm: "latency_aware", selectedModel: "candidate-a",
+			selectionStatus: "selected", selectionMethod: "single", recommendedModels: []string{"candidate-a"},
+			wantFailure: `selection_method="single", want "latency_aware"`,
+		},
+		{
+			name: "random method mismatch", algorithm: "random", selectedModel: "candidate-a",
+			selectionStatus: "selected", selectionMethod: "static", recommendedModels: []string{"candidate-a"},
+			wantFailure: `selection_method="static", want "random"`,
+		},
+		{
 			name: "selected model missing", algorithm: "latency_aware",
 			selectionStatus: "selected", selectionMethod: "latency_aware", recommendedModels: []string{"candidate-a"},
 			wantFailure: "selected_model is required for selected",
@@ -202,6 +212,9 @@ func TestCompareEvalResponseAcceptsAlgorithmSelectionContracts(t *testing.T) {
 	}{
 		{name: "static", algorithm: "static", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "static", recommendedModels: []string{"candidate-a"}},
 		{name: "static single method", algorithm: "static", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "single", recommendedModels: []string{"candidate-a"}},
+		{name: "random", algorithm: "random", selectedModel: "candidate-b", selectionStatus: "selected", selectionMethod: "random", recommendedModels: []string{"candidate-a", "candidate-b"}},
+		{name: "random single method", algorithm: "random", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "single", recommendedModels: []string{"candidate-a"}},
+		{name: "random deferred by runtime policy", algorithm: "random", selectionStatus: "execution_required", selectionMethod: "random", recommendedModels: []string{"candidate-a", "candidate-b"}},
 		{name: "multi factor", algorithm: "multi_factor", selectedModel: "candidate-b", selectionStatus: "selected", selectionMethod: "multi_factor", recommendedModels: []string{"candidate-a", "candidate-b"}},
 		{name: "latency aware", algorithm: "latency_aware", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "latency_aware", recommendedModels: []string{"candidate-a"}},
 		{name: "workflows", algorithm: "workflows", selectedModel: "workflow-final", selectionStatus: "planned_final", selectionMethod: "workflows", recommendedModels: []string{"candidate-a"}},
