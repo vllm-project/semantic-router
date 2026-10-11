@@ -317,6 +317,14 @@ def main() -> int:
     report["quick_latency_ms"] = [round(t, 1) for t in times]
     report["usage"] = answer["usage"]
     report["fast_after"] = model.fast_report()
+    import gc
+
+    import torch
+
+    # One model on the GPU at a time (the 27B one does not fit three times with the loader's warm-up block).
+    saved = model = prepared = None
+    gc.collect()
+    torch.cuda.empty_cache()
 
     if not args.no_server:
         from fastapi.testclient import TestClient
@@ -332,10 +340,6 @@ def main() -> int:
             name=None,
             no_warmup=True,
         )
-        del model
-        import gc
-
-        gc.collect()
         with TestClient(d3_server.build_app(server_args)) as client:
             health = client.get("/health").json()
             models = client.get("/v1/models").json()
@@ -359,6 +363,8 @@ def main() -> int:
             video=models["models"][0].get("video"),
             bad=bad.json(),
         )
+        gc.collect()
+        torch.cuda.empty_cache()
     if not args.no_automodel:
         from transformers import AutoModel
 
