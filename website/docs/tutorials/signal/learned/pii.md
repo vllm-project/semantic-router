@@ -212,7 +212,12 @@ global:
 
 `PIIDetected`, `PIIEntities`, `MatchedPIIRules` and the masked text are the
 same whether the spans came from the local model or from a remote backend;
-overlapping and nested spans are merged before masking.
+overlapping and nested spans are merged before masking. A model may label a
+value once and miss its later copies, so every other exact, whole-word copy of
+a detected value of two or more characters is also reported by the PII API and
+masked there as the same entity type. Such a copy carries the confidence of the
+detection it repeats, only spans the model returned are repeated, and a copy
+that overlaps any detection is left to that detection.
 
 ## Dependencies and Limitations
 
