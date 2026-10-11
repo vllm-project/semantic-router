@@ -81,3 +81,47 @@ QUESTIONS = {
     },
 }
 STATE = "Write a Python function that merges two sorted lists."
+
+
+@pytest.fixture(scope="session")
+def d3_package(fixture_root) -> Path:
+    from vllm_srun.testing.decision3 import write_fixture
+
+    return write_fixture(fixture_root / "d3-vision", "vision", seed=11)
+
+
+@pytest.fixture(scope="session")
+def d3_text_package(fixture_root) -> Path:
+    from vllm_srun.testing.decision3 import write_fixture
+
+    return write_fixture(fixture_root / "d3-text", "text", seed=12)
+
+
+@pytest.fixture(scope="session")
+def d3_runtime(d3_package):
+    runtime = start_runtime(d3_package)
+    yield runtime
+    runtime.stop()
+
+
+@pytest.fixture(scope="session")
+def png_url():
+    """``png_url(width, height, seed)``: a data URL of a deterministic RGB noise-and-gradient PNG."""
+    import base64
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    def make(width: int, height: int, seed: int = 0, fmt: str = "PNG") -> str:
+        rng = np.random.default_rng(seed)
+        pixels = rng.integers(0, 128, size=(height, width, 3), dtype=np.uint8)
+        pixels += np.linspace(0, 127, width, dtype=np.uint8)[None, :, None]
+        buffer = io.BytesIO()
+        Image.fromarray(pixels, "RGB").save(buffer, format=fmt)
+        return (
+            f"data:image/{fmt.lower()};base64,"
+            + base64.b64encode(buffer.getvalue()).decode()
+        )
+
+    return make

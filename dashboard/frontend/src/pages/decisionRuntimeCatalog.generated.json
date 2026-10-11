@@ -121,6 +121,51 @@
       "revision": "2064c84daf599447f840719ef8e86db152a56851",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 24
+    },
+    {
+      "id": "vllm-sr/d3",
+      "name": "d3",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "revision": "dc6c41cb98429ea8fc30e5bfb04b75757222575c",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72
+    },
+    {
+      "id": "vllm-sr/d3-flash",
+      "name": "d3-flash",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "revision": "581c9953d43579645f6249e91430518ee7d838a1",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 32
+    },
+    {
+      "id": "vllm-sr/d3-mini",
+      "name": "d3-mini",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "revision": "61dbd3a320591004ade9afa3cc95cddae78a2488",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16
+    },
+    {
+      "id": "vllm-sr/d3-nano",
+      "name": "d3-nano",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "revision": "6601b4d1398bdbdfa8813dff456a96b92458ca95",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 8
+    },
+    {
+      "id": "vllm-sr/d3-lite",
+      "name": "d3-lite",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "revision": "b731454b7b17e455cbda511574a274a731ea8c2e",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4
     }
   ]
 }

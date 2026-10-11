@@ -136,6 +136,20 @@ case "$SCENARIO" in
     write_stub podman ready
     export VLLM_SR_RUNTIME="skip"
     ;;
+  skip-keeps-existing)
+    printf 'CONTAINER_RUNTIME=podman\n' > "$INSTALL_ROOT_TMP/runtime.env"
+    export VLLM_SR_RUNTIME="skip"
+    ;;
+  cli-keeps-existing)
+    printf 'CONTAINER_RUNTIME=podman\n' > "$INSTALL_ROOT_TMP/runtime.env"
+    export VLLM_SR_RUNTIME="auto"
+    export VLLM_SR_INSTALL_MODE="cli"
+    ;;
+  podman-unreachable-keeps-existing)
+    printf 'CONTAINER_RUNTIME=docker\n' > "$INSTALL_ROOT_TMP/runtime.env"
+    write_stub podman absent
+    export VLLM_SR_RUNTIME="podman"
+    ;;
   print-command-podman)
     write_stub docker ready
     write_stub podman ready
@@ -187,13 +201,22 @@ set +o pipefail 2>/dev/null || true
 # so pretend we are on Linux without invoking detect_os (which would die on
 # unsupported platforms).
 OS_NAME="linux"
-MODE="serve"
-SELECTED_RUNTIME="${REQUESTED_RUNTIME:-}"
+MODE="${VLLM_SR_INSTALL_MODE:-serve}"
+# Match install.sh's own initialization: the selection starts empty and
+# ensure_runtime fills it on success. Pre-filling it from the request would
+# report a selection the failed paths never made.
+SELECTED_RUNTIME=""
 # Keep launcher lookups (the --container-runtime probe among them) off any
 # real vllm-sr on the machine running the tests.
 BIN_DIR="$STUB_BIN"
 
-ensure_runtime
+# The podman-unreachable scenario ends in die(), which exits the shell; run
+# that one in a subshell so the harness survives to report the kept file.
+if [ "$SCENARIO" = "podman-unreachable-keeps-existing" ]; then
+  ( ensure_runtime )
+else
+  ensure_runtime
+fi
 
 # Report the selected runtime and the exact runtime.env contents so the
 # Python side can assert both behavior and persisted state.
