@@ -303,6 +303,7 @@ type RequestContext struct {
 	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
 	VSRMatchedPreference      []string // Matched preference signals
 	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
 	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration

@@ -17,6 +17,26 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ActionRule": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "explain",
+            "fix",
+            "refactor",
+            "test",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AdmissionConfig": {
       "properties": {
         "max_concurrency": {
@@ -1457,6 +1477,12 @@
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
+          },
+          "type": "array"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRule"
           },
           "type": "array"
         },
@@ -6836,6 +6862,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "action",
             "authz",
             "classifier",
             "complexity",
@@ -8119,6 +8146,14 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
+      },
+      {
+        "type": "action",
+        "display_name": "Action",
+        "collection": "actions",
+        "observation_key": "action",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ActionRule"
       },
       {
         "type": "decision",
