@@ -740,6 +740,9 @@ func statementSentences(statement string) []statementSentence {
 		if q.inQuote() {
 			continue
 		}
+		if r == '.' && unicode.IsDigit(runeBefore(statement, i)) && unicode.IsDigit(runeAfter(statement, i, r)) {
+			continue
+		}
 		if r != '.' && r != '!' && r != '?' && r != ';' && r != '\n' {
 			continue
 		}

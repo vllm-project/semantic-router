@@ -54,6 +54,10 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 		user:      "My budget for the Japan trip is $4,000.",
 		assistant: "Your budget is $4,000, and flights from Boston start at $1,200.",
 	}
+	budgetWithDecimalFlights := storedMemoryTurn{
+		user:      "My budget for the Japan trip is $4,000.",
+		assistant: "Your budget is $4,000, and flights from Boston start at $1,200.50.",
+	}
 	raisedBudget := storedMemoryTurn{
 		user:      "I raised my budget for the Japan trip to $6,000.",
 		assistant: "Updated, the Japan trip budget is $6,000.",
@@ -61,6 +65,10 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	bostonWithAlice := storedMemoryTurn{
 		user:      "I live in Boston.",
 		assistant: "Alice lives in Boston.",
+	}
+	bostonWithDecimalWeight := storedMemoryTurn{
+		user:      "I live in Boston.",
+		assistant: "Biscuit weighs 12.5 kg.",
 	}
 	cityAndDog := storedMemoryTurn{user: "I live in Boston, my dog is Biscuit.", assistant: "Noted."}
 	bostonWithTerrier := storedMemoryTurn{user: "I live in Boston.", assistant: "Your dog Biscuit is a Boston terrier."}
@@ -162,10 +170,24 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			superseded: []string{"is $4,000", "start at $1."},
 		},
 		{
+			name:       "a corrected budget preserves decimal values in an independent clause",
+			turns:      []storedMemoryTurn{budgetWithDecimalFlights, raisedBudget},
+			query:      "What is my Japan trip budget now, and what do flights from Boston cost?",
+			injected:   []string{"$6,000", "Flights from Boston start at $1,200.50."},
+			superseded: []string{"is $4,000"},
+		},
+		{
 			name:       "a corrected residence keeps an explicit named subject",
 			turns:      []storedMemoryTurn{bostonWithAlice, denver},
 			query:      "Where do I live now, and where does Alice live?",
 			injected:   []string{"Denver", "Alice lives in Boston."},
+			superseded: []string{"I live in Boston"},
+		},
+		{
+			name:       "a corrected residence preserves decimal values in an independent fact",
+			turns:      []storedMemoryTurn{bostonWithDecimalWeight, denver},
+			query:      "Where do I live now, and how much does Biscuit weigh?",
+			injected:   []string{"Denver", "Biscuit weighs 12.5 kg."},
 			superseded: []string{"I live in Boston"},
 		},
 		{
