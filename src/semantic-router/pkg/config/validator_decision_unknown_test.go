@@ -42,3 +42,23 @@ func TestUnguardedClassifierConditions(t *testing.T) {
 		t.Fatalf("unguarded = %v", got)
 	}
 }
+
+func TestParseYAMLBytesRejectsOnUnknownOnErrorConflict(t *testing.T) {
+	yaml := buildDecisionRefConfig(`    - name: guarded
+      priority: 1
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - {type: classifier, name: risk, label: RISKY, on_error: no_match}
+      modelRefs:
+        - model: m1
+  signals:
+    classifiers:
+      - {name: risk, type: local, model_path: models/risk, labels: [SAFE, RISKY], use_cpu: true}
+`)
+	_, err := ParseYAMLBytes(yaml)
+	if err == nil || !strings.Contains(err.Error(), OnUnknownOnErrorConflictMessage) {
+		t.Fatalf("error = %v, want the on_unknown + on_error conflict rejection", err)
+	}
+}
