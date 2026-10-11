@@ -171,3 +171,44 @@ func TestChatStreamTimingsStaysStrict(t *testing.T) {
 		})
 	}
 }
+
+// Mistral's OpenAI-compatible stream emits chunks with a top-level p field
+// containing a string marker (issue #4632). It is transport metadata, so the
+// stream goes through and the drop is reported as stream.p.
+func TestChatStreamAcceptsMistralPField(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1791279240,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" you today?\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":16,\"total_tokens\":26,\"completion_tokens\":10,\"prompt_tokens_details\":{\"cached_tokens\":0},\"service_tier\":\"standard\"},\"p\":\"abcdefghijklm\"}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	_, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("chunk with p was rejected: %v", err)
+	}
+	assertDiagnosticFields(t, diagnostics, "stream.p", "stream.usage.service_tier")
+}
+
+// p is accepted only as a string, and non-string types or other unknown fields are still
+// rejected.
+func TestChatStreamPFieldStaysStrict(t *testing.T) {
+	for name, extra := range map[string]string{
+		"p is an object":          `"p":{"a":1}`,
+		"p is an array":           `"p":[1]`,
+		"p is an integer":         `"p":123`,
+		"unrelated unknown field": `"surprise":{"a":1}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			decoder := OpenAIChatCodec{}.NewDecoder(
+				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+				llmprotocol.DefaultPolicy(),
+			)
+			payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[]," + extra + "}\n\n")
+			if _, _, err := decoder.Push(payload); err == nil {
+				t.Fatalf("chunk with %s was accepted", extra)
+			}
+		})
+	}
+}
