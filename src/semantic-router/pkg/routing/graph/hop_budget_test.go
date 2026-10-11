@@ -82,8 +82,8 @@ func TestPhysicalRetryBudgetExhaustionFailsTheGraph(t *testing.T) {
 	if !errors.Is(err, ErrHopLimit) {
 		t.Fatalf("err %v, want ErrHopLimit", err)
 	}
-	if calls != 1 || outcome.Hops != 1 {
-		t.Fatalf("physical calls=%d logical hops=%d, want one of each", calls, outcome.Hops)
+	if calls != 1 || outcome.Hops != 1 || outcome.PhysicalCalls != 1 {
+		t.Fatalf("physical calls=%d ledger=%d logical hops=%d, want one of each", calls, outcome.PhysicalCalls, outcome.Hops)
 	}
 }
 
