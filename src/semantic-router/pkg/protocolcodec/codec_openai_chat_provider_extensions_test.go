@@ -128,6 +128,61 @@ func TestChatStreamAcceptsGroqChunkMetadata(t *testing.T) {
 	}
 }
 
+func TestChatStreamAcceptsMistralChunkMetadata(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	// The chunk Mistral returns for a streaming chat completion, as reported
+	// in #4632.
+	payload := []byte(
+		"data: {\"id\":\"xxx\",\"object\":\"chat.completion.chunk\",\"created\":1791279240,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" you today?\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":16,\"total_tokens\":26,\"completion_tokens\":10,\"prompt_tokens_details\":{\"cached_tokens\":0},\"service_tier\":\"standard\"},\"p\":\"abcdefghijklm\"}\n\n",
+	)
+	events, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("Mistral Chat stream chunk was rejected: %v", err)
+	}
+	if len(events) < 2 {
+		t.Fatalf("Chat stream events = %+v", events)
+	}
+	pDiagnostics := 0
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Field == "stream.p" {
+			pDiagnostics++
+			if diagnostic.Action != llmprotocol.DiagnosticDropped {
+				t.Fatalf("stream.p diagnostic action = %v, want dropped: %+v", diagnostic.Action, diagnostics)
+			}
+		}
+	}
+	if pDiagnostics != 1 {
+		t.Fatalf("stream.p omission was not explicit: %+v", diagnostics)
+	}
+}
+
+func TestChatStreamRejectsNonStringMistralP(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"p\":1,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":null,\"logprobs\":null}]}\n\n",
+	)
+	_, _, err := decoder.Push(payload)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+}
+
+func TestChatStreamStillRejectsUnknownChunkFields(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"x_unknown\":1,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":null,\"logprobs\":null}]}\n\n",
+	)
+	_, _, err := decoder.Push(payload)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+}
+
 // Ollama's OpenAI compatible stream puts a top-level timings object on the usage
 // chunk (issue #4585). It is generation metadata, so the stream goes through
 // and the drop is reported, whichever provider profile serves it.
