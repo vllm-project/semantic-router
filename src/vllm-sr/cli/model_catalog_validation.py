@@ -192,7 +192,14 @@ _SECRET_KEY_TERMS = frozenset(
         "secret",
     }
 )
+# The full block must be first. Replacing only the BEGIN marker leaves the
+# key body and END line in redacted proposal output.
+_PEM_BLOCK = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
 _SECRET_LITERAL_PATTERNS = (
+    _PEM_BLOCK,
     re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)https?://[^\s/:@]+:[^\s/@]+@"),
@@ -207,6 +214,25 @@ _SECRET_LITERAL_PATTERNS = (
         r"\s*[:=]\s*[^\s,;]{8,}"
     ),
 )
+
+
+def find_embedded_secret_literals(text: str) -> frozenset[str]:
+    """Return credential-like substrings maintained for catalog manifest checks."""
+
+    found: set[str] = set()
+    for pattern in _SECRET_LITERAL_PATTERNS:
+        for match in pattern.finditer(text):
+            found.add(match.group(0))
+    return frozenset(found)
+
+
+def redact_embedded_secret_literals(text: str) -> str:
+    """Mask credential-like literals using the same patterns as catalog validation."""
+
+    redacted = text
+    for pattern in _SECRET_LITERAL_PATTERNS:
+        redacted = pattern.sub("***", redacted)
+    return redacted
 
 
 def _compatibility(
