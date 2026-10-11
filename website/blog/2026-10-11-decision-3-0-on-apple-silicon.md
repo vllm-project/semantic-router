@@ -50,7 +50,7 @@ Conversion uses PyTorch 2.7 and coremltools 9.0. We checked the Core ML release 
 
 **Core ML scores the same as upstream, and each request is 2.5–4× faster.** On a Mac, upstream PyTorch falls back to Transformers' reference code for the DeltaNet layers, since the fast kernels it uses on NVIDIA GPUs aren't available.
 
-All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Neural Engine doesn't run these models yet: Core ML falls back to the CPU there, so the GPU is the fast path. d3-nano is the middle option: close to d3-lite's speed, and 11 points above it on typed-decisions.
+All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. d3-nano is the middle option: close to d3-lite's speed, and 11 points above it on typed-decisions.
 
 <details>
 <summary>Method and limits</summary>
