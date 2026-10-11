@@ -628,6 +628,108 @@ class ActionRule(BaseModel):
     description: Optional[str] = None
 
 
+class TopicContinuityThresholds(BaseModel):
+    """Continuation and change score bounds; the gap is the unknown band."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    continuation: Optional[float] = None
+    change: Optional[float] = None
+
+
+class TopicContinuityLimits(BaseModel):
+    """Bounds on the history one topic-continuity rule reads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_prior_turns: Optional[int] = None
+    max_turn_bytes: Optional[int] = None
+    max_input_bytes: Optional[int] = None
+
+
+TOPIC_CONTINUITY_DEFAULT_PRIOR_TURNS = 8
+TOPIC_CONTINUITY_DEFAULT_TURN_BYTES = 16384
+TOPIC_CONTINUITY_MIN_PRIOR_TURNS = 1
+TOPIC_CONTINUITY_MAX_PRIOR_TURNS = 32
+TOPIC_CONTINUITY_MIN_TURN_BYTES = 256
+TOPIC_CONTINUITY_MAX_TURN_BYTES = 65536
+TOPIC_CONTINUITY_MIN_INPUT_BYTES = 1024
+TOPIC_CONTINUITY_MAX_INPUT_BYTES = 1 << 20
+TOPIC_CONTINUITY_MAX_RULES = 8
+
+
+class TopicContinuityRule(BaseModel):
+    """Context-policy evidence: does the live turn depend on retained history.
+
+    Not decision-referenceable. Validation mirrors the Router: defaults are
+    applied first and the effective values are checked.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    include_assistant: Optional[bool] = None
+    thresholds: Optional[TopicContinuityThresholds] = None
+    limits: Optional[TopicContinuityLimits] = None
+
+    @model_validator(mode="after")
+    def validate_effective_values(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError(
+                "topic_continuity signal name must be nonempty and trimmed"
+            )
+        thresholds = self.thresholds or TopicContinuityThresholds()
+        continuation = (
+            0.35 if thresholds.continuation is None else thresholds.continuation
+        )
+        change = 0.08 if thresholds.change is None else thresholds.change
+        if not (0 <= change < continuation < 1):
+            raise ValueError(
+                "topic_continuity thresholds must satisfy 0 <= change < continuation < 1"
+            )
+        limits = self.limits or TopicContinuityLimits()
+        turns = limits.max_prior_turns or TOPIC_CONTINUITY_DEFAULT_PRIOR_TURNS
+        turn_bytes = limits.max_turn_bytes or TOPIC_CONTINUITY_DEFAULT_TURN_BYTES
+        if (
+            not TOPIC_CONTINUITY_MIN_PRIOR_TURNS
+            <= turns
+            <= TOPIC_CONTINUITY_MAX_PRIOR_TURNS
+        ):
+            raise ValueError(
+                "topic_continuity limits.max_prior_turns must be in [1, 32]"
+            )
+        if (
+            not TOPIC_CONTINUITY_MIN_TURN_BYTES
+            <= turn_bytes
+            <= TOPIC_CONTINUITY_MAX_TURN_BYTES
+        ):
+            raise ValueError(
+                "topic_continuity limits.max_turn_bytes must be in [256, 65536]"
+            )
+        input_bytes = limits.max_input_bytes
+        if not input_bytes:
+            input_bytes = (turns + 1) * turn_bytes
+            if input_bytes > TOPIC_CONTINUITY_MAX_INPUT_BYTES:
+                raise ValueError(
+                    "topic_continuity derived limits.max_input_bytes exceeds 1048576; "
+                    "set an explicit limits.max_input_bytes"
+                )
+        if (
+            not TOPIC_CONTINUITY_MIN_INPUT_BYTES
+            <= input_bytes
+            <= TOPIC_CONTINUITY_MAX_INPUT_BYTES
+        ):
+            raise ValueError(
+                "topic_continuity limits.max_input_bytes must be in [1024, 1048576]"
+            )
+        if input_bytes < turn_bytes:
+            raise ValueError(
+                "topic_continuity limits.max_input_bytes must be at least limits.max_turn_bytes"
+            )
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -724,9 +826,12 @@ class Signals(BaseModel):
     input_modality: Optional[List[InputModalityRule]] = []
     actions: Optional[List[ActionRule]] = []
     decision: Optional[List[DecisionSignalRule]] = []
+    topic_continuity: Optional[List[TopicContinuityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
+        if len(self.topic_continuity or []) > TOPIC_CONTINUITY_MAX_RULES:
+            raise ValueError("topic_continuity allows at most 8 rules per recipe")
         for family in type(self).model_fields:
             seen: set[str] = set()
             for signal in getattr(self, family) or []:

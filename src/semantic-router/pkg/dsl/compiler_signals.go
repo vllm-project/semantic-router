@@ -240,6 +240,26 @@ func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
 	c.config.InputModalityRules = append(c.config.InputModalityRules, rule)
 }
 
+func (c *Compiler) compileTopicContinuitySignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode topic_continuity signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.TopicContinuityRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode topic_continuity signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateTopicContinuityRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.TopicContinuityRules = append(c.config.TopicContinuityRules, rule)
+}
+
 func (c *Compiler) compileDecisionModelSignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name
