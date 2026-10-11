@@ -214,11 +214,26 @@ def test_frames_are_sampled_as_the_d3_runtime_samples_them(total, fps, expected)
         )
 
 
-def test_each_frame_is_capped_at_the_runtime_pixel_budget(d3_runtime):
-    settings = d3_runtime.lookup(None).model.video_settings
-    assert vid.frame_size(settings, 4, 1080, 1920) == (320, 576)
-    assert vid.frame_size(settings, 32, 64, 48) == (64, 64)
-    assert vid.input_tokens(settings, 4, 1080, 1920) == 2 * (320 // 32) * (576 // 32)
+@pytest.mark.parametrize(
+    "frames,height,width,size",
+    [
+        (4, 1080, 1920, (320, 576)),
+        (16, 2160, 3840, (320, 576)),
+        (32, 64, 48, (64, 64)),
+        (8, 200, 330, (192, 320)),
+        (6, 300, 40, (288, 32)),
+        (4, 32, 6400, (32, 6304)),
+    ],
+)
+def test_each_frame_is_capped_at_the_runtime_pixel_budget(frames, height, width, size):
+    """Frame sizes the Transformers 5.17 processor chose, configured as the d3 runtime configures it."""
+    from vllm_srun.testing.decision3 import VIDEO_PROCESSOR_CONFIG
+
+    settings = vid.VideoSettings.from_config(VIDEO_PROCESSOR_CONFIG)
+    assert vid.frame_size(settings, frames, height, width) == size
+    assert vid.input_tokens(settings, frames, height, width) == (
+        frames // 2 * (size[0] // 32) * (size[1] // 32)
+    )
 
 
 def test_the_card_lists_the_video_limits(d3_runtime):

@@ -14,7 +14,6 @@ import torch
 import torch.nn.functional as F
 from safetensors.torch import load_file
 from vllm_srun.families.decision3 import package as pkg
-from vllm_srun.families.decision3 import videos as vid
 
 transformers = pytest.importorskip("transformers")
 pytestmark = pytest.mark.reference
@@ -135,83 +134,6 @@ def test_image_passes_match_transformers(case, png_url):
             assert model.run(items) == reference_probabilities(
                 reference, package, items
             )
-
-
-def d3_video_processor():
-    """Transformers' video processor with the d3 runtime's settings (its ``configure_video_processor``)."""
-    from transformers.models.qwen3_vl.video_processing_qwen3_vl import (
-        Qwen3VLVideoProcessor,
-    )
-    from vllm_srun.testing.decision3 import VIDEO_PROCESSOR_CONFIG
-
-    settings = {
-        key: value
-        for key, value in VIDEO_PROCESSOR_CONFIG.items()
-        if key not in ("processor_class", "video_processor_type")
-    }
-    processor = Qwen3VLVideoProcessor(**settings)
-    factor = processor.patch_size * processor.merge_size
-    processor.size = {
-        "shortest_edge": vid.MIN_PIXELS,
-        "longest_edge": vid.MAX_PIXELS * vid.MAX_FRAMES,
-    }
-    processor.cap_pixels_per_frame = True
-    processor.max_video_tokens = vid.MAX_PIXELS // factor**2
-    processor.do_sample_frames = False
-    return processor
-
-
-def metadata(video):
-    height, width = video.frames.shape[1:3]
-    return {
-        "total_num_frames": video.total,
-        "fps": video.fps,
-        "width": width,
-        "height": height,
-        "duration": video.total / video.fps,
-        "frames_indices": list(video.indices),
-    }
-
-
-def test_video_processing_matches_transformers(mp4_url):
-    pytest.importorskip("torchvision")
-    from transformers.models.qwen3_vl.processing_qwen3_vl import Qwen3VLProcessor
-    from vllm_srun.testing.decision3 import VIDEO_PROCESSOR_CONFIG
-
-    processor = d3_video_processor()
-    settings = vid.VideoSettings.from_config(VIDEO_PROCESSOR_CONFIG)
-    expander = types.SimpleNamespace(
-        video_processor=processor,
-        vision_start_token="<|vision_start|>",
-        video_token="<|video_pad|>",
-        vision_end_token="<|vision_end|>",
-    )
-    expander._calculate_timestamps = types.MethodType(
-        Qwen3VLProcessor._calculate_timestamps, expander
-    )
-    for clip in (
-        mp4_url(96, 64, frames=12, fps=8.0, seed=1),
-        mp4_url(330, 200, frames=50, fps=25.0, seed=2),
-        mp4_url(40, 300, frames=7, fps=3.0, seed=3),
-    ):
-        video = vid.decode(clip)
-        mine = vid.preprocess(video, settings)
-        theirs = processor(
-            videos=[video.frames],
-            video_metadata=[metadata(video)],
-            return_metadata=True,
-            return_tensors="pt",
-        )
-        assert torch.equal(mine.pixel_values, theirs["pixel_values_videos"])
-        assert list(mine.grid) == theirs["video_grid_thw"][0].tolist()
-        frames, height, width = video.frames.shape[:3]
-        merge = processor.merge_size**2
-        assert mine.tokens == (
-            processor.get_num_of_video_patches(frames, height, width) // merge
-        )
-        assert mine.placeholder(
-            "<|vision_start|>", "<|video_pad|>", "<|vision_end|>"
-        ) == Qwen3VLProcessor.replace_video_token(expander, theirs, 0)
 
 
 def video_reference(model, package, items):

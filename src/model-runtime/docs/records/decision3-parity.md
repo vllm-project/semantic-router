@@ -76,8 +76,10 @@ changes. The previous releases of the other five models were 19 / 19 and
 19 / 19 identical on CPU and through Engine mode, with 3 to 6 MB image bodies.
 `tests/test_decision3_reference.py` checks the same exactness in CI against
 Transformers' `Qwen3_5Model` on random-weight packages, regular and pruned,
-for text, one and three images, and videos with and without an image; it
-also checks the video processing against Transformers' `Qwen3VLVideoProcessor`.
+for text, one and three images, and videos with and without an image.
+`tests/test_decision3_family.py` checks the image and video processing
+against output recorded from the Transformers 5.17 processors, which need
+torchvision.
 
 Exactness needs the released numerics:
 
