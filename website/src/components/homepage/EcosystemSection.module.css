@@ -2,13 +2,14 @@
   --ecosystem-bg: var(--site-surface);
   --ecosystem-text: var(--site-text-strong);
   --ecosystem-secondary: var(--site-muted-bright);
+  --ecosystem-caption: var(--site-muted-bright);
   --ecosystem-muted: var(--site-muted);
   --ecosystem-link-decoration: var(--site-border-strong);
   position: relative;
   isolation: isolate;
   overflow: hidden;
   scroll-margin-top: var(--site-header-height);
-  padding: clamp(3rem, 4.5vw, 4rem) 0 clamp(2.75rem, 4vw, 3.5rem);
+  padding: clamp(4rem, 5.5vw, 5rem) 0 clamp(3rem, 4.5vw, 4rem);
   background: var(--ecosystem-bg);
   color: var(--ecosystem-text);
 }
@@ -17,6 +18,7 @@
   --ecosystem-bg: #050607;
   --ecosystem-text: #fff;
   --ecosystem-secondary: rgba(255, 255, 255, 0.66);
+  --ecosystem-caption: rgba(255, 255, 255, 0.78);
   --ecosystem-muted: rgba(255, 255, 255, 0.58);
   --ecosystem-link-decoration: rgba(255, 255, 255, 0.45);
 }
@@ -51,50 +53,69 @@
   display: block;
 }
 
-.content {
-  width: min(100%, 88rem);
-  margin-inline: auto;
-  padding-inline: clamp(1.5rem, 5vw, 5rem);
+.header {
+  composes: site-section-intro from global;
+  position: relative;
+  z-index: 1;
+  margin-bottom: clamp(2rem, 3.5vw, 2.75rem);
 }
 
-.heading {
+.title {
+  composes: site-section-intro__title from global;
+  color: var(--ecosystem-text);
+}
+
+.subtitle {
+  composes: site-section-intro__lede from global;
+  color: var(--ecosystem-secondary);
+}
+
+.subtitle strong {
+  color: var(--ecosystem-text);
+  font-weight: 650;
+}
+
+.organizations {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(1.25rem, 2vw, 1.75rem);
+  margin: 0;
+  padding: clamp(1.5rem, 2.5vw, 2rem);
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--ecosystem-text) 10%, transparent);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--ecosystem-text) 2.5%, transparent);
+}
+
+.organization {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 4.75rem;
   align-items: center;
-  gap: 0.8rem;
-  margin-bottom: clamp(2.25rem, 4vw, 3rem);
-  text-align: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.5rem;
 }
 
-.wordmark {
-  width: min(31rem, 80%);
-  height: auto;
-  margin-bottom: 1rem;
+.organization img {
+  width: min(100%, var(--logo-width));
+  max-width: 10rem;
+  max-height: 3.25rem;
   object-fit: contain;
 }
 
-.heading h2 {
-  margin: 0;
-  color: var(--ecosystem-text);
-  font-size: clamp(1.7rem, 3.2vw, 2.5rem);
-  font-weight: 530;
-  line-height: 1.15;
-  letter-spacing: -0.04em;
-  text-wrap: balance;
+.organization[data-caption] img {
+  max-height: 2.75rem;
 }
 
-.heading p {
-  max-width: 44rem;
-  margin: 0;
-  color: var(--ecosystem-secondary);
-  font-size: 1rem;
-  line-height: 1.6;
+.logoCaption {
+  color: var(--ecosystem-caption);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
   text-wrap: balance;
-}
-
-.heading strong {
-  color: var(--ecosystem-text);
-  font-weight: 650;
 }
 
 .footer {
@@ -103,6 +124,9 @@
   align-items: center;
   justify-content: center;
   gap: 0.65rem 1.5rem;
+  margin-top: clamp(2.25rem, 4vw, 3rem);
+  padding-top: clamp(1.5rem, 2.5vw, 2rem);
+  border-top: 1px solid color-mix(in srgb, var(--ecosystem-text) 8%, transparent);
   font-size: 0.875rem;
   line-height: 1.6;
   text-align: center;
@@ -132,13 +156,34 @@
   outline-offset: 0.4rem;
 }
 
-@media (max-width: 480px) {
-  .content {
-    padding-inline: 1.5rem;
+@media (max-width: 996px) {
+  .organizations {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .organizations {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+    padding: 1.25rem;
   }
 
-  .wordmark {
-    width: 88%;
-    margin-bottom: 0.75rem;
+  .organization {
+    min-height: 4.25rem;
+  }
+
+  .organization img {
+    max-height: 3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .organizations {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .organization img {
+    max-width: 8.5rem;
   }
 }

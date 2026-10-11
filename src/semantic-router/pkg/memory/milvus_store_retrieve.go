@@ -164,15 +164,9 @@ func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts Retri
 		threshold = adaptiveThresholdElbow(candidates, threshold)
 	}
 
-	results := applyRetrieveThreshold(candidates, limit, threshold)
-	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
-		}
-		go m.recordRetrievalBatch(ids)
-	}
-	return results
+	// No access-count write-back: a background read-modify-upsert under Bounded
+	// consistency could recreate a memory forgotten in the meantime.
+	return applyRetrieveThreshold(candidates, limit, threshold)
 }
 
 // retainProjectMatches keeps candidates whose stored project id equals the
