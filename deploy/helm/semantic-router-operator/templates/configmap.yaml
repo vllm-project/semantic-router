@@ -1,0 +1,14 @@
+# The controller manager's own configuration, mirroring the ConfigMap the
+# kustomize install generates from
+# deploy/operator/config/manager/controller_manager_config.yaml
+# (configMapGenerator in config/manager/kustomization.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "semantic-router-operator.fullname" . }}-manager-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "semantic-router-operator.labels" . | nindent 4 }}
+data:
+  controller_manager_config.yaml: |
+    {{- .Files.Get "files/controller_manager_config.yaml" | nindent 4 }}
