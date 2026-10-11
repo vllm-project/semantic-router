@@ -133,6 +133,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedReask = signals.MatchedReaskRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
+	ctx.VSRMatchedAction = signals.MatchedActionRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedStructure = signals.MatchedStructureRules

@@ -133,6 +133,7 @@ def test_a_later_revision_with_the_same_identity_gets_the_table_references(tmp_p
 def test_every_family_has_a_table_and_lookups_cover_them():
     families = {model.family for model in builtin.all_models()}
     assert families <= {
+        "decision3",
         "decision2",
         "decision1",
         "task_heads",
@@ -140,6 +141,10 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         "multimodal_embedding",
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
+    assert {model.repo_id for model in builtin.all_models("decision3")} == {
+        f"vllm-sr/{name}"
+        for name in ("d3", "d3-flash", "d3-mini", "d3-nano", "d3-lite")
+    }
     assert builtin.all_models("nobody") == ()
 
 

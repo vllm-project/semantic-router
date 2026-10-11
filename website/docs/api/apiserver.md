@@ -700,7 +700,9 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `GET` | `/api/v1/instance` | Read the serving frontend capability mode and default native deployment |
 | `GET` | `/api/v1/diagnostics/models/tasks` | List shared judgment task templates, structural model capabilities and binding provenance |
 | `GET` | `/api/v1/diagnostics/models/systemone` | List published model deployments and their native System One question capabilities |
-| `POST` | `/api/v1/diagnostics/models/systemone` | Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline |
+| `POST` | `/api/v1/diagnostics/models/systemone` | Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 32 MiB request, 4 MiB response, 30 second deadline |
+| `GET` | `/api/v1/diagnostics/routes/systemone` | List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health |
+| `POST` | `/api/v1/diagnostics/routes/systemone` | Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |
 | `POST` | `/api/v1/diagnostics/models/labels` | Inspect a prepared label distribution; windowed bindings preserve their configured scan |
 | `POST` | `/api/v1/diagnostics/models/label-scores` | Inspect independent label scores using the prepared operating point when configured |

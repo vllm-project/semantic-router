@@ -294,7 +294,7 @@ def test_json_request_examples_follow_the_runtime_contract():
     examples = [block for block in _blocks("json") if block.title.startswith("POST ")]
 
     assert {block.title for block in examples} == {
-        f"POST {path}" for path in REQUEST_SCHEMAS
+        f"POST {path}" for path in [*REQUEST_SCHEMAS, "/v1/systemone"]
     }
     for block in examples:
         _validate_request(

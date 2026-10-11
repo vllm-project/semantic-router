@@ -156,6 +156,7 @@ class DomainRegistryTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/families/decision1/family.py",
             "src/model-runtime/vllm_srun/families/decision1/questions.py",
             "src/model-runtime/vllm_srun/families/decision2/family.py",
+            "src/model-runtime/vllm_srun/families/decision3/family.py",
             "tools/codegen/configschema/main.go",
             "tools/codegen/openapi/main.go",
             "tools/codegen/embed_generated_index.py",

@@ -154,7 +154,25 @@ providers:
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
 
+    # A native alias references a shared deployment instead of a second endpoint.
+    - name: native-kai
+      api_format: systemone
+      deployment: decision-kai
+    - name: native-vega
+      api_format: systemone
+      provider_model_id: vllm-sr/Decision-2.0-Vega-27B
+      backend_refs:
+        - provider: systemone-compatible
+          base_url: https://native.example.com/v1
+          api_key_env: SYSTEMONE_API_KEY
+
 evaluation:
+  # Illustrative artifact identity: replace source and digest together after
+  # fitting and evaluating your task. This is not measured quality evidence.
+  calibrations:
+    - name: native-reference
+      source: ./calibration/native-reference.json
+      sha256: "0000000000000000000000000000000000000000000000000000000000000000"
   records:
     - model: qwen3-8b
       benchmark: vllm-sr/operator-rating@1.0.0
@@ -704,6 +722,12 @@ routing:
       - name: audio_input
         description: Request contains at least one audio content part.
         modality: audio
+
+    actions:
+      - name: explain
+        description: Describe code or answer a question without editing anything.
+      - name: fix
+        description: Repair a bug or a failing behavior.
 
     # Typed questions answered by a decision model through the built-in model
     # runtime (global.model_catalog.deployments, provider model_runtime).
@@ -1851,6 +1875,9 @@ entrypoints:
     recipe: default
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
+  - api: systemone
+    model_names: ["vllm-sr/auto"]
+    recipe: native-handwritten
 
 recipes:
   - name: privacy-first
@@ -1901,6 +1928,45 @@ recipes:
           consecutive_failures: 3
           cooldown_period: 30s
           half_open_probes: 1
+
+  - name: native-handwritten
+    description: Complete typed requests use explicit native stages and an algorithm execution budget.
+    routing:
+      decisions:
+        - name: typed-cascade
+          rules: {}
+          modelRefs: [{model: native-kai}, {model: native-vega}, {model: remote-openai-reference}]
+          algorithm:
+            type: cascade
+            budget: {deadline: 3s, max_calls: 4}
+            quality:
+              type: uncalibrated
+              acceptance:
+                rules:
+                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
+                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
+            stages:
+              # Measured pilot gate for the pinned Kai/Vega pair; re-evaluate
+              # when the model identity or question distribution changes.
+              - name: fast
+                kind: native
+                model: native-kai
+                accept:
+                  rules:
+                    - {question_type: choice, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: score, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                    - {question_type: noul, field: top_probability, predicate: {gte: 0.6059704079536342}}
+              - name: strong
+                kind: native
+                model: native-vega
+                timeout: 1s
+              - name: review
+                kind: judge
+                enabled: false
+                model: remote-openai-reference
+                generation: {max_output_tokens: 256}
+                instructions: Select a complete prior response only when it answers every question.
 
 global:
   router:

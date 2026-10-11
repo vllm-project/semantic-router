@@ -135,6 +135,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
+| `action` — heuristic signal | `action` labels each request with the operation it asks for: `generate`, `explain`, `fix`, `refactor`, `test`, or `other`. | [`config/fragments/signal/action/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/action/) | [Guide](../tutorials/signal/heuristic/action) |
 | `authz` — heuristic signal | `authz` turns identity and policy bindings into reusable routing inputs under `routing.signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
 | `classifier` — learned signal | `classifier` exposes reusable label scores from a local native sequence classifier, a remote sequence classifier, or a configured external LLM. | [`config/fragments/signal/classifier/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/classifier/) | [Guide](../tutorials/signal/learned/classifier) |
 | `complexity` — learned signal | `complexity` estimates whether a request is `easy`, `medium`, or `hard` by comparing it with configured example sets. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/learned/complexity) |
@@ -186,6 +187,12 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `ratings` — looper algorithm | `ratings` calls every candidate model and returns one OpenAI-compatible choice per successful model. `max_concurrent` limits parallel work; it does not limit the total number of candidates executed. | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [Guide](../tutorials/algorithm/looper/ratings) |
 | `remom` — looper algorithm | `remom` runs several candidate models across bounded rounds and synthesizes their responses into one answer. | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [Guide](../tutorials/algorithm/looper/remom) |
 | `workflows` — looper algorithm | `workflows` runs a bounded, multi-step Router Flow behind one OpenAI-compatible model name. | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [Guide](../tutorials/algorithm/looper/workflows) |
+
+### Native System One algorithms
+
+| Family and type | Use it to | Reusable fragment | Guide |
+| --- | --- | --- | --- |
+| `cascade` — native algorithm | `cascade` tries declared decision models in order and returns a complete System One response when its acceptance rules pass. | [`config/fragments/algorithm/native/cascade.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/native/cascade.yaml) | [Guide](../tutorials/algorithm/native/cascade) |
 
 ### Plugins and bundles
 

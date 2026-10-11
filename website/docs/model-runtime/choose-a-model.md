@@ -58,6 +58,15 @@ smallest one that is accurate enough for your questions.
 | `vllm-sr/Decision-2.0-Lux-9B` | 9B | GPU (24 GB or more) | The most accurate at moderate cost |
 | `vllm-sr/Decision-2.0-Vega-27B` | 27B | One GPU with 64 GB or more | The most accurate overall |
 
+Decision 3.0 models also read images: a request may carry `images` that every
+question sees. They are built in as `vllm-sr/d3` (27B), `vllm-sr/d3-flash`
+(9B), `vllm-sr/d3-mini` (4B), `vllm-sr/d3-nano` (2B) and `vllm-sr/d3-lite`
+(0.8B), and run on a GPU. Start one with, for example,
+`vllm-sr serve vllm-sr/d3-lite --engine --platform rocm` on an AMD Instinct
+MI325X. They answer `choice`, `noul` and `score` questions, and their answers
+match the packages' own runtime bit for bit
+([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).
+
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,

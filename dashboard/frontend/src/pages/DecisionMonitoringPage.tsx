@@ -1,4 +1,5 @@
 import DecisionTaskMonitoring from './DecisionTaskMonitoring'
+import SystemOneAutoMonitoring from './SystemOneAutoMonitoring'
 import { Link } from 'react-router-dom'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import DecisionModelRuntimePanel from './DecisionModelRuntimePanel'
@@ -49,6 +50,7 @@ export default function DecisionMonitoringPage() {
           refreshedAt={runtime.updatedAt}
           loading={runtime.loading}
         />
+        <SystemOneAutoMonitoring refreshedAt={runtime.updatedAt} />
         <DecisionTaskMonitoring refreshedAt={runtime.updatedAt} />
       </div>
     </ConfigPageManagerLayout>
