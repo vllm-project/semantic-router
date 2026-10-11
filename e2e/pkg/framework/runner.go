@@ -21,7 +21,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/cluster"
 	"github.com/vllm-project/semantic-router/e2e/pkg/docker"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 )
 
 // Runner orchestrates the E2E test execution
@@ -214,15 +213,15 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 			return nil, err
 		}
 	} else {
-		// Run all test cases for the profile
-		profileTestCases := r.profile.GetTestCases()
-		if r.opts.Profile == "envoy-ai-gateway" {
-			profileTestCases, err = testmatrix.BaselineCases(r.opts.BaselineSuite)
-			if err != nil {
-				return nil, err
-			}
+		// Run the profile's effective selection (GetTestCases, narrowed by the
+		// baseline suite for the baseline profile only).
+		var profileTestCases []string
+		var source SelectionSource
+		profileTestCases, source, err = EffectiveTestCases(r.opts.Profile, r.profile.GetTestCases(), r.opts)
+		if err != nil {
+			return nil, err
 		}
-		r.log("Profile test cases: %v", profileTestCases)
+		r.log("Profile test cases (%s): %v", source, profileTestCases)
 		testCasesToRun, err = testcases.ListByNames(profileTestCases...)
 		if err != nil {
 			return nil, err
