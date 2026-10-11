@@ -324,7 +324,12 @@ class NativeEngineModel(EngineModel):
 
     @staticmethod
     def _bit_equal(a: Any, b: Any) -> bool:
-        """Bit-for-bit equality over the engines' output dataclasses."""
+        """Bit-for-bit equality over the engines' output dataclasses.
+
+        Encoder outputs carry dicts of tensors (per-layer hidden states), so
+        dicts recurse like every other container; only scalars ever reach
+        ``==``.
+        """
         if type(a) is not type(b):
             return False
         if isinstance(a, torch.Tensor):
@@ -332,6 +337,10 @@ class NativeEngineModel(EngineModel):
         if isinstance(a, (tuple, list)):
             return len(a) == len(b) and all(
                 NativeEngineModel._bit_equal(x, y) for x, y in zip(a, b, strict=True)
+            )
+        if isinstance(a, dict):
+            return a.keys() == b.keys() and all(
+                NativeEngineModel._bit_equal(a[key], b[key]) for key in a
             )
         fields = getattr(a, "__dataclass_fields__", None)
         if fields:
@@ -347,9 +356,12 @@ class NativeEngineModel(EngineModel):
         Exploration never changes an answer: the batch is served by the
         configured count, and any other allowed count only runs as a shadow
         pass that has to reproduce the served answer bit for bit before its
-        timing counts. Once the resolver has adopted counts, the learned
-        count serves the batch itself — only counts that kept the answers
-        identical on this host were adopted.
+        timing counts. The shadow restores the configured count before it
+        returns, so everything that runs after the engine — a family's
+        readout, the answer assembly — never inherits the shadow's team size.
+        Once the resolver has adopted counts, the learned count serves the
+        batch itself — only counts that kept the answers identical on this
+        host were adopted.
         """
         resolver = self.threads_resolver
         if resolver is None:
@@ -377,6 +389,7 @@ class NativeEngineModel(EngineModel):
             shadow = run()
         finally:
             shadow_ms = (time.perf_counter() - started) * 1000.0
+            adaptive_threads.CpuTeam.apply(base)
         resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
         return result
 

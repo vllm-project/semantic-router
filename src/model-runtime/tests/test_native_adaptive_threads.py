@@ -11,6 +11,7 @@ import torch
 import vllm_srun.engines.native.threads as adaptive
 from starlette.testclient import TestClient
 from vllm_srun.api.app import create_app
+from vllm_srun.engines.native.engine import NativeEngineModel
 
 from .conftest import QUESTIONS, start_runtime
 
@@ -34,6 +35,20 @@ def test_bucket_edges():
     assert adaptive._bucket(31) == 0
     assert adaptive._bucket(32) == 1
     assert adaptive._bucket(2000) == 6
+
+
+def test_bit_equal_reaches_into_dicts_of_tensors():
+    """Encoder outputs carry per-layer tensors in dicts; they compare by value.
+
+    A dict branch must recurse like lists and dataclasses do — falling back
+    to ``==`` raises on a multi-element tensor and took ModernBERT's shadow
+    verification down with it.
+    """
+    same = {"0": torch.tensor([1.0, 2.0]), "1": torch.tensor([3.0])}
+    assert NativeEngineModel._bit_equal(same, dict(same))
+    moved = dict(same, **{"1": torch.tensor([9.0])})
+    assert not NativeEngineModel._bit_equal(same, moved)
+    assert not NativeEngineModel._bit_equal(same, {"0": same["0"]})
 
 
 def test_env_gate(monkeypatch):
