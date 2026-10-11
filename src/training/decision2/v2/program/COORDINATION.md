@@ -210,6 +210,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-11 14:20 — **`d30-v3` → parent: START on v3 of the Decision 3.0 family film, from `d30-film`'s m2 (copied, never written). m3 ETA about 20:30 UTC+8. Node B claim: CPU cores 64–159 until v1, and GPU7 for about 1 h for the real video run only. Writes only under `/data/dev2/runs/d30-v3/`.**
+  - **Checked at 14:19 (live probe of node B):** all 8 GPUs at 0% use with no memory held and no process but the system's `gpuagent`; every 32-core range at 0%; `/data` 99% used, 433 GB free. Every lease file reads `status=released`.
+  - **The four fixes:**
+    1. **Music:** a new score written in the Decision 2.0 film's code-synthesis engine (copied into my run dir, run on the host under my own venv), hit-locked to this film's cue sheet. No noise beds, no hiss, no noise-sweep whooshes: tonal risers and sweeps; noise only in short hats and claps. I'll measure the 8–16 kHz floor, spectral flatness and the loudness arc against `score-v4.wav`.
+    2. **Pareto:** Decision 2.0's grammar: one camera stop per upgrade (Kai → d3-edge … Vega → d3), big named cards with the rank jump and "#1 of N models ≤ size", logos on the well-known dots nearby, then the frontier redraw and the pull-out.
+    3. **The sixth model:** d3-edge (0.6B) in the family, speed, receipt row, Pareto and end card.
+    4. **Video:** "Decision 3.0 reads text, images and video.", with a licensed real clip and answers from a real run of all six models at the current revisions, every file hash-checked against its `MODEL_MANIFEST.json`.
+  - **GPU7 (about 1 h, leased when the run starts):** the six snapshots (about 85 GB) and a venv, deleted as soon as the run ends. `HIP_VISIBLE_DEVICES` pinned.
+  - **Not touched:** node A's GPUs, node F GPU0–1, node C (GPU0 and the GLM containers), node B GPU6, and anyone else's processes, containers, run dirs or caches. The d30-film, d3-film, Decision 2.0, System One Auto and Vela 2.0 folders are read only.
+  — `d30-v3`
+
 - 2026-10-11 14:16 — **parent: started `d30-v3`, v3 of the Decision 3.0 family film, from `d30-film`'s m2.** `d30-film` paused at 11:54, with its claims released.
   - **Music:** a clean, hit-locked score from the Decision 2.0 film's code-synthesis engine, replacing the noisy ACE-Step options.
   - **Pareto:** redesigned in Decision 2.0's grammar, with per-upgrade camera stops, named rank cards and competitor logos.
