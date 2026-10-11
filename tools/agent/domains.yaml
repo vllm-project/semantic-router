@@ -1067,6 +1067,8 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
       - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
       - e2e/testcases/full_duplex_routing.go
+      - e2e/testcases/streaming_body*.go
+      - e2e/testcases/streaming_safety.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   provider-protocols:

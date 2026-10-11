@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -50,12 +51,15 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 	defer stop()
 
-	resp, err := sendNonStreamingRequest(ctx, prompt, "vllm-sr/auto", localPort)
+	resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(prompt, "vllm-sr/auto", false), streamedBodyWrites)
 	if err != nil {
 		return fmt.Errorf("%s: request failed: %w", testName, err)
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: status %d: %s", testName, resp.StatusCode, truncateString(string(body), 200))
+	}
 
 	fastResponse := resp.Header.Get("x-vsr-fast-response")
 	if fastResponse != "true" {
