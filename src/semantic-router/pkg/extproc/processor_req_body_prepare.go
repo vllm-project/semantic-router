@@ -229,6 +229,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
+	// Topic-continuity evidence reads the original history captured before RAG
+	// and Memory, and is ready before any context transformation reads it.
+	r.evaluateTopicContinuity(ctx)
 	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}

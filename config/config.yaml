@@ -728,6 +728,22 @@ routing:
       - name: fix
         description: Repair a bug or a failing behavior.
 
+    # Context-policy evidence: whether the live turn still depends on
+    # retained history. Not decision-referenceable; every declared rule runs
+    # before the context transformation stage and context policies read the
+    # typed result. Every field except name is optional (defaults shown).
+    topic_continuity:
+      - name: topic_boundary
+        description: Whether the live turn still depends on retained history.
+        include_assistant: true
+        thresholds:
+          continuation: 0.35
+          change: 0.08
+        limits:
+          max_prior_turns: 8
+          max_turn_bytes: 16384
+          max_input_bytes: 147456
+
     # Typed questions answered by a decision model through the built-in model
     # runtime (global.model_catalog.deployments, provider model_runtime).
     decision:
