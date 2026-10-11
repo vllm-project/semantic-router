@@ -883,10 +883,22 @@ write_runtime_env() {
   fi
 }
 
+# Name the preference this run left in place. An empty or failed selection
+# writes nothing, so an existing runtime.env survives it; the run should say
+# which runtime still applies instead of leaving the user to guess (#4548).
+report_kept_runtime_env() {
+  local env_file="$INSTALL_ROOT/runtime.env"
+  [ -f "$env_file" ] || return 0
+  local kept
+  kept="$(sed -n 's/^CONTAINER_RUNTIME=//p' "$env_file" | head -n 1)"
+  info "Kept the existing runtime preference: ${kept:-unset}."
+}
+
 ensure_runtime() {
   if [ "$MODE" = "cli" ] || [ "$REQUESTED_RUNTIME" = "skip" ]; then
     SELECTED_RUNTIME=""
     write_runtime_env
+    report_kept_runtime_env
     info "Runtime bootstrap skipped."
     return
   fi
@@ -899,6 +911,7 @@ ensure_runtime() {
       return
     else
       write_runtime_env ""
+      report_kept_runtime_env
       die "Podman was requested but is not reachable. Install Podman or use --runtime auto."
     fi
   fi
