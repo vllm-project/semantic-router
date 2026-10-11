@@ -121,22 +121,18 @@ func TestMCPUpdateCanClearStoredUnsupportedSecurity(t *testing.T) {
 	}
 }
 
-func TestMCPConnectionTestReportsUnsupportedSecurity(t *testing.T) {
+// The collection test path answers a security setting the client cannot
+// enforce the way create and update do: 400 with the field names, not a
+// test failure envelope (#4338).
+func TestMCPConnectionTestRejectsUnsupportedSecurity(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSecurityTestHandler(t, nil)
 	config := securedServerConfig("")
 	config.Security = &mcp.SecurityConfig{AllowedOrigins: []string{"https://dashboard.example.test"}}
 
 	recorder := serveMCPRequest(handler.TestConnectionHandler(), http.MethodPost, "/api/mcp/servers/test", config)
-	var response struct {
-		Success bool   `json:"success"`
-		Error   string `json:"error"`
-	}
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("status=%d body=%s: %v", recorder.Code, recorder.Body.String(), err)
-	}
-	if recorder.Code != http.StatusOK || response.Success {
+	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	assertUnsupportedSecurityMessage(t, response.Error, "security.allowed_origins")
+	assertUnsupportedSecurityMessage(t, recorder.Body.String(), "security.allowed_origins")
 }
