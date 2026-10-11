@@ -280,8 +280,10 @@ server, see [Decision models](../../../model-runtime/guides/decisions.md).
 ## Images and videos in Router decisions
 
 Decision deployments can opt into inline user images and videos. The setting
-is off by default and applies to decision signals, compatible built-in questions
+is off by default and applies to request-stage decision signals, compatible built-in questions
 sharing their call, and the decision model selection algorithm.
+Response-stage jailbreak and hallucination checks do not inherit user attachments,
+even when they share a deployment.
 
 ```yaml
 global:

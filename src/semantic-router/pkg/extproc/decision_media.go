@@ -1,10 +1,22 @@
 package extproc
 
 import (
+	"context"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/decisionmedia"
 )
+
+// requestDecisionContext scopes user attachments to request routing and selection.
+// Response checks use selectionRequestContext without adding request media.
+func requestDecisionContext(ctx *RequestContext) context.Context {
+	parent := selectionRequestContext(ctx)
+	if ctx == nil {
+		return parent
+	}
+	return modelservice.WithDecisionMedia(parent, ctx.decisionMedia)
+}
 
 // prepareRequestDecisionMedia uses this generation's observed cards. It never
 // discovers a model on the request path, and owns no backend-request mutation.

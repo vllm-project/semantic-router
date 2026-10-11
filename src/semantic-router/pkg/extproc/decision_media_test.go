@@ -33,11 +33,16 @@ func TestDecisionMediaReachesSelectorFromChat(t *testing.T) {
 		snapshot := extractSemanticRequestSignals(&neutral)
 		ctx := &RequestContext{TraceContext: t.Context(), decisionMedia: router.prepareRequestDecisionMedia(snapshot.DecisionMedia)}
 		decision := cfg.GetDecisionByName("choose")
-		result, err := router.newDecisionModelSelector(*decision.Algorithm.Decision).Select(selectionRequestContext(ctx), &selection.SelectionContext{Query: snapshot.UserContent, CandidateModels: decision.ModelRefs})
+		result, _, err := router.selectWithSelector(
+			&selection.SelectionContext{Query: snapshot.UserContent, CandidateModels: decision.ModelRefs},
+			selection.MethodDecision,
+			router.newDecisionModelSelector(*decision.Algorithm.Decision),
+			&decision.ModelRefs[0], ctx,
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result.SelectedModel != "deep" || len(decider.requests) != 1 {
+		if result == nil || result.Model != "deep" || len(decider.requests) != 1 {
 			t.Fatal("selector call failed")
 		}
 		got := decider.requests[0].Images

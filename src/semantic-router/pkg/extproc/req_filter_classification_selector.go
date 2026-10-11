@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
@@ -125,7 +124,7 @@ func (r *OpenAIRouter) selectWithSelector(
 	defaultCandidate *config.ModelRef,
 	ctx *RequestContext,
 ) (*config.ModelRef, string, error) {
-	requestCtx := selectionRequestContext(ctx)
+	requestCtx := requestDecisionContext(ctx)
 	selectionStart := time.Now()
 	result, err := selector.Select(requestCtx, selCtx)
 	selection.RecordSelectionDuration(
@@ -253,10 +252,7 @@ func selectionFallbackReasonForError(err error) string {
 
 func selectionRequestContext(ctx *RequestContext) context.Context {
 	if ctx != nil && ctx.TraceContext != nil {
-		return modelservice.WithDecisionMedia(ctx.TraceContext, ctx.decisionMedia)
-	}
-	if ctx != nil {
-		return modelservice.WithDecisionMedia(context.Background(), ctx.decisionMedia)
+		return ctx.TraceContext
 	}
 	return context.Background()
 }
