@@ -89,7 +89,8 @@ func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port in
 			Host: host,
 			Port: port,
 		}).
-		WithClientName("vllm_agentic_memory_client")
+		WithClientName("vllm_agentic_memory_client").
+		WithClientInfoTag("semantic-router")
 
 	if vc.Password != "" {
 		clientConfig = clientConfig.WithCredentials(
