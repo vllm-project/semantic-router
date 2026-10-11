@@ -57,12 +57,20 @@ def board_rank(value: float) -> dict:
     }
 
 
+def _fractions(skills: dict) -> dict:
+    """Per-benchmark skills as fractions. ckpt_eval reports percent and the board fractions; the unit is decided for the
+    whole set, so a percent skill below 1 (e.g. 0.54) is not mistaken for a fraction."""
+    scale = 100.0 if any(x is not None and x > 1.0001 for x in skills.values()) else 1.0
+    return {k: (None if x is None else x / scale) for k, x in skills.items()}
+
+
 def _s_v2(final, public, bench, T):
     from d25.vega.eval.proxy.common import s_weights as weights
 
     w = weights()
-    pub = {int(k): (v["skill"] if isinstance(v, dict) else v) for k, v in bench.items()}
-    pub = {k: (x / 100 if x is not None and x > 1.0001 else x) for k, x in pub.items()}
+    pub = _fractions(
+        {int(k): (v["skill"] if isinstance(v, dict) else v) for k, v in bench.items()}
+    )
     if any(pub.get(b) is None for b in PRIVATE) or len(pub) < 37:
         return None
     maps = final["maps_T"] if T else final["maps"]
@@ -214,12 +222,14 @@ def paired(ours: dict, calibration=DEFAULT, T=tuple(OUR_T), live=None, jackknife
         (pb, PPLX["public"], "pplx"),
     ):
         base = _fhat(cal, pub_i, bench, 50.0, T)[0]
-        for k, v in bench.items():
-            x = v["skill"] if isinstance(v, dict) else v
-            x = x / 100 if x is not None and x > 1.0001 else x
+        fr = _fractions(
+            {k: (v["skill"] if isinstance(v, dict) else v) for k, v in bench.items()}
+        )
+        for k in bench:
+            x = fr[k]
             n = max(1, pm["benchmarks"].get(str(k), {}).get("requests") or 100)
             se = math.sqrt(max(x * (1 - x), 0.01) / n)
-            b2 = dict(bench)
+            b2 = dict(fr)
             b2[k] = min(1.0, x + se)
             var_a += (_fhat(cal, pub_i, b2, 50.0, T)[0] - base) ** 2
     se_o = 1.0  # O_proxy points per model: sqrt(mean p(1-p)/n_t)/(1-1/k)/sqrt(22) ~ 1.0 (22 tasks x ~246 items)
