@@ -51,6 +51,8 @@ interface DSLState {
   deployPreviewMerged: string
   deployPreviewLoading: boolean
   deployPreviewError: string | null
+  /** The Router's verdict on the merged config, from the preview; null when it would load. */
+  deployPreviewValidationError: string | null
 }
 
 interface DSLActions {

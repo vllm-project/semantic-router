@@ -64,6 +64,22 @@ type ConfigVersion struct {
 type DeployPreviewResponse struct {
 	Current string `json:"current"` // Current config.yaml content
 	Preview string `json:"preview"` // What config.yaml will look like after deploy
+	// ValidationError is the Router's verdict on the merged document, empty
+	// when it would load. It travels with the diff rather than replacing it,
+	// so the confirm dialog can show what would be deployed next to why the
+	// Router refuses it, and the full-YAML view that shares this endpoint
+	// keeps rendering an invalid draft.
+	ValidationError string `json:"validation_error,omitempty"`
+}
+
+// mergedConfigValidationError runs the Router's own parser over a merged
+// document and returns the message Deploy reports, or "" when it loads. One
+// place for the wording, so preview and deploy cannot drift apart.
+func mergedConfigValidationError(yamlBytes []byte) string {
+	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+		return fmt.Sprintf("Merged config validation failed: %v", err)
+	}
+	return ""
 }
 
 // DeployPreviewHandler returns the current config and the merged preview
@@ -131,6 +147,9 @@ func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc
 		_ = json.NewEncoder(w).Encode(DeployPreviewResponse{
 			Current: currentForDiff,
 			Preview: previewForDiff,
+			// The same check Deploy runs, so the dialog can refuse before the
+			// write instead of the toast reporting it after.
+			ValidationError: mergedConfigValidationError(previewBytes),
 		})
 	}
 }
@@ -268,12 +287,12 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+	if message := mergedConfigValidationError(yamlBytes); message != "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error":   "config_validation_error",
-			"message": fmt.Sprintf("Merged config validation failed: %v", err),
+			"message": message,
 		})
 		return
 	}
