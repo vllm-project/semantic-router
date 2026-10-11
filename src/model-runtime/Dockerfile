@@ -16,9 +16,9 @@ ENV PIP_NO_CACHE_DIR=1 \
 RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}"
 
 WORKDIR /opt/vllm-srun
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md requirements-lock.txt ./
 COPY vllm_srun ./vllm_srun
-RUN pip install ".[multimodal]" \
+RUN pip install -c requirements-lock.txt ".[multimodal]" \
     && useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin runtime \
     && mkdir -p "$HF_HOME" \
     && chown runtime "$HF_HOME"
