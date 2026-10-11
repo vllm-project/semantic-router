@@ -77,6 +77,9 @@ type chatChunkWire struct {
 	// Aggregator gateways may report the handling agent alongside a chunk.
 	// It is transport metadata, not response content.
 	Agent json.RawMessage `json:"agent,omitempty"`
+	// Mistral reports a stream transport marker alongside chunks.
+	// It is transport metadata, not response content.
+	P *string `json:"p,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -333,6 +336,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
 			"stream.agent", "gateway agent metadata is not model output",
+		)
+	}
+	if chunk.P != nil {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.p", "provider stream metadata is not model output",
 		)
 	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
