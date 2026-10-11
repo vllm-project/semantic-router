@@ -23,10 +23,12 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if id == "" {
 		status = "error"
@@ -61,13 +63,16 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 	return nil
 }
 
-func (m *MilvusStore) recordRetrievalBatch(ids []string) {
+func (m *MilvusStore) recordRetrievalBatch(parent context.Context, ids []string) {
 	m.retrievalUpdateMu.Lock()
 	defer m.retrievalUpdateMu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
 		if err := m.recordRetrieval(ctx, id); err != nil {
 			logging.Warnf("MilvusStore.recordRetrievalBatch: id=%s: %v", id, err)
 		}
@@ -97,10 +102,12 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if id == "" {
 		status = "error"
@@ -143,10 +150,12 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if scope.UserID == "" {
 		status = "error"

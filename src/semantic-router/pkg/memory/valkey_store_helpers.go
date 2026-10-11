@@ -22,10 +22,13 @@ import (
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved memory in the background.
 // Uses targeted HINCRBY + HSET instead of full read-modify-write for efficiency.
 // The user-facing behavior matches the Milvus backend (access_count incremented, timestamps updated).
-func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func (v *ValkeyStore) recordRetrievalBatch(parent context.Context, ids []string) {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
 		if err := v.recordRetrieval(ctx, id); err != nil {
 			logging.Warnf("ValkeyStore.recordRetrievalBatch: id=%s: %v", id, err)
 		}

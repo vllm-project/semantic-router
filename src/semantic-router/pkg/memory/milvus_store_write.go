@@ -22,10 +22,12 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if err := prepareMemoryForStore(memory); err != nil {
 		status = "error"

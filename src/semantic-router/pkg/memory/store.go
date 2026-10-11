@@ -2,7 +2,15 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"sync"
+)
+
+// Every Store method, CheckConnection included, returns one of these (wrapped)
+// when the store is switched off or closed. Use errors.Is to test for them.
+var (
+	ErrStoreDisabled = errors.New("memory store is not enabled")
+	ErrStoreClosed   = errors.New("memory store is closed")
 )
 
 // globalMemoryStore holds the global memory store instance for API access.
