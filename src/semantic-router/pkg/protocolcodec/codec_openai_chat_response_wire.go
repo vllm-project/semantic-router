@@ -108,7 +108,7 @@ type chatStopReasonWire struct {
 func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		if len(text) == 0 || len(text) > 128 {
+		if len(text) == 0 {
 			return fmt.Errorf("chat stop reason string is invalid")
 		}
 		reason.Text = &text

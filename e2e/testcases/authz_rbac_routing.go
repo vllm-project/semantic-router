@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -127,7 +128,7 @@ func checkAuthzRoutingCase(ctx context.Context, chatClient *fixtures.ChatComplet
 	}
 
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model:    "MoM",
+		Model:    "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{{Role: "user", Content: tc.prompt}},
 	}, headers)
 	if err != nil {

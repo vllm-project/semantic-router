@@ -11,7 +11,7 @@ defaults:
 component_workers:
   # These select per-contract setup; each selected verification gets its own job.
   cli:
-    display_name: CLI and Fleet
+    display_name: CLI
     go: false
   model:
     display_name: Model Tools
@@ -87,7 +87,7 @@ verifications:
     executor: operator
     category: e2e
     workflow: .github/workflows/operator-ci.yml
-    images: [operator, operator-bundle, extproc, provider-mocker]
+    images: [operator, operator-bundle, vllm-sr, provider-mocker]
     services: [kind]
     runtime: model-runtime
     device: cpu
@@ -184,16 +184,6 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: vllm-sr-test
     inventory: cli-unittest-discovery
-  fleet-sim:
-    display_name: Fleet Simulation
-    activity: test
-    boundary: [unit]
-    executor: tools
-    category: components
-    worker: cli
-    workflow: .github/workflows/test-tools.yml
-    target: vllm-sr-sim-test
-    inventory: simulator-pytest-discovery
   model-runtime:
     display_name: Model Runtime
     activity: test
@@ -279,7 +269,7 @@ verifications:
 # Versioned required inventory, shared by ci/full, nightly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 full_cpu:
-  version: 3
+  version: 4
   required:
     - quality
     - generated-contracts
@@ -297,7 +287,6 @@ full_cpu:
     - performance
     - cli-package
     - cli-unit
-    - fleet-sim
     - training
     - onnx-artifacts
     - ck-rewrite
@@ -305,7 +294,9 @@ full_cpu:
     - learning-tools
     - harness-tools
     - e2e-unit
+    - e2e.standalone
     - e2e.envoy-ai-gateway
+    - e2e.routing-errors
     - e2e.local-classifier-backend
     - e2e.dashboard
     - e2e.remote-embedding
@@ -319,7 +310,7 @@ full_cpu:
     - e2e.vela-shield
     - e2e.multimodal-routing
   support_contracts:
-    Helm chart: [core]
+    Helm chart: [core, e2e.standalone]
     Local deployment: [local.cli]
     Kubernetes Operator: [operator]
     agentgateway: [e2e.agentgateway]

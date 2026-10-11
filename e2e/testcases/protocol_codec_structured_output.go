@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -50,7 +51,7 @@ func testProtocolCodecAnthropicBackendStructuredOutput(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecStructuredOutputMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecStructuredOutputMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func runProtocolCodecStructuredOutputMatrix(

@@ -53,7 +53,12 @@ routing:
 
 每条规则将当前用户轮次与最近 `lookback_turns` 个先前用户轮次比较。仅当该近期连续中的每一轮都高于已配置相似度阈值时，规则才匹配。
 
+默认分数是余弦相似度，即使配置了默认决策模型也是如此。显式设置
+`routing.model_bindings.reask` 且使用 `contract: decision.v1` 时，才会启用原生的重复意图判断。
+该模式的分数表示两个请求寻求相同信息或操作的概率，需要针对所选模型重新校准阈值；
+余弦相似度阈值不能直接移用。两种模式都由 Router 统计连续轮次，完整且非空的相同轮次无需调用模型即可识别。
+
 ## 依赖与限制 {#dependencies-and-limitations}
 
-Reask 使用共享嵌入路径，并在配置了远程嵌入提供方时把近期用户轮次发给它。重复可能是有意的，而不一定是不满，因此把该信号用于升级而非惩罚。完整示例见：
+Reask 使用共享嵌入路径，并在配置了远程嵌入提供方时把近期用户轮次发给它。非完全相同的轮次必须证明完整输入已被处理：模型截断输入或无法确定输入覆盖范围时，会返回未知信号，而不是不匹配。OpenAI 兼容的嵌入端点必须拒绝超过其限制的输入，不能静默截断。重复可能是有意的，而不一定是不满，因此把该信号用于升级而非惩罚。完整示例见：
 [`config/fragments/signal/reask/dissatisfaction.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/reask/dissatisfaction.yaml)。

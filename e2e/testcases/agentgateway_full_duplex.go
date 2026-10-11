@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -52,7 +53,7 @@ func testAgentGatewayFullDuplexMultiturn(ctx context.Context, client *kubernetes
 	// chunked transfer with small reader chunks. Every attempt must reach the
 	// mock LLM as valid JSON; an empty intermediate mutation produces a 503.
 	history := strings.Repeat("Earlier context that must remain intact across the streamed request. ", 32)
-	payload := fmt.Sprintf(`{"model":"auto","messages":[{"role":"user","content":%q},{"role":"assistant","content":%q},{"role":"user","content":"What is the derivative of x cubed?"}],"max_tokens":64,"temperature":0}`,
+	payload := fmt.Sprintf(`{"model":"vllm-sr/auto","messages":[{"role":"user","content":%q},{"role":"assistant","content":%q},{"role":"user","content":"What is the derivative of x cubed?"}],"max_tokens":64,"temperature":0}`,
 		history, "I retained the earlier context and am ready for the next question.")
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	httpClient := &http.Client{Timeout: 30 * time.Second}

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -37,7 +38,7 @@ func testAnthropicResponseAPIBuffered(ctx context.Context, client *kubernetes.Cl
 	defer session.Close()
 
 	body, err := sendProtocolMatrixRequest(ctx, session, "/v1/responses", map[string]any{
-		"model": "MoM", "input": "Say hello in a few words.", "store": false,
+		"model": "vllm-sr/auto", "input": "Say hello in a few words.", "store": false,
 	}, false)
 	if err != nil {
 		return err
@@ -65,7 +66,7 @@ func testAnthropicResponseAPIStreaming(ctx context.Context, client *kubernetes.C
 		fmt.Println("[Test] Testing Response API streaming over the provider-protocols backend")
 	}
 
-	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "", "Say hello in a few words.", nil)
+	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "vllm-sr/auto", "", "Say hello in a few words.", nil)
 	if err != nil {
 		return err
 	}
@@ -96,7 +97,7 @@ func testAnthropicChatCompletionsStreaming(ctx context.Context, client *kubernet
 	defer session.Close()
 
 	body, err := sendProtocolMatrixRequest(ctx, session, "/v1/chat/completions", map[string]any{
-		"model":    "MoM",
+		"model":    "vllm-sr/auto",
 		"messages": []map[string]string{{"role": "user", "content": "Say hello."}},
 		"stream":   true,
 	}, true)

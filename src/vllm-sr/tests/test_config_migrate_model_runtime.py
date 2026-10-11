@@ -22,11 +22,11 @@ REMOVED_FIELDS = {"precision", "custom_ops_profile", "compilation_cache_dir"}
 REMOVED_PROVIDERS = {"candle", "ort", "openvino"}
 
 
-def _config(global_config=None, routing=None, recipes=None):
+def _config(global_config=None, routing=None, recipes=None, providers=None):
     config = {
         "version": "v0.3",
         "listeners": [],
-        "providers": {"defaults": {"model": "general"}},
+        "providers": {"defaults": {"model": "general"}, **(providers or {})},
         "routing": {"modelCards": [{"name": "general"}], **(routing or {})},
         "global": global_config or {},
     }
@@ -237,7 +237,7 @@ def test_graph_heads_and_the_explainer_binding_leave_task_bindings():
             },
             recipes=[
                 {
-                    "name": "amd",
+                    "name": "rocm",
                     "routing": {
                         "model_bindings": {"domain_classifier": dict(graph_binding)}
                     },
@@ -894,7 +894,10 @@ def test_migrate_command_lists_changes_and_actions(tmp_path):
                             },
                         }
                     }
-                }
+                },
+                providers={
+                    "models": [{"name": "general", "provider_model_id": "gpt-4o-mini"}]
+                },
             )
         )
     )
@@ -914,7 +917,7 @@ def test_migrate_command_lists_changes_and_actions(tmp_path):
     assert deployments["risk"]["provider"] == "model_runtime"
 
 
-def test_omni_deployments_name_the_prepared_bundle_router_images_ship():
+def test_omni_deployments_name_the_published_repositories():
     migrated, notes = _migrate(
         _config(
             {
@@ -929,6 +932,10 @@ def test_omni_deployments_name_the_prepared_bundle_router_images_ship():
                             "provider": "candle",
                             "artifact": "models/mom-embedding-multimodal",
                         },
+                        "bundle": {
+                            "provider": "model_runtime",
+                            "artifact": "/opt/router-model-artifacts/vela-1.0-omni-mini",
+                        },
                     }
                 }
             }
@@ -936,12 +943,8 @@ def test_omni_deployments_name_the_prepared_bundle_router_images_ship():
     )
 
     deployments = _catalog(migrated)["deployments"]
-    assert (
-        deployments["nano"]["artifact"]
-        == "/opt/router-model-artifacts/vela-1.0-omni-nano"
-    )
-    assert deployments["legacy"]["artifact"] == (
-        "/opt/router-model-artifacts/vela-1.0-omni-nano"
-    )
-    assert any("prepare.py" in note.message for note in notes)
+    assert deployments["nano"]["artifact"] == "vllm-sr/Vela-1.0-Omni-Nano"
+    assert deployments["legacy"]["artifact"] == "vllm-sr/Vela-1.0-Omni-Nano"
+    assert deployments["bundle"]["artifact"] == "vllm-sr/Vela-1.0-Omni-Mini"
+    assert any("no longer ship" in note.message for note in notes)
     assert any("re-embedded" in note.message for note in notes)

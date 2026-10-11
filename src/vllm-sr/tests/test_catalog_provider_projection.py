@@ -821,6 +821,9 @@ def test_reference_config_projects_a_homogeneous_weighted_pool(tmp_path, monkeyp
     monkeypatch.setenv("ENVOY_EXTPROC_ADDRESS", "localhost")
     monkeypatch.setenv("ENVOY_ROUTER_API_ADDRESS", "localhost")
     config = parse_user_config(str(REPO_ROOT / "config/config.yaml"))
+    # The reference config also shows a TLS listener, which only the native
+    # gateway serves.
+    config.listeners = [listener for listener in config.listeners if not listener.tls]
 
     generate_envoy_config_from_user_config(config, str(output_path))
 

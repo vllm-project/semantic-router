@@ -16,6 +16,7 @@ _ROUTER_KEYS = {
     "strategy",
     "auto_model_name",
     "auto_model_names",
+    "list_backend_models",
     "include_config_models_in_list",
     "clear_route_cache",
     "model_selection",

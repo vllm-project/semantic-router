@@ -30,10 +30,6 @@ func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
 		return syncRuntimeConfigLocally(configPath)
 	}
 
-	if getDockerContainerStatus(managedRuntimeSyncContainerName()) == "running" {
-		return syncRuntimeConfigInManagedContainer()
-	}
-
 	return filepath.Clean(configPath), nil
 }
 
@@ -67,26 +63,6 @@ func syncRuntimeConfigLocally(configPath string) (string, error) {
 func isExplicitRuntimeConfigPath(configPath string) bool {
 	runtimePath := strings.TrimSpace(os.Getenv("VLLM_SR_RUNTIME_CONFIG_PATH"))
 	return runtimePath != "" && filepath.Clean(configPath) == filepath.Clean(runtimePath)
-}
-
-func syncRuntimeConfigInManagedContainer() (string, error) {
-	containerName := managedRuntimeSyncContainerName()
-	pythonBinary := "python3"
-	if managedRuntimeUsesSplitContainers() {
-		pythonBinary = dashboardVenvPythonPath
-	}
-	managedConfigPath := configuredRuntimeConfigPath(legacyManagedContainerConfigPath)
-	output, err := execInManagedContainer(
-		containerName,
-		30*time.Second,
-		pythonBinary,
-		"-c",
-		buildRuntimeSyncPythonScript("/app", managedConfigPath),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to sync runtime config in %s: %w (output: %s)", containerName, err, strings.TrimSpace(output))
-	}
-	return parseRuntimeSyncOutput(output, managedConfigPath), nil
 }
 
 func hasRuntimeOverrideEnv() bool {

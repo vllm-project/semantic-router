@@ -9,8 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -165,7 +166,7 @@ func testSingleEntropyRouting(ctx context.Context, testCase EntropyRoutingCase, 
 		MaxConfidence:       testCase.MaxConfidence,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -227,8 +228,8 @@ func testSingleEntropyRouting(ctx context.Context, testCase EntropyRoutingCase, 
 
 func printEntropyRoutingResults(results []EntropyRoutingResult, totalTests, uncertaintyMatches,
 	reasoningMatches, confidenceMatches, categoryMatches int,
-	uncertaintyAccuracy, reasoningAccuracy, confidenceAccuracy, categoryAccuracy float64) {
-
+	uncertaintyAccuracy, reasoningAccuracy, confidenceAccuracy, categoryAccuracy float64,
+) {
 	separator := "================================================================================"
 	fmt.Println("\n" + separator)
 	fmt.Println("ENTROPY-BASED ROUTING TEST RESULTS")

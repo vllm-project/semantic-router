@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"io"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -49,7 +50,7 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 	defer stop()
 
-	resp, err := sendNonStreamingRequest(ctx, prompt, "MoM", localPort)
+	resp, err := sendNonStreamingRequest(ctx, prompt, "vllm-sr/auto", localPort)
 	if err != nil {
 		return fmt.Errorf("%s: request failed: %w", testName, err)
 	}

@@ -23,7 +23,7 @@ func TestLocalClassifierLoadFailureDoesNotReserveGlobalSlot(t *testing.T) {
 }
 
 func TestLocalClassifierMaintainedCPU(t *testing.T) {
-	path := requireRealModel(t, "VLLM_SR_DOMAIN_MODEL", config.DefaultGlobalConfig().CategoryModel.ModelID)
+	path := requireRealModel(t, "VLLM_SR_DOMAIN_MODEL", vela1SpecialistsConfig().CategoryModel.ModelID)
 	data, err := os.ReadFile(filepath.Join(path, "config.json"))
 	if err != nil {
 		t.Fatal(err)

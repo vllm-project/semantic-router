@@ -29,7 +29,6 @@ type values struct {
 					Artifact string `yaml:"artifact"`
 					Revision string `yaml:"revision"`
 					Endpoint string `yaml:"endpoint"`
-					Process  string `yaml:"process"`
 					Device   string `yaml:"device"`
 				} `yaml:"deployments"`
 				Bindings map[string]any `yaml:"bindings"`
@@ -59,8 +58,8 @@ func load(t *testing.T) values {
 func TestProfileServesRealKaiAndTheVelaDefaults(t *testing.T) {
 	profile := load(t)
 	kai, ok := profile.Config.Global.ModelCatalog.Deployments["kai"]
-	if !ok || kai.Provider != "model_runtime" || kai.Endpoint != "" || kai.Device != "cpu" || kai.Process != "decisions" {
-		t.Fatalf("kai must be a managed cpu deployment in the decisions process: %+v", kai)
+	if !ok || kai.Provider != "model_runtime" || kai.Endpoint != "" || kai.Device != "cpu" {
+		t.Fatalf("kai must be a managed cpu deployment in its own worker: %+v", kai)
 	}
 	if kai.Artifact != "vllm-sr/Decision-2.0-Kai-0.6B" || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(kai.Revision) {
 		t.Fatalf("kai must pin the published Kai-0.6B revision: %+v", kai)
@@ -94,10 +93,10 @@ func TestProfileRunsTheRealRuntimeWithKnownSockets(t *testing.T) {
 	for _, item := range load(t).ExtraEnv {
 		env[item.Name] = item.Value
 	}
-	if env["VLLM_SR_RUNTIME_DIR"] != "/tmp/vsr-runtime" {
+	if env["VLLM_SRUN_DIR"] != "/tmp/vsr-runtime" {
 		t.Fatalf("the cases reach Kai through /tmp/vsr-runtime: %v", env)
 	}
-	for _, name := range []string{"VLLM_SR_RUNTIME_COMMAND", "HF_HUB_OFFLINE"} {
+	for _, name := range []string{"VLLM_SRUN_COMMAND", "HF_HUB_OFFLINE"} {
 		if _, set := env[name]; set {
 			t.Fatalf("%s would replace the real runtime or block its downloads", name)
 		}

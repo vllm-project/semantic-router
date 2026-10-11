@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 const remoteEmbeddingExpectedDimension = 4
@@ -168,7 +169,7 @@ func requestRemoteEmbeddingDecision(
 	prompt string,
 ) (string, error) {
 	payload, err := json.Marshal(map[string]interface{}{
-		"model": "auto",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},

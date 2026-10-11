@@ -5,10 +5,10 @@ release: unreleased
 compatibility:
   cli:
     min: 0.3.0
-    max_exclusive: 0.5.0
+    max_exclusive: 0.6.0
   router:
     min: 0.3.0
-    max_exclusive: 0.5.0
+    max_exclusive: 0.6.0
   config_schema: v0.3
   required_features:
   - entrypoints
@@ -23,8 +23,21 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+  sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
 protocols:
+- id: vllm-sr/systemone@1
+  display_name: System One
+  wire_format: vllm-sr.systemone.v1
+  default_base_path: /v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/systemone
+  - id: list_models
+    method: GET
+    path: /v1/systemone/models
+  capabilities:
+  - typed_decisions
 - id: openai/chat-completions@1
   display_name: OpenAI Chat Completions
   wire_format: openai.chat.v1
@@ -2735,6 +2748,28 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://platform.stepfun.com/docs/zh/guides/developer/reasoning
+- id: systemone-compatible
+  display_name: System One Compatible
+  description: Connect a concrete decision model through the native System One API.
+  category: private_runtime
+  support_tier: compatible
+  protocols:
+  - vllm-sr/systemone@1
+  default_protocol: vllm-sr/systemone@1
+  supported_operations:
+  - vllm-sr/systemone@1#create
+  - vllm-sr/systemone@1#list_models
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: public:/img/vllm-sr-mark.svg
+    monogram: S
+    monochrome: true
+    featured: false
+  conformance:
+    status: unverified
 - id: together
   display_name: Together AI
   description: Open models through a hosted API.
@@ -3380,6 +3415,19 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+  - catalog: tencent/hunyuan-7b-instruct
+    relationship: self_hosted
+    id: tencent/Hunyuan-7B-Instruct
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    restrictions:
+      minimum_vllm_version: 0.10.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
   - catalog: zai/glm-5.1
     relationship: self_hosted
     id: zai-org/GLM-5.1
@@ -3927,6 +3975,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://docs.x.ai/developers/models
+  - catalog: xai/grok-4.7
+    relationship: first_party
+    id: grok-4.7
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://docs.x.ai/developers/models/grok-4.7
 - id: xiaomi
   display_name: Xiaomi MiMo API
   description: MiMo models through Xiaomi's OpenAI-compatible API platform.
@@ -8629,6 +8687,45 @@ models:
   - hybrid_reasoning
   - moe
   - efficient
+- id: tencent/hunyuan-7b-instruct
+  display_name: Hunyuan 7B Instruct
+  description: Open-weight hybrid-reasoning dense 7B model with 256K context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: H
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct
+    license: Tencent-Hunyuan-7B
+  family: hunyuan
+  parameter_size: 7B
+  revision: 6fd6ecb05e76589bc43b79f49e3619445c6b4593
+  released_at: '2025-07-30'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Tencent Hunyuan
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+  tags:
+  - open_weights
+  - hybrid_reasoning
+  - dense
+  - efficient
 - id: thinking-machines/inkling
   display_name: Inkling
   description: Thinking Machines Lab's open-weight multimodal frontier MoE model with controllable reasoning effort.
@@ -8844,6 +8941,46 @@ models:
   - reasoning
   - coding
   released_at: '2025-05-21'
+- id: xai/grok-4.7
+  display_name: Grok 4.7
+  description: xAI frontier reasoning model for coding, agentic tasks, and knowledge work.
+  kind: physical
+  publisher: xAI
+  presentation:
+    logo: package:xai
+    monogram: x
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://docs.x.ai/developers/models
+  family: grok-4
+  reasoning_family: grok-4.6
+  lifecycle: active
+  limits:
+    context_window_size: 500000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: xAI
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://docs.x.ai/developers/models/grok-4.7
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-09-21'
 - id: xai/grok-4.6
   display_name: Grok 4.6
   description: xAI frontier reasoning model with image input and tool support.
@@ -9382,7 +9519,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9449,7 +9586,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9519,7 +9656,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9604,7 +9741,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -9657,7 +9794,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
@@ -36395,6 +36532,108 @@ evaluations:
     verification: claimed
     source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
     redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-aime-2024@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.811
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-aime-2025@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.753
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-math@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.937
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.601
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-olympiadbench@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: opencompass/olympiadbench@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.765
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-ifeval@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.793
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
 - id: independent/inkling-aa-briefcase@1.0.0
   model: thinking-machines/inkling
   benchmark: artificial-analysis/briefcase@1.0.0
@@ -38516,6 +38755,186 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://benchmarks.duellab.org/model-x-ai-grok-4-5
+    redistributable: true
+- id: independent/grok-4-7-high-critpt@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    score: 0.18
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    score: 0.77
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-omniscience@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    index: 30.9
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-humanitys-last-exam@1.0.0
+  model: xai/grok-4.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.423076923076923
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-scicode@1.0.0
+  model: xai/grok-4.7
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    score: 0.577546296296296
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-critpt@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    score: 0.177142857142857
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    score: 0.766666666666667
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-omniscience@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    index: 32.03333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-humanitys-last-exam@1.0.0
+  model: xai/grok-4.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    accuracy: 0.431417979610751
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-scicode@1.0.0
+  model: xai/grok-4.7
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    score: 0.574074074074074
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
     redistributable: true
 - id: xiaomi/mimo-v2.6-flash-model-card-deep-swe-1.1@1.0.0
   model: xiaomi/mimo-v2.6-flash

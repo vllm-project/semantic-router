@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -55,8 +56,9 @@ func testDecisionPriority(ctx context.Context, client *kubernetes.Clientset, opt
 
 	// Define test cases inline
 	testCases := []DecisionPriorityCase{
+		// No urgency word: the baseline profile's urgent_request outranks thinking.
 		{
-			Query:             "Think carefully about this urgent business decision",
+			Query:             "Think carefully about this business decision",
 			ExpectedDecision:  "thinking_decision",
 			ExpectedPriority:  15,
 			MatchingDecisions: []string{"thinking_decision", "business_decision"},
@@ -69,8 +71,10 @@ func testDecisionPriority(ctx context.Context, client *kubernetes.Clientset, opt
 			MatchingDecisions: []string{"thinking_decision", "math_decision"},
 			Description:       "Query matches thinking (priority 15) and math (priority 10) - should select higher priority",
 		},
+		// No digits: Vela 2.0 can read a bare number as a DATE_TIME span, which a
+		// profile that denies every PII type blocks before any domain decision.
 		{
-			Query:             "What is 2 + 2?",
+			Query:             "How do I solve a quadratic equation?",
 			ExpectedDecision:  "math_decision",
 			ExpectedPriority:  10,
 			MatchingDecisions: []string{"math_decision"},
@@ -137,7 +141,7 @@ func testSinglePrioritySelection(ctx context.Context, testCase DecisionPriorityC
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM", // Use Mixture of Models to trigger decision engine
+		"model": "vllm-sr/auto", // Use the default recipe to trigger decision selection
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1570" viewBox="0 0 1240 1570" role="img"><title>Vela 2.0 0.8B: model architecture</title><desc>Verified inference graph. Read bottom to top. Independent checkpoint.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="320" y="58.0" font-size="28" text-anchor="middle" class="">Decision outputs</text>
+<text x="920" y="58.0" font-size="28" text-anchor="middle" class="">Labeled text spans</text>
+<g data-box="90.0 100 460 88">
+<rect x="90.0" y="100" width="460" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="320" y="138.12" font-size="24" text-anchor="middle" class="">Calibration + softmax / sigmoid</text>
+<text x="320" y="166.2" font-size="24" text-anchor="middle" class="">Choice · Noul · Score · Set</text>
+</g>
+<g data-box="690.0 100 460 88">
+<rect x="690.0" y="100" width="460" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="920" y="138.12" font-size="24" text-anchor="middle" class="">Sigmoid + threshold + merge</text>
+<text x="920" y="166.2" font-size="24" text-anchor="middle" class="">Unicode character offsets</text>
+</g>
+<path d="M320,99 L320,72" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M920,99 L920,72" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="90.0 235 460 86">
+<rect x="90.0" y="235" width="460" height="86" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="320" y="272.12" font-size="24" text-anchor="middle" class="">CandidateHead: LayerNorm</text>
+<text x="320" y="300.2" font-size="24" text-anchor="middle" class="">scaled bilinear + GELU MLP</text>
+</g>
+<g data-box="90.0 370 460 86">
+<rect x="90.0" y="370" width="460" height="86" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="320" y="407.12" font-size="24" text-anchor="middle" class="">Option endpoint states</text>
+<text x="320" y="435.2" font-size="24" text-anchor="middle" class="">+ question-block endpoint</text>
+</g>
+<path d="M320,234 L320,189" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M320,369 L320,322" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="690.0 235 460 86">
+<rect x="690.0" y="235" width="460" height="86" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="920" y="272.12" font-size="24" text-anchor="middle" class="">SpanHeadV2: router OR broad</text>
+<text x="920" y="300.2" font-size="24" text-anchor="middle" class="">separate weights; same topology</text>
+</g>
+<g data-box="690.0 370 460 86">
+<rect x="690.0" y="370" width="460" height="86" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="920" y="407.12" font-size="24" text-anchor="middle" class="">Repeated target: first sub-tokens</text>
+<text x="920" y="435.2" font-size="24" text-anchor="middle" class="">+ label-block mean states</text>
+</g>
+<path d="M920,234 L920,189" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M920,369 L920,322" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="445.0 530 350 54">
+<rect x="445.0" y="530" width="350" height="54" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="565.84" font-size="26" text-anchor="middle" class="">Final RMSNorm</text>
+</g>
+<path d="M620,529 L620,492 L320,492 L320,457" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,492 L920,492 L920,457" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="620" cy="492" r="3.5" fill="#111"/>
+<text x="620" y="480.0" font-size="22" text-anchor="middle" class="math">H: sequence length × 1,024</text>
+<rect x="338" y="625" width="568" height="595" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<text x="314" y="931.5" font-size="30" text-anchor="end" class="math">24×</text>
+<circle cx="620" cy="675" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="620" y="683.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="445.0 723 350 80">
+<rect x="445.0" y="723" width="350" height="80" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="756.875" font-size="25" text-anchor="middle" class="">SwiGLU feed forward</text>
+<text x="620" y="786.125" font-size="25" text-anchor="middle" class="">1,024 → 3,584 → 1,024</text>
+</g>
+<g data-box="445.0 841 350 50">
+<rect x="445.0" y="841" width="350" height="50" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="874.5" font-size="25" text-anchor="middle" class="">RMSNorm</text>
+</g>
+<circle cx="620" cy="935" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="620" y="943.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="445.0 983 350 85">
+<rect x="445.0" y="983" width="350" height="85" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="1019.6200000000001" font-size="24" text-anchor="middle" class="">Gated-DeltaNet (L)</text>
+<text x="620" y="1047.7" font-size="24" text-anchor="middle" class="">or gated causal GQA (F)</text>
+</g>
+<g data-box="445.0 1106 350 50">
+<rect x="445.0" y="1106" width="350" height="50" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="1139.5" font-size="25" text-anchor="middle" class="">RMSNorm</text>
+</g>
+<path d="M620,656 L620,585" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,722 L620,694" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,840 L620,804" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,916 L620,892" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,982 L620,954" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,1105 L620,1069" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,1188 L859,1188 L859,935 L639,935" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,907 L859,907 L859,675 L639,675" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="620" cy="1188" r="3.5" fill="#111"/>
+<circle cx="620" cy="907" r="3.5" fill="#111"/>
+<g data-box="445.0 1280 350 74">
+<rect x="445.0" y="1280" width="350" height="74" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="1310.875" font-size="25" text-anchor="middle" class="">Token embedding</text>
+<text x="620" y="1340.125" font-size="25" text-anchor="middle" class="">248,320 × 1,024</text>
+</g>
+<path d="M620,1279 L620,1157" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="170" y="778.0" font-size="23" text-anchor="middle" class="">Layer schedule</text>
+<text x="170" y="804.91" font-size="23" text-anchor="middle" class="">L → L → L → F</text>
+<text x="170" y="831.8199999999999" font-size="23" text-anchor="middle" class="">6 cycles</text>
+<text x="170" y="862.0" font-size="22" text-anchor="middle" class="">18 linear layers</text>
+<text x="170" y="887.74" font-size="22" text-anchor="middle" class="">6 full-attention layers</text>
+<text x="1022" y="1015.0" font-size="23" text-anchor="middle" class="">GQA: 8 Q / 2 KV</text>
+<text x="1022" y="1041.91" font-size="23" text-anchor="middle" class="">head width 256</text>
+<text x="1022" y="1125.0" font-size="22" text-anchor="middle" class="">Linear heads:</text>
+<text x="1022" y="1150.74" font-size="22" text-anchor="middle" class="">16 Q,K / 16 V</text>
+<text x="1022" y="1176.48" font-size="22" text-anchor="middle" class="">width 128</text>
+<text x="620" y="1412.0" font-size="25" text-anchor="middle" class="">Typed state prefix + isolated question blocks</text>
+<text x="620" y="1441.25" font-size="25" text-anchor="middle" class="">input limit 16,384 tokens</text>
+<path d="M620,1382 L620,1355" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="620" y="1510.0" font-size="31" text-anchor="middle" class="serif">Vela 2.0 0.8B</text>
+<text x="620" y="1547.0" font-size="21" text-anchor="middle" class="">Causal tree execution; the state prefix is reused per layer. Head computations use FP32.</text>
+</svg>

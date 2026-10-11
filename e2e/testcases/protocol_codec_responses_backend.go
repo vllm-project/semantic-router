@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -234,7 +235,7 @@ func testProtocolCodecAnthropicBackendBufferedMatrix(
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	return runProtocolCodecBackendBufferedMatrix(
-		ctx, client, opts, "MoM", "anthropic.messages.v1", protocolCodecAnthropicProbe, protocolCodecAnthropicReply,
+		ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1", protocolCodecAnthropicProbe, protocolCodecAnthropicReply,
 	)
 }
 
@@ -327,7 +328,7 @@ func testProtocolCodecAnthropicBackendStreamingMatrix(
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	return runProtocolCodecBackendStreamingMatrix(
-		ctx, client, opts, "MoM", "anthropic.messages.v1", protocolCodecAnthropicProbe, protocolCodecAnthropicReply,
+		ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1", protocolCodecAnthropicProbe, protocolCodecAnthropicReply,
 	)
 }
 
@@ -415,7 +416,7 @@ func testProtocolCodecAnthropicBackendIncompleteStreamMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecIncompleteStreamMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecIncompleteStreamMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func testProtocolCodecChatBackendMidstreamErrorMatrix(
@@ -439,7 +440,7 @@ func testProtocolCodecAnthropicBackendMidstreamErrorMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecMidstreamErrorMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecMidstreamErrorMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func runProtocolCodecIncompleteStreamMatrix(

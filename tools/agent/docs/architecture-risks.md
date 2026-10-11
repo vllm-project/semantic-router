@@ -8,7 +8,6 @@ owner or the stated proof lands.
 | ID | Risk | Proof needed to retire it |
 | --- | --- | --- |
 | AR020 | Classification construction, discovery, and request-time dispatch can reconverge in central orchestrators. | A new classifier family can land through a family-owned adapter and focused tests without unrelated constructor edits. |
-| AR027 | Fleet-sim analytical sizing, simulation verification, reporting, and public exports remain too coupled. | Each concern has an independent owner and `fleet_sim` root exports contain only deliberate public API. |
 | AR044 | Flow tool state has memory/file/Redis backends but lacks Redis expiry and consume-once integration evidence. | Redis integration and E2E resume tests plus deployment guidance. |
 | AR045 | Repository content moderation has no reviewed implementation; the unsafe secret-script workflow was removed. | A least-privilege reviewed app or workflow with adversarial tests. |
 | AR048 | Online evaluation lacks a runtime-owned assignment/exposure ledger with behavior propensity. | Versioned, idempotent assignment and outcome contracts with estimator fixtures and rollback gates. |

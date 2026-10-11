@@ -223,7 +223,7 @@ Options:
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use
-  --platform PLATFORM      Platform hint for first-run serve. Use 'amd' for ROCm.
+  --platform PLATFORM      Execution platform: auto, cpu, cuda or rocm.
                            Default: auto
   --no-launch              Skip the installer's automatic first `vllm-sr serve`
                            and dashboard open step
@@ -313,37 +313,18 @@ detect_os_label() {
 }
 
 resolve_launch_platform() {
-  if [ "$REQUESTED_PLATFORM" != "auto" ]; then
-    printf '%s\n' "$REQUESTED_PLATFORM"
-    return
-  fi
-
-  if [ -n "${VLLM_SR_PLATFORM:-}" ]; then
-    printf '%s\n' "$VLLM_SR_PLATFORM"
-    return
-  fi
-
-  if has_cmd rocm-smi || has_cmd rocminfo || [ -e /dev/kfd ] || [ -d /opt/rocm ]; then
-    printf 'amd\n'
-    return
-  fi
-
-  printf '\n'
+  case "$REQUESTED_PLATFORM" in
+    auto|cpu|cuda|rocm) printf '%s\n' "$REQUESTED_PLATFORM" ;;
+    *) die "Invalid platform: use auto, cpu, cuda or rocm" ;;
+  esac
 }
 
 display_platform_plan() {
-  local platform
-  platform="$(resolve_launch_platform)"
-  if [ -n "$platform" ]; then
-    if [ "$REQUESTED_PLATFORM" = "auto" ]; then
-      printf '%s (auto-detected)\n' "$platform"
-    else
-      printf '%s\n' "$platform"
-    fi
-    return
+  if [ "$REQUESTED_PLATFORM" = "auto" ]; then
+    printf 'auto (detected by serve on the execution target)\n'
+  else
+    resolve_launch_platform
   fi
-
-  printf 'default\n'
 }
 
 detect_primary_ip() {
@@ -370,6 +351,27 @@ detect_host_label() {
 
 is_remote_session() {
   [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ]
+}
+
+# The CLI publishes the Dashboard on 127.0.0.1 unless VLLM_SR_DASHBOARD_HOST_BIND
+# names another address, so only then does a network URL answer.
+dashboard_published_beyond_loopback() {
+  case "${VLLM_SR_DASHBOARD_HOST_BIND:-127.0.0.1}" in
+    127.*|localhost|::1|'[::1]')
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+# CLIs with --container-runtime keep --runtime as a deprecated alias; older
+# stable releases only know --runtime.
+runtime_flag() {
+  if "$BIN_DIR/vllm-sr" serve --help 2>/dev/null | grep -q -- '--container-runtime'; then
+    printf -- '--container-runtime\n'
+  else
+    printf -- '--runtime\n'
+  fi
 }
 
 open_dashboard_url() {
@@ -401,7 +403,7 @@ print_dashboard_access() {
 
   printf '%b\n' "${COLOR_WHITE}Dashboard access${COLOR_RESET}"
   printf '  local        %s\n' "$DASHBOARD_URL"
-  if [ -n "$primary_ip" ]; then
+  if [ -n "$primary_ip" ] && dashboard_published_beyond_loopback; then
     printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
   fi
   printf '\n'
@@ -433,12 +435,14 @@ print_restart_command() {
   fi
   local cmd="vllm-sr serve"
   local dashboard_cmd="vllm-sr dashboard"
+  local flag
+  flag="$(runtime_flag)"
   if [ -n "$LAUNCH_PLATFORM" ]; then
     cmd+=" --platform $LAUNCH_PLATFORM"
   fi
   if [ -n "${SELECTED_RUNTIME:-}" ]; then
-    cmd+=" --runtime $SELECTED_RUNTIME"
-    dashboard_cmd+=" --runtime $SELECTED_RUNTIME"
+    cmd+=" $flag $SELECTED_RUNTIME"
+    dashboard_cmd+=" $flag $SELECTED_RUNTIME"
   fi
   printf '  %s\n' "$cmd"
   printf '  %s\n' "$dashboard_cmd"
@@ -477,6 +481,42 @@ find_python() {
 
 detect_python_candidate() {
   find_python
+}
+
+# venv needs ensurepip, which Debian and Ubuntu ship separately in pythonX.Y-venv.
+python_creates_venvs() {
+  "$1" -m ensurepip --version >/dev/null 2>&1
+}
+
+python_venv_package() {
+  local version
+  version="$("$1" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" || version=""
+  if [ -n "$version" ]; then
+    printf 'python%s-venv\n' "$version"
+  else
+    printf 'python3-venv\n'
+  fi
+}
+
+ensure_python_venv() {
+  local python_cmd package
+  python_cmd="$1"
+  if python_creates_venvs "$python_cmd"; then
+    return
+  fi
+  package="$(python_venv_package "$python_cmd")"
+  if [ "$OS_NAME" != "linux" ] || [ "$(detect_linux_pkg_manager || true)" != "apt-get" ]; then
+    die "$python_cmd cannot create a virtual environment: ensurepip is missing. Install Python's venv support, or pass --python with an interpreter that has it, and re-run the installer."
+  fi
+  if [ "$(id -u)" -ne 0 ] && ! has_cmd sudo; then
+    die "$python_cmd cannot create a virtual environment: ensurepip is missing. As root, run: apt-get install -y $package, then re-run the installer."
+  fi
+  step "Installing $package: $python_cmd has no ensurepip, which venv needs"
+  run_as_root apt-get update
+  run_as_root apt-get install -y "$package"
+  python_creates_venvs "$python_cmd" || die \
+    "$python_cmd still cannot create a virtual environment after installing $package. Install its venv support and re-run the installer."
+  done_step "$package is installed"
 }
 
 detect_linux_pkg_manager() {
@@ -545,6 +585,11 @@ describe_python_dependency_plan() {
   local python_cmd pkg_manager
   python_cmd="$1"
   if [ -n "$python_cmd" ]; then
+    if ! python_creates_venvs "$python_cmd" && [ "$OS_NAME" = "linux" ] \
+      && [ "$(detect_linux_pkg_manager || true)" = "apt-get" ]; then
+      printf '%s via apt-get (%s has no ensurepip)\n' "$(python_venv_package "$python_cmd")" "$python_cmd"
+      return
+    fi
     printf 'none (using %s)\n' "$python_cmd"
     return
   fi
@@ -739,6 +784,7 @@ install_cli() {
   }
 
   done_step "Using Python interpreter: $python_cmd"
+  ensure_python_venv "$python_cmd"
   mkdir -p "$INSTALL_ROOT"
   step "Creating isolated environment at $INSTALL_ROOT/venv"
   "$python_cmd" -m venv "$INSTALL_ROOT/venv"
@@ -832,16 +878,27 @@ install_linux_docker_runtime() {
 
 write_runtime_env() {
   local runtime="${1:-${SELECTED_RUNTIME:-}}"
-  rm -f "$INSTALL_ROOT/runtime.env"
   if [ -n "$runtime" ]; then
     printf 'CONTAINER_RUNTIME=%s\n' "$runtime" > "$INSTALL_ROOT/runtime.env"
   fi
+}
+
+# Name the preference this run left in place. An empty or failed selection
+# writes nothing, so an existing runtime.env survives it; the run should say
+# which runtime still applies instead of leaving the user to guess (#4548).
+report_kept_runtime_env() {
+  local env_file="$INSTALL_ROOT/runtime.env"
+  [ -f "$env_file" ] || return 0
+  local kept
+  kept="$(sed -n 's/^CONTAINER_RUNTIME=//p' "$env_file" | head -n 1)"
+  info "Kept the existing runtime preference: ${kept:-unset}."
 }
 
 ensure_runtime() {
   if [ "$MODE" = "cli" ] || [ "$REQUESTED_RUNTIME" = "skip" ]; then
     SELECTED_RUNTIME=""
     write_runtime_env
+    report_kept_runtime_env
     info "Runtime bootstrap skipped."
     return
   fi
@@ -854,6 +911,7 @@ ensure_runtime() {
       return
     else
       write_runtime_env ""
+      report_kept_runtime_env
       die "Podman was requested but is not reachable. Install Podman or use --runtime auto."
     fi
   fi
@@ -899,27 +957,29 @@ ensure_runtime() {
 }
 
 launch_first_session() {
-  local launch_dir serve_log_file
+  local launch_dir serve_log_file serve_pid flag
+  local setup_waiting="0"
   if ! should_auto_launch; then
     return
   fi
 
   LAUNCH_PLATFORM="$(resolve_launch_platform)"
   launch_dir="$(resolve_launch_dir)"
+  flag="$(runtime_flag)"
 
   local serve_args=()
   if [ -n "$LAUNCH_PLATFORM" ]; then
     serve_args+=(--platform "$LAUNCH_PLATFORM")
   fi
   if [ -n "$SELECTED_RUNTIME" ]; then
-    serve_args+=(--runtime "$SELECTED_RUNTIME")
+    serve_args+=("$flag" "$SELECTED_RUNTIME")
   fi
   # The dashboard check below talks to the same stack serve just started, so it
   # must reuse the explicit runtime; otherwise it re-detects Docker and the
   # install fails after a Podman stack has already come up.
   local dashboard_args=()
   if [ -n "$SELECTED_RUNTIME" ]; then
-    dashboard_args+=(--runtime "$SELECTED_RUNTIME")
+    dashboard_args+=("$flag" "$SELECTED_RUNTIME")
   fi
   if [ ${#serve_args[@]} -gt 0 ]; then
     info "First-run serve command: vllm-sr serve ${serve_args[*]}"
@@ -934,18 +994,34 @@ launch_first_session() {
   info "Starting the first local session. This can take a few minutes on the first image pull."
 
   step "Running first-time serve flow"
-  serve_log_file="$(make_temp_log)"
-  if (
+  mkdir -p "$INSTALL_ROOT"
+  serve_log_file="$INSTALL_ROOT/first-run.log"
+  (
     cd "$launch_dir"
-    "$BIN_DIR/vllm-sr" serve "${serve_args[@]}"
-  ) >"$serve_log_file" 2>&1; then
+    exec nohup "$BIN_DIR/vllm-sr" serve "${serve_args[@]}"
+  ) >"$serve_log_file" 2>&1 </dev/null &
+  serve_pid=$!
+  # Serve exits once the Router is ready. With no config yet, a CLI that waits
+  # for setup says so and stays up to start the Router when a config is
+  # activated in the Dashboard, so it keeps running after the installer exits.
+  while kill -0 "$serve_pid" 2>/dev/null; do
+    if grep -q 'Waiting for setup' "$serve_log_file" 2>/dev/null; then
+      setup_waiting="1"
+      break
+    fi
+    sleep 1
+  done
+  if [ "$setup_waiting" = "1" ]; then
+    disown "$serve_pid" 2>/dev/null || true
+    AUTO_LAUNCH_RAN="1"
+    done_step "First-time serve flow is waiting for setup"
+  elif wait "$serve_pid"; then
     rm -f "$serve_log_file"
     AUTO_LAUNCH_RAN="1"
     done_step "First-time serve flow completed"
   else
     warn "Automatic first run did not complete. Command output follows:"
     cat "$serve_log_file" >&2
-    rm -f "$serve_log_file"
     warn "Automatic first run did not complete. Retry with:"
     print_restart_command
     die "Installation finished, but the first vllm-sr serve run failed"
@@ -968,6 +1044,10 @@ launch_first_session() {
     done_step "Dashboard is running"
     print_dashboard_access
   fi
+
+  if [ "$setup_waiting" = "1" ]; then
+    info "Add a model and activate a config in the Dashboard: vllm-sr serve keeps waiting in the background and starts the Router then (log: $serve_log_file)."
+  fi
 }
 
 print_path_hint() {
@@ -988,7 +1068,7 @@ print_path_hint() {
 }
 
 print_next_steps() {
-  local primary_ip host_label
+  local primary_ip host_label flag
 
   printf '\n'
   done_step "vLLM Semantic Router is ready"
@@ -996,6 +1076,7 @@ print_next_steps() {
   if [ -z "$LAUNCH_PLATFORM" ]; then
     LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
+  flag="$(runtime_flag)"
 
   if print_path_hint; then
     info "Add the PATH export above before running vllm-sr."
@@ -1009,7 +1090,7 @@ print_next_steps() {
   if [ "$AUTO_LAUNCH_RAN" = "1" ]; then
     primary_ip="$(detect_primary_ip || true)"
     printf '  dashboard    %s\n' "$DASHBOARD_URL"
-    if [ -n "$primary_ip" ]; then
+    if [ -n "$primary_ip" ] && dashboard_published_beyond_loopback; then
       printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
     fi
     printf '  stop         vllm-sr stop\n'
@@ -1019,7 +1100,7 @@ print_next_steps() {
       printf '  restart      vllm-sr serve'
     fi
     if [ -n "${SELECTED_RUNTIME:-}" ]; then
-      printf ' --runtime %s' "$SELECTED_RUNTIME"
+      printf ' %s %s' "$flag" "$SELECTED_RUNTIME"
     fi
     printf '\n'
     if is_remote_session; then
@@ -1035,12 +1116,12 @@ print_next_steps() {
         printf '  start        vllm-sr serve'
       fi
       if [ -n "${SELECTED_RUNTIME:-}" ]; then
-        printf ' --runtime %s' "$SELECTED_RUNTIME"
+        printf ' %s %s' "$flag" "$SELECTED_RUNTIME"
       fi
       printf '\n'
       printf '  open         vllm-sr dashboard'
       if [ -n "${SELECTED_RUNTIME:-}" ]; then
-        printf ' --runtime %s' "$SELECTED_RUNTIME"
+        printf ' %s %s' "$flag" "$SELECTED_RUNTIME"
       fi
       printf '\n'
     fi

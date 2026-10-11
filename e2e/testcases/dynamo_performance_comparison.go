@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -50,7 +51,7 @@ func testDynamoPerformanceComparison(ctx context.Context, client *kubernetes.Cli
 		reqStart := time.Now()
 
 		requestBody := map[string]interface{}{
-			"model": "MoM",
+			"model": "vllm-sr/auto",
 			"messages": []map[string]string{
 				{
 					"role":    "user",

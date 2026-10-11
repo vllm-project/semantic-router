@@ -1,8 +1,13 @@
 package config
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extension"
+)
 
 const (
+	DecisionAlgorithmCascade      = "cascade"
 	DecisionAlgorithmAutoMix      = "automix"
 	DecisionAlgorithmConfidence   = "confidence"
 	DecisionAlgorithmFusion       = "fusion"
@@ -64,7 +69,7 @@ type SignalCatalogEntry struct {
 	ReferenceQualifier    SignalReferenceQualifier `json:"reference_qualifier,omitempty"`
 }
 
-var signalCatalog = []SignalCatalogEntry{
+var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeKeyword, DisplayName: "Keywords", Collection: "keywords", ObservationKey: "keywords", DecisionReferenceable: true},
 	{Type: SignalTypeEmbedding, DisplayName: "Embeddings", Collection: "embeddings", ObservationKey: "embeddings", DecisionReferenceable: true},
 	{Type: SignalTypeDomain, DisplayName: "Domain", Collection: "domains", ObservationKey: "domains", DecisionReferenceable: true},
@@ -88,6 +93,7 @@ var signalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeClassifier, DisplayName: "Classifier", Collection: "classifiers", ObservationKey: "classifier", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
+	{Type: SignalTypeAction, DisplayName: "Action", Collection: "actions", ObservationKey: "action", DecisionReferenceable: true},
 	{Type: SignalTypeDecision, DisplayName: "Decision Model", Collection: "decision", ObservationKey: "decision", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 }
 
@@ -99,33 +105,11 @@ type DecisionPluginCatalogEntry struct {
 	Description string `json:"description"`
 }
 
-type decisionPluginRegistryEntry struct {
-	Catalog    DecisionPluginCatalogEntry
-	NewPayload func() interface{}
-}
-
-var decisionPluginRegistry = []decisionPluginRegistryEntry{
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginResponseCache, DisplayName: "Response Cache", Description: "Reuse exact or semantically compatible responses."}, NewPayload: func() interface{} { return &ResponseCachePluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginMemory, DisplayName: "Memory", Description: "Retrieve and store persistent conversation memory."}, NewPayload: func() interface{} { return &MemoryPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginSystemPrompt, DisplayName: "System Prompt", Description: "Insert or replace the system prompt."}, NewPayload: func() interface{} { return &SystemPromptPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginHeaderMutation, DisplayName: "Header Mutation", Description: "Add, update, or remove provider-bound headers."}, NewPayload: func() interface{} { return &HeaderMutationPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginHallucination, DisplayName: "Hallucination", Description: "Apply response hallucination handling."}, NewPayload: func() interface{} { return &HallucinationPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginRouterReplay, DisplayName: "Router Replay", Description: "Capture bounded request and response replay evidence."}, NewPayload: func() interface{} { return &RouterReplayPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginRAG, DisplayName: "RAG", Description: "Retrieve external context and inject it into the request."}, NewPayload: func() interface{} { return &RAGPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginFastResponse, DisplayName: "Fast Response", Description: "Return a fixed response without calling an upstream model."}, NewPayload: func() interface{} { return &FastResponsePluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginTools, DisplayName: "Tools", Description: "Apply route-local tool filtering and selection."}, NewPayload: func() interface{} { return &ToolsPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginToolSelection, DisplayName: "Tool Selection", Description: "Add or filter tools using semantic retrieval."}, NewPayload: func() interface{} { return &ToolSelectionPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginRequestParams, DisplayName: "Request Parameters", Description: "Constrain or remove provider request parameters."}, NewPayload: func() interface{} { return &RequestParamsPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, NewPayload: func() interface{} { return &ResponseJailbreakPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, NewPayload: func() interface{} { return &ContextCompressionPluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginPromptCache, DisplayName: "Prompt Cache", Description: "Add bounded Anthropic prompt-cache markers after route selection."}, NewPayload: func() interface{} { return &PromptCachePluginConfig{} }},
-	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, NewPayload: func() interface{} { return &ShadowDispatchPluginConfig{} }},
-}
-
 // AlgorithmExecution identifies the runtime path for a decision algorithm.
 type AlgorithmExecution string
 
 const (
+	AlgorithmExecutionNative   AlgorithmExecution = "native"
 	AlgorithmExecutionLooper   AlgorithmExecution = "looper"
 	AlgorithmExecutionSelector AlgorithmExecution = "selector"
 )
@@ -143,17 +127,31 @@ type AlgorithmCatalogEntry struct {
 	DisplayName  string                `json:"display_name"` // concise user-facing name
 	Description  string                `json:"description"`  // request-time behavior
 	Tier         string                `json:"tier"`         // "supported" or "experimental"
-	Execution    AlgorithmExecution    `json:"execution"`    // "selector" or "looper"
+	Execution    AlgorithmExecution    `json:"execution"`    // "selector", "looper", or "native"
 	ConfigField  string                `json:"config_field,omitempty"`
 	PayloadShape AlgorithmPayloadShape `json:"payload_shape,omitempty"` // empty/flat or nested in public DSL editors
 }
 
-type decisionAlgorithmRegistryEntry struct {
+// DecisionAlgorithmType is a decision algorithm type. A built-in type keeps
+// its block in a field of AlgorithmConfig; a type registered outside the
+// Router keeps it in AlgorithmConfig.Extensions under its name, and its
+// payload's Go type is that block's schema.
+type DecisionAlgorithmType struct {
 	Catalog      AlgorithmCatalogEntry
 	IsConfigured func(*AlgorithmConfig) bool
+	// NewPayload returns the empty payload a registered type's block decodes
+	// into; nil for a built-in type.
+	NewPayload func() interface{}
+	// Strict rejects block fields the payload does not declare.
+	Strict bool
+	// Defaults, when set, fills a decoded payload's unset fields.
+	Defaults func(payload interface{})
+	// Validate, when set, checks a decoded payload after its defaults.
+	Validate func(decision string, payload interface{}) error
 }
 
-var decisionAlgorithmRegistry = []decisionAlgorithmRegistryEntry{
+var builtinDecisionAlgorithms = []DecisionAlgorithmType{
+	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmCascade, DisplayName: "Native Cascade", Description: "Escalate complete typed responses through declared stages.", Tier: "experimental", Execution: AlgorithmExecutionNative}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmAutoMix, DisplayName: "AutoMix", Description: "Optimize a cost-quality escalation policy.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "automix"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.AutoMix != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmConfidence, DisplayName: "Confidence", Description: "Escalate across candidate models until confidence is sufficient.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "confidence"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Confidence != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmFusion, DisplayName: "Fusion", Description: "Run a parallel panel and synthesize a judged final response.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "fusion"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Fusion != nil }},
@@ -173,15 +171,35 @@ var decisionAlgorithmRegistry = []decisionAlgorithmRegistryEntry{
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmDecision, DisplayName: "Decision Model", Description: "Ask a decision model which declared candidate should answer.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "decision", PayloadShape: AlgorithmPayloadNested}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Decision != nil }},
 }
 
-var pluginTypeAliases = map[string]string{
-	"semantic-cache": DecisionPluginResponseCache,
-	"semantic_cache": DecisionPluginResponseCache,
-	"response-cache": DecisionPluginResponseCache,
+// signalTypes and decisionAlgorithms hold the signal families and decision
+// algorithms by type, in catalog order.
+var (
+	signalTypes = newCatalogRegistry("signal", builtinSignalCatalog,
+		func(entry SignalCatalogEntry) string { return entry.Type })
+	decisionAlgorithms = newCatalogRegistry("decision algorithm", builtinDecisionAlgorithms,
+		func(entry DecisionAlgorithmType) string { return entry.Catalog.Type })
+)
+
+func newCatalogRegistry[S any](kind string, builtins []S, typeOf func(S) string) *extension.Registry[S] {
+	registry := extension.NewRegistry[S](kind)
+	for _, spec := range builtins {
+		registry.MustRegister(typeOf(spec), spec)
+	}
+	return registry
+}
+
+func registeredSpecs[S any](registry *extension.Registry[S]) []S {
+	entries := registry.Entries()
+	specs := make([]S, len(entries))
+	for i, entry := range entries {
+		specs[i] = entry.Spec
+	}
+	return specs
 }
 
 func SupportedSignalTypes() []string {
-	types := make([]string, 0, len(signalCatalog))
-	for _, entry := range signalCatalog {
+	types := make([]string, 0, len(signalTypes.Entries()))
+	for _, entry := range registeredSpecs(signalTypes) {
 		types = append(types, entry.Type)
 	}
 	return cloneSortedStrings(types)
@@ -194,21 +212,20 @@ func IsSupportedSignalType(signalType string) bool {
 
 // LookupSignalCatalog returns the canonical metadata for one signal type.
 func LookupSignalCatalog(signalType string) (SignalCatalogEntry, bool) {
-	for _, entry := range signalCatalog {
-		if entry.Type == signalType {
-			entry.ReferenceSuffixes = append([]string(nil), entry.ReferenceSuffixes...)
-			return entry, true
-		}
+	entry, ok := signalTypes.Lookup(signalType)
+	if !ok {
+		return SignalCatalogEntry{}, false
 	}
-	return SignalCatalogEntry{}, false
+	entry.ReferenceSuffixes = append([]string(nil), entry.ReferenceSuffixes...)
+	return entry, true
 }
 
 // SupportedDecisionSignalTypes returns signals that can participate in the
 // request-time decision rule tree. Response-only observations remain
 // configurable but are consumed by response plugins instead.
 func SupportedDecisionSignalTypes() []string {
-	types := make([]string, 0, len(signalCatalog))
-	for _, entry := range signalCatalog {
+	types := make([]string, 0, len(signalTypes.Entries()))
+	for _, entry := range registeredSpecs(signalTypes) {
 		if entry.DecisionReferenceable {
 			types = append(types, entry.Type)
 		}
@@ -219,8 +236,8 @@ func SupportedDecisionSignalTypes() []string {
 // SignalCatalog returns the configuration and decision-reference identity for
 // every supported signal family.
 func SignalCatalog() []SignalCatalogEntry {
-	result := make([]SignalCatalogEntry, len(signalCatalog))
-	for index, entry := range signalCatalog {
+	result := make([]SignalCatalogEntry, len(signalTypes.Entries()))
+	for index, entry := range registeredSpecs(signalTypes) {
 		result[index] = entry
 		result[index].ReferenceSuffixes = append([]string(nil), entry.ReferenceSuffixes...)
 	}
@@ -228,52 +245,31 @@ func SignalCatalog() []SignalCatalogEntry {
 }
 
 func SupportedDecisionPluginTypes() []string {
-	types := make([]string, 0, len(decisionPluginRegistry))
-	for _, entry := range decisionPluginRegistry {
-		types = append(types, entry.Catalog.Type)
-	}
-	return cloneSortedStrings(types)
+	return DecisionPlugins.Types()
 }
 
 func NormalizeDecisionPluginType(pluginType string) string {
-	if normalized, ok := pluginTypeAliases[pluginType]; ok {
-		return normalized
-	}
-	return pluginType
+	return DecisionPlugins.Normalize(pluginType)
 }
 
 func IsSupportedDecisionPluginType(pluginType string) bool {
-	normalized := NormalizeDecisionPluginType(pluginType)
-	for _, entry := range decisionPluginRegistry {
-		if entry.Catalog.Type == normalized {
-			return true
-		}
-	}
-	return false
+	_, ok := DecisionPlugins.Lookup(pluginType)
+	return ok
 }
 
 // DecisionPluginCatalog returns the public route-local plugin inventory.
 func DecisionPluginCatalog() []DecisionPluginCatalogEntry {
-	result := make([]DecisionPluginCatalogEntry, len(decisionPluginRegistry))
-	for index, entry := range decisionPluginRegistry {
-		result[index] = entry.Catalog
+	entries := DecisionPlugins.Entries()
+	result := make([]DecisionPluginCatalogEntry, len(entries))
+	for index, entry := range entries {
+		result[index] = entry.Spec.Catalog
 	}
 	return result
 }
 
-func newDecisionPluginPayload(pluginType string) interface{} {
-	normalized := NormalizeDecisionPluginType(pluginType)
-	for _, entry := range decisionPluginRegistry {
-		if entry.Catalog.Type == normalized {
-			return entry.NewPayload()
-		}
-	}
-	return nil
-}
-
 func SupportedDecisionAlgorithmTypes() []string {
-	types := make([]string, 0, len(decisionAlgorithmRegistry))
-	for _, entry := range decisionAlgorithmRegistry {
+	types := make([]string, 0, len(decisionAlgorithms.Entries()))
+	for _, entry := range registeredSpecs(decisionAlgorithms) {
 		types = append(types, entry.Catalog.Type)
 	}
 	return cloneSortedStrings(types)
@@ -285,12 +281,8 @@ func IsSupportedDecisionAlgorithmType(algorithmType string) bool {
 }
 
 func decisionAlgorithmCatalogEntry(algorithmType string) (AlgorithmCatalogEntry, bool) {
-	for _, entry := range decisionAlgorithmRegistry {
-		if entry.Catalog.Type == algorithmType {
-			return entry.Catalog, true
-		}
-	}
-	return AlgorithmCatalogEntry{}, false
+	entry, ok := decisionAlgorithms.Lookup(algorithmType)
+	return entry.Catalog, ok
 }
 
 // DecisionAlgorithmConfigField reports the algorithm-specific YAML block for
@@ -309,7 +301,7 @@ func configuredDecisionAlgorithmBlocks(config *AlgorithmConfig) []string {
 		return nil
 	}
 	blocks := make([]string, 0)
-	for _, entry := range decisionAlgorithmRegistry {
+	for _, entry := range registeredSpecs(decisionAlgorithms) {
 		if entry.Catalog.ConfigField != "" && entry.IsConfigured != nil && entry.IsConfigured(config) {
 			blocks = append(blocks, entry.Catalog.ConfigField)
 		}
@@ -321,7 +313,7 @@ func configuredDecisionAlgorithmBlocks(config *AlgorithmConfig) []string {
 // the multi-model Looper runtime.
 func SupportedLooperAlgorithmTypes() []string {
 	types := make([]string, 0)
-	for _, entry := range decisionAlgorithmRegistry {
+	for _, entry := range registeredSpecs(decisionAlgorithms) {
 		if entry.Catalog.Execution == AlgorithmExecutionLooper {
 			types = append(types, entry.Catalog.Type)
 		}
@@ -340,8 +332,8 @@ func IsLooperAlgorithmType(algorithmType string) bool {
 
 // DecisionAlgorithmCatalog returns the full structured catalog of algorithm types and tiers
 func DecisionAlgorithmCatalog() []AlgorithmCatalogEntry {
-	result := make([]AlgorithmCatalogEntry, len(decisionAlgorithmRegistry))
-	for index, entry := range decisionAlgorithmRegistry {
+	result := make([]AlgorithmCatalogEntry, len(decisionAlgorithms.Entries()))
+	for index, entry := range registeredSpecs(decisionAlgorithms) {
 		result[index] = entry.Catalog
 	}
 	return result

@@ -1607,7 +1607,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should recover from classification errors gracefully", func() {
 			// Create a request that might cause classification issues
 			request := testOpenAIRequest{
-				Model: "auto", // This triggers classification
+				Model: "vllm-sr/auto", // This triggers classification
 				Messages: []testChatMessage{
 					{Role: "user", Content: json.RawMessage(`"Test content that might cause classification issues: \u0000\u0001\u0002"`)}, // Binary content
 				},
@@ -1639,7 +1639,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should handle timeout scenarios gracefully", func() {
 			// Simulate a request that might take a long time to process
 			request := testOpenAIRequest{
-				Model: "auto",
+				Model: "vllm-sr/auto",
 				Messages: []testChatMessage{
 					{Role: "user", Content: json.RawMessage(`"This is a complex request that might take time to classify and process"`)},
 				},

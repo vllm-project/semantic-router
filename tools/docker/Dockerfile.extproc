@@ -1,13 +1,13 @@
 # Router images: the Go router with the built-in model runtime.
 #
-# One stage graph builds every published router image. The router binary, the
-# Vela Omni bundle and the image-routing assets are shared by all of them; only
-# the runtime's PyTorch build differs per accelerator, and only the last layers
-# differ between the Kubernetes image and the CLI stack image.
+# One stage graph builds every published router image: vllm-sr, vllm-sr-rocm
+# and vllm-sr-cuda. The router binary and the image-routing assets are shared
+# by all of them; only the runtime's PyTorch build differs per accelerator.
+# The same image serves `vllm-sr serve`, the Helm chart and the Operator.
 #
-#   docker build -f tools/docker/Dockerfile.extproc -t extproc .
-#   docker build -f tools/docker/Dockerfile.extproc --target vllm-sr -t vllm-sr .
-#   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm -t extproc-rocm .
+#   docker build -f tools/docker/Dockerfile.extproc -t vllm-sr .
+#   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm -t vllm-sr-rocm .
+#   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=cuda -t vllm-sr-cuda .
 #
 # ACCELERATOR is cpu (linux/amd64 and linux/arm64), rocm or cuda (linux/amd64).
 # The CUDA image takes PyTorch from the official wheel, which carries its CUDA
@@ -40,25 +40,6 @@ RUN if [ "$TARGETARCH" = arm64 ] && [ "$(dpkg --print-architecture)" != arm64 ];
     fi && \
     CGO_ENABLED=1 GOOS=linux GOARCH="$TARGETARCH" \
       go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/router ./cmd
-
-# Vela Omni bundle: verified ONNX graphs and exact processors, exported once on
-# the build platform. The exporter's Torch stays in this stage.
-# Use --build-arg VELA_OMNI_VARIANTS="nano mini" to bundle Mini as well.
-FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${PYTHON_IMAGE} AS vela-omni
-ENV HF_HOME=/tmp/vela-hf-cache PIP_DISABLE_PIP_VERSION_CHECK=1
-WORKDIR /build/vela-omni
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
-COPY tools/models/vela_omni/requirements.txt ./
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0 && \
-    pip install --no-cache-dir -r requirements.txt
-COPY tools/models/vela_omni/ ./
-RUN OMP_NUM_THREADS=4 python -m unittest discover -s . -p "test_*.py"
-ARG VELA_OMNI_VARIANTS=nano
-# E2E images keep the official reference inputs and outputs for parity checks.
-ARG VELA_OMNI_KEEP_GOLDEN=0
-RUN case "$VELA_OMNI_KEEP_GOLDEN" in 0) set -- ;; 1) set -- --keep-golden ;; *) exit 1 ;; esac && \
-    python prepare.py --variants ${VELA_OMNI_VARIANTS} "$@" --work /tmp/vela-export --output /opt/router-model-artifacts && \
-    rm -rf /tmp/vela-export /tmp/vela-hf-cache
 
 # Frozen image-routing prototypes; no model download or inference.
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${PYTHON_IMAGE} AS image-routing-assets
@@ -204,12 +185,17 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 
 # The model runtime: its third-party dependencies in one layer and the package
 # in the next, so a runtime code change does not reinstall its dependencies.
-# The multimodal extra serves the prepared Omni bundles (ONNX Runtime, Pillow).
+# The multimodal extra decodes Vela Omni's images (Pillow). Every default model
+# runs on the native engine, so ONNX Runtime (the onnx extra) is not installed.
+# requirements-lock.txt pins every dependency except PyTorch and what only
+# PyTorch requires, which the accelerator stage owns, so every build of a
+# release installs the same versions.
 FROM torch-${ACCELERATOR} AS runtime
 ARG MODEL_RUNTIME_EXTRAS=multimodal
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
+    --mount=type=bind,source=src/model-runtime/requirements-lock.txt,target=/tmp/requirements-lock.txt \
     python - $MODEL_RUNTIME_EXTRAS >/tmp/runtime-requirements.txt <<'EOF' && \
-    pip install -r /tmp/runtime-requirements.txt && \
+    pip install -c /tmp/requirements-lock.txt -r /tmp/runtime-requirements.txt && \
     rm /tmp/runtime-requirements.txt
 import sys, tomllib
 project = tomllib.load(open("/tmp/pyproject.toml", "rb"))["project"]
@@ -219,9 +205,9 @@ EOF
 RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
     pip install --no-deps /tmp/model-runtime
 
-# Everything the two router images share. Immutable artifacts sit outside the
-# mounted model cache, each in an independent layer.
-FROM runtime AS router
+# The router image. Immutable assets sit outside the mounted model cache, each
+# in an independent layer.
+FROM runtime AS vllm-sr
 WORKDIR /app
 # The charts run the router as uid 65532; other uids (OpenShift) have no passwd
 # entry, so Python's getpass and PyTorch's compile caches take USER.
@@ -232,32 +218,24 @@ ENV USER=vllm-sr
 # Triton's compiled kernels and MIOpen's databases and lock files (a ROCm
 # convolution fails without them): the charts' root filesystem is read-only and
 # the router's uid has no home directory.
-ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime \
+ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime \
     TRITON_CACHE_DIR=/app/models/triton \
     MIOPEN_USER_DB_PATH=/app/models/miopen \
     MIOPEN_CUSTOM_CACHE_DIR=/app/models/miopen
-COPY --link --from=vela-omni /opt/router-model-artifacts/ /opt/router-model-artifacts/
-COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
-COPY config/knowledge_bases/ /app/config/knowledge_bases/
-COPY --link --from=router-build /out/router /usr/local/bin/router
-EXPOSE 50051 8080 9190
-
-# The vLLM Semantic Router stack image started by `vllm-sr serve`. The CLI's
-# readiness and status probes run curl inside this container.
-FROM router AS vllm-sr
+# The CLI's readiness and status probes run curl inside the container.
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/* && \
     python -c "import torch"
+COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/config.yaml /app/config/config.yaml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
+COPY --link --from=router-build /out/router /usr/local/bin/router
+EXPOSE 50051 8080 9190
 VOLUME ["/app/models"]
+# With no arguments or with router flags, the entrypoint runs the Router on
+# /app/config/config.yaml (Kubernetes); with a config path, the CLI stack.
 ENTRYPOINT ["/app/start-router.sh"]
-CMD ["/app/config.yaml"]
-
-# The ExtProc router image for Kubernetes (Helm chart and operator), with the
-# reference configuration as its default.
-FROM router AS extproc
-COPY config/config.yaml /app/config/config.yaml
-ENTRYPOINT ["/usr/local/bin/router", "--config=/app/config/config.yaml"]

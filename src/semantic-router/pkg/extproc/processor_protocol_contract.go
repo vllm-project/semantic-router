@@ -31,6 +31,10 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	}
 	responseID := "resp_" + ctx.RequestID
 	itemID := "item_" + ctx.RequestID
+	if publicID := responseObjectPublicID(ctx); publicID != "" {
+		responseID = publicID
+		itemID = llmprotocol.StableID(publicID, "0")
+	}
 	usage := authoritativeZeroUsage()
 	response := &llmprotocol.Response{
 		Generation: 1,
@@ -140,13 +144,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	}
 	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {
-		recordIngressProtocolError(ctx, err)
-		var protocolError *llmprotocol.ProtocolError
-		if errors.As(err, &protocolError) {
-			copy := *protocolError
-			ctx.ImmediateProtocolError = &copy
-		}
-		return nil, r.createErrorResponse(400, "invalid inference request")
+		return nil, r.ingressDecodeErrorResponse(ctx, err)
 	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
@@ -171,6 +169,18 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	}
 	populateSessionTransitionFields(ctx)
 	return &request, nil
+}
+
+// ingressDecodeErrorResponse is the single client-facing 400 for a public wire
+// request the ingress codec rejected.
+func (r *OpenAIRouter) ingressDecodeErrorResponse(ctx *RequestContext, err error) *ext_proc.ProcessingResponse {
+	recordIngressProtocolError(ctx, err)
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) {
+		copy := *protocolError
+		ctx.ImmediateProtocolError = &copy
+	}
+	return r.createErrorResponse(400, "invalid inference request")
 }
 
 func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int {
@@ -240,7 +250,11 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-	return encodeLooperEvidence(encoded.Body, format, ctx)
+	body, err := r.encodeKVHandoff(encoded.Body, format, ctx)
+	if err != nil {
+		return nil, err
+	}
+	return encodeLooperEvidence(body, format, ctx)
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {

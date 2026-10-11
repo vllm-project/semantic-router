@@ -45,7 +45,7 @@ def start(args):
         [
             sys.executable,
             "-m",
-            "vllm_sr_runtime",
+            "vllm_srun",
             "serve",
             *args,
             "--device",
@@ -108,6 +108,26 @@ def test_server_process(qwen35_package, tmp_path, transport):
         assert set(answers) == set(QUESTIONS) and all(
             "error" not in a for a in answers.values()
         )
+        connection = connect()
+        connection.request(
+            "POST",
+            "/v1/bundle",
+            body=json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "t",
+                            "decisions": {"state": STATE, "questions": QUESTIONS},
+                        }
+                    ]
+                }
+            ),
+            headers={"content-type": "application/json"},
+        )
+        response = connection.getresponse()
+        assert response.status == 200 and response.read()
+        timing = response.getheader("server-timing", "")
+        assert timing.startswith("parse;dur=") and ", total;dur=" in timing
         status, body = request(connect(), "GET", "/v1/models")
         assert status == 200 and json.loads(body)["data"][0]["ready"]
     finally:
@@ -120,7 +140,7 @@ def test_server_process(qwen35_package, tmp_path, transport):
 def test_a_server_whose_pytorch_has_no_lapack_refuses_a_gated_delta_model_on_cpu(
     qwen35_package,
 ):
-    """``vllm-sr-runtime serve`` keeps serving its health while the refused model reports why, at once."""
+    """``vllm-srun serve`` keeps serving its health while the refused model reports why, at once."""
     port = free_port()
     env = dict(
         os.environ,
@@ -128,7 +148,7 @@ def test_a_server_whose_pytorch_has_no_lapack_refuses_a_gated_delta_model_on_cpu
     )
     without_lapack = (
         "import runpy, torch; torch._C.has_lapack = False; "
-        "runpy.run_module('vllm_sr_runtime', run_name='__main__')"
+        "runpy.run_module('vllm_srun', run_name='__main__')"
     )
     process = subprocess.Popen(
         [

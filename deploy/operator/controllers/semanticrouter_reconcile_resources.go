@@ -95,7 +95,7 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	if err != nil {
 		return fmt.Errorf("failed to generate PVC: %w", err)
 	}
-	if err := controllerutil.SetControllerReference(sr, pvc, r.Scheme); err != nil {
+	if err = controllerutil.SetControllerReference(sr, pvc, r.Scheme); err != nil {
 		return err
 	}
 
@@ -111,7 +111,7 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	deployment := r.generateDeployment(sr, gatewayMode)
 	hpaEnabled := sr.Spec.Autoscaling.Enabled != nil && *sr.Spec.Autoscaling.Enabled
-	if err := r.annotateDeploymentConfig(ctx, sr, gatewayMode, deployment); err != nil {
+	if err := r.annotateDeploymentConfig(ctx, sr, deployment); err != nil {
 		return err
 	}
 	if err := controllerutil.SetControllerReference(sr, deployment, r.Scheme); err != nil {
@@ -148,6 +148,32 @@ func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *
 	}
 
 	return nil
+}
+
+// retiredEnvoyConfigSuffix names the ConfigMap that the Envoy sidecar of
+// Operator releases before standalone mode read.
+const retiredEnvoyConfigSuffix = "-envoy-config"
+
+// deleteRetiredEnvoyConfig removes that ConfigMap once every Pod of the
+// Deployment runs the current template, which no longer mounts it.
+func (r *SemanticRouterReconciler) deleteRetiredEnvoyConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
+	deployment := &appsv1.Deployment{}
+	if err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, deployment); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if deployment.Status.ObservedGeneration < deployment.Generation ||
+		deployment.Status.UpdatedReplicas != deployment.Status.Replicas {
+		return nil
+	}
+	cm := &corev1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Name: sr.Name + retiredEnvoyConfigSuffix, Namespace: sr.Namespace}, cm)
+	if err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(cm, sr) {
+		return nil
+	}
+	return client.IgnoreNotFound(r.Delete(ctx, cm))
 }
 
 func (r *SemanticRouterReconciler) reconcileService(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {

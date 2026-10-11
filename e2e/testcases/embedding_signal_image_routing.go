@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 // Mirrors embedding_signal_routing.go for image-modality routing. The
@@ -220,7 +221,7 @@ func testSingleEmbeddingSignalImage(ctx context.Context, testCase EmbeddingSigna
 	}
 
 	requestBody := map[string]interface{}{
-		"model": "auto",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]interface{}{
 			{
 				"role":    "user",

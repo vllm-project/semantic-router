@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const llmClassifierDecision = "llm_classifier_toxic"
@@ -60,7 +61,7 @@ func testLLMClassifierDistributionRouting(
 
 	decisions := make(map[string]string, len(cases))
 	for _, testCase := range cases {
-		response, err := sendLocalChatCompletion(ctx, localPort, "auto", testCase.prompt, 30*time.Second)
+		response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.prompt, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("%s: %w", testCase.name, err)
 		}

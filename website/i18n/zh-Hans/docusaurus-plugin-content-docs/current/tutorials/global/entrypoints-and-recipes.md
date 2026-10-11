@@ -2,7 +2,7 @@
 title: 虚拟模型
 description: 在同一 Semantic Router 部署中，为客户端提供由隔离路由策略支撑的稳定虚拟模型名。
 translation:
-  source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/entrypoints-and-recipes.md"
   outdated: false
 ---
@@ -19,7 +19,7 @@ translation:
 
 ## 解决什么问题？
 
-这种分离让应用可以选择低延迟、高质量或折中目标，而无需知道由哪个后端模型服务该请求。
+这种分离让 Agent Harness 可以选择低延迟、高质量或折中目标，而无需知道由哪个后端模型服务该请求。
 
 在规范 YAML 中，`entrypoints` 保存公开名称映射，`recipes` 保存命名的路由策略。
 
@@ -31,7 +31,11 @@ request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
 
 当请求的 `model` 匹配某个 `entrypoints[].model_names` 值时，Router 只评估映射的配方。虚拟模型名随后会被该配方选出的后端替换。
 
-顶层 `routing` 块仍是 `default` 配方。请求 `vllm-sr/auto`、`auto` 或其他已配置的 auto 别名时，使用该默认策略。若所选配方没有匹配的决策，Router 使用 `providers.defaults.model`。
+顶层 `routing` 块是 `default` 配方，默认发布为 `vllm-sr/auto`。
+显式声明 `recipe: default` 的入口会替换这个内置名称；如果客户端仍需使用
+`vllm-sr/auto`，请把它写入该入口的 `model_names`。`auto`、`vllm-sr/flow`
+等名称只有显式声明后才可用；算法由所选配方的决策决定。
+若所选配方没有匹配的决策，Router 使用 `providers.defaults.model`。
 
 具体后端模型名不同：它们会直接选择该模型并绕过配方路由。当客户端应按目标请求时使用虚拟入口；仅当有意需要那个精确后端时，才使用具体模型名。
 
@@ -82,6 +86,70 @@ recipes:
 ```
 
 客户端可通过 `/v1/models` 发现入口名称。已路由的响应包含 `x-vsr-selected-recipe`，运维人员可据此确认由哪条策略处理了请求，而无需向客户端暴露后端选择契约。
+
+连接、协议和会话配置见[接入 Agent Harness](../../installation/agent-harness)。
+
+## Agent 客户端的限制 {#limits-for-agent-clients}
+
+`/v1/models` 告诉客户端有哪些虚拟名称以及它们如何解析，但不报告上下文窗口、输出
+上限或能力。同一名称背后的模型可能在不同请求间变化。`vllm-sr/auto` 的条目如下：
+
+```json
+{
+  "id": "vllm-sr/auto",
+  "object": "model",
+  "created": 1790323030,
+  "owned_by": "vllm-semantic-router",
+  "description": "Intelligent Router for Mixture-of-Models",
+  "routing": {
+    "resolution": "virtual",
+    "selectable": true,
+    "default_route": true,
+    "recipe": "default"
+  }
+}
+```
+
+编码 Agent 和其他需要在发送前计算请求大小的客户端，必须在自身配置中设置这些值。
+会话的任意一轮都可能到达配方可选择的任意模型，包括 `providers.defaults.model`。
+因此，应按这些模型卡的交集配置客户端：
+
+| 客户端设置 | 取值 |
+| --- | --- |
+| 上下文窗口 | 最小的 `context_window_size` |
+| 输出上限 | 最小的 `max_output_tokens` |
+| 工具调用 | 仅当所有模型都声明 `tools` 时开启 |
+| 图像输入 | 仅当所有模型都声明 `vision` 或 `image_input` 时开启 |
+| 推理设置 | 仅当所有模型都声明 `reasoning` 时发送 |
+
+如果配方在以下三个模型中选择，请配置 32,768 token 的上下文窗口、8,192 token 的
+输出上限，并启用工具调用。保持图像输入和推理设置关闭。
+
+```yaml
+routing:
+  modelCards:
+    - name: local-coder
+      context_window_size: 32768
+      max_output_tokens: 8192
+      capabilities: [chat, tools]
+    - name: reasoner
+      context_window_size: 200000
+      max_output_tokens: 64000
+      capabilities: [chat, tools, reasoning]
+    - name: vision-generalist
+      context_window_size: 131072
+      max_output_tokens: 16384
+      capabilities: [chat, tools, vision]
+```
+
+默认情况下，Router 会跳过声明的上下文窗口小于估算输入，或声明的能力无法满足图像
+等必需输入的候选模型。它不会检查输出上限，因此请求 16,384 个输出 token 时，仍
+可能选中 `local-coder`。在配方上配置
+[`candidate_requirements`（英文）](https://vllm-sr.ai/docs/installation/configuration#recipe-wide-candidate-and-replay-policies)
+后，Router 还会在评分前检查输出上限以及工具、推理和结构化输出声明。只适合部分
+候选的请求会发往其中一个；没有合格候选时，在派发前拒绝，详见
+[请求预算错误（英文）](https://vllm-sr.ai/docs/api/router#request-budget-errors)。按交集配置客户端，可以让每个
+候选模型对每条请求都保持可用。
 
 ## 何时使用
 

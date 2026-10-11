@@ -10,8 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 //go:embed testdata/plugin_config_cases.json
@@ -131,7 +132,7 @@ func testSinglePluginConfig(ctx context.Context, testCase PluginConfigCase, loca
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM", // Use Mixture of Models to trigger decision engine
+		"model": "vllm-sr/auto", // Use the default recipe to trigger decision selection
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

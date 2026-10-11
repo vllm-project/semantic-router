@@ -2,7 +2,7 @@
 title: Docker 部署
 description: 将 Semantic Router 作为本地或单主机容器栈运行，并连接你单独运维的模型后端。
 translation:
-  source_commit: "b2f672651b66f00e3410d5b58b5d6d8cb883cfad"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/docker.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 Docker 是从 Semantic Router 配置到运行中栈的最短路径。它适合评估、开发、CI、边缘主机，以及不需要 Kubernetes 调度或故障转移的单主机部署。
 
-CLI 会管理 Router、Envoy、控制面板，以及所选配置所需的支持服务。模型服务器保持独立：健康的 Router 栈并不意味着其 provider 端点已安装、正在运行或能够生成。
+CLI 会管理 Router、控制面板，以及所选配置所需的支持服务；使用 `--gateway extproc` 时还会在 Router 前面放一个 Envoy 容器（见[网关模式](gateway-modes)）。Router 会为自己的分类器和嵌入模型启动[模型运行时](../model-runtime/overview.md)。模型服务器保持独立：健康的 Router 栈并不意味着其 provider 端点已安装、正在运行或能够生成。
 
 ## 启动栈
 
@@ -22,13 +22,14 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-未指定 `--config` 时，`vllm-sr serve` 使用当前目录中的 `config.yaml`，或在控制面板中打开首次运行设置。默认本地端点为：
+未指定 `--config` 时，`vllm-sr serve` 使用当前目录中的 `config.yaml`，或在控制面板中打开首次运行设置。设置期间该命令保持运行：你在控制面板中激活配置后，它用这份配置启动 Router 并等待其就绪。如果你提前停止它，下一次 `vllm-sr serve` 会启动 Router，`vllm-sr status` 会提示设置是否已完成。控制面板不会拿到容器运行时的 socket。默认本地端点为：
 
 | 端点 | 默认值 | 用途 |
 | --- | --- | --- |
 | 控制面板 | `http://localhost:8700` | 配置并检查栈。 |
 | 已路由监听器 | `http://localhost:8899` | 发送 OpenAI 兼容的模型请求。 |
 | 管理 API | `http://localhost:8080` | 校验配置，并使用评估、回放或向量存储 API。 |
+| Router 指标 | `http://localhost:9190/metrics` | Prometheus 指标，包括模型运行时的 `vsr_model_runtime_*`。 |
 
 端口可能随活动配置或栈端口偏移而变化。不确定哪些端点处于活动状态时，使用 `vllm-sr status`。
 
@@ -56,16 +57,17 @@ vllm-sr serve --config config.yaml --startup-timeout 7200
 
 ```bash
 vllm-sr status
-vllm-sr logs router
-vllm-sr logs envoy -f
+vllm-sr logs router -f
 vllm-sr dashboard
 vllm-sr stop
 ```
 
-使用 `--minimal` 仅运行 Router 和 Envoy。使用 `--readonly` 保持控制面板可用但不允许更改配置。在将监听器暴露到受信任主机之外之前，固定镜像并复核[安全加固](security-hardening)。
+使用 `--gateway extproc` 时，`vllm-sr logs envoy` 还能查看 Envoy 容器的日志；standalone 模式下没有 Envoy 容器，该命令会说明这一点。
 
-Envoy 默认使用安全的 `info` 日志级别。若要临时排查问题，在启动栈之前设置 `VLLM_SR_ENVOY_LOG_LEVEL=debug`，完成后取消设置：debug 日志可能在日志中暴露转发的请求标头，包括 provider 的 `Authorization` 标头。
+使用 `--minimal` 在不启动控制面板和可观测性栈（Jaeger、Prometheus、Grafana）的情况下运行。使用 `--readonly` 保持控制面板可用但不允许更改配置。在将监听器暴露到受信任主机之外之前，固定镜像并复核[安全加固](security-hardening)。
+
+使用 `--gateway extproc` 时，Envoy 默认使用安全的 `info` 日志级别。若要临时排查问题，在启动栈之前设置 `VLLM_SR_ENVOY_LOG_LEVEL=debug`，完成后取消设置：debug 日志可能在日志中暴露转发的请求标头，包括 provider 的 `Authorization` 标头。
 
 ## 何时迁移到 Kubernetes
 
-Docker 不提供多节点调度、滚动部署控制或集群级恢复。当你需要副本、声明式发布、网关集成或平台管理的模型发现时，迁移到 Kubernetes 路径。同一份 canonical 配置可以通过 CLI 和 Helm 部署，或通过 Semantic Router Operator 管理。
+Docker 不提供多节点调度、滚动部署控制或集群级恢复。当你需要跨节点 Router 副本、声明式发布、网关集成或平台管理的模型发现时，迁移到 Kubernetes 路径。同一份 canonical 配置可以通过 CLI 和 Helm 部署，或通过 Semantic Router Operator 管理。
