@@ -94,12 +94,18 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 			if firstErr == nil {
 				firstErr = run.err
 			}
+			// Run-wide ceilings fail closed even when this parallel step is
+			// configured to skip ordinary branch failures.
+			if errors.Is(run.err, ErrHopLimit) {
+				stop(run.err)
+			}
 			if n.OnError != OnErrorSkip {
 				stop(run.err)
 			}
 		}
 	}
-	if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, errEnough) && !errors.Is(cause, firstErr) {
+	if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, errEnough) &&
+		(!errors.Is(cause, firstErr) || errors.Is(cause, ErrHopLimit)) {
 		// The run itself was stopped: a ceiling, its timeout or the client.
 		return cause
 	}

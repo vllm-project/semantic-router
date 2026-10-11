@@ -30,7 +30,7 @@ func PublicSystemOneHandler(upstream string, providers ...routerauth.CredentialP
 			return
 		}
 		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, decisionModelRequestLimit))
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, systemone.RequestLimit))
 			if err != nil || !json.Valid(body) {
 				decisionModelError(w, 400, "invalid_request", "Unable to read bounded native request")
 				return
