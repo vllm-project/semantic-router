@@ -117,9 +117,16 @@ func TestVLLMStreamErrorEventFrames(t *testing.T) {
 // The codec gets the stream in arbitrary pieces. Where they split, two ways or
 // one byte at a time, must not change its translation.
 func TestVLLMStreamErrorEventSurvivesEverySplit(t *testing.T) {
-	for _, body := range []string{vllmStreamGrammarError(t), vllmStreamMidError} {
+	for _, tc := range []struct{ body, message string }{
+		{vllmStreamGrammarError(t), "Grammar error: regex parse error"},
+		{vllmStreamMidError, "Internal server error"},
+	} {
+		body := tc.body
 		for _, target := range vllmErrorTargets {
 			whole := translateVLLMErrorStream(t, target, body)
+			if !strings.Contains(whole, tc.message) {
+				t.Fatalf("%s: want vLLM's message %q:\n%s", target, tc.message, whole)
+			}
 			if bytewise := translateVLLMErrorStream(t, target, strings.Split(body, "")...); bytewise != whole {
 				t.Fatalf("%s one byte at a time:\n%s\nwant:\n%s", target, bytewise, whole)
 			}
@@ -145,7 +152,7 @@ func TestChatErrorCodeShapes(t *testing.T) {
 		{"non-error integer", `, "code": 200`, "invalid_upstream_json"},
 		{"below status range", `, "code": 399`, "invalid_upstream_json"},
 		{"above status range", `, "code": 600`, "invalid_upstream_json"},
-		{"integral fraction", `, "code": 400.0`, "invalid_upstream_json"},
+		{"decimal literal", `, "code": 400.0`, "invalid_upstream_json"},
 		{"fraction", `, "code": 400.5`, "invalid_upstream_json"},
 		{"boolean", `, "code": true`, "invalid_upstream_json"},
 		{"object", `, "code": {}`, "invalid_upstream_json"},

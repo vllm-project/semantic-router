@@ -163,8 +163,8 @@ async def test_vllm_stream_error_fixture():
 
 
 def test_vllm_error_and_done_share_one_write():
-    """Each yield is its own write; the error and [DONE] share one so the E2E's
-    Chat result does not depend on how Envoy splits the reads."""
+    """Each yield is its own write; the error and [DONE] share one, so the Router
+    normally reads them together and the E2E's Chat client gets the mapped frame."""
     req = ChatRequest(model="m", messages=[{"role": "user", "content": "x"}])
     *_, last = error_stream(req, 0, GENERATION_ERROR, content="partial")
     assert last.startswith('data: {"error": ')

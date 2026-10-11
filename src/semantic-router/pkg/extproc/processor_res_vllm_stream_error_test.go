@@ -17,7 +17,7 @@ import (
 // [DONE] comes in a later read, a Chat client gets vLLM's event as sent, as
 // the Router already does for an error with a string code. Which form it
 // should get there is not settled, so that case checks only for vLLM's
-// message and no [DONE].
+// message, once, and no [DONE].
 func TestVLLMStreamErrorReachesClientInOneOrTwoReads(t *testing.T) {
 	event := `data: {"error": {"message": "Grammar error: bad regex", "type": "BadRequestError", "param": null, "code": 400}}` + "\n\n"
 	done := "data: [DONE]\n\n"
@@ -31,7 +31,7 @@ func TestVLLMStreamErrorReachesClientInOneOrTwoReads(t *testing.T) {
 			require.Equal(t, want[client], vllmStreamClientBody(t, client, []string{event + done}), "one read")
 			twoReads := vllmStreamClientBody(t, client, []string{event, done})
 			if client == llmprotocol.OpenAIChatV1 {
-				require.Contains(t, twoReads, "Grammar error: bad regex", "two reads")
+				require.Equal(t, 1, strings.Count(twoReads, "Grammar error: bad regex"), "two reads")
 				require.NotContains(t, twoReads, "[DONE]", "two reads")
 				return
 			}

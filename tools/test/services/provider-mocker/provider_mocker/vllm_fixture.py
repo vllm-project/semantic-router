@@ -161,7 +161,7 @@ def error_stream(
 ) -> Iterator[str]:
     """Any content first, then the error event with its integer HTTP status
     (json.dumps spacing, as captured) and [DONE] in one write, so the Router
-    reads them together."""
+    normally reads them together."""
     if content:
         base = {
             "id": "chatcmpl-mock-vllm-error",

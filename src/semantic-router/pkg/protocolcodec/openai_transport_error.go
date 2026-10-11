@@ -103,8 +103,7 @@ func canonicalOpenAIErrorType(category llmprotocol.ErrorCategory) string {
 }
 
 // openAIErrorCode accepts string codes and the integral HTTP error statuses
-// emitted by vLLM, in transport errors, Chat stream error events and buffered
-// Chat error envelopes. The neutral and public contracts always use string codes.
+// emitted by vLLM. The neutral and public contracts always use string codes.
 // Arbitrary numbers, booleans and structured values remain malformed errors.
 type openAIErrorCode string
 
