@@ -455,6 +455,28 @@ def test_preprocessing_matches_the_recorded_processor_output():
     assert digest == "6c77827d418e10a4a4b15eeb95f32ec703815c693d1ca92d007ba02a466e71f3"
 
 
+def test_video_preprocessing_matches_the_recorded_processor_output():
+    """Patch rows of fixed frames that need no resize, as the Transformers 5.17 torchvision processor wrote them."""
+    import hashlib
+
+    import numpy as np
+    from vllm_srun.testing.decision3 import VIDEO_PROCESSOR_CONFIG
+
+    t, y, x, c = np.ogrid[:6, :64, :96, :3]
+    frames = ((x * 7 + y * 3 + c * 50 + t * 11) % 256).astype(np.uint8)
+    video = vid.Video(frames, 8.0, (0, 3, 6, 9, 11, 11), 12, "digest")
+    out = vid.preprocess(video, vid.VideoSettings.from_config(VIDEO_PROCESSOR_CONFIG))
+    assert out.grid == (3, 4, 6)
+    assert out.tokens == 18
+    assert out.timestamps == (0.1875, 0.9375, 1.375)
+    assert out.placeholder("<S>", "p", "<E>") == "".join(
+        f"<{seconds} seconds><S>pppppp<E>" for seconds in ("0.2", "0.9", "1.4")
+    )
+    assert tuple(out.pixel_values.shape) == (72, 1536)
+    digest = hashlib.sha256(out.pixel_values.contiguous().numpy().tobytes()).hexdigest()
+    assert digest == "511bf301e59904d9a101cda76505724a51e16b3203d3aff2583e9c915e77c69c"
+
+
 @pytest.mark.parametrize(
     "size,expected",
     [

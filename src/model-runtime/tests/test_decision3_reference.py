@@ -174,6 +174,7 @@ def metadata(video):
 
 
 def test_video_processing_matches_transformers(mp4_url):
+    pytest.importorskip("torchvision")
     from transformers.models.qwen3_vl.processing_qwen3_vl import Qwen3VLProcessor
     from vllm_srun.testing.decision3 import VIDEO_PROCESSOR_CONFIG
 
