@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const defaultCacheBackendLabel = "milvus" // fallback label when none is provided
@@ -64,29 +66,29 @@ func (c *CachingStore) invalidate(ctx context.Context, userID string) {
 	RecordMemoryStoreOperation(c.label(), "cache_invalidate", "success", time.Since(start).Seconds())
 }
 
-// Retrieve implements Store. It checks the cache first; on miss, calls the
-// underlying store and caches the result unless the user was invalidated meanwhile.
+// Retrieve implements Store. It checks the cache first; on miss, calls the underlying store and caches the result.
 func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
 	label := c.label()
-	generation, cacheable := c.cache.generation(ctx, opts.UserID)
-	if cacheable {
+	generation := ""
+	if c.cache != nil {
 		start := time.Now()
-		results, ok := c.cache.Get(ctx, opts)
+		results, readGeneration, ok := c.cache.GetWithGeneration(ctx, opts)
 		elapsed := time.Since(start).Seconds()
 		if ok {
 			RecordMemoryCacheHit(label, elapsed)
 			return results, nil
 		}
-	}
-	if c.cache != nil {
+		generation = readGeneration
 		RecordMemoryCacheMiss(label)
 	}
 	results, err := c.store.Retrieve(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	if cacheable {
-		c.cache.setIfCurrent(ctx, opts, generation, results)
+	if c.cache != nil && generation != "" {
+		if _, err := c.cache.SetIfGeneration(ctx, opts, results, generation); err != nil {
+			logging.Debugf("Memory Redis cache set error: %v", err)
+		}
 	}
 	return results, nil
 }

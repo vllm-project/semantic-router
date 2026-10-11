@@ -118,29 +118,27 @@ func TestCachingStoreDoesNotCacheStaleReadsDuringHold(t *testing.T) {
 	require.Equal(t, 3, store.backendCalls(), "caching resumes once the hold expires")
 }
 
-func TestRedisCacheInvalidationReplacesGenerationAndHolds(t *testing.T) {
+func TestRedisCacheInvalidationHoldsRefills(t *testing.T) {
 	ctx := context.Background()
 	mr, _, cache := newFenceFixture(t, &fenceStore{})
+	opts := RetrieveOptions{Query: "q", UserID: "u", Limit: 5}
 
-	first, ok := cache.generation(ctx, "u")
-	require.True(t, ok)
+	_, first, _ := cache.GetWithGeneration(ctx, opts)
 	require.NotEmpty(t, first)
-	again, _ := cache.generation(ctx, "u")
-	require.Equal(t, first, again, "admission reuses the live token")
-
 	require.NoError(t, cache.InvalidateByUser(ctx, "u"))
 	require.True(t, mr.Exists(cache.holdKey("u")))
 	require.LessOrEqual(t, mr.TTL(cache.holdKey("u")), cacheWriteHold)
-	_, ok = cache.generation(ctx, "u")
-	require.False(t, ok, "retrievals admitted during the hold are not cacheable")
+
+	_, held, _ := cache.GetWithGeneration(ctx, opts)
+	require.Empty(t, held, "reads during the hold get no refill token")
+	stored, err := cache.SetIfGeneration(ctx, opts, nil, first)
+	require.NoError(t, err)
+	require.False(t, stored, "a token from before the invalidation is rejected")
 
 	mr.FastForward(cacheWriteHold + time.Second)
-	next, ok := cache.generation(ctx, "u")
-	require.True(t, ok)
+	_, next, _ := cache.GetWithGeneration(ctx, opts)
+	require.NotEmpty(t, next)
 	require.NotEqual(t, first, next, "invalidation replaces the token")
-
-	_, ok = cache.generation(ctx, "")
-	require.False(t, ok, "results without an owner cannot be invalidated, so they are never cached")
 }
 
 func TestCachingStoreReadBegunDuringHoldIsNotCachedAfterIt(t *testing.T) {

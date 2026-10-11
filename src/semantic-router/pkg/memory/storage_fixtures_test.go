@@ -36,6 +36,6 @@ func storageMemoryVectors() storagetest.Vectors {
 // post-invalidation write hold, which would stop the test from caching.
 func resetRedisCacheUser(ctx context.Context, cache *RedisCache, userID string) {
 	keys, _ := cache.client.SMembers(ctx, cache.userIndexKey(userID)).Result()
-	keys = append(keys, cache.userIndexKey(userID), cache.generationKey(userID), cache.holdKey(userID))
+	keys = append(keys, cache.userIndexKey(userID), cache.userGenerationKey(userID), cache.holdKey(userID))
 	_ = cache.client.Del(ctx, keys...).Err()
 }
