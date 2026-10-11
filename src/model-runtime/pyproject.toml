@@ -47,6 +47,8 @@ onnx = [
 ]
 multimodal = [
   "pillow>=10.4",
+  # Videos decode with OpenCV's FFmpeg, as the Decision 3.0 runtime decodes them.
+  "opencv-python-headless>=5.0.0.93,<5.1",
 ]
 
 [project.scripts]

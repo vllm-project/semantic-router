@@ -92,16 +92,19 @@ func (m *Manager) SystemOneForArtifact(ctx context.Context, deployment, expected
 }
 
 func (c *Client) systemOne(ctx context.Context, model string, body json.RawMessage) (SystemOneResult, exchangeTiming, error) {
-	var request map[string]json.RawMessage
-	if json.Unmarshal(body, &request) != nil || request == nil {
-		return SystemOneResult{}, exchangeTiming{}, fmt.Errorf("%w: request must be an object", ErrRejected)
-	}
 	// Keep state, questions and options as raw JSON: question and criteria order
 	// belongs to the model contract. Only the served model identity is replaced.
-	request["model"], _ = json.Marshal(model)
-	encoded, err := json.Marshal(request)
-	if err != nil {
-		return SystemOneResult{}, exchangeTiming{}, err
+	encoded, ok := withServedModel(body, model)
+	if !ok {
+		var request map[string]json.RawMessage
+		if json.Unmarshal(body, &request) != nil || request == nil {
+			return SystemOneResult{}, exchangeTiming{}, fmt.Errorf("%w: request must be an object", ErrRejected)
+		}
+		request["model"], _ = json.Marshal(model)
+		var err error
+		if encoded, err = json.Marshal(request); err != nil {
+			return SystemOneResult{}, exchangeTiming{}, err
+		}
 	}
 	generated, err := api.NewClient(c.base, api.WithHTTPClient(c.httpClient))
 	if err != nil {

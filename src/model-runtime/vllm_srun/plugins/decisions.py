@@ -32,7 +32,7 @@ from .base import (
 
 SURFACE = "decisions"
 SUM_TOLERANCE = 1e-6
-STATE_FIELDS = frozenset({"state", "questions", "images"})
+STATE_FIELDS = frozenset({"state", "questions", "images", "videos"})
 
 
 @dataclass(frozen=True)
@@ -102,7 +102,7 @@ def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
             or not {"state", "questions"} <= set(entry) <= STATE_FIELDS
         ):
             raise ValueError(
-                f"states[{name!r}] must hold state and questions, and may hold images"
+                f"states[{name!r}] must hold state and questions, and may hold images and videos"
             )
         bodies.append({**shared, **entry})
         names.append(name)
@@ -199,11 +199,13 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
     bounded input and rejects a longer one. A request's ``options.max_tokens``
     overrides it, and only a model that has one takes that option.
     ``image_inputs`` says the model reads a request's ``images``
-    (``plan_images``); a text model refuses a non-empty list.
+    (``plan_images``); a text model refuses a non-empty list. ``video_inputs``
+    says it also reads ``videos`` (passed to ``plan_images``).
     """
 
     scan_tokens: int | None = None
     image_inputs: ClassVar[bool] = False
+    video_inputs: bool = False
 
     @abstractmethod
     def plan(
@@ -215,11 +217,15 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
         """
 
     def plan_images(
-        self, state: Any, questions: dict[str, Any], images: list[Any]
+        self,
+        state: Any,
+        questions: dict[str, Any],
+        images: list[Any],
+        videos: list[Any] | None = None,
     ) -> RequestPlan[ItemT]:
-        """``plan`` for a request with images that every question sees (models with ``image_inputs``).
+        """``plan`` for a request with images (and videos, models with ``video_inputs``) that every question sees.
 
-        A malformed image fails the request (``ValueError``).
+        A malformed image or video fails the request (``ValueError``).
         """
         raise NotImplementedError(f"{type(self).__name__} reads no images")
 
@@ -257,9 +263,14 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
             raise ValueError(
                 f"model {self.info.id} reads text only; images are not supported"
             )
+        videos = body.get("videos")
+        if videos is not None and not isinstance(videos, list):
+            raise ValueError("videos must be a list of video data URLs")
+        if videos and not self.video_inputs:
+            raise ValueError(f"model {self.info.id} reads no videos")
         plan = (
-            self.plan_images(body["state"], questions, images)
-            if images
+            self.plan_images(body["state"], questions, images or [], videos or None)
+            if images or videos
             else self.plan(body["state"], questions, scan)
         )
         if not request.part:

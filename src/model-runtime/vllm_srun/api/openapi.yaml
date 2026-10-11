@@ -267,6 +267,8 @@ components:
             $ref: '#/components/schemas/Question'
         images:
           $ref: '#/components/schemas/DecisionImages'
+        videos:
+          $ref: '#/components/schemas/DecisionVideos'
         states:
           type: object
           description: |
@@ -293,6 +295,8 @@ components:
             $ref: '#/components/schemas/Question'
         images:
           $ref: '#/components/schemas/DecisionImages'
+        videos:
+          $ref: '#/components/schemas/DecisionVideos'
     DecisionImages:
       type: array
       description: |
@@ -301,6 +305,19 @@ components:
         `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
         pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
         invalid_request, as it does a malformed image.
+      items:
+        type: string
+    DecisionVideos:
+      type: array
+      description: |
+        Videos every question of the state sees, after its images, for models whose card lists the `video`
+        modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+        `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+        pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+        `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+        every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+        at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+        invalid_request, as it does a malformed or over-limit video.
       items:
         type: string
     Question:
@@ -1228,7 +1245,7 @@ components:
             type: string
         modalities:
           type: array
-          description: Decision models only; the inputs a decisions request may carry (`text`, and `image` for `images`).
+          description: Decision models only; the inputs a decisions request may carry (`text`, `image` for `images`, `video` for `videos`).
           items:
             type: string
         heads:
@@ -1410,6 +1427,27 @@ components:
         image_max_bytes:
           type: integer
           description: Models that read images; the most bytes one supplied image may have.
+        video_fps:
+          type: number
+          description: Models that read videos; the frames per second the model samples.
+        video_max_frames:
+          type: integer
+          description: Models that read videos; the most frames the model reads of one video.
+        video_max_pixels:
+          type: integer
+          description: Models that read videos; the most pixels the model reads of one frame (larger frames are resized).
+        video_max_tokens:
+          type: integer
+          description: Models that read videos; the most input tokens the videos of one request may take.
+        video_max_bytes:
+          type: integer
+          description: Models that read videos; the most bytes one supplied video may have.
+        video_max_seconds:
+          type: integer
+          description: Models that read videos; the longest supplied video, in seconds.
+        video_source_max_pixels:
+          type: integer
+          description: Models that read videos; the most pixels one frame of a supplied video may have.
     ProfileInfo:
       type: object
       required: [name, numerics]

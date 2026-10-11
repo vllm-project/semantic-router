@@ -13,6 +13,7 @@ httpx==0.28.1
 huggingface-hub==1.33.0
 idna==3.20
 numpy==2.5.3
+opencv-python-headless==5.0.0.93
 packaging==26.3
 pillow==12.3.0
 prometheus-client==0.26.0

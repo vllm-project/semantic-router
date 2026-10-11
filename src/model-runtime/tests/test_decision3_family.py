@@ -12,6 +12,7 @@ from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3 import images as img
 from vllm_srun.families.decision3 import package as pkg
 from vllm_srun.families.decision3 import prompt
+from vllm_srun.families.decision3 import videos as vid
 from vllm_srun.families.decision3.family import BATCH_SIZE, Decision3Family
 from vllm_srun.registry.tables.decision3 import DECISION3_MODELS
 
@@ -41,7 +42,9 @@ def call(runtime, body):
 def test_the_card_lists_images_and_their_limits(d3_runtime):
     card = d3_runtime.lookup(None).card([])
     assert card["family"] == "decision3"
-    assert card["modalities"] == ["text", "image"]
+    assert card["modalities"] == ["text", "image"] + (
+        ["video"] if vid.available() is None else []
+    )
     assert card["question_types"] == ["choice", "noul", "score"]
     assert card["limits"]["image_max_pixels"] == img.MAX_PIXELS
     assert card["limits"]["image_max_bytes"] == img.MAX_IMAGE_BYTES
@@ -190,6 +193,145 @@ def test_further_states_carry_their_own_images(d3_runtime, png_url):
     assert body["states"]["other"]["answers"] == alone["answers"]
 
 
+@pytest.mark.parametrize(
+    "total,fps,expected",
+    [
+        (48, 24.0, [0, 16, 31, 47]),
+        (3, 30.0, [0, 1, 2]),
+        (61, 30.0, [0, 20, 40, 60]),
+        (3000, 30.0, None),
+    ],
+)
+def test_frames_are_sampled_as_the_d3_runtime_samples_them(total, fps, expected):
+    indices = vid.sample_indices(total, fps)
+    if expected is not None:
+        assert indices == expected
+    else:
+        assert (
+            len(indices) == vid.MAX_FRAMES
+            and indices[0] == 0
+            and indices[-1] == total - 1
+        )
+
+
+def test_each_frame_is_capped_at_the_runtime_pixel_budget(d3_runtime):
+    settings = d3_runtime.lookup(None).model.video_settings
+    assert vid.frame_size(settings, 4, 1080, 1920) == (320, 576)
+    assert vid.frame_size(settings, 32, 64, 48) == (64, 64)
+    assert vid.input_tokens(settings, 4, 1080, 1920) == 2 * (320 // 32) * (576 // 32)
+
+
+def test_the_card_lists_the_video_limits(d3_runtime):
+    pytest.importorskip("cv2")
+    limits = d3_runtime.lookup(None).card([])["limits"]
+    assert limits["video_max_frames"] == vid.MAX_FRAMES
+    assert limits["video_max_pixels"] == vid.MAX_PIXELS
+    assert limits["video_max_tokens"] == vid.MAX_TOKENS
+    assert limits["video_max_bytes"] == vid.MAX_VIDEO_BYTES
+    assert limits["video_max_seconds"] == vid.MAX_SECONDS
+
+
+def test_videos_reach_the_model_and_count_as_input_tokens(d3_runtime, mp4_url, png_url):
+    clip = mp4_url(96, 64, frames=12, fps=8.0, seed=1)
+    text = call(d3_runtime, {"state": "What happens?", "questions": QUESTIONS})[1]
+    status, seen = call(
+        d3_runtime, {"state": "What happens?", "questions": QUESTIONS, "videos": [clip]}
+    )
+    assert status == 200
+    assert seen["answers"] != text["answers"]
+    decoded = vid.decode(clip)
+    assert decoded.indices == (0, 4, 7, 11)
+    settings = d3_runtime.lookup(None).model.video_settings
+    processed = vid.preprocess(decoded, settings)
+    expansion = processed.placeholder(
+        "<|vision_start|>", "<|video_pad|>", "<|vision_end|>"
+    )
+    assert expansion.startswith("<0.2 seconds><|vision_start|>")
+    per_question = (
+        seen["usage"]["input_tokens"] - text["usage"]["input_tokens"]
+    ) / len(QUESTIONS)
+    tokenizer = d3_runtime.lookup(None).model.tokenizer
+    expanded = len(tokenizer.encode(expansion, add_special_tokens=False).ids)
+    # The template's own vision start and end around the video, plus the expansion in place of its pad token.
+    assert per_question == expanded + 2
+    status, both = call(
+        d3_runtime,
+        {
+            "state": "What happens?",
+            "questions": QUESTIONS,
+            "images": [png_url(64, 64, 2)],
+            "videos": [clip],
+        },
+    )
+    assert status == 200 and both["answers"] != seen["answers"]
+    again = call(
+        d3_runtime, {"state": "What happens?", "questions": QUESTIONS, "videos": [clip]}
+    )[1]
+    assert again == seen
+
+
+@pytest.mark.parametrize(
+    "videos,reason",
+    [
+        ("data:video/mp4;base64,AAAA", "videos must be a list"),
+        (["https://example.com/a.mp4"], "videos[0]: videos must be base64 MP4"),
+        (["data:video/avi;base64,AAAA"], "videos[0]: videos must be base64 MP4"),
+        (["data:video/mp4;base64,not base64!"], "videos[0]: invalid base64 video data"),
+        (["data:video/mp4;base64,AAAAAAAA"], "videos[0]: "),
+    ],
+)
+def test_malformed_videos_fail_the_request(d3_runtime, videos, reason):
+    pytest.importorskip("cv2")
+    status, body = call(
+        d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": videos}
+    )
+    assert status == 400
+    assert body["error"]["code"] == "invalid_request"
+    assert reason in body["error"]["message"]
+
+
+def test_oversized_videos_are_refused(d3_runtime):
+    pytest.importorskip("cv2")
+    huge = "data:video/mp4;base64," + "A" * (4 * -(-vid.MAX_VIDEO_BYTES // 3) + 4)
+    status, body = call(
+        d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": [huge]}
+    )
+    assert status == 400 and "32,000,000 bytes" in body["error"]["message"]
+
+
+def test_a_text_model_refuses_videos(d3_text_package, mp4_url):
+    from tests.conftest import start_runtime
+
+    runtime = start_runtime(d3_text_package)
+    try:
+        status, body = call(
+            runtime,
+            {"state": "x", "questions": QUESTIONS, "videos": [mp4_url(32, 32, 4)]},
+        )
+        assert status == 400 and "reads no videos" in body["error"]["message"]
+    finally:
+        runtime.stop()
+
+
+def test_further_states_carry_their_own_videos(d3_runtime, mp4_url):
+    clip = mp4_url(64, 48, frames=6, seed=3)
+    alone = call(d3_runtime, {"state": "b", "questions": QUESTIONS, "videos": [clip]})[
+        1
+    ]
+    status, body = call(
+        d3_runtime,
+        {
+            "state": "a",
+            "questions": QUESTIONS,
+            "states": {
+                "other": {"state": "b", "questions": QUESTIONS, "videos": [clip]}
+            },
+        },
+    )
+    assert status == 200
+    assert body["states"]["other"]["answers"] == alone["answers"]
+
+
 def test_score_levels_must_be_distinct(d3_runtime):
     question = {
         "type": "score",
@@ -288,7 +430,7 @@ def test_the_family_detects_only_d3_exports(d3_package, qwen3_package):
     family = Decision3Family()
     assert family.detect(PackageRef(root=d3_package))
     assert not family.detect(PackageRef(root=qwen3_package))
-    assert family.descriptor()["modalities"] == ["text", "image"]
+    assert family.descriptor()["modalities"] == ["text", "image", "video"]
 
 
 def test_preprocessing_matches_the_recorded_processor_output():
@@ -313,6 +455,28 @@ def test_preprocessing_matches_the_recorded_processor_output():
     assert digest == "6c77827d418e10a4a4b15eeb95f32ec703815c693d1ca92d007ba02a466e71f3"
 
 
+def test_video_preprocessing_matches_the_recorded_processor_output():
+    """Patch rows of fixed frames that need no resize, as the Transformers 5.17 torchvision processor wrote them."""
+    import hashlib
+
+    import numpy as np
+    from vllm_srun.testing.decision3 import VIDEO_PROCESSOR_CONFIG
+
+    t, y, x, c = np.ogrid[:6, :64, :96, :3]
+    frames = ((x * 7 + y * 3 + c * 50 + t * 11) % 256).astype(np.uint8)
+    video = vid.Video(frames, 8.0, (0, 3, 6, 9, 11, 11), 12, "digest")
+    out = vid.preprocess(video, vid.VideoSettings.from_config(VIDEO_PROCESSOR_CONFIG))
+    assert out.grid == (3, 4, 6)
+    assert out.tokens == 18
+    assert out.timestamps == (0.1875, 0.9375, 1.375)
+    assert out.placeholder("<S>", "p", "<E>") == "".join(
+        f"<{seconds} seconds><S>pppppp<E>" for seconds in ("0.2", "0.9", "1.4")
+    )
+    assert tuple(out.pixel_values.shape) == (72, 1536)
+    digest = hashlib.sha256(out.pixel_values.contiguous().numpy().tobytes()).hexdigest()
+    assert digest == "511bf301e59904d9a101cda76505724a51e16b3203d3aff2583e9c915e77c69c"
+
+
 @pytest.mark.parametrize(
     "size,expected",
     [
@@ -327,6 +491,15 @@ def test_smart_resize_keeps_the_released_pixel_budget(size, expected):
     resized = img.smart_resize(height, width, 32, img.MIN_PIXELS, img.MAX_PIXELS)
     assert resized == expected
     assert img.MIN_PIXELS <= resized[0] * resized[1] <= img.MAX_PIXELS
+
+
+def test_a_pruned_backbone_follows_its_layer_types(
+    d3_pruned_runtime, d3_pruned_package
+):
+    text = json.loads((d3_pruned_package / "config.json").read_text())["text_config"]
+    backbone = d3_pruned_runtime.lookup(None).model.engine_model.backbone
+    assert [layer.kind for layer in backbone.layers] == text["layer_types"]
+    assert text["full_attention_interval"] == 4
 
 
 FLA_KERNELS = {

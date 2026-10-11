@@ -3,8 +3,8 @@
 
 The tiny Decision fixtures run offline in the built Router image. The tests
 check public auth/discovery and native inference after starting both Engine
-and Router modes with the supported serve flags, and that images reach a
-Decision 3.0 model through the public System One API. Each test owns an
+and Router modes with the supported serve flags, and that images and videos
+reach a Decision 3.0 model through the public System One API. Each test owns an
 isolated stack.
 """
 
@@ -35,6 +35,42 @@ MANAGEMENT_KEY = "engine-e2e-management-key"
 PUBLIC_MODEL = "test/decision"
 # The public System One API accepted at most 2 MiB before images.
 FORMER_REQUEST_LIMIT = 2 << 20
+# A 64 x 48 MPEG-4 clip (8 frames, 4 per second) of a blue square moving over a green ramp.
+TINY_MP4 = (
+    "data:video/mp4;base64,"
+    "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"
+)
 
 
 def available_offset():
@@ -270,14 +306,16 @@ class TestEngineMode(EngineStack):
 class TestEngineModeImages(EngineStack):
     fixture = ("decision3", "vision")
 
-    def ask(self, path, images=None):
+    def ask(self, path, images=None, videos=None):
         body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
         body["model"] = PUBLIC_MODEL
         if images is not None:
             body["images"] = images
+        if videos is not None:
+            body["videos"] = videos
         return self.public(path, body)
 
-    def test_images_reach_the_model_through_the_public_api(self):
+    def test_images_and_videos_reach_the_model_through_the_public_api(self):
         status, text = self.ask("/v1/systemone")
         self.assertEqual(status, 200, text)
         small = png_data_url(64, 48, seed=1)
@@ -294,6 +332,14 @@ class TestEngineModeImages(EngineStack):
         self.assertEqual(status, 200, both)
         self.assertNotEqual(both["answers"], seen["answers"])
         status, failure = self.ask("/v1/systemone", ["data:image/png;base64,AAAA"])
+        self.assertEqual(status, 400, failure)
+        status, clip = self.ask("/v1/systemone", videos=[TINY_MP4])
+        self.assertEqual(status, 200, clip)
+        self.assertNotEqual(clip["answers"], text["answers"])
+        self.assertGreater(clip["usage"]["input_tokens"], text["usage"]["input_tokens"])
+        status, failure = self.ask(
+            "/v1/systemone", videos=["data:video/mp4;base64,AAAA"]
+        )
         self.assertEqual(status, 400, failure)
 
 
