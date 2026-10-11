@@ -89,14 +89,14 @@ func TestPublicSystemOneDoesNotFollowManagementRedirectOrLeakFailures(t *testing
 }
 
 func TestPublicSystemOnePreservesBoundedHTMLLikeInput(t *testing.T) {
-	state := strings.Repeat("<>&", decisionModelRequestLimit/4)
+	state := strings.Repeat("<>&", systemone.RequestLimit/4)
 	body := `{"model":"judge","state":"` + state + `","questions":{}}`
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 		}
-		if len(data) > decisionModelRequestLimit+8192 {
+		if len(data) > systemone.RequestLimit+8192 {
 			t.Error("native payload expanded beyond the frontend transport limit")
 		}
 		var forwarded systemone.ForwardRequest
