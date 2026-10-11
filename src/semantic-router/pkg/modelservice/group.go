@@ -35,7 +35,7 @@ type group struct {
 	client     *Client
 	managed    bool
 	supervisor *supervisor
-	host       *hostRuntime
+	host       *hostLease
 	modelsFile string
 	cancel     context.CancelFunc
 	done       chan struct{}
@@ -89,7 +89,7 @@ func (g *group) start() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			g.host.keepAlive(ctx, g.plan)
+			g.host.keepAlive(ctx)
 		}()
 	}
 	if g.supervisor != nil {

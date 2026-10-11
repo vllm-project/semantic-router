@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -82,6 +83,104 @@ func TestHostRuntimeGenerationLeases(t *testing.T) {
 	}
 	if deployments["shared"].Device != "cpu" {
 		t.Error("host placement mutated authored deployment")
+	}
+}
+
+func TestHostRuntimeConcurrentReacquisitionKeepsNewLease(t *testing.T) {
+	var mu sync.Mutex
+	owners := make(map[string]struct{})
+	deleting := make(chan struct{})
+	resume := make(chan struct{})
+	var firstDelete, unblock sync.Once
+	unblockDelete := func() { unblock.Do(func() { close(resume) }) }
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+			var body struct {
+				Lease string `json:"lease"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			if body.Lease == "" {
+				t.Error("host control request omitted its owning lease")
+			}
+			if r.Method == http.MethodDelete {
+				firstDelete.Do(func() {
+					close(deleting)
+					<-resume
+				})
+			}
+			mu.Lock()
+			if r.Method == http.MethodPost {
+				owners[body.Lease] = struct{}{}
+			} else {
+				delete(owners, body.Lease)
+			}
+			mu.Unlock()
+			_, _ = w.Write([]byte(`{"port":12345}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"starting","api_version":"2.0"}`))
+	}))
+	defer server.Close()
+	defer unblockDelete()
+	t.Setenv(HostRuntimeEndpointEnv, server.URL)
+	t.Setenv(HostRuntimeTokenEnv, "private-test-token")
+	t.Setenv(RuntimeCommandEnv, "must-not-execute-on-linux")
+	manager := NewManager()
+	deployments := map[string]config.ModelDeployment{"shared": {
+		Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/fixture", Device: "cpu",
+	}}
+	first, err := manager.AcquireDeployments(deployments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retired := make(chan error, 1)
+	go func() { retired <- first.Close() }()
+	select {
+	case <-deleting:
+	case <-time.After(5 * time.Second):
+		t.Fatal("retiring group did not reach host DELETE")
+	}
+	second, err := manager.AcquireDeployments(deployments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		unblockDelete()
+		if err := second.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	mu.Lock()
+	ownerCount := len(owners)
+	mu.Unlock()
+	if ownerCount != 2 {
+		t.Errorf("reacquisition must have a distinct owning lease; got %d", ownerCount)
+	}
+	unblockDelete()
+	select {
+	case err := <-retired:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("retiring group did not finish after DELETE resumed")
+	}
+	mu.Lock()
+	ownerCount = len(owners)
+	mu.Unlock()
+	if ownerCount != 1 {
+		t.Fatalf("retired DELETE removed the newly acquired process lease; got %d", ownerCount)
+	}
+	if err := second.Close(); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(owners) != 0 {
+		t.Error("final owning lease did not release the host process")
 	}
 }
 
