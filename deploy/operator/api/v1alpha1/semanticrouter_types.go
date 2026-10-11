@@ -1295,6 +1295,12 @@ type ComplexityRulesConfig struct {
 type ComplexityCandidates struct {
 	// List of candidate phrases or examples
 	Candidates []string `json:"candidates"`
+
+	// ImageCandidates are example phrases scored against the image side of a
+	// multimodal request. Read only by the local path, like Candidates; a
+	// rule with none keeps text-only scoring.
+	// +optional
+	ImageCandidates []string `json:"image_candidates,omitempty"`
 }
 
 // ComplexityModelConfig configures how the complexity signal produces its

@@ -61,7 +61,7 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 					{
 						Name:      "code",
 						Threshold: "0.55",
-						Hard:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"debug a race"}},
+						Hard:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"debug a race"}, ImageCandidates: []string{"a dense architecture diagram"}},
 						Easy:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"say hello"}},
 						Composer: &vllmv1alpha1.RuleComposition{
 							Operator: "AND",
@@ -569,6 +569,14 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	condition := rule.Composer.Conditions[0]
 	if condition.Type != "domain" || condition.Name != "engineering" {
 		t.Fatalf("unexpected composer condition: %#v", condition)
+	}
+	// The CRD mirrors both candidate banks; the generic conversion carries
+	// the image bank through by key name, so it must arrive intact.
+	if len(rule.Hard.ImageCandidates) != 1 || rule.Hard.ImageCandidates[0] != "a dense architecture diagram" {
+		t.Fatalf("image_candidates did not survive conversion: %#v", rule.Hard)
+	}
+	if len(rule.Easy.ImageCandidates) != 0 {
+		t.Fatalf("unset image_candidates must stay empty: %#v", rule.Easy)
 	}
 
 	remote := rules[1]
