@@ -158,7 +158,7 @@ func (s *Set) Do(ctx context.Context, req *Request) (*Response, error) {
 		return nil, &Error{Kind: KindClosed, Err: errSetClosed}
 	}
 	c, defaultRoute := s.route(req.RouteKey)
-	if c == nil {
+	if c == nil || (req.ExactRoute && defaultRoute) {
 		s.exit()
 		return nil, &Error{Kind: KindNoRoute, Err: fmt.Errorf("no cluster serves route key %q", req.RouteKey)}
 	}

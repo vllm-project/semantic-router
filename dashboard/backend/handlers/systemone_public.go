@@ -24,12 +24,13 @@ func PublicSystemOneHandler(upstream string, providers ...routerauth.CredentialP
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		forwarded := systemone.ForwardRequest{Listener: os.Getenv("VLLM_SR_SYSTEMONE_LISTENER"), Method: r.Method, Path: r.URL.Path, Authorization: r.Header.Get("Authorization"), APIKey: r.Header.Get("Api-Key")}
+		forwarded.BackendRequest = r.Header.Get(systemone.BackendRequestHeader) != ""
 		if !forwarded.ValidOperation() {
 			decisionModelError(w, 405, "method_not_allowed", "Unsupported native operation")
 			return
 		}
 		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, decisionModelRequestLimit))
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, systemone.RequestLimit))
 			if err != nil || !json.Valid(body) {
 				decisionModelError(w, 400, "invalid_request", "Unable to read bounded native request")
 				return

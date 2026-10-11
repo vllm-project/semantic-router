@@ -379,8 +379,22 @@ type ContentPartType string
 // ContentPartList defines model for ContentPartList.
 type ContentPartList = []ContentPart
 
+// DecisionImages Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+// pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+// invalid_request, as it does a malformed image.
+type DecisionImages = []string
+
 // DecisionRequest defines model for DecisionRequest.
 type DecisionRequest struct {
+	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+	// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+	// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+	// pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed image.
+	Images *DecisionImages `json:"images,omitempty"`
+
 	// Model Served model ID. Optional while a runtime serves one model.
 	Model   *string         `json:"model,omitempty"`
 	Options *RequestOptions `json:"options,omitempty"`
@@ -427,6 +441,13 @@ type DecisionResponse struct {
 
 // DecisionState defines model for DecisionState.
 type DecisionState struct {
+	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+	// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+	// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+	// pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+	// invalid_request, as it does a malformed image.
+	Images *DecisionImages `json:"images,omitempty"`
+
 	// Questions Named questions about this state; answers keep this order.
 	Questions map[string]Question `json:"questions"`
 
@@ -690,11 +711,14 @@ type ModelCard struct {
 	Licence              *string        `json:"licence"`
 	Limits               *ModelLimits   `json:"limits,omitempty"`
 	ManifestSha256       *string        `json:"manifest_sha256,omitempty"`
-	ModelSha256          *string        `json:"model_sha256,omitempty"`
-	Object               string         `json:"object"`
-	OwnedBy              *string        `json:"owned_by,omitempty"`
-	Parameters           *int           `json:"parameters,omitempty"`
-	Plugins              *[]PluginInfo  `json:"plugins,omitempty"`
+
+	// Modalities Decision models only; the inputs a decisions request may carry (`text`, and `image` for `images`).
+	Modalities  *[]string     `json:"modalities,omitempty"`
+	ModelSha256 *string       `json:"model_sha256,omitempty"`
+	Object      string        `json:"object"`
+	OwnedBy     *string       `json:"owned_by,omitempty"`
+	Parameters  *int          `json:"parameters,omitempty"`
+	Plugins     *[]PluginInfo `json:"plugins,omitempty"`
 
 	// Presets Questions the model defines (Question.preset).
 	Presets       *[]string      `json:"presets,omitempty"`
@@ -726,7 +750,15 @@ type ModelHealthStatus string
 
 // ModelLimits defines model for ModelLimits.
 type ModelLimits struct {
-	MaxInputTokens *int `json:"max_input_tokens,omitempty"`
+	// ImageMaxBytes Models that read images; the most bytes one supplied image may have.
+	ImageMaxBytes *int `json:"image_max_bytes,omitempty"`
+
+	// ImageMaxPixels Models that read images; the most pixels the model reads of one image (larger images are resized).
+	ImageMaxPixels *int `json:"image_max_pixels,omitempty"`
+
+	// ImageSourceMaxPixels Models that read images; the most pixels one supplied image may have.
+	ImageSourceMaxPixels *int `json:"image_source_max_pixels,omitempty"`
+	MaxInputTokens       *int `json:"max_input_tokens,omitempty"`
 
 	// MaxInputs Most inputs or documents one classify, embeddings or rerank request may carry.
 	MaxInputs  *int `json:"max_inputs,omitempty"`
@@ -971,7 +1003,10 @@ type ResponseMeta struct {
 	Engine      *string  `json:"engine,omitempty"`
 
 	// Head The head that produced a classify result.
-	Head        *string  `json:"head,omitempty"`
+	Head *string `json:"head,omitempty"`
+
+	// ModelId The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
+	ModelId     *string  `json:"model_id,omitempty"`
 	ModelSha256 *string  `json:"model_sha256,omitempty"`
 	Numerics    *string  `json:"numerics,omitempty"`
 	Profile     *string  `json:"profile,omitempty"`

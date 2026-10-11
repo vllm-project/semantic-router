@@ -21,7 +21,7 @@ translation:
 | 某次推理调用需要校验。 | 运行已配置的有界级联、评审组或多模型工作流。 | 决定如何在整个任务中使用返回的答案。 |
 | 敏感工作需要经过批准的执行路径。 | 对已配置的本地或远程后端应用显式资格与数据处理策略。 | 在工具、任务存储和其他外部服务中执行同一边界。 |
 
-从 [agent harness 指南](/zh-Hans/docs/installation/agent-harness)和 [Agent Routing 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md)开始。
+从 [agent harness 指南](../installation/agent-harness)和 [Agent Routing 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md)开始。
 
 ## 部署环境
 

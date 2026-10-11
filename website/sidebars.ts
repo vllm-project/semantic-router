@@ -83,6 +83,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/action',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
@@ -172,6 +173,13 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
                 'tutorials/algorithm/looper/workflows',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'System One',
+              items: [
+                'tutorials/algorithm/native/cascade',
               ],
             },
           ],

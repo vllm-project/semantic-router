@@ -26,7 +26,7 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 
 内置功能会自动解析模型默认值。准备配置时，Router 只为实际模型使用方和显式发布的原生模型启动受管 worker；
 未使用的 deployment 不加载权重。启动会等待所需受管模型就绪；附加模型遵循
-[部署就绪规则](/docs/model-runtime/deploy#when-a-model-is-not-ready)。
+[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 之后如果运行时变慢或崩溃，信号截止时间会限制请求等待的时长。
 未完成的信号按配置的错误策略或未扫描策略处理。
 

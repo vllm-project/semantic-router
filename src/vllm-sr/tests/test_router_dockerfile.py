@@ -9,6 +9,7 @@ import tomllib
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROUTER_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 START_ROUTER = REPO_ROOT / "src" / "vllm-sr" / "start-router.sh"
+MODEL_RUNTIME = REPO_ROOT / "src" / "model-runtime"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
 STAGES = (
     "router-build",
@@ -142,6 +143,26 @@ def test_runtime_dependencies_come_from_the_runtime_package() -> None:
     assert "pip install --no-deps /tmp/model-runtime" in runtime
     assert "ARG MODEL_RUNTIME_EXTRAS=multimodal" in runtime
     assert "==" not in runtime
+    assert "source=src/model-runtime/requirements-lock.txt" in runtime
+    assert "pip install -c /tmp/requirements-lock.txt -r" in runtime
+
+
+def test_runtime_lock_pins_every_dependency_but_pytorch() -> None:
+    def name(requirement: str) -> str:
+        found = re.match(r"[A-Za-z0-9._-]+", requirement)
+        assert found, requirement
+        return re.sub(r"[-_.]+", "-", found.group()).lower()
+
+    project = tomllib.loads((MODEL_RUNTIME / "pyproject.toml").read_text())["project"]
+    wanted = {
+        name(dep)
+        for dep in project["dependencies"]
+        + project["optional-dependencies"]["multimodal"]
+    }
+    lines = (MODEL_RUNTIME / "requirements-lock.txt").read_text().splitlines()
+    pinned = {name(line) for line in lines if "==" in line and not line.startswith("#")}
+
+    assert wanted - pinned == {"torch"}
 
 
 def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:

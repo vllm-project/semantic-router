@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
 // Registry is the narrow runtime-owned dependency seam shared by startup,
@@ -34,6 +35,7 @@ type Registry struct {
 	contextCompression     *contextcompression.Service
 	compressionRecovery    contextcompression.RecoveryStore
 	plugins                pluginruntime.Capabilities
+	nativeRouter           systemone.Router
 	configActivation       ConfigActivation
 	configRejection        *ConfigActivation
 	configSnapshot         *configsnapshot.Snapshot
@@ -67,6 +69,7 @@ type RouterRuntimeSnapshot struct {
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
 	Plugins               pluginruntime.Capabilities
+	NativeRouter          systemone.Router
 }
 
 func (r *Registry) ContextCompression() (
@@ -456,6 +459,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.contextCompression = snapshot.ContextCompression
 	r.compressionRecovery = snapshot.CompressionRecovery
 	r.plugins = snapshot.Plugins
+	r.nativeRouter = snapshot.NativeRouter
 	r.mu.Unlock()
 	r.notifyConfig(snapshot.Config)
 }
