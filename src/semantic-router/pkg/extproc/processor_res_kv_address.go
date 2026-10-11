@@ -60,6 +60,9 @@ func shouldWriteKVAddressRegistry(ctx *RequestContext) bool {
 	if !isTrustedStickySessionProvenance(ctx.SessionProvenance) {
 		return false
 	}
+	if strings.TrimSpace(ctx.AuthenticatedPrincipal) == "" {
+		return false
+	}
 	if routingSessionStateKey(ctx) == "" {
 		return false
 	}
@@ -88,14 +91,13 @@ func kvAddressRecordFromContext(ctx *RequestContext) (kvtransfer.AddressRecord, 
 	}, true
 }
 
+// kvAddressNamespace hard-partitions private session addresses by authenticated
+// principal. Response-cache scope (global/tenant/team) intentionally must not
+// be reused here: those scopes are shared across trusted users and would let
+// one session ID overwrite another user's source pod.
 func kvAddressNamespace(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
 	}
-	scope := responseCacheScope(ctx)
-	scopeIdentity := responseCacheScopeIdentity(ctx)
-	if scopeIdentity != "" {
-		scopeIdentity = scope + ":" + scopeIdentity
-	}
-	return cache.UserScopeNamespace(scopeIdentity)
+	return cache.UserScopeNamespace(ctx.AuthenticatedPrincipal)
 }

@@ -3,7 +3,6 @@ package extproc
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -51,8 +50,6 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	headerMutation := buildResponseHeaderMutation(ctx, outcome.isSuccessful)
 	headerMutation = mergeHeaderMutations(headerMutation, r.runResponseExtensions(ctx, outcome.statusCode))
 	headerMutation = mergeHeaderMutations(headerMutation, buildResponseStreamingMutation(ctx, outcome))
-	headerMutation = mergeHeaderMutations(headerMutation,
-		&ext_proc.HeaderMutation{RemoveHeaders: []string{headers.VSRUpstreamHost}})
 	// Response headers are sent before the body is decoded. A same-format Chat
 	// provider may require canonical re-encoding after its decorations are
 	// dropped, so do not commit the provider's original byte count.

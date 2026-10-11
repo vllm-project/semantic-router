@@ -24,10 +24,50 @@ func TestCaptureUpstreamEndpointAddressFromResponseHeader(t *testing.T) {
 	}
 }
 
+func TestCaptureUpstreamEndpointAddressFromExtProcNamespace(t *testing.T) {
+	ctx := &RequestContext{}
+	attrPod := "10.0.2.9:8000"
+	attrs := map[string]*structpb.Struct{
+		envoyExtProcAttributeNamespace: {
+			Fields: map[string]*structpb.Value{
+				envoyUpstreamAddressAttribute: structpb.NewStringValue(attrPod),
+			},
+		},
+	}
+
+	captureUpstreamEndpointAddress(ctx, nil, attrs)
+
+	if ctx.UpstreamBackendAddress != attrPod {
+		t.Fatalf("UpstreamBackendAddress = %q, want namespaced attribute %q", ctx.UpstreamBackendAddress, attrPod)
+	}
+}
+
+func TestCaptureUpstreamEndpointAddressPrefersNamespacedAttributeOverHeader(t *testing.T) {
+	ctx := &RequestContext{}
+	attrPod := "10.0.2.9:8000"
+	headerPod := "10.0.1.7:8000"
+	attrs := map[string]*structpb.Struct{
+		envoyExtProcAttributeNamespace: {
+			Fields: map[string]*structpb.Value{
+				envoyUpstreamAddressAttribute: structpb.NewStringValue(attrPod),
+			},
+		},
+	}
+
+	captureUpstreamEndpointAddress(ctx, &core.HeaderMap{Headers: []*core.HeaderValue{
+		{Key: headers.VSRUpstreamHost, Value: headerPod},
+	}}, attrs)
+
+	if ctx.UpstreamBackendAddress != attrPod {
+		t.Fatalf("UpstreamBackendAddress = %q, want namespaced attribute %q over header %q", ctx.UpstreamBackendAddress, attrPod, headerPod)
+	}
+}
+
 func TestCaptureUpstreamEndpointAddressPrefersAttributesOverHeader(t *testing.T) {
 	ctx := &RequestContext{}
 	attrPod := "10.0.2.9:8000"
 	headerPod := "10.0.1.7:8000"
+	// Legacy top-level shape still works when present.
 	attrs := map[string]*structpb.Struct{
 		envoyUpstreamAddressAttribute: {
 			Fields: map[string]*structpb.Value{

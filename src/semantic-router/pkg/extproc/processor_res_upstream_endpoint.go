@@ -9,7 +9,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
-const envoyUpstreamAddressAttribute = "upstream.address"
+const (
+	// Envoy nests response_attributes under this filter namespace in ProcessingRequest.attributes.
+	envoyExtProcAttributeNamespace = "envoy.filters.http.ext_proc"
+	envoyUpstreamAddressAttribute  = "upstream.address"
+)
 
 func captureUpstreamEndpointAddress(
 	ctx *RequestContext,
@@ -32,7 +36,38 @@ func upstreamAddressFromAttributes(attributes map[string]*structpb.Struct) strin
 	if len(attributes) == 0 {
 		return ""
 	}
+	// Prefer Envoy's namespaced ext_proc Struct (actual ProcessingRequest shape).
+	if addr := stringFieldFromStruct(attributes[envoyExtProcAttributeNamespace], envoyUpstreamAddressAttribute); addr != "" {
+		return addr
+	}
+	// Legacy / alternate shape: top-level attributes["upstream.address"].
 	return strings.TrimSpace(structAttributeString(attributes, envoyUpstreamAddressAttribute))
+}
+
+func stringFieldFromStruct(st *structpb.Struct, key string) string {
+	if st == nil || key == "" {
+		return ""
+	}
+	v, ok := st.Fields[key]
+	if !ok || v == nil {
+		return ""
+	}
+	if s := strings.TrimSpace(v.GetStringValue()); s != "" {
+		return s
+	}
+	if nested := v.GetStructValue(); nested != nil {
+		if valueField, ok := nested.Fields["value"]; ok {
+			if s := strings.TrimSpace(valueField.GetStringValue()); s != "" {
+				return s
+			}
+		}
+		for _, field := range nested.Fields {
+			if s := strings.TrimSpace(field.GetStringValue()); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 func structAttributeString(attributes map[string]*structpb.Struct, key string) string {
