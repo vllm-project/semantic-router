@@ -397,9 +397,8 @@ ROUTE math_route {
 	if d.Priority != 100 {
 		t.Errorf("expected priority 100, got %d", d.Priority)
 	}
-	if d.Rules.Operator != "AND" || len(d.Rules.Conditions) != 1 ||
-		d.Rules.Conditions[0].Type != "domain" || d.Rules.Conditions[0].Name != "math" {
-		t.Errorf("expected rules AND([domain/math]), got operator=%s conditions=%d", d.Rules.Operator, len(d.Rules.Conditions))
+	if d.Rules.Operator != "" || d.Rules.Type != "domain" || d.Rules.Name != "math" {
+		t.Errorf("expected rules leaf domain/math, got %+v", d.Rules)
 	}
 	if len(d.ModelRefs) != 1 {
 		t.Fatalf("expected 1 model ref, got %d", len(d.ModelRefs))
@@ -1018,12 +1017,8 @@ ROUTE urgent_ai_route {
 	if mathDec.Priority != 100 {
 		t.Errorf("round-trip: math_route priority = %d, want 100", mathDec.Priority)
 	}
-	if mathDec.Rules.Operator != "AND" || len(mathDec.Rules.Conditions) != 1 {
-		t.Errorf("round-trip: math_route rules should be AND with 1 condition, got operator=%q conditions=%d",
-			mathDec.Rules.Operator, len(mathDec.Rules.Conditions))
-	} else if mathDec.Rules.Conditions[0].Type != "domain" || mathDec.Rules.Conditions[0].Name != "math" {
-		t.Errorf("round-trip: math_route rules condition = {type: %q, name: %q}, want {type: domain, name: math}",
-			mathDec.Rules.Conditions[0].Type, mathDec.Rules.Conditions[0].Name)
+	if mathDec.Rules.Operator != "" || mathDec.Rules.Type != "domain" || mathDec.Rules.Name != "math" {
+		t.Errorf("round-trip: math_route rules should be domain/math leaf, got %+v", mathDec.Rules)
 	}
 	if len(mathDec.ModelRefs) != 1 {
 		t.Fatalf("round-trip: math_route expected 1 model ref, got %d", len(mathDec.ModelRefs))
@@ -1111,12 +1106,11 @@ ROUTE math_route {
 	}
 	rules := cfg.Decisions[0].Rules
 
-	// Single WHEN domain("math") should be wrapped in AND for Python CLI compatibility
-	if rules.Operator != "AND" || len(rules.Conditions) != 1 {
-		t.Fatalf("single WHEN should produce AND with 1 condition, got operator=%q with %d conditions",
-			rules.Operator, len(rules.Conditions))
+	// A single WHEN signal keeps the canonical leaf shape and one-node budget.
+	if rules.Operator != "" || len(rules.Conditions) != 0 {
+		t.Fatalf("single WHEN should produce a bare leaf, got %+v", rules)
 	}
-	leaf := rules.Conditions[0]
+	leaf := rules
 	if leaf.Type != "domain" || leaf.Name != "math" {
 		t.Errorf("leaf node = {type: %q, name: %q}, want {type: domain, name: math}", leaf.Type, leaf.Name)
 	}
@@ -1132,11 +1126,10 @@ ROUTE math_route {
 	}
 
 	rtRules := rt.Decisions[0].Rules
-	if rtRules.Operator != "AND" || len(rtRules.Conditions) != 1 {
-		t.Fatalf("after round-trip: expected AND with 1 condition, got operator=%q with %d conditions",
-			rtRules.Operator, len(rtRules.Conditions))
+	if rtRules.Operator != "" || len(rtRules.Conditions) != 0 {
+		t.Fatalf("after round-trip: expected bare leaf, got %+v", rtRules)
 	}
-	rtLeaf := rtRules.Conditions[0]
+	rtLeaf := rtRules
 	if rtLeaf.Type != "domain" || rtLeaf.Name != "math" {
 		t.Errorf("after round-trip: leaf = {type: %q, name: %q}, want {type: domain, name: math}",
 			rtLeaf.Type, rtLeaf.Name)
@@ -5162,7 +5155,7 @@ ROUTE reasoning_route {
 	if got := cfg.Projections.Mappings[0].Outputs[0].Name; got != "balance_medium" {
 		t.Fatalf("first projection output = %q, want balance_medium", got)
 	}
-	if got := cfg.Decisions[0].Rules.Conditions[0].Type; got != "projection" {
+	if got := cfg.Decisions[0].Rules.Type; got != "projection" {
 		t.Fatalf("compiled route leaf type = %q, want projection", got)
 	}
 }

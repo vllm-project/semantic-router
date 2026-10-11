@@ -60,14 +60,9 @@ func (c *Compiler) compileRouteRules(r *RouteDecl) config.RuleCombination {
 	if r.When == nil {
 		return config.RuleCombination{Operator: "AND", Conditions: []config.RuleNode{}}
 	}
-	rules := c.compileBoolExpr(r.When)
-	if rules.Operator == "" && rules.Type != "" {
-		return config.RuleCombination{
-			Operator:   "AND",
-			Conditions: []config.RuleNode{rules},
-		}
-	}
-	return rules
+	// A single signal is already a complete rule. An artificial AND wrapper
+	// would change its depth and node count when a canonical leaf is edited.
+	return c.compileBoolExpr(r.When)
 }
 
 func (c *Compiler) compileRouteEmits(r *RouteDecl, decision *config.Decision) {

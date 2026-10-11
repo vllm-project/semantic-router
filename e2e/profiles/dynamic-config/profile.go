@@ -142,6 +142,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer routerInsta
 		Namespace:   routerNamespace,
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
+			// Exercise controller rejection below IntelligentRoute's 50-child cap.
+			"config.global.router.decision_rule_limits.max_nodes": "8",
 			"gateway.mode":     "extproc",
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,

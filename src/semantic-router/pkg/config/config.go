@@ -89,21 +89,22 @@ type RouterConfig struct {
 	RoutingFragmentOnly bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
-	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
-	InlineModels     `yaml:",inline"`
-	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
-	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig            `yaml:"memory"`
-	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
-	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
-	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
-	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
-	Looper           LooperConfig            `yaml:"looper,omitempty"`
-	LLMObservability `yaml:",inline"`
-	APIServer        `yaml:",inline"`
-	RouterOptions    `yaml:",inline"`
-	RouterLearning   RouterLearningConfig `yaml:"learning,omitempty"`
+	DecisionRuleLimits DecisionRuleLimits `yaml:"decision_rule_limits,omitempty"`
+	RoutingDefaults    RoutingDefaults    `yaml:"-" json:"-"`
+	InlineModels       `yaml:",inline"`
+	ExternalModels     []ExternalModelConfig `yaml:"external_models,omitempty"`
+	SemanticCache      `yaml:"semantic_cache"`
+	Memory             MemoryConfig            `yaml:"memory"`
+	VectorStore        *VectorStoreConfig      `yaml:"vector_store,omitempty"`
+	ToolSessions       *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
+	ResponseAPI        ResponseAPIConfig       `yaml:"response_api"`
+	RouterReplay       RouterReplayConfig      `yaml:"router_replay"`
+	StartupStatus      StartupStatusConfig     `yaml:"startup_status"`
+	Looper             LooperConfig            `yaml:"looper,omitempty"`
+	LLMObservability   `yaml:",inline"`
+	APIServer          `yaml:",inline"`
+	RouterOptions      `yaml:",inline"`
+	RouterLearning     RouterLearningConfig `yaml:"learning,omitempty"`
 
 	// Dynamic user-facing routing configuration. Entrypoints and Recipes are
 	// the normalized multi-recipe state produced by the canonical loader; the

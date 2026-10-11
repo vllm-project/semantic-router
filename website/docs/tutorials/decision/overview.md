@@ -62,6 +62,38 @@ anywhere except a root `AND`, which is the explicit match-all form. Errors name
 the decision and the node path, for example
 `decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`.
 
+Each decision also has a maximum rule-tree depth and total node count, checked
+when configuration loads. The defaults are **16 levels** and **256 nodes**.
+The root is at depth 1. Every operator and every leaf counts as one node;
+repeated references count separately. An empty or omitted root is one match-all
+node. For example, `AND(keyword, keyword)` has depth 2 and three nodes.
+
+Configure the budgets for all decisions, including every recipe, under `global`:
+
+```yaml
+global:
+  router:
+    decision_rule_limits:
+      max_depth: 16
+      max_nodes: 256
+```
+
+Either setting can be raised or lowered independently; an omitted setting keeps
+its default. Values must be literal positive integers. Zero, negative values,
+fractions, quoted numbers, and environment-reference strings are rejected.
+Each decision gets its own budget. These limits do not apply to complexity
+composers. A deeper or larger accepted tree requires more processing, so raise
+limits only for a needed rule structure.
+
+An oversized tree rejects the entire candidate configuration with the recipe,
+decision, offending path, and limit in the error, for example:
+`routing recipe "support": decision "billing": rules.conditions[255]: node count 257 exceeds max_nodes=256`.
+An invalid reload keeps the previous active configuration. CLI, Dashboard, and
+Kubernetes configuration paths use the same budgets. Standalone DSL fragments
+use the defaults; compiling against a base configuration uses that document's
+limits. The operator exposes the settings at `spec.config.decision_rule_limits`.
+IntelligentRoute's separate 50-child CRD restriction still applies.
+
 Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
 `Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
 When the final result is still unknown, `rules.on_unknown` chooses `no_match`,

@@ -1457,6 +1457,21 @@ spec:
                     required:
                     - deployment
                     type: object
+                  decision_rule_limits:
+                    description: DecisionRuleLimits bounds each decision's rule tree
+                      across all recipes.
+                    properties:
+                      max_depth:
+                        default: 16
+                        description: MaxDepth defaults to 16 when omitted.
+                        minimum: 1
+                        type: integer
+                      max_nodes:
+                        default: 256
+                        description: MaxNodes defaults to 256 when omitted.
+                        minimum: 1
+                        type: integer
+                    type: object
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,
                       etc.)

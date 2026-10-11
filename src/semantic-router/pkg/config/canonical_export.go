@@ -297,11 +297,12 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 	global := &CanonicalGlobal{
 		Router: CanonicalRouterGlobal{
-			Enabled:           cfg.RouterEnabled,
-			ConfigSource:      normalizedConfigSource(cfg.ConfigSource),
-			Strategy:          cfg.RoutingDefaults.Strategy,
-			ListBackendModels: cfg.ListBackendModels,
-			ClearRouteCache:   cfg.ClearRouteCache,
+			DecisionRuleLimits: cfg.DecisionRuleLimits,
+			Enabled:            cfg.RouterEnabled,
+			ConfigSource:       normalizedConfigSource(cfg.ConfigSource),
+			Strategy:           cfg.RoutingDefaults.Strategy,
+			ListBackendModels:  cfg.ListBackendModels,
+			ClearRouteCache:    cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
 				Enabled:    cfg.StreamedBodyMode,
 				MaxBytes:   cfg.MaxStreamedBodyBytes,

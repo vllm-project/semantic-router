@@ -125,7 +125,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const revision = sourceRevision
     set({ loading: true })
     try {
-      const result: CompileResult = await dslCompiler.compile(dslSource)
+      const result: CompileResult = await dslCompiler.compile(dslSource, baseConfigYaml)
 
       if (requestId !== compileRequestId || revision !== sourceRevision) return
       const compiledYaml = result.yaml || ''
@@ -182,7 +182,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const revision = sourceRevision
     const requestId = ++analysisRequestId
     try {
-      const result: ValidateResult = await dslCompiler.validate(dslSource)
+      const result: ValidateResult = await dslCompiler.validate(dslSource, get().baseConfigYaml)
       if (requestId !== analysisRequestId || revision !== sourceRevision) return
       set({
         diagnostics: result.diagnostics || [],
@@ -211,7 +211,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const revision = sourceRevision
     const requestId = ++analysisRequestId
     try {
-      const result = await dslCompiler.parseAST(dslSource)
+      const result = await dslCompiler.parseAST(dslSource, get().baseConfigYaml)
       if (requestId !== analysisRequestId || revision !== sourceRevision) return
       set({
         ast: result.ast || null,
@@ -252,7 +252,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const requestId = ++analysisRequestId
     const revision = sourceRevision
     try {
-      const result = await dslCompiler.format(dslSource)
+      const result = await dslCompiler.format(dslSource, get().baseConfigYaml)
       if (requestId !== analysisRequestId || revision !== sourceRevision) return
       if (result.error) {
         set({ compileError: result.error, diagnostics: [] })

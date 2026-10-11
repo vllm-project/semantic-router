@@ -7,6 +7,19 @@ describe('page-owned compiler transport', () => {
     vi.unstubAllGlobals()
   })
 
+  it('sends enclosing config and keeps distinct rule budgets out of the same cache entry', async () => {
+    const resolve: Array<(value: Response) => void> = []
+    const fetchMock = vi.fn((_path, _options: RequestInit) => new Promise<Response>((yes) => resolve.push(yes)))
+    vi.stubGlobal('fetch', fetchMock)
+    const baseYaml = 'global:\n  router:\n    decision_rule_limits:\n      max_depth: 32\n'
+    const fragment = dslCompiler.compile('draft')
+    const document = dslCompiler.compile('draft', baseYaml)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({ source: 'draft', baseYaml })
+    resolve.forEach((yes) => yes(new Response(JSON.stringify({ yaml: 'routing: {}', diagnostics: [] }))))
+    await Promise.all([fragment, document])
+  })
+
   it('aborts requests on departure and preserves deduplication for the next visit', async () => {
     const signals: AbortSignal[] = []
     const resolve: Array<(value: Response) => void> = []

@@ -1969,6 +1969,10 @@ recipes:
 
 global:
   router:
+    # Per-decision budgets count the root at depth one and include all nodes.
+    decision_rule_limits:
+      max_depth: 16
+      max_nodes: 256
     # Engine mode keeps native serving and disables routing consumers.
     enabled: true
     config_source: file

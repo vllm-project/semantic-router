@@ -76,3 +76,30 @@ func TestDSLEditorBoundsAndDiagnostics(t *testing.T) {
 		t.Fatal("unbounded compilation concurrency")
 	}
 }
+
+func TestDSLEditorCarriesEnclosingRuleLimits(t *testing.T) {
+	source := `SIGNAL keyword urgent { operator: "OR" keywords: ["urgent"] }
+ROUTE bounded { PRIORITY 1 WHEN ` + strings.Repeat("NOT ", 16) + `keyword("urgent") MODEL "qwen" }`
+	for _, operation := range []string{"compile", "validate", "parse", "format"} {
+		for _, base := range []string{"", "global:\n  router:\n    decision_rule_limits:\n      max_depth: 32\n"} {
+			body, _ := json.Marshal(map[string]string{"source": source, "baseYaml": base})
+			response := httptest.NewRecorder()
+			DSLEditorHandler(operation)(response, httptest.NewRequest("POST", "/api/dsl/"+operation, strings.NewReader(string(body))))
+			if response.Code != 200 {
+				t.Fatal(response.Code, response.Body.String())
+			}
+			var result struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if base == "" && !strings.Contains(result.Error, "max_depth=16") {
+				t.Fatalf("%s did not apply standalone defaults: %s", operation, result.Error)
+			}
+			if base != "" && result.Error != "" {
+				t.Fatalf("%s ignored enclosing override: %s", operation, result.Error)
+			}
+		}
+	}
+}

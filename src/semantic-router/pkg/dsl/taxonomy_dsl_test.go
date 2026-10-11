@@ -105,7 +105,7 @@ func assertCompiledKBDecision(t *testing.T, cfg *config.RouterConfig) {
 	if len(cfg.Decisions) != 1 {
 		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
 	}
-	cond := cfg.Decisions[0].Rules.Conditions[0]
+	cond := cfg.Decisions[0].Rules
 	if cond.Type != "kb" || cond.Name != "privacy_policy" {
 		t.Errorf("WHEN condition = %+v", cond)
 	}
