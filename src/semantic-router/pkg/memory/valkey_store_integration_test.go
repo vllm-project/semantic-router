@@ -4,6 +4,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -609,6 +610,52 @@ func TestValkeyStoreInteg_DuplicateKeys(t *testing.T) {
 	retrieved, err := store.Get(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, "First version", retrieved.Content)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_ConcurrentDuplicateID(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+
+	const writers = 12
+	id := fmt.Sprintf("mem_concurrent_dup_%d", time.Now().UnixNano())
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- store.Store(ctx, &Memory{
+				ID:      id,
+				Type:    MemoryTypeSemantic,
+				Content: fmt.Sprintf("complete concurrent memory %d", i),
+				UserID:  fmt.Sprintf("concurrent_user_%d", i),
+			})
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	duplicates := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, errValkeyMemoryAlreadyExists):
+			duplicates++
+		default:
+			t.Errorf("unexpected store error: %v", err)
+		}
+	}
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, writers-1, duplicates)
+
+	stored, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Contains(t, stored.Content, "complete concurrent memory ")
+	assert.NotEmpty(t, stored.UserID)
+	assert.NotEmpty(t, stored.Embedding)
 }
 
 // ---------------------------------------------------------------------------
