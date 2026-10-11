@@ -24,7 +24,7 @@ import { ArticleVideo } from '@site/src/components/ArticleMedia';
 
 A decision made on the Mac has no per-call cost and no network round trip, and the pull request, web page or video never leaves the machine. That fits alongside vLLM-SR: routine decisions can be answered on the device, and the ones that need a bigger model can go to the router.
 
-[**Get the Core ML models →**](https://huggingface.co/FluidInference/d3-coreml) · [**Swift runtime →**](https://github.com/FluidInference/FluidUse)
+[**Get the Core ML models →**](https://huggingface.co/FluidInference/d3-coreml) · [**Swift runtime →**](https://github.com/FluidInference/FluidUse) · [**Watch the demo on X →**](https://x.com/Alex_tra_memory/status/2109343807854493724)
 
 <!-- truncate -->
 
@@ -91,5 +91,7 @@ On Core ML each look takes **1.1 s, against 2.4 s for PyTorch on the same Mac**.
 ## Try it
 
 The Core ML models for all three sizes are in [FluidInference/d3-coreml](https://huggingface.co/FluidInference/d3-coreml), and each folder has a Python host built on coremltools. For Swift apps, `D3Manager` in [FluidUse](https://github.com/FluidInference/FluidUse) downloads a model and answers requests.
+
+The PR triage demo is also [on X](https://x.com/Alex_tra_memory/status/2109343807854493724).
 
 Thanks to the vLLM Semantic Router team for early access to Decision 3.0.
