@@ -64,6 +64,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
 | [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
+| [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
 | [`vllm-sr config router`](#vllm-sr-config-router) | Print the canonical router configuration. |
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
@@ -828,6 +829,29 @@ Validate and plan an exact remote mutation without changing the Router.
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr config propose` {#vllm-sr-config-propose}
+
+```text
+Usage: vllm-sr config propose [OPTIONS]
+```
+
+Print a reviewable config proposal. This command does not apply it.
+
+Examples:
+
+```bash
+vllm-sr config propose --config config.yaml \
+    --intent selection.latency-aware --decision default-route
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
+| `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
+| `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr config rollback` {#vllm-sr-config-rollback}

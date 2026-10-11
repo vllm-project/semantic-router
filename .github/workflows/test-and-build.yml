@@ -40,6 +40,11 @@ jobs:
         with:
           version: ${{ env.HELM_VERSION }}
 
+      - name: Set up kubectl for offline deployment render tests
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.33.0
+
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 

@@ -22,11 +22,11 @@ REMOVED_FIELDS = {"precision", "custom_ops_profile", "compilation_cache_dir"}
 REMOVED_PROVIDERS = {"candle", "ort", "openvino"}
 
 
-def _config(global_config=None, routing=None, recipes=None):
+def _config(global_config=None, routing=None, recipes=None, providers=None):
     config = {
         "version": "v0.3",
         "listeners": [],
-        "providers": {"defaults": {"model": "general"}},
+        "providers": {"defaults": {"model": "general"}, **(providers or {})},
         "routing": {"modelCards": [{"name": "general"}], **(routing or {})},
         "global": global_config or {},
     }
@@ -894,7 +894,10 @@ def test_migrate_command_lists_changes_and_actions(tmp_path):
                             },
                         }
                     }
-                }
+                },
+                providers={
+                    "models": [{"name": "general", "provider_model_id": "gpt-4o-mini"}]
+                },
             )
         )
     )

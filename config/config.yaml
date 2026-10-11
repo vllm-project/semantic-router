@@ -722,6 +722,12 @@ routing:
         description: Request contains at least one audio content part.
         modality: audio
 
+    actions:
+      - name: explain
+        description: Describe code or answer a question without editing anything.
+      - name: fix
+        description: Repair a bug or a failing behavior.
+
     # Typed questions answered by a decision model through the built-in model
     # runtime (global.model_catalog.deployments, provider model_runtime).
     decision:

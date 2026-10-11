@@ -94,6 +94,7 @@ var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeClassifier, DisplayName: "Classifier", Collection: "classifiers", ObservationKey: "classifier", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
+	{Type: SignalTypeAction, DisplayName: "Action", Collection: "actions", ObservationKey: "action", DecisionReferenceable: true},
 	{Type: SignalTypeDecision, DisplayName: "Decision Model", Collection: "decision", ObservationKey: "decision", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 }
 

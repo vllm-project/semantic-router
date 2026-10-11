@@ -79,7 +79,6 @@ func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOut
 	if !outcome.isSuccessful && outcome.statusCode != 0 {
 		ctx.UpstreamSpan.SetStatus(codes.Error, "upstream request failed")
 	}
-
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
