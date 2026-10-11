@@ -241,7 +241,7 @@ func buildReplayRoutingRecord(
 		SignalConfidences:        cloneReplayFloat64Map(ctx.VSRSignalConfidences),
 		SignalErrorMatches:       cloneReplayBoolMap(ctx.VSRSignalErrorMatches),
 		SignalValues:             cloneReplayFloat64Map(ctx.VSRSignalValues),
-		ToolTrace:                buildReplayRequestToolTrace(ctx),
+		ToolTrace:                replayRequestToolTrace(ctx),
 		Streaming:                ctx.ExpectStreamingResponse,
 		FromCache:                ctx.VSRCacheHit,
 
@@ -281,16 +281,48 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
-	if ctx.SemanticRequest != nil {
+	suppressBody := replaySuppressesBody(ctx)
+	if ctx.SemanticRequest != nil && !suppressBody {
 		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
 			record.RequestBody = string(requestBody)
 		}
 	}
 
 	// Extract structured fields from neutral IR before recorder truncation.
-	record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(ctx.SemanticRequest)
+	// Tool definitions are operator-authored, not user content, so they are
+	// kept even when the prompt is suppressed (D3, #3566).
+	prompt, toolDefinitions := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	record.ToolDefinitions = toolDefinitions
+	if !suppressBody {
+		record.Prompt = prompt
+	}
 
 	return record
+}
+
+// replaySuppressesBody reports whether a masking route must not persist the
+// pre-mask request. Replay snapshots the neutral request before dispatch, so
+// the only safe option is to omit the body rather than store it raw (D3,
+// #3566).
+// replayRequestToolTrace drops the request trace on a masking route. It
+// carries user text and tool arguments and results, and every record is
+// written before masking runs -- including the Looper path and a failed
+// mask -- so suppression is the only option that cannot persist raw PII
+// (D3, #3566). The response trace is unaffected: the model only ever saw
+// masked content.
+func replayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
+	if replaySuppressesBody(ctx) {
+		return nil
+	}
+	return buildReplayRequestToolTrace(ctx)
+}
+
+func replaySuppressesBody(ctx *RequestContext) bool {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return false
+	}
+	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	return cfg != nil && cfg.Enabled
 }
 
 func replayDecisionMetadata(ctx *RequestContext) (int, int) {

@@ -74,6 +74,7 @@ external project.
 | Jailbreak error-handling demo | Experimental example | Classifier failure paths; not a secure production policy. |
 | Provider mocker and optional tiny-model smoke | Experimental example | Deterministic protocol fixtures; optional pinned Qwen3-0.6B real inference via the upstream llama.cpp server. |
 | PII remote backend demo | Experimental example | Remote token_spans.v1 PII backend and its on_error policy; not a qualified PII model or redaction policy. |
+| PII masking demo | Experimental example | Provider-bound masking across wire formats and its fail-closed path; not a qualified PII model or redaction policy. |
 | Observability demo | Experimental example | Prometheus, Grafana, alert, and Dashboard wiring; replace all example security and retention settings. |
 | Response jailbreak demo | Experimental example | Response-classifier window behavior; not a production guardrail model. |
 | Responses API Kubernetes demo | Experimental example | Redis persistence and restart behavior; not a hardened Redis deployment. |

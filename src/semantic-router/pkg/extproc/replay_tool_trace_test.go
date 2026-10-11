@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -151,4 +152,63 @@ func TestMergeReplayToolTracesDeduplicatesBoundaryStep(t *testing.T) {
 	merged := mergeReplayToolTraces(newReplayToolTrace([]routerreplay.ToolTraceStep{step}), newReplayToolTrace([]routerreplay.ToolTraceStep{step}))
 	require.NotNil(t, merged)
 	require.Len(t, merged.Steps, 1)
+}
+
+// Review #3806 (P1): suppressing RequestBody and Prompt was not enough. The
+// tool trace carries user text and tool arguments and results, and every
+// record is written before masking runs, so a masking route persisted
+// alice@example.com in the trace while the body and prompt were empty.
+func TestBuildReplayRoutingRecordSuppressesRequestTraceWhenMasking(t *testing.T) {
+	const raw = "alice@example.com"
+	newCtx := func(looper bool) *RequestContext {
+		return &RequestContext{
+			RequestID:     "req-mask-trace",
+			SourceFormat:  llmprotocol.OpenAIChatV1,
+			LooperRequest: looper,
+			SemanticRequest: &llmprotocol.Request{
+				Model: "auto",
+				Messages: []llmprotocol.Message{
+					{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+						{Kind: llmprotocol.ContentText, Text: "email " + raw},
+					}},
+					{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+						{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+							ID: "call_1", Name: "send", Arguments: `{"to":"` + raw + `"}`,
+						}},
+					}},
+					{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+						{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+							CallID:  "call_1",
+							Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "sent to " + raw}},
+						}},
+					}},
+				},
+			},
+		}
+	}
+
+	// Baseline: without the plugin the trace is recorded as before.
+	plain := buildReplayRoutingRecord(newCtx(false), "auto", "model-a", "route")
+	require.NotNil(t, plain.ToolTrace, "a route without masking must still record its trace")
+
+	maskingDecision := &config.Decision{Plugins: []config.DecisionPlugin{{
+		Type:          config.DecisionPluginMasking,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
+	}}}
+
+	// Both paths write through this one builder: the ordinary request path and
+	// the internal Looper path, which records before the final mask.
+	for _, looper := range []bool{false, true} {
+		ctx := newCtx(looper)
+		ctx.VSRSelectedDecision = maskingDecision
+
+		record := buildReplayRoutingRecord(ctx, "auto", "model-a", "route")
+
+		require.Nil(t, record.ToolTrace, "looper=%v: request tool trace must be suppressed", looper)
+		require.Empty(t, record.RequestBody, "looper=%v: request body must be suppressed", looper)
+		require.Empty(t, record.Prompt, "looper=%v: prompt must be suppressed", looper)
+		// Routing metadata still records; only request content is dropped.
+		require.Equal(t, "route", record.Decision)
+		require.Equal(t, "model-a", record.SelectedModel)
+	}
 }

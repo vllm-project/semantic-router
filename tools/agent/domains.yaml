@@ -857,6 +857,20 @@ profiles:
       - e2e/profiles/pii-remote-backend/**
       - deploy/kubernetes/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+  masking:
+    display_name: PII Masking
+    owner: e2e
+    coverage_role: pii-masking
+    selection: pr
+    paths:
+      - e2e/profiles/masking/**
+      - deploy/kubernetes/masking/**
+      - e2e/testcases/masking_cross_protocol.go
+      # The router surface this profile exists to protect, so a change to the
+      # masking path cannot land without exercising it.
+      - src/semantic-router/pkg/masking/**
+      - src/semantic-router/pkg/config/masking_plugin.go
+      - src/semantic-router/pkg/extproc/req_filter_masking.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e

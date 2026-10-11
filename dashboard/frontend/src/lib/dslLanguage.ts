@@ -92,6 +92,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'response_jailbreak',
     'tool_selection',
     'prompt_cache',
+    'masking',
   ],
 
   algoTypes: [
@@ -144,7 +145,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|tools|fast_response|request_params|response_jailbreak|tool_selection|prompt_cache)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|tools|fast_response|request_params|response_jailbreak|tool_selection|prompt_cache|masking)\b/,
         'type.plugin',
       ],
 
@@ -308,6 +309,7 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
   { label: 'response_jailbreak', detail: 'Response-side jailbreak screening plugin' },
   { label: 'prompt_cache', detail: 'Route-local Anthropic prompt-cache marker injection' },
+  { label: 'masking', detail: 'Provider-bound PII masking plugin' },
 ]
 
 const ALGO_TYPE_SUGGESTIONS = [

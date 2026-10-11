@@ -268,7 +268,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
 	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
-	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
+	appendTask("classifier.pii", false, c.usesPIIClassifier() && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.safety", false, c.usesRoutingSignalType(config.SignalTypeSafety), c.initializeSafetyClassifiers)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", false, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
@@ -291,6 +291,12 @@ func (c *Classifier) usesRoutingSignalType(signalType string) bool {
 // response-direction rule, and the response_jailbreak plugin is not a rule.
 func (c *Classifier) usesJailbreakClassifier() bool {
 	return c != nil && c.Config != nil && c.Config.UsesJailbreakClassifierInReachableRouting()
+}
+
+// usesPIIClassifier also counts the masking plugin, which usesRoutingSignalType
+// cannot see: masking scans at the dispatch boundary and declares no rule.
+func (c *Classifier) usesPIIClassifier() bool {
+	return c != nil && c.Config != nil && c.Config.UsesPIIClassifierInReachableRouting()
 }
 
 func (c *Classifier) ownsDefaultAPIConsumer() bool {

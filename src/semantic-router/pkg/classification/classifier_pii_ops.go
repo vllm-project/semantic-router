@@ -79,8 +79,10 @@ func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, 
 			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
 			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
 			piiTypes[translatedType] = true
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
+			// The raw value is the thing being protected; it must not reach a
+			// log sink at Info level (#3566).
+			logging.Infof("Detected PII entity: %s → %s at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Start, entity.End, entity.Confidence)
 		}
 	}
 
@@ -189,8 +191,10 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 			seen[key] = len(detections)
 			detections = append(detections, detection)
 
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, detection.Start, detection.End, entity.Confidence)
+			// The raw value is the thing being protected; it must not reach a
+			// log sink at Info level (#3566).
+			logging.Infof("Detected PII entity: %s → %s at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, detection.Start, detection.End, entity.Confidence)
 		}
 	}
 
