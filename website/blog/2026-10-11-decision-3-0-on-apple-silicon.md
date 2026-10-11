@@ -30,7 +30,9 @@ A decision made on the Mac has no per-call cost and no network round trip, and t
 
 ## How the conversion works
 
-Each d3 model is a Qwen3.5 backbone with a small FP32 readout that scores every option at the last prompt token, one forward pass per question. We split that into what Core ML is good at and what the host does cheaply:
+Each d3 model is a Qwen3.5 backbone with a small FP32 readout that scores every option at the last prompt token, one forward pass per question. Core ML runs the heavy part, the backbone and the vision tower. The host app runs the light steps around it: a table lookup for the embeddings, arithmetic for the positions, and one small matrix multiply for the readout.
+
+In detail:
 
 - **Text graph on Core ML.** The backbone takes token embeddings as input, so image and video tokens can be spliced in before it runs. Prompts are right-padded to a few fixed lengths. That is exact for d3: the Gated DeltaNet layers are causal and never see the padding, and the full-attention layers mask it out.
 - **Vision tower on Core ML.** It runs in fp32 with fixed patch counts and masked padding. For video, a block-diagonal mask keeps attention inside each frame pair, as upstream does.
