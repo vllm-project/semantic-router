@@ -68,9 +68,21 @@ zh-Hans	installation/upgrade-rollback.md
 zh-Hans	installation/valkey-memory.md
 zh-Hans	intro.md
 zh-Hans	model-runtime/choose-a-model.md
+zh-Hans	model-runtime/deploy.md
+zh-Hans	model-runtime/guides/classify.md
+zh-Hans	model-runtime/guides/decisions.md
+zh-Hans	model-runtime/guides/embeddings.md
+zh-Hans	model-runtime/guides/hallucination.md
+zh-Hans	model-runtime/guides/multimodal.md
+zh-Hans	model-runtime/guides/pii.md
+zh-Hans	model-runtime/guides/rerank.md
+zh-Hans	model-runtime/guides/safety.md
 zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
+zh-Hans	model-runtime/plugins.md
+zh-Hans	model-runtime/profiles.md
 zh-Hans	model-runtime/quickstart.md
+zh-Hans	model-runtime/reference.md
 zh-Hans	model-runtime/troubleshooting.md
 zh-Hans	overview/component-architecture.md
 zh-Hans	overview/goals.md
@@ -84,6 +96,7 @@ zh-Hans	proposals/agent-based-routing.md
 zh-Hans	proposals/agentic-memory.md
 zh-Hans	proposals/agentic-rag.md
 zh-Hans	proposals/batch-and-capacity-aware-routing.md
+zh-Hans	proposals/decision-ranking-semantics.md
 zh-Hans	proposals/deliberation-algorithms.md
 zh-Hans	proposals/hallucination-mitigation-milestone.md
 zh-Hans	proposals/index.md
@@ -99,6 +112,7 @@ zh-Hans	proposals/standalone-http-gateway.md
 zh-Hans	proposals/standalone-mode.md
 zh-Hans	proposals/unified-config-contract-v0-3.md
 zh-Hans	proposals/unified-model-catalog-and-evaluation-index.md
+zh-Hans	release-notes/router-memory-prometheus-labels.md
 zh-Hans	training/classifier-models.md
 zh-Hans	training/ml-model-selection.md
 zh-Hans	training/mmbert-32k-models.md
@@ -119,6 +133,7 @@ zh-Hans	tutorials/algorithm/looper/workflows.md
 zh-Hans	tutorials/algorithm/overview.md
 zh-Hans	tutorials/algorithm/selection/automix.md
 zh-Hans	tutorials/algorithm/selection/decision.md
+zh-Hans	tutorials/algorithm/selection/gmtrouter.md
 zh-Hans	tutorials/algorithm/selection/hybrid.md
 zh-Hans	tutorials/algorithm/selection/kmeans.md
 zh-Hans	tutorials/algorithm/selection/knn.md
@@ -158,6 +173,7 @@ zh-Hans	tutorials/plugin/hallucination.md
 zh-Hans	tutorials/plugin/header-mutation.md
 zh-Hans	tutorials/plugin/memory.md
 zh-Hans	tutorials/plugin/overview.md
+zh-Hans	tutorials/plugin/prompt-cache.md
 zh-Hans	tutorials/plugin/rag.md
 zh-Hans	tutorials/plugin/request-params.md
 zh-Hans	tutorials/plugin/response-cache.md
