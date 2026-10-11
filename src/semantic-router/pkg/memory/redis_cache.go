@@ -281,7 +281,7 @@ func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error 
 	pipe := c.client.TxPipeline()
 	pipe.Set(ctx, c.generationKey(userID), generation, c.fenceTTL())
 	pipe.Set(ctx, c.holdKey(userID), "1", cacheWriteHold)
-	if _, err := pipe.Exec(ctx); err != nil {
+	if _, err = pipe.Exec(ctx); err != nil {
 		logging.Warnf("Memory Redis cache generation bump failed for user %s, entries remain cached until TTL: %v", userID, err)
 		return err
 	}
@@ -296,7 +296,7 @@ func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error 
 	// Delete the tracked value keys together with the index set itself. DEL on a
 	// key that already expired via TTL is a harmless no-op, so stale index members
 	// (entries whose value key already expired) never cause errors.
-	if err := c.client.Del(ctx, append(keys, idxKey)...).Err(); err != nil {
+	if err = c.client.Del(ctx, append(keys, idxKey)...).Err(); err != nil {
 		logging.Warnf("Memory Redis cache invalidate failed for user %s, %d entries remain cached until TTL: %v", userID, len(keys), err)
 		return err
 	}
