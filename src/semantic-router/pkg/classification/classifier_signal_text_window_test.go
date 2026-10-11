@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -54,6 +55,34 @@ func TestPIISignalChunksUseSmallLanguageAwareWindows(t *testing.T) {
 	for _, span := range spans {
 		if units := securitySignalChunkUnits([]rune(span.Text)); units > piiSignalChunkBudget {
 			t.Fatalf("CJK PII chunk has %d budget units, limit %d", units, piiSignalChunkBudget)
+		}
+	}
+}
+
+func TestSecuritySignalChunksHoldEverySpanUpToTheOverlap(t *testing.T) {
+	for name, text := range map[string]string{
+		"english": strings.Repeat("The quarterly report covers revenue, staffing and the move to the new office. ", 60),
+		"cjk":     strings.Repeat("這是一段很長的中文提示內容，用來測試路由信號的取樣視窗。", 80),
+	} {
+		total := utf8.RuneCountInString(text)
+		for _, scan := range []struct{ budget, overlap int }{
+			{piiSignalChunkBudget, piiSignalChunkOverlapRunes},
+			{jailbreakSignalChunkBudget, jailbreakSignalOverlapRunes},
+		} {
+			var bounds [][2]int
+			for _, span := range securitySignalChunkSpans(text, scan.budget, scan.overlap) {
+				start := utf8.RuneCountInString(text[:span.StartByte])
+				bounds = append(bounds, [2]int{start, start + utf8.RuneCountInString(span.Text)})
+			}
+			if len(bounds) < 2 {
+				t.Fatalf("%s: expected several chunks at budget %d", name, scan.budget)
+			}
+			width := scan.overlap + 1
+			for at := 0; at+width <= total; at++ {
+				if !slices.ContainsFunc(bounds, func(b [2]int) bool { return b[0] <= at && at+width <= b[1] }) {
+					t.Fatalf("%s: a %d-rune span at rune %d is split across chunks at budget %d", name, width, at, scan.budget)
+				}
+			}
 		}
 	}
 }

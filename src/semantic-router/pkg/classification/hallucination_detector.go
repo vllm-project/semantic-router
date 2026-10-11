@@ -39,6 +39,8 @@ type HallucinationSpan struct {
 	ScoreAvailable bool    `json:"score_available"`
 }
 
+// The answer chunk budget is 256 estimated tokens so that the context and the
+// question keep the rest of the 512-token forward.
 const (
 	hallucinationAnswerChunkBudget  = 256 * 4
 	hallucinationAnswerOverlapRunes = 64
