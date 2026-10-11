@@ -25,7 +25,7 @@ from pathlib import Path
 
 from same_run_harness import host_identity
 
-RUN_SHAPE_KEYS = ("max_length", "batch_size")
+RUN_SHAPE_KEYS = ("max_length", "batch_size", "warmup_n")
 
 
 def output_of(record: dict) -> str:

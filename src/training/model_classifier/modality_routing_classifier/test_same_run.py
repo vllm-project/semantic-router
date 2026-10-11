@@ -67,7 +67,10 @@ def _forward_stats(p99_ms: float) -> dict:
 
 
 def _run_fixture(
-    row_ids: list[str], forward_p99_ms: float, max_length: int = 256
+    row_ids: list[str],
+    forward_p99_ms: float,
+    max_length: int = 256,
+    warmup_n: int = 20,
 ) -> dict:
     host = {"cpu_model": "Intel", "core_count": 8, "ram_gb": 15.4}
     return {
@@ -77,6 +80,7 @@ def _run_fixture(
             "binding": "hf",
             "max_length": max_length,
             "batch_size": 1,
+            "warmup_n": warmup_n,
             "peak_rss_mb": 100.0,
             "cpu_s": 1.0,
             "forward": _forward_stats(forward_p99_ms),
@@ -209,6 +213,40 @@ class PairShapeTests(unittest.TestCase):
         candidate = _run_fixture(["r1"], forward_p99_ms=10.0)
         del baseline["run"]["max_length"]
         del candidate["run"]["max_length"]
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("missing", str(ctx.exception))
+
+    def test_mismatched_warmup_n_refused(self) -> None:
+        """Regression (Xunzhuo round 6): warmup_n was missing from
+        RUN_SHAPE_KEYS entirely, so a --warmup 0 baseline could be paired
+        against a --warmup 20 candidate and still emit a confident p99
+        delta despite the two runs having different cold-start exposure.
+        """
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0, warmup_n=0)
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0, warmup_n=20)
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("different settings", str(ctx.exception))
+
+    def test_both_missing_warmup_n_refused(self) -> None:
+        """Same "both absent must not silently match" guard as
+        test_both_missing_max_length_refused, for warmup_n."""
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0)
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0)
+        del baseline["run"]["warmup_n"]
+        del candidate["run"]["warmup_n"]
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("missing", str(ctx.exception))
+
+    def test_one_sided_missing_warmup_n_refused(self) -> None:
+        """Regression (Xunzhuo round 6, his exact repro): "or even a
+        missing candidate value" -- only one side omits warmup_n, not both.
+        """
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0, warmup_n=0)
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0)
+        del candidate["run"]["warmup_n"]
         with self.assertRaises(SystemExit) as ctx:
             refuse_mismatched_shape(baseline, candidate)
         self.assertIn("missing", str(ctx.exception))
@@ -450,8 +488,7 @@ class ModelRuntimeAdapterTests(unittest.TestCase):
             hit_lines = [
                 line
                 for line in metrics_text.splitlines()
-                if line.startswith("vllm_srun_result_cache")
-                and 'outcome="hit"' in line
+                if line.startswith("vllm_srun_result_cache") and 'outcome="hit"' in line
             ]
             for line in hit_lines:
                 value = float(line.rsplit(" ", 1)[-1])
