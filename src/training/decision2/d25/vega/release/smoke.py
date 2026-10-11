@@ -28,7 +28,12 @@ import sys
 import time
 from pathlib import Path
 
-from d25.vega.release.examples import PROBES, QUICKSTART, QUICKSTART_IMAGE
+from d25.vega.release.examples import (
+    PROBES,
+    QUICKSTART,
+    QUICKSTART_IMAGE,
+    QUICKSTART_VIDEO,
+)
 
 
 def check_answer(question: dict, answer: dict) -> list[str]:
@@ -104,6 +109,15 @@ def quickstart(card: Path, replace: list[str]) -> dict:
                 for p in check_answer(q, image_answers.get(key, {}))
             ]
             result["image_answers"] = image_answers
+        if len(printed) > 2:
+            # The video example of a video-capable card: the third printed object.
+            video_answers = printed[2]
+            problems += [
+                p
+                for key, q in QUICKSTART_VIDEO["questions"].items()
+                for p in check_answer(q, video_answers.get(key, {}))
+            ]
+            result["video_answers"] = video_answers
         result.update(answers=answers, problems=problems, ok=not problems)
     return result
 

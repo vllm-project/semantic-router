@@ -45,6 +45,29 @@ QUICKSTART_IMAGE = {
     },
 }
 
+# The video example of a video-capable card: the repository's assets/example-video.mp4 (our own render: a blue
+# square moves from left to right, stops and turns green; 4 s, 640 x 360, 8 frames per second, MPEG-4) with the
+# request the video checks run (d25/vega/release/video_check.py).
+EXAMPLE_VIDEO = "assets/example-video.mp4"
+QUICKSTART_VIDEO = {
+    "state": "A short clip from a test camera.",
+    "questions": {
+        "direction": {
+            "type": "choice",
+            "instructions": "Which way does the square move?",
+            "criteria": {
+                "right": "From left to right",
+                "left": "From right to left",
+                "still": "It does not move",
+            },
+        },
+        "color_change": {
+            "type": "noul",
+            "instructions": "Does the square change color?",
+        },
+    },
+}
+
 # Edge cases of the product API: null descriptions, JSON state, noul criteria, a malformed question.
 PROBES = {
     "state": {
