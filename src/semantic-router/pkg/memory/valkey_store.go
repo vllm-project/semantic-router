@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -17,6 +18,40 @@ import (
 
 // errValkeyMemoryAlreadyExists is returned by Store when a memory with the same ID already exists.
 var errValkeyMemoryAlreadyExists = errors.New("valkey memory already exists")
+
+// valkeyCreateOperationField stores the operation ID of the create that built
+// the hash, so an ambiguous retry of the same Store call can recognize its own
+// completed write.
+const valkeyCreateOperationField = "create_op_id"
+
+// valkeyCreateScript performs the Router Memory uniqueness check and the
+// complete hash write as one atomic server-side operation.
+//
+// Writes used to reserve the ID with HSETNX and then write the hash in a
+// second command: a failure or lost response in between stranded an ID-only
+// partial record that every later create reported as a duplicate. Inside the
+// script the intermediate state is unreachable, so a create either writes the
+// complete hash or leaves no new record.
+//
+// The script carries a per-call operation ID (ARGV[1], reused across retries)
+// and returns 1 on success or -1 when another create owns the ID:
+//   - the stored operation ID matches ARGV[1]: this is the same call retrying
+//     after an error or a lost response; re-write the full hash idempotently.
+//   - the key exists with a different (or absent) operation ID: a separate
+//     create attempt for an existing ID, including under concurrent creators;
+//     fail without overwriting.
+const valkeyCreateScript = `
+local operation = redis.call('HGET', KEYS[1], '` + valkeyCreateOperationField + `')
+if operation == ARGV[1] then
+  redis.call('HSET', KEYS[1], unpack(ARGV, 2))
+  return 1
+end
+if redis.call('EXISTS', KEYS[1]) == 1 then
+  return -1
+end
+redis.call('HSET', KEYS[1], '` + valkeyCreateOperationField + `', ARGV[1], unpack(ARGV, 2))
+return 1
+`
 
 // ValkeyStore provides memory storage and retrieval using Valkey with the Search module.
 // Implements the Store interface with HASH-based storage and FT.SEARCH for vector similarity.
@@ -256,23 +291,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		return fmt.Errorf("failed to build hash fields: %w", err)
 	}
 
-	key := v.hashKey(memory.ID)
-
-	// Enforce uniqueness atomically using HSetNX as a reservation on the "id" field.
-	// HSetNX is atomic: if the key already exists, it returns false without writing.
-	// This avoids the TOCTOU race of a separate EXISTS check.
-	err = v.retryWithBackoff(ctx, func() error {
-		reserved, hsetNXErr := v.client.HSetNX(ctx, key, "id", memory.ID)
-		if hsetNXErr != nil {
-			return hsetNXErr
-		}
-		if !reserved {
-			return fmt.Errorf("%w: memory id=%s", errValkeyMemoryAlreadyExists, memory.ID)
-		}
-		_, hsetErr := v.client.HSet(ctx, key, fields)
-		return hsetErr
-	})
-	if err != nil {
+	if err := v.createMemory(ctx, memory.ID, fields, uuid.NewString()); err != nil {
 		status = "error"
 		if errors.Is(err, errValkeyMemoryAlreadyExists) {
 			return err
@@ -282,6 +301,30 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 
 	logging.Debugf("ValkeyStore.Store: successfully stored memory id=%s", memory.ID)
 	return nil
+}
+
+// createMemory performs the atomic create of one Router Memory hash.
+// operationID is generated once per Store call and reused across the internal
+// retries, so a retry after an error or a lost response recognizes its own
+// completed write instead of reporting a duplicate. Tests pass a chosen
+// operation ID to drive the ambiguous-retry behavior directly.
+func (v *ValkeyStore) createMemory(ctx context.Context, memoryID string, fields map[string]string, operationID string) error {
+	key := v.hashKey(memoryID)
+
+	return v.retryWithBackoff(ctx, func() error {
+		result, evalErr := v.client.CustomCommand(ctx, valkeyCreateScriptArgs(key, operationID, fields))
+		if evalErr != nil {
+			return evalErr
+		}
+		switch code, ok := result.(int64); {
+		case ok && code >= 1:
+			return nil
+		case ok && code == -1:
+			return fmt.Errorf("%w: memory id=%s", errValkeyMemoryAlreadyExists, memoryID)
+		default:
+			return fmt.Errorf("unexpected valkey create script result for memory id=%s: %v", memoryID, result)
+		}
+	})
 }
 
 // rerankAndFilter applies hybrid re-ranking, adaptive threshold, score filtering, and access tracking.

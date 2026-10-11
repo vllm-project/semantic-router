@@ -341,6 +341,24 @@ func valkeyParseScoreFromMap(fields map[string]interface{}, key string, metricTy
 	return valkeyutil.DistanceToSimilarity(metricType, distance)
 }
 
+// valkeyCreateScriptArgs builds the EVAL invocation for valkeyCreateScript:
+// one key (the hash), the operation ID as ARGV[1], then the field/value pairs.
+// Field order is deterministic so retries and tests observe stable argv.
+func valkeyCreateScriptArgs(key, operationID string, fields map[string]string) []string {
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	args := make([]string, 0, 4+2*len(fields))
+	args = append(args, "EVAL", valkeyCreateScript, "1", key, operationID)
+	for _, name := range names {
+		args = append(args, name, fields[name])
+	}
+	return args
+}
+
 // valkeyBuildHashFields builds the HSET field map for storing a memory in Valkey.
 func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]string, error) {
 	// access_count is stored as a top-level HASH field only (updated atomically via HINCRBY).
