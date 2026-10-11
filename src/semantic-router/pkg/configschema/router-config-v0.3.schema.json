@@ -17,6 +17,26 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ActionRule": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "explain",
+            "fix",
+            "refactor",
+            "test",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AdmissionConfig": {
       "properties": {
         "max_concurrency": {
@@ -161,6 +181,7 @@
             "mlp",
             "multi_factor",
             "prompt",
+            "random",
             "ratings",
             "remom",
             "router_dc",
@@ -1457,6 +1478,12 @@
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
+          },
+          "type": "array"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRule"
           },
           "type": "array"
         },
@@ -6836,6 +6863,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "action",
             "authz",
             "classifier",
             "complexity",
@@ -8091,6 +8119,14 @@
         "schema_ref": "#/$defs/InputModalityRule"
       },
       {
+        "type": "action",
+        "display_name": "Action",
+        "collection": "actions",
+        "observation_key": "action",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ActionRule"
+      },
+      {
         "type": "decision",
         "display_name": "Decision Model",
         "collection": "decision",
@@ -8182,6 +8218,13 @@
         "execution": "selector",
         "config_field": "multi_factor",
         "schema_ref": "#/$defs/MultiFactorSelectionConfig"
+      },
+      {
+        "type": "random",
+        "display_name": "Random",
+        "description": "Select uniformly from the eligible candidate models.",
+        "tier": "supported",
+        "execution": "selector"
       },
       {
         "type": "ratings",

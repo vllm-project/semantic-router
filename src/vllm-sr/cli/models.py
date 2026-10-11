@@ -619,6 +619,15 @@ class InputModalityRule(BaseModel):
         return self
 
 
+class ActionRule(BaseModel):
+    """One action from the fixed vocabulary, referenced by decisions as type: action."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Literal["generate", "explain", "fix", "refactor", "test", "other"]
+    description: Optional[str] = None
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -713,6 +722,7 @@ class Signals(BaseModel):
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
     input_modality: Optional[List[InputModalityRule]] = []
+    actions: Optional[List[ActionRule]] = []
     decision: Optional[List[DecisionSignalRule]] = []
 
     @model_validator(mode="after")

@@ -142,6 +142,7 @@ domains:
       - src/model-runtime/vllm_srun/families/decision1/family.py
       - src/model-runtime/vllm_srun/families/decision1/questions.py
       - src/model-runtime/vllm_srun/families/decision2/family.py
+      - src/model-runtime/vllm_srun/families/decision3/family.py
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
@@ -462,7 +463,14 @@ domains:
 
   helm:
     owner: deployment
-    paths: [deploy/helm/**]
+    paths:
+      - deploy/helm/**
+      # These Grafana deployments share the offline render tests in the Helm gate.
+      - deploy/kubernetes/observability/grafana/**
+      - deploy/kubernetes/observability/README.md
+      - deploy/openshift/observability/grafana/**
+      - deploy/openshift/deploy-to-openshift.sh
+      - deploy/openshift/README.md
     checks: [make helm-lint]
     verify:
       - make helm-ci-validate HELM_REPO_UPDATE=false
@@ -571,6 +579,49 @@ domains:
       - bench/test_agentic_routing_experiment.py
     checks: [make test-learning-tools]
     verifications: [learning-tools]
+
+  grounded-fusion-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/grounded_fusion/*
+      - bench/grounded_fusion/testdata/**
+      - tools/make/tooling.mk
+    checks: [make test-grounded-fusion-bench]
+    verifications: [bench-tools]
+
+  hallucination-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/hallucination/**
+      - tools/make/tooling.mk
+    checks: [make test-hallucination-bench]
+    verifications: [bench-tools]
+
+  reasoning-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/reasoning/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-reasoning-bench]
+    verifications: [bench-tools]
+
+  router-flow-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/router_flow/**
+      - tools/make/tooling.mk
+    checks: [make test-router-flow-bench]
+    verifications: [bench-tools]
+
+  agent-crew-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_crew/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-agent-crew]
+    verifications: [bench-tools]
 
   paper:
     owner: paper
