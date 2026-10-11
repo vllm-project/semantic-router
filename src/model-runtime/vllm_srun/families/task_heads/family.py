@@ -29,7 +29,7 @@ import torch
 from ...accel import onednn
 from ...accel.kernels import CONTIGUOUS
 from ...errors import INVALID_INPUT, PackageError
-from ...heads.grounded import GroundedHead, GroundingPolicy, PairEnvelope
+from ...heads.grounded import GroundedHead, GroundingPolicy
 from ...heads.pooled import EmbeddingSurface, PooledLayout
 from ...heads.relevance import LOGITS, RelevanceHead, RelevanceLayout, RerankSurface
 from ...heads.scores import OperatingPoint, ScoresHead
@@ -64,6 +64,7 @@ from ...plugins.base import (
 from ...registry import builtin
 from ...registry.artifacts import named_files, safetensors_elements
 from ...registry.resolve import fetch
+from ...text.pairs import PairEnvelope
 from ...text.windows import Envelope, InputTooLongError
 from . import package as pkg
 
@@ -417,7 +418,7 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
 
 class TaskHeadsFamily(ModelFamily):
     name = "task_heads"
-    surfaces = frozenset({"classify", "embeddings", "rerank"})
+    surfaces = frozenset({"classify", "embeddings", "rerank", "decisions"})
     builtin_table = "vllm_srun.registry.tables.vela1"
     fixture_writer = "vllm_srun.testing.task_heads"
 
@@ -432,6 +433,7 @@ class TaskHeadsFamily(ModelFamily):
             ],
             "backbones": [pkg.MODEL_TYPE, pkg.DECODER_TYPE],
             "heads": ["sequence", "scores", "token", "grounded", "pooled", "relevance"],
+            "nli_question_types": ["choice", "noul"],
             "overflow": list(OVERFLOW),
         }
 
@@ -562,7 +564,7 @@ class TaskHeadsFamily(ModelFamily):
 
     def load(
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
-    ) -> TaskHeadsModel:
+    ) -> LoadedModel[Item, Any]:
         from tokenizers import Tokenizer
 
         task: pkg.TaskPackage = package.details["package"]
@@ -596,9 +598,28 @@ class TaskHeadsFamily(ModelFamily):
         model = TaskHeadsModel(
             info, engine_model, heads, package.max_input_tokens, defaults
         )
+        from .nli import LOGITS_HEAD, LogitsHead, NLIModel, entailment_index
+
+        positive = entailment_index(task.labels) if task.kind == "sequence" else None
+        private = None
+        if positive is not None:
+            assert isinstance(head, SequenceHead)
+            private = LogitsHead(
+                LOGITS_HEAD,
+                head.labels,
+                head.layer,
+                head.tokenizer,
+                head.envelope,
+                head.classifier,
+                head.pooling,
+            )
+            heads[LOGITS_HEAD] = private
         model.batch_invariant = engine_model.batch_invariant and batch_invariant(
             model, int(task.config["vocab_size"])
         )
+        if private is not None:
+            assert positive is not None
+            return NLIModel(model, private, positive)
         return model
 
     def _info(
@@ -722,6 +743,8 @@ class TaskHeadsFamily(ModelFamily):
         return SequenceHead(*args, envelope, classifier, pooling), {}
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
+        from .nli import entailment_index
+
         task: pkg.TaskPackage = package.details["package"]
         known = builtin.by_identity(package.model_sha256)
         expected = dict(known.golden_answers) if known else {}
@@ -733,4 +756,38 @@ class TaskHeadsFamily(ModelFamily):
         else:
             body = {"input": list(GOLDEN_TEXTS)}
             surface = "embeddings" if task.kind == "pooled" else surface
-        return [{"surface": surface, "body": body, "expected": expected}]
+        checks = [{"surface": surface, "body": body, "expected": expected}]
+        if task.kind == "sequence" and entailment_index(task.labels) is not None:
+            hypothesis = "This request is about programming."
+            checks.extend(
+                [
+                    {
+                        "surface": "classify",
+                        "body": {
+                            "input": [
+                                {"text": GOLDEN_TEXTS[0], "text_pair": hypothesis}
+                            ]
+                        },
+                        "expected": {},
+                    },
+                    {
+                        "surface": "decisions",
+                        "body": {
+                            "state": GOLDEN_TEXTS[0],
+                            "questions": {
+                                "domain": {
+                                    "type": "choice",
+                                    "instructions": "This request is about {label}.",
+                                    "criteria": {
+                                        "code": "programming",
+                                        "math": "mathematics",
+                                    },
+                                },
+                                "code": {"type": "noul", "instructions": hypothesis},
+                            },
+                        },
+                        "expected": {},
+                    },
+                ]
+            )
+        return checks

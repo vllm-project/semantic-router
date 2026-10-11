@@ -37,6 +37,18 @@ SEQUENCE = "ModernBertForSequenceClassification"
 TOKEN = "ModernBertForTokenClassification"
 # variant: (architecture, labels, pooling, problem type)
 HEADS: dict[str, tuple[str, list[str], str, str | None]] = {
+    "nli": (
+        SEQUENCE,
+        ["entailment", "not_entailment"],
+        "mean",
+        "single_label_classification",
+    ),
+    "nli_ternary": (
+        SEQUENCE,
+        ["neutral", "contradiction", "entailment"],
+        "mean",
+        "single_label_classification",
+    ),
     "sequence": (SEQUENCE, DOMAIN, "cls", "single_label_classification"),
     "scores": (SEQUENCE, HAZARD, "mean", "multi_label_classification"),
     "token": (
