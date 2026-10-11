@@ -3,7 +3,7 @@ slug: decision-3-0-on-apple-silicon
 title: "Decision 3.0 on Apple Silicon: Text, Image and Video Decisions on a Mac"
 description: "d3-lite, d3-nano and d3-mini converted to Core ML: triage 1,000 pull requests at 0.12 s each, drive a real website and watch live video, all on one Mac."
 authors: [Alex-Wengg]
-tags: [decision, core-ml, apple-silicon, multimodal, demos]
+tags: [decision, core-ml, apple-silicon, multimodal, demos, semantic-router]
 image: /img/blog/decision-3-0-coreml/pr-triage-poster.jpg
 ---
 
