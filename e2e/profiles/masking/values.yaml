@@ -95,14 +95,12 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
-            # No local selectors: model_id empty and use_mmbert_32k false, so
-            # the candle PII path cannot run and every span comes from the
-            # remote backend below -- a detection here is attributable to it.
+            # No local selectors: model_ref and model_id are empty, so the
+            # candle PII path cannot run and every span comes from the remote
+            # backend below -- a detection here is attributable to it.
             model_ref: ""
             model_id: ""
-            use_mmbert_32k: false
             pii_mapping_path: /app/models/pii-remote-backend/pii_type_mapping.json
             backend:
               protocol: http_classify
