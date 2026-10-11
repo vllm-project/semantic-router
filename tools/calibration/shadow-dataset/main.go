@@ -117,7 +117,9 @@ func publish(dest Destination, manifestPath, tasksPath, judgmentsPath, key strin
 	if err != nil {
 		return nil, err
 	}
-	files := []publishedFile{{name: "manifests/" + manifest.Digest + ".json", body: body}}
+	// The digest leaves out the counts, so two exports of the same examples can
+	// differ in what they excluded. The file is named by its bytes as well.
+	files := []publishedFile{{name: "manifests/" + manifest.Digest + "/" + digestOf(body) + ".json", body: body}}
 
 	if judgmentsPath != "" {
 		judged, judgedErr := judgedFiles(manifest, tasksPath, judgmentsPath, key)

@@ -149,4 +149,4 @@ make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
   --blinding-key $JUDGE_KEY"
 ```
 
-清单写入 `manifests/<digest>.json`，评审结果写入 `judgments/<manifest digest>/<digest of the set>.json`，旁边附带一份 `.report.json`，统计各类结果、各位置被选中的次数，以及有多少对任务跟随了位置而不是答案。所有名称都由内容决定，因此重复发布相同文件不会产生变化，已发布的名称也永远不会被替换为不同的内容。评审任务只用于校验评审结果，永远不会被发布，因为它们携带提示词与两个回答。不要把数据集提交到本仓库。
+清单写入 `manifests/<digest>/<digest of the file>.json`，因为清单摘要不包含计数，同一批样本的两次导出可能排除了不同的记录，评审结果写入 `judgments/<manifest digest>/<digest of the set>.json`，旁边附带一份 `.report.json`，统计各类结果、各位置被选中的次数，以及有多少对任务跟随了位置而不是答案。所有名称都由内容决定，因此重复发布相同文件不会产生变化，已发布的名称也永远不会被替换为不同的内容。评审任务只用于校验评审结果，永远不会被发布，因为它们携带提示词与两个回答。不要把数据集提交到本仓库。

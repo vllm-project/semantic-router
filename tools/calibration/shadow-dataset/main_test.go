@@ -40,7 +40,7 @@ func writeJSON(t *testing.T, dir, name string, value any) string {
 
 // fixture writes a manifest, its judge tasks and one valid judgment set to a
 // scratch directory, and returns their paths with the tasks it built.
-func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgmentsPath string, tasks shadowdataset.JudgeTaskSet) {
+func fixture(t *testing.T, seed string, extra ...store.Record) (dir, manifestPath, tasksPath, judgmentsPath string, tasks shadowdataset.JudgeTaskSet) {
 	t.Helper()
 	// The request as the recorder stores it, naming the upstream model the judge
 	// must not see.
@@ -55,7 +55,7 @@ func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgments
 			{Source: "shadow_dispatch", Verdict: "completed", TargetRef: "candidate", Metadata: map[string]string{"response_sha256": sha("secret shadow answer")}},
 		},
 	}
-	manifest, err := shadowdataset.Build([]store.Record{record},
+	manifest, err := shadowdataset.Build(append([]store.Record{record}, extra...),
 		shadowdataset.Policy{Seed: seed, Splits: []shadowdataset.Split{{Name: "eval", Weight: 1}}})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
@@ -117,8 +117,8 @@ func TestPublishWritesManifestJudgmentsAndReportButNoText(t *testing.T) {
 	if len(names) != 3 || len(tree) != 3 {
 		t.Fatalf("published %v, tree %v, want manifest, judgments and report", names, tree)
 	}
-	if names[0] != "manifests/"+tasks.ManifestDigest+".json" {
-		t.Fatalf("manifest published as %q, want it named by its digest", names[0])
+	if names[0] != "manifests/"+tasks.ManifestDigest+"/"+sha(tree[names[0]])+".json" {
+		t.Fatalf("manifest published as %q, want it named by its digest and its bytes", names[0])
 	}
 	judgmentsName := names[1]
 	if sha(tree[judgmentsName]) != strings.TrimSuffix(filepath.Base(judgmentsName), ".json") {
@@ -134,6 +134,40 @@ func TestPublishWritesManifestJudgmentsAndReportButNoText(t *testing.T) {
 	}
 	if !strings.Contains(tree[names[2]], `"slot_following_pairs": 1`) {
 		t.Fatalf("report does not count the first-slot verdicts: %s", tree[names[2]])
+	}
+}
+
+// A later export of the same examples that also excluded a failed record keeps
+// the manifest digest but not the counts. Both exports and their judgments
+// publish side by side.
+func TestPublishKeepsExportsThatDifferOnlyInExclusions(t *testing.T) {
+	_, firstManifest, firstTasks, firstJudgments, tasks := fixture(t, "seed")
+	failed := store.Record{
+		ID: "r2", RequestID: "req-r2", Recipe: "vault", Decision: "guard",
+		Timestamp:     time.Date(2026, 9, 24, 9, 1, 0, 0, time.UTC),
+		SelectedModel: "primary-model", RequestBody: `{"Model":"primary-upstream"}`, ResponseStatus: 500,
+		LifecycleState: store.LifecycleCompleted,
+	}
+	_, laterManifest, laterTasks, laterJudgments, laterTaskSet := fixture(t, "seed", failed)
+	if laterTaskSet.ManifestDigest != tasks.ManifestDigest {
+		t.Fatalf("the failed record changed the manifest digest")
+	}
+
+	dest := t.TempDir()
+	first, err := publish(DirectoryDestination{Root: dest}, firstManifest, firstTasks, firstJudgments, judgeKey)
+	if err != nil {
+		t.Fatalf("publish first export: %v", err)
+	}
+	later, err := publish(DirectoryDestination{Root: dest}, laterManifest, laterTasks, laterJudgments, judgeKey)
+	if err != nil {
+		t.Fatalf("publish later export: %v", err)
+	}
+	if first[0] == later[0] {
+		t.Fatalf("both exports published as %q", first[0])
+	}
+	tree := publishedTree(t, dest)
+	if !strings.Contains(tree[later[0]], `"excluded"`) || strings.Contains(tree[first[0]], `"excluded"`) {
+		t.Fatalf("published manifests do not keep their own counts: %v", tree)
 	}
 }
 
