@@ -3,6 +3,7 @@ package modelservice
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +29,14 @@ const (
 type hostRuntime struct {
 	endpoint string
 	token    string
+}
+
+// hostLease belongs to one group lifetime, independently of the stable plan key.
+// Reacquisition can share the child while the previous group's release is in flight.
+type hostLease struct {
+	runtime *hostRuntime
+	plan    *processPlan
+	id      string
 }
 
 func configuredHostRuntime() *hostRuntime {
@@ -61,14 +70,15 @@ func (m *Manager) processPlans(deployments map[string]config.ModelDeployment) []
 	return planProcesses(placed, m.command, "", m.cores, "mps")
 }
 
-func (h *hostRuntime) control(ctx context.Context, plan *processPlan, method string) error {
+func (h *hostRuntime) control(ctx context.Context, plan *processPlan, method, leaseID string) error {
 	if h.token == "" {
 		return fmt.Errorf("host model runtime requires a private supervisor credential")
 	}
 	key := strings.TrimPrefix(plan.key, "managed\x00")
 	data, err := json.Marshal(struct {
 		Models []modelEntry `json:"models"`
-	}{plan.models})
+		Lease  string       `json:"lease"`
+	}{plan.models, leaseID})
 	if err != nil {
 		return err
 	}
@@ -101,9 +111,14 @@ func (h *hostRuntime) control(ctx context.Context, plan *processPlan, method str
 }
 
 func (h *hostRuntime) start(plan *processPlan) (*group, error) {
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("create host process lease: %w", err)
+	}
+	lease := &hostLease{runtime: h, plan: plan, id: fmt.Sprintf("%x", nonce)}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := h.control(ctx, plan, http.MethodPost); err != nil {
+	if err := h.control(ctx, plan, http.MethodPost, lease.id); err != nil {
 		return nil, err
 	}
 	key := strings.TrimPrefix(plan.key, "managed\x00")
@@ -125,20 +140,20 @@ func (h *hostRuntime) start(plan *processPlan) (*group, error) {
 	client := &Client{endpoint: endpoint, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
 	g := newGroup(plan, client, true)
-	g.host = h
+	g.host = lease
 	g.start()
 	return g, nil
 }
 
 // keepAlive renews the process lease independently of inference calls. If the
 // container dies without releasing it, the host reaps the process in 45 seconds.
-func (h *hostRuntime) keepAlive(ctx context.Context, plan *processPlan) {
+func (l *hostLease) keepAlive(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	defer func() {
 		stop, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if err := h.control(stop, plan, http.MethodDelete); err != nil {
+		if err := l.runtime.control(stop, l.plan, http.MethodDelete, l.id); err != nil {
 			logging.ComponentWarnEvent("model_runtime", "host_process_release_failed", map[string]interface{}{"error": err.Error()})
 		}
 	}()
@@ -148,7 +163,7 @@ func (h *hostRuntime) keepAlive(ctx context.Context, plan *processPlan) {
 			return
 		case <-ticker.C:
 			probe, cancel := context.WithTimeout(ctx, 15*time.Second)
-			err := h.control(probe, plan, http.MethodPost)
+			err := l.runtime.control(probe, l.plan, http.MethodPost, l.id)
 			cancel()
 			if err != nil {
 				logging.ComponentWarnEvent("model_runtime", "host_process_lease_failed", map[string]interface{}{"error": err.Error()})
