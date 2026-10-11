@@ -149,7 +149,7 @@ func TestPublicNativeBoundsAndSanitizesFailures(t *testing.T) {
 		t.Fatal(response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(strings.Repeat("x", (2<<20)+1))))
+	handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(strings.Repeat("x", RequestLimit+1))))
 	if response.Code != 400 {
 		t.Fatal("unbounded native request")
 	}
