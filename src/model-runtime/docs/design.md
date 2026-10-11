@@ -586,7 +586,7 @@ Before any model code runs, the family verifies the package:
 
 | Family | Models | Pinned revisions |
 | --- | --- | --- |
-| `decision3` | `vllm-sr/{d3, d3-flash, d3-mini, d3-nano, d3-lite, d3-edge}` | d3 `a443f814`, flash `abd00fe1`, mini `94b1ea6e`, nano `f1429487`, lite `2227a85f`, edge `5d17a013` (only the files the family loads are fetched) |
+| `decision3` | `vllm-sr/{d3, d3-flash, d3-mini, d3-nano, d3-lite, d3-edge}` | d3 `cbff3a3c`, flash `521525ef`, mini `a475367d`, nano `3aeb1c22`, lite `a8d25a91`, edge `18d61df7` (only the files the family loads are fetched) |
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
@@ -774,7 +774,7 @@ backbone holds BF16 parameters on every device and runs without autocast; its
 full-attention layers see the whole left-padded prompt (`attention_mode:
 noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
 layers follow the package's `layer_types`, so a pruned backbone (d3-edge keeps
-15 of d3-lite's 24 layers, whose `full_attention_interval` no longer describes
+12 of d3-lite's 24 layers, whose `full_attention_interval` no longer describes
 them) loads as it is. The FP32 readout scores the question's codes at the last
 position, and the answer is the softmax over them at the package temperature.
 A request's questions run in request order, eight per forward.

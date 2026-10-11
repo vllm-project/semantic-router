@@ -4694,7 +4694,7 @@
         "triton": "3.8.0"
       }
     },
-    "revision": "a443f814cedfb5525550e6b8ea0770fccce95ec8"
+    "revision": "cbff3a3cb0b074b6585fe9f747b9f9f5557a0e75"
   },
   "vllm-sr/d3-edge": {
     "choices": {
@@ -5370,7 +5370,7 @@
         "triton": "3.8.0"
       }
     },
-    "revision": "5d17a013b2612f3bafe0d974356f35df835e4a36"
+    "revision": "18d61df78684675463af9ae732872478845c5a79"
   },
   "vllm-sr/d3-flash": {
     "choices": {
@@ -6642,7 +6642,7 @@
         "triton": "3.8.0"
       }
     },
-    "revision": "abd00fe158af9aa73ef34dd28eff85c8bdfc6465"
+    "revision": "521525effa79469d899a570726547dd7f00da3af"
   },
   "vllm-sr/d3-lite": {
     "choices": {
@@ -6813,7 +6813,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 4
               },
               "key": [
                 1,
@@ -6832,7 +6832,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 4
               },
               "key": [
                 1,
@@ -6946,7 +6946,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 4
+                "num_warps": 1
               },
               "key": [
                 2,
@@ -7003,104 +7003,104 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
-              },
-              "key": [
-                3,
-                16,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 1
-              },
-              "key": [
-                3,
-                32,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 1
-              },
-              "key": [
-                4,
-                16,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 2
-              },
-              "key": [
-                4,
-                32,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 1
-              },
-              "key": [
-                5,
-                16,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
                 "num_warps": 4
               },
               "key": [
+                3,
+                16,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 2
+              },
+              "key": [
+                3,
+                32,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                4,
+                16,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                4,
+                32,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 2
+              },
+              "key": [
+                5,
+                16,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
                 5,
                 32,
                 64,
@@ -7117,7 +7117,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 2
               },
               "key": [
                 6,
@@ -7174,7 +7174,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 2
               },
               "key": [
                 7,
@@ -7193,7 +7193,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 4
+                "num_warps": 1
               },
               "key": [
                 8,
@@ -7235,7 +7235,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 4
               },
               "key": [
                 128,
@@ -7249,7 +7249,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 32
+                  "BT": 16
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -7268,12 +7268,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 64
+                  "BT": 8
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 16
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -7287,7 +7287,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 128
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -7311,7 +7311,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 1
+                "num_warps": 2
               },
               "key": [
                 128,
@@ -7344,26 +7344,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 8
-                },
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 2
-              },
-              "key": [
-                128,
-                15,
-                "torch.bfloat16",
-                "torch.bfloat16",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -7372,26 +7353,7 @@
               },
               "key": [
                 128,
-                16,
-                "torch.bfloat16",
-                "torch.bfloat16",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {
-                  "BT": 64
-                },
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 16
-              },
-              "key": [
-                128,
-                2,
+                15,
                 "torch.bfloat16",
                 "torch.bfloat16",
                 "torch.float32"
@@ -7410,6 +7372,44 @@
               },
               "key": [
                 128,
+                16,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BT": 64
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 4
+              },
+              "key": [
+                128,
+                2,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BT": 64
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 16
+              },
+              "key": [
+                128,
                 20,
                 "torch.bfloat16",
                 "torch.bfloat16",
@@ -7420,12 +7420,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 8
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 1
+                "num_warps": 4
               },
               "key": [
                 128,
@@ -7439,12 +7439,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 128
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -7496,12 +7496,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 64
+                  "BT": 128
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 16
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -7515,12 +7515,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 64
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 1
               },
               "key": [
                 128,
@@ -7534,12 +7534,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 64
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 16
+                "num_warps": 4
               },
               "key": [
                 128,
@@ -7553,7 +7553,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -7572,7 +7572,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 32
+                  "BT": 16
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -7596,7 +7596,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 16
               },
               "key": [
                 128,
@@ -7610,7 +7610,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 32
+                  "BT": 16
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -7686,7 +7686,7 @@
         "triton": "3.8.0"
       }
     },
-    "revision": "2227a85f59a91528d8a756eb687974151670c75f"
+    "revision": "a8d25a91ef75552803f7009d25b7bd435991abd9"
   },
   "vllm-sr/d3-mini": {
     "choices": {
@@ -8958,7 +8958,7 @@
         "triton": "3.8.0"
       }
     },
-    "revision": "94b1ea6e40111ca5f31db343d39adc13dabbdd70"
+    "revision": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4"
   },
   "vllm-sr/d3-nano": {
     "choices": {
@@ -9129,7 +9129,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 4
+                "num_warps": 2
               },
               "key": [
                 1,
@@ -9148,7 +9148,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 4
+                "num_warps": 2
               },
               "key": [
                 1,
@@ -9262,7 +9262,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 1
+                "num_warps": 4
               },
               "key": [
                 2,
@@ -9319,104 +9319,104 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
+                "num_warps": 2
+              },
+              "key": [
+                3,
+                16,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                3,
+                32,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                4,
+                16,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 2
+              },
+              "key": [
+                4,
+                32,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 1
+              },
+              "key": [
+                5,
+                16,
+                64,
+                false,
+                false,
+                "torch.float32",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {},
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
                 "num_warps": 4
               },
               "key": [
-                3,
-                16,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 2
-              },
-              "key": [
-                3,
-                32,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 1
-              },
-              "key": [
-                4,
-                16,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 1
-              },
-              "key": [
-                4,
-                32,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 2
-              },
-              "key": [
-                5,
-                16,
-                64,
-                false,
-                false,
-                "torch.float32",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {},
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 1
-              },
-              "key": [
                 5,
                 32,
                 64,
@@ -9433,7 +9433,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 8
               },
               "key": [
                 6,
@@ -9490,7 +9490,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 8
               },
               "key": [
                 7,
@@ -9509,7 +9509,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 1
+                "num_warps": 4
               },
               "key": [
                 8,
@@ -9551,7 +9551,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 4
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -9565,7 +9565,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -9584,12 +9584,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 8
+                  "BT": 64
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 16
               },
               "key": [
                 128,
@@ -9603,12 +9603,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 8
+                  "BT": 64
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -9622,7 +9622,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -9660,12 +9660,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 128
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 16
+                "num_warps": 4
               },
               "key": [
                 128,
@@ -9679,12 +9679,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 32
+                  "BT": 16
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 4
               },
               "key": [
                 128,
@@ -9703,7 +9703,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 4
+                "num_warps": 16
               },
               "key": [
                 128,
@@ -9717,12 +9717,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 64
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 16
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -9736,7 +9736,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -9755,12 +9755,12 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 128
+                  "BT": 16
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 8
+                "num_warps": 2
               },
               "key": [
                 128,
@@ -9812,35 +9812,16 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 128
-                },
-                "maxnreg": null,
-                "num_ctas": 1,
-                "num_stages": 3,
-                "num_warps": 8
-              },
-              "key": [
-                128,
-                4,
-                "torch.bfloat16",
-                "torch.bfloat16",
-                "torch.float32"
-              ]
-            },
-            {
-              "config": {
-                "ir_override": null,
-                "kwargs": {
                   "BT": 64
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 2
+                "num_warps": 16
               },
               "key": [
                 128,
-                45,
+                4,
                 "torch.bfloat16",
                 "torch.bfloat16",
                 "torch.float32"
@@ -9859,6 +9840,25 @@
               },
               "key": [
                 128,
+                45,
+                "torch.bfloat16",
+                "torch.bfloat16",
+                "torch.float32"
+              ]
+            },
+            {
+              "config": {
+                "ir_override": null,
+                "kwargs": {
+                  "BT": 64
+                },
+                "maxnreg": null,
+                "num_ctas": 1,
+                "num_stages": 3,
+                "num_warps": 16
+              },
+              "key": [
+                128,
                 5,
                 "torch.bfloat16",
                 "torch.bfloat16",
@@ -9869,7 +9869,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 32
+                  "BT": 16
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -9888,7 +9888,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -9912,7 +9912,7 @@
                 "maxnreg": null,
                 "num_ctas": 1,
                 "num_stages": 3,
-                "num_warps": 16
+                "num_warps": 8
               },
               "key": [
                 128,
@@ -9926,7 +9926,7 @@
               "config": {
                 "ir_override": null,
                 "kwargs": {
-                  "BT": 16
+                  "BT": 32
                 },
                 "maxnreg": null,
                 "num_ctas": 1,
@@ -10002,6 +10002,6 @@
         "triton": "3.8.0"
       }
     },
-    "revision": "f1429487025c06175096c2438f4f48106301ca9d"
+    "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4"
   }
 }

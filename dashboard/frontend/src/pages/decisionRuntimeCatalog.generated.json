@@ -127,7 +127,7 @@
       "name": "d3",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "a443f814cedfb5525550e6b8ea0770fccce95ec8",
+      "revision": "cbff3a3cb0b074b6585fe9f747b9f9f5557a0e75",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 72
     },
@@ -136,7 +136,7 @@
       "name": "d3-flash",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "abd00fe158af9aa73ef34dd28eff85c8bdfc6465",
+      "revision": "521525effa79469d899a570726547dd7f00da3af",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 32
     },
@@ -145,7 +145,7 @@
       "name": "d3-mini",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "94b1ea6e40111ca5f31db343d39adc13dabbdd70",
+      "revision": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 16
     },
@@ -154,7 +154,7 @@
       "name": "d3-nano",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "f1429487025c06175096c2438f4f48106301ca9d",
+      "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 8
     },
@@ -163,7 +163,7 @@
       "name": "d3-lite",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "2227a85f59a91528d8a756eb687974151670c75f",
+      "revision": "a8d25a91ef75552803f7009d25b7bd435991abd9",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 4
     },
@@ -172,7 +172,7 @@
       "name": "d3-edge",
       "provider": "vllm-sr",
       "family": "decision3",
-      "revision": "5d17a013b2612f3bafe0d974356f35df835e4a36",
+      "revision": "18d61df78684675463af9ae732872478845c5a79",
       "backbone": "qwen3_5_text",
       "minMemoryGiB": 4
     }
