@@ -201,6 +201,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/families/decision1/family.py",
             "src/model-runtime/vllm_srun/families/decision1/questions.py",
             "src/model-runtime/vllm_srun/families/decision2/family.py",
+            "src/model-runtime/vllm_srun/families/decision3/family.py",
             "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
             "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
         ):
