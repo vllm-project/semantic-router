@@ -177,7 +177,7 @@ rerun `make check`.
 
 Follow the language's standard formatter and keep modules focused:
 
-- Go: `gofmt`, meaningful exported API comments, and `make check-go-mod-tidy`.
+- Go: `golangci-lint fmt` (gofumpt and gci, applied by the `go-fmt` pre-commit hook), meaningful exported API comments, and `make check-go-mod-tidy`.
 - Python: Black formatting, type hints where they improve the
   interface, and tests for behavior changes.
 

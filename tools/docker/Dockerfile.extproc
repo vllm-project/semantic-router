@@ -187,11 +187,15 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 # in the next, so a runtime code change does not reinstall its dependencies.
 # The multimodal extra decodes Vela Omni's images (Pillow). Every default model
 # runs on the native engine, so ONNX Runtime (the onnx extra) is not installed.
+# requirements-lock.txt pins every dependency except PyTorch and what only
+# PyTorch requires, which the accelerator stage owns, so every build of a
+# release installs the same versions.
 FROM torch-${ACCELERATOR} AS runtime
 ARG MODEL_RUNTIME_EXTRAS=multimodal
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
+    --mount=type=bind,source=src/model-runtime/requirements-lock.txt,target=/tmp/requirements-lock.txt \
     python - $MODEL_RUNTIME_EXTRAS >/tmp/runtime-requirements.txt <<'EOF' && \
-    pip install -r /tmp/runtime-requirements.txt && \
+    pip install -c /tmp/requirements-lock.txt -r /tmp/runtime-requirements.txt && \
     rm /tmp/runtime-requirements.txt
 import sys, tomllib
 project = tomllib.load(open("/tmp/pyproject.toml", "rb"))["project"]
