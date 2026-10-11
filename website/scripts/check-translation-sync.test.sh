@@ -58,7 +58,7 @@ for name in definitely-outdated definitely-current verify-false verify-true; do
     if [[ "$name" == definitely-current || "$name" == verify-true ]]; then
         outdated_value=true
     fi
-    printf -- '---\ntranslation:\n  source_commit: "%s"\n  source_file: "docs/cases/%s.md"\n  outdated: %s\n---\n\n# %s\n\nInitial Chinese content.\n' \
+    printf -- '---\nis_mtpe: false\ntranslation:\n  source_commit: "%s"\n  source_file: "docs/cases/%s.md"\n  outdated: %s\n---\n\n# %s\n\nInitial Chinese content.\n' \
         "$source_commit" "$name" "$outdated_value" "$name" \
         > "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/cases/$name.md"
 done
@@ -191,5 +191,64 @@ for name in definitely-current definitely-outdated verify-false verify-true; do
     grep -q $'^zh-Hans\tcases/'"$name"'.md$' website/i18n/translation-coverage-baseline.txt \
         || fail "baseline refresh omitted cases/$name.md"
 done
+
+# Isolate review-state validation from the source-drift fixtures above.
+mkdir -p "$TEST_ROOT/review-state/website/scripts"
+cp "$SOURCE_SCRIPT" "$TEST_ROOT/review-state/website/scripts/check-translation-sync.sh"
+cd "$TEST_ROOT/review-state"
+git init -q
+git config user.name "Translation Sync Test"
+git config user.email "translation-sync@example.com"
+mkdir -p website/docs
+printf '# Review state\n' > website/docs/review.md
+git add website/docs
+commit_at "2026-01-01T00:00:00Z" "add review source"
+review_source_commit="$(git rev-parse --short HEAD)"
+review_dir="website/i18n/zh-Hans/docusaurus-plugin-content-docs"
+mkdir -p "$review_dir/current" "$review_dir/version-v0.2"
+review_file="$review_dir/current/review.md"
+write_review_fixture() {
+    printf -- '---\n%s\ntranslation:\n  source_commit: "%s"\n  source_file: "docs/review.md"\n  outdated: false\n---\n\n# Review state\n' \
+        "$1" "$review_source_commit" > "$review_file"
+}
+write_review_fixture 'is_mtpe: true'
+printf -- '---\nis_mtpe: false\n---\n\n# Archived translation\n' > "$review_dir/version-v0.2/review.mdx"
+printf 'zh-Hans\treview.md\n' > website/i18n/translation-coverage-baseline.txt
+git add website/i18n
+commit_at "2026-01-02T00:00:00Z" "add review translations"
+
+for declaration in 'is_mtpe: true' 'is_mtpe: false' 'is_mtpe: false # awaiting review'; do
+    write_review_fixture "$declaration"
+    website/scripts/check-translation-sync.sh --locale zh-Hans >/dev/null \
+        || fail "explicit boolean review state should pass: $declaration"
+done
+
+# Quoted false is truthy in the banner, and nested metadata is not read by it.
+for declaration in '' 'is_mtpe:' 'is_mtpe: pending' 'is_mtpe: 1' 'is_mtpe: "false"' "is_mtpe: 'true'" $'other:\n  is_mtpe: true'; do
+    write_review_fixture "$declaration"
+    before="$(cksum "$review_file")"
+    for mode in '' '--fix-status'; do
+        set +e
+        review_output="$(website/scripts/check-translation-sync.sh --locale zh-Hans ${mode:+"$mode"} 2>&1)"
+        review_status=$?
+        set -e
+        [[ $review_status -eq 1 ]] || fail "invalid review state should fail: $declaration ($mode)"
+        assert_contains "$review_output" "current/review.md"
+        assert_contains "$review_output" "missing or invalid is_mtpe (expected a top-level boolean: true or false)"
+        [[ "$(cksum "$review_file")" == "$before" ]] || fail "audit must not assign review state"
+    done
+    website/scripts/check-translation-sync.sh --coverage-only >/dev/null \
+        || fail "coverage-only audit should ignore review metadata"
+done
+
+write_review_fixture 'is_mtpe: true'
+printf '# Archived translation without frontmatter\n' > "$review_dir/version-v0.2/review.mdx"
+set +e
+review_output="$(website/scripts/check-translation-sync.sh --locale zh-Hans 2>&1)"
+review_status=$?
+set -e
+[[ $review_status -eq 1 ]] || fail "archived translations also need explicit review state"
+assert_contains "$review_output" "version-v0.2/review.mdx"
+assert_contains "$review_output" "missing or invalid is_mtpe"
 
 echo "Translation sync behavior test passed."

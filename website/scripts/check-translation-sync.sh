@@ -71,6 +71,9 @@ Latest Git commit times are the primary drift signal. translation.source_commit
 is a secondary metadata signal: when it is behind but the translated file is not
 older, the file is reported for verification instead of definitely outdated.
 
+Current and versioned translations must declare is_mtpe as a top-level boolean.
+The audit reports missing or invalid review state without assigning it.
+
 Missing locale files use Docusaurus's current-English fallback and are reported
 as coverage information. Exit status is 0 when every present translation is
 synced, 1 when a present translation or its metadata needs work, and 2 for usage
@@ -135,6 +138,25 @@ frontmatter_value() {
             }
         }
     ' "$file" | sed -E "s/[[:space:]]+#.*$//; s/^['\"]//; s/['\"]$//"
+}
+
+# The banner reads the root field. Keep quotes so strings such as "false"
+# cannot pass as booleans and silently suppress the notice.
+frontmatter_review_state() {
+    awk '
+        NR == 1 {
+            if ($0 != "---") exit
+            next
+        }
+        $0 == "---" { exit }
+        /^is_mtpe:[[:space:]]*/ {
+            value = $0
+            sub(/^is_mtpe:[[:space:]]*/, "", value)
+            sub(/[[:space:]]+#.*$/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print value
+        }
+    ' "$1"
 }
 
 source_update_count() {
@@ -302,6 +324,19 @@ check_locale() {
             unrecorded_coverage_count=$((unrecorded_coverage_count + 1))
         fi
     done < <(find "$WEBSITE_DIR/$i18n_dir" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
+
+    if ! $COVERAGE_ONLY; then
+        local locale_docs_dir="$WEBSITE_DIR/i18n/$locale/docusaurus-plugin-content-docs"
+        local review_state
+        while IFS= read -r -d '' translated_file; do
+            review_state="$(frontmatter_review_state "$translated_file")"
+            if [[ "$review_state" != "true" && "$review_state" != "false" ]]; then
+                local review_path="${translated_file#"$locale_docs_dir"/}"
+                metadata_files+=("$review_path|missing or invalid is_mtpe (expected a top-level boolean: true or false)")
+                metadata_count=$((metadata_count + 1))
+            fi
+        done < <(find "$locale_docs_dir" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
+    fi
 
     while IFS= read -r -d '' source_file; do
         local rel_path="${source_file#"$DOCS_DIR"/}"
