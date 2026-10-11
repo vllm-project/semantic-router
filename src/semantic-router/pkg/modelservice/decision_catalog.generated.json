@@ -163,6 +163,15 @@
       ]
     },
     {
+      "id": "vllm-sr/d3-edge",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
       "id": "vllm-sr/Vela-2.0-0.3B",
       "family": "vela2",
       "question_types": [

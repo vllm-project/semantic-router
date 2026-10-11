@@ -76,7 +76,7 @@ describe('Decision runtime catalog projection', () => {
   it('contains the projected release families and their supported question types', () => {
     expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision2')).toHaveLength(6)
     expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision1')).toHaveLength(7)
-    expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision3')).toHaveLength(5)
+    expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision3')).toHaveLength(6)
     expect(DECISION_RUNTIME_CAPABILITIES).toEqual(['choice', 'noul', 'score'])
   })
 

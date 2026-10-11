@@ -586,7 +586,7 @@ Before any model code runs, the family verifies the package:
 
 | Family | Models | Pinned revisions |
 | --- | --- | --- |
-| `decision3` | `vllm-sr/{d3, d3-flash, d3-mini, d3-nano, d3-lite}` | d3 `dc6c41cb`, flash `581c9953`, mini `61dbd3a3`, nano `6601b4d1`, lite `b731454b` (only the files the family loads are fetched) |
+| `decision3` | `vllm-sr/{d3, d3-flash, d3-mini, d3-nano, d3-lite, d3-edge}` | d3 `a443f814`, flash `abd00fe1`, mini `94b1ea6e`, nano `f1429487`, lite `2227a85f`, edge `5d17a013` (only the files the family loads are fetched) |
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
@@ -772,20 +772,37 @@ knows by digest, and builds the tokenizer as Transformers 5.17 builds
 `tokenizer_config.json`), which the released runtime tokenized with. The
 backbone holds BF16 parameters on every device and runs without autocast; its
 full-attention layers see the whole left-padded prompt (`attention_mode:
-noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The FP32
-readout scores the question's codes at the last position, and the answer is the
-softmax over them at the package temperature. A request's questions run in
-request order, eight per forward.
+noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
+layers follow the package's `layer_types`, so a pruned backbone (d3-edge keeps
+15 of d3-lite's 24 layers, whose `full_attention_interval` no longer describes
+them) loads as it is. The FP32 readout scores the question's codes at the last
+position, and the answer is the softmax over them at the package temperature.
+A request's questions run in request order, eight per forward.
 
 A request's `images` (base64 PNG, JPEG or WebP data URLs) are decoded by PIL
 and processed as the Transformers 5.17 torchvision `Qwen2VLImageProcessor`
 processes them: `smart_resize` to 65,536 to 1,638,400 pixels, a uint8 bicubic
-antialiased resize, one FP32 normalization and the patch layout. They go in
-front of the text of every question; each question of a forward carries its own
-copy through the native Qwen3.5 vision tower (the matrix-product patch
+antialiased resize, one FP32 normalization and the patch layout. Its `videos`
+(base64 MP4, WebM, QuickTime or Matroska data URLs) are decoded as the d3
+runtime decodes them, by OpenCV's FFmpeg backend from a temporary file: 2
+frames per second, at least 4 and at most 32 spread evenly over the whole
+video, converted to RGB, an odd count padded with the last frame. The
+Transformers 5.17 `Qwen3VLVideoProcessor` path follows with the d3 runtime's
+budget: at most 200,704 pixels per frame, the same resize and normalization,
+and the patch layout over each pair of frames. The videos of a request take at
+most 16,384 input tokens.
+
+Images and videos go in front of the text of every question, images first. In
+an image request, each question of a forward carries its own copy of the
+images through the native Qwen3.5 vision tower (the matrix-product patch
 embedding, bilinearly resampled learned positions, axial rotary attention per
-image and the patch merger), and the image features replace the placeholder
-tokens, which take the multimodal rotary positions. On gfx942 the depthwise
+image and the patch merger). In a request with videos, the tower reads the
+request's images in one call and its videos in another, once per request, and
+every question reuses those features, as the d3 runtime does. Each video's
+placeholder expands to its frame pairs, each after its timestamp (`<0.2
+seconds>`); a frame pair is an image of one temporal patch for the
+multimodal rotary positions, and image features replace the image placeholders
+before video features replace the video placeholders. On gfx942 the depthwise
 convolution is the `fp64_naive` variant (MIOpen's naive kernel, which the
 released runtime ran) and the fused decoder layers run on the BF16 stream.
 Each model pins the FLA kernel choices of its release
@@ -1357,7 +1374,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Model group | Reference | Device classes | Pass thresholds |
 | --- | --- | --- | --- |
 | Decision 2.0 | released package runtime | CPU, ROCm | Bit-identical answers (unchanged) |
-| Decision 3.0 | the packages' own server (`d3_server.py`), same requests, text and images | CPU, ROCm | Bit-identical answers ([`decision3-parity.md`](records/decision3-parity.md)) |
+| Decision 3.0 | the packages' own server (`d3_server.py`), same requests, text, images and videos | CPU, ROCm | Bit-identical answers ([`decision3-parity.md`](records/decision3-parity.md)) |
 | Decision 1.0 | the packages' bundled runtime, same requests | CPU, ROCm | Bit-identical on the same device class, else every answer within 1e-6 and recorded |
 | Vela 1.0 sequence and scores heads | the legacy router path (candle CPU; ORT on the AMD recipe), same inputs | CPU (CI fixtures and real models), ROCm | CPU: label agreement 100% outside near ties (top-two margin under 1e-3), max \|Δp\| ≤ 1e-3; ROCm: label agreement ≥ 99.5%, max \|Δp\| ≤ 0.02 |
 | Vela 1.0 token and grounded heads | the legacy router path | CPU, ROCm | CPU: identical span sets on ≥ 99.5% of inputs, max \|Δp\| ≤ 1e-3; ROCm: identical span sets on ≥ 98% |

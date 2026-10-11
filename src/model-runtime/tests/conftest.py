@@ -105,6 +105,20 @@ def d3_runtime(d3_package):
 
 
 @pytest.fixture(scope="session")
+def d3_pruned_package(fixture_root) -> Path:
+    from vllm_srun.testing.decision3 import write_fixture
+
+    return write_fixture(fixture_root / "d3-pruned", "pruned", seed=13)
+
+
+@pytest.fixture(scope="session")
+def d3_pruned_runtime(d3_pruned_package):
+    runtime = start_runtime(d3_pruned_package)
+    yield runtime
+    runtime.stop()
+
+
+@pytest.fixture(scope="session")
 def png_url():
     """``png_url(width, height, seed)``: a data URL of a deterministic RGB noise-and-gradient PNG."""
     import base64
@@ -123,5 +137,38 @@ def png_url():
             f"data:image/{fmt.lower()};base64,"
             + base64.b64encode(buffer.getvalue()).decode()
         )
+
+    return make
+
+
+@pytest.fixture(scope="session")
+def mp4_url(tmp_path_factory):
+    """``mp4_url(width, height, frames, fps, seed)``: a data URL of a deterministic MPEG-4 video (OpenCV)."""
+    import base64
+
+    import numpy as np
+
+    cv2 = pytest.importorskip("cv2")
+    root = tmp_path_factory.mktemp("videos")
+
+    def make(
+        width: int, height: int, frames: int, fps: float = 8.0, seed: int = 0
+    ) -> str:
+        rng = np.random.default_rng(seed)
+        path = root / f"{width}x{height}-{frames}-{fps}-{seed}.mp4"
+        writer = cv2.VideoWriter(
+            str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
+        )
+        base = rng.integers(0, 96, size=(height, width, 3), dtype=np.uint8)
+        for index in range(frames):
+            frame = base.copy()
+            frame += np.linspace(0, 159, width, dtype=np.uint8)[None, :, None]
+            side = max(4, min(width, height) // 4)
+            top = (index * 3) % max(1, height - side)
+            left = (index * 5) % max(1, width - side)
+            frame[top : top + side, left : left + side] = (255 - 7 * index) % 256
+            writer.write(frame)
+        writer.release()
+        return "data:video/mp4;base64," + base64.b64encode(path.read_bytes()).decode()
 
     return make
