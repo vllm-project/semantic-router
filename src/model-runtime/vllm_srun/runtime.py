@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
+from .accel.cpu import cap_threads
 from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
 from .errors import (
     PackageError,
@@ -149,7 +150,7 @@ __all__ = [
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "options"},
+    "decisions": {"model", "state", "questions", "images", "options"},
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
@@ -673,6 +674,8 @@ class ServedModel:
             }
         if info.presets:
             card["presets"] = list(info.presets)
+        if "decisions" in info.surfaces:
+            card["modalities"] = list(info.modalities)
         return card
 
 
@@ -742,6 +745,13 @@ class Runtime:
     # -- lifecycle -----------------------------------------------------------
 
     def start(self, *, background: bool = True) -> None:
+        capped = cap_threads(self.config.threads)
+        if capped:
+            log.info(
+                "PyTorch CPU threads %d -> %d (the container's CPUs)",
+                capped["from"],
+                capped["to"],
+            )
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True

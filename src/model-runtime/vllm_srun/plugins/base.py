@@ -142,7 +142,8 @@ class DtypePolicy:
     ``bf16_resident`` holds BF16-exact Linear weights in BF16 on GPUs, which
     BF16 autocast multiplies with anyway. ``gpu_weights`` holds every backbone
     parameter in that dtype on GPUs, so the hidden-state stream follows it
-    (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
+    (released runtimes that load the backbone in BF16); CPU keeps ``weights``
+    unless ``cpu_weights`` names the dtype a released runtime held there too.
     ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
     the backbone's linear layers when the configured profile asks for one
     (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
@@ -161,6 +162,7 @@ class DtypePolicy:
     head: str = "float32"
     bf16_resident: bool = True
     gpu_weights: str | None = None
+    cpu_weights: str | None = None
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
@@ -297,6 +299,22 @@ class EngineOptions:
 
 
 @dataclass
+class ImageInputs:
+    """The images of a decoder batch, for a model whose ``ModelSpec.towers`` holds a vision tower.
+
+    ``pixel_values`` holds the patch rows of every image of every row, rows in
+    order and each row's images in order; ``grids`` each image's (t, h, w)
+    patch grid in the same order. The tower's features replace the batch's
+    ``token_id`` placeholders, in the same order.
+    """
+
+    pixel_values: torch.Tensor
+    grids: list[tuple[int, int, int]]
+    token_id: int
+    tower: str = "vision"
+
+
+@dataclass
 class ForwardBatch:
     """Padded token rows and the positions whose hidden states the readout needs.
 
@@ -304,7 +322,8 @@ class ForwardBatch:
     ``query`` holds one query position per row; ``lengths`` the unpadded lengths.
     ``shared_prefix`` > 0 asks an engine that ``supports_shared_context`` to run the
     rows as one shared-context tree whose first ``shared_prefix`` tokens (common to
-    every row, before any endpoint) are computed once.
+    every row, before any endpoint) are computed once. ``images`` are the rows'
+    image inputs, for a backbone that reads them.
     """
 
     input_ids: torch.Tensor
@@ -313,6 +332,7 @@ class ForwardBatch:
     query: torch.Tensor
     lengths: list[int]
     shared_prefix: int = 0
+    images: ImageInputs | None = None
 
 
 @dataclass
@@ -611,7 +631,11 @@ class RerankInfo:
 
 @dataclass(frozen=True)
 class ModelInfo:
-    """What ``/v1/models`` reports about a loaded model."""
+    """What ``/v1/models`` reports about a loaded model.
+
+    ``modalities`` are the inputs a decisions request may carry: ``text``, and
+    ``image`` for a model that reads a request's ``images``.
+    """
 
     id: str
     family: str
@@ -629,6 +653,7 @@ class ModelInfo:
     embedding: EmbeddingInfo | None = None
     rerank: RerankInfo | None = None
     presets: tuple[str, ...] = ()
+    modalities: tuple[str, ...] = ("text",)
 
 
 @dataclass(frozen=True)

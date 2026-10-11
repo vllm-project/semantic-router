@@ -25,6 +25,7 @@ from ...plugins.base import (
     EngineOptions,
     ForwardBatch,
     ForwardOutput,
+    ImageInputs,
     ModelSpec,
     ModuleT,
     TreeBatch,
@@ -36,6 +37,7 @@ from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
 from .models.lora import attach
+from .models.qwen3_5 import noncausal_masks, rope_index
 from .models.tree import Tree
 from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view, unavailable
 from .weights import (
@@ -139,6 +141,7 @@ class NativeEngineModel(EngineModel):
         )
         self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
         self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
+        self.noncausal = bool(getattr(backbone, "noncausal", False))
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
         if self.device.type == "cuda" and spec.encoder and options.graphs:
@@ -156,13 +159,19 @@ class NativeEngineModel(EngineModel):
         return {None: self.backbone} | self.branches
 
     def _install_fast(self) -> None:
-        """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
+        """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs.
+
+        The host masks and graphs are causal, so a noncausal backbone takes only the
+        fused layers and builds its masks per forward (``noncausal_masks``).
+        """
         options, backbone = self.options, self.backbone
         if options.fused_kernels:
             reason = fast.fused_unavailable(backbone, self.kernels)
             self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
             if reason:
                 self.fast["fused_skipped"] = reason
+        if self.noncausal:
+            return
         if self.spec.backbone.lora is not None and self.residency is not None:
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
@@ -381,15 +390,22 @@ class NativeEngineModel(EngineModel):
         attention_mask = batch.attention_mask.to(self.device)
         gather = batch.gather.to(self.device)
         query = batch.query.to(self.device)
+        padded = any(n != input_ids.shape[1] for n in batch.lengths)
         with torch.inference_mode(), self.autocast():
-            if self.graphs is not None:
+            if batch.images is not None:
+                hidden = self._forward_images(batch, input_ids, attention_mask, padded)
+            elif self.graphs is not None:
                 hidden = self.graphs(input_ids, attention_mask, batch.lengths)
             elif self.masks is not None:
-                padded = any(n != input_ids.shape[1] for n in batch.lengths)
                 hidden = self.backbone(
                     input_ids,
                     attention_mask,
                     masks=self.masks.build(attention_mask, padded),
+                )
+            elif self.noncausal:
+                full, linear = noncausal_masks(attention_mask, padded)
+                hidden = self.backbone(
+                    input_ids, attention_mask, masks={"full": full, "linear": linear}
                 )
             else:
                 hidden = self.backbone(input_ids, attention_mask)
@@ -397,6 +413,46 @@ class NativeEngineModel(EngineModel):
             gathered = hidden[rows[:, None], gather]
             queried = hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def _forward_images(
+        self,
+        batch: ForwardBatch,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        padded: bool,
+    ) -> torch.Tensor:
+        """Final hidden states of image prompts: the vision tower's features in place of the placeholders.
+
+        The rotary positions come from the batch's host-side token IDs, so the
+        forward never reads the device back.
+        """
+        images = cast(ImageInputs, batch.images)
+        tower = self.towers.get(images.tower)
+        if tower is None or not hasattr(self.backbone, "forward_images"):
+            raise ValueError(f"the {self.spec.name} backbone reads no images")
+        merge = cast(Any, tower).merge
+        placeholders = int((batch.input_ids == images.token_id).sum())
+        features = sum(t * h * w for t, h, w in images.grids) // merge**2
+        if placeholders != features:
+            raise ValueError(
+                f"{placeholders} image tokens but {features} image features"
+            )
+        positions = rope_index(
+            batch.input_ids.cpu(),
+            batch.attention_mask.cpu(),
+            images.grids,
+            images.token_id,
+            merge,
+        ).to(self.device)
+        hidden: torch.Tensor = cast(Any, self.backbone).forward_images(
+            input_ids,
+            attention_mask,
+            tower(images.pixel_values.to(self.device), images.grids),
+            images.token_id,
+            positions,
+            padded,
+        )
+        return hidden
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Hidden states at the batch's exits, through its branch if it names one.
@@ -624,9 +680,21 @@ class NativeEngine(Engine):
     ) -> HostStacks:
         if options.threads:
             torch.set_num_threads(options.threads)
+        target = accelerator.torch_device(device)
+        # A backbone held in a reduced dtype is read straight into it: the same
+        # values as an FP32 read and a cast, without the FP32 copy in host memory.
+        held = (
+            spec.dtype.cpu_weights if target.type == "cpu" else spec.dtype.gpu_weights
+        )
+        dtype = getattr(torch, held) if held else torch.float32
         backbone_spec = spec.backbone
         backbone = build_on_meta(backbone_spec)
-        load_backbone(backbone, backbone_spec.weight_files, backbone_spec.weight_prefix)
+        load_backbone(
+            backbone,
+            backbone_spec.weight_files,
+            backbone_spec.weight_prefix,
+            dtype=dtype,
+        )
         lora = backbone_spec.lora
         if lora is not None:
             if options.merge_lora:
@@ -645,7 +713,7 @@ class NativeEngine(Engine):
             name: load_branch(backbone, backbone_spec, name)
             for name in backbone_spec.branches
         }
-        towers = {name: load_tower(tower) for name, tower in spec.towers.items()}
+        towers = {name: load_tower(tower, dtype) for name, tower in spec.towers.items()}
         modules = (backbone, *branches.values(), *towers.values())
         leftovers = [
             name
@@ -655,13 +723,13 @@ class NativeEngine(Engine):
         ]
         if leftovers:
             raise ValueError(f"backbone parameters were not loaded: {leftovers[:3]}")
-        target = accelerator.torch_device(device)
         residency = None
         for module in modules:
+            if held:
+                cast_parameters(module, dtype)
+                continue
             module.float()
-            if target.type != "cpu" and spec.dtype.gpu_weights:
-                cast_parameters(module, getattr(torch, spec.dtype.gpu_weights))
-            elif target.type != "cpu" and spec.dtype.bf16_resident:
+            if target.type != "cpu" and spec.dtype.bf16_resident:
                 residency = keep_linear_bf16(module)
         return HostStacks(backbone, branches, towers, residency)
 
@@ -707,10 +775,12 @@ def build_on_meta(spec: BackboneSpec) -> nn.Module:
     return module
 
 
-def load_tower(spec: BackboneSpec) -> nn.Module:
+def load_tower(spec: BackboneSpec, dtype: torch.dtype = torch.float32) -> nn.Module:
     """A tower (``ModelSpec.towers``): every tensor under its prefix must belong to it."""
     tower = build_on_meta(spec)
-    load_backbone(tower, spec.weight_files, spec.weight_prefix, strict=True)
+    load_backbone(
+        tower, spec.weight_files, spec.weight_prefix, strict=True, dtype=dtype
+    )
     return tower
 
 
