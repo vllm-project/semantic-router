@@ -109,12 +109,15 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 
 func requireAnthropicContentFields(object map[string]json.RawMessage, typeName string, providerOutput bool) error {
 	requiredByType := map[string][]string{
-		"text":        {"text"},
-		"thinking":    {"thinking"},
-		"image":       {"source"},
-		"document":    {"source"},
-		"tool_use":    {"id", "input", "name"},
-		"tool_result": {"content", "tool_use_id"},
+		"text":     {"text"},
+		"thinking": {"thinking"},
+		"image":    {"source"},
+		"document": {"source"},
+		"tool_use": {"id", "input", "name"},
+		// content is optional for tool_result, matching the official SDK
+		// contract: only type and tool_use_id are required. Omitted content
+		// decodes to an empty tool result.
+		"tool_result": {"tool_use_id"},
 	}
 	for _, name := range requiredByType[typeName] {
 		if _, present := object[name]; present {
