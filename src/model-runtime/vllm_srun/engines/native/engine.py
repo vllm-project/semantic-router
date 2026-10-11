@@ -7,7 +7,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 import torch
 from torch import nn
@@ -45,6 +45,8 @@ from .weights import (
     load_adapter,
     load_backbone,
 )
+
+_T = TypeVar("_T")
 
 # FLA's gated-delta kernels index q / k / v with 32-bit offsets: one forward's stay within 2**30 elements.
 GATED_DELTA_ELEMENTS = 2**30 - 1
@@ -328,9 +330,9 @@ class NativeEngineModel(EngineModel):
                 NativeEngineModel._bit_equal(getattr(a, f), getattr(b, f))
                 for f in fields
             )
-        return a == b
+        return bool(a == b)
 
-    def _with_threads(self, tokens: int, run: Callable[[], Any]) -> Any:
+    def _with_threads(self, tokens: int, run: Callable[[], _T]) -> _T:
         """Run one batch under the resolver's thread discipline.
 
         Exploration never changes an answer: the batch is served by the
@@ -357,6 +359,7 @@ class NativeEngineModel(EngineModel):
         if count == base:
             resolver.record(tokens, base_ms)
             return result
+        adaptive_threads.CpuTeam.apply(count)
         started = time.perf_counter()
         try:
             shadow = run()
