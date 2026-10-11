@@ -114,6 +114,7 @@ func (g *group) stop() {
 		served.ready.Store(false)
 		g.recordReady(g.plan.logical, false)
 		served.state = "stopped"
+		served.card = nil
 	}
 	g.broadcastLocked()
 	g.mu.Unlock()
@@ -182,8 +183,12 @@ func (g *group) refresh(ctx context.Context) {
 		if err == nil {
 			state, reason = health.stateOf(served.name, len(g.models))
 		}
-		if card, ok := cards[served.name]; ok {
+		if state != "ready" {
+			served.card = nil
+		} else if card, ok := cards[served.name]; ok {
 			served.card = &card
+		} else if !served.ready.Load() {
+			served.card = nil
 		}
 		ready := state == "ready" && served.card != nil
 		if ready != served.ready.Load() || state != served.state || reason != served.reason {
@@ -275,6 +280,7 @@ func (g *group) processExited(err error, ran time.Duration) {
 	for _, served := range g.models {
 		served.ready.Store(false)
 		served.state = "restarting"
+		served.card = nil
 		for _, deployment := range served.deployments {
 			g.recordReady(deployment, false)
 		}
