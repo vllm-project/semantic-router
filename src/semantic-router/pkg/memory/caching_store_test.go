@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -394,6 +395,183 @@ func TestCachingStoreKeepsCacheWhenWriteFails(t *testing.T) {
 	}
 }
 
+// cacheRefillRaceStore snapshots the first retrieval result before blocking it,
+// so a write can commit and invalidate the user's cache before that old result
+// is allowed to return to CachingStore.Retrieve.
+type cacheRefillRaceStore struct {
+	mu               sync.Mutex
+	result           []*RetrieveResult
+	firstRead        bool
+	readCaptured     chan struct{}
+	releaseFirstRead chan struct{}
+	releaseOnce      sync.Once
+	writeErr         error
+}
+
+func newCacheRefillRaceStore(initial *Memory) *cacheRefillRaceStore {
+	return &cacheRefillRaceStore{
+		result:           retrieveResultFor(initial),
+		readCaptured:     make(chan struct{}),
+		releaseFirstRead: make(chan struct{}),
+	}
+}
+
+func retrieveResultFor(mem *Memory) []*RetrieveResult {
+	if mem == nil {
+		return nil
+	}
+	return []*RetrieveResult{{Memory: mem, Score: 0.9}}
+}
+
+func (s *cacheRefillRaceStore) release() {
+	s.releaseOnce.Do(func() { close(s.releaseFirstRead) })
+}
+
+func (s *cacheRefillRaceStore) replaceResult(mem *Memory) {
+	s.mu.Lock()
+	s.result = retrieveResultFor(mem)
+	s.mu.Unlock()
+}
+
+func (s *cacheRefillRaceStore) Store(_ context.Context, mem *Memory) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(mem)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) Update(_ context.Context, _ string, mem *Memory) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(mem)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) Get(context.Context, string) (*Memory, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.result) == 0 || s.result[0] == nil || s.result[0].Memory == nil {
+		return nil, errors.New("memory not found")
+	}
+	return s.result[0].Memory, nil
+}
+
+func (s *cacheRefillRaceStore) Forget(context.Context, string) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(nil)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) ForgetByScope(context.Context, MemoryScope) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.replaceResult(nil)
+	return nil
+}
+
+func (s *cacheRefillRaceStore) Retrieve(context.Context, RetrieveOptions) ([]*RetrieveResult, error) {
+	s.mu.Lock()
+	result := append([]*RetrieveResult(nil), s.result...)
+	block := !s.firstRead
+	s.firstRead = true
+	s.mu.Unlock()
+	if block {
+		close(s.readCaptured)
+		<-s.releaseFirstRead
+	}
+	return result, nil
+}
+
+func (s *cacheRefillRaceStore) List(context.Context, ListOptions) (*ListResult, error) {
+	return &ListResult{}, nil
+}
+
+func (s *cacheRefillRaceStore) IsEnabled() bool { return true }
+
+func (s *cacheRefillRaceStore) CheckConnection(context.Context) error { return nil }
+
+func (s *cacheRefillRaceStore) Close() error { return nil }
+
+var _ Store = (*cacheRefillRaceStore)(nil)
+
+func TestCachingStoreRejectsStaleRefillAfterCommittedWrite(t *testing.T) {
+	const userID = "u-stale-refill"
+	oldMemory := &Memory{ID: "old", UserID: userID, Content: "old result"}
+	newMemory := &Memory{ID: "new", UserID: userID, Content: "new result"}
+
+	writes := map[string]struct {
+		apply  func(*CachingStore) error
+		latest string
+	}{
+		"Store":  {apply: func(c *CachingStore) error { return c.Store(context.Background(), newMemory) }, latest: "new"},
+		"Update": {apply: func(c *CachingStore) error { return c.Update(context.Background(), oldMemory.ID, newMemory) }, latest: "new"},
+		"Forget": {apply: func(c *CachingStore) error { return c.Forget(context.Background(), oldMemory.ID) }},
+		"ForgetByScope": {apply: func(c *CachingStore) error {
+			return c.ForgetByScope(context.Background(), MemoryScope{UserID: userID})
+		}},
+	}
+
+	for name, scenario := range writes {
+		t.Run(name, func(t *testing.T) {
+			backing := newCacheRefillRaceStore(oldMemory)
+			wrapped, cache := newInvalidationFixture(t, backing)
+			defer backing.release()
+
+			opts := RetrieveOptions{Query: "query", UserID: userID, Limit: 5, Threshold: 0.5}
+			otherUserOpts := opts
+			otherUserOpts.UserID = "u-other-stale-refill"
+			cache.Set(context.Background(), otherUserOpts, retrieveResultFor(&Memory{
+				ID: "other-user", UserID: otherUserOpts.UserID, Content: "other user's result",
+			}))
+
+			firstRetrieve := make(chan []*RetrieveResult, 1)
+			firstErr := make(chan error, 1)
+			go func() {
+				results, err := wrapped.Retrieve(context.Background(), opts)
+				firstRetrieve <- results
+				firstErr <- err
+			}()
+
+			select {
+			case <-backing.readCaptured:
+			case <-time.After(time.Second):
+				t.Fatal("first retrieval did not capture the old backing-store result")
+			}
+
+			require.NoError(t, scenario.apply(wrapped), "write must commit before stale retrieval is released")
+			backing.release()
+			var staleResults []*RetrieveResult
+			select {
+			case staleResults = <-firstRetrieve:
+			case <-time.After(time.Second):
+				t.Fatal("first retrieval did not finish after release")
+			}
+			require.NoError(t, <-firstErr)
+			require.Len(t, staleResults, 1)
+			assert.Equal(t, "old", staleResults[0].Memory.ID, "blocked retrieval must return the old snapshot after the write")
+
+			latest, err := wrapped.Retrieve(context.Background(), opts)
+			require.NoError(t, err)
+			if scenario.latest == "" {
+				assert.Empty(t, latest, "a successful deletion must not expose the stale refill")
+			} else {
+				require.Len(t, latest, 1)
+				assert.Equal(t, scenario.latest, latest[0].Memory.ID, "successful write must not expose the stale refill")
+			}
+
+			other, hit := cache.Get(context.Background(), otherUserOpts)
+			require.True(t, hit, "invalidating one user must preserve another user's cache")
+			require.Len(t, other, 1)
+			assert.Equal(t, "other-user", other[0].Memory.ID)
+		})
+	}
+}
+
 func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
 	mr := miniredis.RunT(t)
 	cache, err := NewRedisCache(context.Background(), &RedisCacheConfig{Address: mr.Addr()})
@@ -406,7 +584,7 @@ func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
 	entered, release := make(chan struct{}, 1), make(chan struct{})
 	defer close(release)
 	mr.Server().SetPreHook(func(_ *server.Peer, cmd string, _ ...string) bool {
-		if strings.EqualFold(cmd, "SMEMBERS") {
+		if strings.EqualFold(cmd, "EVAL") || strings.EqualFold(cmd, "EVALSHA") {
 			select {
 			case entered <- struct{}{}:
 			default:

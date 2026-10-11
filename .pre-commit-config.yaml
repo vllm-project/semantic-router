@@ -62,7 +62,7 @@ repos:
         entry: make decision-runtime-catalog-check
         language: system
         pass_filenames: false
-        files: ^(src/model-runtime/vllm_srun/(registry/tables/\w+|systemone|families/decision1/(family|questions)|families/decision2/family|families/vela2/request)\.py$|src/model-runtime/vllm_srun/registry/releases\.generated\.json$|dashboard/frontend/scripts/generate-decision-runtime-catalog\.py$|dashboard/frontend/src/pages/decisionRuntimeCatalog\.generated\.json$|src/semantic-router/pkg/modelservice/decision_catalog\.generated\.json$|tools/make/dashboard\.mk$|\.pre-commit-config\.yaml$)
+        files: ^(src/model-runtime/vllm_srun/(registry/tables/\w+|systemone|families/decision1/(family|questions)|families/decision[23]/family|families/vela2/request)\.py$|src/model-runtime/vllm_srun/registry/releases\.generated\.json$|dashboard/frontend/scripts/generate-decision-runtime-catalog\.py$|dashboard/frontend/src/pages/decisionRuntimeCatalog\.generated\.json$|src/semantic-router/pkg/modelservice/decision_catalog\.generated\.json$|tools/make/dashboard\.mk$|\.pre-commit-config\.yaml$)
 
       - id: cli-reference-generated
         name: CLI command reference

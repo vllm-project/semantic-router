@@ -14,6 +14,11 @@ export interface DecisionModelOption {
   revision?: string
 }
 
+const DECISION_FAMILY_LABELS: Record<string, string> = {
+  decision1: 'Decision 1.0',
+  decision2: 'Decision 2.0',
+  decision3: 'Decision 3.0',
+}
 const velaSizes = ['0.3B', '0.8B', '4B', '9B'] as const
 export const DECISION_MODEL_OPTIONS: readonly DecisionModelOption[] = [
   ...velaSizes.map(
@@ -33,11 +38,17 @@ export const DECISION_MODEL_OPTIONS: readonly DecisionModelOption[] = [
     (entry): DecisionModelOption => ({
       name: entry.name,
       artifact: entry.id,
-      label: entry.name.replace('Decision-', 'Decision ').replace(/-/g, ' '),
-      family: entry.family === 'decision1' ? 'Decision 1.0' : 'Decision 2.0',
+      label:
+        entry.family === 'decision3'
+          ? `Decision 3.0 ${entry.name}`
+          : entry.name.replace('Decision-', 'Decision ').replace(/-/g, ' '),
+      family: DECISION_FAMILY_LABELS[entry.family] ?? 'Decision 2.0',
       provider: entry.provider,
       hardware: `${entry.minMemoryGiB} GiB minimum memory`,
-      summary: 'General judgment questions for classification, scoring and routing decisions.',
+      summary:
+        entry.family === 'decision3'
+          ? 'General judgment questions over text and images for classification, scoring and routing decisions.'
+          : 'General judgment questions for classification, scoring and routing decisions.',
       questionTypes: DECISION_RUNTIME_CAPABILITIES,
       revision: entry.revision,
     }),
