@@ -219,11 +219,12 @@ class DatasetContractTest(unittest.TestCase):
         ):
             spec.validate_artifact(repo)
         mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
-        texts, labels, available = namespace["load_rows"](
+        texts, labels, available, dropped = namespace["load_rows"](
             spec, mapping, None, spec.revision
         )
         self.assertEqual(
-            (texts, labels, available), (["a", "b", "c", "d"], [1, 0, 0, 1], 4)
+            (texts, labels, available, dropped),
+            (["a", "b", "c", "d"], [1, 0, 0, 1], 4, {}),
         )
         self.assertEqual(
             reads,
@@ -232,6 +233,35 @@ class DatasetContractTest(unittest.TestCase):
                 for name in spec.data_files
             ],
         )
+
+    def test_dropped_rows_name_the_labels_and_counts(self):
+        # One row carries a label the artifact's map does not define, the way
+        # a checkpoint trained before a contract class was added reads.
+        published = {
+            "text/nf-cats/fact_check/test.jsonl": [
+                {"text": "d", "label": "OUT_OF_CONTRACT", "source": "nf-cats"},
+            ],
+            "text/open-question-type/fact_check/test.jsonl": [],
+            "text/search-arena/fact_check/test.jsonl": [
+                {"text": "a", "label": "FACT_CHECK_NEEDED", "source": "search-arena"},
+            ],
+            "text/urs/fact_check/test.jsonl": [
+                {"text": "b", "label": "NO_FACT_CHECK_NEEDED", "source": "urs"},
+                {"text": "c", "label": "NO_FACT_CHECK_NEEDED", "source": "urs"},
+            ],
+        }
+
+        def load_dataset(repo, data_files, split, revision):
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
+        spec = namespace["TASK_SPECS"]["fact-check"]
+        mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
+        texts, labels, available, dropped = namespace["load_rows"](
+            spec, mapping, None, spec.revision
+        )
+        self.assertEqual((texts, labels, available), (["a", "b", "c"], [1, 0, 0], 4))
+        self.assertEqual(dropped, {"OUT_OF_CONTRACT": 1})
 
     def test_pinned_split_is_read_and_recorded_at_its_pin(self):
         class LoadReachedError(Exception):
@@ -332,10 +362,12 @@ class DatasetContractTest(unittest.TestCase):
         namespace = domain_baseline()
         spec = namespace["TASK_SPECS"]["domain"]
         self.assertEqual(spec.split_rule, "by_source")
-        texts, labels, available = namespace["load_rows"](
+        texts, labels, available, dropped = namespace["load_rows"](
             spec, DOMAIN_SUBSET, None, "revision"
         )
-        self.assertEqual((texts, labels, available), (["b", "d"], [1, 0], 2))
+        self.assertEqual(
+            (texts, labels, available, dropped), (["b", "d"], [1, 0], 2, {})
+        )
         spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
         for key in ("id", "lora_id"):
             with self.assertRaisesRegex(
@@ -345,7 +377,7 @@ class DatasetContractTest(unittest.TestCase):
 
     def test_filtered_domain_report_leaves_labels_without_rows_unmeasured(self):
         namespace = domain_baseline()
-        _, labels, _ = namespace["load_rows"](
+        _, labels, _, _ = namespace["load_rows"](
             namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None, "revision"
         )
         # Perfect predictions on the rows the filter keeps.
