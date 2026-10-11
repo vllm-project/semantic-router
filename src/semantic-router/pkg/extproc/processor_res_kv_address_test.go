@@ -132,50 +132,50 @@ func TestKVAddressNamespaceIsolatesPrincipalsAcrossResponseCacheScopes(t *testin
 
 	for _, scope := range []string{"", "global", "tenant", "team", "user"} {
 		t.Run("scope_"+scope, func(t *testing.T) {
-			userA := testKVAddressRoutingContext(t)
-			userA.RequestID = "req-a"
-			userA.SessionID = sharedSession
-			userA.SessionProvenance = SessionProvenanceHeader
-			userA.RequestModel = "qwen3-14b"
-			userA.UpstreamBackendAddress = "10.0.1.5:8000"
-			userA.UpstreamStatusCode = 200
-			userA.AuthenticatedPrincipal = "user-a"
-			userA.Headers[headers.AuthzUserID] = "user-a"
-			userA.VSRSelectedDecision = responseCacheScopedDecision(scope)
+			principalA := testKVAddressRoutingContext(t)
+			principalA.RequestID = "req-a"
+			principalA.SessionID = sharedSession
+			principalA.SessionProvenance = SessionProvenanceHeader
+			principalA.RequestModel = "qwen3-14b"
+			principalA.UpstreamBackendAddress = "10.0.1.5:8000"
+			principalA.UpstreamStatusCode = 200
+			principalA.AuthenticatedPrincipal = "user-a"
+			principalA.Headers[headers.AuthzUserID] = "user-a"
+			principalA.VSRSelectedDecision = responseCacheScopedDecision(scope)
 
-			userB := testKVAddressRoutingContext(t)
-			userB.RequestID = "req-b"
-			userB.SessionID = sharedSession
-			userB.SessionProvenance = SessionProvenanceHeader
-			userB.RequestModel = "qwen3-14b"
-			userB.UpstreamBackendAddress = "10.0.1.6:8000"
-			userB.UpstreamStatusCode = 200
-			userB.AuthenticatedPrincipal = "user-b"
-			userB.Headers[headers.AuthzUserID] = "user-b"
-			userB.Headers[headers.AuthzTenantID] = "tenant-shared"
-			userB.Headers[headers.AuthzTeamID] = "team-shared"
-			userB.VSRSelectedDecision = responseCacheScopedDecision(scope)
+			principalB := testKVAddressRoutingContext(t)
+			principalB.RequestID = "req-b"
+			principalB.SessionID = sharedSession
+			principalB.SessionProvenance = SessionProvenanceHeader
+			principalB.RequestModel = "qwen3-14b"
+			principalB.UpstreamBackendAddress = "10.0.1.6:8000"
+			principalB.UpstreamStatusCode = 200
+			principalB.AuthenticatedPrincipal = "user-b"
+			principalB.Headers[headers.AuthzUserID] = "user-b"
+			principalB.Headers[headers.AuthzTenantID] = "tenant-shared"
+			principalB.Headers[headers.AuthzTeamID] = "team-shared"
+			principalB.VSRSelectedDecision = responseCacheScopedDecision(scope)
 
-			router.updateKVAddressRegistry(userA)
-			router.updateKVAddressRegistry(userB)
+			router.updateKVAddressRegistry(principalA)
+			router.updateKVAddressRegistry(principalB)
 
-			if kvAddressNamespace(userA) == kvAddressNamespace(userB) {
-				t.Fatalf("principals share namespace %q under response-cache scope %q", kvAddressNamespace(userA), scope)
+			if kvAddressNamespace(principalA) == kvAddressNamespace(principalB) {
+				t.Fatalf("principals share namespace %q under response-cache scope %q", kvAddressNamespace(principalA), scope)
 			}
 
-			gotA, err := reg.Lookup(context.Background(), kvAddressNamespace(userA), routingSessionStateKey(userA))
+			gotA, err := reg.Lookup(context.Background(), kvAddressNamespace(principalA), routingSessionStateKey(principalA))
 			if err != nil {
-				t.Fatalf("Lookup(userA) error = %v", err)
+				t.Fatalf("Lookup(principalA) error = %v", err)
 			}
-			gotB, err := reg.Lookup(context.Background(), kvAddressNamespace(userB), routingSessionStateKey(userB))
+			gotB, err := reg.Lookup(context.Background(), kvAddressNamespace(principalB), routingSessionStateKey(principalB))
 			if err != nil {
-				t.Fatalf("Lookup(userB) error = %v", err)
+				t.Fatalf("Lookup(principalB) error = %v", err)
 			}
 			if gotA == nil || gotA.SourcePod != "10.0.1.5:8000" {
-				t.Fatalf("userA SourcePod = %v, want 10.0.1.5:8000", gotA)
+				t.Fatalf("principalA SourcePod = %v, want 10.0.1.5:8000", gotA)
 			}
 			if gotB == nil || gotB.SourcePod != "10.0.1.6:8000" {
-				t.Fatalf("userB SourcePod = %v, want 10.0.1.6:8000", gotB)
+				t.Fatalf("principalB SourcePod = %v, want 10.0.1.6:8000", gotB)
 			}
 		})
 	}
