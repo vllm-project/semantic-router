@@ -77,7 +77,7 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 	)
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
-	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
+	assertReferenceConfigDecisionCoverage(t, referenceRecipeDecisions(t, root))
 }
 
 func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {

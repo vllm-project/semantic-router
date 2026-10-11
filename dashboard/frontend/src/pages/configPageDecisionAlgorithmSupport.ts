@@ -1,4 +1,9 @@
-import { ALGORITHM_TYPES, type AlgorithmType } from '../lib/dslAlgorithmSchemas'
+import {
+  ALGORITHM_TYPES,
+  getAlgorithmFieldSchema,
+  isNativeAlgorithm,
+  type AlgorithmType,
+} from '../lib/dslAlgorithmSchemas'
 
 type AlgorithmRecord = Record<string, unknown>
 
@@ -16,6 +21,12 @@ export function algorithmType(value: unknown): AlgorithmType {
 export function algorithmFields(value: unknown): AlgorithmRecord {
   const algorithm = asRecord(value)
   const type = algorithmType(algorithm)
+  if (isNativeAlgorithm(type))
+    return Object.fromEntries(
+      getAlgorithmFieldSchema(type)
+        .filter(({ key }) => algorithm[key] !== undefined)
+        .map(({ key }) => [key, algorithm[key]]),
+    )
   const nested = asRecord(algorithm[type])
   const fields: AlgorithmRecord = { ...nested }
   if (algorithm.minimum_candidates !== undefined) {
@@ -36,6 +47,16 @@ export function mergeAlgorithmFields(
   const previous = asRecord(existing)
   const next: AlgorithmRecord = { ...previous, type }
   for (const algorithmTypeName of ALGORITHM_TYPES) delete next[algorithmTypeName]
+  delete next.budget
+  delete next.quality
+  delete next.stages
+  if (isNativeAlgorithm(type)) {
+    delete next.minimum_candidates
+    delete next.on_error
+    for (const { key } of getAlgorithmFieldSchema(type))
+      if (fields[key] !== undefined) next[key] = fields[key]
+    return next
+  }
 
   if (fields.minimum_candidates === undefined) delete next.minimum_candidates
   else next.minimum_candidates = fields.minimum_candidates

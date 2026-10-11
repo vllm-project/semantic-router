@@ -32,12 +32,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	// KVHandoff is an optional trusted deployment adapter; nil disables transfer.
+	KVHandoff KVHandoffPlanner
+
+	nativeExecutors map[string]*systemone.Executor
 	// signals is the signal runtime this router extracts signals with; a
 	// later generation can share it.
 	signals   *signalRuntime

@@ -15,6 +15,7 @@ from .forest import ForestShape
 from .modernbert import Layout, ModernBertBackbone
 from .qwen3 import Qwen3Backbone
 from .qwen3_5 import Qwen3_5Backbone
+from .qwen3_5_vision import Qwen3_5VisionBackbone
 from .siglip import SiglipVisionBackbone
 from .tree import Tree
 from .whisper import WhisperEncoderBackbone
@@ -25,6 +26,7 @@ ARCHITECTURES: dict[str, type[nn.Module]] = {
     ModernBertBackbone.model_type: ModernBertBackbone,
     Qwen3Backbone.model_type: Qwen3Backbone,
     Qwen3_5Backbone.model_type: Qwen3_5Backbone,
+    Qwen3_5VisionBackbone.model_type: Qwen3_5VisionBackbone,
     SiglipVisionBackbone.model_type: SiglipVisionBackbone,
     WhisperEncoderBackbone.model_type: WhisperEncoderBackbone,
 }

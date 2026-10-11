@@ -69,6 +69,134 @@ func piiSignalChunks(text string) []string {
 	)
 }
 
+// forEachUniquePIISignalChunk streams unique PII chunks to visit in scan order.
+// It is used for tool results, where the caller may stop after a request-scoped
+// inference budget is exhausted. Unlike piiSignalChunks, it does not build a
+// slice containing every chunk before the first inference call.
+//
+// The returned boolean is true only when the complete input was visited. A
+// false result means the visitor intentionally stopped early and the caller
+// must treat the scan as incomplete.
+func forEachUniquePIISignalChunk(text string, visit func(string) bool) bool {
+	seen := make(map[string]struct{})
+	return forEachSecuritySignalChunk(text, piiSignalChunkBudget, piiSignalChunkOverlapRunes, func(chunk string) bool {
+		if _, duplicate := seen[chunk]; duplicate {
+			return true
+		}
+		seen[chunk] = struct{}{}
+		return visit(chunk)
+	})
+}
+
+// forEachSecuritySignalChunk walks security chunks without materializing the
+// complete chunk list. Chunk boundaries intentionally use the same unit and
+// overlap budgets as securitySignalChunkSpans, but calculate only the next
+// chunk needed by the caller.
+func forEachSecuritySignalChunk(text string, budget, overlapRunes int, visit func(string) bool) bool {
+	if text == "" {
+		return true
+	}
+
+	startByte := 0
+	for startByte < len(text) {
+		endByte := nextSecuritySignalChunkEnd(text, startByte, budget)
+		if endByte <= startByte {
+			endByte = advanceOneRune(text, startByte)
+		}
+
+		if !visit(text[startByte:endByte]) {
+			return false
+		}
+		if endByte >= len(text) {
+			return true
+		}
+
+		nextStartByte := rewindRunes(text, endByte, overlapRunes)
+		if nextStartByte <= startByte {
+			nextStartByte = advanceOneRune(text, startByte)
+		}
+		startByte = nextStartByte
+	}
+	return true
+}
+
+// nextSecuritySignalChunkEnd returns the byte boundary of the next chunk.
+// It intentionally keeps the scan local to one chunk, which bounds temporary
+// allocation for very large tool-result strings.
+func nextSecuritySignalChunkEnd(text string, startByte, budget int) int {
+	if startByte >= len(text) {
+		return len(text)
+	}
+
+	const backtrackRunes = 64
+	endByte := startByte
+	units := 0
+	inWord, wordHasDigit := false, false
+	boundaries := make([]int, 0, backtrackRunes+1)
+	boundaries = append(boundaries, startByte)
+
+	for endByte < len(text) {
+		r, size := utf8.DecodeRuneInString(text[endByte:])
+		runeUnits, nextInWord, nextWordHasDigit := signalRuneUnits(r, inWord, wordHasDigit)
+		if endByte > startByte && units+runeUnits > budget-1 {
+			break
+		}
+		if endByte == startByte && units+runeUnits > budget-1 {
+			endByte += size
+			break
+		}
+
+		units += runeUnits
+		inWord, wordHasDigit = nextInWord, nextWordHasDigit
+		endByte += size
+		boundaries = append(boundaries, endByte)
+		if len(boundaries) > backtrackRunes+1 {
+			boundaries = boundaries[1:]
+		}
+	}
+
+	if endByte >= len(text) {
+		return len(text)
+	}
+	if unicode.IsSpace(firstRuneAt(text, endByte)) {
+		return endByte
+	}
+
+	for i := len(boundaries) - 1; i > 0; i-- {
+		boundary := boundaries[i]
+		if unicode.IsSpace(lastRuneBefore(text, boundary)) {
+			return boundary
+		}
+	}
+	return endByte
+}
+
+func advanceOneRune(text string, byteOffset int) int {
+	_, size := utf8.DecodeRuneInString(text[byteOffset:])
+	return byteOffset + size
+}
+
+func rewindRunes(text string, byteOffset, count int) int {
+	for range count {
+		if byteOffset <= 0 {
+			return 0
+		}
+		_, size := utf8.DecodeLastRuneInString(text[:byteOffset])
+		byteOffset -= size
+	}
+	return byteOffset
+}
+
+func firstRuneAt(text string, byteOffset int) rune {
+	r, _ := utf8.DecodeRuneInString(text[byteOffset:])
+	return r
+}
+
+func lastRuneBefore(text string, byteOffset int) rune {
+	r, _ := utf8.DecodeLastRuneInString(text[:byteOffset])
+	return r
+}
+
 // piiSignalChunkSpans is piiSignalChunks with offsets, for callers that report
 // entity positions. It does not de-duplicate: two identical chunks are at
 // different offsets, and both of those positions are real.

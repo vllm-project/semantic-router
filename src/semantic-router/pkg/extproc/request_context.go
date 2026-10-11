@@ -22,6 +22,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/topiccontinuity"
 )
 
 // EnhancedHallucinationSpan is one unsupported span with its offsets, score,
@@ -303,6 +304,7 @@ type RequestContext struct {
 	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
 	VSRMatchedPreference      []string // Matched preference signals
 	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
 	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
@@ -438,7 +440,17 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	SemanticResponse         *llmprotocol.Response
+	// originalConversation memoizes one decode of OriginalContextHistory for
+	// the request. It is read-only by contract: consumers must not mutate it.
+	originalConversation       *contextcompression.ConversationHistory
+	originalConversationLoaded bool
+	// TopicContinuityEvaluations holds the selected recipe's topic-continuity
+	// results in rule declaration order, with content-free cost receipts.
+	TopicContinuityEvaluations []topiccontinuity.RuleEvaluation
+	// TopicContinuityResults indexes the same results by rule name. Values are
+	// plain structs, so reads are detached copies.
+	TopicContinuityResults map[string]topiccontinuity.Result
+	SemanticResponse       *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would

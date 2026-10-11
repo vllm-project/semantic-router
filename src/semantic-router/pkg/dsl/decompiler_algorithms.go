@@ -5,6 +5,7 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 type algorithmFieldExporter func(*config.AlgorithmConfig, map[string]Value)
 
 var algorithmFieldExporters = map[string]algorithmFieldExporter{
+	"cascade": cascadeAlgorithmToFields,
 	"confidence": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		confidenceAlgorithmToFields(algo.Confidence, fields)
 	},

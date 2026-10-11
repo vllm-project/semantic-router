@@ -3,7 +3,8 @@
 ## Overview
 
 An algorithm runs after a decision matches. It either selects one model from
-the decision's `modelRefs` or coordinates several of them through the Looper.
+the decision's `modelRefs`, coordinates Chat models through the Looper, or
+executes a native System One cascade.
 It does not decide whether the route is eligible; signals and decisions do
 that first.
 
@@ -85,6 +86,7 @@ same final validation but are not replaced by another model.
 |---|---|---|---|---|
 | `decision` | supported | Ask a typed choice question over the matched candidates | Decision deployment with Choice support | [Decision](./selection/decision) |
 | `static` | supported | Use declared order or fixed domain scores | None | [Static](./selection/static) |
+| `random` | supported | Pick uniformly among eligible declared candidates | None | [Random](./selection/random) |
 | `router_dc` | supported | Match request semantics to model descriptions | Embedding runtime and useful model cards | [Router DC](./selection/router-dc) |
 | `latency_aware` | supported | Prefer the candidate with the best observed TTFT/TPOT | Per-process latency observations | [Latency Aware](./selection/latency-aware) |
 | `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor) |
@@ -147,3 +149,19 @@ traffic before using them for production routing.
   checked against each target Model's known context window before dispatch.
   Missing context metadata remains eligible for compatibility.
 - Validate a complete config with `vllm-sr config validate --config config.yaml`.
+
+### Native System One Algorithms
+
+A recipe published with `api: systemone` uses native execution. Its matched
+decision runs a `cascade`, preserving complete typed responses. Each cascade
+has its own `algorithm.budget` for its stages and transport retries. Signals
+run first with their own timeouts and request cancellation.
+
+| Type | Status | Goal | Guide |
+| --- | --- | --- | --- |
+| `cascade` | experimental | Try declared native models in authored order until acceptance passes | [Cascade](./native/cascade.md) |
+
+A one-stage cascade can target one model; a longer cascade can try a small model
+before a stronger one. Several decisions can choose different cascades within
+one recipe. Native execution uses an explicit candidate roster and quality
+contract; it does not run Chat plugins or silently fall back to a Chat model.
