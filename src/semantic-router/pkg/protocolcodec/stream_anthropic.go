@@ -338,7 +338,12 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 	if wire.ContentBlock == nil {
 		return event, nil
 	}
-	if err := validateAnthropicToolCaller(wire.ContentBlock.Caller, true); err != nil {
+	if wire.ContentBlock.Type == "tool_use" {
+		// Same response row as the buffered decoder, so a stream cannot admit what a body rejects.
+		if err := validateAnthropicContentExtensions(*wire.ContentBlock, anthropicResponseContentFields["tool_use"], true); err != nil {
+			return llmprotocol.Event{}, err
+		}
+	} else if err := validateAnthropicToolCaller(wire.ContentBlock.Caller, true); err != nil {
 		return llmprotocol.Event{}, err
 	}
 	event.ItemID = wire.ContentBlock.ID
