@@ -3,7 +3,6 @@ package extproc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -117,7 +116,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
-		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
+		return requestDecisionState{}, r.createErrorResponse(503, "RAG retrieval failed")
 	}
 
 	return requestDecisionState{
