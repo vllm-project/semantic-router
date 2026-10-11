@@ -26,7 +26,6 @@ import shutil
 import sys
 from pathlib import Path
 
-from d25.vega.release.card_measured import py_literal
 from d25.vega.release.examples import EXAMPLE_VIDEO, QUICKSTART_VIDEO
 
 AREAS = ("memory", "abstraction", "physics", "semantics")
@@ -34,6 +33,29 @@ FORBIDDEN = re.compile(
     r"nvidia|\brtx\b|cuda|pending|hf jobs|teacher|distill|\bvega\b|\bomni\b|\bd25\b|decision 2\.5",
     re.I,
 )
+
+
+def py_literal(value, indent: int = 0) -> str:
+    """A Python literal laid out like ``json.dumps(..., indent=4)`` (``None`` instead of ``null``), as the cards' code."""
+    pad, inner = " " * indent, " " * (indent + 4)
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        items = [
+            f"{inner}{json.dumps(k)}: {py_literal(v, indent + 4)}"
+            for k, v in value.items()
+        ]
+        return "{\n" + ",\n".join(items) + f"\n{pad}}}"
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        items = [f"{inner}{py_literal(v, indent + 4)}" for v in value]
+        return "[\n" + ",\n".join(items) + f"\n{pad}]"
+    if value is None:
+        return "None"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    return json.dumps(value, ensure_ascii=False)
 
 
 def sha256(path: Path) -> str:
