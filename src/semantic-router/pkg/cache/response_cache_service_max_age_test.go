@@ -130,3 +130,151 @@ func TestLegacyBackendAdapterAgePropagation(t *testing.T) {
 	assert.False(t, res.ExpiresAt.IsZero())
 	assert.GreaterOrEqual(t, res.Age, time.Duration(0))
 }
+
+func TestResponseCacheServiceSemanticMaxAgeAgainstL2(t *testing.T) {
+	ctx := context.Background()
+
+	backend := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		MaxEntries:        100,
+		TTLSeconds:        3600,
+	})
+	service := NewResponseCacheService(
+		NewLegacyBackendAdapter(backend, InMemoryCacheType),
+		ResponseCacheServiceOptions{L1MaxEntries: -1},
+	)
+
+	identity := CacheIdentity{
+		Partition: CachePartition{
+			RequestModel: "model-a",
+			Protocol:     "openai:body",
+		},
+		ExactFingerprint: "fingerprint-sem-1",
+		SemanticQuery:    "hello world",
+	}
+	err := service.StoreSemantic(ctx, CacheWrite{
+		Identity:     identity,
+		RequestID:    "req-sem-1",
+		ResponseBody: []byte(`{"id":"cached-sem"}`),
+		TTL:          TTL(time.Hour),
+	})
+	require.NoError(t, err, "StoreSemantic")
+
+	maxAge := 60 * time.Second
+	result, err := service.LookupSemantic(ctx, SemanticLookup{
+		Identity:  identity,
+		Threshold: 0.8,
+		MaxAge:    &maxAge,
+	})
+	require.NoError(t, err, "LookupSemantic")
+	assert.True(t, result.Found, "expected HIT from L2")
+	assert.Equal(t, HitKindSemantic, result.HitKind)
+	assert.Equal(t, CacheSourceL2, result.Source)
+	assert.True(t, result.AgeKnown, "AgeKnown should be true")
+	assert.LessOrEqual(t, result.Age, maxAge)
+}
+
+func TestResponseCacheServiceSemanticMaxAgeStaleMissAgainstL2(t *testing.T) {
+	ctx := context.Background()
+
+	backend := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		MaxEntries:        100,
+		TTLSeconds:        3600,
+	})
+	service := NewResponseCacheService(
+		NewLegacyBackendAdapter(backend, InMemoryCacheType),
+		ResponseCacheServiceOptions{L1MaxEntries: -1},
+	)
+
+	identity := CacheIdentity{
+		Partition: CachePartition{
+			RequestModel: "model-a",
+			Protocol:     "openai:body",
+		},
+		ExactFingerprint: "fingerprint-sem-2",
+		SemanticQuery:    "hello world",
+	}
+	err := service.StoreSemantic(ctx, CacheWrite{
+		Identity:     identity,
+		RequestID:    "req-sem-2",
+		ResponseBody: []byte(`{"id":"cached-sem-2"}`),
+		TTL:          TTL(time.Hour),
+	})
+	require.NoError(t, err, "StoreSemantic")
+
+	time.Sleep(2 * time.Millisecond)
+	maxAge := time.Nanosecond
+	result, err := service.LookupSemantic(ctx, SemanticLookup{
+		Identity:  identity,
+		Threshold: 0.8,
+		MaxAge:    &maxAge,
+	})
+	require.NoError(t, err, "LookupSemantic")
+	assert.False(t, result.Found, "expected MISS due to max-age bound exceeded")
+	assert.Equal(t, HitKindMiss, result.HitKind)
+
+	stats, err := service.Stats(ctx)
+	require.NoError(t, err, "Stats")
+	assert.Equal(t, int64(1), stats.StaleMissCount, "stale miss count should be incremented")
+}
+
+type semanticUnknownAgeTestStore struct {
+	result CacheResult
+}
+
+func (s *semanticUnknownAgeTestStore) LookupExact(context.Context, ExactLookup) (CacheResult, error) {
+	return CacheResult{HitKind: HitKindMiss}, nil
+}
+func (s *semanticUnknownAgeTestStore) StoreExact(context.Context, CacheWrite) error { return nil }
+func (s *semanticUnknownAgeTestStore) LookupSemantic(context.Context, SemanticLookup) (CacheResult, error) {
+	return s.result, nil
+}
+
+func (s *semanticUnknownAgeTestStore) StoreSemantic(context.Context, CacheWrite) error { return nil }
+
+func (s *semanticUnknownAgeTestStore) Health(context.Context) error { return nil }
+
+func (s *semanticUnknownAgeTestStore) Close() error { return nil }
+
+func (s *semanticUnknownAgeTestStore) Stats(context.Context) (CacheStats, error) {
+	return CacheStats{}, nil
+}
+
+func (s *semanticUnknownAgeTestStore) Capabilities() BackendCapabilities {
+	return CapabilitiesForBackend(InMemoryCacheType)
+}
+
+func TestResponseCacheServiceSemanticMaxAgeUnknownAgeStaleMiss(t *testing.T) {
+	ctx := context.Background()
+
+	store := &semanticUnknownAgeTestStore{
+		result: CacheResult{
+			Found:        true,
+			ResponseBody: []byte(`{"id":"cached-sem-3"}`),
+			AgeKnown:     false,
+		},
+	}
+	service := NewResponseCacheService(store, ResponseCacheServiceOptions{})
+
+	maxAge := 10 * time.Second
+	result, err := service.LookupSemantic(ctx, SemanticLookup{
+		Identity: CacheIdentity{
+			Partition: CachePartition{
+				RequestModel: "model-a",
+				Protocol:     "openai:body",
+			},
+		},
+		Threshold: 0.8,
+		MaxAge:    &maxAge,
+	})
+	require.NoError(t, err, "LookupSemantic")
+	assert.False(t, result.Found, "expected MISS due to unknown age when max-age bound is set")
+	assert.Equal(t, HitKindMiss, result.HitKind)
+
+	stats, err := service.Stats(ctx)
+	require.NoError(t, err, "Stats")
+	assert.Equal(t, int64(1), stats.StaleMissCount, "stale miss count should be incremented")
+}
