@@ -191,6 +191,22 @@ This is a per-worker limit, so several busy workers can still contend for the
 same cores. Reserve cores for other services when sharing a host. Runtimes you
 attach through `endpoint` manage their own threads.
 
+A managed CPU runtime can also adapt its intra-op thread count to the request
+it is running: the fastest count for a short input is often lower than for a
+long one, and on a shared host it moves with the neighbors' load. Setting
+`VLLM_SRUN_CPU_ADAPTIVE_THREADS=1` before starting the stack opts each CPU
+worker in. Exploration starts only after the startup golden check has passed,
+the worker serves each request with this setting's count while the allowed
+counts run as shadow passes that must reproduce the served answer bit for
+bit — a count that drifts on this host is discarded — and only verified
+counts are adopted, per input-size range, never above this setting's budget;
+an adopted count then serves its own range's requests. All forwards state
+their thread count on a shared per-process context, so
+several workers in one process never inherit each other's count. The
+exploration asks something of the first requests, and the learned setting
+reflects the load the worker saw while learning; on a host whose load shifts,
+relearn by restarting the worker.
+
 ## Publish a native API
 
 With the `primary` deployment above, add an explicit grant to a standalone

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 import torch
 from torch import nn
@@ -32,6 +33,7 @@ from ...plugins.base import (
 )
 from ...scheduler.planner import padded
 from . import fast, models
+from . import threads as adaptive_threads
 from .encoder import EncoderGraphs
 from .models.forest import ForestShape
 from .models.lora import attach
@@ -45,6 +47,8 @@ from .weights import (
     load_adapter,
     load_backbone,
 )
+
+_T = TypeVar("_T")
 
 # FLA's gated-delta kernels index q / k / v with 32-bit offsets: one forward's stay within 2**30 elements.
 GATED_DELTA_ELEMENTS = 2**30 - 1
@@ -129,6 +133,12 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self._cpu_threads = options.threads or torch.get_num_threads()
+        self.threads_resolver = (
+            adaptive_threads.AdaptiveThreads(self._cpu_threads)
+            if self.device.type == "cpu" and adaptive_threads.enabled()
+            else None
+        )
         self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
         self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
         self.noncausal = bool(getattr(backbone, "noncausal", False))
@@ -307,7 +317,73 @@ class NativeEngineModel(EngineModel):
         )
         return blocks
 
+    def begin_traffic(self) -> None:
+        """Start thread exploration; called once the startup golden check has passed."""
+        if self.threads_resolver is not None:
+            self.threads_resolver.start()
+
+    @staticmethod
+    def _bit_equal(a: Any, b: Any) -> bool:
+        """Bit-for-bit equality over the engines' output dataclasses."""
+        if type(a) is not type(b):
+            return False
+        if isinstance(a, torch.Tensor):
+            return torch.equal(a, b)
+        if isinstance(a, (tuple, list)):
+            return len(a) == len(b) and all(
+                NativeEngineModel._bit_equal(x, y) for x, y in zip(a, b, strict=True)
+            )
+        fields = getattr(a, "__dataclass_fields__", None)
+        if fields:
+            return all(
+                NativeEngineModel._bit_equal(getattr(a, f), getattr(b, f))
+                for f in fields
+            )
+        return bool(a == b)
+
+    def _with_threads(self, tokens: int, run: Callable[[], _T]) -> _T:
+        """Run one batch under the resolver's thread discipline.
+
+        Exploration never changes an answer: the batch is served by the
+        configured count, and any other allowed count only runs as a shadow
+        pass that has to reproduce the served answer bit for bit before its
+        timing counts. Once the resolver has adopted counts, the learned
+        count serves the batch itself — only counts that kept the answers
+        identical on this host were adopted.
+        """
+        resolver = self.threads_resolver
+        if resolver is None:
+            if self.device.type == "cpu":
+                adaptive_threads.CpuTeam.apply(self._cpu_threads)
+            return run()
+        count = resolver.pick(tokens)
+        if resolver.adopted:
+            adaptive_threads.CpuTeam.apply(count)
+            return run()
+        base = resolver.base
+        # Exploring: the configured count serves; another count only shadows.
+        adaptive_threads.CpuTeam.apply(base)
+        started = time.perf_counter()
+        try:
+            result = run()
+        finally:
+            base_ms = (time.perf_counter() - started) * 1000.0
+        if count == base:
+            resolver.record(tokens, base_ms)
+            return result
+        adaptive_threads.CpuTeam.apply(count)
+        started = time.perf_counter()
+        try:
+            shadow = run()
+        finally:
+            shadow_ms = (time.perf_counter() - started) * 1000.0
+        resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
+        return result
+
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
+        return self._with_threads(batch.input_ids.numel(), lambda: self._forward(batch))
+
+    def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
             return self._forward_tree(batch)
         input_ids = batch.input_ids.to(self.device)
@@ -385,6 +461,9 @@ class NativeEngineModel(EngineModel):
         stack's reduced copy when one is loaded, and every stack has its graphs.
         A batch that names a tower runs it on its named inputs.
         """
+        return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
+
+    def _encode(self, batch: EncoderBatch) -> EncoderOutput:
         if batch.tower is not None:
             return self._encode_tower(batch)
         stack = self.backbone if batch.branch is None else self.branches[batch.branch]

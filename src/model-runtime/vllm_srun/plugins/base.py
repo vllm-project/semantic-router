@@ -468,6 +468,9 @@ class EngineModel(ABC):
     def close(self) -> None:  # noqa: B027 - optional hook
         """Release device memory."""
 
+    def begin_traffic(self) -> None:  # noqa: B027 - optional hook
+        """The startup verification has passed; serving traffic may begin."""
+
 
 class Engine(ABC):
     """Runs backbones that ``supports`` accepts on an accelerator's devices.
