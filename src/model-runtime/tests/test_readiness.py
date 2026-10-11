@@ -117,6 +117,32 @@ def test_npu_run_to_run_shape_change_fails():
     assert result.status == "failed"
 
 
+def test_npu_second_run_is_validated_against_the_reference():
+    """Each run is checked against the reference, not just the first one.
+
+    A second response can stay within the run-to-run tolerance of the first
+    and still drift past the recorded reference (0.30 -> 0.319 -> 0.338
+    exceeds the 0.02 tolerance); readiness fails rather than letting the
+    second run lean on the first.
+    """
+    runs = iter([answers(0.319), answers(0.338)])
+    golden = decisions_golden({"npu": answers(0.30)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+
+
+def test_npu_second_run_non_finite_values_fail():
+    """A NaN leaf in the second response fails instead of slipping through the comparison.
+
+    NaN compares False against every bound, so the drift check has to reject
+    non-finite leaves explicitly.
+    """
+    runs = iter([answers(0.3), {"q": {"type": "noul", "noul": float("nan")}}])
+    golden = decisions_golden({"npu": answers(0.30)})
+    result = golden_check(lambda surface, body: next(runs), decisions, [golden], "npu")
+    assert result.status == "failed"
+
+
 def test_a_device_class_without_a_reference_is_unverified():
     other_class_only = decisions_golden({"rocm": answers(0.9)})
     result = golden_check(
