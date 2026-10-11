@@ -23,6 +23,15 @@ func plan(
 	if ctx.Err() != nil {
 		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
 	}
+	// With nothing eligible there is nothing evidence could authorize, so the
+	// request is an ordinary no-op in both failure modes. Judging the evidence
+	// first would turn every opening turn into a failure: with no prior turn
+	// to compare against, its topic result is always unknown.
+	if !anyEligible(view) {
+		diagnostics := countsFor(view, trigger, nil)
+		diagnostics.Outcome, diagnostics.Reason = OutcomeSkipped, ReasonNoEligibleHistory
+		return contextcompression.TransformationEdits{}, diagnostics
+	}
 	if reason := policy.authorize(trigger); reason != "" {
 		return contextcompression.TransformationEdits{}, skipped(trigger, reason)
 	}
@@ -66,6 +75,16 @@ func selectRemovableTurns(
 		}
 	}
 	return removable, closeOverExchanges(ctx, view, removable)
+}
+
+// anyEligible reports whether any message in the view may be removed.
+func anyEligible(view contextcompression.TransformationView) bool {
+	for _, message := range view.Messages {
+		if eligible(message) {
+			return true
+		}
+	}
+	return false
 }
 
 // cancellationCheckInterval keeps the deadline responsive without paying for a

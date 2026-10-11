@@ -157,8 +157,14 @@ Every outcome records a bounded terminal reason, for example
 metadata, and generation exactly as they were. Under `fail_closed` these
 conditions answer `503`, and the rejection is captured in Router Replay like any
 other router-side refusal. A continuation, an inherited internal follow-up, and
-an accepted change with nothing eligible left to remove are ordinary no-ops:
-neither failure mode rejects them.
+a request with nothing eligible to remove are ordinary no-ops: neither failure
+mode rejects them. That includes the opening turn of every conversation, whose
+topic result is always `unknown` because there is no prior turn to compare.
+
+In practice `fail_closed` is strict: an ordinary follow-up that the rule finds
+inconclusive is `unknown` evidence and is rejected. Choose it only for routes
+where forwarding unevaluated history is worse than asking the client to retry;
+`fail_open` is the default for that reason.
 
 ## Recovery
 

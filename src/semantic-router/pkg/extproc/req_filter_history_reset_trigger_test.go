@@ -171,3 +171,64 @@ func TestTopicContinuityResultMapping(t *testing.T) {
 	}
 
 }
+
+// An opening turn has no prior turn, so its topic result is always unknown.
+// With nothing eligible to remove that is an ordinary no-op, even under
+// fail_closed; otherwise every new conversation on the route would be refused.
+// A follow-up whose evidence is unknown still follows the failure mode.
+func TestFailClosedJudgesEvidenceOnlyWhenHistoryIsRemovable(t *testing.T) {
+	cases := []struct {
+		name     string
+		messages []llmprotocol.Message
+		reject   bool
+		reason   string
+	}{
+		{
+			name:     "opening turn",
+			messages: []llmprotocol.Message{topicText(llmprotocol.RoleUser, "How do I renew a passport?")},
+			reason:   historyreset.ReasonNoEligibleHistory,
+		},
+		{
+			name: "opening turn with instructions",
+			messages: []llmprotocol.Message{
+				topicText(llmprotocol.RoleSystem, "Be brief."),
+				topicText(llmprotocol.RoleUser, "How do I renew a passport?"),
+			},
+			reason: historyreset.ReasonNoEligibleHistory,
+		},
+		{
+			name: "inconclusive follow-up",
+			messages: []llmprotocol.Message{
+				topicText(llmprotocol.RoleUser, "Refactor the routing module so plugins load lazily"),
+				topicText(llmprotocol.RoleAssistant, "Done."),
+				topicText(llmprotocol.RoleUser, "Can you also make the loader thread safe?"),
+			},
+			reject: true,
+			reason: historyreset.ReasonEvidenceUnknown,
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			request := &llmprotocol.Request{Messages: test.messages}
+			policy := topicResetPolicy("topic_boundary", 0.9)
+			policy["failure_mode"] = config.HistoryResetFailureClosed
+			router := topicContinuityRouter(t, config.TopicContinuityRule{Name: "topic_boundary"})
+			ctx := topicContinuityContext(request)
+			ctx.VSRSelectedDecision = historyResetDecision(t, policy)
+			bindHistoryResetPolicy(ctx)
+
+			router.evaluateTopicContinuity(ctx)
+			router.prepareContextHistorySteps(ctx, request)
+			err := router.applyContextTransformationPlan(ctx, request)
+			if (err != nil) != test.reject {
+				t.Fatalf("reject = %v, want %v (diagnostics %+v)", err != nil, test.reject, ctx.HistoryResetDiagnostics)
+			}
+			if ctx.HistoryResetDiagnostics.Reason != test.reason {
+				t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+			}
+			if len(request.Messages) != len(test.messages) {
+				t.Fatalf("history changed: %d messages, want %d", len(request.Messages), len(test.messages))
+			}
+		})
+	}
+}
