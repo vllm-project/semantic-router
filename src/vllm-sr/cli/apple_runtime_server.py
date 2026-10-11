@@ -48,9 +48,18 @@ class Processes:
         self.lock = threading.RLock()
         self.children: dict[str, dict] = {}
 
-    def launch(self, key: str, models: list[dict], *, leased: bool = True) -> int:
+    def launch(
+        self,
+        key: str,
+        models: list[dict],
+        *,
+        leased: bool = True,
+        lease: str | None = None,
+    ) -> int:
         if not KEY.fullmatch(key) or not models or len(models) > MAX_MODELS_PER_PROCESS:
             raise ValueError("invalid process identity or model inventory")
+        if leased and (not isinstance(lease, str) or not KEY.fullmatch(lease)):
+            raise ValueError("managed host processes require a group lease identity")
         normalized = []
         for model in models:
             artifact = model.get("model", "")
@@ -71,10 +80,14 @@ class Processes:
             normalized.append({**model, "model": artifact, "device": "mps"})
         with self.lock:
             previous = self.children.get(key)
-            if previous and previous["models"] != normalized:
+            if previous and (
+                previous["models"] != normalized or previous["leased"] != leased
+            ):
                 raise ValueError("process identity conflicts with its model inventory")
             if previous and previous["process"].poll() is None:
-                previous["expires"] = time.monotonic() + LEASE_SECONDS
+                if leased:
+                    previous["leases"][lease] = time.monotonic() + LEASE_SECONDS
+                    previous["expires"] = max(previous["leases"].values())
                 return previous["port"]
             with socket.socket() as probe:
                 probe.bind(("127.0.0.1", self.config.get("engine_port") or 0))
@@ -113,12 +126,14 @@ class Processes:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             )
+            deadline = time.monotonic() + LEASE_SECONDS
             self.children[key] = {
                 "process": child,
                 "models": normalized,
                 "port": port,
                 "leased": leased,
-                "expires": time.monotonic() + LEASE_SECONDS,
+                "leases": {lease: deadline} if leased else {},
+                "expires": deadline,
             }
             threading.Thread(target=self._logs, args=(key, child), daemon=True).start()
             log.info(
@@ -136,18 +151,30 @@ class Processes:
             log.info("[%s] %s", key[:12], line.decode(errors="replace").rstrip())
         child.stdout.close()
 
-    def stop(self, key: str, *, expired_child: dict | None = None) -> None:
+    def stop(
+        self, key: str, *, expired_child: dict | None = None, lease: str | None = None
+    ) -> bool:
+        if lease is not None and (
+            not isinstance(lease, str) or not KEY.fullmatch(lease)
+        ):
+            raise ValueError("invalid group lease identity")
         with self.lock:
-            if expired_child is not None:
-                # A renewal or replacement may have happened since reap took
-                # its snapshot. Decide and remove under the same process lock.
-                current = self.children.get(key)
-                if (
-                    current is not expired_child
-                    or not current["leased"]
-                    or current["expires"] >= time.monotonic()
-                ):
-                    return
+            current = self.children.get(key)
+            if lease is not None:
+                if not current or lease not in current["leases"]:
+                    return False
+                del current["leases"][lease]
+                if current["leases"]:
+                    current["expires"] = max(current["leases"].values())
+                    return False
+            # A renewal or replacement may have happened since reap took
+            # its snapshot. Decide and remove under the same process lock.
+            if expired_child is not None and (
+                current is not expired_child
+                or not current["leased"]
+                or current["expires"] >= time.monotonic()
+            ):
+                return False
             child = self.children.pop(key, None)
             if child:
                 process = child["process"]
@@ -159,9 +186,20 @@ class Processes:
                         process.kill()
                         process.wait(timeout=5)
                 log.info("Stopped MPS process %s", key[:12])
+                return True
+            return False
 
     def reap(self) -> None:
         with self.lock:
+            now = time.monotonic()
+            for child in self.children.values():
+                if child["leased"]:
+                    child["leases"] = {
+                        owner: deadline
+                        for owner, deadline in child["leases"].items()
+                        if deadline >= now
+                    }
+                    child["expires"] = max(child["leases"].values(), default=0)
             expired = [
                 (key, child)
                 for key, child in self.children.items()
@@ -236,12 +274,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
             key = parts[2]
             if len(parts) == PROCESS_ROUTE_PARTS and self.command == "POST":
-                port = self.server.processes.launch(key, json.loads(body)["models"])
+                payload = json.loads(body)
+                port = self.server.processes.launch(
+                    key, payload["models"], lease=payload["lease"]
+                )
                 self.reply(200, {"port": port})
                 return
             if len(parts) == PROCESS_ROUTE_PARTS and self.command == "DELETE":
-                self.server.processes.stop(key)
-                self.reply(200, {"stopped": True})
+                lease = json.loads(body)["lease"]
+                if not isinstance(lease, str) or not KEY.fullmatch(lease):
+                    raise ValueError("invalid group lease identity")
+                stopped = self.server.processes.stop(key, lease=lease)
+                self.reply(200, {"stopped": stopped})
                 return
             with self.server.processes.lock:
                 child = self.server.processes.children.get(key)

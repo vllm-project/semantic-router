@@ -179,10 +179,18 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
     key = hashlib.sha256(b"model-plan").hexdigest()
     artifact = "./my-model" if local_model else "vllm-sr/fixture"
     models = [{"model": artifact, "name": "fixture", "device": "mps"}]
+    owner = hashlib.sha256(b"original-group").hexdigest()
+    inventory_request = {"models": models, "lease": owner}
+
+    def expire():
+        with server.processes.lock:
+            child = server.processes.children[key]
+            child["leases"] = {lease: time.monotonic() - 1 for lease in child["leases"]}
+
     try:
         assert call("GET", "/status", token="incorrect")[0] == 401
-        assert call("POST", "/processes/" + key, {"models": models})[0] == 200
-        assert call("POST", "/processes/" + key, {"models": models})[0] == 200
+        assert call("POST", "/processes/" + key, inventory_request)[0] == 200
+        assert call("POST", "/processes/" + key, inventory_request)[0] == 200
         assert len(children) == 1
         inventory = json.loads((tmp_path / f"{key}.models.json").read_text())
         expected_artifact = str(local_directory.resolve()) if local_model else artifact
@@ -215,15 +223,14 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
             except BaseException as error:
                 errors.append(error)
 
-        with server.processes.lock:
-            server.processes.children[key]["expires"] = time.monotonic() - 1
+        expire()
         with monkeypatch.context() as patch:
             patch.setattr(server.processes, "stop", paused_stop)
             reaper = threading.Thread(target=reap, daemon=True)
             reaper.start()
             try:
                 assert selected.wait(timeout=5)
-                assert call("POST", "/processes/" + key, {"models": models})[0] == 200
+                assert call("POST", "/processes/" + key, inventory_request)[0] == 200
                 assert server.processes.children[key]["expires"] > time.monotonic()
             finally:
                 resume.set()
@@ -233,7 +240,55 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
         assert children[0].poll() is None
         assert server.processes.children[key]["process"] is children[0]
         assert len(children) == 1
-        server.processes.children[key]["expires"] = time.monotonic() - 1
+
+        # Retirement can overlap reacquisition of the same plan. Pause DELETE
+        # at the host, acquire a new owner through HTTP, and resume the old release.
+        deleting = threading.Event()
+        release = threading.Event()
+        responses = []
+
+        def paused_release(key, **kwargs):
+            deleting.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError("reacquisition regression did not resume DELETE")
+            return original_stop(key, **kwargs)
+
+        def retire():
+            try:
+                responses.append(call("DELETE", "/processes/" + key, {"lease": owner}))
+            except BaseException as error:
+                errors.append(error)
+
+        next_owner = hashlib.sha256(b"reacquired-group").hexdigest()
+        with monkeypatch.context() as patch:
+            patch.setattr(server.processes, "stop", paused_release)
+            retiring = threading.Thread(target=retire, daemon=True)
+            retiring.start()
+            try:
+                assert deleting.wait(timeout=5)
+                assert (
+                    call(
+                        "POST",
+                        "/processes/" + key,
+                        {"models": models, "lease": next_owner},
+                    )[0]
+                    == 200
+                )
+            finally:
+                release.set()
+                retiring.join(timeout=5)
+            assert not retiring.is_alive()
+            assert not errors
+        assert responses == [(200, {"stopped": False})]
+        assert children[0].poll() is None
+        assert len(children) == 1
+        assert set(server.processes.children[key]["leases"]) == {next_owner}
+        # A duplicate release from the retired group is harmless.
+        assert call("DELETE", "/processes/" + key, {"lease": owner}) == (
+            200,
+            {"stopped": False},
+        )
+        expire()
         server.processes.reap()
         assert children[0].poll() is not None
         assert not server.processes.children
