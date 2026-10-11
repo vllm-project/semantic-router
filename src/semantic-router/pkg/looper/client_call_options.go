@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // ModelTarget identifies one concrete model deployment for a Looper call.
@@ -54,9 +56,10 @@ type CallOptions struct {
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
 
-	// ToolStage is this attempt's trusted-facts role. Empty is judged as final,
-	// the stage every Looper call used before per-attempt gating.
-	ToolStage string
+	// ToolStage is this attempt's trusted-facts role. Every call that keeps
+	// tools must name one: an empty stage matches no configured role, so an
+	// authoritative policy denies its tools.
+	ToolStage llmprotocol.TrustedStage
 
 	// candidateRequest retains admission policy through final wire mutations.
 	// It is request-scoped; a shared Client never stores recipe policy.
@@ -103,9 +106,13 @@ func (c *Client) CallModelWithOptions(
 
 // gateAttemptTools applies the recipe's per-stage tool gate to one outbound
 // attempt. The gate sees the attempt's own stage, so a policy that authorizes
-// only final cannot send tools on a candidate or verifier call.
+// only final cannot send tools on a candidate or verifier call. Attempts that
+// carry no tools have nothing to gate, so they skip it and record nothing.
 func gateAttemptTools(options CallOptions, request openai.ChatCompletionNewParams) openai.ChatCompletionNewParams {
 	if options.candidateRequest == nil || options.candidateRequest.ToolStageGate == nil {
+		return request
+	}
+	if len(request.Tools) == 0 && len(request.Functions) == 0 {
 		return request
 	}
 	gated := options.candidateRequest.ToolStageGate(options.ToolStage, &request)

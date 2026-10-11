@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -93,6 +94,35 @@ func TestHandleLooperExecutionTrustedFactsDeniesCandidateAttemptsWhenOnlyFinalAu
 	}
 	if withTools != 0 {
 		t.Fatalf("final-only policy must strip tools from candidate attempts, %d/%d calls carried tools", withTools, calls)
+	}
+}
+
+// A Looper call that names no stage matches no configured role, so the gate
+// denies its tools instead of guessing a stage for it.
+func TestLooperToolStageGateDeniesUnlabeledAttempts(t *testing.T) {
+	toolsCfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+		Enabled:      true,
+		Enforcement:  config.TrustedEnforcementAuthoritative,
+		TrustSources: []string{config.TrustedSourceOperatorPolicy},
+		StageRoles:   []string{config.TrustedStageCandidate, config.TrustedStageFinal},
+	})
+	decision := &config.Decision{Name: "trusted-looper", Plugins: []config.DecisionPlugin{mustToolsDecisionPlugin(t, toolsCfg)}}
+	router := &OpenAIRouter{ToolsDatabase: loadedTrustedFactsToolsDB(t)}
+	gate := router.looperToolStageGate(trustedFactsTestRequest(), decision, &RequestContext{})
+	if gate == nil {
+		t.Fatal("trusted-facts decision produced no Looper gate")
+	}
+	var req openai.ChatCompletionNewParams
+	if err := json.Unmarshal([]byte(`{"model":"m","messages":[{"role":"user","content":"hi"}],
+		"tools":[{"type":"function","function":{"name":"search","parameters":{"type":"object"}}}]}`), &req); err != nil {
+		t.Fatalf("decode request: %v", err)
+	}
+
+	if got := gate("", &req); len(got.Tools) != 0 {
+		t.Fatalf("unlabeled attempt kept %d tools", len(got.Tools))
+	}
+	if got := gate(llmprotocol.TrustedStageFinal, &req); len(got.Tools) != 1 {
+		t.Fatalf("authorized final attempt kept %d tools, want 1", len(got.Tools))
 	}
 }
 

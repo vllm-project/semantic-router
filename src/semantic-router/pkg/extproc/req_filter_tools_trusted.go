@@ -20,11 +20,6 @@ import (
 // unless the decision's stage_roles authorize it.
 const trustedFactsRequestStage = llmprotocol.TrustedStageCandidate
 
-// trustedFactsLooperStage is the role judged for a Looper model attempt that
-// carries no stage of its own. Looper gates each attempt at its actual stage;
-// unlabeled attempts keep the final-stage judgment they always had.
-const trustedFactsLooperStage = llmprotocol.TrustedStageFinal
-
 // trustedFactsNow is the clock for availability freshness; tests override it.
 var trustedFactsNow = time.Now
 
@@ -127,12 +122,13 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	return true
 }
 
-// looperToolStageGate judges each Looper model attempt at its own trusted-facts
-// stage, so a policy that authorizes only final never sends tools on a
-// candidate or verifier call, and one that authorizes candidate does not
-// widen the final stage. Each stage's outcome is evaluated and recorded once,
-// then reused, so concurrent panel and ReMoM attempts share one verdict. It
-// returns nil when the decision does not opt in.
+// looperToolStageGate judges each tool-bearing Looper model attempt at its own
+// trusted-facts stage, so a policy that authorizes only final never sends tools
+// on a candidate or verifier call, and one that authorizes candidate does not
+// widen the final stage. An attempt that names no stage matches no role, so an
+// authoritative policy denies it rather than guessing. Each stage's outcome is
+// evaluated and recorded once, then reused by concurrent attempts. It returns
+// nil when the decision does not opt in.
 func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decision *config.Decision, reqCtx *RequestContext) looper.ToolStageGate {
 	if request == nil || decision == nil {
 		return nil
@@ -147,18 +143,14 @@ func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decisio
 	}
 	var mu sync.Mutex
 	outcomes := make(map[llmprotocol.TrustedStage]llmprotocol.TrustedOutcome, 4)
-	return func(stage string, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
-		attemptStage := llmprotocol.TrustedStage(stage)
-		if attemptStage == "" {
-			attemptStage = trustedFactsLooperStage
-		}
+	return func(stage llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
 		mu.Lock()
-		outcome, seen := outcomes[attemptStage]
+		outcome, seen := outcomes[stage]
 		if !seen {
 			facts := base
-			facts.Stage = attemptStage
+			facts.Stage = stage
 			outcome = llmprotocol.EvaluateTrustedFacts(facts)
-			outcomes[attemptStage] = outcome
+			outcomes[stage] = outcome
 			r.recordTrustedFactsOutcome(reqCtx, toolsCfg, facts, outcome)
 		}
 		mu.Unlock()

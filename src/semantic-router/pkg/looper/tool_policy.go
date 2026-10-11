@@ -16,12 +16,16 @@ limitations under the License.
 
 package looper
 
-import "github.com/openai/openai-go"
+import (
+	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
 
 // ToolStageGate decides which tools one Looper attempt may send. stage is the
-// attempt's trusted-facts role (candidate, verifier, advisor, or final). It
-// returns the request to send and must not mutate req.
-type ToolStageGate func(stage string, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams
+// attempt's trusted-facts role; an empty stage names no role. It returns the
+// request to send and must not mutate req.
+type ToolStageGate func(stage llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams
 
 // WithoutToolUse returns a copy of req with no tools, tool choice, or legacy
 // function calls.

@@ -24,6 +24,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -67,7 +68,8 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	ctx context.Context,
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
-	modelName, stage, role, toolStage string,
+	modelName, stage, role string,
+	toolStage llmprotocol.TrustedStage,
 	streaming bool,
 	iteration int,
 	logprobsConfig *LogprobsConfig,
