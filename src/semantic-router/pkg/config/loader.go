@@ -478,10 +478,17 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	); err != nil {
 		return err
 	}
+	adaptation := nestedStringMap(learning["adaptation"])
 	if err := rejectUnknownMapFields(
 		"global.router.learning.adaptation",
-		nestedStringMap(learning["adaptation"]),
-		[]string{"enabled", "candidate_set", "strategy"},
+		adaptation,
+		[]string{"enabled", "candidate_set", "strategy", "success"},
+	); err != nil {
+		return err
+	}
+	if err := rejectUnsupportedSuccessConfigFields(
+		"global.router.learning.adaptation.success",
+		nestedStringMap(adaptation["success"]),
 	); err != nil {
 		return err
 	}
@@ -511,10 +518,17 @@ func rejectUnsupportedDecisionAdaptationFields(raw map[string]interface{}) error
 		if err := rejectUnknownMapFields(prefix, adaptations, []string{"mode", "adaptation", "protection"}); err != nil {
 			return err
 		}
+		adaptation := nestedStringMap(adaptations["adaptation"])
 		if err := rejectUnknownMapFields(
 			prefix+".adaptation",
-			nestedStringMap(adaptations["adaptation"]),
-			[]string{"mode", "candidate_set"},
+			adaptation,
+			[]string{"mode", "candidate_set", "success"},
+		); err != nil {
+			return err
+		}
+		if err := rejectUnsupportedSuccessConfigFields(
+			prefix+".adaptation.success",
+			nestedStringMap(adaptation["success"]),
 		); err != nil {
 			return err
 		}
@@ -582,6 +596,10 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	return nil
+}
+
+func rejectUnsupportedSuccessConfigFields(prefix string, raw map[string]interface{}) error {
+	return rejectUnknownMapFields(prefix, raw, []string{"outcome", "stale_after_seconds"})
 }
 
 func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed []string) error {
