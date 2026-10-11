@@ -39,3 +39,26 @@ start-provider-mocker: provider-mocker-install ## Run the deterministic test bac
 	@cd tools/test/services/provider-mocker && PROVIDER_MOCKER_MODEL="$(PROVIDER_MOCKER_MODEL)" PROVIDER_MOCKER_SCENARIO="$(PROVIDER_MOCKER_SCENARIO)" "$(PROVIDER_MOCKER_PYTHON)" -m provider_mocker --host 127.0.0.1 --port $(PROVIDER_MOCKER_PORT)
 
 .PHONY: provider-mocker-install start-provider-mocker
+
+bench-test-deps: $(HARNESS_VENV_DEPS) ## Install the bench package dependencies its reasoning and agent crew tests import
+	@"$(AGENT_PYTHON)" -m pip install --quiet -r bench/requirements.txt
+
+test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) ## Test the grounded fusion DRACO loader, rubric judge and arm comparison offline
+	@"$(AGENT_PYTHON)" -m pytest -q bench/grounded_fusion
+
+# The real-tokenizer case downloads a Hugging Face tokenizer, so it stays a manual run.
+test-hallucination-bench: $(HARNESS_VENV_DEPS) ## Test hallucination trajectory loading and scoring without models
+	@"$(AGENT_PYTHON)" -m pytest -q bench/hallucination -k "not real_tokenizer"
+
+test-reasoning-bench: bench-test-deps ## Test reasoning-mode config patches and Router accounting offline
+	@"$(AGENT_PYTHON)" -m pytest -q bench/reasoning
+
+test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope helpers without a remote host
+	@"$(AGENT_PYTHON)" -m pytest -q bench/router_flow
+
+test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
+	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
+
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
+
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools
