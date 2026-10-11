@@ -102,13 +102,13 @@ def test_siblings_apply_their_own_counts_on_the_shared_context(monkeypatch):
     assert calls == [1, 16, 2]
 
 
-def test_a_count_that_changes_answers_never_reaches_the_table():
-    """A shadow pass that fails to reproduce the served answer disqualifies its count.
+def test_a_drift_retires_adaptation_during_exploration():
+    """One drifting shadow retires the resolver instead of disqualifying a pair.
 
-    The served answer always comes from the configured count; a count whose
-    shadow pass drifts on this host is discarded per bucket, so the table can
-    only adopt counts that kept the answer identical and switching never
-    turns into a different exact answer.
+    The served answer always comes from the configured count, and a count
+    that changes it on any input must never serve: the first observed drift
+    means this host's answers move across counts, so adaptation turns off
+    for good and the configured count serves for the model's life.
     """
     resolver = adaptive.AdaptiveThreads(base=8, explore=48)
     resolver.start()
@@ -117,8 +117,29 @@ def test_a_count_that_changes_answers_never_reaches_the_table():
         resolver.record(16, 10.0, exact=small == 8)  # every count drifts
         large = resolver.pick(2000)
         resolver.record(2000, 100.0, exact=large == 8)
-    assert resolver.pick(16) == 8  # only the configured count survived
+    assert resolver.pick(16) == 8  # retired: the configured count forever
     assert resolver.pick(2000) == 8
+    assert resolver._table is None
+
+
+def test_drift_after_the_table_builds_retires_adaptation():
+    """The learned counts keep verifying after the table builds; drift retires.
+
+    Verification samples are inputs: a count that only agreed on the
+    exploration window must not serve. The table's counts shadow the served
+    answers for a few more requests, and one observed drift there retires
+    adaptation exactly as during exploration.
+    """
+    resolver = adaptive.AdaptiveThreads(base=8, explore=12)
+    resolver.start()
+    for _ in range(12):
+        resolver.pick(16)
+        resolver.record(16, 10.0)
+    assert resolver._table is not None and not resolver.adopted  # transitioning
+    assert resolver._transition > 0
+    resolver.record(16, 10.0, exact=False)  # a post-table shadow drifted
+    assert not resolver.adopted and resolver._table is None
+    assert resolver.pick(16) == 8 and resolver.pick(2000) == 8
 
 
 def test_exploration_starts_once_the_runtime_is_ready(
@@ -158,16 +179,16 @@ def test_the_learned_count_serves_after_adoption(
     try:
         client = TestClient(create_app(runtime))
         resolver = runtime.served[0].model.engine_model.threads_resolver
-        for i in range(60):
+        for i in range(80):
             r = client.post(
                 "/v1/decisions", json={"state": f"state {i}", "questions": QUESTIONS}
             )
             assert r.status_code == 200
-        assert resolver.adopted
+        assert resolver.adopted  # exploration and the transition are both over
         sampled = [tokens for per in resolver._samples.values() for tokens, _ in per]
         count = resolver.pick(sampled[0])
         r = client.post(
-            "/v1/decisions", json={"state": "state 60", "questions": QUESTIONS}
+            "/v1/decisions", json={"state": "state 80", "questions": QUESTIONS}
         )
         assert r.status_code == 200
         assert adaptive.CpuTeam._active == count
@@ -178,14 +199,13 @@ def test_the_learned_count_serves_after_adoption(
 def test_opting_in_never_changes_an_answer(
     qwen3_package, monkeypatch, default_cpu_threads
 ):
-    """The served answers never change, exploring or adopted.
+    """The served answers never change while the setting is on.
 
-    Both runs use the same configured count while exploring, so the
-    assertion holds on any host; past the exploration window the learned
-    counts serve, and only counts whose shadow passes reproduced the served
-    answers bit for bit were adopted — including hosts whose thread counts
-    disagree bitwise, where the shadow verification is exactly what keeps
-    exploration from ever adopting a drifting count.
+    The configured count serves every request through exploration and the
+    post-table transition — sixty requests reach deep into both — so the
+    assertion holds on any host, including hosts whose thread counts
+    disagree bitwise: the shadow verification is exactly what retires
+    adaptation there instead of ever letting a drifting count serve.
     """
     questions = dict(QUESTIONS)
 

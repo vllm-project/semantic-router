@@ -198,9 +198,11 @@ long one, and on a shared host it moves with the neighbors' load. Setting
 worker in. Exploration starts only after the startup golden check has passed,
 the worker serves each request with this setting's count while the allowed
 counts run as shadow passes that must reproduce the served answer bit for
-bit — a count that drifts on this host is discarded — and only verified
-counts are adopted, per input-size range, never above this setting's budget;
-an adopted count then serves its own range's requests. All forwards state
+bit — one count that drifts on this host retires the worker's adaptation for
+good, and it keeps this setting's count for its whole life. Verified counts
+are adopted per input-size range, never above this setting's budget, and
+they keep shadow-verifying for the first requests after adoption before they
+serve their own range's requests. All forwards state
 their thread count on a shared per-process context, so
 several workers in one process never inherit each other's count. The
 exploration asks something of the first requests, and the learned setting

@@ -4,23 +4,29 @@ Record (``cpu-forward-thread-scaling-arm``): a short classify is ~99%
 ``forward``, and that forward is per-op dispatch, allocation and barrier
 overhead rather than GEMM, so the fastest intra-op thread count for a small
 input can be 1 while a long input wants every thread — and the crossover
-moves with the host generation. Responses are bit-identical across intra-op
-thread counts (GEMM parallelizes over output rows; the attention and
-elementwise kernels over independent elements), so adapting the count per
-request cannot change an ``exact`` answer.
+moves with the host generation. On the measured hosts the responses are
+bit-identical across intra-op thread counts (GEMM parallelizes over output
+rows; the attention and elementwise kernels over independent elements), and
+the resolver verifies that live instead of assuming it: every pass under a
+non-configured count must reproduce the served answer bit for bit, and one
+observed drift retires adaptation for good, leaving the configured count.
 
 Opt in with ``VLLM_SRUN_CPU_ADAPTIVE_THREADS=1``. Exploration is locked until
 the startup golden check passes (its two runs must see one thread count,
 whatever the host's answer semantics across counts), and then the resolver
 cycles the allowed counts over the first requests while recording (tokens,
 forward milliseconds), before serving each token-size bucket with its fastest
-count; a bucket without enough samples keeps the configured count. Forwards
-run serialized on the process's single CPU device thread (``accel/cpu.py``),
-so ``torch.set_num_threads`` at a forward's start races with nothing. The
-learned table is one-shot: it reflects the load the exploration window saw.
-Every CPU forward states its own count on the shared :class:`CpuTeam` — an
-adaptive model the resolver's pick, a static sibling its configured one — so
-a batch never inherits the previous model's team size.
+count; a bucket without enough samples keeps the configured count. The
+learned counts keep shadow-verifying for the first requests after the table
+builds too — verification samples are inputs, and a count that only agreed
+on the exploration window must not serve — before ``adopted`` turns and they
+serve themselves. Forwards run serialized on the process's single CPU device
+thread (``accel/cpu.py``), so ``torch.set_num_threads`` at a forward's start
+races with nothing. The learned table is one-shot: it reflects the load the
+exploration window saw. Every CPU forward states its own count on the shared
+:class:`CpuTeam` — an adaptive model the resolver's pick, a static sibling
+its configured one — so a batch never inherits the previous model's team
+size.
 """
 
 from __future__ import annotations
@@ -35,6 +41,8 @@ import torch
 ENV = "VLLM_SRUN_CPU_ADAPTIVE_THREADS"
 _EXPLORE = 48  # forwards sampled before the learned table takes over
 _MIN = 3  # samples per (bucket, count) before a bucket trusts a count
+# Requests the learned counts keep shadow-verifying after the table builds.
+_TRANSITION = 16
 
 
 def enabled() -> bool:
@@ -75,7 +83,10 @@ class AdaptiveThreads:
     it. Until :meth:`start` (the startup golden check has passed) it is
     locked to ``base``, and until ``explore`` forwards have been sampled it
     cycles the allowed counts, so the learning traffic spreads over all of
-    them.
+    them. A shadow pass that drifts retires the resolver — adaptation only
+    fits a host whose answers never move across counts. After the table
+    builds, the learned counts keep verifying against the served answers for
+    ``_TRANSITION`` more requests before ``adopted`` turns and they serve.
     """
 
     def __init__(
@@ -92,9 +103,9 @@ class AdaptiveThreads:
         self._samples: dict[int, list[tuple[int, float]]] = {
             count: [] for count in self.counts
         }
-        self._rejected: set[tuple[int, int]] = set()
         self._seen = 0
         self._table: dict[int, int] | None = None
+        self._transition = 0
 
     def start(self) -> None:
         """Begin exploring: the startup golden check has passed."""
@@ -102,8 +113,8 @@ class AdaptiveThreads:
 
     @property
     def adopted(self) -> bool:
-        """Whether exploration finished and the learned table selects counts."""
-        return self._table is not None
+        """Whether the learned counts verified themselves and now serve."""
+        return self._table is not None and self._transition == 0
 
     def pick(self, tokens: int) -> int:
         """The count this request's forward should run with."""
@@ -117,23 +128,38 @@ class AdaptiveThreads:
     def record(self, tokens: int, forward_ms: float, exact: bool = True) -> None:
         """File one forward's size and duration under the count it ran with.
 
-        The served answer always comes from ``base``; a shadow pass under
-        another count that fails to reproduce it bit for bit
-        (``exact=False``) disqualifies that (count, bucket) — its timing is
-        discarded and the resolver can only ever adopt a count that kept the
-        answer identical on this host.
+        The served answer always comes from ``base``. A shadow pass under
+        another count that fails to reproduce it bit for bit (``exact=False``)
+        retires the resolver: one observed drift means this host's answers
+        move across counts, so no count can serve without risking the exact
+        profile. Records after the table builds count down the transition
+        that keeps the learned counts verifying against served answers.
         """
         with self._lock:
-            if not self._started or self._table is not None:
+            if not self._started:
                 return
-            count = self.counts[self._seen % len(self.counts)]
-            if not exact:
-                self._rejected.add((count, _bucket(tokens)))
-            else:
+            if self._table is None:
+                if not exact:
+                    self._retire()
+                    return
+                count = self.counts[self._seen % len(self.counts)]
                 self._samples[count].append((tokens, forward_ms))
-            self._seen += 1
-            if self._seen >= self.explore:
-                self._build()
+                self._seen += 1
+                if self._seen >= self.explore:
+                    self._build()
+                return
+            if self._transition:
+                if not exact:
+                    self._retire()
+                    return
+                self._transition -= 1
+
+    def _retire(self) -> None:
+        """Give up adaptation: keep the configured count for the model's life."""
+        self._started = False
+        self._table = None
+        self._transition = 0
+        self._samples = {count: [] for count in self.counts}
 
     def _build(self) -> None:
         medians: dict[tuple[int, int], float] = {}
@@ -142,7 +168,7 @@ class AdaptiveThreads:
             for tokens, ms in samples:
                 by_bucket.setdefault(_bucket(tokens), []).append(ms)
             for bucket, values in by_bucket.items():
-                if len(values) >= _MIN and (count, bucket) not in self._rejected:
+                if len(values) >= _MIN:
                     medians[(bucket, count)] = statistics.median(values)
         table: dict[int, int] = {}
         for bucket in {bucket for bucket, _ in medians}:
@@ -152,3 +178,4 @@ class AdaptiveThreads:
         # count (``pick`` falls back to ``base``); an empty table means the
         # traffic never repeated a size enough to rank any count.
         self._table = table
+        self._transition = _TRANSITION
