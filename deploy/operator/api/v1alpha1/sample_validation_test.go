@@ -69,7 +69,7 @@ func TestSampleCRValidation(t *testing.T) {
 
 			// Parse the YAML into a SemanticRouter object
 			var sr SemanticRouter
-			if err := yaml.Unmarshal(data, &sr); err != nil {
+			if err = yaml.Unmarshal(data, &sr); err != nil {
 				t.Errorf("Failed to unmarshal sample CR: %v", err)
 				return
 			}
