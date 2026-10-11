@@ -2274,6 +2274,102 @@
   "homepage.testimonials.source": {
     "message": "来源"
   },
+  "homepage.trending.label": {
+    "message": "趋势亮点"
+  },
+  "homepage.trending.title": {
+    "message": "这股势头已经可见"
+  },
+  "homepage.trending.source": {
+    "message": "来源"
+  },
+  "homepage.trending.source.collection": {
+    "message": "打开合集"
+  },
+  "homepage.trending.source.article": {
+    "message": "阅读文章"
+  },
+  "homepage.trending.hfBadge.alt": {
+    "message": "Decision 2.0 — 2026 年 10 月 6 日位列 Hugging Face 热门合集第 1 名"
+  },
+  "homepage.trending.decision20.date": {
+    "message": "2026 年 10 月 6–7 日"
+  },
+  "homepage.trending.decision20.badge": {
+    "message": "热门合集第 1 名"
+  },
+  "homepage.trending.decision20.title": {
+    "message": "Decision 2.0 登顶 Hugging Face 热门榜"
+  },
+  "homepage.trending.decision20.description": {
+    "message": "Decision 2.0 合集于 2026 年 10 月 6 日登上 Hugging Face 热门合集第 1 名。2026 年 10 月 7 日的基准测试显示，该系列在 Jev Decision Index 0.3 的各个参数量级上领先所选开源决策模型。"
+  },
+  "homepage.trending.decision20.imageAlt": {
+    "message": "柱状图：按五个参数量级对比 Decision 2.0 与其他开源决策模型在 Jev Decision Index 0.3 上的得分，并标注 Hugging Face 热门合集第 1 名。"
+  },
+  "homepage.trending.decision20.caption": {
+    "message": "Jev Decision Index 0.3 · 2026 年 10 月 7 日"
+  },
+  "homepage.trending.vela20.date": {
+    "message": "2026 年 10 月 7 日"
+  },
+  "homepage.trending.vela20.badge": {
+    "message": "AlphaSignal 报道"
+  },
+  "homepage.trending.vela20.title": {
+    "message": "AlphaSignal 报道 Vela 2.0"
+  },
+  "homepage.trending.vela20.description": {
+    "message": "2026 年 10 月 7 日，AlphaSignal 报道了 Vela 2.0：四款开源路由模型将安全、领域、PII、幻觉等九项 LLM 路由检查合并到一次调用中。"
+  },
+  "homepage.trending.vela20.imageAlt": {
+    "message": "AlphaSignal 关于 vLLM Semantic Router Vela 2.0 报道的文章卡片。"
+  },
+  "homepage.trending.vela20.caption": {
+    "message": "AlphaSignal · 2026 年 10 月 7 日"
+  },
+  "homepage.trending.source.space": {
+    "message": "打开 Space"
+  },
+  "homepage.trending.source.release": {
+    "message": "阅读发布说明"
+  },
+  "homepage.trending.jevIndex.date": {
+    "message": "2026 年 9 月 17 日"
+  },
+  "homepage.trending.jevIndex.badge": {
+    "message": "Hugging Face Space"
+  },
+  "homepage.trending.jevIndex.title": {
+    "message": "Hugging Face 上的 Jev Decision Index"
+  },
+  "homepage.trending.jevIndex.description": {
+    "message": "社区维护的 Jev Decision Index Space 于 2026 年 9 月 17 日上线，跟踪开源决策模型基准与动态。Decision 2.0 模型已与其他 TypeSafe Jev 开源复现一并列入其中。"
+  },
+  "homepage.trending.jevIndex.imageAlt": {
+    "message": "multimodalart 在 Hugging Face 上的 Jev Decision Index Space 卡片。"
+  },
+  "homepage.trending.jevIndex.caption": {
+    "message": "multimodalart/jev-decision-index · 2026 年 9 月 17 日"
+  },
+  "homepage.trending.hermes.date": {
+    "message": "2026 年 9 月 24 日"
+  },
+  "homepage.trending.hermes.badge": {
+    "message": "v0.4 Hermes 发布"
+  },
+  "homepage.trending.hermes.title": {
+    "message": "Hermes 中的决策模型与分类模型"
+  },
+  "homepage.trending.hermes.description": {
+    "message": "2026 年 9 月 24 日，v0.4 Hermes 发布了用于决策选择的开源 Decision 模型，以及用于理解请求的 Vela 分类模型——覆盖安全、领域、PII、模态等——并纳入可持续改进的 Mixture-of-Models 体系。"
+  },
+  "homepage.trending.hermes.imageAlt": {
+    "message": "vLLM Semantic Router v0.4 Hermes 主视觉：多模型，一个持续改进的系统。"
+  },
+  "homepage.trending.hermes.caption": {
+    "message": "v0.4 Hermes · 2026 年 9 月 24 日"
+  },
   "homepage.finalCta.label": {
     "message": "由你掌控"
   },
