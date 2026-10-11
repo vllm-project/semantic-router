@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.2.0
+  version: 2.3.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
@@ -265,6 +265,8 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        images:
+          $ref: '#/components/schemas/DecisionImages'
         states:
           type: object
           description: |
@@ -289,6 +291,18 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        images:
+          $ref: '#/components/schemas/DecisionImages'
+    DecisionImages:
+      type: array
+      description: |
+        Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+        JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+        `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+        pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+        invalid_request, as it does a malformed image.
+      items:
+        type: string
     Question:
       type: object
       additionalProperties: false
@@ -580,6 +594,9 @@ components:
     ResponseMeta:
       type: object
       properties:
+        model_id:
+          type: string
+          description: The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
         revision:
           type: string
           nullable: true
@@ -1209,6 +1226,11 @@ components:
           description: Questions the model defines (Question.preset).
           items:
             type: string
+        modalities:
+          type: array
+          description: Decision models only; the inputs a decisions request may carry (`text`, and `image` for `images`).
+          items:
+            type: string
         heads:
           type: array
           items:
@@ -1379,6 +1401,15 @@ components:
         max_inputs:
           type: integer
           description: Most inputs or documents one classify, embeddings or rerank request may carry.
+        image_max_pixels:
+          type: integer
+          description: Models that read images; the most pixels the model reads of one image (larger images are resized).
+        image_source_max_pixels:
+          type: integer
+          description: Models that read images; the most pixels one supplied image may have.
+        image_max_bytes:
+          type: integer
+          description: Models that read images; the most bytes one supplied image may have.
     ProfileInfo:
       type: object
       required: [name, numerics]

@@ -3,7 +3,9 @@
 import concurrent.futures
 import copy
 import threading
+from contextlib import suppress
 from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 import requests
@@ -13,6 +15,64 @@ from cli.sr_bench.recovery import recovery_plan
 from cli.sr_bench.service import PREFIX, Server
 from cli.sr_bench.store import Store
 from test_sr_bench_replay import manifest, record
+
+
+def test_preview_request_uses_case_deadline_and_stops_on_cancel(tmp_path, monkeypatch):
+    sent_headers = threading.Event()
+    release_body = threading.Event()
+
+    class StalledPreview(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.flush()
+            sent_headers.set()
+            release_body.wait(5)
+            with suppress(BrokenPipeError, ConnectionResetError):
+                self.wfile.write(b"{}")
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), StalledPreview)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    document = manifest(preview=True)
+    document["cases"] = document["cases"][:1]
+    document["targets"][0][
+        "preview_url"
+    ] = f"http://127.0.0.1:{server.server_port}/api/v1/routing/preview"
+    document["limits"] = {
+        "case_timeout_s": 1,
+        "total_timeout_s": 3,
+        "idle_timeout_s": 3,
+    }
+    seen_timeouts = []
+    post = requests.post
+
+    def observed_post(*args, **kwargs):
+        seen_timeouts.append(kwargs["timeout"])
+        return post(*args, **kwargs)
+
+    monkeypatch.setattr("cli.sr_bench.engine.requests.post", observed_post)
+    monkeypatch.setattr("cli.sr_bench.engine.capture_runner", lambda _: {})
+    engine = Engine(Store(tmp_path))
+    try:
+        run = engine.start(document)
+        assert sent_headers.wait(3)
+        assert seen_timeouts and seen_timeouts[0] <= 1.1
+        engine.cancel(run["id"])
+        engine.threads[run["id"]].join(timeout=1)
+        assert not engine.threads[run["id"]].is_alive()
+        assert engine.store.get(run["id"])["status"] == "cancelled"
+    finally:
+        release_body.set()
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=1)
 
 
 def _manifest():

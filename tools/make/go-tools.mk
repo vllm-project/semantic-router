@@ -4,7 +4,7 @@
 # These commands have no build-tag variants. The Dashboard WASM adapter
 # selects its js/wasm sources separately in dashboard/wasm/Makefile.
 
-ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval memory-coldstart image-routing-calibration ml-selection-validate selector-parity jev-eval
+ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval memory-coldstart image-routing-calibration ml-selection-validate selector-parity systemone-judge-requests jev-eval
 
 sr-dsl_DIR := tools/dev/dsl
 classifier-operating-point_DIR := tools/models/classifier-operating-point
@@ -13,6 +13,7 @@ memory-coldstart_DIR := bench/memory_coldstart
 image-routing-calibration_DIR := tools/calibration/image-routing
 ml-selection-validate_DIR := src/training/model_selection/ml_model_selection
 selector-parity_DIR := src/training/model_selection/ml_model_selection/selectorparity
+systemone-judge-requests_DIR := tools/calibration/systemone_auto/judge_requests
 jev-eval_DIR := bench/jev
 jev-eval_TEST_FLAGS := -race
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(tool)_TEST_EXCLUDE ?=))
@@ -42,7 +43,7 @@ vet-$(1):
 	@cd src/semantic-router && go vet $(call go_tool_test_sources,$(1))
 
 lint-$(1):
-	@cd src/semantic-router && golangci-lint run --config ../../tools/linter/go/.golangci.yml $(call go_tool_test_sources,$(1))
+	@cd src/semantic-router && golangci-lint run --config $$(GOLANGCI_LINT_CONFIG) $(call go_tool_test_sources,$(1))
 endef
 
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(call router_go_tool,$(tool))))
