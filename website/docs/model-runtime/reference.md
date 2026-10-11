@@ -429,6 +429,26 @@ messages a history-aware jailbreak or PII rule reads:
 The response answers the request's own `state` in its own fields, and has
 `"states": {"1": {"model", "answers", "usage", ...}}`.
 
+A model whose card lists the `image` modality (Decision 3.0) also reads
+`images`: base64 PNG, JPEG or WebP data URLs, each of at most
+`limits.image_max_bytes` bytes and `limits.image_source_max_pixels` pixels.
+Every question of the state sees them, in front of its text and in this order;
+the model resizes each to at most `limits.image_max_pixels` pixels. An entry of
+`states` may carry its own `images`. The images' tokens count in `usage`. A
+malformed image, or images sent to a model without the modality, fail the
+request with 400 `invalid_request`.
+
+```json title="POST /v1/systemone"
+{
+  "model": "d3-lite",
+  "state": "Is the attached receipt complete?",
+  "images": ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."],
+  "questions": {
+    "complete": {"type": "noul", "instructions": "Does the receipt show a total, a date and a merchant?"}
+  }
+}
+```
+
 `src/model-runtime/tools/reference_examples.py --url <runtime>` sends this
 section's requests to a runtime that serves Vela 2.0 0.3B and checks that the
 answers match.
