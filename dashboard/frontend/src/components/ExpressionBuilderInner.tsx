@@ -177,8 +177,12 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
 
   const handleEditSave = useCallback((signalType: string, signalName: string) => {
     if (!editingNode || !tree) { setEditingNode(null); return }
+    const node = getNodeAtPath(tree, editingNode.path)
+    // Fields such as label and predicate only apply to the signal they were written for.
+    const same =
+      node && isLeaf(node) && node.signalType === signalType && node.signalName === signalName
     pushHistory(tree)
-    setTree(replaceAtPath(tree, editingNode.path, { signalType, signalName }))
+    setTree(replaceAtPath(tree, editingNode.path, same ? node : { signalType, signalName }))
     setEditingNode(null)
     showToast(`Updated to ${signalType}("${signalName}")`)
   }, [editingNode, tree, pushHistory, setTree, showToast])
