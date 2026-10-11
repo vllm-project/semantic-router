@@ -50,6 +50,14 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 		user:      "I live in Boston.",
 		assistant: "Your dog Biscuit is a beagle, and you live in Boston.",
 	}
+	budgetWithFlights := storedMemoryTurn{
+		user:      "My budget for the Japan trip is $4,000.",
+		assistant: "Your budget is $4,000, and flights from Boston start at $1,200.",
+	}
+	raisedBudget := storedMemoryTurn{
+		user:      "I raised my budget for the Japan trip to $6,000.",
+		assistant: "Updated, the Japan trip budget is $6,000.",
+	}
 	bostonWithAlice := storedMemoryTurn{
 		user:      "I live in Boston.",
 		assistant: "Alice lives in Boston.",
@@ -145,6 +153,13 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			query:      "Where do I live now, and what kind of dog is Biscuit?",
 			injected:   []string{"Denver", "Your dog Biscuit is a beagle."},
 			superseded: []string{"I live in Boston", "you live in Boston"},
+		},
+		{
+			name:       "a corrected budget keeps a grouped number in an independent clause",
+			turns:      []storedMemoryTurn{budgetWithFlights, raisedBudget},
+			query:      "What is my Japan trip budget now, and what do flights from Boston cost?",
+			injected:   []string{"$6,000", "Flights from Boston start at $1,200."},
+			superseded: []string{"is $4,000", "start at $1."},
 		},
 		{
 			name:       "a corrected residence keeps an explicit named subject",

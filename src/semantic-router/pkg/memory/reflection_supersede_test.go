@@ -55,7 +55,12 @@ var (
 		"I live in Boston.",
 		"Your dog Biscuit is a beagle, and you live in Boston.",
 	)
-	aliceBostonTurn = formatTurnChunk("I live in Boston.", "Alice lives in Boston.")
+	aliceBostonTurn      = formatTurnChunk("I live in Boston.", "Alice lives in Boston.")
+	budgetAndFlightsTurn = formatTurnChunk(
+		"My budget for the Japan trip is $4,000.",
+		"Your budget is $4,000, and flights from Boston start at $1,200.",
+	)
+	bostonAndPetsTurn = formatTurnChunk("I live in Boston.", "You live in Boston, and Biscuit and Luna love the parks.")
 	// Long enough that the correction is a near-duplicate for the default dedup threshold.
 	hospitalTurn   = formatTurnChunk("I work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
 	noHospitalTurn = formatTurnChunk("I no longer work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
@@ -186,6 +191,16 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			name:      "a correction keeps an independent clause before a stale clause",
 			retrieved: []datedContent{{content: dogBeforeBostonTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
 			want:      []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a grouped number in an independent clause",
+			retrieved: []datedContent{{content: budgetAndFlightsTurn, daysAgo: 30}, {content: budget6kTurn, daysAgo: 9}},
+			want:      []string{"A: Flights from Boston start at $1,200.", budget6kTurn},
+		},
+		{
+			name:      "a correction keeps a subject joined by and",
+			retrieved: []datedContent{{content: bostonAndPetsTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Biscuit and Luna love the parks.", denverTurn},
 		},
 		{
 			name:      "a correction keeps a fact about an explicit named subject",

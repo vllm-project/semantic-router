@@ -271,6 +271,7 @@ func filterAssistantSentence(
 	clauses := splitAssistantClauses(sentence.text)
 	keep := make([]bool, len(clauses))
 	kept := 0
+	var keptWords []string
 	for i, clause := range clauses {
 		if restatesOriginal(clause.text, clause.words, originalContentWords, originalPairs) {
 			continue
@@ -285,18 +286,18 @@ func filterAssistantSentence(
 			}
 		}
 		answerPairs := anchorPairs(words)
-		if len(answerPairs) == 0 {
-			continue
-		}
 		if slices.ContainsFunc(corrections, func(correction wordPair) bool {
 			return slices.Contains(answerPairs, correction)
 		}) {
 			continue
 		}
+		// A fragment such as "Biscuit" in "Biscuit and Luna" has no pairs of
+		// its own, so only the kept text as a whole must state something.
 		keep[i] = true
 		kept++
+		keptWords = append(keptWords, words...)
 	}
-	if kept == 0 {
+	if kept == 0 || len(anchorPairs(keptWords)) == 0 {
 		return ""
 	}
 	if kept == len(clauses) {
@@ -344,12 +345,26 @@ func splitAssistantClauses(sentence string) []assistantClause {
 		}
 	}
 	for _, match := range matches {
+		if groupsDigits(sentence, match) {
+			continue
+		}
 		appendClause(match[0])
 		separator = sentence[match[0]:match[1]]
 		start = match[1]
 	}
 	appendClause(len(sentence))
 	return clauses
+}
+
+// groupsDigits reports a bare comma between digits, as in "$1,200", which
+// groups thousands rather than ending a clause.
+func groupsDigits(sentence string, match []int) bool {
+	if sentence[match[0]:match[1]] != "," {
+		return false
+	}
+	before, _ := utf8.DecodeLastRuneInString(sentence[:match[0]])
+	after, _ := utf8.DecodeRuneInString(sentence[match[1]:])
+	return unicode.IsDigit(before) && unicode.IsDigit(after)
 }
 
 func capitalizeFirstLetter(text string) string {
