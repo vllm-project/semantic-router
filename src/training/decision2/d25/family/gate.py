@@ -129,10 +129,13 @@ def main() -> None:
     args = parser.parse_args()
     cal = json.loads(Path(args.calibration).read_text())
     result = json.loads(Path(args.result).read_text())
+    # ckpt_eval skills are percentages; the calibration takes fractions and would read a skill in (0, 1] percent
+    # as a fraction.
     ours = {
         "public": result["public"]["index"],
         "per_benchmark": {
-            k: v["skill"] for k, v in result["public"]["per_benchmark"].items()
+            k: None if v["skill"] is None else v["skill"] / 100
+            for k, v in result["public"]["per_benchmark"].items()
         },
         "O_proxy": result["proxy"]["O_proxy"],
     }
