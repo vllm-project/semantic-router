@@ -6,11 +6,27 @@ checked on a fixture, through the real request path, with the resolver
 exploring live.
 """
 
+import pytest
+import torch
 import vllm_srun.engines.native.threads as adaptive
 from starlette.testclient import TestClient
 from vllm_srun.api.app import create_app
 
 from .conftest import QUESTIONS, start_runtime
+
+
+@pytest.fixture
+def default_cpu_threads():
+    """Leave the process's CPU thread count as these tests found it.
+
+    The runtime tests really switch the team size; without restoring it,
+    every test filed after these runs on whatever count exploration left
+    behind.
+    """
+    default = torch.get_num_threads()
+    yield
+    torch.set_num_threads(default)
+    adaptive.CpuTeam._active = None
 
 
 def test_bucket_edges():
@@ -105,7 +121,9 @@ def test_a_count_that_changes_answers_never_reaches_the_table():
     assert resolver.pick(2000) == 8
 
 
-def test_exploration_starts_once_the_runtime_is_ready(qwen3_package, monkeypatch):
+def test_exploration_starts_once_the_runtime_is_ready(
+    qwen3_package, monkeypatch, default_cpu_threads
+):
     """The runtime starts exploration once the startup golden check has passed.
 
     Through the real runtime path: the served model is ready — the golden
@@ -126,7 +144,9 @@ def test_exploration_starts_once_the_runtime_is_ready(qwen3_package, monkeypatch
         runtime.stop()
 
 
-def test_the_learned_count_serves_after_adoption(qwen3_package, monkeypatch):
+def test_the_learned_count_serves_after_adoption(
+    qwen3_package, monkeypatch, default_cpu_threads
+):
     """Once exploration builds the table, the learned count serves requests.
 
     Through the real runtime path: past the exploration window the serving
@@ -155,7 +175,9 @@ def test_the_learned_count_serves_after_adoption(qwen3_package, monkeypatch):
         runtime.stop()
 
 
-def test_opting_in_never_changes_an_answer(qwen3_package, monkeypatch):
+def test_opting_in_never_changes_an_answer(
+    qwen3_package, monkeypatch, default_cpu_threads
+):
     """The served answers never change, exploring or adopted.
 
     Both runs use the same configured count while exploring, so the
