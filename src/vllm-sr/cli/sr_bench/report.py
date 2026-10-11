@@ -128,11 +128,14 @@ def continuity(
         if call.get("case_id"):
             tasks.setdefault(call["case_id"], []).append(call)
     correct = {
-        r.get("case_id")
+        case_id
         for r in results
-        if r["status"] == "completed" and r.get("correct") is True
+        if r["status"] == "completed"
+        and r.get("correct") is True
+        and isinstance((case_id := r.get("case_id")), str)
     }
     switches: dict[str, int] = {}
+    switches_by_phase: Counter[str] = Counter()
     decision_changed = unknown = multi_inference = 0
     for case_id, requests in tasks.items():
         if len(requests) < MIN_CONTINUITY_REQUESTS:
@@ -141,15 +144,23 @@ def continuity(
         if any((c.get("inference_call_count") or 0) > 1 for c in requests):
             multi_inference += 1
             continue
-        models = [m for m in map(_observed_model, requests) if m]
+        known_requests = []
+        for request in requests:
+            model = _observed_model(request)
+            if model:
+                known_requests.append((model, request.get("phase")))
+        models = [model for model, _ in known_requests]
         unknown += len(requests) - len(models)
         switches[case_id] = _changes(models)
+        for before, after in pairwise(known_requests):
+            if before[0] != after[0]:
+                switches_by_phase[after[1] or "unknown"] += 1
         decision_changed += (
             _changes([c["decision"] for c in requests if c.get("decision")]) > 0
         )
     switched = [case_id for case_id, count in switches.items() if count]
     unswitched = [case_id for case_id, count in switches.items() if not count]
-    return {
+    result = {
         "session_mode": session_mode,
         "multi_request_tasks": len(switches),
         "switched_tasks": len(switched),
@@ -164,6 +175,69 @@ def continuity(
         "decision_changed_tasks": decision_changed,
         "unknown_model_requests": unknown,
         "multi_inference_tasks": multi_inference,
+    }
+    result["model_switches_by_phase"] = dict(sorted(switches_by_phase.items()))
+    return result
+
+
+def cache_read_metrics(subject_calls: list[dict]) -> dict:
+    """Measure cache reads only for calls whose provider reported the field."""
+    observations: list[dict] = []
+    for call in subject_calls:
+        model_usage = call.get("model_usage")
+        if isinstance(model_usage, list) and model_usage:
+            observations.extend(
+                {
+                    **item,
+                    "usage": item.get("cache_read_usage", item.get("usage")),
+                }
+                for item in model_usage
+                if isinstance(item, dict) and item.get("cache_read_reported") is True
+            )
+        elif call.get("cache_read_reported") is True:
+            observations.append(
+                {
+                    **call,
+                    "usage": call.get("cache_read_usage", call.get("usage")),
+                }
+            )
+
+    if not observations:
+        return {
+            "cache_read_ratio": None,
+            "cache_read_call_count": 0,
+            "cache_read_tokens": 0,
+            "cache_read_prompt_tokens": 0,
+        }
+    if any(not isinstance(call.get("usage"), dict) for call in observations):
+        return {
+            "cache_read_ratio": None,
+            "cache_read_call_count": len(observations),
+            "cache_read_tokens": None,
+            "cache_read_prompt_tokens": None,
+        }
+
+    def token(observation: dict, name: str) -> int:
+        value = observation["usage"].get(name, 0)
+        return (
+            value
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            else 0
+        )
+
+    cached = sum(token(call, "cached_input_tokens") for call in observations)
+    prompt = sum(
+        sum(
+            token(call, name)
+            for name in ("input_tokens", "cached_input_tokens", "cache_write_tokens")
+        )
+        for call in observations
+    )
+    return {
+        "cache_read_ratio": cached / prompt if prompt else None,
+        "cache_read_call_count": len(observations),
+        "cache_read_tokens": cached,
+        "cache_read_prompt_tokens": prompt,
     }
 
 
@@ -237,6 +311,7 @@ def metric(
         "evaluation_cost_usd": sum_cost(overhead) if overhead else 0,
         "total_spend_usd": sum_cost(calls) if subject_coverage_complete else None,
         "tokens": tokens,
+        **cache_read_metrics(subject),
         "call_count": (
             sum(c["inference_call_count"] for c in subject)
             if subject

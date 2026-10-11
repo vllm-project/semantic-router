@@ -46,9 +46,9 @@ func Compile(cfg *config.RouterConfig) (Topology, error) {
 			return Topology{}, err
 		}
 		topology.Clusters = append(topology.Clusters, spec)
-	}
-	if len(topology.Clusters) > 0 {
-		topology.DefaultCluster = topology.Clusters[0].Name
+		if topology.DefaultCluster == "" && !cfg.IsSystemOneBackend(alias) {
+			topology.DefaultCluster = spec.Name
+		}
 	}
 	return topology, nil
 }

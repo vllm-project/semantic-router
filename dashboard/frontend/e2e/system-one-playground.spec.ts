@@ -82,6 +82,12 @@ async function mockPlayground(
       body: JSON.stringify({ tasks: [], deployments: [], bindings: [] }),
     }),
   )
+  await page.route('**/api/decision-model/routes', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ available: true, routes: [] }),
+    }),
+  )
   const requests: Record<string, unknown>[] = []
   await page.route('**/api/decision-model/test', (route) => {
     requests.push(route.request().postDataJSON())
@@ -140,11 +146,53 @@ test('shows runtime deployments before task observations in monitoring', async (
       body: JSON.stringify({ tasks: [], deployments: [], bindings: [] }),
     }),
   )
+  await page.route('**/embedded/prometheus/api/v1/query?*', (route) => {
+    const query = new URL(route.request().url()).searchParams.get('query') ?? ''
+    const result = query.includes('sr_systemone_stage_total')
+      ? [
+          {
+            metric: {
+              algorithm: 'cascade',
+              stage: 'fast',
+              model: 'decision-kai',
+              outcome: 'accepted',
+            },
+            value: [0, '12'],
+          },
+          {
+            metric: {
+              algorithm: 'cascade',
+              stage: 'fast',
+              model: 'decision-kai',
+              outcome: 'rejected',
+            },
+            value: [0, '3'],
+          },
+        ]
+      : [{ metric: {}, value: [0, '0.2'] }]
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'success', data: { resultType: 'vector', result } }),
+    })
+  })
   await page.goto('/decision-model/monitoring')
   const headings = page.getByRole('heading', {
-    name: /^(Model runtime deployments|Task observations)$/,
+    name: /^(Model runtime deployments|Automatic routing|Task observations)$/,
   })
-  await expect(headings).toHaveText(['Model runtime deployments', 'Task observations'])
+  await expect(headings).toHaveText([
+    'Model runtime deployments',
+    'Automatic routing',
+    'Task observations',
+  ])
+  const auto = page.getByRole('region', { name: 'Automatic routing', exact: true })
+  await expect(auto).toContainText('not answer accuracy')
+  await expect(auto.getByText('Stage activity', { exact: true })).toBeVisible()
+  await expect(auto.locator('.recharts-yAxis')).toContainText(/cascade \/ fast ·\s*decision-kai/)
+  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-monitoring.png'),
+      fullPage: true,
+    })
 })
 
 test('runs a native request and presents real probabilities with API details collapsed', async ({
@@ -246,7 +294,17 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
       path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-desktop.png'),
       fullPage: true,
     })
+  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-desktop.png'),
+      fullPage: true,
+    })
   await page.setViewportSize({ width: 390, height: 844 })
+  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-mobile.png'),
+      fullPage: true,
+    })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
@@ -538,3 +596,141 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await context.close()
   })
 }
+
+test('runs auto through its recipe and preserves the selected example across target changes', async ({
+  page,
+}) => {
+  await mockPlayground(page)
+  const submissions: Record<string, unknown>[] = []
+  await page.route('**/api/decision-model/routes', (route) => {
+    if (route.request().method() === 'POST') {
+      submissions.push(route.request().postDataJSON())
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...response,
+          model: 'vllm-sr/auto',
+          routing: {
+            recipe: 'decisions',
+            decision: 'task',
+            algorithm: 'cascade',
+            stage: 'strong',
+            selected_model: 'decision-eos',
+            quality: 'uncalibrated',
+            model_calls: 3,
+          },
+        }),
+      })
+    }
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        available: true,
+        routes: [
+          {
+            model: 'vllm-sr/auto',
+            recipe: 'decisions',
+            algorithms: ['cascade'],
+            question_types: ['choice', 'score', 'noul'],
+            timeout_ms: 120000,
+          },
+        ],
+      }),
+    })
+  })
+  await loadExample(page, 'Code')
+  const example = await page
+    .getByRole('combobox', { name: 'Load example', exact: true })
+    .textContent()
+  const input = await page.getByRole('textbox', { name: 'Input context', exact: true }).inputValue()
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  const target = page.getByRole('combobox', { name: 'Runtime target', exact: true })
+  await target.click()
+  await expect(page.getByText('Automatic routes', { exact: true })).toBeVisible()
+  await expect(page.getByText('Direct models', { exact: true })).toBeVisible()
+  await page.getByRole('option', { name: /vllm-sr\/auto/ }).click()
+  await expect(target).toHaveText('vllm-sr/auto')
+  await expect(page.getByRole('combobox', { name: 'Load example', exact: true })).toHaveText(
+    example!,
+  )
+  await expect(page.getByRole('textbox', { name: 'Input context', exact: true })).toHaveValue(input)
+  await expect(
+    page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }),
+  ).toBeDisabled()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  const outcome = page.getByRole('region', { name: 'Auto routing outcome' })
+  await expect(outcome).toContainText('decision-eos')
+  await expect(outcome).toContainText('strong')
+  await expect(outcome).toContainText('Operator thresholds')
+  await expect(outcome).toContainText('not measured accuracy')
+  expect(submissions[0]).toMatchObject({ model: 'vllm-sr/auto', request: { state: input } })
+  expect(submissions[0]).not.toHaveProperty('deployment')
+  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-desktop.png'),
+      fullPage: true,
+    })
+  await page.setViewportSize({ width: 390, height: 844 })
+  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-mobile.png'),
+      fullPage: true,
+    })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+})
+
+test('route discovery failure does not block direct inference', async ({ page }) => {
+  const direct = await mockPlayground(page)
+  await page.route('**/api/decision-model/routes', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Auto discovery unavailable' } }),
+    }),
+  )
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect(page.getByText('Auto discovery unavailable')).toBeVisible()
+  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await expect(page.getByText('Response received')).toBeVisible()
+  expect(direct).toHaveLength(1)
+})
+
+test('slow direct discovery does not delay auto routing', async ({ page }) => {
+  await mockPlayground(page)
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/decision-model/capabilities', async (route) => {
+    await pending
+    await route.fulfill({ status: 503, body: '{}' })
+  })
+  await page.route('**/api/decision-model/routes', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        available: true,
+        routes: [
+          {
+            model: 'vllm-sr/auto',
+            recipe: 'decisions',
+            algorithms: ['policy'],
+            question_types: ['choice', 'score', 'noul'],
+            timeout_ms: 5000,
+          },
+        ],
+      }),
+    }),
+  )
+  try {
+    await page.reload()
+    await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toHaveText(
+      'vllm-sr/auto',
+    )
+    await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeEnabled()
+  } finally {
+    release()
+  }
+})

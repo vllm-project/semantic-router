@@ -1,37 +1,52 @@
 ---
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/global/model-runtime.md"
   outdated: false
 ---
 
-# 模型运行时
+# 内置模型运行时
 
-内置模型在 `vllm-srun` worker 中运行。Router 通过模型服务接口使用任务能力；前端保持控制与请求入口，deployment 声明模型资源，副本池提供多个独立 worker。
+## 概述
 
-## 配置部署与绑定
+模型运行时承载 Router 使用的所有模型，包括领域、PII 和越狱等信号背后的分类器，语义缓存、记忆和 RAG 使用的嵌入模型，以及重排、幻觉检测和判断模型。托管部署使用独立的工作进程，通过统一的模型服务 API 提供能力。Router 可以启动并监督这些进程，也可以连接你自行运行的运行时。
+
+## 解决什么问题？
+
+需要模型的功能使用同一条加载路径，统一完成下载、验证、加载以及 CPU 或 GPU 推理。模型输入兼容的调用可以共享原生批处理；独立的逻辑部署则有各自的托管工作进程。
+
+模型失败或超过截止时间时，Router 会得到不可用的证据，再按 decision 的未知信号策略决定路由。请求可能等待至截止时间，而已开始的模型前向计算在调用方停止等待后仍可能继续。请根据输入长度和并发量规划运行时容量。
+
+## 何时使用
+
+只要配置中的功能需要模型，运行时就会参与，无需额外开关。需要指定 GPU、固定模型、安排或扩展副本，或连接外部共享工作进程时，再显式配置部署。
+
+使用 `vllm-sr serve ARTIFACT --engine`，可以通过同一个持久运行的前端暴露原生 System One 请求。不加 `--engine` 启动时会启用已保存的 recipe 路由。两种启动模式下前端和 Dashboard 都保持可用。
+
+## 配置
+
+通过 `model_runtime` 部署声明你选择的模型：
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      primary:
+      decision-kai:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.3B
-        device: cpu
-    system:
-      decision_model:
-        deployment: primary
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: auto
+      decision-shared:
+        provider: model_runtime
+        endpoint: http://decision-runtime:8100
 ```
 
-命名部署集中保存产物、设备与输入策略；任务绑定引用部署。相同模型可以供多个任务使用，而不必为每个消费者加载一份。目录中仅存在条目不会自动启动未被使用的模型。
+未配置 `endpoint` 时，Router 会启动该部署的运行时，并在它退出后重启。配置 `endpoint` 时，Router 连接你自行运行的运行时。
 
-在 CLI 中，`vllm-sr serve MODEL` 使用 Router 模式；添加 `--engine`（`-e`）启动不要求 Router YAML 或 Chat 后端的 Engine 模式。`--platform cpu|cuda|rocm` 选择运行平台。模式由启动方式决定，Dashboard 用于管理模型、任务和副本。
+可以从以下指南开始：
 
-## 副本、状态与输入
-
-部署可配置多个副本，由运行时池根据就绪状态和队列负载分发。副本调度不改变 Router 的 signals → decisions → algorithm 语义。增加副本需要足够的计算与内存资源，不保证在同一张 GPU 上线性提速。
-
-未就绪、失败或超时的模型任务按可用性策略处理。截止时间约束调用方等待，不保证正在进行的底层 forward 立即中止。长输入在少核 CPU 上可能超过请求预算，应按实际文本长度、并发和任务选择硬件与部署规模。
-
-继续阅读[部署指南](../../model-runtime/deploy)、[选择模型](../../model-runtime/choose-a-model.md)与[输入限制](../../model-runtime/reference#long-inputs)。
+- [快速开始](/model-runtime/quickstart.md)：启动模型并在 Router 中使用。
+- [选择模型、规模和硬件](/model-runtime/choose-a-model.md)。
+- [与 Router 一起运行](/model-runtime/deploy.md)：设备、进程、连接外部运行时和 Kubernetes。
+- [执行配置](/model-runtime/profiles.md)：精确答案或更快的近似设置。
+- [从原生绑定迁移](/model-runtime/migrate.md)。
+- [排障与常见问题](/model-runtime/troubleshooting.md)。
