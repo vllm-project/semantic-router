@@ -656,16 +656,11 @@ type statementSentence struct {
 	ending   rune
 }
 
-// quoteTracker reports whether a scan position sits inside a quoted span, so
-// sentence splitting and quote stripping treat every quote style alike
-// instead of each keeping its own ad hoc state. A straight or curly double
-// quote, a backtick, and a curly single quote always toggle on their own
-// mark. A straight single quote is ambiguous with an apostrophe, so it acts
-// as a quote mark only when it isn't one: flanked by a letter or digit on
-// both sides it is a contraction or a singular possessive ("don't", "dog's")
-// and never toggles; closing an open span always does; otherwise it opens a
-// span only when it leads a word, so a trailing plural possessive ("dogs' ")
-// isn't mistaken for an opening quote.
+// quoteTracker shares quote state between sentence splitting and quote
+// stripping. Straight and curly single quotes inside words are apostrophes,
+// not quote boundaries. A straight quote opens a span only before a word,
+// so a trailing plural possessive outside a span stays literal. Curly
+// quotes have distinct opening and closing marks.
 type quoteTracker struct {
 	inDouble, inSmart, inSmartSingle, inSingle, inBacktick bool
 }
@@ -690,17 +685,18 @@ func (q *quoteTracker) advance(s string, i int, r rune) bool {
 	case '‘':
 		q.inSmartSingle = true
 		return true
-	case '’':
-		q.inSmartSingle = false
-		return true
 	case '`':
 		q.inBacktick = !q.inBacktick
 		return true
-	case '\'':
+	case '\'', '’':
 		before, after := runeBefore(s, i), runeAfter(s, i, r)
 		switch {
 		case isWordRune(before) && isWordRune(after):
 			return false
+		case r == '’':
+			wasOpen := q.inSmartSingle
+			q.inSmartSingle = false
+			return wasOpen
 		case q.inSingle:
 			q.inSingle = false
 			return true

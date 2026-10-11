@@ -113,6 +113,8 @@ func injectedContents(t *testing.T, retrieved []datedContent) []string {
 }
 
 func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
+	curlyContractedMove := formatTurnChunk("I’ve moved to Denver, and I live there now.", "")
+	moveAfterCurlyQuote := formatTurnChunk("Please translate: ‘I’m happy.’ I just moved to Denver, and I live there now.", "")
 	cases := []struct {
 		name      string
 		retrieved []datedContent
@@ -160,6 +162,16 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 				{content: contractedMoveTurn, daysAgo: 9},
 			},
 			want: []string{contractedNotNurseTurn, contractedMoveTurn},
+		},
+		{
+			name:      "a curly contracted subject reports a change",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyContractedMove, daysAgo: 9}},
+			want:      []string{curlyContractedMove},
+		},
+		{
+			name:      "a real correction follows a curly quoted contraction",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: moveAfterCurlyQuote, daysAgo: 9}},
+			want:      []string{moveAfterCurlyQuote},
 		},
 		{
 			name: "a correction keeps unrelated memories",
@@ -439,6 +451,33 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	}
 }
 
+func TestReflectionGateKeepsCurlyQuotedApostrophes(t *testing.T) {
+	boston := formatTurnChunk("I live in Boston.", "")
+	cases := []struct {
+		name string
+		text string
+	}{
+		{name: "contraction before a semicolon", text: "Please translate: ‘I’m happy; I just moved to Denver, and I live there now.’"},
+		{name: "contraction before a period", text: "Please translate: ‘I’m happy. I just moved to Denver, and I live there now.’"},
+		{name: "contraction before a question mark", text: "Please translate: ‘I’m happy? I just moved to Denver, and I live there now.’"},
+		{name: "contraction before an exclamation mark", text: "Please translate: ‘I’m happy! I just moved to Denver, and I live there now.’"},
+		{name: "negative contraction", text: "Please translate: ‘I don’t mind; I just moved to Denver, and I live there now.’"},
+		{name: "singular possessive", text: "Please translate: ‘Alice’s dog is happy; I just moved to Denver, and I live there now.’"},
+		{name: "without a contraction", text: "Please translate: ‘I am happy; I just moved to Denver, and I live there now.’"},
+		{name: "nested double quotes", text: `Please translate: ‘They said "I’m happy"; I just moved to Denver, and I live there now.’`},
+		{name: "inside curly double quotes", text: "Please translate: “They said ‘I’m happy’; I just moved to Denver, and I live there now.”"},
+		{name: "unmatched opening quote", text: "Please translate: ‘I’m happy; I just moved to Denver, and I live there now."},
+		{name: "plural possessive before the quote", text: "The dogs’ leashes are here. Please translate: ‘I’m happy; I just moved to Denver, and I live there now.’"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			quoted := formatTurnChunk(tc.text, "")
+			retrieved := []datedContent{{content: boston, daysAgo: 30}, {content: quoted, daysAgo: 9}}
+			assert.ElementsMatch(t, []string{boston, quoted}, injectedContents(t, retrieved))
+		})
+	}
+}
+
 func TestReflectionGateTrimsACopyOfTheStoredSessionChunk(t *testing.T) {
 	now := time.Now()
 	chunk := sessionChunkOf(dogTurn, bostonTurn)
@@ -565,10 +604,8 @@ func TestReflectionGateDedupKeepsACorrectionBesideTheFactItCorrects(t *testing.T
 	}
 }
 
-// TestWithoutQuotedContentStripsEveryQuoteStyle pins the quoteTracker
-// mechanism down directly, not just through end-to-end retrieval scenarios:
-// every quote style strips its content, and a straight single quote never
-// mistakes a contraction or a possessive for a quote boundary.
+// TestWithoutQuotedContentStripsEveryQuoteStyle checks that quote stripping
+// preserves apostrophes and removes the complete quoted span.
 func TestWithoutQuotedContentStripsEveryQuoteStyle(t *testing.T) {
 	cases := []struct {
 		name string
@@ -586,6 +623,14 @@ func TestWithoutQuotedContentStripsEveryQuoteStyle(t *testing.T) {
 		{name: "a plural possessive does not desync a later real quote", text: "The dogs' leashes are here. Please translate: 'I moved to Denver.'", want: "The dogs' leashes are here. Please translate: "},
 		{name: "a contraction inside a straight-single-quoted span is still stripped", text: "Please say 'I don't know' aloud.", want: "Please say  aloud."},
 		{name: "a period inside a straight-single-quoted span is stripped", text: "Translate: 'Yesterday I moved to Denver, and I live there now.'", want: "Translate: "},
+		{name: "curly apostrophes are not quote boundaries", text: "I’m sure it’s Alice’s dog; I don’t mind.", want: "I’m sure it’s Alice’s dog; I don’t mind."},
+		{name: "a curly plural possessive is not a quote boundary", text: "The dogs’ leashes are here. Please say ‘hello’.", want: "The dogs’ leashes are here. Please say ."},
+		{name: "a curly contraction inside curly quotes is stripped", text: "Please say ‘I don’t know; I moved.’ aloud.", want: "Please say  aloud."},
+		{name: "a straight contraction inside curly quotes is stripped", text: "Please say ‘I don't know; I moved.’ aloud.", want: "Please say  aloud."},
+		{name: "a curly contraction inside straight quotes is stripped", text: "Please say 'I don’t know; I moved.' aloud.", want: "Please say  aloud."},
+		{name: "a curly possessive inside curly quotes is stripped", text: "Please say ‘Alice’s dog is happy; I moved.’ aloud.", want: "Please say  aloud."},
+		{name: "nested quotes with a curly apostrophe", text: `Please say ‘They said "I’m happy"; I moved.’ aloud.`, want: "Please say  aloud."},
+		{name: "an unmatched curly quote with a contraction", text: "Please say ‘I’m happy; I moved.", want: "Please say "},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -32,6 +32,9 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	quotedTranslation := storedMemoryTurn{
 		user: "Please translate this sentence: ‘I just moved to Denver, and I live there now.’",
 	}
+	curlyQuotedContraction := storedMemoryTurn{
+		user: "Please translate: ‘I’m happy; I just moved to Denver, and I live there now.’",
+	}
 	straightSingleQuotedTranslation := storedMemoryTurn{
 		user: "Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'",
 	}
@@ -132,6 +135,12 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			turns:    []storedMemoryTurn{boston, quotedTranslation},
 			query:    "Does my Boston residence change after asking to translate a Denver move?",
 			injected: []string{"I live in Boston", "translate this sentence"},
+		},
+		{
+			name:     "a curly quoted contraction before a semicolon keeps the user's fact",
+			turns:    []storedMemoryTurn{{user: "I live in Boston.", assistant: "Got it, you live in Boston."}, curlyQuotedContraction},
+			query:    "Does my Boston residence change after asking to translate a Denver move?",
+			injected: []string{"I live in Boston.", curlyQuotedContraction.user},
 		},
 		{
 			name:     "a straight single-quoted translation keeps the user's fact",
@@ -236,7 +245,9 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			chunks := memory.NewMemoryChunkStore(store)
 			bg := context.Background()
 			for _, turn := range tc.turns {
-				require.NoError(t, chunks.ProcessResponse(bg, "session", "user-1", turn.user, turn.assistant))
+				stored, err := chunks.ProcessResponseWithHistoryCount(bg, "session", "user-1", turn.user, turn.assistant, nil)
+				require.NoError(t, err)
+				require.Equal(t, 1, stored, "each turn must reach the store before retrieval")
 			}
 			for i, mem := range tc.stored {
 				mem.ID, mem.UserID, mem.Type, mem.CreatedAt = fmt.Sprintf("stored-%d", i), "user-1", memory.MemoryTypeEpisodic, time.Now()
