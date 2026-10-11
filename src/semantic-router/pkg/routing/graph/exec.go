@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // Limits bound one run of a program; a zero field means no bound. A run that
@@ -114,6 +115,12 @@ func Run(ctx context.Context, program *Program, in Input, opts Options) (*Outcom
 		var stop context.CancelFunc
 		runCtx, stop = context.WithTimeoutCause(runCtx, program.Limits.Timeout, ErrDeadline)
 		defer stop()
+	}
+	// Install the physical-call ledger before any caller or nested transport
+	// starts. Existing ledgers are preserved, so a parent request budget remains
+	// authoritative when a graph runs inside another execution.
+	if program.Limits.MaxHops > 0 {
+		runCtx, _ = budget.WithLimit(runCtx, program.Limits.MaxHops)
 	}
 	x := &Exec{program: program, opts: opts, fail: fail}
 	st := &State{Request: in.Request.Clone(), Values: cloneValues(in.Values)}

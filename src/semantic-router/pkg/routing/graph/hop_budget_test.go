@@ -1,8 +1,11 @@
 package graph
 
 import (
+	"context"
 	"errors"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // A parallel step's branches are hops of the same run, so the run's hop
@@ -67,4 +70,35 @@ func TestParallelSkipCannotHideHopBudgetExhaustion(t *testing.T) {
 	if outcome.Hops != 1 {
 		t.Fatalf("hops %d, want 1", outcome.Hops)
 	}
+}
+
+func TestPhysicalRetryBudgetExhaustionFailsTheGraph(t *testing.T) {
+	calls := 0
+	program := &Program{
+		Steps:  Sequence{call("retry", "model"), respond()},
+		Limits: Limits{MaxHops: 1},
+	}
+	outcome, err := run(t, program, &budgetCaller{calls: &calls})
+	if !errors.Is(err, ErrHopLimit) {
+		t.Fatalf("err %v, want ErrHopLimit", err)
+	}
+	if calls != 1 || outcome.Hops != 1 {
+		t.Fatalf("physical calls=%d logical hops=%d, want one of each", calls, outcome.Hops)
+	}
+}
+
+type budgetCaller struct{ calls *int }
+
+func (c *budgetCaller) Call(ctx context.Context, req *HopRequest) (*HopResponse, error) {
+	if err := budget.Consume(ctx); err != nil {
+		return nil, err
+	}
+	*c.calls++
+	// Model one upstream attempt followed by a retry inside the same logical
+	// hop. The graph must account for the retry even though Caller.Call is
+	// entered only once.
+	if err := budget.Consume(ctx); err != nil {
+		return nil, err
+	}
+	return completion(req.Model, "ok", 1), nil
 }

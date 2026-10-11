@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -146,6 +147,9 @@ type upstreamSender struct {
 func (s upstreamSender) Send(ctx context.Context, call *routing.Call) (*graph.Delivery, error) {
 	result, err := s.set.Execute(ctx, call, "")
 	if err != nil {
+		if errors.Is(err, budget.ErrExhausted) {
+			return nil, err
+		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
