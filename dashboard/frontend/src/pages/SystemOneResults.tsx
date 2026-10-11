@@ -326,6 +326,41 @@ export default function SystemOneResults({ run }: { run: SystemOneRun }) {
         </div>
         <span className={styles.successPill}>Response received</span>
       </div>
+      {run.response.routing && (
+        <section className={styles.routingOutcome} aria-label="Auto routing outcome">
+          <div className={styles.routingHeading}>
+            <span className={styles.eyebrow}>Selected model</span>
+            <strong>{run.response.routing.selected_model}</strong>
+          </div>
+          <dl className={styles.runMeta}>
+            <div>
+              <dt>Stage</dt>
+              <dd>{run.response.routing.stage}</dd>
+            </div>
+            <div>
+              <dt>Algorithm calls</dt>
+              <dd>{run.response.routing.model_calls}</dd>
+            </div>
+            <div>
+              <dt>Algorithm</dt>
+              <dd>{run.response.routing.algorithm}</dd>
+            </div>
+            <div>
+              <dt>Acceptance</dt>
+              <dd>
+                {run.response.routing.quality === 'calibrated'
+                  ? 'Calibrated risk gate'
+                  : 'Operator thresholds'}
+              </dd>
+            </div>
+          </dl>
+          <p className={styles.caption}>
+            {run.response.routing.recipe} · {run.response.routing.decision}. Acceptance describes
+            the configured gate; it is not measured accuracy. Algorithm calls include transport
+            retries. Signal inference is counted separately.
+          </p>
+        </section>
+      )}
       <MetaChips response={run.response} elapsed={run.elapsed} />
       {Object.entries(run.request.questions).map(([name, question]) => (
         <article className={styles.resultCard} key={name} aria-label={`Result for ${name}`}>
@@ -345,7 +380,11 @@ export default function SystemOneResults({ run }: { run: SystemOneRun }) {
       <JSONInspector title="Inspect response" value={run.response} />
       <JSONInspector
         title="Inspect submitted request"
-        value={{ deployment: run.deployment, request: run.request }}
+        value={
+          run.targetKind === 'route'
+            ? { model: run.deployment, request: run.request }
+            : { deployment: run.deployment, request: run.request }
+        }
       />
     </div>
   )

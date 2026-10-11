@@ -51,6 +51,37 @@ vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0,1
 vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0
 ```
 
+## Ask about images
+
+Decision 3.0 models (`vllm-sr/d3`, `d3-flash`, `d3-mini`, `d3-nano`,
+`d3-lite`) read images as well as text. Serve one on an AMD Instinct MI325X:
+
+```bash
+vllm-sr serve vllm-sr/d3-lite --engine --platform rocm
+```
+
+A request may carry any number of `images` as base64 PNG, JPEG or WebP data
+URLs; every question sees them, in front of the text. Each image may have up to
+8,000,000 bytes and 16,000,000 pixels, the model reads it at up to 1.6
+megapixels, and a request body may have up to 32 MiB:
+
+```bash
+IMAGE="data:image/png;base64,$(base64 -w0 chart.png)"
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+  "model": "vllm-sr/d3-lite",
+  "state": "What does the attached image show?",
+  "images": ["'"$IMAGE"'"],
+  "questions": {
+    "kind": {"type": "choice", "instructions": "What kind of image is this?",
+             "criteria": {"chart": "A chart or plot", "photo": "A photograph", "document": "A document"}}
+  }
+}'
+```
+
+A text-only model answers a request with images with `invalid_request`. The
+runtime's model card lists the `modalities` a model reads and its image
+`limits`.
+
 Use canonical YAML for additional deployments, task bindings, attached workers
 and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy.md).
 Model placement and replica count apply in either mode.

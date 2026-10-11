@@ -19,7 +19,7 @@ The default standalone frontend accepts client traffic directly. Recipe routing
 and native System One serving compose in the same instance. An Envoy-based
 ExtProc gateway is an alternative ingress, not a required component.
 See [Component Architecture](component-architecture) for the protocol path,
-model-runtime replicas, and the separately marked System One auto roadmap.
+model-runtime replicas, and explicit native recipes for System One auto.
 
 ### Data plane
 
