@@ -14,6 +14,7 @@ Test classes live in the memory_tests package:
   - SimilarityThresholdTest: Irrelevant NOT injected, relevant IS injected
   - MemoryDefaultThresholdTest: Zero plugin fallback and calibrated 0.40 cutoff
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
+  - SupersededMemoryTest: A correction hides only the fact it replaces
   - PluginCombinationTest: Memory + system_prompt coexistence
   - MemoryStorageTest: Conversation turns stored in Milvus
   - PerDecisionMemoryDisabledTest: Decision with memory.enabled=false skips retrieval
@@ -59,6 +60,7 @@ from memory_tests import (
     PluginCombinationTest,
     SimilarityThresholdTest,
     StaleMemoryTest,
+    SupersededMemoryTest,
     UserIsolationTest,
 )
 from memory_tests.base import HTTP_OK
@@ -114,6 +116,7 @@ def run_tests():
             SimilarityThresholdTest,
             MemoryDefaultThresholdTest,
             StaleMemoryTest,
+            SupersededMemoryTest,
             PluginCombinationTest,
             MemoryStorageTest,
             # P1: Per-decision plugin behavior

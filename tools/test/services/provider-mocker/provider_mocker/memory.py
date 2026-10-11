@@ -6,6 +6,14 @@ from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 QUERY_CONTEXT_WORD_THRESHOLD = 6
+MEMORY_ASSISTANT_FACT_PROMPT: str = "I live in Boston."
+MEMORY_QUOTED_TRANSLATION_PROMPT: str = (
+    "THRESHOLD_MARKER Please translate this sentence: "
+    "\u2018I just moved to Denver, and I live there now actually\u2019."
+)
+MEMORY_DENVER_CORRECTION_PROMPT: str = (
+    "THRESHOLD_MARKER I just moved to Denver, and I live there now."
+)
 
 
 def _content_text(content: object) -> str:
@@ -277,10 +285,24 @@ class MemoryScenario:
             {**message, "content": _content_text(message.get("content"))}
             for message in messages
         ]
+        latest_user_prompt: str = next(
+            (
+                msg.get("content", "").strip()
+                for msg in reversed(messages)
+                if msg.get("role") == "user"
+            ),
+            "",
+        )
         if self._is_extraction_prompt(messages):
             return json.dumps(self._extract_facts_from_messages(messages))
         if self._is_query_rewrite_prompt(messages):
             return self._rewrite_query(messages)
+        if latest_user_prompt == MEMORY_ASSISTANT_FACT_PROMPT:
+            return "Your dog Biscuit is a beagle."
+        if latest_user_prompt == MEMORY_QUOTED_TRANSLATION_PROMPT:
+            return "Translation complete."
+        if latest_user_prompt == MEMORY_DENVER_CORRECTION_PROMPT:
+            return "Welcome to Denver!"
         return "\n".join(
             f"[{m.get('role', 'unknown')}]: {m.get('content', '')}" for m in messages
         )

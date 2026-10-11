@@ -1,0 +1,623 @@
+package memory
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+var (
+	bostonTurn             = formatTurnChunk("I live in Boston, near the Charles River.", "Got it, you live in Boston.")
+	denverTurn             = formatTurnChunk("I just moved to Denver, and I live there now.", "Welcome to Denver!")
+	nurseTurn              = formatTurnChunk("I work as a nurse at the children's hospital.", "Thanks, I'll remember you're a nurse.")
+	paramedicTurn          = formatTurnChunk("I changed jobs and now work as a paramedic.", "Congratulations on the paramedic job!")
+	budget4kTurn           = formatTurnChunk("My budget for the Japan trip is $4,000.", "I'll plan the Japan trip around $4,000.")
+	budget6kTurn           = formatTurnChunk("I raised my budget for the Japan trip to $6,000.", "Updated, the Japan trip budget is $6,000.")
+	dogTurn                = formatTurnChunk("My dog is a beagle named Biscuit.", "Biscuit the beagle, noted.")
+	birthdayTurn           = formatTurnChunk("Biscuit turned three today, so I bought my dog a new toy.", "Happy birthday to Biscuit!")
+	peanutsTurn            = formatTurnChunk("I'm allergic to peanuts, so keep them out of any recipe.", "Understood, no peanuts.")
+	notNurseTurn           = formatTurnChunk("I no longer work as a nurse.", "Understood.")
+	leftCityTurn           = formatTurnChunk("I don't live in Boston anymore.", "Thanks for letting me know.")
+	contractedNotNurseTurn = formatTurnChunk("I'm no longer a nurse.", "Understood.")
+	contractedMoveTurn     = formatTurnChunk("I've moved to Denver, and I live there now.", "Welcome to Denver!")
+	bostonTerrierTurn      = formatTurnChunk("I live in Boston.", "Your dog Biscuit is a Boston terrier.")
+	nurseAndSisterTurn     = formatTurnChunk("I work as a nurse.", "Got it, you work as a nurse. Your sister is a nurse too.")
+	bostonAndParentsTurn   = formatTurnChunk("I live in Boston.", "Your parents visit often. They live in Boston too.")
+	sisterNursePronounTurn = formatTurnChunk("My sister is a nurse.", "She is a nurse.")
+	sisterParamedicTurn    = formatTurnChunk("I changed my sister from a nurse to a paramedic.", "Your sister is now a paramedic.")
+	dogTerrierRestatedTurn = formatTurnChunk("My dog Biscuit is a Boston terrier.", "Your dog Biscuit is a Boston terrier.")
+	dogBeagleTurn          = formatTurnChunk("I changed my dog Biscuit from a Boston terrier to a beagle.", "Your dog Biscuit is now a beagle.")
+	budgetRestatedTurn     = formatTurnChunk("My budget for the Japan trip is 4000 dollars.", "Your budget is 4000 dollars.")
+	bostonInTheFallTurn    = formatTurnChunk("I live in Boston.", "Got it, you live in Boston. Boston is lovely in the fall.")
+	hopeYouLoveBostonTurn  = formatTurnChunk("I live in Boston.", "I hope you love Boston.")
+	chicagoTurn            = formatTurnChunk("I moved to Chicago, and I live there now.", "Welcome to Chicago!")
+	jobAndCity             = formatTurnChunk("I changed jobs and now work as a paramedic, and I live in Boston.", "Noted.")
+	jobNearPark            = formatTurnChunk("I changed jobs and now work as a paramedic near Central Park.", "Congratulations!")
+	leftParkTurn           = formatTurnChunk("I no longer work near Central Park.", "Noted.")
+	// The reply quotes a stored session, so its "Q:" line is not the user's.
+	quotedTurn                    = formatTurnChunk("What does a stored session look like?", "Like this:\n---\nQ: I moved to Denver, and I live there now")
+	bostonWithAssistantFact       = formatTurnChunk("I live in Boston.", "Your dog Biscuit is a beagle.")
+	bostonWithMixedAssistantFacts = formatTurnChunk(
+		"I live in Boston.",
+		"Your dog Biscuit is a beagle. You live in Boston.",
+	)
+	bostonBeforeDogTurn = formatTurnChunk(
+		"I live in Boston.",
+		"You live in Boston, and your dog Biscuit is a beagle.",
+	)
+	dogBeforeBostonTurn = formatTurnChunk(
+		"I live in Boston.",
+		"Your dog Biscuit is a beagle, and you live in Boston.",
+	)
+	aliceBostonTurn      = formatTurnChunk("I live in Boston.", "Alice lives in Boston.")
+	budgetAndFlightsTurn = formatTurnChunk(
+		"My budget for the Japan trip is $4,000.",
+		"Your budget is $4,000, and flights from Boston start at $1,200.",
+	)
+	bostonAndPetsTurn    = formatTurnChunk("I live in Boston.", "You live in Boston, and Biscuit and Luna love the parks.")
+	bostonAndVetSiteTurn = formatTurnChunk("I live in Boston.", "You live in Boston. Your vet's site is vetclinic.com.")
+	bostonAndConfigTurn  = formatTurnChunk("I live in Boston.", "You live in Boston. Your settings live in config.yaml for now.")
+	// Long enough that the correction is a near-duplicate for the default dedup threshold.
+	hospitalTurn   = formatTurnChunk("I work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
+	noHospitalTurn = formatTurnChunk("I no longer work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
+)
+
+type datedContent struct {
+	content string
+	daysAgo int
+	undated bool
+	// source defaults to what the extractor writes for the content.
+	source string
+}
+
+// legacySessionChunkSource is the source of session windows stored before
+// quoted turn boundaries were escaped.
+const legacySessionChunkSource = "session_window"
+
+func sessionChunkOf(turns ...string) string {
+	return strings.Join(turns, sessionTurnSeparator)
+}
+
+// injectedContents runs retrieved memories through the default memory filter.
+func injectedContents(t *testing.T, retrieved []datedContent) []string {
+	t.Helper()
+	now := time.Now()
+	results := make([]*RetrieveResult, 0, len(retrieved))
+	for i, r := range retrieved {
+		source := r.source
+		if source == "" {
+			source = turnChunkSource
+			if strings.Contains(r.content, sessionTurnSeparator+turnQuestionPrefix) {
+				source = sessionChunkSource
+			}
+		}
+		mem := &Memory{ID: fmt.Sprintf("m%d", i), Content: r.content, Source: source}
+		if !r.undated {
+			mem.CreatedAt = now.AddDate(0, 0, -r.daysAgo)
+		}
+		results = append(results, &RetrieveResult{Memory: mem, Score: 0.5})
+	}
+	gate := NewReflectionGate(config.MemoryReflectionConfig{}, nil)
+	require.NotNil(t, gate)
+	injected := make([]string, 0, len(results))
+	for _, r := range gate.Filter(results) {
+		injected = append(injected, r.Memory.Content)
+	}
+	return injected
+}
+
+func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
+	cases := []struct {
+		name      string
+		retrieved []datedContent
+		want      []string
+	}{
+		{
+			name:      "a move hides the old city",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{denverTurn},
+		},
+		{
+			name:      "a job change hides the old job",
+			retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: paramedicTurn, daysAgo: 9}},
+			want:      []string{paramedicTurn},
+		},
+		{
+			name:      "a raised budget hides the old budget",
+			retrieved: []datedContent{{content: budget4kTurn, daysAgo: 30}, {content: budget6kTurn, daysAgo: 9}},
+			want:      []string{budget6kTurn},
+		},
+		{
+			name: "a raised budget without a purpose hides the old budget",
+			retrieved: []datedContent{
+				{content: formatTurnChunk("My budget is $4,000.", "Noted."), daysAgo: 30},
+				{content: formatTurnChunk("I raised my budget to $6,000.", "Updated."), daysAgo: 9},
+			},
+			want: []string{formatTurnChunk("I raised my budget to $6,000.", "Updated.")},
+		},
+		{
+			name: "no longer and anymore end an old fact",
+			retrieved: []datedContent{
+				{content: nurseTurn, daysAgo: 30},
+				{content: bostonTurn, daysAgo: 30},
+				{content: notNurseTurn, daysAgo: 9},
+				{content: leftCityTurn, daysAgo: 9},
+			},
+			want: []string{notNurseTurn, leftCityTurn},
+		},
+		{
+			name: "contracted subjects report a change",
+			retrieved: []datedContent{
+				{content: nurseTurn, daysAgo: 30},
+				{content: bostonTurn, daysAgo: 30},
+				{content: contractedNotNurseTurn, daysAgo: 9},
+				{content: contractedMoveTurn, daysAgo: 9},
+			},
+			want: []string{contractedNotNurseTurn, contractedMoveTurn},
+		},
+		{
+			name: "a correction keeps unrelated memories",
+			retrieved: []datedContent{
+				{content: dogTurn, daysAgo: 30},
+				{content: peanutsTurn, daysAgo: 28},
+				{content: bostonTurn, daysAgo: 30},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{dogTurn, peanutsTurn, denverTurn},
+		},
+		{
+			name:      "a correction keeps an unrelated assistant fact",
+			retrieved: []datedContent{{content: bostonWithAssistantFact, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name: "a correction drops only the assistant sentence that repeats it",
+			retrieved: []datedContent{
+				{content: bostonWithMixedAssistantFacts, daysAgo: 30},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name:      "a correction keeps an independent clause after a stale clause",
+			retrieved: []datedContent{{content: bostonBeforeDogTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name:      "a correction keeps an independent clause before a stale clause",
+			retrieved: []datedContent{{content: dogBeforeBostonTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a grouped number in an independent clause",
+			retrieved: []datedContent{{content: budgetAndFlightsTurn, daysAgo: 30}, {content: budget6kTurn, daysAgo: 9}},
+			want:      []string{"A: Flights from Boston start at $1,200.", budget6kTurn},
+		},
+		{
+			name:      "a correction keeps a subject joined by and",
+			retrieved: []datedContent{{content: bostonAndPetsTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Biscuit and Luna love the parks.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a domain name in a retained reply",
+			retrieved: []datedContent{{content: bostonAndVetSiteTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your vet's site is vetclinic.com.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a file name in a retained reply",
+			retrieved: []datedContent{{content: bostonAndConfigTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your settings live in config.yaml for now.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a fact about an explicit named subject",
+			retrieved: []datedContent{{content: aliceBostonTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Alice lives in Boston.", denverTurn},
+		},
+		{
+			name:      "a correction keeps an assistant fact about the user's dog that shares a word",
+			retrieved: []datedContent{{content: bostonTerrierTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your dog Biscuit is a Boston terrier.", denverTurn},
+		},
+		{
+			name:      "a job change keeps the job of another person",
+			retrieved: []datedContent{{content: nurseAndSisterTurn, daysAgo: 30}, {content: paramedicTurn, daysAgo: 9}},
+			want:      []string{"A: Your sister is a nurse too.", paramedicTurn},
+		},
+		{
+			name:      "a correction drops a stale assistant pronoun sentence",
+			retrieved: []datedContent{{content: sisterNursePronounTurn, daysAgo: 30}, {content: sisterParamedicTurn, daysAgo: 9}},
+			want:      []string{sisterParamedicTurn},
+		},
+		{
+			name:      "a correction drops a your clause about the corrected subject",
+			retrieved: []datedContent{{content: dogTerrierRestatedTurn, daysAgo: 30}, {content: dogBeagleTurn, daysAgo: 9}},
+			want:      []string{dogBeagleTurn},
+		},
+		{
+			name:      "a move keeps an explicit parent fact but drops an unresolved pronoun",
+			retrieved: []datedContent{{content: bostonAndParentsTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your parents visit often.", denverTurn},
+		},
+		{
+			name:      "a move keeps a sentence that only mentions the old city",
+			retrieved: []datedContent{{content: bostonInTheFallTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Boston is lovely in the fall.", denverTurn},
+		},
+		{
+			name:      "a move drops a reply that speaks to the user about the old city",
+			retrieved: []datedContent{{content: hopeYouLoveBostonTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{denverTurn},
+		},
+		{
+			name:      "a correction drops the assistant restating what the user owns",
+			retrieved: []datedContent{{content: budgetRestatedTurn, daysAgo: 30}, {content: budget6kTurn, daysAgo: 9}},
+			want:      []string{budget6kTurn},
+		},
+		{
+			name:      "a session chunk keeps its other turns",
+			retrieved: []datedContent{{content: sessionChunkOf(dogTurn, bostonTurn, nurseTurn), daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{sessionChunkOf(dogTurn, nurseTurn), denverTurn},
+		},
+		{
+			name: "a trimmed session chunk that repeats a turn chunk is deduplicated",
+			retrieved: []datedContent{
+				{content: sessionChunkOf(dogTurn, bostonTurn), daysAgo: 30},
+				{content: dogTurn, daysAgo: 30},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{dogTurn, denverTurn},
+		},
+		{
+			name:      "a later turn in one session chunk corrects an earlier one",
+			retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, dogTurn, denverTurn), daysAgo: 9}},
+			want:      []string{sessionChunkOf(dogTurn, denverTurn)},
+		},
+		{
+			name: "a correction of a correction leaves only the newest",
+			retrieved: []datedContent{
+				{content: bostonTurn, daysAgo: 30},
+				{content: chicagoTurn, daysAgo: 20},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{denverTurn},
+		},
+		{
+			name:      "a correction that holds another fact stays and still corrects",
+			retrieved: []datedContent{{content: sessionChunkOf(nurseTurn, jobAndCity, dogTurn), daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{sessionChunkOf(jobAndCity, dogTurn), denverTurn},
+		},
+		{
+			name: "a correction stays when its own correction skips what it corrected",
+			retrieved: []datedContent{
+				{content: nurseTurn, daysAgo: 30},
+				{content: jobNearPark, daysAgo: 20},
+				{content: leftParkTurn, daysAgo: 9},
+			},
+			want: []string{jobNearPark, leftParkTurn},
+		},
+		{
+			name:      "the last turn of a newer session chunk corrects another memory",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: sessionChunkOf(dogTurn, denverTurn), daysAgo: 9}},
+			want:      []string{sessionChunkOf(dogTurn, denverTurn)},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tc.want, injectedContents(t, tc.retrieved))
+		})
+	}
+}
+
+func TestIndependentAssistantAnswerDoesNotResolvePronouns(t *testing.T) {
+	cases := []struct {
+		name      string
+		statement string
+		answer    string
+	}{
+		{name: "he", statement: "My brother is a nurse.", answer: "He is a nurse."},
+		{name: "she", statement: "My sister is a nurse.", answer: "She is a nurse."},
+		{name: "they", statement: "My siblings are nurses.", answer: "They are nurses."},
+		{name: "his", statement: "My brother is active.", answer: "His status is active."},
+		{name: "her", statement: "My sister is active.", answer: "Her status is active."},
+		{name: "their", statement: "My team is active.", answer: "Their status is active."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Empty(t, independentAssistantAnswer(formatTurnChunk(tc.statement, tc.answer), nil))
+		})
+	}
+}
+
+func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
+	apartment := formatTurnChunk("I rent an apartment in Boston.", "Noted, an apartment in Boston.")
+	planned := formatTurnChunk("Next year I will live in Denver.", "Denver next year, noted.")
+	workout := formatTurnChunk("I work out every morning.", "Morning workouts, noted.")
+	park := formatTurnChunk("I live near Washington Park.", "That's a lovely park.")
+	replicas := formatTurnChunk("My deployment runs three replicas.", "Three replicas, noted.")
+	manifest := formatTurnChunk("Here is my manifest:\nkind: Service\n---\nkind: Deployment",
+		"I changed my deployment to run five replicas.")
+	partner := formatTurnChunk("My partner moved to Denver and started work as a teacher.", "Big change for your partner!")
+	stayed := formatTurnChunk("I haven't moved, I still live in Boston.", "Good to know.")
+	hypothetical := formatTurnChunk("If I switched jobs, I would still work as a nurse.", "That makes sense.")
+	otherSentence := formatTurnChunk("I moved to Denver. My sister works as a nurse there.", "Nice to be near her.")
+	bostonMove := formatTurnChunk("I moved to Boston, and I live there now.", "Welcome to Boston!")
+	question := formatTurnChunk("Have I changed jobs, or do I still work as a nurse?", "You still work as a nurse.")
+	inverted := formatTurnChunk("Had I switched jobs, I would still work as a nurse.", "That makes sense.")
+	otherClause := formatTurnChunk("I moved apartments, and I still work as a nurse at another clinic.", "Congrats on the new place.")
+	nowClause := formatTurnChunk("I moved apartments, and my dog is now three years old.", "Happy birthday to your dog!")
+	dogName := formatTurnChunk("My dog Biscuit is a beagle.", "A beagle named Biscuit, noted.")
+	nowName := formatTurnChunk("I moved apartments, and now Biscuit is three.", "Happy birthday, Biscuit!")
+	twoFacts := formatTurnChunk("I live in Boston and work as a nurse.", "Noted.")
+	twoSentences := formatTurnChunk("I live in Boston. I work as a nurse.", "Noted.")
+	commaSplice := formatTurnChunk("I live in Boston, I work as a nurse.", "Noted.")
+	someday := formatTurnChunk("If someday I switched jobs to work as a paramedic, I'd tell you.", "Please do.")
+	commute := formatTurnChunk("My work is in Cambridge, so I commute.", "That's a long ride.")
+	closerWork := formatTurnChunk("I moved apartments, and now work is closer.", "Nice, a shorter commute.")
+	workAsNow := formatTurnChunk("I changed jobs, and I work as a paramedic now.", "Congratulations!")
+	sisterTrip := formatTurnChunk("My sister flew to Denver last week.", "Hope she enjoyed it.")
+	groceryBudget := formatTurnChunk("I raised my budget for groceries to $500.", "Updated, $500 for groceries.")
+	cityAndDog := formatTurnChunk("I live in Boston, my dog is Biscuit.", "Noted.")
+	cityAndDogName := formatTurnChunk("I live in Boston, Biscuit is my dog.", "Noted.")
+	married := formatTurnChunk("I live in Boston, I'm married.", "Congratulations!")
+	jammedSentences := formatTurnChunk("i live in boston.i work as a nurse.", "Noted.")
+	stillNurse := formatTurnChunk("I moved apartments, and I still work as a nurse now.", "Congrats on the new place.")
+	quotedTask := formatTurnChunk("Please translate this sentence: \"I just moved to Denver, and I live there now.\"", "Here is the translation.")
+	curlyQuotedTask := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now’.", "Here is the translation.")
+	curlyQuotedTaskWithQuotedPeriod := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now.’", "Here is the translation.")
+	curlyQuotedTaskWithAdverb := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now actually’.", "Here is the translation.")
+	straightSingleQuotedTask := formatTurnChunk("Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'", "Here is the translation.")
+	straightSingleQuotedTaskWithContraction := formatTurnChunk("Please translate this sentence: 'I don't live in Boston anymore, I just moved to Denver.'", "Here is the translation.")
+	continueNurse := formatTurnChunk("I moved apartments, and I continue to work as a nurse now.", "Congrats on the new place.")
+	remainNurse := formatTurnChunk("I moved apartments, and I remain a nurse now.", "Congrats on the new place.")
+
+	cases := []struct {
+		name      string
+		retrieved []datedContent
+	}{
+		{name: "a newer fact about the same dog", retrieved: []datedContent{{content: dogTurn, daysAgo: 30}, {content: birthdayTurn, daysAgo: 21}}},
+		{name: "a second fact about the same city", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: apartment, daysAgo: 9}}},
+		{name: "a planned move", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: planned, daysAgo: 9}}},
+		{name: "a shared word without a shared pair", retrieved: []datedContent{{content: workout, daysAgo: 30}, {content: paramedicTurn, daysAgo: 9}}},
+		{name: "a correction older than the statement", retrieved: []datedContent{{content: denverTurn, daysAgo: 30}, {content: park, daysAgo: 9}}},
+		{name: "undated memories", retrieved: []datedContent{{content: bostonTurn, undated: true}, {content: denverTurn, undated: true}}},
+		{name: "an assistant reply after a --- line", retrieved: []datedContent{{content: replicas, daysAgo: 30}, {content: manifest, daysAgo: 9}}},
+		{
+			name:      "a session chunk's copy of a correction",
+			retrieved: []datedContent{{content: denverTurn, daysAgo: 9}, {content: sessionChunkOf(denverTurn, paramedicTurn), daysAgo: 8}},
+		},
+		{name: "a change someone else made", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: partner, daysAgo: 9}}},
+		{name: "a change the user denies", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: stayed, daysAgo: 9}}},
+		{name: "a hypothetical change", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: hypothetical, daysAgo: 9}}},
+		{name: "a change in another sentence", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: otherSentence, daysAgo: 9}}},
+		{
+			name:      "an earlier turn in a newer session chunk",
+			retrieved: []datedContent{{content: denverTurn, daysAgo: 20}, {content: sessionChunkOf(bostonMove, dogTurn), daysAgo: 10}},
+		},
+		{name: "a question about a change", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: question, daysAgo: 9}}},
+		{name: "an inverted hypothetical", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: inverted, daysAgo: 9}}},
+		{name: "a change in another clause", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: otherClause, daysAgo: 9}}},
+		{name: "a now clause about something else", retrieved: []datedContent{{content: dogTurn, daysAgo: 30}, {content: nowClause, daysAgo: 9}}},
+		{name: "a now clause about someone else", retrieved: []datedContent{{content: dogName, daysAgo: 30}, {content: nowName, daysAgo: 9}}},
+		{name: "two facts joined by and", retrieved: []datedContent{{content: twoFacts, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "two facts in two sentences", retrieved: []datedContent{{content: twoSentences, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "two facts in a comma splice", retrieved: []datedContent{{content: commaSplice, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a hypothetical opened earlier in the clause", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: someday, daysAgo: 9}}},
+		{name: "a noun after now", retrieved: []datedContent{{content: commute, daysAgo: 30}, {content: closerWork, daysAgo: 9}}},
+		{name: "the same verb with another complement", retrieved: []datedContent{{content: workout, daysAgo: 30}, {content: workAsNow, daysAgo: 9}}},
+		{name: "the destination of a move", retrieved: []datedContent{{content: sisterTrip, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a budget for something else", retrieved: []datedContent{{content: budget4kTurn, daysAgo: 30}, {content: groceryBudget, daysAgo: 9}}},
+		{name: "a comma clause with its own fact", retrieved: []datedContent{{content: cityAndDog, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a comma clause led by a name", retrieved: []datedContent{{content: cityAndDogName, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a comma clause of two words", retrieved: []datedContent{{content: married, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "two sentences typed without a space", retrieved: []datedContent{{content: jammedSentences, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "a correction that reaffirms an older fact", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: stillNurse, daysAgo: 9}}},
+		{name: "a quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTask, daysAgo: 9}}},
+		{name: "a curly-single-quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTask, daysAgo: 9}}},
+		{name: "a curly-single-quoted change with punctuation inside the quote", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTaskWithQuotedPeriod, daysAgo: 9}}},
+		{name: "a curly-single-quoted change with a trailing adverb", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTaskWithAdverb, daysAgo: 9}}},
+		{name: "a straight-single-quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: straightSingleQuotedTask, daysAgo: 9}}},
+		{name: "a straight-single-quoted task with a contraction inside the quote", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: straightSingleQuotedTaskWithContraction, daysAgo: 9}}},
+		{name: "a correction that reaffirms an older fact with continue", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: continueNurse, daysAgo: 9}}},
+		{name: "a correction that reaffirms an older fact with remain", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: remainNurse, daysAgo: 9}}},
+		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},
+		{name: "a turn quoted in a session chunk's reply", retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, quotedTurn), daysAgo: 9}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want := make([]string, 0, len(tc.retrieved))
+			for _, r := range tc.retrieved {
+				want = append(want, r.content)
+			}
+			assert.ElementsMatch(t, want, injectedContents(t, tc.retrieved))
+		})
+	}
+}
+
+func TestReflectionGateTrimsACopyOfTheStoredSessionChunk(t *testing.T) {
+	now := time.Now()
+	chunk := sessionChunkOf(dogTurn, bostonTurn)
+	stored := &Memory{ID: "window", Content: chunk, CreatedAt: now.AddDate(0, 0, -30)}
+	correction := &Memory{ID: "move", Content: denverTurn, CreatedAt: now.AddDate(0, 0, -9)}
+
+	gate := NewReflectionGate(config.MemoryReflectionConfig{}, nil)
+	got := gate.Filter([]*RetrieveResult{{Memory: stored, Score: 0.5}, {Memory: correction, Score: 0.4}})
+
+	require.Len(t, got, 2)
+	assert.Equal(t, chunk, stored.Content, "the stored record must not change")
+	for _, r := range got {
+		assert.NotContains(t, r.Memory.Content, "Boston")
+	}
+}
+
+func TestReflectionGateReadsAStoredTurnChunkAsOneTurn(t *testing.T) {
+	now := time.Now()
+	// Written before quoted turn boundaries were escaped.
+	unescaped := "Q: What does a stored session look like?\nA: Like this:\n---\nQ: I moved to Denver, and I live there now"
+	gate := NewReflectionGate(config.MemoryReflectionConfig{}, nil)
+	got := gate.Filter([]*RetrieveResult{
+		{Memory: &Memory{ID: "city", Content: bostonTurn, Source: turnChunkSource, CreatedAt: now.AddDate(0, 0, -30)}, Score: 0.5},
+		{Memory: &Memory{ID: "reply", Content: unescaped, Source: turnChunkSource, CreatedAt: now.AddDate(0, 0, -9)}, Score: 0.5},
+	})
+	ids := make([]string, 0, len(got))
+	for _, r := range got {
+		ids = append(ids, r.Memory.ID)
+	}
+	assert.ElementsMatch(t, []string{"city", "reply"}, ids)
+}
+
+func TestReflectionGateDoesNotTrustTurnsSplitFromAnOldSessionWindow(t *testing.T) {
+	// A reply stored before quoted turn boundaries were escaped.
+	unescapedQuote := "Q: What does a stored session look like?\nA: Like this:\n---\nQ: I moved to Denver, and I live there now"
+	cases := []struct {
+		name      string
+		retrieved []datedContent
+		want      []string
+	}{
+		{
+			name:      "a quote in a later turn of the window",
+			retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, unescapedQuote), daysAgo: 9, source: legacySessionChunkSource}},
+			want:      []string{sessionChunkOf(bostonTurn, unescapedQuote)},
+		},
+		{
+			name: "a quote at the end of a newer window",
+			retrieved: []datedContent{
+				{content: bostonTurn, daysAgo: 30},
+				{content: sessionChunkOf(dogTurn, unescapedQuote), daysAgo: 9, source: legacySessionChunkSource},
+			},
+			want: []string{bostonTurn, sessionChunkOf(dogTurn, unescapedQuote)},
+		},
+		{
+			name: "an old window still loses a turn a trusted correction replaces",
+			retrieved: []datedContent{
+				{content: sessionChunkOf(dogTurn, bostonTurn), daysAgo: 30, source: legacySessionChunkSource},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{dogTurn, denverTurn},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tc.want, injectedContents(t, tc.retrieved))
+		})
+	}
+}
+
+func TestReflectionGateHidesAFactOnlyWhenItsCorrectionIsInjected(t *testing.T) {
+	chunk := sessionChunkOf(dogTurn, bostonTurn, nurseTurn)
+	cases := []struct {
+		name      string
+		maxTokens int
+		want      []string
+	}{
+		{name: "both fit the token budget", maxTokens: 2048, want: []string{sessionChunkOf(dogTurn, nurseTurn), denverTurn}},
+		{name: "the correction misses the token budget", maxTokens: estimateTokens(chunk), want: []string{chunk}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+			gate := NewReflectionGate(config.MemoryReflectionConfig{MaxInjectTokens: tc.maxTokens}, nil)
+			got := gate.Filter([]*RetrieveResult{
+				{Memory: &Memory{ID: "window", Content: chunk, CreatedAt: now.AddDate(0, 0, -2)}, Score: 0.9},
+				{Memory: &Memory{ID: "move", Content: denverTurn, CreatedAt: now.AddDate(0, 0, -1)}, Score: 0.3},
+			})
+			injected := make([]string, 0, len(got))
+			for _, r := range got {
+				injected = append(injected, r.Memory.Content)
+			}
+			assert.Equal(t, tc.want, injected)
+		})
+	}
+}
+
+func TestReflectionGateDedupKeepsACorrectionBesideTheFactItCorrects(t *testing.T) {
+	other := formatTurnChunk("I'm planning a trip to Japan next spring and want to see Kyoto, Osaka and the temples.", "")
+	require.GreaterOrEqual(t, wordJaccard(hospitalTurn, noHospitalTurn), float32(0.90), "plain dedup would drop the lower-scored correction")
+
+	cases := []struct {
+		name      string
+		maxTokens int
+		want      []string
+	}{
+		{name: "both fit the token budget", maxTokens: 2048, want: []string{"other", "correction"}},
+		{name: "the correction misses the token budget", maxTokens: estimateTokens(other) + estimateTokens(hospitalTurn), want: []string{"other", "old"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+			gate := NewReflectionGate(config.MemoryReflectionConfig{MaxInjectTokens: tc.maxTokens}, nil)
+			got := gate.Filter([]*RetrieveResult{
+				{Memory: &Memory{ID: "other", Content: other, CreatedAt: now}, Score: 0.95},
+				{Memory: &Memory{ID: "old", Content: hospitalTurn, CreatedAt: now.AddDate(0, 0, -30)}, Score: 0.9},
+				{Memory: &Memory{ID: "correction", Content: noHospitalTurn, CreatedAt: now.AddDate(0, 0, -9)}, Score: 0.5},
+			})
+			ids := make([]string, 0, len(got))
+			for _, r := range got {
+				ids = append(ids, r.Memory.ID)
+			}
+			assert.Equal(t, tc.want, ids)
+		})
+	}
+}
+
+// TestWithoutQuotedContentStripsEveryQuoteStyle pins the quoteTracker
+// mechanism down directly, not just through end-to-end retrieval scenarios:
+// every quote style strips its content, and a straight single quote never
+// mistakes a contraction or a possessive for a quote boundary.
+func TestWithoutQuotedContentStripsEveryQuoteStyle(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want string
+	}{
+		{name: "straight double quotes", text: `He said "hello there" to me.`, want: `He said  to me.`},
+		{name: "curly double quotes", text: "He said “hello there” to me.", want: "He said  to me."},
+		{name: "backticks", text: "Run `go test` now.", want: "Run  now."},
+		{name: "curly single quotes", text: "She said ‘hi’ softly.", want: "She said  softly."},
+		{name: "straight single quotes", text: "She said 'hi' softly.", want: "She said  softly."},
+		{name: "a contraction is not a quote boundary", text: "I don't think so.", want: "I don't think so."},
+		{name: "contractions and a singular possessive are not quote boundaries", text: "I'm sure it's the dog's bowl.", want: "I'm sure it's the dog's bowl."},
+		{name: "a trailing plural possessive is not a quote boundary", text: "The dogs' leashes are here.", want: "The dogs' leashes are here."},
+		{name: "a plural possessive does not desync a later real quote", text: "The dogs' leashes are here. Please translate: 'I moved to Denver.'", want: "The dogs' leashes are here. Please translate: "},
+		{name: "a contraction inside a straight-single-quoted span is still stripped", text: "Please say 'I don't know' aloud.", want: "Please say  aloud."},
+		{name: "a period inside a straight-single-quoted span is stripped", text: "Translate: 'Yesterday I moved to Denver, and I live there now.'", want: "Translate: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, withoutQuotedContent(tc.text))
+		})
+	}
+}
+
+// TestStatementSentencesDoesNotSplitInsideAStraightSingleQuote guards the
+// other half of the quoteTracker mechanism: a sentence-ending period quoted
+// with a straight single quote must not end the sentence early, or the
+// unstripped remainder would reach correctionPairs unquoted.
+func TestStatementSentencesDoesNotSplitInsideAStraightSingleQuote(t *testing.T) {
+	text := "Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'"
+	sentences := statementSentences(text)
+	require.Len(t, sentences, 1)
+	assert.Equal(t, text, sentences[0].text)
+}
+
+func BenchmarkReflectionGateSupersedesLargeRepetitiveChunks(b *testing.B) {
+	turn := formatTurnChunk("I changed "+strings.Repeat("alpha ", 500), "Noted.")
+	chunk := sessionChunkOf(turn, turn, turn, turn, turn)
+	gate := NewReflectionGate(config.MemoryReflectionConfig{MaxInjectTokens: 1 << 20}, nil)
+	now := time.Now()
+	for i := 0; i < b.N; i++ {
+		retrieved := make([]*RetrieveResult, 0, 10)
+		for m := 0; m < 10; m++ {
+			retrieved = append(retrieved, &RetrieveResult{
+				Memory: &Memory{ID: fmt.Sprint(m), Content: chunk, Source: sessionChunkSource, CreatedAt: now.Add(-time.Duration(m) * time.Hour)},
+				Score:  0.5,
+			})
+		}
+		gate.Filter(retrieved)
+	}
+}
