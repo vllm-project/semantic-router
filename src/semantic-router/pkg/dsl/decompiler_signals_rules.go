@@ -228,6 +228,64 @@ func (d *decompiler) decompileInputModalitySignals() {
 	}
 }
 
+// decompileTopicContinuitySignals writes only explicitly set fields, so an
+// omitted default stays omitted across a compile/decompile round trip.
+func (d *decompiler) decompileTopicContinuitySignals() {
+	for _, rule := range d.cfg.TopicContinuityRules {
+		d.write("SIGNAL topic_continuity %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.IncludeAssistant != nil {
+			d.write("  include_assistant: %t\n", *rule.IncludeAssistant)
+		}
+		if thresholds := topicContinuityThresholdsValue(rule.Thresholds); thresholds != nil {
+			d.write("  thresholds: %s\n", formatPluginConfigValue(thresholds))
+		}
+		if limits := topicContinuityLimitsValue(rule.Limits); limits != nil {
+			d.write("  limits: %s\n", formatPluginConfigValue(limits))
+		}
+		d.write("}\n\n")
+	}
+}
+
+func topicContinuityThresholdsValue(thresholds *config.TopicContinuityThresholds) map[string]interface{} {
+	if thresholds == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	if thresholds.Continuation != nil {
+		value["continuation"] = *thresholds.Continuation
+	}
+	if thresholds.Change != nil {
+		value["change"] = *thresholds.Change
+	}
+	if len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
+func topicContinuityLimitsValue(limits *config.TopicContinuityEvidenceLimits) map[string]interface{} {
+	if limits == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	if limits.MaxPriorTurns != 0 {
+		value["max_prior_turns"] = limits.MaxPriorTurns
+	}
+	if limits.MaxTurnBytes != 0 {
+		value["max_turn_bytes"] = limits.MaxTurnBytes
+	}
+	if limits.MaxInputBytes != 0 {
+		value["max_input_bytes"] = limits.MaxInputBytes
+	}
+	if len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
 func (d *decompiler) decompileDecisionModelSignals() {
 	for _, rule := range d.cfg.DecisionRules {
 		d.write("SIGNAL decision %s {\n", quoteName(rule.Name))

@@ -5,6 +5,7 @@ import type {
   DecisionModelSignal,
   Listener,
   SafetySignal,
+  TopicContinuitySignal,
 } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
@@ -925,6 +926,7 @@ export interface ConfigSignals {
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
   decision?: DecisionModelSignal[]
+  topic_continuity?: TopicContinuitySignal[]
 }
 
 export interface ConfigProjections {
