@@ -98,6 +98,25 @@ const valkeyUpdateIfCurrentScriptSource = `
 if redis.call('HGET', KEYS[1], 'id') ~= ARGV[1] then
   return 0
 end
+
+-- Pre-consolidation rows kept last_accessed in metadata as Unix seconds.
+-- Promote it only while the authoritative hash field is absent. Because this
+-- runs in the same script as the content update, a retrieval either writes its
+-- newer timestamp before this check or after the migration; it is never
+-- overwritten by an Update based on stale data.
+if redis.call('HEXISTS', KEYS[1], 'last_accessed') == 0 then
+  local metadata = redis.call('HGET', KEYS[1], 'metadata')
+  if metadata then
+    local decoded, legacy = pcall(cjson.decode, metadata)
+    if decoded and type(legacy) == 'table' then
+      local last_accessed = tonumber(legacy.last_accessed)
+      if last_accessed then
+        redis.call('HSET', KEYS[1], 'last_accessed', string.format('%.0f', last_accessed * 1000))
+      end
+    end
+  end
+end
+
 redis.call('HSET', KEYS[1], unpack(ARGV, 2))
 return 1
 `

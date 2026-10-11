@@ -112,6 +112,52 @@ func TestValkeyReplaceCurrentGroupScriptRejectsStaleAndCollidingWrites(t *testin
 	})
 }
 
+func TestValkeyUpdateIfCurrentScriptMigratesLegacyLastAccessed(t *testing.T) {
+	t.Run("migrates legacy metadata during an existing-row update", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		t.Cleanup(func() { _ = client.Close() })
+
+		ctx := context.Background()
+		key := "mem:legacy"
+		require.NoError(t, client.HSet(ctx, key,
+			"id", "legacy",
+			"content", "original",
+			"metadata", `{"last_accessed":1700000200,"user_id":"user-1"}`,
+		).Err())
+
+		result := evalUpdateScript(t, client, key, "legacy", map[string]string{
+			"content":  "updated",
+			"metadata": `{"user_id":"user-1"}`,
+		})
+		require.Equal(t, int64(1), result)
+		require.Equal(t, "updated", client.HGet(ctx, key, "content").Val())
+		require.Equal(t, "1700000200000", client.HGet(ctx, key, "last_accessed").Val())
+		require.JSONEq(t, `{"user_id":"user-1"}`, client.HGet(ctx, key, "metadata").Val())
+	})
+
+	t.Run("does not overwrite newer retrieval tracking", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		t.Cleanup(func() { _ = client.Close() })
+
+		ctx := context.Background()
+		key := "mem:tracked"
+		require.NoError(t, client.HSet(ctx, key,
+			"id", "tracked",
+			"metadata", `{"last_accessed":1700000200}`,
+			"last_accessed", "1700000200123",
+		).Err())
+
+		result := evalUpdateScript(t, client, key, "tracked", map[string]string{
+			"content":  "updated",
+			"metadata": `{}`,
+		})
+		require.Equal(t, int64(1), result)
+		require.Equal(t, "1700000200123", client.HGet(ctx, key, "last_accessed").Val())
+	})
+}
+
 func versionFixture(id, content string, createdAt time.Time) memoryVersion {
 	return memoryVersion{
 		id:         id,
@@ -144,6 +190,20 @@ func evalReplaceScript(t *testing.T, client *redis.Client, keys []string, versio
 		cmdArgs[i] = arg
 	}
 	result, err := client.Eval(context.Background(), valkeyReplaceCurrentGroupScriptSource, keys, cmdArgs...).Result()
+	require.NoError(t, err)
+	n, ok := result.(int64)
+	require.True(t, ok, "script result type %T (%v)", result, result)
+	return n
+}
+
+func evalUpdateScript(t *testing.T, client *redis.Client, key, id string, fields map[string]string) int64 {
+	t.Helper()
+	args := append([]string{id}, valkeyHashFieldArgs(fields)...)
+	cmdArgs := make([]any, len(args))
+	for i, arg := range args {
+		cmdArgs[i] = arg
+	}
+	result, err := client.Eval(context.Background(), valkeyUpdateIfCurrentScriptSource, []string{key}, cmdArgs...).Result()
 	require.NoError(t, err)
 	n, ok := result.(int64)
 	require.True(t, ok, "script result type %T (%v)", result, result)

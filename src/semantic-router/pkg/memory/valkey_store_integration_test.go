@@ -399,6 +399,51 @@ func TestValkeyStoreInteg_Update(t *testing.T) {
 	assert.Equal(t, beforeUpdate.LastAccessed, retrieved.LastAccessed, "LastAccessed should be preserved")
 }
 
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_UpdateMigratesLegacyLastAccessed(t *testing.T) {
+	store, client := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+
+	id := fmt.Sprintf("mem_legacy_upd_%d", time.Now().UnixNano())
+	createdAt := time.Unix(1_700_000_000, 0).UTC()
+	legacyLastAccessed := time.Unix(1_700_000_200, 0).UTC()
+	_, err := client.HSet(ctx, store.hashKey(id), map[string]string{
+		"id":           id,
+		"content":      "Original legacy content",
+		"user_id":      "update_user",
+		"project_id":   "legacy_project",
+		"memory_type":  string(MemoryTypeSemantic),
+		"source":       "conversation",
+		"metadata":     `{"user_id":"update_user","project_id":"legacy_project","source":"conversation","importance":0.5,"last_accessed":1700000200}`,
+		"embedding":    string(valkeyFloat32ToBytes(make([]float32, store.dimension))),
+		"created_at":   strconv.FormatInt(createdAt.UnixMilli(), 10),
+		"updated_at":   strconv.FormatInt(createdAt.UnixMilli(), 10),
+		"access_count": "3",
+		"importance":   "0.5",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.Update(ctx, id, &Memory{
+		Content:    "Updated legacy content",
+		UserID:     "update_user",
+		Type:       MemoryTypeSemantic,
+		Importance: 0.9,
+	}))
+
+	retrieved, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated legacy content", retrieved.Content)
+	// Compare the instant. assert.Equal uses reflect.DeepEqual, which treats
+	// time.UTC and the local zone as different even when the clock time matches.
+	assert.True(t, legacyLastAccessed.Equal(retrieved.LastAccessed))
+	lastAccessed, err := client.HGet(ctx, store.hashKey(id), "last_accessed")
+	require.NoError(t, err)
+	assert.Equal(t, "1700000200000", lastAccessed.Value())
+	metadata, err := client.HGet(ctx, store.hashKey(id), "metadata")
+	require.NoError(t, err)
+	assert.NotContains(t, metadata.Value(), "last_accessed")
+}
+
 // ---------------------------------------------------------------------------
 // Update — not found
 // ---------------------------------------------------------------------------
