@@ -3,11 +3,27 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
 	c "github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingcontract"
 )
+
+// Middleware and net/http errors are not public diagnostics. Keep their client
+// messages fixed; handlers explicitly construct APIError for safe validation details.
+var trainingFallbackErrors = map[int]c.APIError{
+	http.StatusBadRequest:                   {Code: "invalid_request", Message: "invalid request"},
+	http.StatusUnauthorized:                 {Code: "unauthenticated", Message: "authentication required"},
+	http.StatusForbidden:                    {Code: "forbidden", Message: "permission denied"},
+	http.StatusNotFound:                     {Code: "not_found", Message: "training resource not found"},
+	http.StatusMethodNotAllowed:             {Code: "method_not_allowed", Message: "method not allowed"},
+	http.StatusConflict:                     {Code: "conflict", Message: "training conflict"},
+	http.StatusRequestEntityTooLarge:        {Code: "payload_too_large", Message: "request body too large"},
+	http.StatusRequestedRangeNotSatisfiable: {Code: "invalid_range", Message: "invalid byte range"},
+	http.StatusInternalServerError:          {Code: "internal_error", Message: "training operation failed"},
+	http.StatusServiceUnavailable:           {Code: "unavailable", Message: "training service unavailable"},
+}
 
 // TrainingErrorEnvelope also gives shared auth, CSRF, method and body-limit
 // rejections the v2 APIError shape. Successful downloads stream directly.
@@ -24,12 +40,12 @@ func TrainingErrorEnvelope(next http.Handler) http.Handler {
 		}
 		var value c.APIError
 		if err := json.Unmarshal(response.body.Bytes(), &value); err != nil || value.Code == "" {
-			codes := map[int]string{400: "invalid_request", 401: "unauthenticated", 403: "forbidden", 404: "not_found", 405: "method_not_allowed", 409: "conflict", 413: "payload_too_large", 416: "invalid_range", 500: "internal_error", 503: "unavailable"}
-			code := codes[response.status]
-			if code == "" {
-				code = "request_failed"
+			var ok bool
+			value, ok = trainingFallbackErrors[response.status]
+			if !ok {
+				value = c.APIError{Code: "request_failed", Message: "training request failed"}
 			}
-			value = c.APIError{Code: code, Message: strings.TrimSpace(response.body.String())}
+			log.Printf("training API middleware: status=%d code=%s detail=%q", response.status, value.Code, response.body.String())
 		}
 		w.Header().Del("Content-Length")
 		w.Header().Set("Content-Type", "application/json")
