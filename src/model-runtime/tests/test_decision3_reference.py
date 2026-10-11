@@ -60,17 +60,20 @@ def linear_patch_embed(self, hidden_states):
     )
 
 
-@pytest.fixture(scope="module")
-def reference(d3_package):
+@pytest.fixture(scope="module", params=["d3", "d3_pruned"])
+def case(request):
+    """The runtime, the package and the reference model, for a package and one with a pruned backbone."""
     from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
 
+    package = request.getfixturevalue(f"{request.param}_package")
+    runtime = request.getfixturevalue(f"{request.param}_runtime")
     model = Qwen3_5Model.from_pretrained(
-        str(d3_package), dtype=torch.bfloat16, attn_implementation="sdpa"
+        str(package), dtype=torch.bfloat16, attn_implementation="sdpa"
     ).eval()
     enable_noncausal(model.language_model)
     embed = model.visual.patch_embed
     embed.forward = types.MethodType(linear_patch_embed, embed)
-    return model
+    return runtime, package, model
 
 
 def reference_probabilities(model, package, items):
@@ -83,12 +86,12 @@ def reference_probabilities(model, package, items):
         ids[row, width - len(item.ids) :] = torch.tensor(item.ids)
         mask[row, width - len(item.ids) :] = 1
     inputs = {"input_ids": ids, "attention_mask": mask, "use_cache": False}
-    images = items[0].images
-    if images is not None:
+    media = items[0].media
+    if media is not None:
         config = json.loads((package / "config.json").read_text())
-        inputs["pixel_values"] = torch.cat([images.pixel_rows()] * len(items))
+        inputs["pixel_values"] = torch.cat([media.pixel_rows()] * len(items))
         inputs["image_grid_thw"] = torch.tensor(
-            [image.grid for _ in items for image in images.images]
+            [image.grid for _ in items for image in media.images]
         )
         inputs["mm_token_type_ids"] = (ids == config["image_token_id"]).to(torch.int32)
     with torch.inference_mode():
@@ -104,18 +107,20 @@ def reference_probabilities(model, package, items):
     ]
 
 
-def test_text_passes_match_transformers(d3_runtime, d3_package, reference):
-    model = d3_runtime.lookup(None).model
+def test_text_passes_match_transformers(case):
+    runtime, package, reference = case
+    model = runtime.lookup(None).model
     plan = model.plan(
         "Merge two sorted lists in Python and explain the cost. " * 3, QUESTIONS
     )
     short = model.plan("hi", {"q": {"type": "noul", "instructions": "Greeting?"}})
     for items in (plan.items, plan.items[:1], plan.items[1:], short.items):
-        assert model.run(items) == reference_probabilities(reference, d3_package, items)
+        assert model.run(items) == reference_probabilities(reference, package, items)
 
 
-def test_image_passes_match_transformers(d3_runtime, d3_package, reference, png_url):
-    model = d3_runtime.lookup(None).model
+def test_image_passes_match_transformers(case, png_url):
+    runtime, package, reference = case
+    model = runtime.lookup(None).model
     images = [
         png_url(300, 200, seed=1),
         png_url(64, 64, seed=2),
@@ -127,5 +132,87 @@ def test_image_passes_match_transformers(d3_runtime, d3_package, reference, png_
         )
         for items in (plan.items, plan.items[:1]):
             assert model.run(items) == reference_probabilities(
-                reference, d3_package, items
+                reference, package, items
             )
+
+
+def video_reference(model, package, items):
+    """The d3 runtime's video pass: the request's image and video features computed once and repeated per row."""
+    config = json.loads((package / "config.json").read_text())
+    decision = json.loads((package / "decision_config.json").read_text())
+    readout = load_file(str(package / "readout.safetensors"))["weight"].float()
+    media = items[0].media
+    rows = len(items)
+    width = max(len(item.ids) for item in items)
+    ids = torch.full((rows, width), 0, dtype=torch.long)
+    mask = torch.zeros((rows, width), dtype=torch.long)
+    for row, item in enumerate(items):
+        ids[row, width - len(item.ids) :] = torch.tensor(item.ids)
+        mask[row, width - len(item.ids) :] = 1
+    with torch.inference_mode():
+        embeds = model.get_input_embeddings()(ids)
+        image_grid = None
+        if media.images:
+            grids = torch.tensor([image.grid for image in media.images])
+            features = model.get_image_features(
+                media.pixel_rows(), grids, return_dict=True
+            ).pooler_output
+            values = torch.cat(list(features) * rows).to(embeds.dtype)
+            image_mask, _ = model.get_placeholder_mask(
+                ids, inputs_embeds=embeds, image_features=values
+            )
+            embeds = embeds.masked_scatter(image_mask, values)
+            image_grid = grids.repeat(rows, 1)
+        grids = torch.tensor([clip.grid for clip in media.videos])
+        features = model.get_video_features(
+            torch.cat([clip.pixel_values for clip in media.videos]),
+            grids,
+            return_dict=True,
+        ).pooler_output
+        values = torch.cat(list(features) * rows).to(embeds.dtype)
+        _, video_mask = model.get_placeholder_mask(
+            ids, inputs_embeds=embeds, video_features=values
+        )
+        embeds = embeds.masked_scatter(video_mask, values)
+        types_ = (ids == config["image_token_id"]).to(torch.int32) + 2 * (
+            ids == config["video_token_id"]
+        ).to(torch.int32)
+        positions = model.compute_3d_position_ids(
+            input_ids=ids,
+            image_grid_thw=image_grid,
+            video_grid_thw=grids.repeat(rows, 1),
+            inputs_embeds=embeds,
+            attention_mask=mask,
+            past_key_values=None,
+            mm_token_type_ids=types_,
+        )
+        hidden = model.language_model(
+            input_ids=None,
+            position_ids=positions,
+            attention_mask=mask,
+            past_key_values=None,
+            inputs_embeds=embeds,
+            use_cache=False,
+        ).last_hidden_state[:, -1]
+        logits = hidden.float() @ readout.T
+        counts = torch.tensor([len(item.keys) for item in items])[:, None]
+        invalid = torch.arange(pkg.MAX_OPTIONS)[None] >= counts
+        probs = (
+            logits.masked_fill(invalid, float("-inf")) / decision["temperature"]
+        ).softmax(-1)
+    return [
+        row[: len(item.keys)] for row, item in zip(probs.tolist(), items, strict=True)
+    ]
+
+
+def test_video_passes_match_transformers(case, mp4_url, png_url):
+    runtime, package, reference = case
+    model = runtime.lookup(None).model
+    clips = [
+        mp4_url(96, 64, frames=12, fps=8.0, seed=1),
+        mp4_url(64, 96, frames=5, seed=4),
+    ]
+    for images, videos in (([], clips[:1]), ([png_url(80, 60, 5)], clips)):
+        plan = model.plan_images("What happens in the clip?", QUESTIONS, images, videos)
+        for items in (plan.items, plan.items[:1]):
+            assert model.run(items) == video_reference(reference, package, items)

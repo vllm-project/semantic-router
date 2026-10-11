@@ -58,10 +58,11 @@ smallest one that is accurate enough for your questions.
 | `vllm-sr/Decision-2.0-Lux-9B` | 9B | GPU (24 GB or more) | The most accurate at moderate cost |
 | `vllm-sr/Decision-2.0-Vega-27B` | 27B | One GPU with 64 GB or more | The most accurate overall |
 
-Decision 3.0 models also read images: a request may carry `images` that every
-question sees. They are built in as `vllm-sr/d3` (27B), `vllm-sr/d3-flash`
-(9B), `vllm-sr/d3-mini` (4B), `vllm-sr/d3-nano` (2B) and `vllm-sr/d3-lite`
-(0.8B), and run on a GPU. Start one with, for example,
+Decision 3.0 models also read images and videos: a request may carry `images`
+and `videos` that every question sees. They are built in as `vllm-sr/d3`
+(27B), `vllm-sr/d3-flash` (9B), `vllm-sr/d3-mini` (4B), `vllm-sr/d3-nano`
+(2B), `vllm-sr/d3-lite` (0.8B) and `vllm-sr/d3-edge` (0.6B, a pruned
+d3-lite), and run on a GPU. Start one with, for example,
 `vllm-sr serve vllm-sr/d3-lite --engine --platform rocm` on an AMD Instinct
 MI325X. They answer `choice`, `noul` and `score` questions, and their answers
 match the packages' own runtime bit for bit
