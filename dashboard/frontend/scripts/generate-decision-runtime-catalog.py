@@ -100,7 +100,11 @@ def projection():
         or decision1_kinds.id != "QUESTION_TYPES"
     ):
         raise ValueError("Decision 1.0 question kinds need an updated projection")
-    for family, expected in (("decision1", "KINDS"), ("decision2", None)):
+    for family, expected in (
+        ("decision1", "KINDS"),
+        ("decision2", None),
+        ("decision3", None),
+    ):
         family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
         descriptor = next(
             node
@@ -126,7 +130,7 @@ def projection():
             raise ValueError(
                 f"{family} capabilities no longer match shared System One kinds"
             )
-    for family in ("decision2", "decision1"):
+    for family in ("decision2", "decision1", "decision3"):
         tree = ast.parse((RUNTIME / f"registry/tables/{family}.py").read_text())
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):

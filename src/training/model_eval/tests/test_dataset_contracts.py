@@ -221,7 +221,7 @@ class DatasetContractTest(unittest.TestCase):
         ):
             spec.validate_artifact(repo)
         mapping = {"SAT": 1, "NO_FEEDBACK": 0}
-        texts, labels, available, matched = namespace["load_rows"](
+        texts, labels, available, matched, _ = namespace["load_rows"](
             spec, mapping, None, spec.revision
         )
         self.assertEqual((texts, labels, available), (["a", "b"], [1, 0], 2))
@@ -304,7 +304,7 @@ class DatasetContractTest(unittest.TestCase):
             spec = namespace["TASK_SPECS"]["feedback"]
             return namespace["load_rows"](spec, mapping, None, spec.revision)
 
-        texts, labels, available, matched = scored()
+        texts, labels, available, matched, _ = scored()
         # The question-mark row shares no stratum with any SAT row, so its
         # stratum keeps nothing; each kept stratum holds one row per class.
         self.assertEqual(available, 7)
@@ -315,7 +315,7 @@ class DatasetContractTest(unittest.TestCase):
         self.assertEqual(texts, ["thanks", "thanks a lot", "book a table", "open now"])
         self.assertEqual(labels, [1, 1, 0, 0])
         # The seeded draw is stable, so a rerun scores the same rows.
-        again, _, _, _ = scored()
+        again, _, _, _, _ = scored()
         self.assertEqual(again, texts)
         # The draw is the seed's, not the file's order: another seed keeps the
         # counts and takes a different row from the over-supplied bin.
@@ -372,7 +372,7 @@ class DatasetContractTest(unittest.TestCase):
 
         namespace = baseline_loader(load_dataset)
         spec = namespace["TASK_SPECS"]["feedback"]
-        texts, _, available, matched = namespace["load_rows"](
+        texts, _, available, matched, _ = namespace["load_rows"](
             spec, {"SAT": 1, "NO_FEEDBACK": 0}, None, spec.revision
         )
         self.assertEqual(available, 4)
@@ -415,13 +415,13 @@ class DatasetContractTest(unittest.TestCase):
         ):
             spec.validate_artifact(repo)
         mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
-        texts, labels, available, matched = namespace["load_rows"](
+        texts, labels, available, matched, dropped = namespace["load_rows"](
             spec, mapping, None, spec.revision
         )
         self.assertEqual(
-            (texts, labels, available), (["a", "b", "c", "d"], [1, 0, 0, 1], 4)
+            (texts, labels, available, matched, dropped),
+            (["a", "b", "c", "d"], [1, 0, 0, 1], 4, None, {}),
         )
-        self.assertIsNone(matched)
         self.assertEqual(
             reads,
             [
@@ -429,6 +429,35 @@ class DatasetContractTest(unittest.TestCase):
                 for name in spec.data_files
             ],
         )
+
+    def test_dropped_rows_name_the_labels_and_counts(self):
+        # One row carries a label the artifact's map does not define, the way
+        # a checkpoint trained before a contract class was added reads.
+        published = {
+            "text/nf-cats/fact_check/test.jsonl": [
+                {"text": "d", "label": "OUT_OF_CONTRACT", "source": "nf-cats"},
+            ],
+            "text/open-question-type/fact_check/test.jsonl": [],
+            "text/search-arena/fact_check/test.jsonl": [
+                {"text": "a", "label": "FACT_CHECK_NEEDED", "source": "search-arena"},
+            ],
+            "text/urs/fact_check/test.jsonl": [
+                {"text": "b", "label": "NO_FACT_CHECK_NEEDED", "source": "urs"},
+                {"text": "c", "label": "NO_FACT_CHECK_NEEDED", "source": "urs"},
+            ],
+        }
+
+        def load_dataset(repo, data_files, split, revision):
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
+        spec = namespace["TASK_SPECS"]["fact-check"]
+        mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
+        texts, labels, available, _, dropped = namespace["load_rows"](
+            spec, mapping, None, spec.revision
+        )
+        self.assertEqual((texts, labels, available), (["a", "b", "c"], [1, 0, 0], 4))
+        self.assertEqual(dropped, {"OUT_OF_CONTRACT": 1})
 
     def test_pinned_split_is_read_and_recorded_at_its_pin(self):
         class LoadReachedError(Exception):
@@ -529,11 +558,13 @@ class DatasetContractTest(unittest.TestCase):
         namespace = domain_baseline()
         spec = namespace["TASK_SPECS"]["domain"]
         self.assertEqual(spec.split_rule, "by_source")
-        texts, labels, available, matched = namespace["load_rows"](
+        texts, labels, available, matched, dropped = namespace["load_rows"](
             spec, DOMAIN_SUBSET, None, "revision"
         )
-        self.assertEqual((texts, labels, available), (["b", "d"], [1, 0], 2))
-        self.assertIsNone(matched)
+        self.assertEqual(
+            (texts, labels, available, matched, dropped),
+            (["b", "d"], [1, 0], 2, None, {}),
+        )
         spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
         for key in ("id", "lora_id"):
             with self.assertRaisesRegex(
@@ -543,7 +574,7 @@ class DatasetContractTest(unittest.TestCase):
 
     def test_filtered_domain_report_leaves_labels_without_rows_unmeasured(self):
         namespace = domain_baseline()
-        _, labels, _, _ = namespace["load_rows"](
+        _, labels, _, _, _ = namespace["load_rows"](
             namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None, "revision"
         )
         # Perfect predictions on the rows the filter keeps.
