@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react'
 
-import { getAlgorithmFieldSchema, quoteDSLString, serializeFields } from '@/lib/dslMutations'
+import {
+  formatDslName,
+  getAlgorithmFieldSchema,
+  quoteDSLString,
+  serializeFields,
+} from '@/lib/dslMutations'
 import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
@@ -22,7 +27,7 @@ function generateRouteDslPreview(
   const descPart = description.trim()
     ? ` (description = ${quoteDSLString(description.trim())})`
     : ''
-  const lines: string[] = [`ROUTE ${routeName}${descPart} {`]
+  const lines: string[] = [`ROUTE ${formatDslName(routeName)}${descPart} {`]
   lines.push(`  PRIORITY ${priority}`)
   if (whenExpr.trim()) {
     lines.push('')
@@ -64,11 +69,11 @@ function generateRouteDslPreview(
     plugins.forEach((p) => {
       if (p.fields && Object.keys(p.fields).length > 0) {
         const pluginFields = serializeFields(filterPreviewFields(p.fields), '    ')
-        lines.push(`  PLUGIN ${p.name} {`)
+        lines.push(`  PLUGIN ${formatDslName(p.name)} {`)
         if (pluginFields.trim()) lines.push(pluginFields)
         lines.push(`  }`)
       } else {
-        lines.push(`  PLUGIN ${p.name}`)
+        lines.push(`  PLUGIN ${formatDslName(p.name)}`)
       }
     })
   }
