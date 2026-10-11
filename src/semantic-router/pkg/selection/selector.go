@@ -96,6 +96,9 @@ const (
 	// weighted score with optional SLO ceilings. Issue #37.
 	MethodMultiFactor SelectionMethod = "multi_factor"
 
+	// MethodRandom picks uniformly from the eligible candidates. No learned state.
+	MethodRandom SelectionMethod = "random"
+
 	// MethodPrompt uses a concrete helper LLM to choose one declared candidate
 	// through a runtime-owned structured output contract.
 	MethodPrompt SelectionMethod = "prompt"
