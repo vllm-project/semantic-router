@@ -120,6 +120,17 @@ func TestGatewayPostStartEmptyChoiceChunkWithForeignIDFailsClosed(t *testing.T) 
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_response_id_mismatch")
 }
 
+func TestGatewayPostStartEmptyChoiceChunkAfterGeneratedIDFailsClosed(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy())
+	first := `{"object":"chat.completion.chunk","created":1,"model":"real","choices":[{"index":0,"delta":{"role":"assistant","content":"hello"},"finish_reason":null}]}`
+	if _, _, err := decoder.Push([]byte("data: " + first + "\n\n")); err != nil {
+		t.Fatal(err)
+	}
+	postStart := `{"id":"chatcmpl-other","object":"chat.completion.chunk","created":1770000000,"model":"foreign","choices":[]}`
+	_, _, err := decoder.Push([]byte("data: " + postStart + "\n\n"))
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_model_mismatch")
+}
+
 // A post-start empty-choice chunk that carries the pinned response ID stays
 // benign: it establishes nothing new and the stream completes.
 func TestGatewayPostStartEmptyChoiceChunkWithPinnedIDStaysBenign(t *testing.T) {

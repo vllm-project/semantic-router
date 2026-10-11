@@ -167,13 +167,13 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return nil, diagnostics, err
 	}
 	// Some gateways emit empty synthetic chunks while waiting for the first
-	// model token. Before a response identity is pinned, any such chunk is a
+	// model token. Before a response has started, any such chunk is a
 	// heartbeat: it must not establish the response ID or model identity, or
 	// it would poison a stream that later switches to its real identity. Once
-	// an identity is pinned, only the exact keepalive sentinel stays exempt,
+	// a response has started, only the exact keepalive sentinel stays exempt,
 	// so a post-start empty chunk carrying a different response ID still
 	// fails closed through identity observation.
-	if isGatewayChatKeepalive(chunk) && (decoder.providerID == "" || isExactGatewayKeepalive(chunk)) {
+	if isGatewayChatKeepalive(chunk) && (!decoder.started || isExactGatewayKeepalive(chunk)) {
 		diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 		return nil, diagnostics, nil
 	}
