@@ -180,3 +180,63 @@ func TestKVAddressNamespaceIsolatesPrincipalsAcrossResponseCacheScopes(t *testin
 		})
 	}
 }
+
+type closeTrackingAddressRegistry struct {
+	closeCalls int
+}
+
+func (*closeTrackingAddressRegistry) Write(context.Context, kvtransfer.AddressRecord) error {
+	return nil
+}
+
+func (*closeTrackingAddressRegistry) Lookup(context.Context, string, string) (*kvtransfer.AddressRecord, error) {
+	return nil, nil
+}
+
+func (r *closeTrackingAddressRegistry) Close() error {
+	r.closeCalls++
+	return nil
+}
+
+func TestOpenAIRouterCloseClosesKVAddressRegistry(t *testing.T) {
+	reg := &closeTrackingAddressRegistry{}
+	resources := newResourceScope()
+	router := &OpenAIRouter{resources: resources}
+
+	router.kvAddressRegistryMu.Lock()
+	router.setKVAddressRegistryLocked(reg)
+	router.kvAddressRegistryMu.Unlock()
+
+	if reg.closeCalls != 0 {
+		t.Fatalf("AddressRegistry.Close() called %d times before router.Close(), want 0", reg.closeCalls)
+	}
+	if err := router.Close(); err != nil {
+		t.Fatalf("router.Close() error = %v", err)
+	}
+	if reg.closeCalls != 1 {
+		t.Fatalf("AddressRegistry.Close() called %d times after router.Close(), want 1", reg.closeCalls)
+	}
+
+	if err := router.Close(); err != nil {
+		t.Fatalf("second router.Close() error = %v", err)
+	}
+	if reg.closeCalls != 1 {
+		t.Fatalf("AddressRegistry.Close() called %d times after second Close, want 1", reg.closeCalls)
+	}
+}
+
+func TestRouterGenerationCloseReleasesKVAddressRegistry(t *testing.T) {
+	reg := &closeTrackingAddressRegistry{}
+	router := (&routerComponents{resources: newResourceScope()}).buildRouter()
+	router.kvAddressRegistryMu.Lock()
+	router.setKVAddressRegistryLocked(reg)
+	router.kvAddressRegistryMu.Unlock()
+
+	service := NewRouterService(router)
+	if err := service.Close(); err != nil {
+		t.Fatalf("RouterService.Close() error = %v", err)
+	}
+	if reg.closeCalls != 1 {
+		t.Fatalf("AddressRegistry.Close() called %d times on generation teardown, want 1", reg.closeCalls)
+	}
+}

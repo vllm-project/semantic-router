@@ -111,9 +111,6 @@ func buildResponseHeadersContinueResponse(
 	headerMutation *ext_proc.HeaderMutation,
 	streaming bool,
 ) *ext_proc.ProcessingResponse {
-	// Envoy may inject this internal upstream-address header into responses.
-	// Strip it on every CONTINUE path (including SkipProcessing / looper), so
-	// bypassed responses never forward the private address to clients.
 	headerMutation = mergeHeaderMutations(headerMutation,
 		&ext_proc.HeaderMutation{RemoveHeaders: []string{headers.VSRUpstreamHost}})
 	response := &ext_proc.ProcessingResponse{

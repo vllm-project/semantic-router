@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	// Envoy nests response_attributes under this filter namespace in ProcessingRequest.attributes.
 	envoyExtProcAttributeNamespace = "envoy.filters.http.ext_proc"
 	envoyUpstreamAddressAttribute  = "upstream.address"
 )
@@ -36,11 +35,9 @@ func upstreamAddressFromAttributes(attributes map[string]*structpb.Struct) strin
 	if len(attributes) == 0 {
 		return ""
 	}
-	// Prefer Envoy's namespaced ext_proc Struct (actual ProcessingRequest shape).
 	if addr := stringFieldFromStruct(attributes[envoyExtProcAttributeNamespace], envoyUpstreamAddressAttribute); addr != "" {
 		return addr
 	}
-	// Legacy / alternate shape: top-level attributes["upstream.address"].
 	return strings.TrimSpace(structAttributeString(attributes, envoyUpstreamAddressAttribute))
 }
 

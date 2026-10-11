@@ -28,8 +28,16 @@ func (r *OpenAIRouter) kvAddressRegistry() kvtransfer.AddressRegistry {
 		r.kvAddressRegistryStore = kvtransfer.NoopAddressRegistry{}
 		return r.kvAddressRegistryStore
 	}
-	r.kvAddressRegistryStore = registry
+	r.setKVAddressRegistryLocked(registry)
 	return r.kvAddressRegistryStore
+}
+
+func (r *OpenAIRouter) setKVAddressRegistryLocked(registry kvtransfer.AddressRegistry) {
+	r.kvAddressRegistryStore = registry
+	if registry == nil {
+		return
+	}
+	r.resources.add(registry.Close)
 }
 
 func (r *OpenAIRouter) updateKVAddressRegistry(ctx *RequestContext) {
@@ -91,10 +99,6 @@ func kvAddressRecordFromContext(ctx *RequestContext) (kvtransfer.AddressRecord, 
 	}, true
 }
 
-// kvAddressNamespace hard-partitions private session addresses by authenticated
-// principal. Response-cache scope (global/tenant/team) intentionally must not
-// be reused here: those scopes are shared across trusted users and would let
-// one session ID overwrite another user's source pod.
 func kvAddressNamespace(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
