@@ -13,6 +13,7 @@
 *.pdf binary
 *.safetensors.fixture binary
 *.gz binary
+*.zip binary
 
 # Catalog projections are deterministic compiler outputs. Review authored
 # facts under config/catalog instead of treating these as independent sources.

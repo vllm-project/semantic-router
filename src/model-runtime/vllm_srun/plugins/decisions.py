@@ -16,7 +16,7 @@ from abc import abstractmethod
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from http import HTTPStatus
-from typing import Any, Generic
+from typing import Any, ClassVar, Generic
 
 from ..errors import INVALID_QUESTION, RuntimeServiceError
 from .base import (
@@ -32,6 +32,7 @@ from .base import (
 
 SURFACE = "decisions"
 SUM_TOLERANCE = 1e-6
+STATE_FIELDS = frozenset({"state", "questions", "images"})
 
 
 @dataclass(frozen=True)
@@ -96,11 +97,14 @@ def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
     for name, entry in states.items():
         if not isinstance(name, str) or not name.strip():
             raise ValueError("every state in states needs a non-blank name")
-        if not isinstance(entry, dict) or set(entry) != {"state", "questions"}:
-            raise ValueError(f"states[{name!r}] must hold exactly state and questions")
-        bodies.append(
-            {**shared, "state": entry["state"], "questions": entry["questions"]}
-        )
+        if (
+            not isinstance(entry, dict)
+            or not {"state", "questions"} <= set(entry) <= STATE_FIELDS
+        ):
+            raise ValueError(
+                f"states[{name!r}] must hold state and questions, and may hold images"
+            )
+        bodies.append({**shared, **entry})
         names.append(name)
     return bodies, names
 
@@ -194,9 +198,12 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
     windows (its card's ``max_scan_tokens``); None for a model that reads one
     bounded input and rejects a longer one. A request's ``options.max_tokens``
     overrides it, and only a model that has one takes that option.
+    ``image_inputs`` says the model reads a request's ``images``
+    (``plan_images``); a text model refuses a non-empty list.
     """
 
     scan_tokens: int | None = None
+    image_inputs: ClassVar[bool] = False
 
     @abstractmethod
     def plan(
@@ -206,6 +213,15 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
 
         ``scan`` is the request's scan budget, given only to a model with ``scan_tokens``.
         """
+
+    def plan_images(
+        self, state: Any, questions: dict[str, Any], images: list[Any]
+    ) -> RequestPlan[ItemT]:
+        """``plan`` for a request with images that every question sees (models with ``image_inputs``).
+
+        A malformed image fails the request (``ValueError``).
+        """
+        raise NotImplementedError(f"{type(self).__name__} reads no images")
 
     def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
         """The API answer for one rendered question (``finish_surface`` assembles them)."""
@@ -234,7 +250,18 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
                     "max_tokens is the scan budget of a model that reads parts in"
                     " windows; this model reads one bounded input and rejects a longer one"
                 )
-        plan = self.plan(body["state"], questions, scan)
+        images = body.get("images")
+        if images is not None and not isinstance(images, list):
+            raise ValueError("images must be a list of image data URLs")
+        if images and not self.image_inputs:
+            raise ValueError(
+                f"model {self.info.id} reads text only; images are not supported"
+            )
+        plan = (
+            self.plan_images(body["state"], questions, images)
+            if images
+            else self.plan(body["state"], questions, scan)
+        )
         if not request.part:
             refuse_unanswerable(plan)
         items: list[Any] = list(plan.items)

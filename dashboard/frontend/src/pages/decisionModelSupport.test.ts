@@ -32,7 +32,7 @@ describe('default decision deployment', () => {
 
   it('offers all generic families with truthful native question types', () => {
     expect(new Set(DECISION_MODEL_OPTIONS.map((model) => model.family))).toEqual(
-      new Set(['Vela 2.0', 'Decision 1.0', 'Decision 2.0']),
+      new Set(['Vela 2.0', 'Decision 1.0', 'Decision 2.0', 'Decision 3.0']),
     )
     for (const model of DECISION_MODEL_OPTIONS) {
       expect(model.label).not.toMatch(/Qwen|Llama/i)

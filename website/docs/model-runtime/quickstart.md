@@ -52,6 +52,11 @@ vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-id
 The `vllm-sr-rocm` image is a 6.5 GB download on first use. `rocm:N` picks
 another GPU of the host in canonical YAML; `--device-ids N` selects a host GPU at startup.
 
+Decision 3.0 models also answer questions about images. On an AMD Instinct
+MI325X, start the smallest one with
+`vllm-sr serve vllm-sr/d3-lite --engine --platform rocm`, and send images as
+described in [Router and Engine modes](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images).
+
 The CLI starts the persistent frontend, Dashboard and a managed model worker.
 The first start downloads the model into the instance model cache. Later starts
 reuse it. Startup waits for readiness; use `vllm-sr status` to inspect the stack

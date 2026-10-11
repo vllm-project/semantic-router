@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -285,8 +286,8 @@ func extractRoutingMethod(headers http.Header, testCase RoutingFallbackCase) str
 }
 
 func printRoutingFallbackResults(results []RoutingFallbackResult, totalTests, correctTests,
-	methodCorrect, confidenceMet int, accuracy, methodAccuracy, confidenceAccuracy float64) {
-
+	methodCorrect, confidenceMet int, accuracy, methodAccuracy, confidenceAccuracy float64,
+) {
 	separator := "================================================================================"
 	fmt.Println("\n" + separator)
 	fmt.Println("ROUTING FALLBACK TEST RESULTS (Keyword → Embedding → BERT → MCP)")
