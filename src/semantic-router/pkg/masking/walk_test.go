@@ -622,83 +622,35 @@ func TestApply_CustomToolResultKeepsTextMasking(t *testing.T) {
 	}
 }
 
-// scanForValues reports every occurrence of every value, so a mixed payload
-// can be checked for leftovers rather than just its first match.
-func scanForValues(entityType string, values ...string) ScanFunc {
-	return func(text string) ([]Span, error) {
-		var spans []Span
-		for _, value := range values {
-			for offset := 0; ; {
-				idx := strings.Index(text[offset:], value)
-				if idx < 0 {
-					break
-				}
-				start := offset + idx
-				spans = append(spans, Span{
-					EntityType: entityType, Start: start, End: start + len(value), Confidence: 1.0,
-				})
-				offset = start + len(value)
+// A JSON-shaped payload that will not decode faithfully fails closed. The
+// text path cannot be used as a fallback: it scans the undecoded bytes, so an
+// escaped value such as ali\u0063e@example.com would reach the provider.
+func TestApply_ToolResultUndecodableJSONFailsClosed(t *testing.T) {
+	escaped := `{"value":"` + "ali" + string([]byte{92}) + `u0063e@example.com"}`
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"trailing text", `{"note":"safe"} alice@example.com`, "trailing content"},
+		{"trailing text after an escaped value", escaped + ` note`, "trailing content"},
+		{"second JSON value", `{"a":1} {"b":"alice@example.com"}`, "trailing content"},
+		{"second JSON value holding an escaped value", `{"a":1} ` + escaped, "trailing content"},
+		{"malformed JSON", `{"a": alice@example.com`, "not valid JSON"},
+		{"malformed JSON holding an escaped value", escaped[:len(escaped)-1], "not valid JSON"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := toolResultRequest(tc.input)
+
+			result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+			if err == nil {
+				t.Fatalf("payload was accepted: changed=%v text=%q",
+					result.Changed, request.Messages[0].Content[0].ToolResult.Content[0].Text)
 			}
-		}
-		return spans, nil
-	}
-}
-
-// A JSON prefix with text appended is mixed text, not a JSON document: the
-// decoder would consume only the prefix and leave the rest unscanned.
-func TestApply_ToolResultTrailingTextIsMasked(t *testing.T) {
-	request := toolResultRequest(`{"note":"safe"} alice@example.com`)
-
-	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Changed {
-		t.Fatal("result reported no change, so the trailing text was never scanned")
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"note":"safe"} [EMAIL_ADDRESS_0]`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
-// Masking the whole payload must not drop what follows the first value.
-func TestApply_ToolResultTrailingTextKeepsBothHalves(t *testing.T) {
-	request := toolResultRequest(`{"a":"alice@example.com"} bob@example.com`)
-
-	scan := scanForValues("EMAIL_ADDRESS", "alice@example.com", "bob@example.com")
-	if _, err := Apply(request, NewAllocator(defaultCfg()), scan); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"a":"[EMAIL_ADDRESS_0]"} [EMAIL_ADDRESS_1]`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
-// A second JSON value is past the end of the first, so it needs the text path.
-func TestApply_ToolResultSecondJSONValueIsMasked(t *testing.T) {
-	request := toolResultRequest(`{"a":1} {"b":"alice@example.com"}`)
-
-	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"a":1} {"b":"[EMAIL_ADDRESS_0]"}`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
-// A function tool result that only starts like JSON is text, not a refusal.
-func TestApply_ToolResultMalformedJSONIsMaskedAsText(t *testing.T) {
-	request := toolResultRequest(`{"a": alice@example.com`)
-
-	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
-	if want := `{"a": [EMAIL_ADDRESS_0]`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got error %v, want one mentioning %q", err, tc.want)
+			}
+		})
 	}
 }
 

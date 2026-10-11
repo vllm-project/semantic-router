@@ -132,10 +132,11 @@ func maskTextBlock(block *llmprotocol.Content, a *Allocator, scan ScanFunc, out 
 	return nil
 }
 
-// maskToolResult masks a tool result's content. A structured (JSON object or
-// array) text payload is masked as decoded JSON leaves, so object keys stay
-// intact, escapes are seen through, and the result stays valid JSON. Custom
-// tools and plain-text payloads keep ordinary text masking.
+// maskToolResult masks a tool result's content. A JSON-shaped text payload is
+// masked as decoded JSON leaves, so object keys stay intact, escapes are seen
+// through, and the result stays valid JSON; one that will not decode
+// faithfully fails closed (D4). Custom tools and plain-text payloads keep
+// ordinary text masking.
 func maskToolResult(
 	result *llmprotocol.ToolResult, a *Allocator, scan ScanFunc, out *Result, depth int,
 ) error {
@@ -146,7 +147,7 @@ func maskToolResult(
 		block := &result.Content[i]
 		structured := block.Kind == llmprotocol.ContentText &&
 			result.Kind != llmprotocol.ToolKindCustom &&
-			isStructuredJSONPayload(block.Text)
+			isJSONShapedPayload(block.Text)
 		if !structured {
 			if err := applyToBlock(block, a, scan, out, depth+1); err != nil {
 				return err
@@ -170,15 +171,14 @@ func maskToolResult(
 	return nil
 }
 
-// isStructuredJSONPayload reports whether text is one complete JSON object or
-// array. Those are masked as decoded JSON, which fails closed on a repeated
-// member, since the text path never decodes escapes. Anything else is text.
-func isStructuredJSONPayload(text string) bool {
+// isJSONShapedPayload reports whether text opens as a JSON object or array.
+// Such a payload is masked as decoded JSON, so escapes are seen through, and
+// one that will not decode faithfully fails closed rather than falling back to
+// the text path, which scans the undecoded bytes and so cannot see an escaped
+// value. Anything else, a bare scalar included, is ordinary text.
+func isJSONShapedPayload(text string) bool {
 	trimmed := strings.TrimSpace(text)
-	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
-		return false
-	}
-	return json.Valid([]byte(trimmed))
+	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
 }
 
 // jsonFrame tracks one open object or array while walking tokens. Only object
