@@ -600,6 +600,7 @@ def chat(
             response.close()
         if stream_file is not None:
             try:
+                stream_file.flush()
                 os.fsync(stream_file.fileno())
             finally:
                 stream_file.close()
