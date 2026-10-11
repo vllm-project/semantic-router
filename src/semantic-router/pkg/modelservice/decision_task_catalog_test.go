@@ -12,7 +12,7 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 	if len(response.Bindings) != 0 {
 		t.Fatalf("unused task rows: %+v", response.Bindings)
 	}
-	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 22 {
+	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 23 {
 		t.Fatalf("catalog unavailable: %d %d", len(response.Tasks), len(response.Models))
 	}
 	if response.DefaultBindings["pii_classifier"].Contract != config.DecisionTaskContract {
