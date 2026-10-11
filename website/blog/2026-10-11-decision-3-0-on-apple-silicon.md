@@ -28,9 +28,16 @@ A decision made on the Mac has no per-call cost and no network round trip, and t
 
 <!-- truncate -->
 
-## Same answers, on device
+## How the conversion works
 
-Core ML runs the same models with the same prompts, and still returns a probability for every option. The weights are stored at 8 bits, which keeps the downloads small enough for a laptop. Answers that differ from upstream PyTorch on the same requests:
+Each d3 model is a Qwen3.5 backbone with a small FP32 readout that scores every option at the last prompt token, one forward pass per question. We split that into what Core ML is good at and what the host does cheaply:
+
+- **Text graph on Core ML.** The backbone takes token embeddings as input, so image and video tokens can be spliced in before it runs. Prompts are right-padded to a few fixed lengths. That is exact for d3: the Gated DeltaNet layers are causal and never see the padding, and the full-attention layers mask it out.
+- **Vision tower on Core ML.** It runs in fp32 with fixed patch counts and masked padding. For video, a block-diagonal mask keeps attention inside each frame pair, as upstream does.
+- **Host side.** Token embeddings, M-RoPE positions and the 255-way readout run in numpy (or Swift) in FP32. Prompts come from upstream's own request preparation, run on a d3 with no weights loaded, so every prompt, timestamp and position matches upstream exactly.
+- **8-bit weights.** At fp16, d3-mini's text graph is 6.7 GB per length bucket. Two buckets loaded at once made the GPU page on a 24 GB Mac, at 8–12 s per step. With 8-bit weights both stay resident.
+
+Conversion uses PyTorch 2.7 and coremltools 9.0. Answers that differ from upstream PyTorch on the same requests:
 
 | | d3-lite | d3-nano | d3-mini |
 |---|---|---|---|
@@ -41,22 +48,13 @@ Core ML runs the same models with the same prompts, and still returns a probabil
 | Per 4-second video look | 0.32 s | 0.57 s | 1.1 s |
 | Download | 3.2 GB | 9.1 GB | 16 GB |
 
-All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Neural Engine doesn't run these models yet: Core ML falls back to the CPU there, so the GPU is the fast path.
+All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Neural Engine doesn't run these models yet: Core ML falls back to the CPU there, so the GPU is the fast path. d3-nano is the middle option, with no answer changes on the text and image checks at ~65 ms per question.
 
-The demos below use d3-lite where speed matters and d3-mini for screenshots and video. d3-nano is the middle option, with no answer changes on the text and image checks at ~65 ms per question.
+## Demos
 
-## Triage pull requests at 8 per second
+d3-lite handles the demo where speed matters; d3-mini handles screenshots and video.
 
-The demo at the top is about speed. A queue of 1,000 sample pull requests runs down the center. For each one, d3-lite reads the title, the start of the description and the changed files, and answers two questions:
-
-- Which of the seven [vLLM-SR workgroups](/blog/join-vllm-sr-workgroups) owns it?
-- What kind of change is it?
-
-The card then flies into its workgroup. Each PR takes **0.12 s, so 8.3 PRs and 16.5 decisions per second**, for the whole run.
-
-The pull requests are generated samples, so the run can last as long as the demo needs. On real vLLM-SR pull requests, d3-mini matched the maintainers' workgroup label on **134 of 168** and the title's change-type tag on **153 of 182**.
-
-## Drive a real website
+**Triage pull requests (d3-lite, [on X](https://x.com/Alex_tra_memory/status/2109343807854493724)).** The video at the top. For each of 1,000 sample pull requests, d3-lite reads the title, the start of the description and the changed files, then answers two questions: which of the seven [vLLM-SR workgroups](/blog/join-vllm-sr-workgroups) owns it, and what kind of change it is. Each PR takes **0.12 s, so 8.3 PRs and 16.5 decisions per second**. On real vLLM-SR pull requests, d3-mini matched the maintainers' workgroup label on **134 of 168** and the change-type tag on **153 of 182**.
 
 <ArticleVideo
   src="/videos/decision-3-0-coreml/d3-browser-pilot.mp4"
@@ -64,16 +62,10 @@ The pull requests are generated samples, so the run can last as long as the demo
   title="d3-mini drives a real website in Chrome"
   landscape
 >
-  Goal: open a book in the Travel category with a five-star rating. d3-mini picks each click from a screenshot of the page.
+  Goal: open a book in the Travel category with a five-star rating. d3-mini picks each click from a screenshot.
 </ArticleVideo>
 
-d3-mini gets a goal and a screenshot of a live website ([books.toscrape.com](https://books.toscrape.com), built for scraping practice) with numbered marks on the links. It picks the next link to click, reads the books on the page, and stops when a book meets the goal.
-
-In a 17-goal test on Core ML it reached **all 17 goals, at about 2.2 s per click**.
-
-What made the difference: d3 reads values well but compares them less reliably. Asking for one pick across a whole page of books reached 9 of the 17 goals. Asking it to read each book card (title, rating, price) and doing the comparison in code reached all 17.
-
-## Watch live video
+**Drive a real website (d3-mini).** d3-mini gets a goal and a screenshot of [books.toscrape.com](https://books.toscrape.com) with numbered marks on the links. It picks the next click, reads the books on the page, and stops when one meets the goal. It reached **all 17 goals in a 17-goal test, at about 2.2 s per click**. d3 reads values well but compares them less reliably: one pick across a whole page reached 9 of 17. Reading each book card and comparing in code reached all 17.
 
 <ArticleVideo
   src="/videos/decision-3-0-coreml/d3-live-video.mp4"
@@ -81,17 +73,13 @@ What made the difference: d3 reads values well but compares them less reliably. 
   title="d3-mini watches a street crossing live"
   landscape
 >
-  Each time d3-mini is free, it looks at the last 4 seconds of video and the timeline grows from its answers. Video: diagonal crosswalk at Yonge &amp; Dundas, Toronto (Raysonho, Wikimedia Commons, CC0).
+  Each time d3-mini is free, it looks at the last 4 seconds and the timeline grows from its answers. Video: diagonal crosswalk at Yonge &amp; Dundas, Toronto (Raysonho, Wikimedia Commons, CC0).
 </ArticleVideo>
 
-As the clip plays, d3-mini looks at the last 4 seconds (8 frames at its native 2 fps) and answers two questions: are the cars moving, and is someone cycling? The timeline on the right is built from those answers, as they arrive.
-
-On Core ML each look takes **1.1 s, against 2.4 s for PyTorch on the same Mac**. Answers stay at about 2 seconds behind the live video, with 0 answer changes in 28 looks compared with PyTorch.
+**Watch live video (d3-mini).** As the clip plays, d3-mini looks at the last 4 seconds (8 frames at its native 2 fps) and answers whether the cars are moving and whether someone is cycling. Each look takes **1.1 s on Core ML, against 2.4 s for PyTorch on the same Mac**, and answers stay about 2 seconds behind the live video.
 
 ## Try it
 
 The Core ML models for all three sizes are in [FluidInference/d3-coreml](https://huggingface.co/FluidInference/d3-coreml), and each folder has a Python host built on coremltools. For Swift apps, `D3Manager` in [FluidUse](https://github.com/FluidInference/FluidUse) downloads a model and answers requests.
-
-The PR triage demo is also [on X](https://x.com/Alex_tra_memory/status/2109343807854493724).
 
 Thanks to the vLLM Semantic Router team for early access to Decision 3.0.
