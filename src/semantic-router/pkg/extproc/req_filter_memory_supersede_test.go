@@ -66,6 +66,10 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 		user:      "I live in Boston.",
 		assistant: "Alice lives in Boston.",
 	}
+	bostonWithVetSite := storedMemoryTurn{
+		user:      "I live in Boston.",
+		assistant: "You live in Boston. Your vet's site is vetclinic.com.",
+	}
 	bostonWithDecimalWeight := storedMemoryTurn{
 		user:      "I live in Boston.",
 		assistant: "Biscuit weighs 12.5 kg.",
@@ -182,6 +186,13 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			query:      "Where do I live now, and where does Alice live?",
 			injected:   []string{"Denver", "Alice lives in Boston."},
 			superseded: []string{"I live in Boston"},
+		},
+		{
+			name:       "a corrected residence preserves a domain name in an independent fact",
+			turns:      []storedMemoryTurn{bostonWithVetSite, denver},
+			query:      "Where do I live now, and what is my vet's website?",
+			injected:   []string{"Denver", "Your vet's site is vetclinic.com."},
+			superseded: []string{"I live in Boston", "You live in Boston"},
 		},
 		{
 			name:       "a corrected residence preserves decimal values in an independent fact",

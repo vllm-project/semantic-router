@@ -60,7 +60,9 @@ var (
 		"My budget for the Japan trip is $4,000.",
 		"Your budget is $4,000, and flights from Boston start at $1,200.",
 	)
-	bostonAndPetsTurn = formatTurnChunk("I live in Boston.", "You live in Boston, and Biscuit and Luna love the parks.")
+	bostonAndPetsTurn    = formatTurnChunk("I live in Boston.", "You live in Boston, and Biscuit and Luna love the parks.")
+	bostonAndVetSiteTurn = formatTurnChunk("I live in Boston.", "You live in Boston. Your vet's site is vetclinic.com.")
+	bostonAndConfigTurn  = formatTurnChunk("I live in Boston.", "You live in Boston. Your settings live in config.yaml for now.")
 	// Long enough that the correction is a near-duplicate for the default dedup threshold.
 	hospitalTurn   = formatTurnChunk("I work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
 	noHospitalTurn = formatTurnChunk("I no longer work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
@@ -201,6 +203,16 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			name:      "a correction keeps a subject joined by and",
 			retrieved: []datedContent{{content: bostonAndPetsTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
 			want:      []string{"A: Biscuit and Luna love the parks.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a domain name in a retained reply",
+			retrieved: []datedContent{{content: bostonAndVetSiteTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your vet's site is vetclinic.com.", denverTurn},
+		},
+		{
+			name:      "a correction keeps a file name in a retained reply",
+			retrieved: []datedContent{{content: bostonAndConfigTurn, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your settings live in config.yaml for now.", denverTurn},
 		},
 		{
 			name:      "a correction keeps a fact about an explicit named subject",
@@ -353,6 +365,7 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	cityAndDog := formatTurnChunk("I live in Boston, my dog is Biscuit.", "Noted.")
 	cityAndDogName := formatTurnChunk("I live in Boston, Biscuit is my dog.", "Noted.")
 	married := formatTurnChunk("I live in Boston, I'm married.", "Congratulations!")
+	jammedSentences := formatTurnChunk("i live in boston.i work as a nurse.", "Noted.")
 	stillNurse := formatTurnChunk("I moved apartments, and I still work as a nurse now.", "Congrats on the new place.")
 	quotedTask := formatTurnChunk("Please translate this sentence: \"I just moved to Denver, and I live there now.\"", "Here is the translation.")
 	curlyQuotedTask := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now’.", "Here is the translation.")
@@ -402,6 +415,7 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "a comma clause with its own fact", retrieved: []datedContent{{content: cityAndDog, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a comma clause led by a name", retrieved: []datedContent{{content: cityAndDogName, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a comma clause of two words", retrieved: []datedContent{{content: married, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
+		{name: "two sentences typed without a space", retrieved: []datedContent{{content: jammedSentences, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: stillNurse, daysAgo: 9}}},
 		{name: "a quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTask, daysAgo: 9}}},
 		{name: "a curly-single-quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTask, daysAgo: 9}}},

@@ -246,7 +246,7 @@ func independentAssistantAnswer(turn string, corrections []wordPair) string {
 	}
 
 	var independent []string
-	for _, sentence := range statementSentences(answer) {
+	for _, sentence := range answerSentences(answer) {
 		if text := filterAssistantSentence(sentence, originalContentWords, originalPairs, corrections); text != "" {
 			independent = append(independent, text)
 		}
@@ -732,27 +732,43 @@ func isWordRune(r rune) bool {
 }
 
 func statementSentences(statement string) []statementSentence {
+	return splitSentences(statement, func(before rune, after rune) bool {
+		return unicode.IsDigit(before) && unicode.IsDigit(after)
+	})
+}
+
+// answerSentences also keeps a period between letters or digits inside its
+// sentence, as in "vetclinic.com" or "config.yaml". Generated replies put a
+// space after a sentence's period, while a user may type "boston.i work" for
+// two sentences.
+func answerSentences(answer string) []statementSentence {
+	return splitSentences(answer, func(before rune, after rune) bool {
+		return isWordRune(before) && isWordRune(after)
+	})
+}
+
+func splitSentences(text string, inToken func(before rune, after rune) bool) []statementSentence {
 	var sentences []statementSentence
 	start := 0
 	var q quoteTracker
-	for i, r := range statement {
-		q.advance(statement, i, r)
+	for i, r := range text {
+		q.advance(text, i, r)
 		if q.inQuote() {
 			continue
 		}
-		if r == '.' && unicode.IsDigit(runeBefore(statement, i)) && unicode.IsDigit(runeAfter(statement, i, r)) {
+		if r == '.' && inToken(runeBefore(text, i), runeAfter(text, i, r)) {
 			continue
 		}
 		if r != '.' && r != '!' && r != '?' && r != ';' && r != '\n' {
 			continue
 		}
-		if text := statement[start:i]; strings.TrimSpace(text) != "" {
-			sentences = append(sentences, statementSentence{text: text, question: r == '?', ending: r})
+		if sentence := text[start:i]; strings.TrimSpace(sentence) != "" {
+			sentences = append(sentences, statementSentence{text: sentence, question: r == '?', ending: r})
 		}
 		start = i + utf8.RuneLen(r)
 	}
-	if text := statement[start:]; strings.TrimSpace(text) != "" {
-		sentences = append(sentences, statementSentence{text: text})
+	if sentence := text[start:]; strings.TrimSpace(sentence) != "" {
+		sentences = append(sentences, statementSentence{text: sentence})
 	}
 	return sentences
 }
