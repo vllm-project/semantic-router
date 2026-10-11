@@ -29,6 +29,25 @@ func (r *OpenAIRouter) applyPreDispatchToolsPolicy(
 	return changed, nil
 }
 
+// stripToolsForModeNone applies the mode:none policy to the neutral request:
+// it drops every function tool, tool_choice, and parallel-call flag, plus prior
+// tool history when strip_tool_history is set. Ordinary mode handling and the
+// trusted-facts gate share it so both produce the same request.
+func stripToolsForModeNone(request *llmprotocol.Request, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig) {
+	decision := ""
+	if ctx != nil && ctx.VSRSelectedDecision != nil {
+		decision = ctx.VSRSelectedDecision.Name
+	}
+	logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", decision)
+	changed, removed := stripSemanticToolPolicy(request, toolsCfg.StripToolHistory)
+	if changed {
+		request.Generation++
+	}
+	if removed > 0 {
+		logging.Infof("[ToolsPlugin] Decision %q stripped %d prior tool-history messages", decision, removed)
+	}
+}
+
 func stripSemanticToolPolicy(request *llmprotocol.Request, stripHistory bool) (bool, int) {
 	return llmprotocol.StripTools(request, stripHistory)
 }

@@ -247,6 +247,7 @@ func TestToolSelectionFilterModeE2E_KeepsToolsForEmptyQuery(t *testing.T) {
 			RelevanceThreshold: float32Ptr(0.99),
 			PreserveCount:      1,
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("runToolSelectionPluginFilter returned unexpected error: %v", err)

@@ -203,6 +203,9 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 		looper.CallOptions{
 			DecisionName: requestCtx.VSRSelectedDecisionName,
 			Iteration:    1,
+			// The follow-up continues the request-path dispatch, which its
+			// tools were already gated for.
+			Stage: trustedFactsRequestStage,
 		},
 	)
 	if err != nil {

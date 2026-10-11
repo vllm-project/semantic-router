@@ -209,7 +209,9 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
-		r.handleToolSelectionForRequest(request, response, ctx)
+		if failure := r.handleToolSelectionForRequest(request, response, ctx); failure != nil {
+			return failure, nil
+		}
 		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 		if err != nil {
 			return nil, err
@@ -256,7 +258,9 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	}()
 
 	// Handle tool selection
-	r.handleToolSelectionForRequest(request, response, ctx)
+	if failure := r.handleToolSelectionForRequest(request, response, ctx); failure != nil {
+		return failure, nil
+	}
 	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	if err != nil {
 		return nil, err
@@ -306,7 +310,9 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
-	r.handleToolSelectionForRequest(request, response, ctx)
+	if failure := r.handleToolSelectionForRequest(request, response, ctx); failure != nil {
+		return failure, nil
+	}
 	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	if err != nil {
 		return nil, err

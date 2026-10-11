@@ -120,6 +120,9 @@ func (r *OpenAIRouter) handleLooperExecution(
 		}
 		defer r.WorkflowStateService.Release()
 	}
+	// Looper never reaches handleToolSelection. Its trusted-facts gate runs
+	// per hop, at each model call's own stage, in
+	// handleLooperInternalRequestWithPlugins.
 	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil

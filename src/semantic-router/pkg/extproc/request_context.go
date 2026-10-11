@@ -412,6 +412,18 @@ type RequestContext struct {
 	// separately checks stage-specific evidence and the resolved capture policy.
 	RouterReplayContentOmitted bool
 
+	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
+	// before Replay created its record; startRouterReplay appends them.
+	pendingTrustedFactsOutcomes []routerreplay.Outcome
+
+	// StickyToolReceipt is the bounded receipt of this request's sticky
+	// tool-set selection, or nil when its decision does not enable sticky
+	// selection.
+	StickyToolReceipt *routerreplay.StickyToolSelectionReceipt
+	// pendingStickyToolOutcomes holds sticky receipts recorded before Replay
+	// created its record; startRouterReplay appends them.
+	pendingStickyToolOutcomes []routerreplay.Outcome
+
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
