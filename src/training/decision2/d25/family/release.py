@@ -154,17 +154,6 @@ def collection(add: list[str]) -> dict[str, Any]:
 # ---------------------------------------------------------------- card inputs
 
 
-def public_skills(scores: dict) -> dict[str, Any]:
-    return {
-        "index": scores["decision_index"],
-        "per_benchmark": {
-            k: round(100 * v["index_skill"], 2)
-            for k, v in scores["benchmarks"].items()
-            if v.get("in_index")
-        },
-    }
-
-
 def text_estimate(size: str, scores: dict, result: dict) -> dict[str, Any]:
     """The family gate's paired estimate with the complete run's public skills (O_proxy from the gate run)."""
     from d25.family import gate as family_gate
@@ -176,10 +165,14 @@ def text_estimate(size: str, scores: dict, result: dict) -> dict[str, Any]:
     anchor = FAMILY_ROOT / "anchors" / name / "scores.json"
     if not any(a["name"] == name for a in cal["anchor_points"]):
         o_ref = json.loads(anchor.read_text())["O_proxy"]
-    public = public_skills(scores)
+    # Fractions: the calibration would read a percentage between 0 and 1 as a fraction.
     ours = {
-        "public": public["index"],
-        "per_benchmark": public["per_benchmark"],
+        "public": scores["decision_index"],
+        "per_benchmark": {
+            k: v["index_skill"]
+            for k, v in scores["benchmarks"].items()
+            if v.get("in_index")
+        },
         "O_proxy": result["proxy"]["O_proxy"],
     }
     return family_gate.paired(ours, family_gate.reference(name, cal, o_ref), cal)
