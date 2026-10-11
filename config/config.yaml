@@ -596,6 +596,7 @@ routing:
 
     pii:
       - name: restricted_pii
+        source: ""
         threshold: 0.01
         include_history: true
         pii_types_allowed:

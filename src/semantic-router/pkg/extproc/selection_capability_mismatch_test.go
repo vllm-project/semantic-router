@@ -37,7 +37,7 @@ func TestAutoRoutingReportsUnsupportedCapabilityLikeNamedModel(t *testing.T) {
 		RequestID: "capability-mismatch", RequestModel: "vllm-sr/auto", TraceContext: context.Background(),
 		SemanticRequest: request, SourceFormat: llmprotocol.AnthropicMessagesV1,
 	}
-	_, response := router.runRequestPreRoutingStages("vllm-sr/auto", extractSemanticRequestSignals(request), ctx)
+	_, response := router.runRequestPreRoutingStages("vllm-sr/auto", request, extractSemanticRequestSignals(request), ctx)
 	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != 400 {
 		t.Fatalf("auto-routed status = %d, body %s; want the 400 a named model gets", got, response.GetImmediateResponse().GetBody())
 	}
@@ -79,7 +79,7 @@ func TestAutoRoutingKeepsMixedContextAndWireExclusionsUnavailable(t *testing.T) 
 	request := unsupportedThinkingRequest("vllm-sr/auto")
 	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, request)
 	ctx.RequestModel = "vllm-sr/auto"
-	_, response := router.runRequestPreRoutingStages("vllm-sr/auto", extractSemanticRequestSignals(request), ctx)
+	_, response := router.runRequestPreRoutingStages("vllm-sr/auto", request, extractSemanticRequestSignals(request), ctx)
 	if ctx.VSRContextTokenCount <= messagesParams.ContextWindowSize {
 		t.Fatalf("context estimate %d did not exercise the context-window exclusion", ctx.VSRContextTokenCount)
 	}
