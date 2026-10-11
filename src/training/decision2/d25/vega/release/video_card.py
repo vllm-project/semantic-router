@@ -29,9 +29,11 @@ from pathlib import Path
 from d25.vega.release.examples import EXAMPLE_VIDEO, QUICKSTART_VIDEO
 
 AREAS = ("memory", "abstraction", "physics", "semantics")
-FORBIDDEN = re.compile(
-    r"nvidia|\brtx\b|cuda|pending|hf jobs|teacher|distill|\bvega\b|\bomni\b|\bd25\b|decision 2\.5",
-    re.I,
+# Never anywhere in a card; the second list is checked on the lines this tool writes (board tables name other
+# teams' models, e.g. "Jev-Omni").
+FORBIDDEN = re.compile(r"nvidia|\brtx\b|cuda|pending|hf jobs", re.I)
+FORBIDDEN_NEW = re.compile(
+    r"teacher|distill|\bvega\b|\bomni\b|\bd25\b|decision 2\.5", re.I
 )
 
 
@@ -241,6 +243,19 @@ def main(argv: list[str] | None = None) -> int:
     bad = FORBIDDEN.search(new)
     if bad:
         raise SystemExit(f"forbidden wording in the card: {bad.group(0)!r}")
+    added = [
+        line[1:]
+        for line in difflib.unified_diff(
+            old.split("\n"), new.split("\n"), lineterm="", n=0
+        )
+        if line.startswith("+") and not line.startswith("+++")
+    ]
+    bad = next(
+        (FORBIDDEN_NEW.search(line) for line in added if FORBIDDEN_NEW.search(line)),
+        None,
+    )
+    if bad:
+        raise SystemExit(f"forbidden wording in the new card lines: {bad.group(0)!r}")
     if new.rstrip("\n").split("\n")[-1] != "Trained on AMD Instinct MI325X GPUs.":
         raise SystemExit("last line changed")
     if out.exists():
