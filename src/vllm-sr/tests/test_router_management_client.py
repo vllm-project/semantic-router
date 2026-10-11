@@ -236,3 +236,137 @@ def test_default_management_base_url_rejects_offset_above_the_derived_port_range
         match="must be between 0 and 15484 so derived ports stay within 65535, got 57456",
     ):
         default_management_base_url()
+
+
+def _recorded_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, str, dict[str, Any]]]:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def request(method: str, url: str, **kwargs: Any) -> _Response:
+        calls.append((method, url, kwargs))
+        return _Response()
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", request)
+    return calls
+
+
+def test_apply_config_sends_a_merge_as_patch_with_the_if_match_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _recorded_requests(monkeypatch)
+
+    RouterManagementClient("http://localhost:8080").apply_config(
+        "version: v0.3\n", "merge", '"v7"'
+    )
+
+    method, url, kwargs = calls[0]
+    assert method == "PATCH"
+    assert url == "http://localhost:8080/api/v1/config"
+    assert kwargs["headers"]["If-Match"] == '"v7"'
+    assert kwargs["json"] == {"yaml": "version: v0.3\n"}
+
+
+def test_apply_config_sends_a_replace_as_put(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _recorded_requests(monkeypatch)
+
+    RouterManagementClient("http://localhost:8080").apply_config(
+        "version: v0.3\n", "replace", '"v7"'
+    )
+
+    assert calls[0][0] == "PUT"
+    assert calls[0][2]["headers"]["If-Match"] == '"v7"'
+
+
+def test_apply_config_rejects_an_unknown_mode() -> None:
+    with pytest.raises(ValueError, match="mode must be merge or replace"):
+        RouterManagementClient("http://localhost:8080").apply_config(
+            "version: v0.3\n", "reset", '"v7"'
+        )
+
+
+def test_apply_config_rejects_an_etag_that_is_blank() -> None:
+    client = RouterManagementClient("http://localhost:8080")
+
+    for blank in ("", "   "):
+        with pytest.raises(ValueError, match="requires the current ETag"):
+            client.apply_config("version: v0.3\n", "merge", blank)
+
+
+def test_rollback_config_submits_the_version_with_the_if_match_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _recorded_requests(monkeypatch)
+
+    RouterManagementClient("http://localhost:8080").rollback_config("3", '"v7"')
+
+    method, url, kwargs = calls[0]
+    assert method == "POST"
+    assert url == "http://localhost:8080/api/v1/config/rollback"
+    assert kwargs["json"] == {"version": "3"}
+    assert kwargs["headers"]["If-Match"] == '"v7"'
+
+
+def test_rollback_config_rejects_an_etag_that_is_blank() -> None:
+    with pytest.raises(ValueError, match="requires the current ETag"):
+        RouterManagementClient("http://localhost:8080").rollback_config("3", " ")
+
+
+def test_plan_config_posts_the_document_and_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _recorded_requests(monkeypatch)
+
+    RouterManagementClient("http://localhost:8080").plan_config(
+        "version: v0.3\n", "merge"
+    )
+
+    method, url, kwargs = calls[0]
+    assert method == "POST"
+    assert url == "http://localhost:8080/api/v1/config/plan"
+    assert kwargs["json"] == {"yaml": "version: v0.3\n", "mode": "merge"}
+
+
+def test_config_versions_reads_the_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _recorded_requests(monkeypatch)
+
+    RouterManagementClient("http://localhost:8080").config_versions()
+
+    assert calls[0][0] == "GET"
+    assert calls[0][1] == "http://localhost:8080/api/v1/config/versions"
+
+
+class _PreconditionFailedResponse(_Response):
+    ok = False
+    status_code = 412
+
+    def json(self) -> dict[str, Any]:
+        return {
+            "error": {
+                "code": "PRECONDITION_FAILED",
+                "message": "the configuration changed since the ETag was read",
+            }
+        }
+
+
+def test_a_stale_etag_answers_precondition_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        lambda *args, **kwargs: _PreconditionFailedResponse(),
+    )
+
+    with pytest.raises(ValueError, match="412: PRECONDITION_FAILED") as excinfo:
+        RouterManagementClient("http://localhost:8080").apply_config(
+            "version: v0.3\n", "merge", '"old"'
+        )
+
+    error = excinfo.value
+    assert getattr(error, "status", None) == 412
+    assert getattr(error, "code", None) == "PRECONDITION_FAILED"
+    assert "changed since the ETag" in getattr(error, "detail", "")
