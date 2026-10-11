@@ -43,7 +43,10 @@ func testAnthropicChatStopSequence(ctx context.Context, client *kubernetes.Clien
 		"model":       "vllm-sr/auto",
 		"max_tokens":  50,
 		"temperature": 0,
-		"stop":        []string{" "},
+		// A stop that lands mid-canned-text keeps the case independent of the
+		// whitespace-only matched-stop edge, which the stream provider
+		// validation still rejects (#4909).
+		"stop": []string{" from"},
 		"messages": []map[string]string{{
 			"role":    "user",
 			"content": "Answer directly with a short phrase of at least three words.",
