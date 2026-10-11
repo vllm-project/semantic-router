@@ -3,12 +3,16 @@
     pip install fastapi uvicorn
     python d3_server.py --model <package dir or Hub id> [--device cuda:0] [--host 127.0.0.1] [--port 8000]
 
-Request ``{"model", "state", "questions", "images"}``, response ``{"model", "answers", "usage"}``: the wire
-format of the Decision Index ``http`` engine. ``images`` (optional) lists any number of base64 PNG, JPEG or WebP
-data URLs (``data:image/png;base64,...``) that every question sees, each at most 8,000,000 bytes and 16,000,000
-pixels (the model reads it at up to 1.6 MP). A question over the input limit refuses the whole request with
-HTTP 422 naming the maximum context length (the Index records it as unsupported; nothing is truncated);
-malformed requests and invalid images also get 422. Requests are served one at a time. With
+Request ``{"model", "state", "questions", "images", "videos"}``, response ``{"model", "answers", "usage"}``: the
+wire format of the Decision Index ``http`` engine. ``images`` (optional) lists any number of base64 PNG, JPEG or
+WebP data URLs (``data:image/png;base64,...``) that every question sees, each at most 8,000,000 bytes and
+16,000,000 pixels (the model reads it at up to 1.6 MP). ``videos`` (optional) lists any number of base64 MP4, WebM,
+QuickTime or Matroska data URLs (``data:video/mp4;base64,...``) that every question sees, each at most 32,000,000
+bytes, 300 seconds and 8,294,400 pixels per frame (the model reads 2 frames per second, at most 32 frames spread
+over the video, each at up to 0.2 MP; at most 16,384 video tokens per request). A question over the input limit
+refuses the whole request with HTTP 422 naming the maximum context length (the Index records it as unsupported;
+nothing is truncated); malformed requests and invalid images or videos also get 422. Requests are served one at
+a time. With
 ``DECISION_API_KEY`` set, requests need ``Authorization: Bearer <key>``. ``GET /health`` and
 ``GET /v1/models`` describe the loaded model.
 
@@ -35,18 +39,28 @@ os.environ.setdefault("TRITON_CACHE_AUTOTUNING", "1")
 from d3_runtime import (  # noqa: E402
     DEFAULT_BATCH_SIZE,
     IMAGE_MAX_PIXELS,
+    MAX_VIDEO_BYTES,
+    VIDEO_FPS,
+    VIDEO_MAX_FRAMES,
+    VIDEO_MAX_PIXELS,
+    VIDEO_MAX_TOKENS,
     D3,
 )
 
-REQUEST_FIELDS = {"model", "state", "questions", "images"}
+REQUEST_FIELDS = {"model", "state", "questions", "images", "videos"}
 
 
 def reads_images(model: D3) -> bool:
     return getattr(model, "image_unavailable", "unknown") is None
 
 
+def reads_videos(model: D3) -> bool:
+    return getattr(model, "video_unavailable", "unknown") is None
+
+
 def modalities(model: D3) -> list[str]:
-    return ["text", "image"] if reads_images(model) else ["text"]
+    names = ["text", "image"] if reads_images(model) else ["text"]
+    return names + ["video"] if reads_videos(model) else names
 
 
 class Service:
@@ -129,6 +143,14 @@ def build_app(args: argparse.Namespace):
         }
         if reads_images(model):
             entry["image_max_pixels"] = IMAGE_MAX_PIXELS
+        if reads_videos(model):
+            entry["video"] = {
+                "fps": VIDEO_FPS,
+                "max_frames": VIDEO_MAX_FRAMES,
+                "max_pixels_per_frame": VIDEO_MAX_PIXELS,
+                "max_tokens_per_request": VIDEO_MAX_TOKENS,
+                "max_bytes": MAX_VIDEO_BYTES,
+            }
         return {"models": [entry]}
 
     def decode_images(model: D3, images: Any) -> list[Any]:
@@ -140,10 +162,25 @@ def build_app(args: argparse.Namespace):
             raise ValueError("This model reads text only; images are not supported.")
         return model.load_images(images, strict=True)
 
-    def decide(body: dict[str, Any], images: list[Any]) -> dict[str, Any]:
+    def decode_videos(model: D3, videos: Any) -> list[Any]:
+        if not isinstance(videos, list):
+            raise ValueError("videos must be a list of base64 data URLs")
+        if not videos:
+            return []
+        if not reads_videos(model):
+            raise ValueError("This model does not read videos.")
+        return model.load_videos(videos, strict=True)
+
+    def decide(
+        body: dict[str, Any], images: list[Any], videos: list[Any]
+    ) -> dict[str, Any]:
         model = service.model
         with service.lock:
-            if images:
+            if videos:
+                prepared = model.prepare(
+                    body.get("state"), body.get("questions"), images, videos
+                )
+            elif images:
                 prepared = model.prepare(
                     body.get("state"), body.get("questions"), images
                 )
@@ -181,7 +218,12 @@ def build_app(args: argparse.Namespace):
                 if body.get("images") is not None
                 else []
             )
-            return await run_in_threadpool(decide, body, images)
+            videos = (
+                await run_in_threadpool(decode_videos, service.model, body["videos"])
+                if body.get("videos") is not None
+                else []
+            )
+            return await run_in_threadpool(decide, body, images, videos)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
 

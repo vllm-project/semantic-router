@@ -1,8 +1,9 @@
 """The ``decision`` pipeline for d3 models (``trust_remote_code=True``).
 
 ``pipeline("decision", model=repo, trust_remote_code=True)`` loads the model with ``AutoModel`` and answers
-``{"state": ..., "questions": {...}}`` requests, optionally with ``"images": [...]`` (any number of images per
-request), or ``state=..., questions=..., images=...`` keywords, or a list of requests, with the model's
+``{"state": ..., "questions": {...}}`` requests, optionally with ``"images": [...]`` and ``"videos": [...]`` (any
+number per request), or ``state=..., questions=..., images=..., videos=...`` keywords, or a list of requests, with
+the model's
 ``system_one`` response. The model batches the questions of one request itself.
 """
 
@@ -10,7 +11,7 @@ from transformers import Pipeline
 
 _UNSET = object()
 REQUEST_KEYS = {"state", "questions"}
-OPTIONAL_KEYS = {"images"}
+OPTIONAL_KEYS = {"images", "videos"}
 
 
 class D3Pipeline(Pipeline):
@@ -28,17 +29,28 @@ class D3Pipeline(Pipeline):
         return {}, {}, {}
 
     def __call__(
-        self, inputs=None, *, state=_UNSET, questions=_UNSET, images=_UNSET, **kwargs
+        self,
+        inputs=None,
+        *,
+        state=_UNSET,
+        questions=_UNSET,
+        images=_UNSET,
+        videos=_UNSET,
+        **kwargs,
     ):
-        if state is not _UNSET or questions is not _UNSET or images is not _UNSET:
+        if any(v is not _UNSET for v in (state, questions, images, videos)):
             if inputs is not None:
-                raise TypeError("Pass one request, or state=, questions= and images=")
+                raise TypeError(
+                    "Pass one request, or state=, questions=, images= and videos="
+                )
             inputs = {
                 "state": None if state is _UNSET else state,
                 "questions": None if questions is _UNSET else questions,
             }
             if images is not _UNSET:
                 inputs["images"] = images
+            if videos is not _UNSET:
+                inputs["videos"] = videos
         if kwargs.get("batch_size") not in (None, 1):
             raise ValueError(
                 "The decision pipeline runs one request at a time (batch_size=1)"
@@ -51,12 +63,13 @@ class D3Pipeline(Pipeline):
         ):
             raise ValueError(
                 'A decision request is {"state": ..., "questions": {<id>: <question>, ...}} '
-                'with optional "images": [...]'
+                'with optional "images": [...] and "videos": [...]'
             )
         return {
             "state": inputs["state"],
             "questions": inputs["questions"],
             "images": inputs.get("images"),
+            "videos": inputs.get("videos"),
         }
 
     def _forward(self, model_inputs):
@@ -64,6 +77,7 @@ class D3Pipeline(Pipeline):
             state=model_inputs["state"],
             questions=model_inputs["questions"],
             images=model_inputs["images"],
+            videos=model_inputs["videos"],
         )
 
     def postprocess(self, model_outputs):

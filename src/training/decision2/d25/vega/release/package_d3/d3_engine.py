@@ -11,7 +11,8 @@ average, see d3_runtime.py). A request with a question over the checkpoint's inp
 (nothing is truncated).
 
 Image requests: ``engine(state, questions, images=[...])`` with any number of images (PIL images, paths,
-http(s) or data URLs) that every question sees.
+http(s) or data URLs) that every question sees. Video requests: ``engine(state, questions, videos=[...])``
+(with or without images) with any number of videos (paths, http(s) or data URLs, frame arrays).
 """
 
 from __future__ import annotations
@@ -37,8 +38,8 @@ class D3Engine(Engine):
     name = "d3"
     latency = (
         "Device-synchronized in-process request wall time including prompt rendering and tokenization (and, "
-        "for image requests, image decoding and preprocessing); one request per call, its questions in request "
-        "order in batches of batch_size; excludes model loading."
+        "for image and video requests, their decoding and preprocessing); one request per call, its questions in "
+        "request order in batches of batch_size; excludes model loading."
     )
 
     def __init__(
@@ -90,8 +91,8 @@ class D3Engine(Engine):
     def synchronize(self):
         self.decision.synchronize()
 
-    def __call__(self, state, questions, images=None):
-        prepared = self.decision.prepare(state, questions, images)
+    def __call__(self, state, questions, images=None, videos=None):
+        prepared = self.decision.prepare(state, questions, images, videos)
         over = [
             e["message"]
             for e in prepared.errors.values()

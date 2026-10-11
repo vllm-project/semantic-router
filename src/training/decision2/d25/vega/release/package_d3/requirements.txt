@@ -1,4 +1,4 @@
-# d3 runtime. Validated with transformers 5.17.0 on ROCm (torch 2.13) and CUDA (RTX PRO 6000).
+# d3 runtime. Validated with transformers 5.17.0 on ROCm (torch 2.13).
 torch>=2.8
 transformers==5.17.0
 accelerate>=1.10
@@ -11,7 +11,8 @@ einops
 # (install the torchvision build that matches torch; without it transformers falls back to a PIL resize).
 pillow>=10
 torchvision
-# Optional on CUDA: causal-conv1d (the convolution then runs in its CUDA kernel instead of torch conv1d).
+# Video files: OpenCV decodes them with FFmpeg (frame arrays need no decoder).
+opencv-python-headless
 # d3_server.py only:
 # fastapi
 # uvicorn

@@ -11,6 +11,7 @@ probability for every option. No text is generated and no input is truncated.
     #                                     "confidence": ...}}, "usage": {"input_tokens": n, "output_tokens": 0}}
 
     model.system_one(state="...", questions={...}, images=["photo.png", "label.jpg"])
+    model.system_one(state="...", questions={...}, videos=["clip.mp4"])
 
 The checkpoint directory holds ``config.json`` + ``model*.safetensors`` (a transformers
 ``Qwen3_5Model``, or a ``Qwen3VLModel`` when ``config.json`` says ``model_type: qwen3_vl``),
@@ -25,6 +26,14 @@ torchvision backend) resizes each to at most 1,638,400 pixels (1.6 MP) and at le
 the aspect ratio; each 32 x 32 pixel patch is one input token. The prompt is the text prompt with the
 images in front; a request without images takes exactly the text path. Image inputs need a checkpoint
 with the vision tower (``visual.*`` weights).
+
+Videos: a request also takes any number of videos (local paths, http(s) URLs, base64 ``data:video/...``
+URLs, or frame arrays: a uint8 ``[frames, height, width, 3]`` RGB array or a list of PIL images, read as
+frames sampled at 2 per second), shared by all of its questions and placed after the images. Files are
+decoded with OpenCV (FFmpeg): 2 frames per second, at least 4 and at most 32 frames spread evenly over the
+whole video, each read by the checkpoint's own video processor at up to 200,704 pixels (0.2 MP); every two
+frames are one group of input tokens (one token per 32 x 32 pixels) after a timestamp. All videos of one
+request take at most 16,384 input tokens. A request without videos takes exactly the text or image path.
 
 Numerics: BF16 backbone with SDPA attention, FP32 readout and softmax (unless the checkpoint says
 otherwise). A request's questions run in request order, ``batch_size`` per forward pass, each batch
@@ -122,6 +131,22 @@ IMAGE_INPUTS = (
     "pixel_values",
     "image_grid_thw",
 )
+VIDEO_FPS = 2.0
+VIDEO_MIN_FRAMES = 4
+VIDEO_MAX_FRAMES = 32
+# Per frame; one input token per 32 x 32 pixels for every two frames.
+VIDEO_MAX_PIXELS = 200_704
+VIDEO_MIN_PIXELS = 4_096
+# All videos of one request.
+VIDEO_MAX_TOKENS = 16_384
+# Checked for every video the server receives (strict loading).
+MAX_VIDEO_BYTES = 32_000_000
+MAX_VIDEO_SOURCE_PIXELS = 8_294_400
+MAX_VIDEO_SECONDS = 300
+VIDEO_FORMATS = ("mp4", "webm", "quicktime", "x-matroska")
+# A source frame rate outside this range is treated as unknown.
+VIDEO_SOURCE_FPS = (0.1, 1000.0)
+VIDEO_UNKNOWN_FPS = 24.0
 
 
 class MaxLengthExceeded(ValueError):
@@ -239,6 +264,28 @@ def image_messages(
     raise ValueError(f"unknown prompt family {prompt!r}")
 
 
+def video_messages(
+    prompt: str,
+    state: Any,
+    question: dict[str, Any],
+    codes: Sequence[str],
+    n_images: int,
+    n_videos: int,
+) -> list[dict[str, Any]]:
+    """The prompt family's messages with the image placeholders, then the video placeholders, before the user text."""
+    if n_videos < 1:
+        raise ValueError(f"a video prompt takes at least 1 video, got {n_videos}")
+    media: list[dict[str, Any]] = [{"type": "image"} for _ in range(n_images)]
+    media += [{"type": "video"} for _ in range(n_videos)]
+    if prompt == "d3":
+        text = {"type": "text", "text": user_prompt(state, question, codes)}
+        return [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": media + [text]},
+        ]
+    raise ValueError(f"unknown prompt family {prompt!r}")
+
+
 def reversed_question(question: Question) -> dict[str, Any] | None:
     """The rendered choice question with its options in reverse order (None when there is nothing to permute)."""
     if question.kind != "choice" or len(question.keys) < 2:
@@ -332,7 +379,7 @@ def _data_url_payload(value: str, strict: bool) -> bytes:
         raise ValueError("invalid base64 image data") from exc
 
 
-def _download(url: str) -> bytes:
+def _download(url: str, what: str = "image") -> bytes:
     import urllib.request
 
     request = urllib.request.Request(url, headers={"User-Agent": RUNTIME})
@@ -340,7 +387,7 @@ def _download(url: str) -> bytes:
         payload = response.read(MAX_DOWNLOAD_BYTES + 1)
     if len(payload) > MAX_DOWNLOAD_BYTES:
         raise ValueError(
-            f"the image at {url} is larger than {MAX_DOWNLOAD_BYTES:,} bytes"
+            f"the {what} at {url} is larger than {MAX_DOWNLOAD_BYTES:,} bytes"
         )
     return payload
 
@@ -448,6 +495,278 @@ def linearize_patch_embed(model) -> int:
             module.forward = types.MethodType(_linear_patch_embed_forward, module)
             count += 1
     return count
+
+
+# ---------------------------------------------------------------------------------------------
+# Videos
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Video:
+    """A decoded video: the sampled RGB frames and where they come from in the source.
+
+    ``frames`` is a uint8 array ``[frames, height, width, 3]`` holding an even number of frames (the last
+    one is repeated when needed); ``indices`` are their source frame numbers and ``fps`` the source frame
+    rate, which give each frame its timestamp.
+    """
+
+    frames: Any
+    fps: float
+    indices: list[int]
+    total_frames: int
+
+    @property
+    def size(self) -> tuple[int, int]:
+        """(width, height) of the frames."""
+        return int(self.frames.shape[2]), int(self.frames.shape[1])
+
+    def metadata(self) -> dict[str, Any]:
+        """The video processor's ``video_metadata`` for these frames."""
+        width, height = self.size
+        return {
+            "total_num_frames": self.total_frames,
+            "fps": self.fps,
+            "width": width,
+            "height": height,
+            "duration": self.total_frames / self.fps,
+            "frames_indices": list(self.indices),
+        }
+
+
+def video_sample_indices(total: int, fps: float) -> list[int]:
+    """Source frames to read: 2 per second, at least 4 and at most 32, spread evenly over the whole video."""
+    import numpy as np
+
+    count = int(total / fps * VIDEO_FPS)
+    count = min(max(count, VIDEO_MIN_FRAMES), VIDEO_MAX_FRAMES, total)
+    return np.linspace(0, total - 1, count).round().astype(int).tolist()
+
+
+def _video(frames: list[Any], indices: list[int], fps: float, total: int) -> Video:
+    import numpy as np
+
+    if len(frames) % 2:
+        frames.append(frames[-1])
+        indices.append(indices[-1])
+    try:
+        stacked = np.stack(frames)
+    except ValueError as exc:
+        raise ValueError("all frames of a video must have the same size") from exc
+    return Video(np.ascontiguousarray(stacked), float(fps), list(indices), int(total))
+
+
+def _video_data_url_payload(value: str, strict: bool) -> bytes:
+    header, separator, encoded = value.partition(",")
+    kind = header.strip().lower()
+    if (
+        not separator
+        or not kind.startswith("data:video/")
+        or not kind.endswith(";base64")
+    ):
+        raise ValueError("a data URL video is data:video/<format>;base64,<data>")
+    if strict:
+        if kind[len("data:video/") :].split(";")[0] not in VIDEO_FORMATS:
+            raise ValueError(
+                "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
+            )
+        if len(encoded) > 4 * -(-MAX_VIDEO_BYTES // 3):
+            raise ValueError(f"each video must be at most {MAX_VIDEO_BYTES:,} bytes")
+    try:
+        payload = base64.b64decode(encoded, validate=True)
+    except binascii.Error as exc:
+        raise ValueError("invalid base64 video data") from exc
+    if strict and len(payload) > MAX_VIDEO_BYTES:
+        raise ValueError(f"each video must be at most {MAX_VIDEO_BYTES:,} bytes")
+    return payload
+
+
+def _decode_video(
+    source: bytes | str, *, strict: bool, end_frame: int | None = None
+) -> Video:
+    """Decode a video file (path) or encoded video (bytes) with OpenCV and sample its frames."""
+    try:
+        import cv2
+    except ImportError as exc:
+        raise ValueError(
+            "decoding video files needs OpenCV (pip install opencv-python-headless)"
+        ) from exc
+    import tempfile
+
+    try:
+        api = (
+            cv2.CAP_FFMPEG
+            if cv2.videoio_registry.hasBackend(cv2.CAP_FFMPEG)
+            else cv2.CAP_ANY
+        )
+    except (AttributeError, cv2.error):
+        api = cv2.CAP_ANY
+    temporary = None
+    if not isinstance(source, str):
+        # Encoded bytes are read from a temporary file, so they decode exactly as the same file given by path.
+        with tempfile.NamedTemporaryFile(prefix="d3-video-", delete=False) as handle:
+            handle.write(source)
+        source = temporary = handle.name
+
+    def capture():
+        return cv2.VideoCapture(source, api)
+
+    frames, kept, reader = [], [], None
+    try:
+        reader = capture()
+        if not reader.isOpened():
+            raise ValueError("the video could not be opened")
+        width = int(reader.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if width <= 0 or height <= 0:
+            raise ValueError("the video has no frame size")
+        if strict and width * height > MAX_VIDEO_SOURCE_PIXELS:
+            raise ValueError(
+                f"video frames must have at most {MAX_VIDEO_SOURCE_PIXELS:,} pixels"
+            )
+        fps = float(reader.get(cv2.CAP_PROP_FPS) or 0.0)
+        if not (
+            math.isfinite(fps) and VIDEO_SOURCE_FPS[0] <= fps <= VIDEO_SOURCE_FPS[1]
+        ):
+            fps = VIDEO_UNKNOWN_FPS
+        total = int(reader.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        if total <= 0:  # the container does not say: count the frames, then read again
+            limit = int(MAX_VIDEO_SECONDS * fps) if strict else None
+            while reader.grab():
+                total += 1
+                if limit is not None and total > limit:
+                    break
+            reader.release()
+            reader = capture()
+        if end_frame is not None:
+            total = min(total, int(end_frame))
+        if total <= 0:
+            raise ValueError("the video has no frames")
+        if strict and total / fps > MAX_VIDEO_SECONDS:
+            raise ValueError(
+                f"each video must be at most {MAX_VIDEO_SECONDS} seconds long"
+            )
+        indices = video_sample_indices(total, fps)
+        wanted = set(indices)
+        for number in range(indices[-1] + 1):
+            if not reader.grab():
+                continue
+            if number in wanted:
+                ok, frame = reader.retrieve()
+                if ok and frame is not None and frame.size:
+                    frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    kept.append(number)
+    except cv2.error as exc:
+        raise ValueError(f"invalid video data ({exc.__class__.__name__})") from exc
+    finally:
+        if reader is not None:
+            reader.release()
+        if temporary is not None:
+            os.unlink(temporary)
+    if not frames:
+        raise ValueError("no frame of the video could be decoded")
+    return _video(frames, kept, fps, total)
+
+
+def _frames_video(value: Any, end_frame: int | None = None) -> Video:
+    """A frame array as a video sampled at ``VIDEO_FPS``, thinned evenly to at most ``VIDEO_MAX_FRAMES``."""
+    import numpy as np
+    from PIL import Image
+
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().numpy()
+    if isinstance(value, (list, tuple)):
+        if not value:
+            raise ValueError("a video given as frames needs at least one frame")
+        value = [
+            (
+                np.asarray(frame.convert("RGB"))
+                if isinstance(frame, Image.Image)
+                else np.asarray(frame)
+            )
+            for frame in value
+        ]
+        if len({frame.shape for frame in value}) != 1:
+            raise ValueError("all frames of a video must have the same size")
+        value = np.stack(value)
+    array = np.asarray(value)
+    if (
+        array.ndim != 4
+        or array.shape[-1] != 3
+        or array.dtype != np.uint8
+        or not len(array)
+    ):
+        raise ValueError(
+            "a video given as frames is a uint8 [frames, height, width, 3] RGB array or a list of "
+            "PIL images or [height, width, 3] arrays"
+        )
+    if end_frame is not None:
+        array = array[: max(1, int(end_frame))]
+    total = len(array)
+    if total > VIDEO_MAX_FRAMES:
+        indices = (
+            np.linspace(0, total - 1, VIDEO_MAX_FRAMES).round().astype(int).tolist()
+        )
+    else:
+        indices = list(range(total))
+    return _video([array[i] for i in indices], indices, VIDEO_FPS, total)
+
+
+def load_video(
+    value: Any, *, strict: bool = False, end_frame: int | None = None
+) -> Video:
+    """One video input, decoded and sampled (see the module docstring).
+
+    ``value`` is a local path, an http(s) URL, a ``data:video/<format>;base64,`` URL, a frame array (a uint8
+    ``[frames, height, width, 3]`` RGB array or a list of PIL images or ``[height, width, 3]`` arrays, read
+    as frames sampled at 2 per second) or a ``Video`` this function returned. ``end_frame`` reads only the
+    frames before it. ``strict`` (the server) accepts only data URLs of MP4, WebM, QuickTime or Matroska
+    videos of at most 32,000,000 bytes, 300 seconds and 8,294,400 pixels per frame.
+    """
+    if isinstance(value, Video) and not strict:
+        return value
+    if isinstance(value, os.PathLike):
+        value = os.fspath(value)
+    if not isinstance(value, str):
+        if strict:
+            raise ValueError(
+                "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
+            )
+        return _frames_video(value, end_frame)
+    if not value:
+        raise ValueError(
+            "a video is a path, an http(s) URL, a data:video/...;base64 URL or a frame array"
+        )
+    if strict and not value.startswith("data:"):
+        raise ValueError(
+            "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
+        )
+    try:
+        if value.startswith("data:"):
+            source: bytes | str = _video_data_url_payload(value, strict)
+        elif value.startswith(("http://", "https://")):
+            source = _download(value, "video")
+        else:
+            path = Path(value).expanduser()
+            if not path.is_file():
+                raise ValueError(f"no video file at {value}")
+            source = str(path)
+    except OSError as exc:
+        raise ValueError(f"video unreadable ({exc})") from exc
+    return _decode_video(source, strict=strict, end_frame=end_frame)
+
+
+def configure_video_processor(processor) -> None:
+    """Read already-sampled frames at up to ``VIDEO_MAX_PIXELS`` each with the checkpoint's video processor."""
+    video = processor.video_processor
+    factor = video.patch_size * video.merge_size
+    video.size = {
+        "shortest_edge": VIDEO_MIN_PIXELS,
+        "longest_edge": VIDEO_MAX_PIXELS * VIDEO_MAX_FRAMES,
+    }
+    video.cap_pixels_per_frame = True
+    video.max_video_tokens = VIDEO_MAX_PIXELS // factor**2
+    video.do_sample_frames = False
 
 
 # ---------------------------------------------------------------------------------------------
@@ -684,7 +1003,9 @@ class Prepared:
 
     A text request holds token ``sequences``; an image request holds the decoded ``images`` (shared by
     every question), the rendered prompt ``texts`` and the planned input ``lengths`` (text tokens plus
-    image tokens), and the processor tokenizes it when it runs.
+    image tokens), and the processor tokenizes it when it runs. A video request also holds the decoded
+    ``videos``, their processed pixels (``media``, one copy per image and video) and each video's
+    placeholder expansion (``video_texts``).
     """
 
     keys: list[str]
@@ -694,6 +1015,9 @@ class Prepared:
     images: list[Any] = field(default_factory=list)
     texts: dict[str, str] = field(default_factory=dict)
     lengths: dict[str, int] = field(default_factory=dict)
+    videos: list[Video] = field(default_factory=list)
+    media: dict[str, Any] = field(default_factory=dict)
+    video_texts: list[str] = field(default_factory=list)
     # Reversed-option prompts of the choice questions (permutation_average only).
     reversed_sequences: dict[str, list[int]] = field(default_factory=dict)
     reversed_texts: dict[str, str] = field(default_factory=dict)
@@ -832,6 +1156,22 @@ class D3:
                 self.image_unavailable = (
                     f"the image processor failed to load ({type(exc).__name__}: {exc})"
                 )
+        self.video_unavailable: str | None = None
+        if self.image_unavailable is not None:
+            self.video_unavailable = self.image_unavailable
+        elif self.backbone_type != "qwen3_5":
+            self.video_unavailable = "video inputs need a Qwen3.5 backbone"
+        elif getattr(self.processor, "video_processor", None) is None:
+            self.video_unavailable = "the checkpoint has no video processor"
+        else:
+            try:
+                configure_video_processor(self.processor)
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 - text and image requests do not use it
+                self.video_unavailable = (
+                    f"the video processor failed to load ({type(exc).__name__}: {exc})"
+                )
         fast, reason = d3_fast, "d3_fast.py is not present"
         if fast is None:
             try:
@@ -900,6 +1240,36 @@ class D3:
             enable_thinking=False,
         )
 
+    def video_text(
+        self, state: Any, question: dict[str, Any], n_images: int, n_videos: int
+    ) -> str:
+        return self.processor.apply_chat_template(
+            video_messages(
+                self.prompt, state, question, self.codes, n_images, n_videos
+            ),
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+
+    def load_videos(
+        self, videos: Sequence[Any], *, strict: bool = False
+    ) -> list[Video]:
+        """Decode and sample a request's videos, any number; raises ValueError for a video it cannot read."""
+        if not videos:
+            return []
+        if self.video_unavailable is not None:
+            raise ValueError(
+                f"video inputs are not available: {self.video_unavailable}"
+            )
+        decoded = []
+        for number, value in enumerate(videos):
+            try:
+                decoded.append(load_video(value, strict=strict))
+            except ValueError as exc:
+                raise ValueError(f"videos[{number}]: {exc}") from exc
+        return decoded
+
     def load_images(self, images: Sequence[Any], *, strict: bool = False) -> list[Any]:
         """Decode a request's images (RGB PIL), any number; raises ValueError for an image it cannot read."""
         if not images:
@@ -921,11 +1291,14 @@ class D3:
         state: Any,
         questions: Mapping[str, Any],
         images: Sequence[Any] | None = None,
+        videos: Sequence[Any] | None = None,
     ) -> Prepared:
-        """Validate and tokenize one request; malformed ``state``, ``questions`` or ``images`` raise ValueError.
+        """Validate and tokenize one request; malformed ``state``, ``questions``, ``images`` or ``videos`` raise
+        ValueError.
 
-        ``images`` (a list of any number of images shared by every question) select the image path. Without
-        images the request takes the text path unchanged.
+        ``images`` (a list of any number of images shared by every question) select the image path, ``videos``
+        (a list of any number of videos, with or without images) the video path. Without them the request takes
+        the text path unchanged.
         """
         if not isinstance(questions, Mapping) or not questions:
             raise ValueError(
@@ -936,6 +1309,15 @@ class D3:
         _json_value(state)
         if images is not None and not isinstance(images, (list, tuple)):
             raise ValueError("images must be a list of images")
+        if videos is not None and not isinstance(videos, (list, tuple)):
+            raise ValueError("videos must be a list of videos")
+        if videos:
+            return self._prepare_videos(
+                state,
+                questions,
+                self.load_images(images or []),
+                self.load_videos(videos),
+            )
         if images:
             return self._prepare_images(state, questions, self.load_images(images))
         prepared = Prepared(keys=list(questions))
@@ -976,9 +1358,10 @@ class D3:
     ) -> None:
         """Render and tokenize the reversed-option prompt of every runnable choice question.
 
-        ``visual``: the image tokens of the request (image path), counted like ``_prepare_images`` counts them.
+        ``visual``: the image and video tokens of the request (image and video paths), counted like
+        ``_prepare_images`` and ``_prepare_videos`` count them.
         """
-        n_images = len(prepared.images)
+        n_images, n_videos = len(prepared.images), len(prepared.videos)
         texts = []
         for key in prepared.runnable:
             flipped = reversed_question(prepared.questions[key])
@@ -987,18 +1370,22 @@ class D3:
                     (
                         key,
                         (
-                            self.image_text(state, flipped, n_images)
-                            if n_images
-                            else self.text(state, flipped)
+                            self.video_text(state, flipped, n_images, n_videos)
+                            if n_videos
+                            else (
+                                self.image_text(state, flipped, n_images)
+                                if n_images
+                                else self.text(state, flipped)
+                            )
                         ),
                     )
                 )
         if not texts:
             return
-        tokenizer = self.processor.tokenizer if n_images else self.tokenizer
+        tokenizer = self.processor.tokenizer if n_images or n_videos else self.tokenizer
         ids = tokenizer([t for _, t in texts], add_special_tokens=False)["input_ids"]
         for (key, text), sequence in zip(texts, ids):
-            length = len(sequence) - n_images + visual
+            length = len(sequence) - n_images - n_videos + visual
             if self.max_length is not None and length > self.max_length:
                 for planned in (prepared.sequences, prepared.texts, prepared.lengths):
                     planned.pop(key, None)
@@ -1008,7 +1395,7 @@ class D3:
                     "message": f"the reversed-option prompt has {length} tokens, over the maximum context "
                     f"length of {self.max_length} tokens; nothing was truncated",
                 }
-            elif n_images:
+            elif n_images or n_videos:
                 prepared.reversed_texts[key] = text
                 prepared.reversed_lengths[key] = length
             else:
@@ -1067,6 +1454,125 @@ class D3:
                 prepared.lengths[key] = length
         if self.permutation_average:
             self._prepare_reversed(state, prepared, sum(visual))
+        return prepared
+
+    def _prepare_videos(
+        self,
+        state: Any,
+        questions: Mapping[str, Any],
+        images: list[Any],
+        videos: list[Video],
+    ) -> Prepared:
+        """Process the images and videos once, render every question with them in front and plan its tokens."""
+        processor = self.processor
+        try:
+            visual = [
+                visual_tokens(processor.image_processor, *image.size)
+                for image in images
+            ]
+        except ValueError as exc:
+            raise ValueError(f"image rejected by the processor: {exc}") from exc
+        merge = processor.video_processor.merge_size**2
+        try:
+            planned = (
+                sum(
+                    processor.video_processor.get_num_of_video_patches(
+                        len(video.frames), video.size[1], video.size[0]
+                    )
+                    for video in videos
+                )
+                // merge
+            )
+        except ValueError as exc:
+            raise ValueError(f"video rejected by the processor: {exc}") from exc
+        if planned > VIDEO_MAX_TOKENS:
+            raise ValueError(
+                f"the videos take {planned:,} input tokens, over the {VIDEO_MAX_TOKENS:,} tokens a "
+                "request may spend on videos; send fewer or shorter videos"
+            )
+        try:
+            media = dict(
+                processor.video_processor(
+                    videos=[video.frames for video in videos],
+                    video_metadata=[video.metadata() for video in videos],
+                    return_metadata=True,
+                    return_tensors="pt",
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(f"video rejected by the processor: {exc}") from exc
+        video_texts = [
+            processor.replace_video_token(media, video_idx=i)
+            for i in range(len(videos))
+        ]
+        if int(media["video_grid_thw"].prod(-1).sum()) // merge != planned:
+            raise RuntimeError("the video processor and its token count disagree")
+        expanded = sum(
+            len(ids)
+            for ids in processor.tokenizer(video_texts, add_special_tokens=False)[
+                "input_ids"
+            ]
+        )
+        media = {
+            "pixel_values_videos": media["pixel_values_videos"],
+            "video_grid_thw": media["video_grid_thw"],
+        }
+        if images:
+            media.update(processor.image_processor(images=images, return_tensors="pt"))
+        prepared = Prepared(
+            keys=list(questions),
+            images=images,
+            videos=videos,
+            media=media,
+            video_texts=video_texts,
+        )
+        texts = []
+        for key, question in questions.items():
+            try:
+                normalized = normalize_question(question)
+                text = self.video_text(
+                    state, normalized.rendered, len(images), len(videos)
+                )
+            except ValueError as exc:
+                kind = question.get("type") if isinstance(question, Mapping) else None
+                prepared.errors[key] = {
+                    "type": kind,
+                    "error": "invalid_question",
+                    "message": str(exc),
+                }
+                continue
+            if text.count(IMAGE_TOKEN) != len(images) or text.count(VIDEO_TOKEN) != len(
+                videos
+            ):
+                prepared.errors[key] = {
+                    "type": normalized.kind,
+                    "error": "invalid_question",
+                    "message": "the state or question contains a literal image or video placeholder token",
+                }
+                continue
+            prepared.questions[key] = normalized
+            texts.append((key, text))
+        if texts:
+            ids = processor.tokenizer([t for _, t in texts], add_special_tokens=False)[
+                "input_ids"
+            ]
+            for (key, text), sequence in zip(texts, ids):
+                length = (
+                    len(sequence) - len(images) - len(videos) + sum(visual) + expanded
+                )
+                if self.max_length is not None and length > self.max_length:
+                    prepared.errors[key] = {
+                        "type": prepared.questions[key].kind,
+                        "error": "max_length_exceeded",
+                        "message": f"the question prompt has {length} tokens ({sum(visual) + expanded} for "
+                        f"{len(images)} image(s) and {len(videos)} video(s)), over the maximum context length "
+                        f"of {self.max_length} tokens; nothing was truncated",
+                    }
+                    continue
+                prepared.texts[key] = text
+                prepared.lengths[key] = length
+        if self.permutation_average:
+            self._prepare_reversed(state, prepared, sum(visual) + expanded)
         return prepared
 
     def logits(self, sequences: Sequence[Sequence[int]], counts: Sequence[int]):
@@ -1196,8 +1702,170 @@ class D3:
             prepared.reversed_lengths.values()
         )
 
+    def media_features(self, media: Mapping[str, Any]) -> dict[str, list[Any]]:
+        """Vision-tower features of each image and video of a video request, computed once per request."""
+        torch = self.torch
+        backbone = self.backbone
+        features: dict[str, list[Any]] = {}
+        with torch.inference_mode(), sdpa_backends(self.device):
+            if "pixel_values" in media:
+                features["image"] = list(
+                    backbone.get_image_features(
+                        media["pixel_values"].to(self.device),
+                        media["image_grid_thw"].to(self.device),
+                        return_dict=True,
+                    ).pooler_output
+                )
+            features["video"] = list(
+                backbone.get_video_features(
+                    media["pixel_values_videos"].to(self.device),
+                    media["video_grid_thw"].to(self.device),
+                    return_dict=True,
+                ).pooler_output
+            )
+        return features
+
+    def video_logits(
+        self,
+        texts: Sequence[str],
+        prepared: Prepared,
+        features: Mapping[str, list[Any]],
+        counts: Sequence[int],
+        width: int,
+    ):
+        """Masked code logits (FP32, [B, 255]) for one left-padded batch of prompts that share the request's videos.
+
+        Each prompt's placeholders are expanded with the request's images and videos and the batch is padded to
+        ``width`` tokens (the longest planned prompt); the vision features of the request go into every prompt,
+        then the text layers run as for an image batch (the fused layers when the fast path is active).
+        """
+        torch = self.torch
+        processor = self.processor
+        backbone = self.backbone
+        media = prepared.media
+        image_texts = [
+            processor.replace_image_token(media, image_idx=i)
+            for i in range(len(prepared.images))
+        ]
+        expanded = [
+            processor.get_text_with_replacements(
+                [text], image_texts, prepared.video_texts
+            )[0][0]
+            for text in texts
+        ]
+        encoded = processor.tokenizer(
+            expanded, padding=True, return_token_type_ids=False, return_tensors="pt"
+        )
+        if encoded["input_ids"].shape[1] != width:
+            raise RuntimeError(
+                f"planned {width} input tokens, the processor produced {encoded['input_ids'].shape[1]}"
+            )
+        rows = len(texts)
+        ids = encoded["input_ids"].to(self.device)
+        mask = encoded["attention_mask"].to(self.device)
+        types = torch.as_tensor(
+            processor.create_mm_token_type_ids(encoded["input_ids"]), device=self.device
+        )
+        padded = not bool(encoded["attention_mask"].all())
+        with torch.inference_mode(), sdpa_backends(self.device):
+            embeds = backbone.get_input_embeddings()(ids)
+            image_grid = None
+            if "image" in features:
+                values = torch.cat(features["image"] * rows).to(
+                    embeds.device, embeds.dtype
+                )
+                image_mask, _ = backbone.get_placeholder_mask(
+                    ids, inputs_embeds=embeds, image_features=values
+                )
+                embeds = embeds.masked_scatter(image_mask, values)
+                image_grid = media["image_grid_thw"].repeat(rows, 1).to(self.device)
+            values = torch.cat(features["video"] * rows).to(embeds.device, embeds.dtype)
+            _, video_mask = backbone.get_placeholder_mask(
+                ids, inputs_embeds=embeds, video_features=values
+            )
+            embeds = embeds.masked_scatter(video_mask, values)
+            positions = backbone.compute_3d_position_ids(
+                input_ids=ids,
+                image_grid_thw=image_grid,
+                video_grid_thw=media["video_grid_thw"].repeat(rows, 1).to(self.device),
+                inputs_embeds=embeds,
+                attention_mask=mask,
+                past_key_values=None,
+                mm_token_type_ids=types,
+            )
+            fused = self.fast.fused if self.fast is not None else None
+            if fused is not None:
+                rotary = self.fast.lm.rotary_emb(embeds, positions)
+                hidden = fused.forward(
+                    embeds,
+                    mask.bool()[:, None, None, :],
+                    mask.reshape(-1) if padded else None,
+                    rotary,
+                )[:, -1]
+            else:
+                hidden = backbone.language_model(
+                    input_ids=None,
+                    position_ids=positions,
+                    attention_mask=mask,
+                    past_key_values=None,
+                    inputs_embeds=embeds,
+                    use_cache=False,
+                ).last_hidden_state[:, -1]
+            if self.readout_dtype == "float32":
+                logits = hidden.float() @ self.readout.T
+            else:
+                logits = torch.nn.functional.linear(hidden, self.readout).float()
+            limit = torch.as_tensor(list(counts), device=self.device)[:, None]
+            invalid = torch.arange(MAX_OPTIONS, device=self.device)[None] >= limit
+            return logits.masked_fill(invalid, float("-inf"))
+
+    def _run_videos(self, prepared: Prepared) -> tuple[dict[str, list[float]], int]:
+        keys = prepared.runnable
+        out: dict[str, list[float]] = {}
+        if not keys:
+            return out, 0
+        features = self.media_features(prepared.media)
+
+        def probabilities(texts, counts, width):
+            probs = (
+                (
+                    self.video_logits(texts, prepared, features, counts, width)
+                    / self.temperature
+                )
+                .softmax(-1)
+                .cpu()
+                .tolist()
+            )
+            return [p[:c] for p, c in zip(probs, counts)]
+
+        for start in range(0, len(keys), self.batch_size):
+            chunk = keys[start : start + self.batch_size]
+            extra = [k for k in chunk if k in prepared.reversed_texts]
+            texts = [prepared.texts[k] for k in chunk] + [
+                prepared.reversed_texts[k] for k in extra
+            ]
+            counts = [len(prepared.questions[k].keys) for k in chunk + extra]
+            widths = [prepared.lengths[k] for k in chunk] + [
+                prepared.reversed_lengths[k] for k in extra
+            ]
+            n = len(chunk)
+            if extra and len(widths) * max(widths) > MERGE_TOKENS:
+                probs = probabilities(
+                    texts[:n], counts[:n], max(widths[:n])
+                ) + probabilities(texts[n:], counts[n:], max(widths[n:]))
+            else:
+                probs = probabilities(texts, counts, max(widths))
+            out.update(zip(chunk, probs))
+            for key, backward in zip(extra, probs[n:]):
+                out[key] = average_orders(out[key], backward)
+        return out, sum(prepared.lengths[k] for k in keys) + sum(
+            prepared.reversed_lengths.values()
+        )
+
     def run(self, prepared: Prepared) -> tuple[dict[str, list[float]], int]:
         """Probabilities per runnable question (request order, ``batch_size`` per pass) and the input tokens."""
+        if prepared.videos:
+            return self._run_videos(prepared)
         if prepared.images:
             return self._run_images(prepared)
         keys = prepared.runnable
@@ -1255,15 +1923,17 @@ class D3:
         state: Any,
         questions: Mapping[str, Any],
         images: Sequence[Any] | None = None,
+        videos: Sequence[Any] | None = None,
     ) -> dict[str, Any]:
         """Typed Choice / Noul / Score answers about one state: ``{"model", "answers", "usage"}``.
 
         ``images``: any number of images (PIL images, paths, http(s) or data URLs) that every question sees.
+        ``videos``: any number of videos (paths, http(s) or data URLs, frame arrays) that every question sees.
         A question that cannot be answered gets ``{"type", "error", "message"}`` with ``error`` one of
         ``invalid_question``, ``max_length_exceeded`` (never truncated) or ``invalid_model_output``; the
         other questions of the request are still answered.
         """
-        prepared = self.prepare(state, questions, images)
+        prepared = self.prepare(state, questions, images, videos)
         probabilities, tokens = self.run(prepared)
         return self.respond(prepared, probabilities, tokens)
 
@@ -1359,6 +2029,7 @@ class D3:
             "over the question's codes only; argmax choice; no truncation (over-limit questions are "
             "refused); no option filtering; one fixed prompt for every request.",
             "images": self.image_contract(),
+            "videos": self.video_contract(),
         }
         if self.permutation_average:
             record["permutation_average"] = True
@@ -1387,6 +2058,31 @@ class D3:
                 contract["torchvision"] = None
         if self.image_unavailable is not None:
             contract["unavailable"] = self.image_unavailable
+        return contract
+
+    def video_contract(self) -> dict[str, Any]:
+        """How video inputs are read (or why they are not available)."""
+        contract: dict[str, Any] = {
+            "supported": self.video_unavailable is None,
+            "fps": VIDEO_FPS,
+            "min_frames": VIDEO_MIN_FRAMES,
+            "max_frames": VIDEO_MAX_FRAMES,
+            "max_pixels_per_frame": VIDEO_MAX_PIXELS,
+            "max_tokens_per_request": VIDEO_MAX_TOKENS,
+            "placement": "after the images, before the text of the user turn, one placeholder per video, "
+            "request order; every two frames are one token group after their timestamp",
+            "sampling": "source frames spread evenly over the whole video (frame arrays: frames at 2 per second)",
+        }
+        if self.video_unavailable is None:
+            contract["video_processor"] = type(self.processor.video_processor).__name__
+            try:
+                import cv2
+
+                contract["opencv"] = cv2.__version__
+            except Exception:  # noqa: BLE001
+                contract["opencv"] = None
+        else:
+            contract["unavailable"] = self.video_unavailable
         return contract
 
     def runtime_info(self) -> dict[str, Any]:

@@ -1,8 +1,8 @@
 """d3 model for 🤗 Transformers (``trust_remote_code=True``).
 
 ``AutoModel.from_pretrained(repo, trust_remote_code=True)`` loads the repository through its own runtime
-(``d3_runtime.py``) and returns a model with ``system_one(state=..., questions={...}, images=[...])``
-(any number of images per request). The
+(``d3_runtime.py``) and returns a model with ``system_one(state=..., questions={...}, images=[...], videos=[...])``
+(any number of images and videos per request). The
 repository is a standard ``Qwen3_5Model`` checkpoint (``D3Model``) or ``Qwen3VLModel`` checkpoint
 (``D3Qwen3VLModel``) plus a 255-way answer-code readout, so without ``trust_remote_code`` the same
 repository loads as the plain backbone. A directory without ``decision_config.json`` is not a Decision
@@ -107,7 +107,7 @@ def _is_decision(name_or_path: Any, revision: Any, hub: dict[str, Any]) -> bool:
 
 
 class D3Model(PreTrainedModel):
-    """A d3 checkpoint behind System One: ``system_one(state=..., questions={...}, images=[...])``."""
+    """A d3 checkpoint behind System One: ``system_one(state=..., questions={...}, images=[...], videos=[...])``."""
 
     config_class = Qwen3_5Config
     base_model_prefix = "decision"
@@ -233,16 +233,19 @@ class D3Model(PreTrainedModel):
         state: Any,
         questions: dict[str, Any],
         images: list[Any] | None = None,
+        videos: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Typed Choice / Noul / Score answers about one state: ``{"model", "answers", "usage"}``.
 
         ``questions`` maps question IDs to ``{"type": "choice" | "noul" | "score", "instructions": ...,
         "criteria": ...}``; a question over the input limit is answered ``max_length_exceeded``, never
         truncated. ``images``: any number of images every question sees (PIL images, local paths, http(s) URLs or
-        base64 ``data:image/...`` URLs), placed before the text and read at up to 1.6 MP each.
+        base64 ``data:image/...`` URLs), placed before the text and read at up to 1.6 MP each. ``videos``: any
+        number of videos every question sees (local paths, http(s) URLs, base64 ``data:video/...`` URLs or frame
+        arrays), placed after the images: 2 frames per second, at most 32 frames, each at up to 0.2 MP.
         """
         return self._require().system_one(
-            state=state, questions=questions, images=images
+            state=state, questions=questions, images=images, videos=videos
         )
 
     def forward(
@@ -250,8 +253,11 @@ class D3Model(PreTrainedModel):
         state: Any = None,
         questions: dict[str, Any] | None = None,
         images: list[Any] | None = None,
+        videos: list[Any] | None = None,
     ) -> dict[str, Any]:
-        return self.system_one(state=state, questions=questions, images=images)
+        return self.system_one(
+            state=state, questions=questions, images=images, videos=videos
+        )
 
     def to(self, *args: Any, **kwargs: Any) -> D3Model:
         """Move to another device; numerics are fixed by the checkpoint, so dtype casts are refused."""
