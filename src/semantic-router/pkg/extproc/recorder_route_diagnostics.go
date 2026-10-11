@@ -69,6 +69,7 @@ func buildReplayRouteDiagnostics(
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
+		Retention:                      ctx.RetentionOutcome.Clone(),
 	}
 	if ctx.preparedDispatchReceipt != nil {
 		receipt := *ctx.preparedDispatchReceipt

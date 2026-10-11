@@ -68,14 +68,15 @@ and evolve the physical pool behind a stable public entrypoint.
 
 1. A harness sends a request using OpenAI Chat Completions, OpenAI Responses, or
    Anthropic Messages.
-2. The standalone frontend, or an ExtProc gateway, presents it to the Router.
-3. The requested model resolves to an entrypoint and its recipe.
-4. The Router extracts relevant signals and computes projections.
-5. Decisions enforce constraints and choose an eligible candidate set.
-6. The route's algorithm selects one model or executes a bounded multi-model
+2. With the ExtProc gateway, Envoy presents the request to the Router.
+3. Without ExtProc, the standalone frontend presents the request directly.
+4. The requested model resolves to an entrypoint and its recipe.
+5. The Router extracts relevant signals and computes projections.
+6. Decisions enforce constraints and choose an eligible candidate set.
+7. The route's algorithm selects one model or executes a bounded multi-model
    strategy.
-7. Route plugins run at their configured request, execution, or response hook.
-8. The standalone upstream client, or the external gateway, sends the
+8. Route plugins run at their configured request, execution, or response hook.
+9. The standalone upstream client, or the external gateway, sends the
    provider-shaped request to the selected backend and returns the normalized
    response.
 
