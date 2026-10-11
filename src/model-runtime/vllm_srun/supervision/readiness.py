@@ -167,7 +167,12 @@ def golden_check(
                 status="failed", detail="golden answers are not deterministic"
             )
         reference = (golden.get("expected") or {}).get(device_class)
-        for values in (first, second):
+        # The npu class's two runs drift independently, so both are checked
+        # against the reference; on the other classes the second run equals
+        # the first bitwise and checking it again would only double the
+        # counts.
+        runs = (first, second) if device_class == "npu" else (first,)
+        for values in runs:
             counts = compare(surface, values, reference or {}, tolerance)
             if counts is None:
                 return GoldenResult(
