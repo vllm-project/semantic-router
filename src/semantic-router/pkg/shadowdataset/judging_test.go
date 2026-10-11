@@ -220,3 +220,30 @@ func TestBuildJudgeTasksRejectsAKeyAnyReaderHolds(t *testing.T) {
 		})
 	}
 }
+
+// A v1 manifest hashed inputs with the model name in them, so its digests,
+// deduplication and splits do not match v2. It is refused by version rather
+// than having every pair excluded as a changed input.
+func TestAV1ManifestIsRefusedByVersion(t *testing.T) {
+	manifest, texts := judgedManifest(t)
+	manifest.Version = "shadow-dataset.v1"
+	if err := Validate(manifest); err == nil || !strings.Contains(err.Error(), "shadow-dataset.v1") {
+		t.Fatalf("Validate: %v", err)
+	}
+	if _, err := BuildJudgeTasks(manifest, texts, "judge-key"); err == nil || !strings.Contains(err.Error(), "shadow-dataset.v1") {
+		t.Fatalf("BuildJudgeTasks: %v", err)
+	}
+}
+
+// The recorder stores the semantic request with `Model`, a client body has
+// `model`. Neither reaches the judge or the input digest.
+func TestJudgeInputDropsTheModelInEitherSpelling(t *testing.T) {
+	for _, input := range []string{
+		`{"Model":"openai/gpt-oss-20b","Messages":[]}`,
+		`{"model":"openai/gpt-oss-20b","messages":[]}`,
+	} {
+		if got := judgeInput(input); strings.Contains(got, "gpt-oss") {
+			t.Fatalf("judgeInput(%s) = %s", input, got)
+		}
+	}
+}
