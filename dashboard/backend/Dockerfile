@@ -139,6 +139,7 @@ COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
+COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 COPY config/knowledge_bases/ /app/config/knowledge_bases/

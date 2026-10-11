@@ -76,8 +76,12 @@ func TestRedisCacheVersionExcludesLegacyValuesAndPreservesLifecycle(t *testing.T
 		require.NoError(t, cache.client.Set(ctx, oldKey, stale, time.Minute).Err())
 		require.NoError(t, cache.client.SAdd(ctx, cache.userIndexKey(opts.UserID), oldKey).Err())
 	}
+	// A pre-upgrade v2 value is also part of the historical index contract.
+	v2Key := cacheKeyForVersion(cache.prefix, opts.UserID, opts, "v2:")
+	require.NoError(t, cache.client.Set(ctx, v2Key, stale, time.Minute).Err())
+	require.NoError(t, cache.client.SAdd(ctx, cache.userIndexKey(opts.UserID), v2Key).Err())
 	_, hit := cache.Get(ctx, opts)
-	require.False(t, hit, "v2 must not interpret an unversioned value")
+	require.False(t, hit, "v3 must not interpret unversioned or v2 values")
 	store := &retrievalPolicyStore{}
 	wrapped := NewCachingStore(store, cache, "valkey")
 	got, err := wrapped.Retrieve(ctx, opts)
@@ -85,10 +89,10 @@ func TestRedisCacheVersionExcludesLegacyValuesAndPreservesLifecycle(t *testing.T
 	require.Equal(t, 1, store.calls)
 	require.NotEqual(t, "legacy-vector-result", got[0].Memory.ID)
 	key := cacheKey(cache.prefix, opts.UserID, opts)
-	require.Contains(t, key, ":v2:")
+	require.Contains(t, key, ":v3:")
 	members, err := cache.client.SMembers(ctx, cache.userIndexKey(opts.UserID)).Result()
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{legacy, unversionedPolicy, key}, members)
+	require.ElementsMatch(t, []string{legacy, unversionedPolicy, v2Key, key}, members)
 	for _, k := range []string{key, cache.userIndexKey(opts.UserID)} {
 		ttl, ttlErr := cache.client.PTTL(ctx, k).Result()
 		require.NoError(t, ttlErr)
@@ -96,7 +100,7 @@ func TestRedisCacheVersionExcludesLegacyValuesAndPreservesLifecycle(t *testing.T
 		require.LessOrEqual(t, ttl, time.Minute)
 	}
 	_ = cache.InvalidateByUser(ctx, opts.UserID)
-	remaining, err := cache.client.Exists(ctx, legacy, unversionedPolicy, key, cache.userIndexKey(opts.UserID)).Result()
+	remaining, err := cache.client.Exists(ctx, legacy, unversionedPolicy, v2Key, key, cache.userIndexKey(opts.UserID)).Result()
 	require.NoError(t, err)
 	require.Zero(t, remaining, "invalidation must remove both old and new indexed values")
 	cache.Set(ctx, opts, got)
