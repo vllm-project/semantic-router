@@ -11,6 +11,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -250,7 +251,7 @@ func (r *OpenAIRouter) handleProcessRequest(
 		}
 		return processUnknownRequest(stream, v)
 	case *ext_proc.ProcessingRequest_ResponseHeaders:
-		return r.processResponseHeaders(stream, v, ctx)
+		return r.processResponseHeaders(stream, req, v, ctx)
 	case *ext_proc.ProcessingRequest_ResponseBody:
 		return r.processResponseBody(stream, v, ctx)
 	default:
@@ -345,9 +346,17 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 
 func (r *OpenAIRouter) processResponseHeaders(
 	stream ext_proc.ExternalProcessor_ProcessServer,
+	req *ext_proc.ProcessingRequest,
 	v *ext_proc.ProcessingRequest_ResponseHeaders,
 	ctx *RequestContext,
 ) error {
+	if v != nil {
+		var attributes map[string]*structpb.Struct
+		if req != nil {
+			attributes = req.GetAttributes()
+		}
+		captureUpstreamEndpointAddress(ctx, v.ResponseHeaders.GetHeaders(), attributes)
+	}
 	response, err := r.responseHeadersReply(v, ctx)
 	if err != nil {
 		return err

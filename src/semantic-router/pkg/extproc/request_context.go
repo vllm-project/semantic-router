@@ -160,6 +160,8 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
+	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded
 	// downstream to the client. Once true, response headers are committed and no
 	// subsequent replacement or fallback response may be attempted.
