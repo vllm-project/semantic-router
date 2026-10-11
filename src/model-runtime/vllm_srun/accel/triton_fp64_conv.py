@@ -71,7 +71,7 @@ def causal_silu(hidden_states: torch.Tensor, weight: torch.Tensor) -> torch.Tens
 
 @triton.jit
 def _gdn_prep_fp64(
-    X, W, B, A, ALOG, DTB, Q, K, V, G, BETA,
+    X, W, B, A, A_LOG, DTB, Q, K, V, G, BETA,
     T, C, NK, NV,
     DK: tl.constexpr, BT: tl.constexpr, KW: tl.constexpr,
 ):  # fmt: skip
@@ -122,7 +122,9 @@ def _gdn_prep_fp64(
             DTB + hv
         )
         sp = tl.where(s > 20.0, s, libdevice.log1p(libdevice.exp(s)))
-        tl.store(G + row * NV + hv, -libdevice.exp(tl.load(ALOG + hv)) * sp, mask=tmask)
+        tl.store(
+            G + row * NV + hv, -libdevice.exp(tl.load(A_LOG + hv)) * sp, mask=tmask
+        )
 
 
 def gdn_prep_fp64(

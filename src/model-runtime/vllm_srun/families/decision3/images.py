@@ -179,7 +179,7 @@ def _resize(image: torch.Tensor, height: int, width: int) -> torch.Tensor:
     image = F.interpolate(
         image, size=[height, width], mode="bicubic", align_corners=False, antialias=True
     )
-    return image.reshape(shape[:-3] + (channels, height, width))
+    return image.reshape((*shape[:-3], channels, height, width))
 
 
 def preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:

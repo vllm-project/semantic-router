@@ -38,6 +38,7 @@ ATTENTION_MODES = ("causal", "noncausal_full_attention")
 READOUT_DTYPES = ("float32", "bfloat16")
 MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
+COLOUR_CHANNELS = 3
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 # decision_config.json fields that change answers; the identity covers them.
 INFERENCE_FIELDS = (
@@ -274,10 +275,10 @@ def readout_shape(root: Path) -> list[int]:
         raise PackageError(
             "readout.safetensors must hold exactly one tensor named weight"
         )
-    shape = header["weight"].get("shape")
-    if not isinstance(shape, list) or len(shape) != 2:
-        raise PackageError("the readout weight must be a matrix")
-    return shape
+    match header["weight"].get("shape"):
+        case [int() as options, int() as hidden]:
+            return [options, hidden]
+    raise PackageError("the readout weight must be a matrix")
 
 
 def check_processor(config: Any) -> dict[str, Any]:
@@ -311,7 +312,7 @@ def check_processor(config: Any) -> dict[str, Any]:
         values = config.get(key)
         if (
             not isinstance(values, list)
-            or len(values) != 3
+            or len(values) != COLOUR_CHANNELS
             or any(type(v) not in (int, float) or not math.isfinite(v) for v in values)
         ):
             raise PackageError(f"preprocessor_config.json needs three {key} values")

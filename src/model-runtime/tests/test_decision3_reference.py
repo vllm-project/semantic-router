@@ -99,7 +99,9 @@ def reference_probabilities(model, package, items):
         probs = (
             logits.masked_fill(invalid, float("-inf")) / decision["temperature"]
         ).softmax(-1)
-    return [row[: len(item.keys)] for row, item in zip(probs.tolist(), items)]
+    return [
+        row[: len(item.keys)] for row, item in zip(probs.tolist(), items, strict=True)
+    ]
 
 
 def test_text_passes_match_transformers(d3_runtime, d3_package, reference):

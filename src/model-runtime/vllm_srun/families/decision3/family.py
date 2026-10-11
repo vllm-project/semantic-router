@@ -301,7 +301,7 @@ class Decision3Family(ModelFamily):
 
 def _confidence(values: list[float]) -> float:
     """One minus the normalized entropy, clipped to [0, 1]."""
-    if len(values) < 2:
+    if len(values) <= 1:
         return 1.0
     entropy = -sum(p * math.log(p) for p in values if p > 0)
     return max(0.0, min(1.0, 1.0 - entropy / math.log(len(values))))
