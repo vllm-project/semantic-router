@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -446,5 +447,63 @@ func TestRemoteEmbeddingBatchesAndCaches(t *testing.T) {
 	defer mu.Unlock()
 	if len(requests) != 2 || len(requests[1]) != 2 || provider.Dimension() != 3 {
 		t.Fatalf("endpoint requests %v (warmup, then one batch of distinct texts)", requests)
+	}
+}
+
+func TestRemoteEmbeddingBatchIndexes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		indexes []int
+		wantErr string
+	}{
+		{name: "reordered", indexes: []int{1, 0}},
+		{name: "duplicate_zero", indexes: []int{0, 0}, wantErr: "duplicate embedding index 0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests [][]string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Input []string `json:"input"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				mu.Lock()
+				requests = append(requests, body.Input)
+				mu.Unlock()
+				data := make([]map[string]interface{}, len(body.Input))
+				for i := range body.Input {
+					index := i
+					sourceIndex := i
+					if len(body.Input) > 1 {
+						index = tc.indexes[i]
+						sourceIndex = len(body.Input) - 1 - i
+					}
+					data[i] = map[string]interface{}{"index": index, "embedding": []float64{float64(len(body.Input[sourceIndex])), 1, 1}}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+			}))
+			defer server.Close()
+			spec := embeddingSpec("embedding:remote")
+			spec.Deployment = config.ModelDeployment{Provider: "http"}
+			provider, err := New(nil, nil).RemoteEmbedding(context.Background(), spec, embedding.OpenAICompatibleConfig{BaseURL: server.URL, Model: "remote-model"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer provider.Close()
+			inputs := []string{"x", "yy"}
+			vectors, err := provider.EmbedBatch(context.Background(), inputs)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("EmbedBatch() error = %v, want %q", err, tc.wantErr)
+				}
+			} else if want := [][]float32{{1, 1, 1}, {2, 1, 1}}; err != nil || !reflect.DeepEqual(vectors, want) {
+				t.Fatalf("EmbedBatch() = %v, %v; want vectors in input-index order %v", vectors, err, want)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests) != 2 || !reflect.DeepEqual(requests[1], inputs) {
+				t.Fatalf("endpoint requests %v (want warmup, then one batch %v)", requests, inputs)
+			}
+		})
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -19,7 +21,7 @@ const remoteEmbeddingExpectedDimension = 4
 
 func init() {
 	pkgtestcases.Register("remote-embedding-routing", pkgtestcases.TestCase{
-		Description: "Verify remote embedding provider startup and deterministic embedding-signal routing",
+		Description: "Verify remote embedding startup, reordered batch vectors, and deterministic embedding-signal routing",
 		Tags:        []string{"embedding", "remote-provider", "routing", "openai-compatible"},
 		Fn:          testRemoteEmbeddingRouting,
 	})
@@ -63,6 +65,9 @@ func testRemoteEmbeddingRouting(
 		return err
 	}
 	defer gatewaySession.Close()
+	if err := checkRemoteEmbeddingBatch(ctx, client, opts, gatewaySession); err != nil {
+		return fmt.Errorf("reordered remote embedding batch: %w", err)
+	}
 
 	cases := []remoteEmbeddingRouteCase{
 		{
@@ -96,16 +101,105 @@ func testRemoteEmbeddingRouting(
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"provider_backend": providerStatus.Backend,
-			"provider_model":   providerStatus.Model,
-			"provider_healthy": true,
-			"dimension":        providerStatus.Dimension,
-			"routing_cases":    len(cases),
-			"routing_passed":   len(cases),
-			"decisions":        results,
+			"provider_backend":      providerStatus.Backend,
+			"provider_model":        providerStatus.Model,
+			"provider_healthy":      true,
+			"dimension":             providerStatus.Dimension,
+			"batch_vectors_checked": 2,
+			"routing_cases":         len(cases),
+			"routing_passed":        len(cases),
+			"decisions":             results,
 		})
 	}
 
+	return nil
+}
+
+func checkRemoteEmbeddingBatch(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	gateway *fixtures.ServiceSession,
+) error {
+	marker := fmt.Sprintf("batch-%d", time.Now().UnixNano())
+	texts := []string{
+		marker + " " + strings.Repeat("Billing invoice payment refund. ", 20),
+		marker + " " + strings.Repeat("Photosynthesis converts sunlight into energy. ", 20),
+	}
+	// The diagnostics API embeds texts individually. Compression first fills the
+	// runtime vector cache with a real batch containing both distinct history texts.
+	response, err := sendProtocolMatrixRaw(ctx, gateway, "/v1/chat/completions", map[string]interface{}{
+		"model":      "vllm-sr/auto",
+		"max_tokens": 16,
+		"messages": []map[string]string{
+			{"role": "user", "content": texts[0]},
+			{"role": "assistant", "content": texts[1]},
+			{"role": "user", "content": "Continue."},
+			{"role": "assistant", "content": "Acknowledged."},
+			{"role": "user", "content": "Please explain my billing invoice."},
+		},
+	}, false, nil)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK || response.Headers.Get("x-vsr-selected-decision") != "billing-route" {
+		return fmt.Errorf("expected billing-route status 200, got %d, decision %q: %s", response.StatusCode, response.Headers.Get("x-vsr-selected-decision"), response.Body)
+	}
+	mock, err := fixtures.OpenServiceEndpointSession(ctx, client, opts, "default", "mock-embedding", "8000")
+	if err != nil {
+		return err
+	}
+	defer mock.Close()
+	batchResponse, err := getJSON(ctx, mock.HTTPClient(30*time.Second), mock.URL("/last-batch"))
+	if err != nil {
+		return err
+	}
+	if batchResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected /last-batch status 200, got %d: %s", batchResponse.StatusCode, batchResponse.Body)
+	}
+	var batch struct {
+		Inputs []string `json:"inputs"`
+	}
+	if err = json.Unmarshal(batchResponse.Body, &batch); err != nil {
+		return err
+	}
+	if !slices.Contains(batch.Inputs, texts[0]) || !slices.Contains(batch.Inputs, texts[1]) {
+		return fmt.Errorf("expected both history texts in one provider batch, got %v", batch.Inputs)
+	}
+	api, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer api.Close()
+	payload, err := json.Marshal(map[string]interface{}{"recipe": "default", "texts": texts})
+	if err != nil {
+		return err
+	}
+	vectorsResponse, err := postJSON(ctx, api.HTTPClient(30*time.Second), http.MethodPost, api.URL("/api/v1/diagnostics/embeddings"), payload)
+	if err != nil {
+		return err
+	}
+	if vectorsResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected embeddings status 200, got %d: %s", vectorsResponse.StatusCode, vectorsResponse.Body)
+	}
+	var vectors struct {
+		Embeddings []struct {
+			Text      string    `json:"text"`
+			Embedding []float32 `json:"embedding"`
+		} `json:"embeddings"`
+	}
+	if err = json.Unmarshal(vectorsResponse.Body, &vectors); err != nil {
+		return err
+	}
+	want := [][]float32{{1, 0, 0, 0}, {0, 1, 0, 0}}
+	if len(vectors.Embeddings) != len(texts) {
+		return fmt.Errorf("expected %d embeddings, got %d", len(texts), len(vectors.Embeddings))
+	}
+	for i, result := range vectors.Embeddings {
+		if result.Text != texts[i] || !slices.Equal(result.Embedding, want[i]) {
+			return fmt.Errorf("batch input %d: got text %q, vector %v; want text %q, vector %v", i, result.Text, result.Embedding, texts[i], want[i])
+		}
+	}
 	return nil
 }
 
