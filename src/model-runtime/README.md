@@ -30,7 +30,7 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers (a superset of System One), plus Set and Span where a model declares them |
+| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers (a superset of System One), plus Set and Span where a model declares them, and `images` for models that read them (Decision 3.0) |
 | `POST /v1/classify` | Fixed heads: label distributions, label scores and token spans over texts, pairs or grounded answers |
 | `POST /v1/embeddings` | OpenAI-compatible embeddings with dimensions and layer exits |
 | `POST /v1/rerank` | Pair scores of documents against a query |
