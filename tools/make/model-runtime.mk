@@ -15,7 +15,7 @@ OAPI_CODEGEN_VERSION ?= v2.4.1
 model-runtime-install: ## Install the model runtime with CPU PyTorch, every engine and its test extras
 	@$(LOG_TARGET)
 	@"$(MODEL_RUNTIME_PYTHON)" -m pip install "$(MODEL_RUNTIME_TORCH)" --index-url "$(MODEL_RUNTIME_TORCH_INDEX)"
-	@"$(MODEL_RUNTIME_PYTHON)" -m pip install -e "$(MODEL_RUNTIME_DIR)[test,reference,onnx,multimodal]"
+	@"$(MODEL_RUNTIME_PYTHON)" -m pip install -c "$(MODEL_RUNTIME_DIR)/requirements-lock.txt" -e "$(MODEL_RUNTIME_DIR)[test,reference,onnx,multimodal]"
 
 model-runtime-test: ## Type-check the runtime, its engines and families, and run the model runtime tests on CPU (tiny fixtures; GPU cases are deselected)
 	@$(LOG_TARGET)
