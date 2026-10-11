@@ -131,6 +131,7 @@ class ComponentBatchTests(unittest.TestCase):
     def test_maintained_entrypoints_all_run_and_each_failure_propagates(self):
         stages = {
             "learning-tools": ["test-learning-tools", "test-calibration"],
+            "bench-tools": ["test-bench-tools"],
             "soak-tools": ["soak-test", "proxy-tests"],
             "mock-provider": ["test-provider-mocker"],
             "e2e-unit": ["test-e2e-unit"],
