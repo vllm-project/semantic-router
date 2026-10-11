@@ -242,37 +242,6 @@ func TestHistoryResetEffectiveLimitsOverrideOnlyConfiguredBounds(t *testing.T) {
 	}
 }
 
-// Enablement depends on whether the topic-continuity family is available, and
-// the check is parameterized so both directions are verified without asserting
-// anything about which families the shipped catalog happens to declare.
-func TestHistoryResetEnablementFollowsTriggerAvailability(t *testing.T) {
-	confidence := 0.9
-	policy := &HistoryResetPluginConfig{
-		Enabled: true,
-		Trigger: &HistoryResetTriggerConfig{
-			Signal:           "topic_boundary",
-			MinConfidence:    &confidence,
-			AcceptedVersions: []string{"v1"},
-		},
-	}
-	err := validateHistoryResetEnablement(policy, "decision", false)
-	if err == nil {
-		t.Fatal("an enabled policy was accepted with no available trigger family")
-	}
-	if !strings.Contains(err.Error(), HistoryResetTriggerUnavailable) {
-		t.Fatalf("unexpected error %v", err)
-	}
-	if err = validateHistoryResetEnablement(policy, "decision", true); err != nil {
-		t.Fatalf("expected an enabled policy to validate once the family exists, got %v", err)
-	}
-
-	// A disabled policy never depends on the trigger family.
-	disabled := &HistoryResetPluginConfig{Enabled: false}
-	if err = validateHistoryResetEnablement(disabled, "decision", false); err != nil {
-		t.Fatalf("a disabled policy must not require a trigger family: %v", err)
-	}
-}
-
 func TestGetHistoryResetConfigReadsTheDecisionPlugin(t *testing.T) {
 	decision := &Decision{
 		Plugins: []DecisionPlugin{{
@@ -350,8 +319,9 @@ func TestDecisionRejectsDisagreeingContextRecoveryStores(t *testing.T) {
 	decision.Plugins[1].Configuration = matching
 }
 
-// Registering the topic-continuity family globally must not be enough on its
-// own: an enabled trigger has to name a signal the recipe actually declares.
+// An enabled trigger must name a topic-continuity rule the recipe declares:
+// only a declared rule is evaluated, so any other name could never supply
+// evidence, including a signal of another family that shares the name.
 func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 	enabled := func(signal string) Decision {
 		return Decision{
@@ -370,23 +340,25 @@ func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 		}
 	}
 
-	// No topic-continuity signal can be declared yet, so every enabled
-	// reference is unresolvable inside a recipe scope.
 	scoped := &RouterConfig{RoutingScope: "recipe-a"}
 	scoped.Decisions = []Decision{enabled("topic_boundary")}
 	err := validateHistoryResetTriggerReferences(scoped)
-	if err == nil {
-		t.Fatal("an undeclared trigger signal was accepted")
-	}
-	if !strings.Contains(err.Error(), "not declared in this recipe") {
-		t.Fatalf("unexpected error %v", err)
+	if err == nil || !strings.Contains(err.Error(), "not declared in this recipe") {
+		t.Fatalf("an undeclared trigger rule was accepted: %v", err)
 	}
 
-	// A name that resolves to some other signal family is equally invalid: the
-	// reference is checked against the topic-continuity family, not any match.
 	scoped.KeywordRules = []KeywordRule{{Name: "topic_boundary", Operator: "OR", Keywords: []string{"x"}}}
 	if err = validateHistoryResetTriggerReferences(scoped); err == nil {
 		t.Fatal("a keyword signal was accepted as a topic-continuity trigger")
+	}
+
+	scoped.TopicContinuityRules = []TopicContinuityRule{{Name: "topic_boundary"}}
+	if err = validateHistoryResetTriggerReferences(scoped); err != nil {
+		t.Fatalf("a declared topic-continuity rule was rejected: %v", err)
+	}
+	scoped.Decisions = []Decision{enabled("declared_elsewhere")}
+	if err = validateHistoryResetTriggerReferences(scoped); err == nil {
+		t.Fatal("a rule this recipe does not declare was accepted")
 	}
 
 	// Unscoped configuration defers to the per-recipe pass.
@@ -396,26 +368,7 @@ func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 		t.Fatalf("unscoped configuration must defer the reference check: %v", err)
 	}
 
-	// Once a topic-continuity signal can be declared, a reference to it
-	// resolves and a reference to any other family still does not. Supplying
-	// the declaration map directly exercises both today.
-	withTopicSignal := map[string]map[string]struct{}{
-		HistoryResetTriggerSignalType: {"topic_boundary": {}},
-		SignalTypeKeyword:             {"unrelated": {}},
-	}
-	if err = resolveHistoryResetTriggerReferences(scoped, withTopicSignal); err != nil {
-		t.Fatalf("a declared topic-continuity signal was rejected: %v", err)
-	}
-	scoped.Decisions = []Decision{enabled("unrelated")}
-	if err = resolveHistoryResetTriggerReferences(scoped, withTopicSignal); err == nil {
-		t.Fatal("a signal from another family was accepted as a trigger")
-	}
-	scoped.Decisions = []Decision{enabled("declared_elsewhere")}
-	if err = resolveHistoryResetTriggerReferences(scoped, withTopicSignal); err == nil {
-		t.Fatal("a name declared in no recipe was accepted")
-	}
-
-	// A disabled policy never resolves its future trigger.
+	// A disabled policy never resolves its trigger.
 	disabled := &RouterConfig{RoutingScope: "recipe-a"}
 	disabled.Decisions = []Decision{{
 		Name: "reset",
@@ -423,15 +376,11 @@ func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 			Type: DecisionPluginHistoryReset,
 			Configuration: MustStructuredPayload(map[string]interface{}{
 				"enabled": false,
-				"trigger": map[string]interface{}{
-					"signal":            "topic_boundary",
-					"min_confidence":    0.9,
-					"accepted_versions": []string{"v1"},
-				},
+				"trigger": map[string]interface{}{"signal": "topic_boundary"},
 			}),
 		}},
 	}}
 	if err = validateHistoryResetTriggerReferences(disabled); err != nil {
-		t.Fatalf("a disabled policy must not require a declared signal: %v", err)
+		t.Fatalf("a disabled policy must not resolve its trigger: %v", err)
 	}
 }

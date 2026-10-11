@@ -7,30 +7,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// verifyHistoryResetTriggerWiring refuses to activate an enabled policy that
-// has no topic-continuity producer in this process. Static validation proves
-// the configuration is well formed and that its trigger resolves inside the
-// recipe; it cannot prove that this router has a producer wired, and a route
-// without one could only preserve or reject every request.
-func (r *OpenAIRouter) verifyHistoryResetTriggerWiring(cfg *config.RouterConfig) error {
-	if cfg == nil {
-		return nil
-	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if !decision.GetHistoryResetConfig().IsEnabled() {
-			continue
-		}
-		if r.HistoryResetTriggers == nil {
-			return fmt.Errorf(
-				"decision %q: %s: no topic-continuity producer is wired in this router",
-				decision.Name,
-				config.HistoryResetTriggerUnavailable,
-			)
-		}
-	}
-	return nil
-}
-
 // verifyContextRecoveryAgreement enforces one recovery backend and total-byte
 // budget across every reachable decision. The store is built once and reused
 // for the process, so two decisions naming different backends would silently

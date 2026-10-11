@@ -132,10 +132,14 @@ const historyResetBindingSchema = "vsr.history-reset.binding.v1"
 // deterministic encoding supplies that canonical form, and the schema label
 // plus a length prefix keep distinct inputs from colliding.
 func historyResetEvidenceBinding(ctx *RequestContext) string {
-	if ctx == nil || ctx.OriginalContextHistory == nil {
+	if ctx == nil {
 		return ""
 	}
-	canonical, err := json.Marshal(ctx.OriginalContextHistory.Conversation())
+	history, ok := originalConversation(ctx)
+	if !ok {
+		return ""
+	}
+	canonical, err := json.Marshal(history)
 	if err != nil {
 		// Without a canonical form no evidence can be bound to this request,
 		// so report no binding and let the action reject unbound evidence.

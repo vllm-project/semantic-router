@@ -1,12 +1,12 @@
 # Remove complete eligible prior turns after an accepted topic change.
 #
-# Disabled by default. An enabled policy is rejected during validation until a
-# topic_continuity signal family is registered (issue #3342), so this fragment
-# documents the contract rather than enabling live removal.
+# trigger.signal must name a topic_continuity rule declared in the same recipe,
+# such as config/fragments/signal/topic-continuity/topic-boundary.yaml. With
+# min_confidence 0.9 only an explicit change phrase authorizes removal.
 plugin:
   type: history_reset
   configuration:
-    enabled: false
+    enabled: true
     trigger:
       signal: topic_boundary
       min_confidence: 0.9

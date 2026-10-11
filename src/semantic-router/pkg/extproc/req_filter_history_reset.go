@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -61,7 +60,7 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 	// and its answer could only be discarded.
 	var trigger historyreset.TriggerResult
 	if blocked == "" {
-		trigger = r.historyResetTrigger(ctx, policy)
+		trigger = historyResetTrigger(ctx, policy)
 	}
 	action := historyreset.NewAction(policy, trigger, blocked)
 	if writer != nil {
@@ -110,47 +109,6 @@ func historyResetPolicy(
 	// more than the contract another action agreed to.
 	policy.MaxRecoveryBytes = effectiveRecoveryBytes(recovery)
 	return policy
-}
-
-// historyResetTrigger resolves the topic-continuity result for this request.
-// The producer is asked here, after the permitted history has been resolved
-// and the request's binding computed, so a signal evaluated earlier in the
-// pipeline cannot classify a different view of the conversation than the one
-// the action transforms.
-//
-// A result already present on the request context wins: internal follow-ups
-// and tests supply one directly. When nothing produces a result the action
-// treats the evidence as missing and applies its failure mode rather than
-// assuming continuation or change.
-func (r *OpenAIRouter) historyResetTrigger(
-	ctx *RequestContext,
-	policy historyreset.Policy,
-) historyreset.TriggerResult {
-	if ctx.HistoryResetTrigger != nil {
-		return *ctx.HistoryResetTrigger
-	}
-	if r == nil || r.HistoryResetTriggers == nil {
-		return historyreset.TriggerResult{}
-	}
-	callContext := ctx.TraceContext
-	if callContext == nil {
-		callContext = context.Background()
-	}
-	if ctx.OriginalContextHistory == nil {
-		// Nothing resolved the history, so there is no conversation to
-		// classify and no binding to verify a result against.
-		return historyreset.TriggerResult{}
-	}
-	result, ok := r.HistoryResetTriggers.TopicContinuity(callContext, historyreset.TriggerRequest{
-		Signal:  policy.Signal,
-		Binding: policy.Binding,
-		History: ctx.OriginalContextHistory.Conversation(),
-	})
-	if !ok {
-		return historyreset.TriggerResult{}
-	}
-	ctx.HistoryResetTrigger = &result
-	return result
 }
 
 // effectiveRecoveryBytes reports the per-request payload bound every context

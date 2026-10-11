@@ -13,16 +13,6 @@ const (
 
 	HistoryResetFailureOpen   = "fail_open"
 	HistoryResetFailureClosed = "fail_closed"
-
-	// HistoryResetTriggerSignalType is the only signal family allowed to
-	// authorize removal. An enabled policy whose family is unregistered is
-	// rejected rather than allowed to bind to an unrelated signal that
-	// happens to resolve.
-	HistoryResetTriggerSignalType = "topic_continuity"
-
-	// HistoryResetTriggerUnavailable is the stable reason reported when an
-	// enabled policy cannot resolve a usable topic-continuity trigger.
-	HistoryResetTriggerUnavailable = "history_reset_trigger_unavailable"
 )
 
 // Planning bounds. Defaults apply when the policy omits a limit; the maxima

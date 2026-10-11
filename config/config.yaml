@@ -992,9 +992,11 @@ routing:
                 - target
               max_target_tokens: 16000
             failure_mode: fail_open
+        # Removes complete eligible prior turns when the topic_boundary
+        # topic_continuity rule above reports an explicit change (0.9).
         - type: history_reset
           configuration:
-            enabled: false
+            enabled: true
             trigger:
               signal: topic_boundary
               min_confidence: 0.9

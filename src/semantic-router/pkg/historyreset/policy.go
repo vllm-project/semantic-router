@@ -6,6 +6,7 @@
 package historyreset
 
 import (
+	"math"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
@@ -224,4 +225,12 @@ func (p Policy) withinLimits(view contextcompression.TransformationView) bool {
 		return false
 	}
 	return p.MaxHistoryBytes <= 0 || bytes <= p.MaxHistoryBytes
+}
+
+// usableConfidence rejects values that cannot be compared against a threshold.
+// NaN in particular fails every ordered comparison, so without this check an
+// unusable confidence would slip past the minimum and authorize a removal.
+func usableConfidence(confidence float64) bool {
+	return !math.IsNaN(confidence) && !math.IsInf(confidence, 0) &&
+		confidence >= 0 && confidence <= 1
 }

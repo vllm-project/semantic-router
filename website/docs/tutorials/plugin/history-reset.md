@@ -34,61 +34,85 @@ are pure cost. Do not use it when the application depends on the router
 forwarding its complete history, or when removed turns must remain available
 without configuring recovery.
 
-## Current Availability
+## Pairing It With a Topic-Continuity Rule
 
-Live removal is not yet available. An enabled policy is rejected during
-configuration validation with `history_reset_trigger_unavailable` because no
-`topic_continuity` signal family is registered yet; that dependency is tracked
-by issue #3342. Disabled policies validate and round-trip today, so the
-contract can be reviewed, stored, and rendered before the trigger lands.
+`trigger.signal` names a [`topic_continuity`](../signal/heuristic/topic-continuity)
+rule declared in the same recipe. Every declared rule is evaluated once per
+request, against the original history and before the context stage, and the
+reset reads the result of the rule it names; it does not run a classifier of
+its own. Validation rejects an enabled policy whose trigger names no declared
+rule in its recipe, including a signal of another family that happens to share
+the name, because such a policy could never receive evidence.
 
-Registration alone is not enough to enable the feature. A producer implements
-the router's topic-continuity source, and the router refuses to activate a
-configuration whose enabled policy has no such producer wired, rather than
-starting a route that could only preserve or reject every request. The producer
-is asked for its result after the permitted history is resolved, so it
-classifies the same conversation the action transforms.
+| Rule result | Effect on the reset |
+| --- | --- |
+| `change` at or above `min_confidence` | Removes the eligible prior turns. |
+| `change` below `min_confidence` | Preserves history, or rejects under `fail_closed`. |
+| `continuation` | Preserves history. |
+| `unknown`, including conflicting evidence | Preserves history, or rejects under `fail_closed`. |
+| A fallback result, or no result for the named rule | Preserves history, or rejects under `fail_closed`. |
+
+`trigger.accepted_versions` is compared with the result's schema version, which
+is `v1` today. An explicit leading change phrase such as "Unrelated question:"
+scores `0.9`, while a change inferred only from disjoint vocabulary scores at
+most `0.6`, so with `min_confidence: 0.9` only an explicit phrase authorizes a
+removal. Lowering the threshold to act on disjoint changes is a deliberate
+operator choice.
+
+A `change` result requires full coverage of the rule's evidence window, so the
+rule's `limits.max_prior_turns` (at most 32) bounds the sessions a reset can act
+on: a conversation with more prior turns than the window yields `unknown` and
+keeps its history. Vocabulary shared between turns counts as evidence of
+continuation, so a marker that an application repeats in every turn can stop a
+genuine change from being recognized.
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`, next to the rule it reads:
 
 ```yaml
-plugins:
-  - type: history_reset
-    configuration:
-      enabled: false
-      trigger:
-        signal: topic_boundary
-        min_confidence: 0.9
-        accepted_versions:
-          - v1
-      scope: eligible_history
-      failure_mode: fail_open
-      limits:
-        max_history_turns: 128
-        max_history_bytes: 1048576
-        timeout_ms: 50
-      recovery:
-        enabled: false
-        store: response_cache
-        ttl_seconds: 900
-        max_bytes_per_request: 10485760
-        max_total_bytes: 268435456
-        max_retrievals: 8
+routing:
+  signals:
+    topic_continuity:
+      - name: topic_boundary
+  decisions:
+    - name: assistant
+      # ...
+      plugins:
+        - type: history_reset
+          configuration:
+            enabled: true
+            trigger:
+              signal: topic_boundary
+              min_confidence: 0.9
+              accepted_versions:
+                - v1
+            scope: eligible_history
+            failure_mode: fail_open
+            limits:
+              max_history_turns: 128
+              max_history_bytes: 1048576
+              timeout_ms: 50
+            recovery:
+              enabled: false
+              store: response_cache
+              ttl_seconds: 900
+              max_bytes_per_request: 10485760
+              max_total_bytes: 268435456
+              max_retrievals: 8
 ```
 
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `false` | Omission or `false` performs no reset work at all. |
-| `trigger.signal` | — | Recipe-local topic-continuity signal that may authorize removal. Required when enabled. |
+| `trigger.signal` | — | Name of the `topic_continuity` rule, declared in the same recipe, whose result may authorize removal. Required when enabled. |
 | `trigger.min_confidence` | — | Acceptance threshold in `(0, 1]`. Required when enabled; there is no implicit default. A confidence that is not a finite value in `[0, 1]` is rejected outright. |
 | `trigger.accepted_versions` | — | The producing signal contracts this policy trusts. Required when enabled: a result whose version is not listed cannot authorize removal, so there is no implicit "trust any version". |
 | `scope` | `eligible_history` | The only supported scope. Ranking and selective retention belong to other actions. |
 | `failure_mode` | `fail_open` | `fail_open` preserves history on failure; `fail_closed` rejects before provider dispatch. |
 | `limits.max_history_turns` | `128` | Upper bound on turns examined per request. |
 | `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects; tool arguments and media are not part of that view. Recoverable removal is bounded separately by `recovery.max_bytes_per_request`. |
-| `limits.timeout_ms` | `50` | Budget for the action's own work: selecting removable turns, closing over tool dependencies, and persisting recovery content. It is checked between steps, not inside one: the topic signal and the shared transformation view are prepared before the action runs, and encoding a single message for recovery cannot be interrupted once started. |
+| `limits.timeout_ms` | `50` | Budget for the action's own work: selecting removable turns, closing over tool dependencies, and persisting recovery content. It is checked between steps, not inside one: the topic-continuity rule and the shared transformation view are prepared before the action runs, and encoding a single message for recovery cannot be interrupted once started. |
 | `recovery.enabled` | `false` | When true, removed turns must be stored recoverably before removal commits. |
 | `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound. Each removed message's encoded size is computed before it is encoded, so a message that would not fit is refused without allocating it, and the finished envelope is then checked exactly. When `context_compression` also enables recovery, the effective bound is the stricter of the two: neither action can widen the other's budget. |
 
@@ -184,9 +208,8 @@ and public response IDs stay owned by the Responses API and are never altered
 by a reset. If no original history can be resolved, the action is blocked with
 `history_unresolved` and the configured failure mode decides.
 
-Because that resolution happens before signals are extracted, a
-topic-continuity producer classifies the same conversation the action
-transforms; no separate ordering step is needed for this plugin.
+Because that resolution happens before signals are extracted, the
+topic-continuity rule classifies the same conversation the action transforms.
 
 Internal router hops — the algorithm loop and recovery follow-ups — continue a
 public turn that was already evaluated. They inherit that completion and never

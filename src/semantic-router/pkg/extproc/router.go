@@ -18,7 +18,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -69,18 +68,14 @@ type OpenAIRouter struct {
 	kvAddressRegistryMu    sync.Mutex
 	ContextCompression     *contextcompression.Service
 	CompressionRecovery    contextcompression.RecoveryStore
-	// HistoryResetTriggers resolves the configured topic-continuity signal for
-	// a history-reset policy. It stays nil until a producer is wired, and an
-	// enabled policy cannot be activated without it.
-	HistoryResetTriggers  historyreset.TriggerSource
-	CompressionEmbedding  embedding.Provider
-	CompressionScorer     contextcompression.RelevanceScorer
-	compressionScorers    map[string]contextcompression.RelevanceScorer
-	contextCompressionMu  sync.Mutex
-	ToolsDatabase         *tools.ToolsDatabase
-	ToolsRegistry         *tools.Registry // retriever strategy registry
-	toolSelectionDBMu     sync.Mutex
-	toolSelectionDBByPath map[string]*tools.ToolsDatabase
+	CompressionEmbedding   embedding.Provider
+	CompressionScorer      contextcompression.RelevanceScorer
+	compressionScorers     map[string]contextcompression.RelevanceScorer
+	contextCompressionMu   sync.Mutex
+	ToolsDatabase          *tools.ToolsDatabase
+	ToolsRegistry          *tools.Registry // retriever strategy registry
+	toolSelectionDBMu      sync.Mutex
+	toolSelectionDBByPath  map[string]*tools.ToolsDatabase
 	// toolEmbedder embeds request-supplied tool definitions for tool_selection
 	// filter mode, memoizing them across requests. Set once at router
 	// construction and read-only afterwards; nil (remote provider construction

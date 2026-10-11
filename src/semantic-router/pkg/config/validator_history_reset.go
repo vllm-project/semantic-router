@@ -6,9 +6,9 @@ import (
 )
 
 // validateHistoryResetPlugin enforces the reset action's configuration
-// contract. Structural checks apply to every policy; trigger resolution and
-// runtime capability checks apply only once a policy is enabled, so a disabled
-// example can reference a signal family that is not registered yet.
+// contract. Structural checks apply to every policy; the trigger requirements
+// apply only once a policy is enabled, so a disabled example stays valid
+// without a complete trigger.
 func validateHistoryResetPlugin(
 	decisionName string,
 	index int,
@@ -22,10 +22,7 @@ func validateHistoryResetPlugin(
 		func() error { return validateHistoryResetLimits(typed, scope) },
 		func() error { return validateHistoryResetTrigger(typed, scope) },
 		func() error { return validateHistoryResetRecovery(typed, scope) },
-		func() error {
-			return validateHistoryResetEnablement(
-				typed, scope, IsSupportedSignalType(HistoryResetTriggerSignalType))
-		},
+		func() error { return validateHistoryResetEnablement(typed, scope) },
 	}
 	for _, check := range checks {
 		if err := check(); err != nil {
@@ -122,15 +119,10 @@ func validateHistoryResetRecovery(typed *HistoryResetPluginConfig, scope string)
 }
 
 // validateHistoryResetEnablement rejects an enabled policy that cannot be
-// executed safely: it needs an explicit trigger, an acceptance threshold, the
-// producer contracts it trusts, and a registered topic-continuity family.
-// Disabled policies are accepted without those, so the contract and its
-// examples stay usable.
-func validateHistoryResetEnablement(
-	typed *HistoryResetPluginConfig,
-	scope string,
-	triggerFamilyRegistered bool,
-) error {
+// executed safely: it needs an explicit trigger, an acceptance threshold, and
+// the result contracts it trusts. Disabled policies are accepted without
+// those, so the contract and its examples stay usable.
+func validateHistoryResetEnablement(typed *HistoryResetPluginConfig, scope string) error {
 	if !typed.IsEnabled() {
 		return nil
 	}
@@ -149,14 +141,6 @@ func validateHistoryResetEnablement(
 			return fmt.Errorf(
 				"%s: trigger.accepted_versions[%d] cannot be empty", scope, index)
 		}
-	}
-	if !triggerFamilyRegistered {
-		return fmt.Errorf(
-			"%s: %s: no %q signal family is registered, so an enabled history_reset policy cannot resolve a trigger",
-			scope,
-			HistoryResetTriggerUnavailable,
-			HistoryResetTriggerSignalType,
-		)
 	}
 	return nil
 }
@@ -187,27 +171,16 @@ func validateDecisionContextRecoveryAgreement(decision *Decision) error {
 }
 
 // validateHistoryResetTriggerReferences resolves each enabled policy's trigger
-// against the signals the selected recipe actually declares, using the same
-// rules as a decision rule leaf. Registering the topic-continuity family
-// globally is not enough: the named signal must exist in this scope and belong
-// to that family, so a valid name pointing at an unrelated signal cannot
-// authorize removal.
+// against the topic-continuity rules the selected recipe declares. Only a
+// declared rule is evaluated for a request, so a trigger naming anything else,
+// including a signal of another family with the same name, could never supply
+// evidence and is rejected rather than left to preserve every request.
 func validateHistoryResetTriggerReferences(cfg *RouterConfig) error {
 	if cfg == nil || cfg.RoutingScope == "" {
 		// Unscoped configuration cannot resolve recipe-local references; the
 		// per-recipe validation pass performs this check.
 		return nil
 	}
-	return resolveHistoryResetTriggerReferences(cfg, projectionDeclaredSignals(cfg))
-}
-
-// resolveHistoryResetTriggerReferences takes the declared-signal map as an
-// argument so the resolution rules can be exercised against a topic-continuity
-// declaration before any producer registers one.
-func resolveHistoryResetTriggerReferences(
-	cfg *RouterConfig,
-	declared map[string]map[string]struct{},
-) error {
 	for index := range cfg.Decisions {
 		decision := &cfg.Decisions[index]
 		reset := decision.GetHistoryResetConfig()
@@ -215,13 +188,13 @@ func resolveHistoryResetTriggerReferences(
 			continue
 		}
 		name := strings.TrimSpace(reset.Trigger.Signal)
-		if projectionInputDeclared(declared, HistoryResetTriggerSignalType, name) {
+		if _, declared := cfg.TopicContinuityRule(name); declared {
 			continue
 		}
 		return fmt.Errorf(
 			"decision %q: history_reset trigger.signal %s(%q) is not declared in this recipe",
 			decision.Name,
-			HistoryResetTriggerSignalType,
+			SignalTypeTopicContinuity,
 			name,
 		)
 	}
