@@ -28,8 +28,11 @@ The Router and Dashboard remain in containers; the existing gateway stack is
 preserved. The CLI manages a native host supervisor. The Router sends it the
 model groups needed by active recipes, and reaches the existing model HTTP/JSON
 API through an authenticated TCP proxy. Reloaded generations share unchanged
-groups; their last consumer releases the host model process. Declaring an unused
-model does not load it. Explicit external runtime endpoints remain external.
+groups; their last consumer releases the host model process. Each group lifetime
+has its own lease identity, so a retiring group's release cannot stop a process
+owned by a concurrently acquired group. Abandoned leases expire independently.
+Declaring an unused model does not load it. Explicit external runtime endpoints
+remain external.
 
 Engine mode serves models directly on host loopback, without starting a Router:
 
