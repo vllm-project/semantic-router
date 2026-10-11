@@ -252,3 +252,44 @@
   - moe
   - efficient
   released_at: '2025-12-15'
+- id: nvidia/nemotron-cascade-8b
+  display_name: Nemotron Cascade 8B
+  description: Compact NVIDIA reasoning model with thinking and instruct modes, post-trained from Qwen3-8B-Base.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
+    license: NVIDIA-Open-Model-License
+  family: nemotron-cascade
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - coding
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - dense
+  - efficient
+  released_at: '2025-12-08'
