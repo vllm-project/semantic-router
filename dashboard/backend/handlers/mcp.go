@@ -357,15 +357,18 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 		}
 		if err := h.manager.TestConnection(ctx, &config); err != nil {
 			log.Printf("[MCP-Handler] Test connection failed: error_class=%T", err)
+			// A validation failure is reported in this endpoint's envelope, not
+			// as a 400: the dialog's caller reads the message out of the body,
+			// and a non-ok status would drop it to a generic statusText.
+			message := "Connection test failed"
 			if errors.Is(err, mcp.ErrInvalidServerConfig) || errors.Is(err, mcp.ErrUnsupportedSecurity) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+				message = err.Error()
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   "Connection test failed",
+				"error":   message,
 			})
 			return
 		}

@@ -73,8 +73,10 @@ func TestMCPUpdateRefusesAnUnknownTransportOnTheMergedResult(t *testing.T) {
 }
 
 // The collection test path dials the configuration it is given, so an
-// incomplete one is refused before the dial (#4338).
-func TestMCPTestConnectionRefusesAnIncompleteCollectionConfig(t *testing.T) {
+// incomplete one is refused before the dial and reported in this endpoint's
+// envelope: the dialog's caller reads the message out of the body, and a 400
+// would drop it to a generic statusText (#4338).
+func TestMCPTestConnectionReportsAnIncompleteCollectionConfig(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSecurityTestHandler(t, nil)
 
@@ -85,11 +87,18 @@ func TestMCPTestConnectionRefusesAnIncompleteCollectionConfig(t *testing.T) {
 		map[string]any{"name": "Probe", "transport": "streamable-http"},
 	)
 
-	if recorder.Code != http.StatusBadRequest {
+	var response struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("status=%d body=%s: %v", recorder.Code, recorder.Body.String(), err)
+	}
+	if recorder.Code != http.StatusOK || response.Success {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "URL is required for streamable-http transport") {
-		t.Fatalf("message must name the missing field: %q", recorder.Body.String())
+	if response.Error != "URL is required for streamable-http transport" {
+		t.Fatalf("message must name the missing field: %#v", response)
 	}
 }
 
