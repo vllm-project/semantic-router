@@ -5,6 +5,7 @@ import type {
   DecisionModelSignal,
   Listener,
   SafetySignal,
+  TopicContinuitySignal,
 } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
@@ -925,6 +926,7 @@ export interface ConfigSignals {
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
   decision?: DecisionModelSignal[]
+  topic_continuity?: TopicContinuitySignal[]
 }
 
 export interface ConfigProjections {
@@ -1334,6 +1336,7 @@ export interface JailbreakSignal {
 export interface PIISignal {
   name: string
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
   description?: string

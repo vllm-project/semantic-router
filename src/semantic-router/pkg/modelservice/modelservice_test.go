@@ -162,6 +162,7 @@ func TestClientDecideOverUnixSocket(t *testing.T) {
 	}
 	request := sampleRequest("text")
 	request.Model = "kai"
+	request.Questions = append(request.Questions, Question{ID: "level", Type: "score", Instructions: "Level?", Levels: []string{"low", "mid", "high"}})
 	response, err := client.Decide(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +172,9 @@ func TestClientDecideOverUnixSocket(t *testing.T) {
 	}
 	if got := response.Answers["kind"]; got.Choice != "code" || got.Probabilities["code"] != 0.7 {
 		t.Fatalf("choice answer = %+v", got)
+	}
+	if got := response.Answers["level"]; got.Error != "" || got.Score != 1 {
+		t.Fatalf("score answer = %+v", got)
 	}
 }
 
