@@ -32,16 +32,24 @@ AGREE = (
 
 
 def build_soup(
-    members: list[Path], weights: list[float] | None, out: Path, name: str | None = None
+    members: list[Path],
+    weights: list[float] | None,
+    out: Path,
+    name: str | None = None,
+    allow_negative: bool = False,
 ) -> dict:
-    """Write the FP32 weighted average of ``members`` to ``out`` (atomic); returns a summary."""
+    """Write the FP32 weighted average of ``members`` to ``out`` (atomic); returns a summary.
+
+    ``allow_negative`` admits negative weights (task arithmetic, e.g. A + B - C as weights 1, 1, -1).
+    """
     from safetensors import safe_open
     from safetensors.torch import load_file
 
     began = time.time()
     members = [Path(p) for p in members]
     weights = list(weights) if weights else [1.0] * len(members)
-    if len(weights) != len(members) or any(w < 0 for w in weights) or sum(weights) <= 0:
+    negative = any(w < 0 for w in weights) and not allow_negative
+    if len(weights) != len(members) or negative or sum(weights) <= 0:
         raise ValueError("need one non-negative weight per checkpoint")
     weights = [w / sum(weights) for w in weights]
     configs = [json.loads((m / "decision_config.json").read_text()) for m in members]
@@ -120,10 +128,20 @@ def main() -> int:
         "--weights", help="Comma-separated, normalised to sum 1 (default uniform)"
     )
     parser.add_argument("--out", required=True)
+    parser.add_argument(
+        "--allow-negative",
+        action="store_true",
+        help="Admit negative weights (task arithmetic); the weights still sum to a positive total",
+    )
     args = parser.parse_args()
     weights = [float(w) for w in args.weights.split(",")] if args.weights else None
     try:
-        summary = build_soup([Path(p) for p in args.ckpt], weights, Path(args.out))
+        summary = build_soup(
+            [Path(p) for p in args.ckpt],
+            weights,
+            Path(args.out),
+            allow_negative=args.allow_negative,
+        )
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     print(json.dumps(summary))
