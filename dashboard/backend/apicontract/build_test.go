@@ -233,6 +233,8 @@ func TestOperationIDsAndTags(t *testing.T) {
 		{"GET", "/openapi.json", "getOpenapiJson", "openapi"},
 		{"DELETE", "/api/mcp/servers/{id}", "deleteApiMcpServersId", "mcp"},
 		{"POST", "/api/sr-bench/v1/runs/{id}/recover-plan", "postApiSrBenchV1RunsIdRecoverPlan", "sr-bench"},
+		{"GET", "/api/v1/capabilities", "getApiV1Capabilities", "capabilities"},
+		{"GET", "/api/v1", "getApiV1", "v1"},
 		{"GET", "/", "get", "root"},
 	} {
 		if id := defaultOperationID(test.method, test.path); id != test.id {

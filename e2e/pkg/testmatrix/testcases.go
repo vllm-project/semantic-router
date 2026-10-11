@@ -85,6 +85,8 @@ var DashboardContract = []string{
 	"dashboard-status",
 	// Issue #2794: OpenAPI rendered from the route registration.
 	"dashboard-openapi",
+	// Issue #2794: per-caller capability states with cached dependency probes.
+	"dashboard-capabilities",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints

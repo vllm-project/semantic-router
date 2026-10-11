@@ -8565,6 +8565,140 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/v1/capabilities": {
+      "get": {
+        "operationId": "listCapabilities",
+        "summary": "Dashboard capability states for the caller",
+        "description": "state is the first failing dimension in the order enabled, configured, authorized, reachable, degraded; reason is a stable code for it. Health checks are cached, so checkedAt can lag by one refresh interval.",
+        "tags": [
+          "capabilities"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per capability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "capabilities": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "authorized": {
+                            "type": "boolean"
+                          },
+                          "checkedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "configured": {
+                            "type": "boolean"
+                          },
+                          "degraded": {
+                            "type": "boolean"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "reachable": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "setup_inactive",
+                              "config_unreadable",
+                              "permission_required",
+                              "serve_not_attached",
+                              "router_unreachable",
+                              "probe_pending",
+                              "server_readonly",
+                              "runtime_config_not_writable",
+                              "sr_bench_auth_unconfigured",
+                              "upstream_unreachable",
+                              "ml_pipeline_disabled",
+                              "ml_pipeline_unavailable",
+                              "mcp_disabled"
+                            ]
+                          },
+                          "remediation": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "disabled",
+                              "unconfigured",
+                              "unauthorized",
+                              "unreachable",
+                              "degraded",
+                              "available"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "enabled",
+                          "configured",
+                          "reachable",
+                          "authorized",
+                          "degraded",
+                          "state"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "capabilities"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "session.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/workflows/health": {
       "get": {
         "operationId": "getApiWorkflowsHealth",
@@ -9112,7 +9246,7 @@
         "operationId": "postV1Decisions",
         "summary": "POST /v1/decisions",
         "tags": [
-          "v1"
+          "decisions"
         ],
         "security": [],
         "responses": {
@@ -9132,7 +9266,7 @@
         "operationId": "postV1Systemone",
         "summary": "POST /v1/systemone",
         "tags": [
-          "v1"
+          "systemone"
         ],
         "security": [],
         "responses": {
@@ -9152,7 +9286,7 @@
         "operationId": "getV1SystemoneModels",
         "summary": "GET /v1/systemone/models",
         "tags": [
-          "v1"
+          "systemone"
         ],
         "security": [],
         "responses": {
