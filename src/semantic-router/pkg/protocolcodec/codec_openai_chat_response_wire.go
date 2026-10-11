@@ -178,6 +178,11 @@ type chatUsageWire struct {
 	PromptTime     *float64 `json:"prompt_time,omitempty"`
 	CompletionTime *float64 `json:"completion_time,omitempty"`
 	TotalTime      *float64 `json:"total_time,omitempty"`
+	// Flat detail fields some cumulative-usage gateways and providers emit
+	// beside the canonical nested details objects. Nested details win when
+	// both shapes are present.
+	CachedTokens    *int64 `json:"cached_tokens,omitempty"`
+	ReasoningTokens *int64 `json:"reasoning_tokens,omitempty"`
 	// OpenRouter reports its own pricing and server-tool accounting beside
 	// canonical token usage. Keep these fields typed at the provider boundary.
 	Cost          *float64                         `json:"cost,omitempty"`
