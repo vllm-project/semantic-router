@@ -48,6 +48,9 @@ func writeEntrypoints(sb *strings.Builder, entrypoints []config.EntrypointMappin
 	sb.WriteString("# =============================================================================\n\n")
 	for _, entrypoint := range entrypoints {
 		sb.WriteString("ENTRYPOINT {\n")
+		if entrypoint.API != "" {
+			fmt.Fprintf(sb, "  api: %q\n", entrypoint.API)
+		}
 		fmt.Fprintf(sb, "  model_names: %s\n", formatStringArray(entrypoint.ModelNames))
 		fmt.Fprintf(sb, "  recipe: %q\n", entrypoint.Recipe)
 		sb.WriteString("}\n\n")
@@ -111,6 +114,7 @@ func appendConfigScopesToAST(prog *Program, cfg *config.RouterConfig) {
 	}
 	for _, entrypoint := range cfg.Entrypoints {
 		prog.Entrypoints = append(prog.Entrypoints, &EntrypointDecl{
+			API:        string(entrypoint.API),
 			ModelNames: append([]string(nil), entrypoint.ModelNames...),
 			Recipe:     string(entrypoint.Recipe),
 		})
