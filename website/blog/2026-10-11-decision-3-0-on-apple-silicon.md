@@ -39,18 +39,33 @@ In detail:
 - **Host side.** Token embeddings, M-RoPE positions and the 255-way readout run in numpy (or Swift) in FP32. Prompts come from upstream's own request preparation, run on a d3 with no weights loaded, so every prompt, timestamp and position matches upstream exactly.
 - **8-bit weights.** At fp16, d3-mini's text graph is 6.7 GB per length bucket. Two buckets loaded at once made the GPU page on a 24 GB Mac, at 8–12 s per step. With 8-bit weights both stay resident.
 
-Conversion uses PyTorch 2.7 and coremltools 9.0. Answers that differ from upstream PyTorch on the same requests:
+Conversion uses PyTorch 2.7 and coremltools 9.0. We checked the Core ML release against upstream PyTorch (bf16 on the Mac's GPU) on the same requests, including two public benchmarks: the [JevBench](https://github.com/fstandhartinger/jevbench/tree/b6b8fff7e345b98c060ad26c13308860ddc67004) public suite, run through its unchanged System One adapter and scorer as in the [System One Auto](/blog/system-one-auto) post, and the [typed-decisions](https://huggingface.co/datasets/LocalLLaMA/typed-decisions) TEST split, scored against its gold labels.
 
 | | d3-lite | d3-nano | d3-mini |
 |---|---|---|---|
-| Text | 2 / 100 | 0 / 100 | 1 / 100 |
-| Images (receipt checks) | 1 / 24 | 0 / 24 | 0 / 48 |
-| Video (4-second clips) | 0 / 28 | 1 / 28 | 0 / 28 |
-| Per text question | ~46 ms | ~65 ms | ~160 ms |
+| **JevBench public** (231 tasks), PyTorch → Core ML | 73.2% → **74.0%** | 75.3% → **75.8%** | 81.8% → **81.8%** |
+| **typed-decisions TEST** (2,000 questions), PyTorch → Core ML | 51.6% → **51.6%** | 62.7% → **62.7%** | running |
+| Answers that differ: JevBench | 2 / 231 | 1 / 231 | 2 / 231 |
+| Answers that differ: typed-decisions | 41 / 2,000 | 29 / 2,000 | running |
+| Answers that differ: images (receipt checks) | 1 / 24 | 0 / 24 | 0 / 48 |
+| Answers that differ: video (4-second clips) | 0 / 28 | 1 / 28 | 0 / 28 |
+| Median JevBench request, PyTorch → Core ML | 204 → **53 ms** | 173 → **69 ms** | 438 → **169 ms** |
 | Per 4-second video look | 0.32 s | 0.57 s | 1.1 s |
-| Download | 3.2 GB | 9.1 GB | 16 GB |
+| Download | 3.7 GB | 10.5 GB | 19.6 GB |
 
-All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Neural Engine doesn't run these models yet: Core ML falls back to the CPU there, so the GPU is the fast path. d3-nano is the middle option, with no answer changes on the text and image checks at ~65 ms per question.
+**Core ML scores the same as upstream, within one or two answers, and each request is 2.5–4× faster.** On a Mac, upstream PyTorch falls back to Transformers' reference code for the DeltaNet layers, since the fast kernels it uses on NVIDIA GPUs aren't available.
+
+All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Neural Engine doesn't run these models yet: Core ML falls back to the CPU there, so the GPU is the fast path. d3-nano is the middle option: close to d3-lite's speed, and 11 points above it on typed-decisions.
+
+<details>
+<summary>Method and limits</summary>
+
+- Both backends ran one request at a time. Request times include a local HTTP round trip.
+- JevBench accuracy is exact-label accuracy on the public suite, not the official sealed leaderboard or its composite score. 37 of its tasks are longer than 1,536 tokens (the longest is 3,970), so the release includes a 4,096-token text graph.
+- typed-decisions gold labels come from several annotators who often disagree, so accuracy there sits well below JevBench for every model.
+- "Answers that differ" counts questions where the top answer changed between PyTorch and Core ML.
+
+</details>
 
 ## Demos
 
