@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -26,10 +27,27 @@ const (
 	cacheWriteHold = 10 * time.Second
 )
 
-// setIfCurrentScript caches a result only if no invalidation ran since the
-// caller read the user's generation and no post-invalidation hold is active.
+// admitScript returns the user's generation token, creating one if none exists,
+// or "" during a post-write hold. Tokens are random, so an expired fence can
+// never come back as a generation an in-flight read was admitted under.
+var admitScript = redis.NewScript(`
+if redis.call('EXISTS', KEYS[2]) == 1 then
+	return ''
+end
+local generation = redis.call('GET', KEYS[1])
+if not generation then
+	generation = ARGV[1]
+	redis.call('SET', KEYS[1], generation, 'PX', ARGV[2])
+else
+	redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return generation
+`)
+
+// setIfCurrentScript caches a result only if the user's generation token is
+// still the one the read was admitted under and no write hold is active.
 var setIfCurrentScript = redis.NewScript(`
-local generation = redis.call('GET', KEYS[1]) or '0'
+local generation = redis.call('GET', KEYS[1])
 if generation ~= ARGV[1] or redis.call('EXISTS', KEYS[2]) == 1 then
 	return 0
 end
@@ -145,32 +163,37 @@ func (c *RedisCache) holdKey(userID string) string {
 	return c.prefix + "h:" + userID
 }
 
-// generation admits a retrieval for caching and returns the user's invalidation
-// generation. ok is false when the cache cannot be used safely: no user, a Redis
+// fenceTTL keeps a generation token alive well past any cached value.
+func (c *RedisCache) fenceTTL() time.Duration {
+	return 2*c.ttl + cacheWriteHold
+}
+
+func newCacheGeneration() (string, error) {
+	var token [16]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(token[:]), nil
+}
+
+// generation admits a retrieval for caching and returns the user's generation
+// token. ok is false when the cache cannot be used safely: no user, a Redis
 // error, or a post-write hold, since a read begun then may be stale when it ends.
 func (c *RedisCache) generation(ctx context.Context, userID string) (string, bool) {
 	if c == nil || c.client == nil || userID == "" {
 		return "", false
 	}
-	pipe := c.client.TxPipeline()
-	generationCmd := pipe.Get(ctx, c.generationKey(userID))
-	holdCmd := pipe.Exists(ctx, c.holdKey(userID))
-	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		logging.Debugf("Memory Redis cache generation read error: %v", err)
+	candidate, err := newCacheGeneration()
+	if err != nil {
 		return "", false
 	}
-	if holdCmd.Val() > 0 {
-		return "", false
-	}
-	generation, err := generationCmd.Result()
-	if errors.Is(err, redis.Nil) {
-		return "0", true
-	}
+	keys := []string{c.generationKey(userID), c.holdKey(userID)}
+	generation, err := admitScript.Run(ctx, c.client, keys, candidate, c.fenceTTL().Milliseconds()).Text()
 	if err != nil {
 		logging.Debugf("Memory Redis cache generation read error: %v", err)
 		return "", false
 	}
-	return generation, true
+	return generation, generation != ""
 }
 
 // setIfCurrent caches results read after the caller observed generation.
@@ -251,9 +274,12 @@ func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error 
 		return nil
 	}
 	// Fence in-flight retrievals before deleting, so none can re-cache old results.
+	generation, err := newCacheGeneration()
+	if err != nil {
+		return err
+	}
 	pipe := c.client.TxPipeline()
-	pipe.Incr(ctx, c.generationKey(userID))
-	pipe.PExpire(ctx, c.generationKey(userID), 2*c.ttl+cacheWriteHold)
+	pipe.Set(ctx, c.generationKey(userID), generation, c.fenceTTL())
 	pipe.Set(ctx, c.holdKey(userID), "1", cacheWriteHold)
 	if _, err := pipe.Exec(ctx); err != nil {
 		logging.Warnf("Memory Redis cache generation bump failed for user %s, entries remain cached until TTL: %v", userID, err)

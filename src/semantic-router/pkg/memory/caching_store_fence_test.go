@@ -118,13 +118,16 @@ func TestCachingStoreDoesNotCacheStaleReadsDuringHold(t *testing.T) {
 	require.Equal(t, 3, store.backendCalls(), "caching resumes once the hold expires")
 }
 
-func TestRedisCacheInvalidationBumpsGenerationAndHolds(t *testing.T) {
+func TestRedisCacheInvalidationReplacesGenerationAndHolds(t *testing.T) {
 	ctx := context.Background()
 	mr, _, cache := newFenceFixture(t, &fenceStore{})
 
-	generation, ok := cache.generation(ctx, "u")
+	first, ok := cache.generation(ctx, "u")
 	require.True(t, ok)
-	require.Equal(t, "0", generation)
+	require.NotEmpty(t, first)
+	again, _ := cache.generation(ctx, "u")
+	require.Equal(t, first, again, "admission reuses the live token")
+
 	require.NoError(t, cache.InvalidateByUser(ctx, "u"))
 	require.True(t, mr.Exists(cache.holdKey("u")))
 	require.LessOrEqual(t, mr.TTL(cache.holdKey("u")), cacheWriteHold)
@@ -132,9 +135,9 @@ func TestRedisCacheInvalidationBumpsGenerationAndHolds(t *testing.T) {
 	require.False(t, ok, "retrievals admitted during the hold are not cacheable")
 
 	mr.FastForward(cacheWriteHold + time.Second)
-	generation, ok = cache.generation(ctx, "u")
+	next, ok := cache.generation(ctx, "u")
 	require.True(t, ok)
-	require.Equal(t, "1", generation)
+	require.NotEqual(t, first, next, "invalidation replaces the token")
 
 	_, ok = cache.generation(ctx, "")
 	require.False(t, ok, "results without an owner cannot be invalidated, so they are never cached")
@@ -163,4 +166,26 @@ func TestCachingStoreReadBegunDuringHoldIsNotCachedAfterIt(t *testing.T) {
 
 	_, hit := cache.Get(ctx, opts)
 	require.False(t, hit, "a read begun during the hold must not be cached after it expires")
+}
+
+func TestCachingStoreReadSpanningFenceExpiryIsNotCached(t *testing.T) {
+	ctx := context.Background()
+	read, gate := make(chan struct{}), make(chan struct{})
+	store := &fenceStore{mem: &Memory{ID: "secret", UserID: "u"}, stale: true, read: read, gate: gate}
+	mr, cached, cache := newFenceFixture(t, store)
+	opts := RetrieveOptions{Query: "q", UserID: "u", Limit: 5}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = cached.Retrieve(ctx, opts) // admitted before Forget
+	}()
+	<-read
+	require.NoError(t, cached.Forget(ctx, "secret"))
+	mr.FastForward(2*cache.ttl + cacheWriteHold + time.Minute) // fence and hold keys expire
+	close(gate)
+	<-done
+
+	_, hit := cache.Get(ctx, opts)
+	require.False(t, hit, "an expired fence must not readmit a read that began before Forget")
 }
