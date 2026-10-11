@@ -135,6 +135,12 @@ func (m *Manager) UpdateServer(config *ServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("update server config: %w", err)
 	}
+	// A partial body merges into the stored configuration, so the structural
+	// invariants are checked against what the merge produced rather than the
+	// request; the security policy is vetted at the API door.
+	if err := validateServerStructure(merged); err != nil {
+		return err
+	}
 
 	if err := m.persistConfig(merged); err != nil {
 		return err
@@ -300,6 +306,9 @@ func (m *Manager) resolveConnectionTestConfig(config *ServerConfig) (*ServerConf
 func (m *Manager) TestConnection(ctx context.Context, config *ServerConfig) error {
 	resolved, err := m.resolveConnectionTestConfig(config)
 	if err != nil {
+		return err
+	}
+	if err := ValidateServerConfig(resolved); err != nil {
 		return err
 	}
 	client, err := NewClient(resolved)
