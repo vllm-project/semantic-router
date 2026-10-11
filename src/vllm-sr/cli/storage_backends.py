@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from collections.abc import Callable
@@ -10,6 +11,7 @@ from cli.container_runtime import get_container_runtime
 from cli.container_services import (
     container_mount_destinations,
     container_network_disconnect_if_attached,
+    container_remove_container,
     container_start_milvus,
     container_start_postgres,
     container_start_redis,
@@ -243,6 +245,11 @@ def _start_credentialed_backends(
         )
 
     if "postgres" in targets:
+        # Shared credential state may have been created by Redis alone while a
+        # retained Postgres volume still holds an older role password.
+        needs_rekey = credentials_are_new or (
+            container_status(stack_layout.postgres_container_name) != "running"
+        )
         password_file = str(
             postgres_password_path(state_root_dir, stack_layout=stack_layout)
         )
@@ -256,13 +263,77 @@ def _start_credentialed_backends(
                 data_volume=secrets.postgres.volume,
             ),
         )
-        if credentials_are_new:
-            rekey_managed_postgres(
+        if needs_rekey:
+            _rekey_started_postgres(
                 stack_layout.postgres_container_name, secrets.postgres
             )
+        elif not _postgres_credentials_match(
+            stack_layout.postgres_container_name, secrets.postgres
+        ):
+            log.error(
+                "Managed Postgres does not accept this stack's recorded credential. "
+                "Stop its managed container and rerun `vllm-sr serve` to reconcile "
+                "the retained volume; its data and recorded credential are preserved."
+            )
+            raise SystemExit(1)
         _record_or_park(
             "postgres", stack_layout.postgres_container_name, required_backends, started
         )
+
+
+def _rekey_started_postgres(container_name: str, secret: PostgresSecret) -> None:
+    """Leave no reusable half-configured container after an unsuccessful rekey."""
+    try:
+        rekey_managed_postgres(container_name, secret)
+    except (Exception, SystemExit):
+        # Only called for a container this invocation created or recreated.
+        # Removing its container keeps the named data volume and credential
+        # state intact; another serve can repeat the same reconciliation.
+        if container_stop_container(container_name):
+            if not container_remove_container(container_name):
+                log.error(
+                    "Failed to remove stopped Postgres container %s", container_name
+                )
+        else:
+            log.error(
+                "Failed to stop unconfigured Postgres container %s; "
+                "credential verification will prevent reuse until it is reconciled",
+                container_name,
+            )
+        raise
+
+
+def _postgres_credentials_match(container_name: str, secret: PostgresSecret) -> bool:
+    """Verify a reused container over TCP without changing its role or state."""
+    command = [
+        get_container_runtime(),
+        "exec",
+        "--env",
+        "PGPASSWORD",
+        container_name,
+        "psql",
+        "--no-password",
+        "-h",
+        "127.0.0.1",
+        "-U",
+        secret.user,
+        "-d",
+        secret.database,
+        "-c",
+        "SELECT 1",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            env={**os.environ, "PGPASSWORD": secret.password},
+            capture_output=True,
+            check=False,
+            timeout=RUNTIME_COMMAND_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    # Never print command output: an external runtime can include credentials.
+    return result.returncode == 0
 
 
 def _record_or_park(
@@ -388,12 +459,44 @@ def _log_takeover_intent(
         return
     defaults = default_storage_volume_names(stack_layout)
     if volumes is None or volumes == defaults:
+        # Only a host with volumes no container uses can hold the data of
+        # storage containers an older CLI removed; a fresh host has none.
+        unattached = _unattached_volume_count()
+        if not unattached:
+            return
         log.info(
             "No managed storage containers exist yet, so this stack starts on "
-            "empty data volumes. If an older CLI removed them with "
-            "`vllm-sr stop`, their data may survive as orphaned volumes. "
-            f"{RECOVERY_HINT}"
+            f"empty data volumes. {unattached} data volume(s) on this host "
+            "belong to no container: if an older vllm-sr removed this stack's "
+            "storage containers with `vllm-sr stop`, their data may be among "
+            "them. The storage credential recovery section of the "
+            "security-hardening documentation shows how to recover it."
         )
+
+
+def _unattached_volume_count() -> int:
+    """How many volumes no container uses, or 0 when the runtime can't say."""
+
+    try:
+        result = subprocess.run(
+            [
+                get_container_runtime(),
+                "volume",
+                "ls",
+                "--quiet",
+                "--filter",
+                "dangling=true",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=RUNTIME_COMMAND_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    if result.returncode != 0:
+        return 0
+    return len([line for line in result.stdout.splitlines() if line.strip()])
 
 
 def _start_backend(name: str, starter: Callable[[], tuple[int, str, str]]) -> None:

@@ -53,16 +53,21 @@ describe('Dashboard capability settings fail closed', () => {
     expect(source).toContain(
       'const [mlPipelineAvailabilityChecked, setMLPipelineAvailabilityChecked] = useState(false)',
     )
-    expect(source).toContain("await fetch('/api/ml-pipeline/availability', { signal })")
-    expect(source).toContain('await readMLPipelineAvailabilityFromMLSurface(controller.signal)')
+    expect(source).toContain(
+      "await fetch('/api/ml-pipeline/availability', { signal: requestSignal })",
+    )
+    expect(source).toContain('void readMLPipelineAvailabilityFromMLSurface(controller.signal)')
     expect(source).toContain('setMLPipelineAvailabilityChecked(false)')
     expect(source).toContain('setMLPipelineAvailabilityChecked(true)')
     // The fallback call runs only after a settings failure, so the
     // config.read path keeps its single request.
     const callIndex = source.indexOf(
-      'await readMLPipelineAvailabilityFromMLSurface(controller.signal)',
+      'void readMLPipelineAvailabilityFromMLSurface(controller.signal)',
     )
-    const catchIndex = source.indexOf('} catch (error) {', source.indexOf("await fetch('/api/settings'"))
+    const catchIndex = source.indexOf(
+      '} catch (error) {',
+      source.indexOf("await fetch('/api/settings'"),
+    )
     expect(callIndex).toBeGreaterThan(catchIndex)
   })
 
@@ -72,8 +77,6 @@ describe('Dashboard capability settings fail closed', () => {
       'utf8',
     )
 
-    expect(source).toContain(
-      'settingsError={mlPipelineAvailabilityChecked ? null : settingsError}',
-    )
+    expect(source).toContain('settingsError={mlPipelineAvailabilityChecked ? null : settingsError}')
   })
 })

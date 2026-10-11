@@ -22,6 +22,7 @@ type resourceEntry struct {
 	resource io.Closer
 	gate     admission.Admissioner
 	budget   string
+	gateOnly bool
 	err      error
 	refs     int
 }
@@ -32,15 +33,26 @@ func NewPool() *Pool { return &Pool{entries: make(map[string]*resourceEntry)} }
 // description of its admission settings: aliases cannot create separate gates
 // or silently change the total capacity of a shared physical resource.
 func (p *Pool) Acquire(ctx context.Context, identity ResourceIdentity, budget string, gate admission.Admissioner, load func(context.Context) (io.Closer, error)) (*Resource, error) {
+	if load == nil {
+		return nil, fmt.Errorf("model resource loader is required")
+	}
+	return p.acquire(ctx, identity, budget, gate, load)
+}
+
+// Admit shares only an admission gate for an identity: the model lives in
+// another process (a runtime process or an external endpoint), so the
+// reference owns nothing and Use calls receive a nil resource.
+func (p *Pool) Admit(ctx context.Context, identity ResourceIdentity, budget string, gate admission.Admissioner) (*Resource, error) {
+	return p.acquire(ctx, identity, budget, gate, nil)
+}
+
+func (p *Pool) acquire(ctx context.Context, identity ResourceIdentity, budget string, gate admission.Admissioner, load func(context.Context) (io.Closer, error)) (*Resource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	key, err := identity.Key()
 	if err != nil {
 		return nil, err
-	}
-	if load == nil {
-		return nil, fmt.Errorf("model resource loader is required")
 	}
 	p.mu.Lock()
 	if p.entries == nil {
@@ -50,6 +62,10 @@ func (p *Pool) Acquire(ctx context.Context, identity ResourceIdentity, budget st
 		if entry.budget != budget {
 			p.mu.Unlock()
 			return nil, fmt.Errorf("%w: shared resource admission budgets differ", ErrCapability)
+		}
+		if entry.gateOnly != (load == nil) {
+			p.mu.Unlock()
+			return nil, fmt.Errorf("%w: an identity is either a loaded resource or an admission gate", ErrCapability)
 		}
 		entry.refs++
 		p.mu.Unlock()
@@ -66,8 +82,13 @@ func (p *Pool) Acquire(ctx context.Context, identity ResourceIdentity, budget st
 	if gate == nil {
 		gate = admission.Noop{}
 	}
-	entry := &resourceEntry{ready: make(chan struct{}), gate: gate, budget: budget, refs: 1}
+	entry := &resourceEntry{ready: make(chan struct{}), gate: gate, budget: budget, gateOnly: load == nil, refs: 1}
 	p.entries[key] = entry
+	if load == nil {
+		close(entry.ready)
+		p.mu.Unlock()
+		return &Resource{pool: p, key: key, entry: entry, identity: identity}, nil
+	}
 	p.mu.Unlock()
 	resource, loadErr := load(ctx)
 	if loadErr == nil && resource == nil {

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "b2db276cf1b5057c31f2ab2bddbd181e5692dbb6"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/shadow-dispatch.md"
   outdated: false
 ---
@@ -70,7 +70,7 @@ plugins:
 | `max_retries` | `0` | 传输错误或可重试状态上的额外尝试。上限为 `3`。 |
 | `capture_response_body` | `false` | 在结果中存储 shadow 文本的有界摘录。默认关闭；只保留大小、token 和 SHA-256。 |
 | `max_capture_bytes` | `4096` | 开启采集时的摘录上限。 |
-| `tls_skip_verify` | `false` | 跳过由内部 CA 签名的 https shadow 后端的证书校验。主路径通过 Envoy 到达后端，Envoy 不校验上游证书。 |
+| `tls_skip_verify` | `false` | 跳过由内部 CA 签名的 https shadow 后端的证书校验。此设置仅作用于 shadow HTTP 客户端，不会配置主请求的后端传输。 |
 | `forward_headers` | `[]` | Shadow 副本可以携带的决策 `header_mutation` 名称，按不区分大小写匹配。决策为主后端设置的其他内容都不会转发，因此像 `X-Internal-Token` 这样的自定义凭据留在主路径。已知凭据载体（`Authorization`、`Proxy-Authorization`、`Cookie`、`x-api-key`、`api-key`、`x-goog-api-key`、`x-user-*-key` 请求头）即使被列出，也会在配置加载时拒绝并在运行时丢弃。 |
 
 当请求被采样排除，或主分发已经选择了 shadow 模型时，会跳过 shadow，只产生指标而不产生结果。通过 looper 执行的决策（ratings、confidence、fusion、ReMoM、workflows）会在配置加载时拒绝该插件，因为 shadow hook 只在单模型提供商分发上运行。

@@ -5,7 +5,7 @@
 `knn` chooses a candidate from the models that performed well on the most
 similar recorded requests.
 
-**Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-nn`) for high-performance nearest-neighbor search.
+**Implementation**: runs in the router itself, in Go.
 
 ## Key Advantages
 

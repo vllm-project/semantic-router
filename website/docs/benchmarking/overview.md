@@ -25,12 +25,12 @@ live model comparison.
 
 The `perf/` package contains Go benchmarks for classification, decision
 evaluation, response-cache operations, ExtProc processing, and Looper-family
-paths. They do not need a running Router, but model-dependent suites require the
-native libraries and benchmark model files.
+paths. They do not need a running Router. Classification and cache benchmarks
+serve the catalog's pinned Vela models through the model runtime, which
+downloads them on first start; install the runtime once:
 
 ```bash
-make download-models-perf
-make rust
+make model-runtime-install
 make perf-bench-quick
 ```
 
@@ -66,14 +66,13 @@ make benchmark-cache-comparison
 make benchmark-hybrid-vs-milvus
 make benchmark-redis
 make benchmark-valkey
-
-# Native inference implementations
-make benchmark-openvino-classifier
-make benchmark-openvino-embedding
-make benchmark-openvino-vs-candle
 ```
 
-Do not interpret a store or binding comparison as an end-to-end routing result.
+Model latency and throughput are measured per model with the model runtime's
+benchmarks; their records are under
+[`src/model-runtime/docs/records`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records).
+
+Do not interpret a store or model comparison as an end-to-end routing result.
 Network placement, warmup, dataset shape, model files, and host contention can
 change the outcome.
 

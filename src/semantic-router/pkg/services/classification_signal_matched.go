@@ -30,6 +30,8 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeMetadata:      func(target *MatchedSignals) *[]string { return &target.Metadata },
 	config.SignalTypeClassifier:    func(target *MatchedSignals) *[]string { return &target.Classifier },
 	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
+	config.SignalTypeAction:        func(target *MatchedSignals) *[]string { return &target.Action },
+	config.SignalTypeDecision:      func(target *MatchedSignals) *[]string { return &target.Decision },
 	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -61,6 +63,8 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Metadata:      signals.MatchedMetadataRules,
 		Classifier:    signals.MatchedClassifierRules,
 		InputModality: signals.MatchedInputModalityRules,
+		Action:        signals.MatchedActionRules,
+		Decision:      signals.MatchedDecisionRules,
 		Projection:    signals.MatchedProjectionRules,
 	}
 }
@@ -133,6 +137,8 @@ func getUnmatchedSignals(
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
 	collectUnmatchedClassifierRules(&unmatched.Classifier, cfg.ClassifierRules, signals.MatchedClassifierRules)
 	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
+	collectUnmatchedRuleNames(&unmatched.Action, cfg.ActionRules, signals.MatchedActionRules, func(rule config.ActionRule) string { return rule.Name })
+	collectUnmatchedDecisionRules(&unmatched.Decision, cfg.DecisionRules, signals.MatchedDecisionRules)
 
 	return unmatched
 }
@@ -214,4 +220,21 @@ func makeStringSet(values []string) map[string]bool {
 		set[value] = true
 	}
 	return set
+}
+
+// collectUnmatchedDecisionRules lists decision signals with no matched answer;
+// a choice rule matches as "rule:choice".
+func collectUnmatchedDecisionRules(target *[]string, rules []config.DecisionSignalRule, matched []string) {
+	for _, rule := range rules {
+		hit := false
+		for _, name := range matched {
+			if name == rule.Name || strings.HasPrefix(name, rule.Name+":") {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			*target = append(*target, rule.Name)
+		}
+	}
 }

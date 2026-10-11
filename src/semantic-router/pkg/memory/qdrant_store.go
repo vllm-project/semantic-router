@@ -47,7 +47,7 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		collectionName = "agentic_memory"
 	}
 
-	embCfg := EmbeddingConfig{Model: EmbeddingModelBERT}
+	embCfg := EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	if opts.EmbeddingConfig != nil {
 		embCfg = *opts.EmbeddingConfig
 	}
@@ -316,6 +316,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	if threshold <= 0 {
 		threshold = float32(s.config.DefaultSimilarityThreshold)
 	}
+	queryLimit, scoreThreshold := qdrantRetrieveQuery(limit, threshold, opts)
 
 	must := []*qdrant.Condition{
 		qdrant.NewMatchKeyword("user_id", opts.UserID),
@@ -334,8 +335,8 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	scored, err := s.client.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: s.collectionName,
 		Query:          qdrant.NewQueryDense(emb),
-		Limit:          qdrant.PtrOf(uint64(limit)), //nolint:gosec
-		ScoreThreshold: &threshold,
+		Limit:          qdrant.PtrOf(queryLimit),
+		ScoreThreshold: scoreThreshold,
 		WithPayload:    qdrant.NewWithPayload(true),
 		Filter:         &qdrant.Filter{Must: must},
 	})
@@ -347,6 +348,9 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	for _, sp := range scored {
 		m := payloadToMemory(sp.Payload)
 		results = append(results, &RetrieveResult{Memory: m, Score: sp.Score})
+	}
+	if opts.HybridSearch || opts.AdaptiveThreshold {
+		results = finalizePolicyRetrieve(results, opts, threshold, limit)
 	}
 
 	resultCount = len(results)

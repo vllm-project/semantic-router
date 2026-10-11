@@ -26,8 +26,10 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"kmeans":        selection.MethodKMeans,
 	"svm":           selection.MethodSVM,
 	"multi_factor":  selection.MethodMultiFactor,
+	"random":        selection.MethodRandom,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
+	"decision":      selection.MethodDecision,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -156,6 +158,8 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"action":         signals.MatchedActionRules,
+		"decision":       signals.MatchedDecisionRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -201,6 +205,8 @@ func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *c
 			{"metadata", signals.Metrics.Metadata.ExecutionTimeMs},
 			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
 			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
+			{"action", signals.Metrics.Action.ExecutionTimeMs},
+			{"decision", signals.Metrics.Decision.ExecutionTimeMs},
 		}
 		for _, timing := range timings {
 			if timing.ms > 0 {
@@ -343,9 +349,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := r.effectiveReplayConfigForRequest(ctx, result.Decision); pluginCfg != nil {
-		ctx.RouterReplayPluginConfig = pluginCfg
-	}
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, result.Decision)
 	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
 	// Snapshot the retention directive emitted by this decision (deep clone)

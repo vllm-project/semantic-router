@@ -26,6 +26,34 @@ func TestBalanceTaskIntentPolicy(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "balance")
 	tests := []evaluateSignalsCase{
 		{
+			name: "health semantics retain verification when topic is uncertain",
+			signals: &SignalMatches{
+				DomainRules:     []string{"other"},
+				EmbeddingRules:  []string{"health_guidance"},
+				KeywordRules:    []string{"verification_markers", "reference_heavy_markers"},
+				ContextRules:    []string{"short_context"},
+				ProjectionRules: []string{"balance_simple", "verification_required"},
+			},
+			expectedDecision: "verified_health",
+		},
+		{
+			name: "health semantics alone do not request verification",
+			signals: &SignalMatches{
+				EmbeddingRules: []string{"health_guidance"},
+			},
+			expectedDecision: "casual_chat",
+		},
+		{
+			name: "health correction keeps recovery priority",
+			signals: &SignalMatches{
+				EmbeddingRules:    []string{"health_guidance"},
+				KeywordRules:      []string{"verification_markers"},
+				UserFeedbackRules: []string{"wrong_answer"},
+				ProjectionRules:   []string{"verification_required", "feedback_correction_verified"},
+			},
+			expectedDecision: "feedback_wrong_answer_verified",
+		},
+		{
 			name: "short health source request keeps verification",
 			signals: &SignalMatches{
 				DomainRules:     []string{"health"},
@@ -125,6 +153,35 @@ func TestBalanceTaskIntentPolicy(t *testing.T) {
 func TestAgentTaskIntentKeepsPrivacyPriority(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "agent")
 	tests := []evaluateSignalsCase{
+		{
+			name: "comparison does not escalate on learned complexity alone",
+			signals: &SignalMatches{
+				DomainRules:     []string{"computer science"},
+				KeywordRules:    []string{"comparison_request"},
+				EmbeddingRules:  []string{"research_synthesis"},
+				ComplexityRules: []string{"general_reasoning:hard", "evidence_synthesis:hard"},
+				ContextRules:    []string{"medium_context"},
+				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_complex", "non_agentic"},
+			},
+			expectedDecision: "medium_general",
+		},
+		{
+			name: "comparison with explicit reasoning still escalates",
+			signals: &SignalMatches{
+				KeywordRules:    []string{"comparison_request", "reasoning_request_markers"},
+				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_complex"},
+			},
+			expectedDecision: "complex_general",
+		},
+		{
+			name: "comparison with dense constraints still escalates",
+			signals: &SignalMatches{
+				KeywordRules:    []string{"comparison_request"},
+				StructureRules:  []string{"constraint_dense"},
+				ProjectionRules: []string{"policy_privacy_cloud_allowed", "policy_security_standard", "balance_complex"},
+			},
+			expectedDecision: "complex_general",
+		},
 		{
 			name: "editing code with uncertain embedding",
 			signals: &SignalMatches{

@@ -3,17 +3,17 @@
 ## Overview
 
 [Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
-is a family of fourteen published model checkpoints for intelligent routing.
-The Router registry currently includes the Vela 307M encoder base and ten task
-models covering routing, prompt protection, content safety, retrieval and
-reranking. Each registered release is pinned to an immutable revision.
+is a family of specialist models for intelligent routing. The Router registry
+includes the Vela 307M encoder base, task classifiers, retrieval and reranking
+models, and multimodal embedders. Each registered release is pinned to an
+immutable revision.
 
 | Model | Role |
 | --- | --- |
 | Encoder | Shared base for adapting new routing tasks |
 | Domain | Request subject across 14 domains |
 | Guard | Prompt injection and jailbreak detection |
-| Safety | Unsafe content detection |
+| Safety / Shield | Alternative unsafe-content classifiers |
 | Hazard | Twelve independent content risk categories |
 | PII | Personal information spans across 17 entity types |
 | FactCheck | Whether a request needs factual verification |
@@ -28,8 +28,9 @@ FactCheck requests verification and does not verify the truth of an answer.
 
 The public collection also includes **Halu** for answer evidence-support
 detection and **Omni Nano / Omni Mini** for text, image and audio embeddings.
-These three checkpoints are available for direct use and integration work;
-they are not yet the Router's default hallucination or multimodal components.
+Halu is the Router's specialist hallucination detector, and Omni serves its
+multimodal embeddings; see [Check answers against context](../../model-runtime/guides/hallucination.md)
+and [Images and audio](../../model-runtime/guides/multimodal.md).
 See the [Vela 1.0 release announcement](/blog/vela-models) for the full family.
 
 ## What Problem Does It Solve?
@@ -46,8 +47,8 @@ and latency requirements.
 ## Omni checkpoints
 
 The September 19 releases provide separate text, image and audio encoders in a
-shared embedding space. These checkpoints remain direct-use models rather than
-the Router's default multimodal components.
+shared embedding space. The model runtime serves them as prepared bundles for
+multimodal embeddings.
 
 | Checkpoint | Total parameters | Output dimensions | Text limit | Text backbone and readout |
 | --- | ---: | ---: | ---: | --- |
@@ -130,27 +131,35 @@ establish full multilingual or image coverage, latency, or memory performance.
 
 ## Defaults and input budgets
 
-Built-in Domain, Guard, Safety, PII, FactCheck, Feedback and semantic Embedding
-now use Vela. The reference configuration also selects Vela Modality, Hazard and
-Reranker. Only models required by a recipe are loaded. The base encoder is a
-training parent and is not loaded as an additional routing signal.
+With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
+Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
+Semantic Embedding and the Reranker use Vela 1.0. The built-in Vela 1.0
+Hazard deployment is an explicit specialist binding; its presence in the
+catalog does not enable a Safety-to-Hazard cascade. Naming a Vela 1.0 task
+model in `global.model_catalog.system` selects that specialist. Only models required by
+a recipe are loaded. The base encoder is a training parent and is not loaded as
+an additional routing signal.
 
-Default operating thresholds are **0.5** for Guard, **0.95** for FactCheck and
-**0.7** for Feedback. `NO_FEEDBACK` emits no feedback match. Safety is independent
+A module running a Vela 1.0 task model without a threshold of its own uses
+**0.5** for Guard, **0.95** for FactCheck and **0.7** for Feedback. `NO_FEEDBACK` emits no feedback match. Safety is independent
 of Guard, so an unsafe content request need not be classified as a prompt attack.
 Hazard uses per-label thresholds from its artifact-bound operating point; a
 single threshold does not represent its published decision policy.
 
-An input budget is a deployment choice. A module `max_sequence_length` of `0`
-keeps the conservative 512-token policy. Embedding defaults to 22 layers,
-768 dimensions and `full_context: false`. Explicit model bindings can accept
-up to **32,768 tokens**, including special tokens, with `overflow: reject`.
-A rejected input is not silently shortened.
+Input budgets depend on the task, loaded model and deployment policy; `0`
+does not mean unlimited context. Embedding defaults to 22 layers, 768
+dimensions and `full_context: false`. A qualified 32K model can use an explicit
+**32,768-token** budget, including special tokens, with `overflow: reject`.
+PII and Guard may instead scan overlapping windows; use their task guides to
+choose the complete-text budget and window geometry. A rejected input is not
+silently shortened.
 
 ## Configuration
 
-The following excerpt binds Domain to a CPU deployment with a 32K budget. Apply
-it to an existing configuration containing providers, signals and decisions.
+Every Vela model runs in the [model runtime](../../model-runtime/overview.md),
+so the defaults need no configuration. The following excerpt binds Domain to
+an explicit CPU deployment with a 32K budget. Apply it to an existing
+configuration containing providers, signals and decisions.
 
 ```yaml
 routing:
@@ -158,33 +167,30 @@ routing:
     domain_classifier:
       deployment: vela-domain
       contract: label_distribution.v1
-      adapter: modernbert
-      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
 
 global:
   model_catalog:
     deployments:
       vela-domain:
-        artifact: models/Vela-1.0-Encoder-307M-Domain
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         device: cpu
-        precision: fp32
         input:
           max_tokens: 32768
           overflow: reject
 ```
 
 Use the same deployment and consumer-binding structure for other classifiers.
-PII returns `token_spans.v1`. Embedding uses the `mmbert` adapter and
-`embedding.v1`; Reranker uses `vela_reranker` and `relevance_scores.v1`. These
-adapter names describe inference architectures and are independent of release
-names. See [in-process inference](/docs/installation/runtime/in-process) for the full contract.
+PII returns `token_spans.v1`, Embedding `embedding.v1` and Reranker
+`relevance_scores.v1`. The runtime reads each model's architecture from its
+package, so these bindings need no adapter. See
+[Run it with the router](../../model-runtime/deploy.md) for the full contract.
 
 For Hazard, bind the independent classifier contract `label_scores.v1` and pin
 `operating_point.json` with its SHA-256. The policy binds the weights, tokenizer,
-execution settings, overlapping windows and twelve thresholds. Decisions select
-labels without replacing those thresholds. The reference configuration includes
-this complete pattern.
+overlapping windows and twelve thresholds. Decisions select labels without
+replacing those thresholds. The reference configuration includes this complete
+pattern.
 
 PII's overlapping scan and Hazard's windowed policy differ from whole-document
 classification. Select the policy appropriate to the task, and measure latency
@@ -192,44 +198,26 @@ with the input lengths your application will send.
 
 ## Inference engines and hardware
 
-Native Vela artifacts run through Candle. CPU execution is validated, including
-32K inputs. CUDA remains an available Candle backend; NVIDIA performance must be
-measured on the target hardware.
+The model runtime runs Vela models with PyTorch on CPU, CUDA or ROCm.
+A supported input length is a capacity limit, not a latency guarantee. Long
+inputs can exceed request deadlines on a CPU with few cores; measure the
+actual input lengths and concurrency on the hardware you plan to serve.
+Select suitable CPU capacity or a GPU deployment rather than assuming a longer
+timeout will solve a capacity problem. [Profiles](../../model-runtime/profiles.md) trade exactness
+for speed, and [Choose a model](../../model-runtime/choose-a-model.md) lists
+what each model costs.
 
-ONNX is the portable inference format for the ORT provider. The
-[Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
-explicitly binds all ten task models to AMD GPU execution: CK FlashAttention
-through ROCm for Embedding and Reranker, a fixed 8K ROCm graph for Guard, and
-MIGraphX for the other classifiers. It pins
-each artifact and preserves the published operating policies. `--platform amd`
-selects the AMD image and device access; it does not make every authored model
-use a GPU or override an explicit CPU deployment.
+The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
+places all ten task models on an AMD GPU and preserves the published operating
+policies. `--platform rocm` selects the AMD image and device access; it does not
+make every authored model use a GPU or override an explicit CPU deployment.
+See [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd).
 
-The complete signal pipeline is measured with an **8K** input budget.
-Standalone Embedding and Reranker execution is qualified through **32K**;
-Hazard uses its qualified 2,048-token windows within a 32K logical budget.
-These limits do not establish 32K AMD execution for all classifiers. Initial GPU
-compilation and warm request latency are separate measurements.
-
-For longer Domain and FactCheck requests, use the optional
-[32K ROCm deployments](../../installation/amd-rocm.md#optional-32k-domain-and-factcheck-on-rocm).
-They require more GPU memory and add latency for short inputs.
-
-The Embedding and Reranker repositories include FP32 ONNX graphs with shared
-external weights. The full representation uses `onnx/model.onnx`; reduced
-representations require their matching trained layer or layer/dimension graph.
-The downloader resolves a full-size selection from the model's encoder
-configuration, so an explicit full selection can use the primary graph.
-The CK variants use `onnx/model_fa.onnx` for the full 22-layer, 768-dimensional
-representation. Select that exact `head`, `device: rocm:0`,
-`custom_ops_profile: ck_flash_attention` and `precision: native`. Reranker's
-`pair_scorer` must match the graph: reduced exits use
-`onnx/model_fa_layer_N_dim_D.onnx` with the same layer and dimension. Embedding
-uses matching `onnx/model_fa_layer_N.onnx` companions. These graphs share the
-published external weights and retain the portable exports.
-
-Replacing native weights also requires regenerating the corresponding ONNX
-artifacts before publishing the update.
+Earlier releases ran Vela through Candle, ONNX Runtime, MIGraphX or OpenVINO
+and selected exported ONNX graphs with `head`. Those providers are removed; the
+model repositories keep their ONNX exports for other tools.
+`vllm-sr config migrate` rewrites old deployments; see
+[Migrate from the native bindings](../../model-runtime/migrate.md).
 
 All models expose their supported input length, usage and comparable evaluation
 results in their model cards. Published comparisons use the previous mmBERT
@@ -246,7 +234,7 @@ start it with the AMD image. Connect an existing vLLM backend served as
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
 Route Preview returns actual signal values, decisions and per-signal latency.

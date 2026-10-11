@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -18,7 +18,7 @@ import (
 // a few MB even for 1024-dim models.
 const defaultEmbeddingMemoSize = 512
 
-// InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
+// InMemoryCache provides a high-performance semantic cache over embeddings held in memory
 type InMemoryCache struct {
 	embeddingProvider   embedding.Provider
 	entries             []CacheEntry
@@ -43,10 +43,9 @@ type InMemoryCache struct {
 
 	hnswIndex        *HNSWIndex
 	useHNSW          bool
-	hnswNeedsRebuild bool                 // true while the HNSW graph is stale relative to entries
-	hnswEfSearch     int                  // Search-time ef parameter
-	embeddingModel   string               // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
-	polarityGuard    PolarityGuardOptions // optional NLI polarity tier (#2751)
+	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
+	hnswEfSearch     int    // Search-time ef parameter
+	embeddingModel   string // "mmbert" (default), "qwen3" or "multimodal"
 
 	// embMemo deduplicates query-embedding inference: a cache-miss request
 	// otherwise embeds the same query twice (lookup + pending write), so the
@@ -72,12 +71,11 @@ type InMemoryCacheOptions struct {
 	TTLSeconds          int
 	Enabled             bool
 	EvictionPolicy      EvictionPolicyType
-	UseHNSW             bool                 // Enable HNSW index for faster search
-	HNSWM               int                  // Number of bi-directional links (default: 16)
-	HNSWEfConstruction  int                  // Size of dynamic candidate list during construction (default: 200)
-	HNSWEfSearch        int                  // Size of dynamic candidate list during search (default: 50)
-	EmbeddingModel      string               // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
-	PolarityGuard       PolarityGuardOptions // Optional NLI polarity tier (#2751)
+	UseHNSW             bool   // Enable HNSW index for faster search
+	HNSWM               int    // Number of bi-directional links (default: 16)
+	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
+	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
+	EmbeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 func attachInMemoryEvictionPolicy(cache *InMemoryCache, policy EvictionPolicyType) {
@@ -159,7 +157,6 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		"eviction_policy":      options.EvictionPolicy,
 		"use_hnsw":             options.UseHNSW,
 		"embedding_model":      embeddingModel,
-		"polarity_guard_nli":   options.PolarityGuard.UseNLI,
 	})
 
 	cache := &InMemoryCache{
@@ -176,7 +173,6 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
 		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, inMemoryEmbeddingOptions(embeddingModel)),
-		polarityGuard:       options.PolarityGuard,
 		embMemo:             embedding.NewMemo(defaultEmbeddingMemoSize),
 	}
 
@@ -189,7 +185,6 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		"use_hnsw":             options.UseHNSW,
 		"hnsw_ef_search":       efSearch,
 		"embedding_model":      embeddingModel,
-		"polarity_guard_nli":   options.PolarityGuard.UseNLI,
 	})
 
 	attachInMemoryEvictionPolicy(cache, options.EvictionPolicy)
@@ -227,6 +222,8 @@ func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]f
 }
 
 // computeEmbedding runs the configured embedding model for text (no caching).
+func (c *InMemoryCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *InMemoryCache) computeEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return invokeCacheEmbedding(ctx, c.embeddingProvider, text)
 }

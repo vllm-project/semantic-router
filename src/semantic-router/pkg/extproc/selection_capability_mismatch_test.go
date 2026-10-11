@@ -32,12 +32,12 @@ func TestAutoRoutingReportsUnsupportedCapabilityLikeNamedModel(t *testing.T) {
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
 
-	request := unsupportedThinkingRequest("auto")
+	request := unsupportedThinkingRequest("vllm-sr/auto")
 	ctx := &RequestContext{
-		RequestID: "capability-mismatch", RequestModel: "auto", TraceContext: context.Background(),
+		RequestID: "capability-mismatch", RequestModel: "vllm-sr/auto", TraceContext: context.Background(),
 		SemanticRequest: request, SourceFormat: llmprotocol.AnthropicMessagesV1,
 	}
-	_, response := router.runRequestPreRoutingStages("auto", extractSemanticRequestSignals(request), ctx)
+	_, response := router.runRequestPreRoutingStages("vllm-sr/auto", extractSemanticRequestSignals(request), ctx)
 	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != 400 {
 		t.Fatalf("auto-routed status = %d, body %s; want the 400 a named model gets", got, response.GetImmediateResponse().GetBody())
 	}
@@ -76,17 +76,18 @@ func TestAutoRoutingKeepsMixedContextAndWireExclusionsUnavailable(t *testing.T) 
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
 
-	request := unsupportedThinkingRequest("auto")
+	request := unsupportedThinkingRequest("vllm-sr/auto")
 	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, request)
-	ctx.RequestModel = "auto"
-	_, response := router.runRequestPreRoutingStages("auto", extractSemanticRequestSignals(request), ctx)
+	ctx.RequestModel = "vllm-sr/auto"
+	_, response := router.runRequestPreRoutingStages("vllm-sr/auto", extractSemanticRequestSignals(request), ctx)
 	if ctx.VSRContextTokenCount <= messagesParams.ContextWindowSize {
 		t.Fatalf("context estimate %d did not exercise the context-window exclusion", ctx.VSRContextTokenCount)
 	}
 	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != 503 {
 		t.Fatalf("mixed context and wire exclusions returned %d, body %s; want fail-closed 503", got, response.GetImmediateResponse().GetBody())
 	}
-	if ctx.ImmediateProtocolError != nil {
-		t.Fatalf("mixed exclusions were attributed solely to the caller: %v", ctx.ImmediateProtocolError)
+	if protocolError := ctx.ImmediateProtocolError; protocolError == nil ||
+		isClientProtocolError(protocolError.Category) || protocolError.Code != routingFailureNoEligibleModel.code {
+		t.Fatalf("mixed exclusions were attributed solely to the caller: %v", protocolError)
 	}
 }

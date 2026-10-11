@@ -12,8 +12,8 @@ Use it to:
 - import and activate Recipe packages;
 - test routes in the Playground and inspect the selected path;
 - view topology, logs, evaluations, and monitoring tools;
-- manage security policies, ML selection workflows, MCP tools, and optional
-  OpenClaw workers when those features are enabled.
+- manage security policies, ML selection workflows, and MCP tools when those
+  features are enabled.
 
 Playground starts with the default route advertised by the Router. Named recipe
 entrypoints and orchestration aliases remain selectable alongside it; adding a
@@ -21,7 +21,8 @@ Fusion route does not change ordinary chat's default. If the Router advertises
 only explicit entrypoints, Playground selects the first available entrypoint.
 
 The Dashboard is a control plane, not an inference proxy. Applications should
-send inference requests to Envoy.
+send inference requests to the Router's listener (to Envoy with
+`--gateway extproc`).
 
 ## Local development
 
@@ -69,7 +70,7 @@ when changing sr-bench UI or workflows. `dashboard-check` runs, in order:
 | Step | What it covers |
 | --- | --- |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
-| `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
+| `dashboard-type-check` | TypeScript type checking (frontend) |
 | `dashboard-test-frontend` | Frontend unit tests |
 | `dashboard-test-backend` | Go test inventory and JSON test evidence on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
@@ -130,16 +131,6 @@ Feature controls:
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
-| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. Defaults to `false`; `vllm-sr serve` mounts the container socket only when explicitly enabled. |
-
-OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
-server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
-letters or digits, with single hyphens or underscores separating groups. Paths,
-case or whitespace aliases, and unknown IDs return HTTP 400 before provisioning
-starts, including for asynchronous requests. Malformed catalog JSON returns
-HTTP 500 when skills are selected. Omitting skills or selecting an empty list
-still provisions without skills. Administrators can supply a catalog with
-`OPENCLAW_SKILLS_PATH`.
 
 ## sr-bench evaluation
 
@@ -246,11 +237,6 @@ differs from the backend's `Host`, as behind a reverse proxy or the Vite dev
 proxy (`http://localhost:3001`). Unset, the origin check is advisory and the
 CSRF token is the guarantee. `Authorization: Bearer` requests are exempt.
 
-The same list governs the ClawRoom WebSocket handshake. CORS does not apply to
-handshakes, so the origin check is the only cross-origin control there; a
-split-origin frontend that is not listed can authenticate and write but cannot
-open the room socket.
-
 sr-bench APIs are intentionally stricter: they accept browser
 requests only when `Origin` exactly matches the request scheme and `Host`.
 TLS-terminating proxies must overwrite `X-Forwarded-Proto` with the external
@@ -261,8 +247,27 @@ ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
 the matching flag so the UI does not offer operations the runtime cannot
 persist.
 
-Some local workflows can manage containers. Do not mount a container-runtime
-socket unless users with Dashboard access are allowed to control that runtime.
+The Dashboard holds no container runtime: its image has no container CLI, and
+`vllm-sr serve` mounts no runtime socket. A saved change the Router hot-reloads
+applies at once; one the running containers can't take (the Router answers
+`restart_required`, or an extproc stack's generated Envoy config changes) is
+recorded beside the runtime config as a pending activation, and the Dashboard
+answers "Restart required: run `vllm-sr serve` to apply." The CLI applies it
+(`src/vllm-sr/cli/pending_activation.py`). A Recipe activation or deactivation
+that needs the containers recreated (new listeners, storage or management API)
+is committed the same way and answered `202` with `status: restart_required`;
+the Dashboard reads the stack's storage from what `vllm-sr serve` passed it and
+never inspects containers.
+
+The status page reads the Router's and Envoy's HTTP probes. For a service that
+does not answer, it reads the stack's files instead: the runtime config's setup
+block (standby), the heartbeat of a `vllm-sr serve` that is starting the stack
+(starting), and the pending activation. Logs come from the bounded log spool.
+
+`vllm-sr serve` owns the Router management credential the Dashboard uses
+(`VLLM_SR_DASHBOARD_RECIPE_TOKEN`) and passes it in the environment; the
+Dashboard never writes it down. The entrypoint shares the Recipe store with the
+group in `VLLM_SR_RECIPE_STORE_GID`, the CLI user's, so a non-root CLI reads it.
 See the [security hardening guide](../website/docs/installation/security-hardening.md)
 for the deployment boundary.
 
@@ -311,8 +316,63 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **`--setup-mode` / `DASHBOARD_SETUP_MODE` is deprecated and ignored.** It is still read, but only so that a value disagreeing with the config file can be reported: `/api/setup/state` returns a `reason`, and the backend logs one `WARNING` per change (not per request, since the endpoint is unauthenticated). A stale environment value can no longer open bootstrap on its own.
 - **An unreadable or unparsable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
+- **The `-openclaw*` flags are deprecated and ignored.** OpenClaw was removed. `-openclaw`, `-openclaw-url`, `-openclaw-data` and `-openclaw-token` still parse for this release, so an older manifest keeps starting, and the backend logs one `DEPRECATED` line naming the flags and `OPENCLAW_*` variables it was given. The next release no longer accepts the flags.
 
 ## Router contract access
+
+**System → Platform & Access → Integrations** opens MCP Servers. MCP keeps its
+existing read and management permissions.
+
+### Decision models
+
+**Build → System One** contains three independent pages:
+**Decision Models**, **Decision Playground**, and **Decision Monitoring**.
+Decision Models at `/decision-model` selects and deploys the router's decision
+models. Search and filter the provider catalog by family or question capability.
+Vela controls built-in router intelligence; the default remains Vela-2.0-0.3B.
+Decision 1.0 and 2.0 are separate custom runtimes for Choice, Score and Noul
+questions or decision selectors. Their deployment dialog saves a pinned
+declaration and an explicitly selected consumer binding in one canonical config
+update. It preserves the Vela default, other bindings and existing runtime tuning.
+Saving an unbound declaration does not start a model. Saved configuration,
+activation and observed readiness remain separate states. Configuration readers
+can inspect the catalog but cannot deploy. **System → Runtime → Models → Model
+Hub** contains the broader backend model catalog.
+
+The lightweight Decision catalog is generated from the canonical model-runtime
+registry and family capabilities without importing ML dependencies. Run
+`make decision-runtime-catalog-generate` after changing its source tables;
+`make decision-runtime-catalog-check` rejects stale projections in the generated
+contract and pre-commit gates. Production frontend builds consume the checked-in
+projection without requiring Python or downloading models.
+
+Decision Monitoring at `/decision-model/monitoring` charts runtime traffic,
+unsuccessful calls, latency and result-cache behavior using Prometheus samples for each deployment. Select a
+time range to inspect trends. Missing samples remain unknown; statistics require
+observability read access and aggregate matching deployments across the routers
+scraped by Prometheus.
+
+Management reads configuration on entry, explicit refresh, deployment, or an
+observed configuration change. Routine polling reads operational state only;
+metrics and chart code load on the monitoring page. Router or Engine mode is
+identified on the Dashboard homepage.
+
+**Decision Playground** is a separate System One workspace at
+`/decision-model/playground`. Compose a state and named Choice, Score, Noul, Set
+or Span questions, then inspect structured answers or the native request and
+response. Available question types come from the running model's capabilities.
+Viewing the workspace requires `config.read`; running a test requires
+`evaluation.run`. Tests run against an already configured deployment and do not
+change routing configuration or select a new model.
+
+The Dashboard's `/api/decision-model/capabilities` and
+`/api/decision-model/test` endpoints use the Router's
+`/api/v1/diagnostics/models/systemone` diagnostic API. When connected to a
+standalone Engine, they use that Engine's `/v1/models` and `/v1/systemone` APIs.
+The native System One contract remains owned by the model runtime; request
+targets come from the connected service rather than a caller-supplied URL.
+
+### Router API reference
 
 The **System → Platform & Access → Router API Docs** entry opens the running
 Router's Swagger UI through the authenticated Dashboard origin. Its companion
@@ -342,7 +402,6 @@ Browser
 - [`backend/handlers/`](backend/handlers/) implements control-plane workflows.
 - [`backend/recipe/`](backend/recipe/) validates and materializes Recipe
   packages.
-- [`wizmap/`](wizmap/) builds the embedded knowledge-map view.
 
 Keep detailed user workflows in the website and keep this README focused on
 developing and operating the Dashboard itself.

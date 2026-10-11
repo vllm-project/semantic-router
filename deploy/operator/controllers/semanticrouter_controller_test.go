@@ -20,8 +20,6 @@ import (
 	"context"
 	"testing"
 
-	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -33,6 +31,9 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
@@ -697,6 +698,65 @@ func TestGenerateIngress(t *testing.T) {
 	if ing.Spec.Rules[0].Host != "example.com" {
 		t.Errorf("expected host 'example.com', got '%s'", ing.Spec.Rules[0].Host)
 	}
+
+	// servicePort is optional: an omitted port must target the api Service
+	// port instead of serialising an empty backend port the API server
+	// rejects (#4414).
+	if got := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number; got != DefaultAPIPort {
+		t.Errorf("omitted servicePort: backend port = %d, want %d", got, DefaultAPIPort)
+	}
+}
+
+func TestGenerateIngressServicePortFollowsAPIService(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	r := &SemanticRouterReconciler{
+		Scheme: s,
+	}
+
+	tests := []struct {
+		name        string
+		apiPort     int32
+		servicePort int32
+		setPort     bool
+		wantPort    int32
+	}{
+		{name: "omitted port follows custom api port", apiPort: 9000, wantPort: 9000},
+		{name: "omitted port defaults to DefaultAPIPort", wantPort: DefaultAPIPort},
+		{name: "explicit port wins over api port", apiPort: 9000, servicePort: 9090, setPort: true, wantPort: 9090},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := vllmv1alpha1.IngressPath{Path: "/", PathType: "Prefix"}
+			if tt.setPort {
+				path.ServicePort = tt.servicePort
+			}
+			sr := &vllmv1alpha1.SemanticRouter{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: vllmv1alpha1.SemanticRouterSpec{
+					Service: vllmv1alpha1.ServiceSpec{
+						API: vllmv1alpha1.PortSpec{Port: tt.apiPort},
+					},
+					Ingress: vllmv1alpha1.IngressSpec{
+						Hosts: []vllmv1alpha1.IngressHost{
+							{Host: "example.com", Paths: []vllmv1alpha1.IngressPath{path}},
+						},
+					},
+				},
+			}
+
+			ing := r.generateIngress(sr)
+			if ing == nil {
+				t.Fatal("generateIngress() returned nil")
+			}
+			got := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number
+			if got != tt.wantPort {
+				t.Errorf("backend port = %d, want %d", got, tt.wantPort)
+			}
+		})
+	}
 }
 
 func TestGenerateContainers(t *testing.T) {
@@ -787,7 +847,7 @@ func TestGenerateVolumes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			volumes := r.generateVolumes(tt.sr, "gateway-integration")
+			volumes := r.generateVolumes(tt.sr)
 
 			if len(volumes) != tt.expectedVolume {
 				t.Errorf("expected %d volumes, got %d", tt.expectedVolume, len(volumes))

@@ -32,6 +32,8 @@ var signalTutorialBuckets = map[string]string{
 	"metadata":       "heuristic",
 	"classifier":     "learned",
 	"input-modality": "heuristic",
+	"action":         "heuristic",
+	"decision":       "learned",
 }
 
 var retiredSignalTutorialDocs = []string{

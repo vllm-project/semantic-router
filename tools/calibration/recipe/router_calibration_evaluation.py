@@ -139,7 +139,9 @@ def _compare_probe_outcome(
     selection_status = str(data.get("selection_status") or "").strip()
     selection_method = str(data.get("selection_method") or "").strip()
     selection_reason = str(data.get("selection_reason") or "").strip()
-    signal_errors = data.get("signal_errors") or {}
+    signal_errors = data.get("signal_errors")
+    if signal_errors is None:
+        signal_errors = {}
     actual_recipe = str(data.get("recipe") or "").strip()
     expected_recipe = probe.expected_recipe or "default"
     actual_algorithm = str(decision_result.get("algorithm") or "").strip()
@@ -192,7 +194,10 @@ def _compare_probe_outcome(
         "signal_values": value_comparison["matched"],
         "alias": expected_alias_matches(probe.expected_alias, actual_models),
         "trace": trace_comparison["matched"],
-        "signal_errors": not signal_errors,
+        "signal_errors": (
+            isinstance(signal_errors, dict)
+            and signal_errors == probe.expected_signal_errors
+        ),
         "selection": selection_comparison["matched"],
     }
     selection_shape = compare_selection_structure(
@@ -272,6 +277,7 @@ def _build_probe_result(
         "selection_reason": outcome["selection_reason"],
         "selection_method": outcome["selection_method"],
         "signal_errors": outcome["signal_errors"],
+        "expected_signal_errors": dict(probe.expected_signal_errors),
         "expected_recipe": outcome["expected_recipe"],
         "actual_recipe": outcome["actual_recipe"],
         "expected_algorithm": probe.expected_algorithm,
@@ -476,6 +482,7 @@ def compare_eval_selection(
         "static": {"selected", "execution_required"},
         "multi_factor": {"selected", "execution_required"},
         "latency_aware": {"selected", "execution_required"},
+        "decision": {"selected", "execution_required"},
         # Multi-model algorithms expose a configured final-output model when
         # one exists; otherwise their final model is known only after execution.
         "workflows": {"planned_final", "execution_required"},
@@ -671,8 +678,7 @@ def _validate_materialized_message_size(probe: Probe, max_json_bytes: int) -> No
             raw_type = item.get("type")
             item_type = str(raw_type or "").strip().lower()
             label = (
-                f"{probe.probe_id} messages[{message_index}].content"
-                f"[{content_index}]"
+                f"{probe.probe_id} messages[{message_index}].content[{content_index}]"
             )
             if item_type in {"image_url", "input_image"}:
                 raise ValueError(

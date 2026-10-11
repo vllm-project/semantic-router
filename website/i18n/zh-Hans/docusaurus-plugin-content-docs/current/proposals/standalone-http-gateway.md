@@ -2,14 +2,14 @@
 title: 独立 HTTP Gateway
 description: 实验性独立推理网关，加上传输中立的共享语义运行时。一个引擎，两个适配器（ExtProc 和 HTTP）；网关额外拥有生产支持决策之前所需的物理流量层、流量控制、治理、可观测性和安全边界。
 created: 2026-08-31
-status: 提案
+status: 已取代
 translation:
   source_commit: "b32d1ba6a3c6850e0e935d8a02bcbe69f4cf8064"
   source_file: "docs/proposals/standalone-http-gateway.md"
   outdated: false
 ---
 
-> **状态：** 提案 - **创建日期：** 2026-08-31 - **修订：** 2026-09-01
+> **状态：** 已被 [Standalone 模式](./standalone-mode) 取代 - **创建日期：** 2026-08-31 - **修订：** 2026-09-01
 
 ## 摘要 {#summary}
 

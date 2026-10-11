@@ -28,8 +28,8 @@ prescribe a work loop, or decide when the task is complete.
 
 - `src/semantic-router/`: Go router, ExtProc runtime, routing, and APIs
 - `src/vllm-sr/`: Python CLI and local stack orchestration
+- `src/model-runtime/`: model runtime that serves every model the router uses
 - `config/`: canonical configuration, fragments, schemas, and recipes
-- `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`: inference bindings
 - `dashboard/`: React frontend and Go management backend
 - `deploy/`: deployment artifacts and operator
 - `e2e/`: end-to-end framework and profiles

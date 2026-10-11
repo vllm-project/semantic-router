@@ -2,7 +2,7 @@
 title: 训练 Vela 分类器
 sidebar_label: 分类器
 translation:
-  source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/training/classifier-models.md"
   outdated: false
 ---
@@ -95,6 +95,6 @@ PII 训练使用实体片段，而不是为整个请求指定一个标签。BIO 
 
 通过[序列导出工具](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#freeze-then-evaluate-the-independent-test)导出选中的模型，包含训练权重、tokenizer 和任务标签映射。PII 使用专用导出流程。
 
-最后配置[本地模型绑定](../installation/runtime/in-process.md)，通过[路由预览](../installation/runtime/lifecycle-diagnostics.md)发送代表性请求，同时检查实际信号、决策和置信度。
+最后配置[本地模型绑定](../model-runtime/deploy)，通过[路由预览](../model-runtime/troubleshooting.md)发送代表性请求，同时检查实际信号、决策和置信度。
 
 [产物索引](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)保留早期 mmBERT adapter 和 merged 模型的入口。

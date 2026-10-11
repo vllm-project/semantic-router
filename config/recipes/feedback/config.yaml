@@ -11,9 +11,6 @@ global:
     response_cache:
       enabled: false
       backend_type: memory
-  router:
-    auto_model_names:
-      - vllm-sr/auto
 
 providers:
   defaults:
@@ -306,7 +303,7 @@ routing:
         method: threshold_bands
         outputs:
           - name: feedback_needs_evidence
-            gte: 0.42
+            gte: 0.45
 
   decisions:
     - name: omni
@@ -565,3 +562,7 @@ routing:
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

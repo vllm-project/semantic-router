@@ -2,7 +2,7 @@
 title: 训练 Vela Router 模型
 sidebar_label: 概览
 translation:
-  source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/training/training-overview.md"
   outdated: false
 ---
@@ -23,7 +23,7 @@ translation:
 | 检测个人信息 | [PII](./classifier-models#pii-detector) | 实体片段 |
 | 应用内容风险策略 | [Safety 和 Hazard](./mmbert-safety-classifier) | 安全判断和风险类别 |
 
-[Vela 模型目录](./model-catalog)列出了全部 11 个模型。Vela 1.0 接受文本输入；[多模态嵌入](./multimodal-embeddings)属于独立家族。[后端模型评测](./model-performance-eval)和[学习式模型选择](./ml-model-selection)用于选择下游 LLM。
+[Vela 模型目录](./model-catalog)列出了各任务 checkpoint。Vela 1.0 接受文本输入；[多模态嵌入](./multimodal-embeddings)属于独立家族。[后端模型评测](./model-performance-eval)和[学习式模型选择](./ml-model-selection)用于选择下游 LLM。
 
 ## 选择起始模型 {#record-the-base-and-task-lineage}
 
@@ -53,10 +53,10 @@ translation:
 
 ## 接入 Router {#use-the-trained-model-in-the-router}
 
-导出包含 tokenizer 和标签的完整 checkpoint。在[本地运行模型](../installation/runtime/in-process.md)中选择支持的引擎和输入预算，然后验证配置：
+导出包含 tokenizer 和标签的完整 checkpoint。在[本地运行模型](../model-runtime/deploy)中选择支持的引擎和输入预算，然后验证配置：
 
 ```bash
 vllm-sr config validate --config config.yaml
 ```
 
-使用[路由预览](../installation/runtime/lifecycle-diagnostics.md)，在部署到真实流量前检查代表性请求的信号、决策和延迟。
+使用[路由预览](../model-runtime/troubleshooting.md)，在部署到真实流量前检查代表性请求的信号、决策和延迟。

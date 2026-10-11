@@ -166,15 +166,23 @@ def bench_command_identity(command: list[str], credentials: dict[str, str]) -> s
     ).hexdigest()
 
 
+class BenchWorkerKeptError(ValueError):
+    """The existing sr-bench worker stays as it is; the rest of the stack starts."""
+
+
 def reconcile_bench_container(
     command: list[str], container_name: str, credentials: dict[str, str]
 ) -> str | None:
-    """Reuse a matching worker, or remove an owned idle worker for an image upgrade.
+    """Reuse a matching worker, replace an owned idle one, or keep it running.
 
-    Identity covers every launch argument and credential. The previous image is
-    the only permitted difference; even legacy workers carry the full identity.
-    A worker that never started is removed whatever its identity: it holds no
-    ledger state, and left in place its name would fail every later serve.
+    Identity covers every launch argument and credential, so only an identical
+    worker is reused. Any other change (image, host alias, port, credential or
+    store) replaces the worker once its own journal shows no active work.
+    A worker that cannot be replaced safely is kept and reported with
+    ``BenchWorkerKeptError``: sr-bench is independent of the Router and Dashboard,
+    and refusing it must not leave the stack down. A worker that never started
+    is removed whatever its identity: it holds no ledger state, and left in
+    place its name would fail every later serve.
     """
     expected = next(
         (
@@ -192,7 +200,7 @@ def reconcile_bench_container(
             "inspect",
             "--format",
             '{"id":{{json .Id}},"status":{{json .State.Status}},'
-            '"labels":{{json .Config.Labels}},"image":{{json .Config.Image}}}',
+            '"labels":{{json .Config.Labels}},"args":{{json .Args}}}',
             container_name,
         ],
         capture_output=True,
@@ -226,21 +234,18 @@ def reconcile_bench_container(
             )
         return None
     if status != "running":
-        raise ValueError(
-            "The sr-bench service is stopped; inspect its saved ledger before an explicit service restart"
+        raise BenchWorkerKeptError(
+            f"The sr-bench service {container_name} is stopped; inspect its saved "
+            "ledger before an explicit service restart. Benchmarks stay "
+            "unavailable until then."
         )
     if isinstance(labels, dict) and labels.get(BENCH_IDENTITY_LABEL) == expected:
         return "reuse"
-    previous = _previous_image_command(command, existing.get("image"))
-    if (
-        previous is None
-        or not isinstance(labels, dict)
-        or labels.get(BENCH_IDENTITY_LABEL)
-        != bench_command_identity(previous, credentials)
-        or not existing.get("id")
-    ):
-        raise ValueError(
-            "The running sr-bench service has a different identity, store or credential; reconcile it before replacing the service"
+    store = _running_worker_store(existing)
+    if store is None or not existing.get("id"):
+        raise BenchWorkerKeptError(
+            f"{container_name} is not an sr-bench worker this CLI started; it was "
+            "left unchanged. Remove it to let serve start a new worker."
         )
     image = command[command.index("cli.sr_bench.service") - 2]
     subprocess.run(
@@ -250,34 +255,31 @@ def reconcile_bench_container(
         check=True,
         timeout=10,
     )
-    store = Path(previous[previous.index("--store") + 1])
-    _remove_idle_bench_container(command[0], existing["id"], store)
+    try:
+        _remove_idle_bench_container(command[0], existing["id"], store)
+    except ValueError as exc:
+        raise BenchWorkerKeptError(
+            f"{exc}. The running sr-bench worker was kept with its previous "
+            "settings; run serve again once it is idle to update it."
+        ) from exc
     return "replace"
 
 
-def _previous_image_command(command: list[str], image: str | None) -> list[str] | None:
-    """Reconstruct the legacy identity without changing any non-image argument."""
-    if not isinstance(image, str) or not image:
+def _running_worker_store(existing: dict) -> Path | None:
+    """The store a labelled worker was launched with, read from its arguments."""
+    labels = existing.get("labels")
+    args = existing.get("args")
+    if not isinstance(labels, dict) or BENCH_IDENTITY_LABEL not in labels:
         return None
-    previous = list(command)
+    if not isinstance(args, list) or "cli.sr_bench.service" not in args:
+        return None
     try:
-        label = next(
-            i
-            for i, arg in enumerate(previous)
-            if arg.startswith(BENCH_IDENTITY_LABEL + "=")
-        )
-        if previous[label - 1] != "--label":
-            return None
-        del previous[label - 1 : label + 1]
-        module = previous.index("cli.sr_bench.service")
-        if previous[module - 1] != "-m" or previous[module - 2] == image:
-            return None
-        previous[module - 2] = image
-        if previous[module + 1] != "--store":
-            return None
-    except (StopIteration, ValueError, IndexError):
+        store = args[args.index("--store") + 1]
+    except (ValueError, IndexError):
         return None
-    return previous
+    if not isinstance(store, str) or not os.path.isabs(store):
+        return None
+    return Path(store)
 
 
 def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -> None:
@@ -317,7 +319,7 @@ def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -
             ) from exc
         if busy:
             raise ValueError(
-                "The sr-bench service has active runs; finish or cancel them before an image upgrade"
+                "The sr-bench service has active runs; finish or cancel them before it is replaced"
             )
         # Preparation workers share this service lifecycle but have their own
         # durable journal. Inspect it while admission and its children are frozen.
@@ -352,7 +354,7 @@ def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -
             ) from exc
         if preparing:
             raise ValueError(
-                "The sr-bench service has active dataset preparations; wait for them to finish before an image upgrade"
+                "The sr-bench service has active dataset preparations; wait for them to finish before it is replaced"
             )
         # No benchmark can be dispatched after the idle check while frozen.
         # SQLite's durable journal survives removal; only the owned ID is removed.

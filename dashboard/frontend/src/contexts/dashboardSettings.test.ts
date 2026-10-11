@@ -7,7 +7,7 @@ const readySettings = {
   runtimeConfigWritable: true,
   recipeStoreWritable: true,
   setupMode: false,
-  platform: 'amd',
+  platform: 'rocm',
   envoyUrl: 'http://envoy',
   routerEvalEndpoint: 'http://router/api/v1/routing/preview',
   srBenchAvailable: true,
