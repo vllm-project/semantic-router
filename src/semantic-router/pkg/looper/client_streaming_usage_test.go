@@ -74,6 +74,23 @@ func TestParseStreamingUsage_IgnoresNullUsageChunks(t *testing.T) {
 	}
 }
 
+func TestParseStreamingUsage_PreservesFieldPresence(t *testing.T) {
+	body := []byte("data: {\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0}}\n")
+	usage, presence := parseStreamingUsageWithPresence(body)
+	if usage != (TokenUsage{}) {
+		t.Fatalf("usage = %+v, want explicit zero counts", usage)
+	}
+	if !presence.PromptTokens || !presence.CompletionTokens || !presence.TotalTokens {
+		t.Fatalf("presence = %+v, want all fields present", presence)
+	}
+
+	partialBody := []byte("data: {\"usage\":{\"completion_tokens\":2}}\n")
+	_, partial := parseStreamingUsageWithPresence(partialBody)
+	if partial.Any() && (&ModelResponse{UsagePresent: partial}).UsageKnown() {
+		t.Fatalf("partial presence = %+v, want unknown usage", partial)
+	}
+}
+
 func TestParseStreamingResponse_PopulatesUsage(t *testing.T) {
 	c := &Client{}
 	body := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
