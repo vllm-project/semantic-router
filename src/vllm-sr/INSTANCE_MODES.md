@@ -51,19 +51,21 @@ vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0,1
 vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0
 ```
 
-## Ask about images
+## Ask about images and videos
 
 Decision 3.0 models (`vllm-sr/d3`, `d3-flash`, `d3-mini`, `d3-nano`,
-`d3-lite`) read images as well as text. Serve one on an AMD Instinct MI325X:
+`d3-lite`, `d3-edge`) read images and videos as well as text. Serve one on an
+AMD Instinct MI325X:
 
 ```bash
 vllm-sr serve vllm-sr/d3-lite --engine --platform rocm
 ```
 
 A request may carry any number of `images` as base64 PNG, JPEG or WebP data
-URLs; every question sees them, in front of the text. Each image may have up to
-8,000,000 bytes and 16,000,000 pixels, the model reads it at up to 1.6
-megapixels, and a request body may have up to 32 MiB:
+URLs and `videos` as base64 MP4, WebM, QuickTime or Matroska data URLs; every
+question sees them, images first, then videos, in front of the text. Each
+image may have up to 8,000,000 bytes and 16,000,000 pixels, and the model
+reads it at up to 1.6 megapixels:
 
 ```bash
 IMAGE="data:image/png;base64,$(base64 -w0 chart.png)"
@@ -78,9 +80,27 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 }'
 ```
 
-A text-only model answers a request with images with `invalid_request`. The
-runtime's model card lists the `modalities` a model reads and its image
-`limits`.
+Each video may have up to 32,000,000 bytes, 300 seconds and 8,294,400 pixels
+per frame. The model reads 2 frames per second, at least 4 and at most 32
+spread over the whole video, each at up to 200,704 pixels; the videos of one
+request take at most 16,384 input tokens, and a request body may have up to
+48 MiB:
+
+```bash
+VIDEO="data:video/mp4;base64,$(base64 -w0 clip.mp4)"
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+  "model": "vllm-sr/d3-lite",
+  "state": "What happens in the clip?",
+  "videos": ["'"$VIDEO"'"],
+  "questions": {
+    "moving": {"type": "noul", "instructions": "Does something move across the scene?"}
+  }
+}'
+```
+
+A model that does not read a request's images or videos answers it with
+`invalid_request`. The runtime's model card lists the `modalities` a model
+reads and its image and video `limits`.
 
 Use canonical YAML for additional deployments, task bindings, attached workers
 and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy.md).
