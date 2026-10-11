@@ -4,19 +4,22 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl/editor"
 	"syscall/js"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl/editor"
 )
 
-type CompileResult = editor.CompileResult
-type DiagnosticJSON = editor.DiagnosticJSON
-type QuickFixJSON = editor.QuickFixJSON
-type ValidateResult = editor.ValidateResult
-type SymbolTableJSON = editor.SymbolTableJSON
-type SymbolInfoJSON = editor.SymbolInfoJSON
-type DecompileResult = editor.DecompileResult
-type FormatResult = editor.FormatResult
-type ParseASTResult = editor.ParseASTResult
+type (
+	CompileResult   = editor.CompileResult
+	DiagnosticJSON  = editor.DiagnosticJSON
+	QuickFixJSON    = editor.QuickFixJSON
+	ValidateResult  = editor.ValidateResult
+	SymbolTableJSON = editor.SymbolTableJSON
+	SymbolInfoJSON  = editor.SymbolInfoJSON
+	DecompileResult = editor.DecompileResult
+	FormatResult    = editor.FormatResult
+	ParseASTResult  = editor.ParseASTResult
+)
 
 func main() {
 	js.Global().Set("signalCompile", js.FuncOf(compile))
