@@ -126,6 +126,9 @@ async def chat_completions(request: Request):
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
         return openrouter_fixture.buffered_reply(req, created_ts)
+    vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
+    if vllm_reasoning is not None:
+        return vllm_reasoning
     vllm_stop = vllm_fixture.matched_stop(req)
     if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
         if req.stream:

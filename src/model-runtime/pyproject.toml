@@ -67,6 +67,7 @@ onnxruntime = "vllm_srun.engines.onnxruntime.engine:OnnxRuntimeEngine"
 cpu = "vllm_srun.accel.cpu:CPUAccelerator"
 cuda = "vllm_srun.accel.cuda:CUDAAccelerator"
 mps = "vllm_srun.accel.mps:MPSAccelerator"
+npu = "vllm_srun.accel.npu:NPUAccelerator"
 rocm = "vllm_srun.accel.rocm:ROCmAccelerator"
 xpu = "vllm_srun.accel.xpu:XPUAccelerator"
 

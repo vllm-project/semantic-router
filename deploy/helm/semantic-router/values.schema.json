@@ -4,6 +4,28 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "grafana": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "grafana.ini": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "live": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "allowed_origins": {
+                  "type": "string",
+                  "description": "Comma-separated trusted Dashboard origins. Empty preserves Grafana's default origin checks."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "replicaCount": {
       "type": "integer",
       "minimum": 0,
