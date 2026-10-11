@@ -180,7 +180,7 @@ REF_ONLY_CONFIG = {
     "global": {
         "model_catalog": {
             "system": {
-                "decision_model": "Vela-2.0-0.3B",
+                "decision_model": {"deployment": "primary"},
                 "hazard": "models/Vela-1.0-Encoder-307M-Hazard",
             },
             "modules": {
@@ -222,7 +222,16 @@ def test_an_unset_threshold_takes_the_served_models_published_one(tmp_path):
 
 def test_the_decision_model_choice_moves_every_unset_line(tmp_path):
     config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
-    config["global"]["model_catalog"]["system"]["decision_model"] = "Vela-2.0-4B"
+    config["global"]["model_catalog"]["deployments"] = {
+        "vela-4b": {
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Vela-2.0-4B",
+            "device": "cpu",
+        }
+    }
+    config["global"]["model_catalog"]["system"]["decision_model"] = {
+        "deployment": "vela-4b"
+    }
     inventory = served_artifacts(load_config(write_config(tmp_path, config)))
     assert inventory["jailbreak"].model_path == "models/Vela-2.0-4B"
     assert inventory["jailbreak"].thresholds == (0.63,)
@@ -244,20 +253,75 @@ def test_an_explicit_system_line_still_wins_over_the_decision_model(tmp_path):
     assert inventory["domain"].model_path == "models/Vela-2.0-0.3B"
 
 
-def test_vela1_restores_the_specialists(tmp_path):
+def test_a_vela1_encoder_deployment_fills_the_lines_with_its_artifact(tmp_path):
     config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
-    config["global"]["model_catalog"]["system"] = {"decision_model": "Vela-1.0"}
+    config["global"]["model_catalog"]["deployments"] = {
+        "vela1-safety": {
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+            "device": "cpu",
+        }
+    }
+    config["global"]["model_catalog"]["system"]["decision_model"] = {
+        "deployment": "vela1-safety"
+    }
     inventory = served_artifacts(load_config(write_config(tmp_path, config)))
-    assert inventory["jailbreak"].model_path == "models/Vela-1.0-Encoder-307M-Guard"
-    assert inventory["domain"].model_path == "models/Vela-1.0-Encoder-307M-Domain"
-    assert inventory["modality"].model_path == ("models/Vela-1.0-Encoder-307M-Modality")
+    assert inventory["jailbreak"].model_path == "models/Vela-1.0-Encoder-307M-Safety"
+    assert inventory["domain"].model_path == "models/Vela-1.0-Encoder-307M-Safety"
+    assert system_refs(load_config(write_config(tmp_path, config)))["hazard"] == (
+        "models/Vela-1.0-Encoder-307M-Hazard"
+    )
 
 
-def test_an_unknown_decision_model_is_a_load_error(tmp_path):
+def test_a_bare_string_decision_model_is_a_load_error(tmp_path):
     config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
-    config["global"]["model_catalog"]["system"]["decision_model"] = "Vela-3.0-1B"
-    with pytest.raises(ValueError, match="not a decision model"):
+    config["global"]["model_catalog"]["system"]["decision_model"] = "Vela-2.0-4B"
+    with pytest.raises(ValueError, match="decision_model must be"):
         served_artifacts(load_config(write_config(tmp_path, config)))
+
+
+def test_an_unknown_deployment_key_is_a_load_error(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["system"]["decision_model"] = {
+        "deployment": "missing-deployment"
+    }
+    with pytest.raises(ValueError, match="unknown deployment"):
+        served_artifacts(load_config(write_config(tmp_path, config)))
+
+
+def test_a_non_model_runtime_deployment_is_a_load_error(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["deployments"] = {
+        "remote": {"provider": "openai", "endpoint": "https://api.example.com"}
+    }
+    config["global"]["model_catalog"]["system"]["decision_model"] = {
+        "deployment": "remote"
+    }
+    with pytest.raises(ValueError, match="must use provider model_runtime"):
+        served_artifacts(load_config(write_config(tmp_path, config)))
+
+
+def test_a_kai_binding_fills_the_lines_with_the_served_artifact(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["deployments"] = {
+        "decision-kai": {
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Decision-2.0-Kai-0.6B",
+            "device": "cpu",
+        }
+    }
+    config["global"]["model_catalog"]["system"]["decision_model"] = {
+        "deployment": "decision-kai"
+    }
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    # An artifact the built-in registry does not know stays in the repo-id
+    # form the deployment declares; the gold probe against DecisionModelSpec
+    # pins this.
+    for artifact in inventory.values():
+        assert artifact.model_path == "vllm-sr/Decision-2.0-Kai-0.6B"
+    assert system_refs(load_config(write_config(tmp_path, config)))["hazard"] == (
+        "models/Vela-1.0-Encoder-307M-Hazard"
+    )
 
 
 def test_an_unknown_model_ref_is_reported_and_not_served(tmp_path):
