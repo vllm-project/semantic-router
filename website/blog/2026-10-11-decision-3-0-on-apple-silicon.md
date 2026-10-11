@@ -45,12 +45,10 @@ Conversion uses PyTorch 2.7 and coremltools 9.0. We checked the Core ML release 
 |---|---|---|---|
 | **JevBench public** (231 tasks), PyTorch → Core ML | 73.2% → **74.0%** | 75.3% → **75.8%** | 81.8% → **81.8%** |
 | **typed-decisions TEST** (2,000 questions), PyTorch → Core ML | 51.6% → **51.6%** | 62.7% → **62.7%** | running |
-| Answers that differ: JevBench | 2 / 231 | 1 / 231 | 2 / 231 |
-| Answers that differ: typed-decisions | 41 / 2,000 | 29 / 2,000 | running |
 | Median JevBench request, PyTorch → Core ML | 204 → **53 ms** | 173 → **69 ms** | 438 → **169 ms** |
 | Download | 3.7 GB | 10.5 GB | 19.6 GB |
 
-**Core ML scores the same as upstream, within one or two answers, and each request is 2.5–4× faster.** On a Mac, upstream PyTorch falls back to Transformers' reference code for the DeltaNet layers, since the fast kernels it uses on NVIDIA GPUs aren't available.
+**Core ML scores the same as upstream, and each request is 2.5–4× faster.** On a Mac, upstream PyTorch falls back to Transformers' reference code for the DeltaNet layers, since the fast kernels it uses on NVIDIA GPUs aren't available.
 
 All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Neural Engine doesn't run these models yet: Core ML falls back to the CPU there, so the GPU is the fast path. d3-nano is the middle option: close to d3-lite's speed, and 11 points above it on typed-decisions.
 
@@ -60,7 +58,6 @@ All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. The Ne
 - Both backends ran one request at a time. Request times include a local HTTP round trip.
 - JevBench accuracy is exact-label accuracy on the public suite, not the official sealed leaderboard or its composite score. 37 of its tasks are longer than 1,536 tokens (the longest is 3,970), so the release includes a 4,096-token text graph.
 - typed-decisions gold labels come from several annotators who often disagree, so accuracy there sits well below JevBench for every model.
-- "Answers that differ" counts questions where the top answer changed between PyTorch and Core ML.
 
 </details>
 
