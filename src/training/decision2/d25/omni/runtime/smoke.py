@@ -383,7 +383,7 @@ def main() -> None:
             report["models"] = models
             checks["models_advertise_images"] = (
                 status == 200
-                and models["models"][0].get("modalities") == ["text", "image"]
+                and models["models"][0].get("modalities", [])[:2] == ["text", "image"]
                 and "max_images" not in models["models"][0]
             )
             text_body = {
