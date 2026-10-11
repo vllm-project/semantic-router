@@ -199,7 +199,7 @@ func TestLooperCandidateConfidenceRetainsNativeEvidenceAndRejectsLargeVerifier(t
 	client, calls, bodies := candidateStageClient(t)
 	base := candidateStageRequest()
 	l := newBaseLooper(&config.LooperConfig{}, borrowClient(client))
-	_, _, err := l.startConfidenceModelAttempt(context.Background(), base, base.OriginalRequest, "worker", "candidate", "worker", false, 1, &LogprobsConfig{Enabled: true, TopLogprobs: 9}, "")
+	_, _, err := l.startConfidenceModelAttempt(context.Background(), base, base.OriginalRequest, "worker", "candidate", "worker", "candidate", false, 1, &LogprobsConfig{Enabled: true, TopLogprobs: 9}, "")
 	if err != nil {
 		t.Fatalf("native confidence evidence rejected: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestLooperCandidateConfidenceRetainsNativeEvidenceAndRejectsLargeVerifier(t
 	}
 	verifier := cloneRequest(base.OriginalRequest)
 	verifier.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage(strings.Repeat("review agenda ", 4096))}
-	_, _, err = l.startConfidenceModelAttempt(context.Background(), base, verifier, "worker", "self_verifier", "verifier", false, 2, nil, "")
+	_, _, err = l.startConfidenceModelAttempt(context.Background(), base, verifier, "worker", "self_verifier", "verifier", "verifier", false, 2, nil, "")
 	if !errors.Is(err, selection.ErrNoEligibleCandidates) || calls.Load() != 1 {
 		t.Fatalf("large verifier dispatched: %v calls=%d", err, calls.Load())
 	}

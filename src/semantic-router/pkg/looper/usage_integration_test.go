@@ -133,7 +133,7 @@ func TestLooperCacheWriteAliasesReachAttemptReceipts(t *testing.T) {
 				defer span.End()
 				var aggregate TokenUsage
 				for i, model := range []string{"model-a", "model-b"} {
-					response, attempt, err := l.startConfidenceModelAttempt(ctx, req, req.OriginalRequest, model, "candidate", "subject", streaming, i+1, nil, "")
+					response, attempt, err := l.startConfidenceModelAttempt(ctx, req, req.OriginalRequest, model, "candidate", "subject", "candidate", streaming, i+1, nil, "")
 					if err != nil {
 						if !streaming || !conflict {
 							t.Fatal(err)

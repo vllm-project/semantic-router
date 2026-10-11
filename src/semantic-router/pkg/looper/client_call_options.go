@@ -54,6 +54,10 @@ type CallOptions struct {
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
 
+	// ToolStage is this attempt's trusted-facts role. Empty is judged as final,
+	// the stage every Looper call used before per-attempt gating.
+	ToolStage string
+
 	// candidateRequest retains admission policy through final wire mutations.
 	// It is request-scoped; a shared Client never stores recipe policy.
 	candidateRequest *Request
@@ -93,5 +97,20 @@ func (c *Client) CallModelWithOptions(
 	if c.connector == nil && c.hops == nil {
 		return nil, fmt.Errorf("looper connector is required")
 	}
+	request = gateAttemptTools(options, request)
 	return c.callModel(ctx, &request, target, options)
+}
+
+// gateAttemptTools applies the recipe's per-stage tool gate to one outbound
+// attempt. The gate sees the attempt's own stage, so a policy that authorizes
+// only final cannot send tools on a candidate or verifier call.
+func gateAttemptTools(options CallOptions, request openai.ChatCompletionNewParams) openai.ChatCompletionNewParams {
+	if options.candidateRequest == nil || options.candidateRequest.ToolStageGate == nil {
+		return request
+	}
+	gated := options.candidateRequest.ToolStageGate(options.ToolStage, &request)
+	if gated == nil {
+		return request
+	}
+	return *gated
 }

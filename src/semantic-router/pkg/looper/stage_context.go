@@ -67,7 +67,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	ctx context.Context,
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
-	modelName, stage, role string,
+	modelName, stage, role, toolStage string,
 	streaming bool,
 	iteration int,
 	logprobsConfig *LogprobsConfig,
@@ -94,6 +94,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 			Iteration:        iteration,
 			Mode:             responseMode(streaming),
 			Logprobs:         logprobsConfig,
+			ToolStage:        toolStage,
 		},
 	)
 	if err != nil && attempt != nil {

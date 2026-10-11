@@ -2,10 +2,14 @@ package extproc
 
 import (
 	"fmt"
+	"sync"
 	"time"
+
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -16,9 +20,9 @@ import (
 // unless the decision's stage_roles authorize it.
 const trustedFactsRequestStage = llmprotocol.TrustedStageCandidate
 
-// trustedFactsLooperStage is the role attributed to Looper execution: Looper
-// forwards the tool-bearing request to the models that produce the final
-// answer, so it binds tools at the final stage.
+// trustedFactsLooperStage is the role judged for a Looper model attempt that
+// carries no stage of its own. Looper gates each attempt at its actual stage;
+// unlabeled attempts keep the final-stage judgment they always had.
 const trustedFactsLooperStage = llmprotocol.TrustedStageFinal
 
 // trustedFactsNow is the clock for availability freshness; tests override it.
@@ -121,6 +125,51 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	clearSemanticToolChoiceWhenNoTools(request)
 	_ = commitToolSelection(request, ctx)
 	return true
+}
+
+// looperToolStageGate judges each Looper model attempt at its own trusted-facts
+// stage, so a policy that authorizes only final never sends tools on a
+// candidate or verifier call, and one that authorizes candidate does not
+// widen the final stage. Each stage's outcome is evaluated and recorded once,
+// then reused, so concurrent panel and ReMoM attempts share one verdict. It
+// returns nil when the decision does not opt in.
+func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decision *config.Decision, reqCtx *RequestContext) looper.ToolStageGate {
+	if request == nil || decision == nil {
+		return nil
+	}
+	toolsCfg := decision.GetToolsConfig()
+	if !toolsCfg.TrustedFactsEnabled() {
+		return nil
+	}
+	base, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg.TrustedFacts.FreshnessSeconds), "")
+	if !ok || base.Enforcement == llmprotocol.TrustedDisabled {
+		return nil
+	}
+	var mu sync.Mutex
+	outcomes := make(map[llmprotocol.TrustedStage]llmprotocol.TrustedOutcome, 4)
+	return func(stage string, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+		attemptStage := llmprotocol.TrustedStage(stage)
+		if attemptStage == "" {
+			attemptStage = trustedFactsLooperStage
+		}
+		mu.Lock()
+		outcome, seen := outcomes[attemptStage]
+		if !seen {
+			facts := base
+			facts.Stage = attemptStage
+			outcome = llmprotocol.EvaluateTrustedFacts(facts)
+			outcomes[attemptStage] = outcome
+			r.recordTrustedFactsOutcome(reqCtx, toolsCfg, facts, outcome)
+		}
+		mu.Unlock()
+		switch outcome {
+		case llmprotocol.TrustedDeny:
+			return looper.WithoutToolUse(req)
+		case llmprotocol.TrustedNarrow:
+			return looper.NarrowToolUse(req, toolsCfg.AllowTools, toolsCfg.BlockTools)
+		}
+		return req
+	}
 }
 
 // trustedFactsToolsAvailable reports bounded runtime availability evidence:

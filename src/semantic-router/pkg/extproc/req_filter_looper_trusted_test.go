@@ -84,19 +84,21 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.T
 	return calls, callsWithTools
 }
 
-func TestHandleLooperExecutionTrustedFactsDeniesExcludedFinalStage(t *testing.T) {
-	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageCandidate}, llmprotocol.TrustedDeny)
+// A final-only policy must not send tools on Confidence's candidate attempts,
+// even though those attempts are the ones that produce the answer.
+func TestHandleLooperExecutionTrustedFactsDeniesCandidateAttemptsWhenOnlyFinalAuthorized(t *testing.T) {
+	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageFinal}, llmprotocol.TrustedDeny)
 	if calls == 0 {
 		t.Fatal("Looper made no upstream calls")
 	}
 	if withTools != 0 {
-		t.Fatalf("policy excluding the final stage must strip tools before Looper, %d/%d calls carried tools", withTools, calls)
+		t.Fatalf("final-only policy must strip tools from candidate attempts, %d/%d calls carried tools", withTools, calls)
 	}
 }
 
-func TestHandleLooperExecutionTrustedFactsAllowsAuthorizedFinalStage(t *testing.T) {
-	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageFinal}, llmprotocol.TrustedAllow)
+func TestHandleLooperExecutionTrustedFactsAllowsAuthorizedCandidateAttempts(t *testing.T) {
+	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageCandidate}, llmprotocol.TrustedAllow)
 	if calls == 0 || withTools != calls {
-		t.Fatalf("authorized final stage must keep tools, %d/%d calls carried tools", withTools, calls)
+		t.Fatalf("candidate-authorized policy must keep tools on candidate attempts, %d/%d calls carried tools", withTools, calls)
 	}
 }
