@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "5c3869fc7b8c7585f4a0dcbc89a4da1ccb34d1c9"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -213,6 +213,12 @@ global:
   传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
 - 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
   `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
+- 在多核 CPU 主机上，先在启动前用 cpuset 或亲和性掩码
+  [限制路由器的 CPU 预算](model-runtime/deploy.md#bound-the-cpu-budget-on-many-core-hosts)。
+  托管运行时的子进程（包括后加载的进程）会继承允许使用的 CPU 范围。
+  只设置线程上限可能让延迟更差；`GOMAXPROCS` 和 `--threads` 并不限制 CPU 范围。
+  对于你自己启动的运行时，单独设置 CPU 范围，再按该范围设置线程数。
+
 - 托管 CPU worker 默认使用路由器可用 CPU 预算的一半，向下取整，最少 1 个、最多 16 个线程。
   在 `vllm-sr serve` 启动前设置正整数 `VLLM_SRUN_CPU_THREADS`，即可指定每个 worker 的线程数，上限为完整 CPU 预算。
   用实际输入长度和并发量比较效果：多个模型同时忙碌时，减少线程可能降低争用；有专用核心时，长输入可能受益于更多线程。

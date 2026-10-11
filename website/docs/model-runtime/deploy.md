@@ -217,6 +217,117 @@ See the [quickstart](model-runtime/quickstart.md#3-send-a-request) for a complet
 request. Publication does not guarantee readiness; inspect it with
 `vllm-sr instance --config config.yaml models`.
 
+## Bound the CPU budget on many-core hosts
+
+More CPU threads do not always make a small model faster. Give the router a
+measured CPU budget before it starts, using a Linux cpuset or affinity mask.
+All managed runtime children inherit that allowed CPU range, including
+processes started after the initial generation plan. They share the same
+range; the router does not pin each runtime to disjoint CPUs. An attached
+runtime needs its own deployment budget.
+
+The router reads `GOMAXPROCS` when its runtime manager is created. Managed
+CPU workers use the [CPU thread budget](#cpu-threads), including the
+`VLLM_SRUN_CPU_THREADS` override. The router images use Go 1.25, whose default
+considers the allowed CPU range and Linux cgroup CPU bandwidth limit. Leave `GOMAXPROCS` unset to use that default;
+a manual override changes the thread budget, not the allowed CPU range.
+See [Go's container-aware default](https://go.dev/doc/go1.25#runtime).
+Restart the router after changing its CPU budget: existing runtime thread
+counts are fixed at spawn, and the manager keeps its initial budget.
+
+**A thread ceiling alone is insufficient and can regress latency.** Lowering
+`GOMAXPROCS` or an attached runtime's `--threads` leaves it free to run across
+the same host CPUs. `OMP_NUM_THREADS` does not override the managed runtime's
+explicit PyTorch thread setting. In [issue #4756](https://github.com/vllm-project/semantic-router/issues/4756),
+a thread ceiling without a CPU range was slower on the reporter's shared
+192-core host. That host's best range is not a default for other deployments:
+measure your model, input length, concurrency and competing workloads.
+
+### Linux and Docker
+
+Choose CPU IDs that are available to your deployment, preferably considering
+NUMA placement. The four logical CPUs below are an example, not a sizing
+recommendation. For a directly launched Linux router, set affinity before
+launching it:
+
+```bash
+ROUTER_CPUSET=0-3
+env -u GOMAXPROCS taskset --cpu-list "$ROUTER_CPUSET" \
+  /usr/local/bin/router --config=/app/config/config.yaml
+```
+
+For a container, configure the cpuset on the **router container**, before its
+router process starts. Applying `taskset` to the host's `vllm-sr serve` CLI does
+not confine the container created by the Docker daemon. Add
+`--cpuset-cpus="$ROUTER_CPUSET"` to a deployment's Docker run/create options.
+For an existing Docker deployment, stop, update and restart the router
+container (replace its name and CPU IDs for your host):
+
+```bash
+ROUTER_CONTAINER=your-router-container
+ROUTER_CPUSET=0-3
+docker stop "$ROUTER_CONTAINER"
+docker update --cpuset-cpus="$ROUTER_CPUSET" "$ROUTER_CONTAINER"
+docker start "$ROUTER_CONTAINER"
+```
+
+Persist the cpuset in your deployment configuration so recreating the
+container preserves it. Docker's `--cpus` is a bandwidth quota;
+`--cpuset-cpus` bounds where the process runs. A cpuset alone does not reserve
+these CPUs against other workloads. See [Docker CPU controls](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
+
+### Kubernetes
+
+CPU `requests` and `limits` alone do not assign an exclusive CPU range. On a
+node configured by its administrator with the CPU Manager `static` policy,
+a container in a **Guaranteed** pod with an integer CPU request can receive
+exclusive CPUs. Every container in that pod must have equal, nonzero CPU and
+memory requests and limits for Guaranteed QoS; account for enabled sidecars.
+For example, these Helm values give the router an integer request:
+
+```yaml
+resources:
+  requests:
+    cpu: "4"
+    memory: "7Gi"
+  limits:
+    cpu: "4"
+    memory: "7Gi"
+```
+
+They require the node policy and pod QoS conditions above; on a default node
+they only set resource requests and bandwidth limits. Verify the actual
+allocation rather than inferring it from the values. See [Kubernetes CPU
+Manager requirements](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/#static-policy).
+
+### Verify the inherited range
+
+Run this in the router's Linux PID namespace (for example, inside its
+container). Find the router and each `vllm-srun` PID, then check every thread
+with the following command, substituting one PID at a time:
+
+```bash
+ROUTER_OR_RUNTIME_PID=123
+for status in /proc/"$ROUTER_OR_RUNTIME_PID"/task/*/status; do
+  printf '%s: ' "$status"
+  grep '^Cpus_allowed_list:' "$status"
+done
+tr '\0' ' ' < /proc/"$ROUTER_OR_RUNTIME_PID"/cmdline
+printf '\n'
+```
+
+The router and all managed runtime threads should have the intended allowed
+range. A CPU runtime's command line also shows its planned `--threads`.
+Repeat for a runtime started later, and compare latency on the same inputs
+with the same cache settings and concurrency.
+
+Implicit embedding models used by routing or global services are included in
+the initial generation plan with other active models. If
+`deployment_outside_generation_plan` still appears, a deployment was missed
+and had to start outside that plan. Capture its
+name when reporting the event; the inherited CPU range still bounds where
+that worker can run.
+
 ## Attach to a runtime you run
 
 Start a runtime anywhere the router can reach, then point a deployment at it:

@@ -13,14 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
-// embeddingModels are the embedding model types the model runtime serves,
-// with the configuration path that names each one's package.
-var embeddingModels = map[string]func(*config.RouterConfig) string{
-	"mmbert":     func(cfg *config.RouterConfig) string { return cfg.MmBertModelPath },
-	"qwen3":      func(cfg *config.RouterConfig) string { return cfg.Qwen3ModelPath },
-	"multimodal": func(cfg *config.RouterConfig) string { return cfg.MultiModalModelPath },
-}
-
 // PrepareOwnedEmbeddings prepares a candidate generation's recipe consumers;
 // the service-owned cache, tools, memory and ingestion consumers are prepared
 // by PrepareOwnedGlobalServiceEmbeddings. Failure releases only the
@@ -94,7 +86,7 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *s
 		if !needed[model] || (hasExplicit && model == primary) {
 			continue
 		}
-		spec, err := implicitEmbeddingSpec(cfg, recipe, model)
+		spec, err := cfg.ImplicitEmbeddingBinding(recipe, model)
 		if err != nil {
 			return fail(err)
 		}
@@ -154,29 +146,6 @@ func prepareExplicitEmbedding(ctx context.Context, cfg *config.RouterConfig, run
 		address = protocol + "://" + address
 	}
 	return runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{BaseURL: address, Model: external.ModelName, APIKey: external.AccessKey, TimeoutSeconds: external.TimeoutSeconds, MaxResponseBytes: external.MaxResponseBytes, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
-}
-
-// implicitEmbeddingSpec is the module-default deployment of an embedding model
-// type: the configured package served by the model runtime as
-// "@embedding.<model>", on CPU unless use_cpu is false, at the default exact
-// profile. Inputs over budget are truncated, as embeddings always were.
-// Concurrent requests still share forwards: exact batches queued requests
-// together on a model that loads batch-invariant.
-func implicitEmbeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, model string) (config.ResolvedModelBinding, error) {
-	path, served := embeddingModels[model]
-	if !served {
-		return config.ResolvedModelBinding{}, fmt.Errorf("embedding model %q is not served by the model runtime; use mmbert, qwen3 or multimodal, or an OpenAI-compatible endpoint (vllm-sr config migrate rewrites legacy settings)", model)
-	}
-	deployment, err := config.ImplicitModelRuntimeDeployment(path(cfg), cfg.EmbeddingModels.UseCPU)
-	if err != nil {
-		return config.ResolvedModelBinding{}, fmt.Errorf("embedding model %s: %w", model, err)
-	}
-	deployment.Input.Overflow = "truncate"
-	return config.ResolvedModelBinding{
-		Recipe: recipe, Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "@embedding." + model, Contract: "embedding.v1"},
-		Deployment: deployment, Admission: cfg.ModelAdmission["embedding:"+model],
-	}, nil
 }
 
 // EmbeddingState describes one prepared set without inferring consumer readiness.

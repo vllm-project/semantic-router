@@ -265,6 +265,13 @@ not finish its safety scan within it.
 - For a runtime you started, look at `vllm_srun_request_duration_seconds` and
   `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
   `Server-Timing` header of its responses.
+- On many-core CPU hosts, first [bound the router's CPU budget](./deploy.md#bound-the-cpu-budget-on-many-core-hosts)
+  with a cpuset or affinity mask before startup. Managed runtime children,
+  including late ones, inherit the allowed range. A thread ceiling alone can
+  regress latency; `GOMAXPROCS` and `--threads` do not confine CPUs. Set a
+  separate CPU range for a runtime you start yourself, then size its threads
+  within that range.
+
 - Managed CPU workers default to half the router's available CPU budget,
   rounded down, with a minimum of one thread and a maximum of 16. Set
   `VLLM_SRUN_CPU_THREADS` before `vllm-sr serve` to choose a positive thread count
