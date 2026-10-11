@@ -338,18 +338,21 @@ class NativeEngineModel(EngineModel):
         Exploration never changes an answer: the batch is served by the
         configured count, and any other allowed count only runs as a shadow
         pass that has to reproduce the served answer bit for bit before its
-        timing counts — so the team size can only ever switch to a count that
-        preserves ``exact`` answers on this host, and the answer itself always
-        comes from the configured count until the resolver adopts a verified
-        one.
+        timing counts. Once the resolver has adopted counts, the learned
+        count serves the batch itself — only counts that kept the answers
+        identical on this host were adopted.
         """
         resolver = self.threads_resolver
         if resolver is None:
             if self.device.type == "cpu":
                 adaptive_threads.CpuTeam.apply(self._cpu_threads)
             return run()
-        base = resolver.base
         count = resolver.pick(tokens)
+        if resolver.adopted:
+            adaptive_threads.CpuTeam.apply(count)
+            return run()
+        base = resolver.base
+        # Exploring: the configured count serves; another count only shadows.
         adaptive_threads.CpuTeam.apply(base)
         started = time.perf_counter()
         try:

@@ -105,13 +105,65 @@ def test_a_count_that_changes_answers_never_reaches_the_table():
     assert resolver.pick(2000) == 8
 
 
-def test_opting_in_never_changes_an_answer(qwen3_package, monkeypatch):
-    """The configured count serves every request; shadow passes never replace the answer.
+def test_exploration_starts_once_the_runtime_is_ready(qwen3_package, monkeypatch):
+    """The runtime starts exploration once the startup golden check has passed.
 
-    Both runs use the same configured count, so the assertion holds on any
-    host — including hosts whose thread counts disagree bitwise, where the
-    shadow verification is exactly what keeps exploration from ever adopting
-    a drifting count.
+    Through the real runtime path: the served model is ready — the golden
+    check passed — and it samples the requests it serves.
+    """
+    monkeypatch.setenv(adaptive.ENV, "1")
+    runtime = start_runtime(qwen3_package, threads=4)
+    try:
+        client = TestClient(create_app(runtime))
+        resolver = runtime.served[0].model.engine_model.threads_resolver
+        assert resolver is not None and resolver._started
+        r = client.post(
+            "/v1/decisions", json={"state": "state 0", "questions": QUESTIONS}
+        )
+        assert r.status_code == 200
+        assert resolver._seen > 0
+    finally:
+        runtime.stop()
+
+
+def test_the_learned_count_serves_after_adoption(qwen3_package, monkeypatch):
+    """Once exploration builds the table, the learned count serves requests.
+
+    Through the real runtime path: past the exploration window the serving
+    pass states the learned count on the shared CPU context, so the learned
+    setting reaches execution instead of only feeding a table.
+    """
+    monkeypatch.setenv(adaptive.ENV, "1")
+    runtime = start_runtime(qwen3_package, threads=4)
+    try:
+        client = TestClient(create_app(runtime))
+        resolver = runtime.served[0].model.engine_model.threads_resolver
+        for i in range(60):
+            r = client.post(
+                "/v1/decisions", json={"state": f"state {i}", "questions": QUESTIONS}
+            )
+            assert r.status_code == 200
+        assert resolver.adopted
+        sampled = [tokens for per in resolver._samples.values() for tokens, _ in per]
+        count = resolver.pick(sampled[0])
+        r = client.post(
+            "/v1/decisions", json={"state": "state 60", "questions": QUESTIONS}
+        )
+        assert r.status_code == 200
+        assert adaptive.CpuTeam._active == count
+    finally:
+        runtime.stop()
+
+
+def test_opting_in_never_changes_an_answer(qwen3_package, monkeypatch):
+    """The served answers never change, exploring or adopted.
+
+    Both runs use the same configured count while exploring, so the
+    assertion holds on any host; past the exploration window the learned
+    counts serve, and only counts whose shadow passes reproduced the served
+    answers bit for bit were adopted — including hosts whose thread counts
+    disagree bitwise, where the shadow verification is exactly what keeps
+    exploration from ever adopting a drifting count.
     """
     questions = dict(QUESTIONS)
 
@@ -124,7 +176,7 @@ def test_opting_in_never_changes_an_answer(qwen3_package, monkeypatch):
         try:
             client = TestClient(create_app(runtime))
             out = []
-            for i in range(8):
+            for i in range(60):
                 r = client.post(
                     "/v1/decisions",
                     json={"state": f"state {i}", "questions": questions},

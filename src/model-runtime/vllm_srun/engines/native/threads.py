@@ -100,6 +100,11 @@ class AdaptiveThreads:
         """Begin exploring: the startup golden check has passed."""
         self._started = True
 
+    @property
+    def adopted(self) -> bool:
+        """Whether exploration finished and the learned table selects counts."""
+        return self._table is not None
+
     def pick(self, tokens: int) -> int:
         """The count this request's forward should run with."""
         with self._lock:

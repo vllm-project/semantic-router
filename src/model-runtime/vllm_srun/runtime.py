@@ -449,6 +449,7 @@ class ServedModel:
             self.health.golden = replace(
                 self.health.golden, status="unverified", detail=self.unpinned
             )
+        model.engine_model.begin_traffic()
 
     def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
         """How a model without a device thread runs its batches on the CPU: inline, in its choice scope if pinned."""
