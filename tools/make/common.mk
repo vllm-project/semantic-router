@@ -18,6 +18,9 @@ DATETIME = $(shell date +"%Y%m%d%H%M%S")
 # REV is the short git sha of latest commit.
 REV=$(shell git rev-parse --short HEAD)
 
+# Shared golangci-lint configuration for every Go module.
+GOLANGCI_LINT_CONFIG ?= $(CURDIR)/tools/linter/go/.golangci.yml
+
 # Function Define
 
 # logging Output Function

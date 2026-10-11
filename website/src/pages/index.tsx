@@ -16,6 +16,7 @@ import YouTubeSection from '@site/src/components/YouTubeSection'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
+import TrendingHighlights from '@site/src/components/TrendingHighlights'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
@@ -188,6 +189,9 @@ export default function Home(): JSX.Element {
         <div className={styles.bandGraphite}>
           <ScrollReveal>
             <TestimonialsRail />
+          </ScrollReveal>
+          <ScrollReveal delay={40}>
+            <TrendingHighlights />
           </ScrollReveal>
         </div>
 
