@@ -118,3 +118,16 @@ The manifest carries identity, output digests, and lineage, never prompt or resp
 One recipe or one decision usually dominates live traffic, and a dataset built from it reads as a statement about the whole router when it is a statement about that decision. `balance_by` and `balance_max` cap how much one group may contribute, grouping by `recipe`, `decision` or `primary_model`. The rows a cap keeps follow the seed rather than the clock, so a balanced dataset is a sample of the traffic and not of when it arrived, and rows dropped for balance are counted under `balance_cap` like any other exclusion. Both parameters are given together; one alone is refused.
 
 The export needs `replay.read` and reads the same records the list API does. Body capture must be on for the decisions being compared, since an observation with no captured request is excluded as `request_body_missing`.
+
+### Hand the comparison to a judge
+
+`GET /api/v1/observability/replays/dataset/judge-tasks` takes the same selection and split plan as the export, plus a `blinding_key`, and answers with pairwise tasks: one primary answer against one shadow answer, with the request each was given. Every pair appears twice with the sides swapped, so a judge that prefers whichever answer comes first shows up as disagreement between the two orders. Each side carries an opaque arm label that names neither the model nor which side is the primary, and the labels differ in every pair. Only the key maps a label back to a model, so keep it away from the judge. It may not equal the manifest seed, which is published.
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset/judge-tasks?recipe=vault&seed=2026-q3&split=train:8&split=eval:2&blinding_key=$JUDGE_KEY"
+```
+
+A pair is built only when the request and both answers hash back to the digests in the manifest. A stored request names the model the router sent it to, so the input digest covers the request body without its top-level model field (`Model` in the recorded request, `model` in a client body), which is also the `input` a judge reads, and each task carries that `input_digest`. This changed input identity, deduplication and splits, so the manifest is `shadow-dataset.v2` and the tasks are `shadow-judge-tasks.v2`. A `shadow-dataset.v1` manifest is refused. The shadow text comes from the captured excerpt, so the shadow decision needs `capture_response_body` on and a `max_capture_bytes` large enough for whole answers. An excerpt that was cut, or a primary answer a response-stage plugin rewrote before it was stored, is left out and counted as `arm_text_digest_mismatch`, and a pair with no text at all as `arm_text_missing`. A request that does not match its digest is counted as `input_text_digest_mismatch`, and a missing one as `input_text_missing`. An answer that names its own model is marked `names_own_model`, since no label can blind a judge to that.
+
+The tasks carry prompt and answer text, so the route needs `replay.detail` and refuses a caller without it rather than redacting the tasks. The judge runs outside the router.
