@@ -181,6 +181,7 @@
             "mlp",
             "multi_factor",
             "prompt",
+            "random",
             "ratings",
             "remom",
             "router_dc",
@@ -1489,6 +1490,12 @@
         "decision": {
           "items": {
             "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
+        },
+        "topic_continuity": {
+          "items": {
+            "$ref": "#/$defs/TopicContinuityRule"
           },
           "type": "array"
         }
@@ -7375,6 +7382,54 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "TopicContinuityEvidenceLimits": {
+      "properties": {
+        "max_prior_turns": {
+          "type": "integer"
+        },
+        "max_turn_bytes": {
+          "type": "integer"
+        },
+        "max_input_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "include_assistant": {
+          "type": "boolean"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/TopicContinuityThresholds"
+        },
+        "limits": {
+          "$ref": "#/$defs/TopicContinuityEvidenceLimits"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityThresholds": {
+      "properties": {
+        "continuation": {
+          "type": "number"
+        },
+        "change": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "TracingConfig": {
       "properties": {
         "enabled": {
@@ -8133,6 +8188,13 @@
         "decision_referenceable": true,
         "reference_qualifier": "label",
         "schema_ref": "#/$defs/DecisionSignalRule"
+      },
+      {
+        "type": "topic_continuity",
+        "display_name": "Topic Continuity",
+        "collection": "topic_continuity",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/TopicContinuityRule"
       }
     ],
     "algorithms": [
@@ -8217,6 +8279,13 @@
         "execution": "selector",
         "config_field": "multi_factor",
         "schema_ref": "#/$defs/MultiFactorSelectionConfig"
+      },
+      {
+        "type": "random",
+        "display_name": "Random",
+        "description": "Select uniformly from the eligible candidate models.",
+        "tier": "supported",
+        "execution": "selector"
       },
       {
         "type": "ratings",
