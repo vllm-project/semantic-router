@@ -468,10 +468,13 @@ def load_file_module(path: Path):
     import importlib.util
     import sys
 
-    path = Path(path).resolve()
+    # Not resolved: in a Hub snapshot the .py name is a link to a blob without a suffix, which has no loader.
+    path = Path(path).absolute()
     name = f"{path.stem}_{hashlib.sha256(str(path).encode()).hexdigest()[:16]}"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
+        spec = importlib.util.spec_from_file_location(name, str(path))
+        if spec is None or spec.loader is None:
+            raise ImportError(f"no loader for {path}")
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         try:
