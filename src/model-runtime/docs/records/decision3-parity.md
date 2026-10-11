@@ -128,11 +128,24 @@ requests).
 | `vllm-sr/d3-flash` | 27.6 | 28.2 | 171.5 | 166.9 |
 | `vllm-sr/d3` | 73.4 | 71.0 | 298.0 | 288.5 |
 
-Through Engine mode, `vllm-sr/d3-lite` answered text in 16.5 ms (package server
-16.1 ms in the same run). The image request's JSON body is about 6 MB, and
-it took 202.8 ms against the package server's 80.0 ms. The Router decodes and
-re-encodes the whole body several times before it reaches the worker. That
-costs about 5 ms per 0.5 MB of image data, so a typical photo adds a few
-milliseconds. Before images, the public System One API accepted bodies of
-at most 2 MiB. It now accepts up to 48 MiB, enough for one video of
-32,000,000 bytes; each image may have up to 8,000,000 bytes.
+Through Engine mode (the Router on the configuration `vllm-sr serve
+vllm-sr/d3-lite --engine --platform rocm` writes, in front of its managed
+worker), the 13 video requests are 13 / 13 identical to the package server
+as well, with request bodies of up to 15 MB. Warm medians in milliseconds for
+d3-lite, each request sent to both sides in turn (20 requests), with the
+Router replacing the served model name in the body without decoding it:
+
+| Request | Body | Package server | Engine mode |
+| --- | --- | --- | --- |
+| Text, 1 question | 219 B | 15.2 | 16.0 |
+| 1280×1280 PNG | 6.0 MB | 72.3 | 141.5 |
+| 640×360 video, 5 s | 3.0 MB | 62.4 | 98.0 |
+| 1920×1080 video, 2.6 s | 10.6 MB | 116.9 | 261.2 |
+
+Before that change the 6 MB image took 202.8 ms through Engine mode (package
+server 80.0 ms): the Router decoded and encoded the whole body again to set
+the model name. It still reads and checks each body once, about 12 to 14 ms
+per MB, so a typical photo or short clip adds a few to a few tens of
+milliseconds. Before images, the public System One API accepted bodies of at
+most 2 MiB. It now accepts up to 48 MiB, enough for one video of 32,000,000
+bytes; each image may have up to 8,000,000 bytes.
