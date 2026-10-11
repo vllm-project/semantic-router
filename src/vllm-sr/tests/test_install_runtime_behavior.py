@@ -81,13 +81,43 @@ def test_explicit_podman_skips_docker_detection() -> None:
 
 
 def test_skip_writes_no_runtime_env() -> None:
-    """--runtime skip clears the selection and must not persist a file."""
+    """A fresh --runtime skip install writes no runtime.env of its own.
+
+    An existing preference is a different case, covered by the seeded
+    scenarios below: skip preserves it rather than deleting it (#4548).
+    """
     out = _run_harness("skip")
 
     assert "SELECTED_RUNTIME=" in out
-    # `skip` should not leave a stale CONTAINER_RUNTIME behind.
     assert "RUNTIME_ENV_FILE=absent" in out
     assert "CONTAINER_RUNTIME=" not in out
+
+
+def test_skip_keeps_an_existing_runtime_env() -> None:
+    """--runtime skip on a root with a persisted preference keeps it."""
+    out = _run_harness("skip-keeps-existing")
+
+    assert "RUNTIME_ENV_FILE=present" in out
+    assert "CONTAINER_RUNTIME=podman" in out
+    assert "Kept the existing runtime preference: podman." in out
+
+
+def test_cli_mode_keeps_an_existing_runtime_env() -> None:
+    """--mode cli leaves an existing runtime.env in place and names it."""
+    out = _run_harness("cli-keeps-existing")
+
+    assert "RUNTIME_ENV_FILE=present" in out
+    assert "CONTAINER_RUNTIME=podman" in out
+    assert "Kept the existing runtime preference: podman." in out
+
+
+def test_failed_podman_keeps_an_existing_runtime_env() -> None:
+    """A failed --runtime podman check preserves the existing preference."""
+    out = _run_harness("podman-unreachable-keeps-existing")
+
+    assert "RUNTIME_ENV_FILE=present" in out
+    assert "CONTAINER_RUNTIME=docker" in out
+    assert "Kept the existing runtime preference: docker." in out
 
 
 def test_printed_commands_include_runtime_flag() -> None:
