@@ -199,6 +199,41 @@ func TestHandleToolSelectionTrustedFactsNarrowKeepsExplicitToolsOnly(t *testing.
 	}
 }
 
+func TestHandleToolSelectionTrustedFactsNarrowReconcilesNamedToolChoice(t *testing.T) {
+	cases := map[string]struct {
+		forced     string
+		wantChoice llmprotocol.ToolChoice
+	}{
+		"removed tool clears the choice": {forced: "calculator"},
+		"kept tool keeps the choice": {
+			forced:     "search",
+			wantChoice: llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: "search"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+				Enabled:      true,
+				Enforcement:  config.TrustedEnforcementAuthoritative,
+				TrustSources: []string{config.TrustedSourceOperatorPolicy},
+				StageRoles:   []string{config.TrustedStageCandidate},
+			})
+			cfg.AllowTools = []string{"search"}
+			req := trustedFactsTestRequest()
+			req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: tc.forced}
+			require.NoError(t, llmprotocol.ValidateRequest(*req, llmprotocol.DefaultPolicy().Limits), "fixture must start valid")
+
+			resp := &ext_proc.ProcessingResponse{}
+			require.NoError(t, (&OpenAIRouter{}).handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)))
+
+			require.Len(t, req.Tools, 1)
+			require.Equal(t, "search", req.Tools[0].Name)
+			require.Equal(t, tc.wantChoice, req.ToolChoice)
+			require.NoError(t, llmprotocol.ValidateRequest(*req, llmprotocol.DefaultPolicy().Limits))
+		})
+	}
+}
+
 func TestHandleToolSelectionTrustedFactsAllowAndObserveContinue(t *testing.T) {
 	db := loadedTrustedFactsToolsDB(t)
 	for _, enforcement := range []string{"", config.TrustedEnforcementAuthoritative} {

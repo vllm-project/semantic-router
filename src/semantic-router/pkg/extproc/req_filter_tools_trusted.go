@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -118,6 +119,13 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 		request.Tools = filtered
 	}
 	clearSemanticToolChoiceWhenNoTools(request)
+	// A forced choice naming a tool narrowing removed would fail protocol
+	// validation, so it is cleared; a choice whose tool survived is kept.
+	if request.ToolChoice.Mode == llmprotocol.ToolChoiceNamed &&
+		!slices.ContainsFunc(request.Tools, func(t llmprotocol.Tool) bool { return t.Name == request.ToolChoice.Name }) {
+		request.ToolChoice = llmprotocol.ToolChoice{}
+		request.Generation++
+	}
 	_ = commitToolSelection(request, ctx)
 	return true
 }
