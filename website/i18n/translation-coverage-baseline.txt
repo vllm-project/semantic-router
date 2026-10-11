@@ -60,8 +60,10 @@ zh-Hans	installation/nvidia-cuda.md
 zh-Hans	installation/ollama.md
 zh-Hans	installation/protocol-compatibility.md
 zh-Hans	installation/qdrant.md
+zh-Hans	installation/recipe-lifecycle.md
 zh-Hans	installation/runtime/external.md
 zh-Hans	installation/security-hardening.md
+zh-Hans	installation/shell-completion.md
 zh-Hans	installation/storage-overview.md
 zh-Hans	installation/support-matrix.md
 zh-Hans	installation/upgrade-rollback.md
