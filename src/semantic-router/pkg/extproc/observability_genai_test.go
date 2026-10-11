@@ -93,7 +93,7 @@ func exportedUpstreamSpanAttributes(
 		contentType, providerBody = "text/event-stream", extProcStreamFixture(backend)
 	}
 	stream := NewMockStream(nil)
-	require.NoError(t, router.processResponseHeaders(stream, looperTransportHeaders(200, contentType), ctx))
+	require.NoError(t, router.processResponseHeaders(stream, &ext_proc.ProcessingRequest{}, looperTransportHeaders(200, contentType), ctx))
 	require.NoError(t, router.processResponseBody(stream, &ext_proc.ProcessingRequest_ResponseBody{
 		ResponseBody: &ext_proc.HttpBody{Body: providerBody, EndOfStream: true},
 	}, ctx))
