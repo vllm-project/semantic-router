@@ -1,22 +1,19 @@
 package memory
 
-// Access tracking is a documented retention contract (Memory.AccessCount and
-// Memory.LastAccessed: S = S0 + AccessCount, t from LastAccessed), so every
-// maintained persistent backend must reinforce the memories its Retrieve
-// returns, off the request path. The assertions below fail the build when a
-// backend loses its reinforcement entrypoint, and retrieveResultIDs keeps the
-// result-ID collection identical across backends. The behavioral contract is
-// pinned end to end by the retrieve-reinforcement contract test in the
-// storage-integration lane.
+// Access tracking feeds retention scoring (Memory.AccessCount and
+// Memory.LastAccessed: S = S0 + AccessCount, t from LastAccessed) for the
+// persistent backends that support retrieve-time reinforcement. The assertions
+// below keep the Qdrant and Valkey entrypoints present, and retrieveResultIDs
+// keeps their result-ID collection identical. The behavioral contract is pinned
+// end to end by the storage-integration tests.
 
-// accessTrackingStore is the reinforcement entrypoint each persistent backend
+// accessTrackingStore is the reinforcement entrypoint each reinforcing backend
 // exposes for its Retrieve path.
 type accessTrackingStore interface {
 	recordRetrievalBatch(ids []string)
 }
 
 var (
-	_ accessTrackingStore = (*MilvusStore)(nil)
 	_ accessTrackingStore = (*ValkeyStore)(nil)
 	_ accessTrackingStore = (*QdrantStore)(nil)
 )

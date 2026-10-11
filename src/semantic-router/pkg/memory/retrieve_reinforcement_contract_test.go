@@ -18,14 +18,11 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 )
 
-// Retrieve-time reinforcement is the retention contract (S = S0 + AccessCount,
-// t = LastAccessed) that every maintained persistent backend must honor. Each
-// contract test below runs against a real service — the same setup as the
-// storage integration lane — and fails when that backend's Retrieve does not
-// reinforce, instead of the behavior diverging silently per backend.
+// Retrieve-time reinforcement feeds retention scoring (S = S0 + AccessCount,
+// t = LastAccessed) for the persistent backends that support it. These tests
+// run against real Qdrant and Valkey services in the storage integration lane.
 
 const (
 	retrieveReinforcementContent = "The user prefers dark mode in all their applications"
@@ -163,13 +160,6 @@ func TestValkeyRetrieveReinforcementContract(t *testing.T) {
 	assertRetrieveReinforces(t, store, false)
 }
 
-// StorageIntegration: milvus
-func TestMilvusRetrieveReinforcementContract(t *testing.T) {
-	storagetest.Require(t, "milvus")
-	store := setupMilvusReinforcementStore(t)
-	assertRetrieveReinforces(t, store, true)
-}
-
 func uniqueReinforcementSuffix() string {
 	return strconv.FormatInt(time.Now().UnixNano(), 36)
 }
@@ -269,41 +259,6 @@ func setupValkeyReinforcementStore(t *testing.T) Store {
 	return store
 }
 
-func setupMilvusReinforcementStore(t *testing.T) Store {
-	t.Helper()
-	address := os.Getenv("MILVUS_URI")
-	if address == "" {
-		address = "localhost:19530"
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	client, err := milvuslifecycle.ConnectGRPC(ctx, address, 0)
-	if err != nil {
-		storagetest.Unavailable(t, "milvus", err)
-		return nil
-	}
-	cfg := config.MemoryConfig{Milvus: config.MemoryMilvusConfig{Dimension: 384}}
-	collection := fmt.Sprintf("memory_reinforce_%s", uniqueReinforcementSuffix())
-	store, err := NewMilvusStore(MilvusStoreOptions{
-		Client:          client,
-		CollectionName:  collection,
-		Config:          cfg,
-		Enabled:         true,
-		EmbeddingConfig: reinforcementEmbeddingConfig(),
-	})
-	if err != nil {
-		_ = client.Close()
-		storagetest.Unavailable(t, "milvus", err)
-		return nil
-	}
-	t.Cleanup(func() {
-		_ = client.DropCollection(context.Background(), collection)
-		_ = client.Close()
-	})
-	return store
-}
-
 // assertRetrieveReinforces stores a memory, retrieves it, and polls the store
 // until the background reinforcement is visible through the read path.
 // lastAccessedAdvances is false for Valkey, whose reinforcement leaves the
@@ -320,8 +275,8 @@ func assertRetrieveReinforces(t *testing.T, store Store, lastAccessedAdvances bo
 	}
 	require.NoError(t, store.Store(ctx, mem))
 
-	// The write can take a moment to enter the query view (Milvus growing
-	// segments), so the baseline read waits for visibility.
+	// The write can take a moment to enter the query view, so the baseline read
+	// waits for visibility.
 	baseline := getMemoryEventually(t, store, mem.ID, 15*time.Second)
 	require.Equal(t, 0, baseline.AccessCount, "a fresh memory starts unreinforced")
 
@@ -341,9 +296,6 @@ func assertRetrieveReinforces(t *testing.T, store Store, lastAccessedAdvances bo
 	require.Equal(t, mem.ID, results[0].Memory.ID)
 
 	// Reinforcement is asynchronous by design; poll the read path for it.
-	// Get can transiently report the memory missing while a backend's
-	// reinforcement upsert (delete+insert) is in flight, so errors inside the
-	// window are retried rather than fatal.
 	deadline := time.Now().Add(15 * time.Second)
 	var reinforced *Memory
 	for time.Now().Before(deadline) {

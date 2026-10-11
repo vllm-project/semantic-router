@@ -364,7 +364,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	} else {
 		status = "hit"
 		//nolint:gosec // G118: reinforcement outlives the request by design; the
-		// batch derives its own bounded background context, matching Milvus/Valkey.
+		// batch derives its own bounded background context, matching Valkey.
 		go s.recordRetrievalBatch(retrieveResultIDs(results))
 	}
 	return results, nil
