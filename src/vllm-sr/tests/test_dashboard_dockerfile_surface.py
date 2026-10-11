@@ -463,6 +463,11 @@ def test_dashboard_image_binds_the_generated_model_catalog() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
     assert "COPY src/vllm-sr/cli/ /app/cli/" in content
     assert "COPY config/recipes/built-in/ /app/cli/model_assets/" in content
+    assert (
+        "COPY config/fragments/algorithm/selection/latency-aware.yaml "
+        "/app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml"
+    ) in content
+    assert "config/recipes/privacy/" not in content
 
     source_root = REPO_ROOT / "config" / "recipes" / "built-in"
     source_assets = {

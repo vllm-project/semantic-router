@@ -12,6 +12,7 @@ from cli.envoy_backend_pool import project_envoy_backend_group
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
 from cli.models import BackendRef, Model, UserConfig
+from cli.validation_error import ValidationError
 
 
 class CatalogProviderProjectionError(ValueError):
@@ -114,6 +115,25 @@ def validate_provider_model_configuration(
             project_envoy_backend_group(model)
         except ValueError as backend_error:
             raise CatalogProviderProjectionError(str(backend_error)) from backend_error
+
+
+def provider_projection_errors(config: UserConfig) -> list[ValidationError]:
+    """Return provider projection failures without mutating the authored config.
+
+    Projection works on deep copies and resolves only structural catalog
+    defaults. It does not read provider credentials.
+    """
+
+    try:
+        validate_provider_model_configuration(
+            config,
+            allow_backendless_physical=(
+                "listeners" in config.model_fields_set and not config.listeners
+            ),
+        )
+    except CatalogProviderProjectionError as projection_error:
+        return [ValidationError(str(projection_error))]
+    return []
 
 
 def _project_provider_models(

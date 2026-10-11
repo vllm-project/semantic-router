@@ -3,10 +3,7 @@
 import sys
 from collections.abc import Callable
 
-from cli.catalog_provider_projection import (
-    CatalogProviderProjectionError,
-    validate_provider_model_configuration,
-)
+from cli.catalog_provider_projection import provider_projection_errors
 from cli.config_contract import (
     PROJECTION_FAMILY_SPECS,
     SIGNAL_FAMILY_SPECS,
@@ -105,32 +102,12 @@ def _plugin_summary_lines(decisions) -> list[str]:
     ]
 
 
-def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
-    """Validate the same provider projection used by Envoy generation.
-
-    Projection works on deep copies and resolves only structural catalog
-    defaults. It neither reads provider credentials nor mutates the authored
-    configuration, so it is safe for the validation-only command path.
-    """
-
-    try:
-        validate_provider_model_configuration(
-            config,
-            allow_backendless_physical=(
-                "listeners" in config.model_fields_set and not config.listeners
-            ),
-        )
-    except CatalogProviderProjectionError as projection_error:
-        return [ValidationError(str(projection_error))]
-    return []
-
-
 def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
     """Return the semantic and provider projection errors for a parsed config."""
 
     errors = validate_user_config(user_config, log_summary=False)
     if not errors:
-        errors.extend(_provider_projection_errors(user_config))
+        errors.extend(provider_projection_errors(user_config))
     return errors
 
 
