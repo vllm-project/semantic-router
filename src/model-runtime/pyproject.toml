@@ -55,6 +55,7 @@ vllm-srun = "vllm_srun.cli:main"
 [project.entry-points."vllm_srun.families"]
 decision1 = "vllm_srun.families.decision1.family:Decision1Family"
 decision2 = "vllm_srun.families.decision2.family:Decision2Family"
+decision3 = "vllm_srun.families.decision3.family:Decision3Family"
 multimodal_embedding = "vllm_srun.families.multimodal_embedding.family:MultimodalEmbeddingFamily"
 task_heads = "vllm_srun.families.task_heads.family:TaskHeadsFamily"
 vela2 = "vllm_srun.families.vela2.family:Vela2Family"
@@ -84,6 +85,7 @@ vllm_srun = [
   "api/openapi.yaml",
   "registry/golden_answers*.json",
   "registry/kernel_choices.json",
+  "testing/data/*.jinja",
 ]
 
 [tool.mypy]
