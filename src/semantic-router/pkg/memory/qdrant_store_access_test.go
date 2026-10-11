@@ -404,3 +404,103 @@ func TestRetrieveResultIDsKeepsResultOrder(t *testing.T) {
 	require.Equal(t, []string{"b", "a", "c"}, retrieveResultIDs(results))
 	require.Empty(t, retrieveResultIDs(nil))
 }
+
+// TestQdrantCloseRejectsQueuedReinforcementBatch pins the shutdown race the
+// lifecycle drain exists for: a reinforcement batch queued behind the batch
+// mutex when Close starts must resume only to observe the closing store, never
+// the closed client. Before the drain, the queued batch resumed against a
+// released pool and panicked the router.
+func TestQdrantCloseRejectsQueuedReinforcementBatch(t *testing.T) {
+	memoryID := arbitraryIDToUUID("queued").GetUuid()
+	fake := &fakePointsServer{
+		payloads: map[string]map[string]*qdrant.Value{
+			memoryID: seededPayload(t, "queued", 5),
+		},
+		scored: []*qdrant.ScoredPoint{{
+			Id:      arbitraryIDToUUID("queued"),
+			Score:   1.0,
+			Payload: qdrant.NewValueMap(map[string]any{}),
+		}},
+	}
+	fake.mu.Lock()
+	fake.scored[0].Payload = fake.payloads[memoryID]
+	fake.mu.Unlock()
+
+	store := newReinforcementTestStore(t, fake)
+
+	// Park every batch by holding the batch mutex before the retrieval spawns
+	// its reinforcement, so the batch is queued when Close begins.
+	store.retrievalUpdateMu.Lock()
+	results, err := store.Retrieve(context.Background(), RetrieveOptions{
+		Query:  "What are the user's display preferences?",
+		UserID: "user-a",
+		Limit:  5,
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	closeErr := make(chan error, 1)
+	go func() { closeErr <- store.Close() }()
+	require.Eventually(t, func() bool { return store.closed.Load() }, 5*time.Second, time.Millisecond,
+		"Close must reject new batches before draining")
+
+	// Release the queued batch: it must exit on the closed store, not run
+	// against the closing client.
+	store.retrievalUpdateMu.Unlock()
+	require.NoError(t, <-closeErr)
+	require.Empty(t, fake.setPayloadCalls(),
+		"the queued batch must not reach the client once closing has started")
+	require.Equal(t, int64(5), fake.accessCountOf(memoryID))
+}
+
+// TestQdrantCloseWaitsForInFlightReinforcement pins the drain ordering: Close
+// must not release the client while a reinforcement is mid-flight, and the
+// access it covers must persist.
+func TestQdrantCloseWaitsForInFlightReinforcement(t *testing.T) {
+	memoryID := arbitraryIDToUUID("inflight").GetUuid()
+	gate := make(chan struct{})
+	gateEntered := make(chan struct{}, 4)
+	fake := &fakePointsServer{
+		payloads: map[string]map[string]*qdrant.Value{
+			memoryID: seededPayload(t, "inflight", 5),
+		},
+		scored: []*qdrant.ScoredPoint{{
+			Id:      arbitraryIDToUUID("inflight"),
+			Score:   1.0,
+			Payload: qdrant.NewValueMap(map[string]any{}),
+		}},
+		gate:        gate,
+		gateArmed:   atomic.Bool{},
+		gateEntered: gateEntered,
+	}
+	fake.gateArmed.Store(true)
+	fake.mu.Lock()
+	fake.scored[0].Payload = fake.payloads[memoryID]
+	fake.mu.Unlock()
+
+	store := newReinforcementTestStore(t, fake)
+
+	_, err := store.Retrieve(context.Background(), RetrieveOptions{
+		Query:  "What are the user's display preferences?",
+		UserID: "user-a",
+		Limit:  5,
+	})
+	require.NoError(t, err)
+
+	// Wait until the reinforcement write is parked mid-flight at the gate.
+	select {
+	case <-gateEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reinforcement never reached its write")
+	}
+
+	closeErr := make(chan error, 1)
+	go func() { closeErr <- store.Close() }()
+
+	// Release the write only after Close has begun: the drain must hold the
+	// client open until the in-flight reinforcement finishes.
+	close(gate)
+	require.NoError(t, <-closeErr)
+	require.Equal(t, int64(6), fake.accessCountOf(memoryID),
+		"the in-flight reinforcement must persist before the client is released")
+}

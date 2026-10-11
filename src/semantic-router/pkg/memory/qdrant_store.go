@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,16 @@ type QdrantStore struct {
 	// retrievalUpdateMu serializes background reinforcement read-modify-writes so
 	// concurrent retrievals of the same memory cannot move access_count backwards.
 	retrievalUpdateMu sync.Mutex
+
+	// closeMu guards the closing transition so reinforcement registration
+	// (reinforcementWG.Add) can never race Close's drain (reinforcementWG.Wait).
+	closeMu sync.Mutex
+	// closed reports the store has begun closing: new reinforcement batches are
+	// rejected and queued batches exit without touching the client.
+	closed atomic.Bool
+	// reinforcementWG tracks in-flight reinforcement batches; Close drains it
+	// before releasing the client so no batch resumes against a closed pool.
+	reinforcementWG sync.WaitGroup
 }
 
 type QdrantStoreOptions struct {
@@ -364,11 +375,34 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	} else {
 		status = "hit"
 		//nolint:gosec // G118: reinforcement outlives the request by design; the
-		// batch derives its own bounded background context, matching Valkey.
-		go s.recordRetrievalBatch(retrieveResultIDs(results))
+		// batch derives its own bounded background context and registers with
+		// the store lifecycle, so Close drains it before releasing the client.
+		if s.beginReinforcement() {
+			go func() {
+				defer s.finishReinforcement()
+				s.recordRetrievalBatch(retrieveResultIDs(results))
+			}()
+		}
 	}
 	return results, nil
 }
+
+// beginReinforcement registers a background reinforcement batch with the store
+// lifecycle and reports whether the batch may start. Once closing has begun it
+// reports false, so no batch can start work against a client that is about to
+// be released. The registration happens under closeMu, which also guards the
+// closing transition, so an Add can never race the drain's Wait.
+func (s *QdrantStore) beginReinforcement() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.closed.Load() {
+		return false
+	}
+	s.reinforcementWG.Add(1)
+	return true
+}
+
+func (s *QdrantStore) finishReinforcement() { s.reinforcementWG.Done() }
 
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved
 // memory in the background. The mutex only serializes this store's own
@@ -377,6 +411,13 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 func (s *QdrantStore) recordRetrievalBatch(ids []string) {
 	s.retrievalUpdateMu.Lock()
 	defer s.retrievalUpdateMu.Unlock()
+
+	// A batch queued behind this mutex can resume after Close began draining.
+	// The drain still waits for this batch (it is registered), but the client
+	// must not see any new work once closing has started.
+	if s.closed.Load() {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -743,6 +784,13 @@ func (s *QdrantStore) CheckConnection(ctx context.Context) error {
 }
 
 func (s *QdrantStore) Close() error {
+	// Reject new reinforcement batches, then drain the in-flight and mutex-
+	// queued ones before releasing the client: a queued batch that resumed
+	// against a released pool would panic inside the client.
+	s.closeMu.Lock()
+	s.closed.Store(true)
+	s.closeMu.Unlock()
+	s.reinforcementWG.Wait()
 	if s.client != nil {
 		return s.client.Close()
 	}
