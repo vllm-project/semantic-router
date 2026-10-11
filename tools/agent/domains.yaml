@@ -580,6 +580,49 @@ domains:
     checks: [make test-learning-tools]
     verifications: [learning-tools]
 
+  grounded-fusion-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/grounded_fusion/*
+      - bench/grounded_fusion/testdata/**
+      - tools/make/tooling.mk
+    checks: [make test-grounded-fusion-bench]
+    verifications: [bench-tools]
+
+  hallucination-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/hallucination/**
+      - tools/make/tooling.mk
+    checks: [make test-hallucination-bench]
+    verifications: [bench-tools]
+
+  reasoning-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/reasoning/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-reasoning-bench]
+    verifications: [bench-tools]
+
+  router-flow-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/router_flow/**
+      - tools/make/tooling.mk
+    checks: [make test-router-flow-bench]
+    verifications: [bench-tools]
+
+  agent-crew-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_crew/**
+      - bench/requirements.txt
+      - tools/make/tooling.mk
+    checks: [make test-agent-crew]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]

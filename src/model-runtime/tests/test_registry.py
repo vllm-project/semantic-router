@@ -143,7 +143,7 @@ def test_every_family_has_a_table_and_lookups_cover_them():
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
     assert {model.repo_id for model in builtin.all_models("decision3")} == {
         f"vllm-sr/{name}"
-        for name in ("d3", "d3-flash", "d3-mini", "d3-nano", "d3-lite")
+        for name in ("d3", "d3-flash", "d3-mini", "d3-nano", "d3-lite", "d3-edge")
     }
     assert builtin.all_models("nobody") == ()
 

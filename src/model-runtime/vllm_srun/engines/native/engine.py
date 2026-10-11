@@ -355,28 +355,56 @@ class NativeEngineModel(EngineModel):
         if tower is None or not hasattr(self.backbone, "forward_images"):
             raise ValueError(f"the {self.spec.name} backbone reads no images")
         merge = cast(Any, tower).merge
-        placeholders = int((batch.input_ids == images.token_id).sum())
-        features = sum(t * h * w for t, h, w in images.grids) // merge**2
-        if placeholders != features:
-            raise ValueError(
-                f"{placeholders} image tokens but {features} image features"
-            )
+        videos = images.videos
+        inputs = [("image", images.token_id, images.grids)]
+        if videos is not None:
+            inputs.append(("video", videos.token_id, videos.grids))
+        for kind, token_id, grids in inputs:
+            placeholders = int((batch.input_ids == token_id).sum())
+            features = sum(t * h * w for t, h, w in grids) // merge**2
+            if placeholders != features:
+                raise ValueError(
+                    f"{placeholders} {kind} tokens but {features} {kind} features"
+                )
         positions = rope_index(
             batch.input_ids.cpu(),
             batch.attention_mask.cpu(),
             images.grids,
             images.token_id,
             merge,
+            video_grids=videos.grids if videos is not None else None,
+            video_token_id=videos.token_id if videos is not None else None,
         ).to(self.device)
+        if images.features is not None:
+            image_features = images.features.to(self.device)
+        elif images.pixel_values is not None:
+            image_features = tower(images.pixel_values.to(self.device), images.grids)
+        else:
+            raise ValueError("image inputs need pixel values or features")
         hidden: torch.Tensor = cast(Any, self.backbone).forward_images(
             input_ids,
             attention_mask,
-            tower(images.pixel_values.to(self.device), images.grids),
+            image_features,
             images.token_id,
             positions,
             padded,
+            videos=(
+                (videos.features.to(self.device), videos.token_id)
+                if videos is not None
+                else None
+            ),
         )
         return hidden
+
+    def tower_features(
+        self, name: str, pixel_values: torch.Tensor, grids: list[tuple[int, int, int]]
+    ) -> torch.Tensor:
+        tower = self.towers.get(name)
+        if tower is None:
+            raise ValueError(f"the {self.spec.name} model has no {name} tower")
+        with torch.inference_mode(), self.autocast():
+            features: torch.Tensor = tower(pixel_values.to(self.device), grids)
+        return features
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Hidden states at the batch's exits, through its branch if it names one.
