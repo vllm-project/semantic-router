@@ -3,7 +3,8 @@
     python3 tools/vela2_bench.py --package DIR --device cpu|rocm:0 --output OUT.json
         [--sides runtime,runtime-shared,runtime-batching,max_speed:KIND,reference,reference-onnx]
         [--tokens 32,128,512,2048] [--requests 40] [--warmup 5] [--concurrency 1,8]
-        [--prompts PROMPTS.jsonl] [--rounds 5 --baselines reference,runtime]
+        [--prompts PROMPTS.jsonl] [--rounds 5 --baselines reference,runtime] [--no-graphs] [--no-fused]
+        [--questions QUESTIONS.json]
 
 Workload: the router's signals as one Vela 2.0 request (domain over 14 subject areas,
 jailbreak, PII spans, fact-check, feedback, modality and safety categories) over a
@@ -60,7 +61,7 @@ from vela2_parity import (  # noqa: E402
     load_runtime,
     pin_choices,
 )
-from vllm_srun.plugins.base import SurfacePlan  # noqa: E402
+from vllm_srun.plugins.base import EngineOptions, SurfacePlan  # noqa: E402
 from vllm_srun.profiles.batching import BatchingProfile  # noqa: E402
 from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
 from vllm_srun.profiles.max_speed import MaxSpeedProfile  # noqa: E402
@@ -350,17 +351,30 @@ def main() -> int:
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--baselines", default="reference,runtime")
     parser.add_argument(
+        "--questions",
+        type=Path,
+        help="a JSON object of questions to ask instead of the router's signals",
+    )
+    parser.add_argument("--no-graphs", action="store_true")
+    parser.add_argument("--no-fused", action="store_true")
+    parser.add_argument(
         "--trace",
         action="store_true",
         help="record each runtime side's forwards (rows, tokens, time) per row",
     )
     args = parser.parse_args()
+    if args.questions:
+        ROUTER_QUESTIONS.clear()
+        ROUTER_QUESTIONS.update(json.loads(args.questions.read_text(encoding="utf-8")))
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
     concurrency = [int(x) for x in args.concurrency.split(",")]
     pin_choices(args.package, args.device)
     execute = device_executor(args.device)
-    model = execute(lambda: load_runtime(args.package, args.device, args.engine))
+    options = EngineOptions(graphs=not args.no_graphs, fused_kernels=not args.no_fused)
+    model = execute(
+        lambda: load_runtime(args.package, args.device, args.engine, options=options)
+    )
     runs: list[dict[str, Any]] = []
     callers: dict[str, Any] = {}
     trace: list[dict[str, Any]] | None = [] if args.trace else None
@@ -370,7 +384,7 @@ def main() -> int:
             kind = side.split(":", maxsplit=1)[1]
             copy = execute(
                 lambda kind=kind: load_runtime(
-                    args.package, args.device, args.engine, kind
+                    args.package, args.device, args.engine, kind, options
                 )
             )
             callers[side], _ = runtime_side(
@@ -447,6 +461,11 @@ def main() -> int:
     report: dict[str, Any] = {
         "package": str(args.package),
         "device": args.device,
+        "fast_path_options": {
+            "graphs": not args.no_graphs,
+            "fused_kernels": not args.no_fused,
+        },
+        "fast_path": model.engine_model.receipt(),
         "runs": runs,
     }
     if args.rounds > 1:

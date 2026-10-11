@@ -26,14 +26,17 @@ four scored panels), so it belongs to the exact profile:
   ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) are captured; after that, new shapes
   run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
-  batches of Index traffic, led to GPU memory access faults.
+  batches of Index traffic, led to GPU memory access faults. On CUDA the same
+  runner also replays Vela 2.0's forest forward (``models/forest.py``) per
+  exact forest shape; ROCm keeps forests eager, because an eager forward while
+  a forest graph of eight or more Vela-4B layers is alive faults there.
 """
 
 from __future__ import annotations
 
 import math
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
@@ -648,9 +651,9 @@ class Graphs:
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
         self.max_output_bytes = max_output_bytes
-        self.graphs: dict[tuple[int, int, bool], dict[str, Any]] = {}
-        self.seen: dict[tuple[int, int, bool], int] = {}
-        self.failed: set[tuple[int, int, bool]] = set()
+        self.graphs: dict[Hashable, dict[str, Any]] = {}
+        self.seen: dict[Hashable, int] = {}
+        self.failed: set[Hashable] = set()
         self.output_bytes = 0
         self.pool: Any = None
         self.stats = {
@@ -666,28 +669,42 @@ class Graphs:
     ) -> torch.Tensor:
         rows, length = input_ids.shape
         padded = any(n != length for n in lengths)
-        key = (rows, length, padded)
+        return self.run(
+            (rows, length, padded),
+            (input_ids, attention_mask),
+            lambda ids, mask: self.eager(ids, mask, padded),
+            rows * length,
+        )
+
+    def run(
+        self,
+        key: Hashable,
+        inputs: tuple[torch.Tensor, ...],
+        body: Callable[..., torch.Tensor],
+        tokens: int,
+    ) -> torch.Tensor:
+        """``body(*inputs)``, replayed from the graph of ``key`` once captured (the module docstring)."""
         entry = self.graphs.get(key)
         if entry is None:
             if (
                 key in self.failed
-                or rows * length > self.max_tokens
+                or tokens > self.max_tokens
                 or not torch.is_inference_mode_enabled()
             ):
                 self.stats["eager"] += 1
-                return self.eager(input_ids, attention_mask, padded)
+                return body(*inputs)
             if len(self.seen) > 1 << 16:
                 self.seen.clear()
             self.seen[key] = self.seen.get(key, 0) + 1
             if self.seen[key] < self.capture_after:
                 self.stats["eager"] += 1
-                return self.eager(input_ids, attention_mask, padded)
-            entry = self._capture(key, input_ids, attention_mask, padded)
+                return body(*inputs)
+            entry = self._capture(key, inputs, body)
             if entry is None:
                 self.stats["eager"] += 1
-                return self.eager(input_ids, attention_mask, padded)
-        entry["input_ids"].copy_(input_ids)
-        entry["attention_mask"].copy_(attention_mask)
+                return body(*inputs)
+        for static, value in zip(entry["inputs"], inputs, strict=True):
+            static.copy_(value)
         entry["graph"].replay()
         self.stats["replays"] += 1
         output: torch.Tensor = entry["output"]
@@ -703,10 +720,9 @@ class Graphs:
 
     def _capture(
         self,
-        key: tuple[int, int, bool],
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        padded: bool,
+        key: Hashable,
+        inputs: tuple[torch.Tensor, ...],
+        body: Callable[..., torch.Tensor],
     ) -> dict[str, Any] | None:
         if (
             len(self.graphs) >= self.max_graphs
@@ -714,14 +730,7 @@ class Graphs:
         ):
             self.stats["full"] += 1
             return None
-        static = {
-            "input_ids": input_ids.clone(),
-            "attention_mask": attention_mask.clone(),
-        }
-
-        def body() -> torch.Tensor:
-            return self.eager(static["input_ids"], static["attention_mask"], padded)
-
+        static = tuple(value.clone() for value in inputs)
         try:
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
@@ -730,7 +739,7 @@ class Graphs:
             with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
                 with torch.cuda.stream(stream):
                     for _ in range(2):
-                        body()
+                        body(*static)
                 torch.cuda.current_stream().wait_stream(stream)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
@@ -739,7 +748,7 @@ class Graphs:
                 with torch.cuda.graph(
                     graph, pool=self.pool, capture_error_mode="thread_local"
                 ):
-                    output = body()
+                    output = body(*static)
             torch.cuda.synchronize()
         except Exception:
             torch.cuda.synchronize()
@@ -747,7 +756,7 @@ class Graphs:
             self.stats["failed"] += 1
             return None
         size = _output_bytes(output)
-        entry = {**static, "graph": graph, "output": output, "bytes": size}
+        entry = {"inputs": static, "graph": graph, "output": output, "bytes": size}
         self.graphs[key] = entry
         self.output_bytes += size
         self.stats["captures"] += 1
