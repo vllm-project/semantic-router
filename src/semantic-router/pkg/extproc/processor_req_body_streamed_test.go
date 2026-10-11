@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -154,6 +156,68 @@ func TestStreamedBodyNonEOSChunkUsesSharedResponse(t *testing.T) {
 	require.NoError(t, err)
 	assert.Same(t, sharedContinueEmptyBody, response)
 	assertChunkEaten(t, response)
+}
+
+func TestProcessRequestBodyBenchmarkBindingKeepsSharedResponseImmutable(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		header     string
+		fullDuplex bool
+	}{
+		{name: "benchmark", header: headers.SRBenchExpectedConfigHash},
+		{name: "mixed case", header: strings.ToUpper(headers.SRBenchExpectedConfigHash)},
+		{name: "unbound"},
+		{name: "full duplex", header: headers.SRBenchExpectedConfigHash, fullDuplex: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			router := makeTestRouter("auto")
+			ctx := &RequestContext{
+				Headers:               make(map[string]string),
+				FullDuplexRequestBody: test.fullDuplex,
+			}
+			if test.header != "" {
+				ctx.Headers[test.header] = strings.Repeat("a", 64)
+			}
+			stream := NewMockStream(nil)
+			defer func() {
+				if ctx.StreamedBody != nil {
+					ctx.StreamedBody.Release()
+				}
+			}()
+
+			for range 3 {
+				require.NoError(t, router.processRequestBody(stream, &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{Body: []byte("opaque bytes")},
+				}, ctx))
+			}
+			assert.Nil(t, sharedContinueEmptyBody.GetRequestBody().GetResponse().GetHeaderMutation())
+			if test.fullDuplex {
+				assert.Empty(t, stream.Responses)
+				return
+			}
+			require.Len(t, stream.Responses, 3)
+			for i, response := range stream.Responses {
+				assertChunkEaten(t, response)
+				mutation := response.GetRequestBody().GetResponse().GetHeaderMutation()
+				if test.header == "" {
+					assert.Same(t, sharedContinueEmptyBody, response)
+					assert.Nil(t, mutation)
+					continue
+				}
+				assert.NotSame(t, sharedContinueEmptyBody, response)
+				if i > 0 {
+					assert.NotSame(t, stream.Responses[i-1], response)
+				}
+				require.NotNil(t, mutation)
+				assert.Equal(t, []string{
+					headers.SRBenchExpectedConfigHash, headers.SRBenchMaxInferenceCalls,
+					headers.VSRConfigHash, headers.VSRModelUsage, headers.VSRInferenceCallCount,
+				}, mutation.GetRemoveHeaders())
+				assert.Len(t, mutation.GetSetHeaders(), 2)
+			}
+		})
+	}
 }
 
 func TestProcessRequestBodyRejectsStreamedGuardViolations(t *testing.T) {

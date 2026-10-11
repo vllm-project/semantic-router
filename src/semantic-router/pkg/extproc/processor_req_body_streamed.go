@@ -8,7 +8,9 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -30,8 +32,8 @@ import (
 //     the limit (HTTP 413).
 //   - Deadline: if configured, rejects requests that take too long to
 //     accumulate (HTTP 408).
-//   - GC: the "eat chunk" response is pooled so intermediate chunks produce
-//     zero allocations on the hot path.
+//   - GC: the "eat chunk" response is shared so intermediate chunks produce
+//     zero allocations unless benchmark binding needs a mutable copy.
 type StreamedBodyHandler struct {
 	router *OpenAIRouter
 	ctx    *RequestContext
@@ -70,8 +72,8 @@ var streamedHandlerPool = sync.Pool{
 
 // Shared immutable "eat chunk" response. Because the response only contains
 // CONTINUE + empty body (no per-request data), a single instance is safe to
-// return from every non-EOS chunk across all goroutines. This eliminates ~5
-// protobuf allocations per chunk that would otherwise become immediate garbage.
+// return from non-EOS chunks that need no per-request mutations. This avoids
+// ~5 protobuf allocations per chunk that would become immediate garbage.
 var sharedContinueEmptyBody = &ext_proc.ProcessingResponse{
 	Response: &ext_proc.ProcessingResponse_RequestBody{
 		RequestBody: &ext_proc.BodyResponse{
@@ -142,6 +144,9 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingResponse {
 	if h.ctx != nil && h.ctx.FullDuplexRequestBody {
 		return nil
+	}
+	if headerValueCI(h.ctx, headers.SRBenchExpectedConfigHash) != "" {
+		return proto.Clone(sharedContinueEmptyBody).(*ext_proc.ProcessingResponse)
 	}
 	return sharedContinueEmptyBody
 }
