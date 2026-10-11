@@ -54,11 +54,10 @@ The prompt was `Write a Python function to sort a list.`; the candidates
 were programming, mathematics and travel planning, with the template
 `This request is about {label}.`.
 
-The verified model is binary. For ternary NLI packages, the adapter's Noul
-score includes neutral in the non-entailment denominator, while the standard
-Transformers independent-label pipeline compares entailment with
-contradiction only. This record establishes pipeline parity for this binary
-checkpoint, not universal ternary Noul parity.
+The verified model is binary. Decision serving accepts only binary NLI label
+sets in this slice. Ternary checkpoints remain available for classification;
+their decision normalization contract is deferred to a follow-up. This record
+establishes pipeline parity for the pinned binary checkpoint.
 
 ## Reproduce
 

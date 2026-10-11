@@ -89,14 +89,22 @@ def test_capabilities_only_enable_nli_decisions(client):
     body = client.get("/v1/models").json()
     check("ModelList", body)
     cards = {card["id"]: card for card in body["data"]}
-    for name in ("nli", "nli_ternary"):
-        assert cards[name]["ready"]
-        assert cards[name]["surfaces"] == ["classify", "decisions"]
-        assert cards[name]["question_types"] == ["choice", "noul"]
-        assert cards[name]["heads"][0]["inputs"] == ["text", "pair"]
-        assert [head["name"] for head in cards[name]["heads"]] == ["default"]
+    card = cards["nli"]
+    assert card["ready"]
+    assert card["surfaces"] == ["classify", "decisions"]
+    assert card["question_types"] == ["choice", "noul"]
+    assert card["heads"][0]["inputs"] == ["text", "pair"]
+    assert [head["name"] for head in card["heads"]] == ["default"]
     assert cards["sequence"]["surfaces"] == ["classify"]
     assert cards["sequence"]["question_types"] == []
+    assert cards["nli_ternary"]["surfaces"] == ["classify"]
+    assert cards["nli_ternary"]["question_types"] == []
+    response = client.post(
+        "/v1/decisions",
+        json={"model": "nli_ternary", "state": STATE, "questions": QUESTIONS},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "unsupported_surface"
 
 
 @pytest.mark.parametrize(
@@ -104,8 +112,9 @@ def test_capabilities_only_enable_nli_decisions(client):
     [
         (["entailment", "not_entailment"], 0),
         (["not_entailment", "entailment"], 1),
-        (["neutral", "contradiction", "entailment"], 2),
-        (["ENTAILMENT", "CONTRADICTION", "NEUTRAL"], 0),
+        (["NOT_ENTAILMENT", "ENTAILMENT"], 1),
+        (["neutral", "contradiction", "entailment"], None),
+        (["ENTAILMENT", "CONTRADICTION", "NEUTRAL"], None),
         (["LABEL_0", "LABEL_1"], None),
         (["entailment", "entailment"], None),
         (["entailment", "safe", "unsafe"], None),
@@ -140,7 +149,11 @@ def test_pairs_and_decisions_match_transformers(client, packages, name):
     )
     with torch.inference_mode():
         logits = reference(**encoded).logits
-    positive = entailment_index(list(reference.config.id2label.values()))
+    positive = next(
+        index
+        for index, label in reference.config.id2label.items()
+        if label.casefold() == "entailment"
+    )
     response = client.post(
         "/v1/classify",
         json={
@@ -152,6 +165,8 @@ def test_pairs_and_decisions_match_transformers(client, packages, name):
     check("ClassifyResponse", response.json())
     ours = torch.tensor([row["probabilities"] for row in response.json()["results"]])
     torch.testing.assert_close(ours, logits.softmax(-1), rtol=0, atol=1e-6)
+    if name == "nli_ternary":
+        return
     body = decisions(client, name)
     expected = logits[:, positive].softmax(0)
     actual = body["answers"]["domain"]
@@ -370,6 +385,24 @@ def test_runtime_process_exposes_nli_decisions(packages):
         assert status == 200, body
         check("DecisionResponse", body)
         assert all("error" not in a for a in body["answers"].values())
+        strict_questions = {
+            key: {**question, "require_full_input": True}
+            for key, question in QUESTIONS.items()
+        }
+        status, payload = request(
+            connect(),
+            "POST",
+            "/v1/decisions",
+            {"state": STATE, "questions": strict_questions},
+        )
+        strict = json.loads(payload)
+        assert status == 200, strict
+        check("DecisionResponse", strict)
+        for key, item in strict["answers"].items():
+            assert item.get("input_coverage") == "complete", strict
+            assert {k: v for k, v in item.items() if k != "input_coverage"} == body[
+                "answers"
+            ][key]
     finally:
         process.terminate()
         process.wait(timeout=30)

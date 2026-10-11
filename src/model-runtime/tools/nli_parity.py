@@ -43,6 +43,16 @@ def main() -> None:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--tolerance", type=float, default=1e-5)
+    parser.add_argument(
+        "--systemone",
+        action="store_true",
+        help="Check the Router's public System One listener (decision surfaces only)",
+    )
+    parser.add_argument(
+        "--require-full-input",
+        action="store_true",
+        help="Also verify strict answers have complete coverage and unchanged scores",
+    )
     args = parser.parse_args()
     torch.set_num_threads(4)
     tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -72,8 +82,11 @@ def main() -> None:
     pipeline_maximum = 0.0
     maximum = 0.0
     with httpx.Client(base_url=args.url, timeout=120) as client:
-        client.get("/health").raise_for_status()
-        cards = client.get("/v1/models").json()["data"]
+        if not args.systemone:
+            client.get("/health").raise_for_status()
+        listed = client.get("/v1/systemone/models" if args.systemone else "/v1/models")
+        listed.raise_for_status()
+        cards = listed.json()["data"]
         if len(cards) != 1:
             raise ValueError("serve exactly one model for this parity run")
         card = cards[0]
@@ -90,6 +103,7 @@ def main() -> None:
             reference_choice = logits[:, positive].softmax(0).tolist()
             reference_noul = logits[0].softmax(0)[positive].item()
             body = {
+                "model": card["id"],
                 "state": state,
                 "questions": {
                     "domain": {
@@ -106,6 +120,21 @@ def main() -> None:
             response.raise_for_status()
             native = response.json()
             elapsed = 1000 * (time.perf_counter() - started)
+            strict_answers = None
+            full_input_passed = True
+            if args.require_full_input:
+                strict_body = json.loads(json.dumps(body))
+                for question in strict_body["questions"].values():
+                    question["require_full_input"] = True
+                strict = client.post("/v1/decisions", json=strict_body)
+                strict.raise_for_status()
+                strict_answers = strict.json()["answers"]
+                full_input_passed = all(
+                    value.get("input_coverage") == "complete"
+                    and {k: v for k, v in value.items() if k != "input_coverage"}
+                    == native["answers"][key]
+                    for key, value in strict_answers.items()
+                ) and set(strict_answers) == set(native["answers"])
             choice, noul = native["answers"]["domain"], native["answers"]["code"]
             actual = [choice["probabilities"][key] for key in CRITERIA]
             errors = [abs(a - b) for a, b in zip(actual, reference_choice, strict=True)]
@@ -131,15 +160,18 @@ def main() -> None:
             ]
             pipeline_errors.append(abs(noul["noul"] - pipeline_noul))
             pipeline_maximum = max(pipeline_maximum, *pipeline_errors)
-            classified = client.post(
-                "/v1/classify",
-                json={"input": [{"text": state, "text_pair": h} for h in HYPOTHESES]},
-            )
-            classified.raise_for_status()
-            probabilities = torch.tensor(
-                [row["probabilities"] for row in classified.json()["results"]]
-            )
-            errors.append((probabilities - logits.softmax(-1)).abs().max().item())
+            if not args.systemone:
+                classified = client.post(
+                    "/v1/classify",
+                    json={
+                        "input": [{"text": state, "text_pair": h} for h in HYPOTHESES]
+                    },
+                )
+                classified.raise_for_status()
+                probabilities = torch.tensor(
+                    [row["probabilities"] for row in classified.json()["results"]]
+                )
+                errors.append((probabilities - logits.softmax(-1)).abs().max().item())
             reference_winner = list(CRITERIA)[
                 reference_choice.index(max(reference_choice))
             ]
@@ -160,6 +192,7 @@ def main() -> None:
                 and reordered_answer["probabilities"] == choice["probabilities"]
                 and reordered_answer["choice"] == choice["choice"]
                 and alias.json()["answers"] == native["answers"]
+                and full_input_passed
             )
             maximum = max(maximum, *errors)
             records.append(
@@ -168,6 +201,7 @@ def main() -> None:
                     "state": state,
                     "expected_smoke_choice": expected,
                     "native_answers": native["answers"],
+                    "strict_answers": strict_answers,
                     "reference_choice": dict(
                         zip(CRITERIA, reference_choice, strict=True)
                     ),
@@ -185,10 +219,13 @@ def main() -> None:
     report = {
         "model": args.repo,
         "revision": args.revision,
-        "model_sha256": card["model_sha256"],
-        "device": card["device"],
+        "model_sha256": card.get("model_sha256"),
+        "device": card.get("device"),
         "profile": "exact",
-        "golden_status": card["golden"]["status"],
+        "golden_status": card.get("golden", {}).get("status"),
+        "entrypoint": "router-systemone" if args.systemone else "model-runtime",
+        "classify_parity_checked": not args.systemone,
+        "strict_input_checked": args.require_full_input,
         "python": platform.python_version(),
         "pytorch": torch.__version__,
         "transformers": transformers.__version__,

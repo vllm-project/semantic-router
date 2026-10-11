@@ -75,20 +75,47 @@ digests before load, and code shipped inside packages is never executed.
 
 Compatible ModernBERT NLI sequence classifiers also serve `/v1/decisions`
 with `choice` and `noul` questions. Their label metadata must name
-`entailment` and `not_entailment`, or `entailment`, `contradiction` and
-`neutral`; label order does not matter. Other classifiers keep their fixed
-heads on `/v1/classify`.
+exactly `entailment` and `not_entailment`; label order and case do not matter.
+Ternary NLI models keep their fixed heads on `/v1/classify`. Their decision
+normalization contract is deferred to a follow-up.
 
-For example, serve the independent Apache-2.0 zero-shot model:
+For example, build the local image and serve the independent Apache-2.0
+zero-shot model through an engine-mode listener:
 
 ```bash
-vllm-sr serve MoritzLaurer/ModernBERT-base-zeroshot-v2.0 \
-  --revision d421c4545a438fd006fb43f8b981c5d908faa1e1 --device cpu --port 8100
-curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
+make vllm-sr-build VLLM_SR_IMAGE=semantic-router-nli:local
+python -m pip install -e src/vllm-sr
+cat > nli-config.yaml <<'YAML'
+version: v0.3
+listeners:
+  - name: nli
+    address: 127.0.0.1
+    port: 8899
+    systemone:
+      models: [nli]
+global:
+  model_catalog:
+    system:
+      decision_model:
+        deployment: nli
+    deployments:
+      nli:
+        provider: model_runtime
+        artifact: MoritzLaurer/ModernBERT-base-zeroshot-v2.0
+        revision: d421c4545a438fd006fb43f8b981c5d908faa1e1
+        public_name: nli
+        device: cpu
+        profile: exact
+YAML
+VLLM_SR_IMAGE=semantic-router-nli:local vllm-sr serve --engine \
+  --config nli-config.yaml --platform cpu --minimal --image-pull-policy never
+curl -s localhost:8899/v1/decisions -H 'content-type: application/json' -d '{
+  "model": "nli",
   "state": "Write a Python function to sort a list.",
   "questions": {
     "domain": {
       "type": "choice", "instructions": "This request is about {label}.",
+      "require_full_input": true,
       "criteria": {"code": "programming", "math": "mathematics", "travel": "travel planning"}
     },
     "code": {"type": "noul", "instructions": "This request is about programming."}
@@ -102,7 +129,7 @@ Noul instructions are an affirmative hypothesis, not a question. A supplied
 `true` description overrides that hypothesis; a non-null `false` description
 is rejected because false is defined as non-entailment. Choice scores use
 softmax over the candidates' entailment logits. Noul uses the entailment
-probability against all other labels, including neutral for ternary models.
+probability against `not_entailment`.
 These are model scores, not calibrated confidence. Score, Set and Span are
 unsupported. Inspect `/v1/models` for the model's surfaces and question types.
 
@@ -112,6 +139,9 @@ keeps all of `text_pair` and truncates only `text`; pair windowing is
 unsupported. Decision hypotheses always reject overflow. Each choice needs
 one pair; the runtime batches and deduplicates pairs but does not turn NLI
 into a joint multi-question forward. At most 2048 hypotheses fit one request.
+Strict questions preserve `require_full_input: true` and return
+`input_coverage: "complete"` only after every whole premise/hypothesis pair
+has been accepted and scored successfully. Errors omit the proof.
 
 Unregistered Hub models require a 40-character revision. Their package
 digests are verified, but a ready model without recorded golden answers is

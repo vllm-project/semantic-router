@@ -24,7 +24,7 @@ from ...heads.sequence import SequenceHead
 from ...heads.task import HeadOptions, Item, Rows
 from ...plugins.base import DEADLINE, LoadedModel, SurfacePlan, SurfaceRequest
 from ...plugins.decisions import RequestPlan, compare_answers, refuse_unanswerable
-from ...systemone import canonical, read_question, valid_state
+from ...systemone import canonical, read_question, require_full_input, valid_state
 from ...text.windows import InputTooLongError
 
 LOGITS_HEAD = "_nli_logits"
@@ -32,12 +32,9 @@ MAX_HYPOTHESES = 2048
 
 
 def entailment_index(labels: Sequence[str]) -> int | None:
-    """Recognize binary or ternary NLI labels, independent of their index order."""
+    """Recognize binary NLI labels, independent of their index order."""
     names = [label.casefold() for label in labels]
-    if len(set(names)) != len(names) or set(names) not in (
-        {"entailment", "not_entailment"},
-        {"entailment", "contradiction", "neutral"},
-    ):
+    if len(set(names)) != len(names) or set(names) != {"entailment", "not_entailment"}:
         return None
     return names.index("entailment")
 
@@ -95,6 +92,7 @@ class DecisionEntry:
     end: int
     error: str | None = None
     message: str | None = None
+    complete_input: bool = False
 
 
 def answer(
@@ -213,7 +211,11 @@ class NLIModel(LoadedModel[Item, Any]):
             for pair in prepared:
                 items.extend(pair.items)
                 tokens += pair.usage["tokens"]
-            entries[key] = DecisionEntry(kind, keys, start, len(items))
+            # Reject-overflow preparation accepted every whole premise/hypothesis
+            # pair before recording proof for this question.
+            entries[key] = DecisionEntry(
+                kind, keys, start, len(items), complete_input=require_full_input(raw)
+            )
         if not request.part:
             errors = {
                 key: {"error": entry.error, "message": entry.message or entry.error}
@@ -241,6 +243,8 @@ class NLIModel(LoadedModel[Item, Any]):
                     entry.kind, entry.keys, rows, self.positive, len(self.head.labels)
                 )
             )
+            if entry.complete_input and "error" not in answers[key]:
+                answers[key]["input_coverage"] = "complete"
             if entry.message:
                 answers[key]["message"] = entry.message
         return {"answers": answers}
