@@ -129,14 +129,12 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self._cpu_threads = options.threads or torch.get_num_threads()
         self.threads_resolver = (
-            adaptive_threads.AdaptiveThreads(
-                options.threads or torch.get_num_threads()
-            )
+            adaptive_threads.AdaptiveThreads(self._cpu_threads)
             if self.device.type == "cpu" and adaptive_threads.enabled()
             else None
         )
-        self._applied_threads: int | None = None
         self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
         self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
         if self.device.type == "cuda" and not spec.encoder:
@@ -308,35 +306,67 @@ class NativeEngineModel(EngineModel):
         )
         return blocks
 
-    def _apply_threads(self, tokens: int) -> None:
-        """Run this batch with the resolver's count (no-op when not adaptive).
+    def begin_traffic(self) -> None:
+        """Start thread exploration; called once the startup golden check has passed."""
+        if self.threads_resolver is not None:
+            self.threads_resolver.start()
 
-        Called on the CPU device thread, where the OpenMP team lives; a
-        repeated count is a no-op, so steady-state traffic rarely touches
-        ``torch.set_num_threads``.
+    @staticmethod
+    def _bit_equal(a: Any, b: Any) -> bool:
+        """Bit-for-bit equality over the engines' output dataclasses."""
+        if type(a) is not type(b):
+            return False
+        if isinstance(a, torch.Tensor):
+            return torch.equal(a, b)
+        if isinstance(a, (tuple, list)):
+            return len(a) == len(b) and all(
+                NativeEngineModel._bit_equal(x, y) for x, y in zip(a, b, strict=True)
+            )
+        fields = getattr(a, "__dataclass_fields__", None)
+        if fields:
+            return all(
+                NativeEngineModel._bit_equal(getattr(a, f), getattr(b, f))
+                for f in fields
+            )
+        return a == b
+
+    def _with_threads(self, tokens: int, run: Callable[[], Any]) -> Any:
+        """Run one batch under the resolver's thread discipline.
+
+        Exploration never changes an answer: the batch is served by the
+        configured count, and any other allowed count only runs as a shadow
+        pass that has to reproduce the served answer bit for bit before its
+        timing counts — so the team size can only ever switch to a count that
+        preserves ``exact`` answers on this host, and the answer itself always
+        comes from the configured count until the resolver adopts a verified
+        one.
         """
         resolver = self.threads_resolver
         if resolver is None:
-            return
+            if self.device.type == "cpu":
+                adaptive_threads.CpuTeam.apply(self._cpu_threads)
+            return run()
+        base = resolver.base
         count = resolver.pick(tokens)
-        if count != self._applied_threads:
-            torch.set_num_threads(count)
-            self._applied_threads = count
-
-    def _sample_threads(self, tokens: int, started: float) -> None:
-        if self.threads_resolver is not None:
-            self.threads_resolver.record(
-                tokens, (time.perf_counter() - started) * 1000.0
-            )
-
-    def forward(self, batch: ForwardBatch) -> ForwardOutput:
-        tokens = batch.input_ids.numel()
-        self._apply_threads(tokens)
+        adaptive_threads.CpuTeam.apply(base)
         started = time.perf_counter()
         try:
-            return self._forward(batch)
+            result = run()
         finally:
-            self._sample_threads(tokens, started)
+            base_ms = (time.perf_counter() - started) * 1000.0
+        if count == base:
+            resolver.record(tokens, base_ms)
+            return result
+        started = time.perf_counter()
+        try:
+            shadow = run()
+        finally:
+            shadow_ms = (time.perf_counter() - started) * 1000.0
+        resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
+        return result
+
+    def forward(self, batch: ForwardBatch) -> ForwardOutput:
+        return self._with_threads(batch.input_ids.numel(), lambda: self._forward(batch))
 
     def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -369,13 +399,7 @@ class NativeEngineModel(EngineModel):
         stack's reduced copy when one is loaded, and every stack has its graphs.
         A batch that names a tower runs it on its named inputs.
         """
-        tokens = batch.input_ids.numel()
-        self._apply_threads(tokens)
-        started = time.perf_counter()
-        try:
-            return self._encode(batch)
-        finally:
-            self._sample_threads(tokens, started)
+        return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
 
     def _encode(self, batch: EncoderBatch) -> EncoderOutput:
         if batch.tower is not None:
