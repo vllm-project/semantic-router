@@ -1,3 +1,4 @@
+import { dslHeaderPattern } from '@/lib/dslMutations'
 import type { ASTProgram, SymbolTable } from '@/types/dsl'
 
 export interface BuilderRoutingScope {
@@ -6,8 +7,6 @@ export interface BuilderRoutingScope {
   recipeName: string | null
   modelNames: string[]
 }
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 export function listBuilderRoutingScopes(ast: ASTProgram | null): BuilderRoutingScope[] {
   if (!ast) return []
@@ -86,13 +85,10 @@ export function mutateBuilderRecipeSource(
 ): string {
   if (!recipeName) return mutation(source)
 
-  const header = new RegExp(
-    `^RECIPE\\s+${escapeRegex(recipeName)}\\s*(?:\\([^)]*\\))?\\s*\\{`,
-    'm',
-  ).exec(source)
+  const header = new RegExp(dslHeaderPattern('RECIPE', recipeName), 'm').exec(source)
   if (!header) return source
 
-  const openBrace = source.indexOf('{', header.index)
+  const openBrace = header.index + header[0].length - 1
   let depth = 0
   let closeBrace = -1
   for (let index = openBrace; index < source.length; index += 1) {

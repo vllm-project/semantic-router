@@ -118,6 +118,51 @@
       ]
     },
     {
+      "id": "vllm-sr/d3",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/d3-flash",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/d3-mini",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/d3-nano",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
+      "id": "vllm-sr/d3-lite",
+      "family": "decision3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score"
+      ]
+    },
+    {
       "id": "vllm-sr/Vela-2.0-0.3B",
       "family": "vela2",
       "question_types": [
