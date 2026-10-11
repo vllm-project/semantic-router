@@ -341,6 +341,9 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 	}
 	currentCounts := usageCounts(current)
 	updateCounts := usageCounts(update)
+	if usageSnapshotIsPlaceholder(updateCounts, currentCounts) {
+		return current, nil
+	}
 	merged := make([]llmprotocol.TokenCount, len(currentCounts))
 	for index := range merged {
 		value, err := mergeTokenCount(currentCounts[index], updateCounts[index])
@@ -364,6 +367,26 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		return llmprotocol.Usage{}, err
 	}
 	return result, nil
+}
+
+// usageSnapshotIsPlaceholder reports whether an upstream usage snapshot
+// carries no evidence of its own: it presents only zero counters while the
+// running usage already holds positive evidence. Cumulative-usage upstreams
+// emit such all-zero snapshots between real cumulative frames, so the
+// snapshot is a placeholder rather than a decrease and the running usage
+// keeps its evidence.
+func usageSnapshotIsPlaceholder(update, current []llmprotocol.TokenCount) bool {
+	for _, count := range update {
+		if count.Value != nil && *count.Value > 0 {
+			return false
+		}
+	}
+	for _, count := range current {
+		if count.Value != nil && *count.Value > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
