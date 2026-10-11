@@ -63,6 +63,11 @@ Go commands against that module's dependencies.
   GitHub issues for tracked debt; keep repository-only architectural risks in
   `tools/agent/docs/architecture-risks.md`.
 - PR commits use `git commit -s`. Keep unrelated changes out of the branch.
+- Treat a PR in the merge queue as frozen: do not push to its branch, since a
+  push restarts PR Gate and can dequeue it. After a dequeue caused by a
+  branch-update failure, follow the
+  [merge-queue recovery steps](CONTRIBUTING.md#troubleshoot-the-merge-queue)
+  to update the branch and let the rule requeue it automatically.
 - Never publish credentials, private hostnames, or private fleet details.
 
 ## Optional repository skills
