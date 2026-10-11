@@ -83,6 +83,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/action',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
@@ -158,6 +159,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
                 'tutorials/algorithm/selection/decision',
+                'tutorials/algorithm/selection/random',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
