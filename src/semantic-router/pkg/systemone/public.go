@@ -16,9 +16,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
-// RequestLimit bounds one native request body. Requests may carry images as
-// base64 data URLs; the managed runtime accepts larger bodies than this.
-const RequestLimit = 32 << 20
+// RequestLimit bounds one native request body. Requests may carry images and
+// videos as base64 data URLs (one video of up to 32,000,000 bytes fits); the
+// managed runtime accepts larger bodies than this.
+const RequestLimit = 48 << 20
 
 // Invoke is a retained inference call supplied by the serving owner.
 type Invoke func(context.Context, string, json.RawMessage) (int, []byte, error)
