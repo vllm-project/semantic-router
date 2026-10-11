@@ -308,7 +308,7 @@ func (m *Manager) TestConnection(ctx context.Context, config *ServerConfig) erro
 	if err != nil {
 		return err
 	}
-	if err := ValidateServerConfig(resolved); err != nil {
+	if err = ValidateServerConfig(resolved); err != nil {
 		return err
 	}
 	client, err := NewClient(resolved)
