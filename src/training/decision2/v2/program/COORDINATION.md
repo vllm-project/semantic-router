@@ -210,6 +210,118 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-11 14:16 — **parent: started `d30-v3`, v3 of the Decision 3.0 family film, from `d30-film`'s m2.** `d30-film` paused at 11:54, with its claims released.
+  - **Music:** a clean, hit-locked score from the Decision 2.0 film's code-synthesis engine, replacing the noisy ACE-Step options.
+  - **Pareto:** redesigned in Decision 2.0's grammar, with per-upgrade camera stops, named rank cards and competitor logos.
+  - **The family:** the sixth model, d3-edge.
+  - **Video:** the new capability, with real-run answers.
+  - **Channel:** `/home/xunliu/scratch/d30-v3/PARENT.md`.
+
+- 2026-10-11 11:54 — **`d30-film` → parent: m2 is now complete for whichever score the user picks. The final m2 with each score is in `Downloads/decision3-launch-film/preview/`. Nothing has come through `PARENT.md` since 07:3x, so I'm pausing: I've released node B CPU cores 64–159 and I'm returning a status reply. Resume me with the pick and your word on v1.**
+  - **The three m2 files** are the same m2e picture (52.3 s, 1080p60, BT.709) with each score. Each sha256 was checked after the pull:
+
+    | File | Score | sha256 |
+    | --- | --- | --- |
+    | `decision3-launch-m2-music-A-social-1080p60.mp4` | A, melodic house | `d209f19e…` |
+    | `decision3-launch-m2-music-B-social-1080p60.mp4` | B, cinematic hybrid trailer | `c599d7bb…` |
+    | `decision3-launch-m2-music-C-social-1080p60.mp4` | C, synthwave / future garage | `e29ff1aa…` |
+
+  - **The user can pick by watching** the film with each score instead of listening to the bare tracks. Whichever is picked is the m2. The 08:12 draft is the C file under its earlier name.
+  - **Also in `preview/`:** `poster.jpg` is now the m2 poster. The `m2-draft` contact sheets show this same picture.
+  - **v1 after your word:** about 20 minutes. It needs a fresh CPU claim on node B for the encode, then `SOURCES.json`, `README.md`, `post.md` and `SHA256SUMS.txt`. Everything is prepared.
+  - **Node B:** released CPU cores 64–159. GPU5 and GPU7 still read `status=released`. No processes of mine are running.
+  - **Node B disk:** my run dir is down to 58 GB. I deleted the five model snapshots and `d3venv` (78 GB), since the data disk was at 100%. The ACE-Step copies (36 GB) stay in case the user wants new music; I'll delete them at the end.
+  - **Docs sync:** still blocked by your staged 07:19–07:24 notes in the training worktree. I haven't touched them.
+
+  — `d30-film`
+
+- 2026-10-11 09:01 — **`d30-film` → parent: status while I wait for the music pick (A, B or C) and your acceptance of the m2 picture. The final m2 is now encoded with all three scores, so the pick reaches `preview/` within about 2 minutes, not the 10 I said at 08:12.**
+  - **Pre-encoded on node B:** the same m2e picture with each score. All three pass QA:
+
+    | Option | Loudness | True peak | A/V offset |
+    | --- | --- | --- | --- |
+    | A, melodic house | −14.1 LUFS | −1.9 dBTP | 0 ms |
+    | B, cinematic hybrid trailer | −14.1 LUFS | −1.9 dBTP | 0 ms |
+    | C, synthwave / future garage | −14.2 LUFS | −1.6 dBTP | 0 ms |
+
+  - **With the pick, `preview/` also gets** the m2 poster, which replaces the m1 one still there, and the final contact sheets.
+  - **The docs sync is blocked by your own notes.** The training worktree has your 07:19, 07:23 and 07:24 notes staged but not committed, so `sync_program_docs.sh` refuses to run. My 07:33, 07:49, 08:12 and this note are in `COORDINATION.md` but not synced. I haven't touched the staged change.
+  - **Held:** node B CPU cores 64–159. GPU5 and GPU7 are released.
+
+  — `d30-film`
+
+- 2026-10-11 08:12 — **`d30-film` → parent: the m2 PICTURE is ready for your acceptance in `Downloads/decision3-launch-film/preview/`: `decision3-launch-m2-draft-social-1080p60.mp4` (52.3 s, 1080p60, 57.5 MB, sha256 `a2962644…` checked after the pull), four contact sheets, and an updated `beat-map.md` and `facts.md`. It plays option C only as a placeholder.**
+  - **Music:** when the user picks A, B or C, I re-encode the same picture with that score as `decision3-launch-m2-social-1080p60.mp4`, about 10 minutes later. Nothing in the picture changes.
+  - **The new arc, 124 BPM, 27 bars:**
+    - **0–5 s:** the ring ignites at 1 s (the muted hook), and "Decision 3.0" and the tagline land in the ring.
+    - **5–13 s:** the five sizes, then "Open. Multimodal." with the HF "Open weights" chip and Apache-2.0. "Milliseconds, at every size." rolls each median down (23.5 / 22.4 / 29.5 / 29.7 / 84 ms) on "MEDIAN · ON [AMD] Instinct MI325X".
+    - **13–20 s:** text → text + images, with bold ✓ answers and the five-size agreement pills.
+    - **20–27 s:** the Pareto shot. 109 models rain in, then Decision 2.0's line and the old frontier. Each size launches from its Decision 2.0 point with its badge (0.8B #90→#78, 2B #78→#63, 4B #41→#19, 9B #32→#6), then the hero 27B #13→#1, and the frontier redraws: "A new frontier at every size."
+    - **27–40 s:** the climb, with one hero card at a time (Clef, Microsoft-Decision-1, the +8.4 gap over Decision 2.0, Jev, "previous #1" Perplexity) and the drop on #1 at 0:36.8. Then the vision #1 and "#1 in text and vision."
+    - **42–47 s:** the 9B face-off, with the second hit on 59.0 at 0:44.5.
+    - **47–52 s:** the end card, with "Open weights on Hugging Face" and the link as the main call to action, plus Apache-2.0 and "Trained on [AMD] Instinct MI325X".
+  - **Measured on this cut:**
+
+    | Measure | m2 | v6.2 | Target |
+    | --- | --- | --- | --- |
+    | Moves per minute | 76.9 | 58.4 | ≥ 55 |
+    | Moving share | 0.789 | 0.631 | ≥ 0.60 |
+    | Ease-out share | 0.75 | 0.68 | ≥ 0.60 |
+    | Median move | 0.40 s | 0.516 s | 0.35–0.6 s |
+    | Time-to-peak median | 0.09 | 0.14 | ≤ 0.2 |
+    | Frame difference | 4.31 | 4.49 | ≥ 4 |
+
+    - **QA:** 3,135 of 3,135 frames, no black or flash frames, no music gaps, −14.2 LUFS, true peak −1.6 dBTP after the encode, A/V offset 0 ms. `overlap_check.mjs` reports PASS. The file is BT.709 tv range and printed "clean".
+  - **Checked:** every Pareto number matches yours (`tools/make_data.py` asserts the frontier at every size). Microsoft-Decision-1 has no size, so it stays out of the scatter.
+  - **Docs sync:** `sync_program_docs.sh` is refused because someone else has staged changes in the coordinator worktree. I left them alone; my notes are in `COORDINATION.md`.
+  — `d30-film`
+
+- 2026-10-11 07:49 — **`d30-film` → parent: three music options delivered to `Downloads/decision3-launch-film/music-options/` for the user to pick: `music-A.m4a` (melodic house), `music-B.m4a` (cinematic hybrid trailer) and `music-C.m4a` (synthwave / future garage), with a `README.md`. Each is 52.3 s at 124 BPM, cut to the locked bar plan with the film's sound design, at about −14 LUFS.**
+  - **How they were made:**
+    - **Generation:** ACE-Step 1.5 produced 48 candidates: three style families, two captions each, eight seeds.
+    - **Ranking:** by fit to the bar plan (tempo lock, plan correlation, drop depth and hit), a hook measure (4- and 8-bar repetition, tonality) and mix clarity.
+    - **Vetting:** vocals were checked with Demucs. Four candidates with vocal-like peaks were rejected, as was every candidate that drifted to 125 BPM.
+    - **The picks:** A `cA_s7607` (fit 2.23, vocals −36.8 dB), B `cD_s7602` (fit 1.41, the strongest hook and cleanest mix, −32.7 dB) and C `cE_s7602` (fit 2.29, the best of all 48, −33.5 dB).
+    - **The cut:** each was split with Demucs and sculpted on the film's bar lines. The biggest drop is on the text #1 at 0:36.8, the second hit on d3-flash's 59.0 at 0:44.5, and each ends on its own fade.
+  - **The picture is being built on the same grid (124 BPM, 27 bars):**
+    - the reveal with the ring igniting;
+    - the family with the HF "Open weights" chip;
+    - "Milliseconds, at every size." with the five medians on the AMD Instinct MI325X lockup;
+    - the receipt with bold answers;
+    - the new Pareto shot with rank badges (0.8B #90→#78 … 27B #13→#1), which re-verify your numbers exactly, and "A new frontier at every size.";
+    - the hero climb callouts, the face-off;
+    - the end card with "Open weights on Hugging Face" as the call to action and "Trained on [AMD] Instinct MI325X".
+  - **GPUs:** GPU5 and GPU7 were released at 23:39Z. The CPU claim (cores 64–159) is unchanged.
+  - **Next:** m2 with the user's pick about 30 min after it arrives. Until then I polish and measure the picture on the node.
+  — `d30-film`
+
+- 2026-10-11 07:33 — **`d30-film` → parent: ack the 07:3x restructure (about 52 s, new score, Pareto, speed + AMD, the HF call to action). Node B GPU5 and GPU7 leased again for about 45 min, for ACE-Step 1.5 only (48 candidates in three style families). The CPU claim (cores 64–159) is unchanged.**
+  - **Checked at 07:29 (live):** GPU5 and GPU7 were at 0% use with no memory held. GPU6 holds another team's job, which I won't touch.
+  - **Locked bar plan:** 124 BPM, 27 bars = 52.3 s, with the main drop on the text #1 (bar 19) and the second hit on 59.0 (bar 23).
+  - **Next:** I'll deliver three options to `music-options/`, `music-A/B/C.m4a`, each cut to the bar plan with the sound design, and keep building the picture on the same grid. m2 follows with the track the user picks.
+  — `d30-film`
+
+- 2026-10-11 07:24 — **parent → `d30-film`: USER (07:23), restructure the whole film with a new score; no hard length limit.**
+  - **Length:** the parent targets about 50–60 s.
+  - **Arc:** reveal, family, speed with AMD, text and images, the Pareto leap, the climb to #1, the 9B face-off, the end card with HF and AMD.
+  - **Music:** lock the bar plan first, then generate widely, and deliver three contrasting score options to `Downloads/decision3-launch-film/music-options/` for the user to pick by ear. Keep building the picture meanwhile.
+
+  Details are in `PARENT.md`.
+
+- 2026-10-11 07:23 — **parent → `d30-film`: USER (07:21), a Pareto animation like Decision 2.0's, on Index 0.3.1 data, replacing the gains-bar beat.**
+  - **The shot:** Decision 2.0 points fly up to their Decision 3.0 successors.
+  - **Rank jumps:** #13→#1, #32→#6, #41→#19, #78→#63, #90→#78.
+  - **The frontier:** it redraws above every size (verified at all five).
+
+  Details are in `PARENT.md`.
+
+- 2026-10-11 07:19 — **parent → `d30-film`: USER (07:18), more for m2.**
+  - **Speed beat:** about 3 s after the family tiles, with each size's median text latency (22.4–84 ms) on an AMD Instinct MI325X lockup with the AMD logo.
+  - **End card:** a designed "Trained on AMD Instinct MI325X" logo lockup instead of the plain line, and the Hugging Face logo with "Open weights on Hugging Face" and the collection URL as the main call to action.
+  - **Length:** about 48–50 s.
+
+  Details are in `PARENT.md`.
+
 - 2026-10-11 06:55 — **`d30-film` → parent: MILESTONE 1 delivered to `Downloads/decision3-launch-film/preview/`: `decision3-launch-m1-social-1080p60.mp4` (45.0 s, 1080p60, 16:9, 50.1 MB, sha256 `70abeef7…` checked after the pull), three contact sheets, `beat-map.md`, `facts.md` and `poster.jpg`. Every motion target, the overlap audit and QA pass. It follows the user's 05:45 direction and your 05:5x answers.**
   - **Story (120 BPM, 22.5 bars):**
     - **0–6.5 s:** the poster, then the ring bursts and the five sizes land (0.8B → 27B), with "Open. Multimodal." and Apache-2.0.
