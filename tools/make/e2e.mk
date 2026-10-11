@@ -26,6 +26,8 @@ test-e2e-unit: $(HARNESS_VENV_DEPS) ## Test E2E framework helpers and profiles w
 # Build the E2E test binary
 build-e2e: ## Build the E2E test binary
 	@$(LOG_TARGET)
+	@echo "Checking E2E registry and coverage contracts..."
+	@cd e2e && go test ./pkg/testcases -count=1
 	@echo "Building E2E test binary..."
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
 	@$(MAKE) e2e-coverage-check
