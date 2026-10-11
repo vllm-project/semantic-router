@@ -159,6 +159,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
                 'tutorials/algorithm/selection/decision',
+                'tutorials/algorithm/selection/random',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -523,6 +524,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
+        'benchmarking/agent-routing-protection',
         {
           type: 'category',
           label: 'sr-bench 1.0',
