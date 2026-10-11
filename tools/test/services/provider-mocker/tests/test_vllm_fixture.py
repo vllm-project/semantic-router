@@ -6,7 +6,15 @@ from pathlib import Path
 import httpx
 import pytest
 from provider_mocker.app import create_app
-from provider_mocker.vllm_fixture import MARKER, REASONING_ORDER_MARKER
+from provider_mocker.chat_request import ChatRequest
+from provider_mocker.vllm_fixture import (
+    GENERATION_ERROR,
+    MARKER,
+    MIDSTREAM_ERROR_MARKER,
+    REASONING_ORDER_MARKER,
+    STREAM_ERROR_MARKER,
+    error_stream,
+)
 
 CAPTURE = (
     Path(__file__).resolve().parents[5]
@@ -107,3 +115,57 @@ async def test_vllm_reasoning_order_fixture():
         reply = await client.post("/v1/chat/completions", json=ordinary)
         assert reply.status_code == 200
         assert "Hello there, how are you" not in reply.text
+
+
+# Bytes captured from vLLM 0.30.0 (bad json_schema regex), streamed and buffered.
+CAPTURED_STREAM = CAPTURE.with_name("vllm-chat-stream-error-stream.sse").read_text()
+CAPTURED_BUFFERED = (
+    '{"error":{"message":"Grammar error: regex parse error:\\n    [\\n    ^\\n'
+    'error: unclosed character class","type":"BadRequestError","param":null,"code":400}}'
+)
+
+
+async def test_vllm_stream_error_fixture():
+    request = {
+        "model": "openai/gpt-oss-20b",
+        "messages": [{"role": "user", "content": STREAM_ERROR_MARKER}],
+        "stream": True,
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app()), base_url="http://fixture"
+    ) as client:
+        streamed = await client.post("/v1/chat/completions", json=request)
+        assert streamed.status_code == 200
+        assert streamed.text == CAPTURED_STREAM
+
+        buffered = await client.post(
+            "/v1/chat/completions", json={**request, "stream": False}
+        )
+        assert buffered.status_code == 400
+        assert buffered.text == CAPTURED_BUFFERED
+
+        midstream = await client.post(
+            "/v1/chat/completions",
+            json={
+                **request,
+                "messages": [{"role": "user", "content": MIDSTREAM_ERROR_MARKER}],
+            },
+        )
+        events = [
+            line.removeprefix("data: ")
+            for line in midstream.text.splitlines()
+            if line.startswith("data: ")
+        ]
+        assert midstream.status_code == 200
+        assert json.loads(events[1])["choices"][0]["delta"]["content"] == "partial"
+        assert json.loads(events[2]) == {"error": GENERATION_ERROR}
+        assert events[3:] == ["[DONE]"]
+
+
+def test_vllm_error_and_done_share_one_write():
+    """Each yield is its own write; the error and [DONE] share one so the E2E's
+    Chat result does not depend on how Envoy splits the reads."""
+    req = ChatRequest(model="m", messages=[{"role": "user", "content": "x"}])
+    *_, last = error_stream(req, 0, GENERATION_ERROR, content="partial")
+    assert last.startswith('data: {"error": ')
+    assert last.endswith("\n\ndata: [DONE]\n\n")
