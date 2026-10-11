@@ -6,9 +6,10 @@
   arrays and ``Video`` objects pass through;
 - prompt expansion: the runtime's video prompt (placeholders expanded with the request's processed videos) is
   token for token what the checkpoint's own processor produces for the same text and frames;
-- forward pass: the runtime's video path (vision features once per request) against the stock
-  ``Qwen3_5Model.forward`` on the processor's batch (every copy through the vision tower): same argmax, small
-  probability differences; the fused fast path against the plain path the same way;
+- forward pass: the runtime's video path against the processor's own call and the stock ``Qwen3_5Model.forward``,
+  one question at a time (identical); with several questions the runtime computes the vision features once per
+  request while the stock forward runs every copy through the vision tower (reported, small differences); the
+  fused fast path against the plain path (identical);
 - requests: one video with several questions, a video with images, two videos, the per-request video token
   budget, strict (server) loading, the HTTP server and ``AutoModel.from_pretrained(..., trust_remote_code=True)``.
 
@@ -237,14 +238,30 @@ def main() -> int:
     def same_top(a, b):
         return all(int(np.argmax(a[k])) == int(np.argmax(b[k])) for k in a)
 
+    singles = {}
+    saved = model.fast
+    model.fast = None
+    try:
+        for key, question in QUESTIONS.items():
+            one = model.system_one(
+                state=state, questions={key: question}, videos=[video]
+            )
+            reference, _ = stock_probabilities(model, rt, state, {key: question}, video)
+            singles[key] = max(
+                abs(x - y) for x, y in zip(values(one["answers"][key]), reference[key])
+            )
+    finally:
+        model.fast = saved
     check(
         "plain_path_equals_stock_forward",
-        same_top(probs_plain, stock) and dp(probs_plain, stock) < 0.02,
-        max_abs_dp=dp(probs_plain, stock),
+        max(singles.values()) <= 1e-6,
+        max_abs_dp_one_question=singles,
+        batch_of_three_max_abs_dp=dp(probs_plain, stock),
+        batch_of_three_same_argmax=same_top(probs_plain, stock),
     )
     check(
-        "fused_path_close_to_plain",
-        same_top(probs_fused, probs_plain) and dp(probs_fused, probs_plain) < 0.02,
+        "fused_path_equals_plain",
+        dp(probs_fused, probs_plain) == 0.0,
         max_abs_dp=dp(probs_fused, probs_plain),
     )
     again = model.system_one(state=state, questions=QUESTIONS, videos=[data_url])
