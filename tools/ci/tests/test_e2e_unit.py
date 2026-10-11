@@ -44,7 +44,6 @@ class E2EUnitTests(unittest.TestCase):
         self.assertEqual(record["executor"], "tools")
         self.assertEqual(record["boundary"], ["unit"])
         self.assertEqual(record["images"], [])
-        self.assertFalse(record["native"])
 
     def test_dynamic_packages_preserve_dedicated_owners(self):
         evidence, packages, calls = self._run()

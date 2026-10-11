@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -95,7 +96,7 @@ type rlResponse struct {
 
 func sendRateLimitRequest(ctx context.Context, baseURL, userID, groups, prompt string, maxTokens int) (*rlResponse, error) {
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},

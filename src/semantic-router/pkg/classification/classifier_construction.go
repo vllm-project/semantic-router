@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -108,24 +107,6 @@ func (b *classifierOptionBuilder) closePending() {
 		}
 	}
 	_ = classifier.Close()
-}
-
-func classifierBuildParallelism(stepCount int) int {
-	if stepCount <= 1 {
-		return 1
-	}
-	backend := embeddingBackendOverride()
-	if backend == "" || backend == "candle" {
-		return 1
-	}
-	parallelism := runtime.NumCPU()
-	if parallelism <= 0 {
-		parallelism = 1
-	}
-	if parallelism > stepCount {
-		parallelism = stepCount
-	}
-	return parallelism
 }
 
 func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {

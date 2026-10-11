@@ -364,8 +364,8 @@ func (c *Compiler) compileJailbreakSignal(s *SignalDecl) {
 
 func (c *Compiler) compileHallucinationSignal(s *SignalDecl) {
 	rule := config.HallucinationRule{Name: s.Name}
-	if v, ok := getBoolField(s.Fields, "use_nli"); ok {
-		rule.UseNLI = v
+	if _, ok := s.Fields["use_nli"]; ok {
+		c.addError(s.Pos, "hallucination signal %q: use_nli is retired with the NLI explainer; remove it", s.Name)
 	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v

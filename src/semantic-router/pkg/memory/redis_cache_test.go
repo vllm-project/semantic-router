@@ -66,7 +66,7 @@ func TestRedisCache_Set_NilReceiver_NoPanic(t *testing.T) {
 
 func TestRedisCache_InvalidateByUser_NilReceiver_NoPanic(t *testing.T) {
 	var c *RedisCache
-	c.InvalidateByUser(context.Background(), "u1")
+	_ = c.InvalidateByUser(context.Background(), "u1")
 }
 
 // StorageIntegration: redis
@@ -81,7 +81,7 @@ func TestRedisCache_InvalidateByUser_EmptyUser_NoPanic(t *testing.T) {
 		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
-	cache.InvalidateByUser(context.Background(), "")
+	_ = cache.InvalidateByUser(context.Background(), "")
 }
 
 func TestRedisCache_Close_NilReceiver_NoError(t *testing.T) {
@@ -104,7 +104,7 @@ func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
 	ctx := context.Background()
 
 	user := "u_inv_idx"
-	cache.InvalidateByUser(ctx, user) // clean slate from prior runs
+	_ = cache.InvalidateByUser(ctx, user) // clean slate from prior runs
 
 	// Two distinct queries -> two distinct value keys for the same user.
 	opts1 := RetrieveOptions{Query: "alpha", UserID: user, Limit: 5, Threshold: 0.5}
@@ -127,7 +127,7 @@ func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
 	require.True(t, ok1)
 	require.True(t, ok2)
 
-	cache.InvalidateByUser(ctx, user)
+	_ = cache.InvalidateByUser(ctx, user)
 
 	// Value keys and the index set are all gone.
 	_, ok1 = cache.Get(ctx, opts1)
@@ -154,19 +154,19 @@ func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
 
 	optsA := RetrieveOptions{Query: "q", UserID: "u_scope_a", Limit: 5, Threshold: 0.5}
 	optsB := RetrieveOptions{Query: "q", UserID: "u_scope_b", Limit: 5, Threshold: 0.5}
-	cache.InvalidateByUser(ctx, optsA.UserID)
-	cache.InvalidateByUser(ctx, optsB.UserID)
+	_ = cache.InvalidateByUser(ctx, optsA.UserID)
+	_ = cache.InvalidateByUser(ctx, optsB.UserID)
 	cache.Set(ctx, optsA, []*RetrieveResult{})
 	cache.Set(ctx, optsB, []*RetrieveResult{})
 
-	cache.InvalidateByUser(ctx, optsA.UserID)
+	_ = cache.InvalidateByUser(ctx, optsA.UserID)
 
 	_, okA := cache.Get(ctx, optsA)
 	_, okB := cache.Get(ctx, optsB)
 	assert.False(t, okA, "invalidated user should miss")
 	assert.True(t, okB, "other user's cache must be untouched")
 
-	cache.InvalidateByUser(ctx, optsB.UserID) // cleanup
+	_ = cache.InvalidateByUser(ctx, optsB.UserID) // cleanup
 }
 
 // StorageIntegration: redis
@@ -246,26 +246,19 @@ func TestCacheKeyVersionedEncodingPreservesThresholdPrecision(t *testing.T) {
 }
 
 func TestCacheKeyHybridDefaultsAgreeWithActualRerankers(t *testing.T) {
-	for name, rerank := range map[string]func([]*RetrieveResult, RetrieveOptions) []*RetrieveResult{
-		"milvus": (&MilvusStore{}).hybridRerank,
-		"valkey": (&ValkeyStore{}).hybridRerank,
-	} {
-		t.Run(name, func(t *testing.T) {
-			candidates := func() []*RetrieveResult {
-				return []*RetrieveResult{
-					{Memory: &Memory{ID: "coffee", Content: "coffee preference"}, Score: 0.8},
-					{Memory: &Memory{ID: "tea", Content: "tea preference"}, Score: 0.4},
-				}
-			}
-			implicit := RetrieveOptions{Query: "coffee", HybridSearch: true}
-			explicit := implicit
-			explicit.HybridMode = "weighted"
-			rrf := implicit
-			rrf.HybridMode = "rrf"
-			assert.Equal(t, rerank(candidates(), implicit), rerank(candidates(), explicit))
-			assert.NotEqual(t, rerank(candidates(), implicit), rerank(candidates(), rrf))
-			assert.Equal(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", explicit))
-			assert.NotEqual(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", rrf))
-		})
+	candidates := func() []*RetrieveResult {
+		return []*RetrieveResult{
+			{Memory: &Memory{ID: "coffee", Content: "coffee preference"}, Score: 0.8},
+			{Memory: &Memory{ID: "tea", Content: "tea preference"}, Score: 0.4},
+		}
 	}
+	implicit := RetrieveOptions{Query: "coffee", HybridSearch: true}
+	explicit := implicit
+	explicit.HybridMode = "weighted"
+	rrf := implicit
+	rrf.HybridMode = "rrf"
+	assert.Equal(t, hybridRerankCandidates(candidates(), implicit), hybridRerankCandidates(candidates(), explicit))
+	assert.NotEqual(t, hybridRerankCandidates(candidates(), implicit), hybridRerankCandidates(candidates(), rrf))
+	assert.Equal(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", explicit))
+	assert.NotEqual(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", rrf))
 }

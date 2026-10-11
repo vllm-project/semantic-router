@@ -98,7 +98,6 @@ describe('playgroundInvocationSupport', () => {
       conversationId: 'conversation-1',
       prompt: 'Explain vector clocks.',
       requestOptions: {
-        enableClawMode: false,
         enableWebSearch: false,
         executeToolCalls: false,
         model: 'team/custom-balanced',

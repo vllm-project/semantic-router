@@ -66,10 +66,8 @@ func TestValidationUsesManagedBearerCredentialForEvalAndProvenance(t *testing.T)
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath})
-	token, err := store.EnsureManagementCredential()
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	t.Setenv(ManagementCredentialEnv, token)
 	hash := strings.TrimPrefix(digestBytes(config), "sha256:")
 	var authenticated atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

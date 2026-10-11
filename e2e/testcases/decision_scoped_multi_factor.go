@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -74,7 +75,7 @@ func testDecisionScopedMultiFactor(
 
 func requestDecisionScopedSelection(ctx context.Context, localPort, query string) (string, string, error) {
 	payload, err := json.Marshal(map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": query},
 		},

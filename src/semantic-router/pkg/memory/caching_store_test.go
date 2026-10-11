@@ -75,7 +75,7 @@ func TestCachingStore_Retrieve_MissThenHit(t *testing.T) {
 		Provider: storagetest.Vectors{Size: 384, Aliases: map[string]string{
 			"coffee": "user likes coffee",
 		}},
-		Model: EmbeddingModelBERT,
+		Model: EmbeddingModelQwen3,
 	})
 	// Store one memory so Retrieve can return something
 	mem := &Memory{ID: "m1", Type: MemoryTypeSemantic, Content: "user likes coffee", UserID: "u1"}
@@ -144,7 +144,7 @@ func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
 		Provider: storagetest.Vectors{Size: 384, Aliases: map[string]string{
 			"coffee": "likes coffee",
 		}},
-		Model: EmbeddingModelBERT,
+		Model: EmbeddingModelQwen3,
 	})
 	wrapped := NewCachingStore(underlying, redisCache, "milvus")
 	opts := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}

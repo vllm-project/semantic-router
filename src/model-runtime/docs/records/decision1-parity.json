@@ -1,0 +1,8215 @@
+{
+ "schema": "decision1-parity/1",
+ "runs": [
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1200,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.59634780883789e-06
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1200,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.7220458984375e-06
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1200,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 8.171796798706055e-05
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.04634942286553101
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03321716843964184
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.02120363735630626
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 5,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03150317371912048
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.025149976593148438
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.02103409757801017
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 15,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03134746315246195
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 10,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.028099290639471475
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "c22bb15cd",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4541,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.328126907348633e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 1227,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.379847526550293e-05
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 176,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.8908252716064453e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 58,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.364418029785156e-06
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 1553,
+      "eager": 6,
+      "packed": 8,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 7,
+      "replays": 7025,
+      "eager": 7,
+      "packed": 898,
+      "failed": 0
+     },
+     "score": {
+      "captures": 4,
+      "replays": 1102,
+      "eager": 5,
+      "packed": 1,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "c22bb15cd",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4540,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 4.380941390991211e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 1257,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 4.380941390991211e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 164,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.6226043701171875e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 46,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.5957822799682617e-05
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 1553,
+      "eager": 6,
+      "packed": 8,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 7,
+      "replays": 7025,
+      "eager": 7,
+      "packed": 898,
+      "failed": 0
+     },
+     "score": {
+      "captures": 4,
+      "replays": 1102,
+      "eager": 5,
+      "packed": 1,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "c22bb15cd",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4534,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 7.808208465576172e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 1253,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 8.940696716308594e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 165,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.8312206268310547e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 50,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.6269426345825195e-05
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 1553,
+      "eager": 6,
+      "packed": 8,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 7,
+      "replays": 7025,
+      "eager": 7,
+      "packed": 898,
+      "failed": 0
+     },
+     "score": {
+      "captures": 4,
+      "replays": 1102,
+      "eager": 5,
+      "packed": 1,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "max_speed",
+   "commit": "c22bb15cd",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.1265277862548828e-05
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 10,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.556510925292969e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 60,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.7220458984375e-06
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.67572021484375e-06
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "profile": "max_speed",
+   "commit": "c22bb15cd",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.6673078536987305e-06
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 9,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 4.470348358154297e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 47,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.6656856536865234e-06
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.874301910400391e-06
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "profile": "max_speed",
+   "commit": "c22bb15cd",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.467103958129883e-06
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 11,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.6301870346069336e-05
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 50,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.377696990966797e-06
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.463029861450195e-05
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "89c4388aa",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "89c4388aa",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "89c4388aa",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "89c4388aa",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "max_speed",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.1265277862548828e-05
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 10,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.556510925292969e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 60,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.7220458984375e-06
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.67572021484375e-06
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "8d45cd2f2",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4541,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.328126907348633e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 1227,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.379847526550293e-05
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 176,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.8908252716064453e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 58,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.364418029785156e-06
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 1553,
+      "eager": 6,
+      "packed": 8,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 7,
+      "replays": 7025,
+      "eager": 7,
+      "packed": 898,
+      "failed": 0
+     },
+     "score": {
+      "captures": 4,
+      "replays": 1102,
+      "eager": 5,
+      "packed": 1,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "profile": "max_speed",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.6673078536987305e-06
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 9,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 4.470348358154297e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 47,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.6656856536865234e-06
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.874301910400391e-06
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "8d45cd2f2",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4540,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 4.380941390991211e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 1257,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 4.380941390991211e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 164,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.6226043701171875e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 46,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.5957822799682617e-05
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 1553,
+      "eager": 6,
+      "packed": 8,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 7,
+      "replays": 7025,
+      "eager": 7,
+      "packed": 898,
+      "failed": 0
+     },
+     "score": {
+      "captures": 4,
+      "replays": 1102,
+      "eager": 5,
+      "packed": 1,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "profile": "max_speed",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.467103958129883e-06
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 11,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.6301870346069336e-05
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 50,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.377696990966797e-06
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 0,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.463029861450195e-05
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "8d45cd2f2",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4534,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 7.808208465576172e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 1253,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 8.940696716308594e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 165,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.8312206268310547e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 50,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.6269426345825195e-05
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 1553,
+      "eager": 6,
+      "packed": 8,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 7,
+      "replays": 7025,
+      "eager": 7,
+      "packed": 898,
+      "failed": 0
+     },
+     "score": {
+      "captures": 4,
+      "replays": 1102,
+      "eager": 5,
+      "packed": 1,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "d3d1d7e68",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "69ae2d0c5",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "69ae2d0c5",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "28d702760",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "28d702760",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 1200,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "28d702760",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "28d702760",
+   "panels": {
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B",
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Sol-2B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Sol-2B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 75,
+     "questions": 6547,
+     "decision_changes": 39,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08670604228973389
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0685591246692484
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 2,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.025269670627194596
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 30,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.09961378916370389
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "64d6046ad",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6530,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.015630451610106344
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 163,
+     "questions": 6547,
+     "decision_changes": 26,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.09891176223754883
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 2,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08831104957768132
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 36,
+     "questions": 231,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.031943798554801006
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 9,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.14794302356459355
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 163,
+     "questions": 6547,
+     "decision_changes": 35,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.06685614685499885
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.06291954178030568
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 36,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.043655795103268835
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 27,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.06972065568214791
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Nox-4B",
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "64d6046ad",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 75,
+     "questions": 6547,
+     "decision_changes": 37,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05325248993678411
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 6,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08546296395988884
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 2,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05111707004702376
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 34,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.19266973306950474
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "79908fad8",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "concurrent": 8,
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d7b06a6f9",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "concurrent": 8,
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 0,
+     "questions": 13094,
+     "decision_changes": 6547,
+     "error_mismatches": 4,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 4550,
+     "decision_changes": 2275,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 462,
+     "decision_changes": 231,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1,
+     "questions": 3599,
+     "decision_changes": 1999,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "triton-gfx942-fp64",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "dc81682bb",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "f25dae5dd",
+   "served_before": [
+    "Decision-1.0-Lex-0.6B",
+    "Decision-1.0-Route-0.6B"
+   ],
+   "concurrent": 8,
+   "also_failed_requests": 0,
+   "health_after": {
+    "Decision-1.0-Lex-0.6B": "ready",
+    "Decision-1.0-Route-0.6B": "ready",
+    "Decision-1.0-Kai-0.6B": "ready"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 438,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.2278556823730469e-05
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 123,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.551644325256348e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 68,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.841255187988281e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 11,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.834766387939453e-06
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 10,
+     "replays": 341,
+     "eager": 16,
+     "packed": 32,
+     "failed": 0,
+     "cached": 10,
+     "branches": {
+      "choice": {
+       "captures": 11,
+       "replays": 443,
+       "eager": 14,
+       "packed": 752,
+       "failed": 0,
+       "cached": 11
+      },
+      "score": {
+       "captures": 10,
+       "replays": 255,
+       "eager": 13,
+       "packed": 57,
+       "failed": 0,
+       "cached": 10
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "f25dae5dd",
+   "served_before": [
+    "Decision-1.0-Lex-0.6B",
+    "Decision-1.0-Route-0.6B"
+   ],
+   "concurrent": 8,
+   "also_failed_requests": 0,
+   "health_after": {
+    "Decision-1.0-Lex-0.6B": "ready",
+    "Decision-1.0-Route-0.6B": "ready",
+    "Decision-1.0-Kai-0.6B": "ready"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "f25dae5dd",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "concurrent": 8,
+   "also_failed_requests": 0,
+   "health_after": {
+    "Decision-1.0-Eos-0.8B": "ready",
+    "Decision-1.0-Sol-2B": "ready"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 19,
+     "questions": 6547,
+     "decision_changes": 35,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.028966227293383495
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.02555746825480426
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.022446120601728126
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 14,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.035884496753836204
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "triton-gfx942-fp64",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 1076,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.318092346191406e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 55,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.0013580322265625e-05
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 89,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.516674041748047e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 21,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.993511199951172e-06
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 1080,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.453824996948242e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 88,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.4149398401007716e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 78,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.562999725341797e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 14,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.834766387939453e-06
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4,
+     "questions": 6547,
+     "decision_changes": 25,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05146821823612391
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.043225089690801355
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05192119512240895
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 4,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08428734513063718
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4,
+     "questions": 6547,
+     "decision_changes": 37,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.056860087607500276
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.030538513139509726
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.037319834853763556
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 22,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.07295125722885132
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 4,
+    "matched": 4,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 1071,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 8.791685104370117e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 69,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 7.331371307373047e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 77,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 7.0035457611083984e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 11,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.2636184692382812e-05
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 14,
+     "questions": 6547,
+     "decision_changes": 34,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.04844945542515533
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 4,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03212225645517641
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.040794516998102826
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 28,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.1726114367406391
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "stack",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "stack",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "reference": "stack",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   },
+   "concurrent": 8,
+   "also_failed_requests": 0,
+   "health_after": {
+    "Decision-1.0-Eos-0.8B": "ready",
+    "Decision-1.0-Sol-2B": "ready"
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "stack B plus causal-conv1d (venv-rocm72-cc)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 19,
+     "questions": 6547,
+     "decision_changes": 35,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.028966227293383495
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.02555746825480426
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.022446120601728126
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 14,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.035884496753836204
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "triton-gfx942-fp64",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 1076,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 6.318092346191406e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 55,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.0013580322265625e-05
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 89,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.516674041748047e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 21,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 3.993511199951172e-06
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 1080,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.453824996948242e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 88,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.4149398401007716e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 78,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 2.562999725341797e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 14,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.834766387939453e-06
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4,
+     "questions": 6547,
+     "decision_changes": 25,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05146821823612391
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.043225089690801355
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05192119512240895
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 4,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08428734513063718
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 4,
+     "questions": 6547,
+     "decision_changes": 37,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.056860087607500276
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.030538513139509726
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.037319834853763556
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 22,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.07295125722885132
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 4,
+    "matched": 4,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 1071,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 8.791685104370117e-06
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 69,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 7.331371307373047e-06
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 77,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 7.0035457611083984e-06
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 11,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 1.2636184692382812e-05
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 14,
+     "questions": 6547,
+     "decision_changes": 34,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.04844945542515533
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 4,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03212225645517641
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.040794516998102826
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 28,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.1726114367406391
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "stack",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "stack",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "reference": "stack",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   },
+   "concurrent": 8,
+   "also_failed_requests": 0,
+   "health_after": {
+    "Decision-1.0-Eos-0.8B": "ready",
+    "Decision-1.0-Sol-2B": "ready"
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 (stack B plus causal-conv1d)",
+   "cross_process": {
+    "processes": 3,
+    "started": "together, one GPU each, one shared empty autotune cache and Triton cache",
+    "identical": [
+     10653,
+     10653
+    ],
+    "prompts": 10653,
+    "passed": true,
+    "golden": [
+     "matched",
+     "matched",
+     "matched"
+    ],
+    "autotune_entries": [
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     },
+     {
+      "before": 0,
+      "after": 0
+     }
+    ],
+    "versions": {
+     "torch": "2.12.0+rocm7.2",
+     "triton": "3.7.0",
+     "fla": "0.5.2"
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "triton-gfx942-fp64",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 6,
+     "replays": 141,
+     "eager": 92,
+     "full": 0,
+     "failed": 0,
+     "cached": 6
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 6,
+     "replays": 141,
+     "eager": 92,
+     "full": 0,
+     "failed": 0,
+     "cached": 6
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 6,
+     "replays": 141,
+     "eager": 92,
+     "full": 0,
+     "failed": 0,
+     "cached": 6
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "the shipped image extproc-rocm72cc:be7366c49 plus transformers 5.17, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 6,
+     "replays": 141,
+     "eager": 92,
+     "full": 0,
+     "failed": 0,
+     "cached": 6
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "CPU PyTorch 2.10.0, 3 threads on both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 10,
+     "identical": 10,
+     "questions": 60,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "a1c7a284e",
+   "stack": "CPU PyTorch 2.10.0, 3 threads on both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 30,
+     "identical": 30,
+     "questions": 180,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "triton-gfx942-fp64",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 4,
+    "matched": 4,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "CPU PyTorch 2.10.0, 3 threads on both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 30,
+     "identical": 30,
+     "questions": 180,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  }
+ ]
+}

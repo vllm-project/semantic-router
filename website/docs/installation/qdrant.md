@@ -168,7 +168,7 @@ global:
       backend_type: qdrant
       similarity_threshold: 0.90
       ttl_seconds: 7200
-      embedding_model: bert
+      embedding_model: mmbert
       qdrant:
         host: qdrant                   # Service name or hostname
         port: 6334
@@ -189,15 +189,18 @@ global:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 384               # Must match your embedding model
-      embedding_model: bert
+        dimension: 256               # mmbert: 64, 128, 256, 512 or 768
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-This is a starting point for `bert` (`mom-embedding-light`) with plain cosine
-retrieval. Calibrate it against answered, unrelated, and corrected-fact queries
-for your data; other embedding models have different score ranges.
+`dimension` must be a size the embedding model serves. With any other size the
+router logs `Failed to create memory store: … Memory will be disabled` and
+runs without memory. The 0.30 threshold is a starting point for plain cosine
+retrieval, not a calibrated value. Calibrate it against answered, unrelated,
+and corrected-fact queries for your data; each embedding model and vector size
+has its own score range.
 
 ### Uploaded document vector store
 

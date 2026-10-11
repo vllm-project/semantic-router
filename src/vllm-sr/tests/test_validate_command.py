@@ -134,6 +134,33 @@ routing:
     assert "Configuration is valid" in result.output
 
 
+def test_validate_command_accepts_pii_rule_without_threshold(tmp_path):
+    config_path = _write_config(
+        tmp_path,
+        """
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+  signals:
+    pii:
+      - name: contact_details
+        pii_types_allowed: [EMAIL_ADDRESS]
+""",
+    )
+
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    rule = parse_user_config(str(config_path)).routing.signals.pii[0]
+    assert rule.threshold is None
+
+
 def test_validate_command_rejects_empty_external_gateway_provider_model(tmp_path):
     config_path = _write_config(
         tmp_path,

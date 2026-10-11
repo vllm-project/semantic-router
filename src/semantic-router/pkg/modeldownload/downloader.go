@@ -81,9 +81,6 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if spec.PreparedArtifact != "" {
-		return provisionPreparedArtifact(ctx, spec)
-	}
 	if err := validateArtifactDownload(spec); err != nil {
 		return err
 	}
@@ -181,16 +178,7 @@ func buildDownloadArgs(spec ModelSpec) []string {
 	return args
 }
 
-// EnsureModels ensures all required models are downloaded
-func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
-	return EnsureModelsWithProgress(specs, config, nil)
-}
-
-// EnsureModelsWithProgress ensures all required models are downloaded and reports progress.
-func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter ProgressReporter) error {
-	return EnsureModelsWithProgressContext(context.Background(), specs, config, reporter)
-}
-
+// EnsureModelsWithProgressContext ensures all required models are downloaded and reports progress.
 func EnsureModelsWithProgressContext(
 	ctx context.Context,
 	specs []ModelSpec,

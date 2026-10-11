@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 CONTRACT_ROOT = (
     Path(__file__).resolve().parents[2] / "semantic-router/pkg/trainingcontract"
 )
-SCHEMA = json.loads((CONTRACT_ROOT / "training-v1.schema.json").read_text())
+SCHEMA = json.loads((CONTRACT_ROOT / "training-v2.schema.json").read_text())
 
 
 def validate(message: dict, definition: str) -> None:

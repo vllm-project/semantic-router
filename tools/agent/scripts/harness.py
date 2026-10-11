@@ -25,7 +25,6 @@ from check_support import (  # noqa: E402
     run_precommit,
     run_python_lint,
     run_reference_config_lint,
-    run_rust_lint,
     run_test_commands,
 )
 from classify_pr_changes import classify  # noqa: E402
@@ -52,7 +51,6 @@ def environment_facts(requested_environment: str) -> dict[str, Any]:
         for name in (
             "python3",
             "go",
-            "cargo",
             "node",
             "docker",
             "podman",
@@ -186,8 +184,6 @@ def run_check(
     bootstrap = []
     if any(path.endswith(".go") for path in existing):
         bootstrap.append("make harness-go-bootstrap")
-    if any(path.endswith(".rs") for path in existing):
-        bootstrap.append("make harness-rust-bootstrap")
 
     try:
         run_test_commands(["make codespell-tracked", *bootstrap], "baseline checks")
@@ -197,7 +193,6 @@ def run_check(
             ),
             lambda: run_python_lint(changed_files),
             lambda: run_go_lint(changed_files, base_ref),
-            lambda: run_rust_lint(changed_files),
         ]
         if not ci_static_only:
             checks.append(lambda: run_reference_config_lint(changed_files))

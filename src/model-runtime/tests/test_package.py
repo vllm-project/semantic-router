@@ -4,9 +4,9 @@ import shutil
 import sys
 
 import pytest
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.decision2.family import Decision2Family
-from vllm_sr_runtime.plugins.base import PackageRef, RegistryOptions
+from vllm_srun.errors import PackageError
+from vllm_srun.families.decision2.family import Decision2Family
+from vllm_srun.plugins.base import PackageRef, RegistryOptions
 
 
 def verify(root, **options):

@@ -1,4 +1,5 @@
-// Command trainingcontract generates schema and TypeScript from the canonical Go contract.
+// Command trainingcontract generates schema, TypeScript and the default capability
+// catalog fixture from the canonical Go contract.
 package main
 
 import (
@@ -25,7 +26,10 @@ func main() {
 	schema := (&jsonschema.Reflector{Anonymous: true}).Reflect(c.Catalog{})
 	data, err := json.MarshalIndent(schema, "", "  ")
 	must(err)
-	write(*root, "src/semantic-router/pkg/trainingcontract/training-v1.schema.json", append(data, '\n'), *check)
+	write(*root, "src/semantic-router/pkg/trainingcontract/training-v2.schema.json", append(data, '\n'), *check)
+	capabilities, err := json.MarshalIndent(c.DefaultRegistry().Catalog(), "", "  ")
+	must(err)
+	write(*root, "src/semantic-router/pkg/trainingcontract/testdata/capabilities.json", append(capabilities, '\n'), *check)
 	types := map[string]reflect.Type{}
 	var collect func(reflect.Type)
 	collect = func(t reflect.Type) {
@@ -61,15 +65,22 @@ func main() {
 	for _, name := range names {
 		t := types[name]
 		if t.Kind() != reflect.Struct {
-			values := reflect.Zero(t).Interface().(interface {
+			schemaGetter, hasSchema := reflect.Zero(t).Interface().(interface {
 				JSONSchema() *jsonschema.Schema
-			}).JSONSchema().Enum
-			parts := []string{}
-			for _, v := range values {
-				b, _ := json.Marshal(v)
-				parts = append(parts, string(b))
+			})
+			if hasSchema {
+				sch := schemaGetter.JSONSchema()
+				if len(sch.Enum) > 0 {
+					parts := []string{}
+					for _, v := range sch.Enum {
+						b, _ := json.Marshal(v)
+						parts = append(parts, string(b))
+					}
+					fmt.Fprintf(&out, "export type %s = %s\n\n", name, strings.Join(parts, " | "))
+					continue
+				}
 			}
-			fmt.Fprintf(&out, "export type %s = %s\n\n", name, strings.Join(parts, " | "))
+			fmt.Fprintf(&out, "export type %s = string\n\n", name)
 			continue
 		}
 		if name == "Profile" {

@@ -18,14 +18,12 @@ import (
 )
 
 func immediateResponseTestConfig() *config.RouterConfig {
-	replay := false
 	return &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			CandidateRequirements: &config.CandidateRequirements{
 				Capabilities: config.CandidateCapabilitiesDeclared,
 				Context:      config.CandidateContextKnownLimits,
 			},
-			DataPolicy: &config.RoutingDataPolicy{Replay: &replay},
 			Decisions: []config.Decision{{
 				Name: "immediate", Priority: 1,
 				Plugins: []config.DecisionPlugin{{
@@ -68,7 +66,7 @@ func TestFastResponsePreviewNeedsNoCandidateOrCodec(t *testing.T) {
 }
 
 func TestFastResponseLiveDecisionAndPreviewNeedNoBackend(t *testing.T) {
-	const requestedModel = "auto"
+	const requestedModel = "vllm-sr/auto"
 	cfg := immediateResponseTestConfig()
 	cfg.DefaultModel = "immediate-unused-default"
 	cfg.Decisions[0].ModelRefs = []config.ModelRef{{Model: "immediate-unused-candidate"}}
@@ -80,7 +78,7 @@ func TestFastResponseLiveDecisionAndPreviewNeedNoBackend(t *testing.T) {
 	service.SetEvalModelSelector(router)
 
 	preview, err := service.ClassifyIntentForEval(context.Background(), services.IntentRequest{
-		Model: "auto", Text: "Synthetic routing contract.",
+		Model: "vllm-sr/auto", Text: "Synthetic routing contract.",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, preview.DecisionResult)

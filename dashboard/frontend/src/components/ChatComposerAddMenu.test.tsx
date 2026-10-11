@@ -9,10 +9,7 @@ describe('ChatComposerAddMenu contract', () => {
   it('renders one compact, collapsed add trigger', () => {
     const markup = renderToStaticMarkup(
       createElement(ChatComposerAddMenu, {
-        clawModeDisabled: false,
-        clawModeEnabled: false,
         onAttachFiles: vi.fn(),
-        onToggleClawMode: vi.fn(),
         onToggleWebSearch: vi.fn(),
         webSearchEnabled: true,
       }),

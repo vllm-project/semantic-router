@@ -48,6 +48,20 @@ threshold inherits the global setting; calibrate that value for the selected
 embedding model and search mode before adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
+### Reflection and `max_inject_tokens`
+
+When reflection is enabled under `global.stores.memory.reflection` (the default
+heuristic gate), retrieved memories are trimmed to `max_inject_tokens` before
+injection. The gate estimates size with a script-aware heuristic, not the
+upstream model tokenizer: about **1.3 tokens per Latin word unit** and about
+**1.5 tokens per Han, Hiragana, Katakana, or Hangul character**, with the
+combined estimate rounded **up** (`ceil`). Space-free CJK text therefore counts
+many characters toward the budget instead of collapsing to a single whitespace
+word. Operators tuning `max_inject_tokens` for Chinese, Japanese, or Korean
+traffic should expect tighter trimming than the old English-only estimate.
+Thai and other scripts without spaces are not fully segmented here. Exact
+tokenizer accounting for routing budgets is tracked separately ([#3050](https://github.com/vllm-project/semantic-router/issues/3050)).
+
 ## Observability
 
 Router Memory exposes bounded Prometheus metrics on the Router scrape endpoint.
@@ -131,8 +145,8 @@ part of the parent issue.
 
 ## Upgrading the embedding model
 
-Restart the model runtime after changing embedding weights. For local `mmbert`
-models, including Vela Embedding, the router binds memory to
+Restart the model runtime after changing embedding weights. For embeddings from
+the model runtime, including Vela Embedding, the router binds memory to
 the loaded model, tokenizer, inference settings, and vector dimension. Changing
 these creates a separate physical collection or index and a separate Redis hot
 cache. Restarting with the same representation reuses its existing storage.
@@ -143,17 +157,8 @@ equal vector dimensions do not prove that two models produce compatible
 embeddings. The management API has no import or bulk export endpoint for
 memories, so the collection for the new model starts empty and repopulates
 from new traffic. No old collection is deleted during
-startup or model migration. This automatic identity binding currently covers
-local `mmbert`; other embedding providers keep their existing behavior, except
-Candle `bert` as described below.
-
-Candle `bert` models have no content descriptor, so the router keys their memory
-by an encoder version that changes whenever Candle BERT vectors change, as they
-did when padding tokens stopped counting toward the average. After upgrading
-across such a change, BERT memory opens a new collection or index and a new
-Redis hot cache. Entries stored before the upgrade stay in the old collection
-and are no longer recalled, so memory fills again from new conversations. BERT
-served by another runtime keeps its existing storage.
+startup or model migration. This automatic identity binding covers every
+embedding the model runtime serves.
 
 A remote embedding endpoint cannot prove which model produced its vectors, so
 memory keeps the configured collection or index, and the router logs a startup

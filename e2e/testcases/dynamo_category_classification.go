@@ -106,9 +106,9 @@ func testDynamoCategoryClassification(ctx context.Context, client *kubernetes.Cl
 			fmt.Printf("[Test] Test case %d/%d: Testing query for '%s' category\n", i+1, len(testCases), tc.ExpectedCategory)
 		}
 
-		// Use "auto" or "MoM" to trigger category classification
+		// Use the default recipe to trigger category classification
 		requestBody := map[string]interface{}{
-			"model": "auto",
+			"model": "vllm-sr/auto",
 			"messages": []map[string]string{
 				{"role": "user", "content": tc.Query},
 			},

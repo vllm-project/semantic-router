@@ -18,7 +18,7 @@ import transformers
 from artifact_inventory import REGISTRY_ALIASES, ServedArtifact
 from baseline_artifact import BaselineError
 from constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
-from datasets import load_dataset
+from datasets import concatenate_datasets, load_dataset
 from peft import PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -36,6 +36,10 @@ class TaskSpec:
     artifact trained on that upstream measures fit rather than generalisation.
     ``by_source`` holds a whole corpus out and is the rule an external
     held-out set carries.
+
+    ``revision`` pins the dataset, so the rows scored are the rows the manifest
+    names. ``data_files`` reads the split from these files of the repository
+    instead of from a published split.
     """
 
     dataset_repo: str
@@ -43,6 +47,8 @@ class TaskSpec:
     text_field: str
     label_field: str
     split_rule: str = "predefined"
+    revision: str | None = None
+    data_files: tuple[str, ...] = ()
     compatible_artifact_repos: tuple[str, ...] = ()
     # Why other artifacts are refused, completed with {repo}.
     restriction: str = ""
@@ -89,19 +95,24 @@ TASK_SPECS: dict[str, TaskSpec] = {
             "attack-reviewed benign/jailbreak gold for Guard."
         ),
     ),
+    # The corpus-matched fact-check test of #4305. Inside every corpus, script,
+    # length, question-mark and capitalisation stratum the two classes are equal,
+    # so neither the corpus nor those cues give the label away. Dolly is left out
+    # because the mmBERT fact-check checkpoint trained on it, and neither
+    # fact-check checkpoint names the other four corpora.
     "fact-check": TaskSpec(
-        dataset_repo="vllm-sr/fact-check-classification-dataset",
+        dataset_repo="vllm-sr/router-signal-suite",
+        revision="3f95fc2d0dbdd8abdd2a0fba0387f4a925fe934a",
         split="test",
+        data_files=(
+            "text/nf-cats/fact_check/test.jsonl",
+            "text/open-question-type/fact_check/test.jsonl",
+            "text/search-arena/fact_check/test.jsonl",
+            "text/urs/fact_check/test.jsonl",
+        ),
         text_field="text",
-        label_field="label_id",
-        compatible_artifact_repos=(
-            LEGACY_MODEL_REGISTRY["fact-check"]["id"],
-            LEGACY_MODEL_REGISTRY["fact-check"]["lora_id"],
-        ),
-        restriction=(
-            "gives each source corpus one label, so the corpus alone predicts the "
-            "test label. It only scores the checkpoint trained on it, not {repo}."
-        ),
+        label_field="label",
+        split_rule="by_source",
     ),
     "feedback": TaskSpec(
         dataset_repo="vllm-sr/feedback-detector-dataset",
@@ -236,11 +247,30 @@ def check_registry_label_order(
     ]
 
 
+def load_split(spec: TaskSpec, revision: str):
+    """Read the split at ``revision``, from its files when the spec names them."""
+    if not spec.data_files:
+        return load_dataset(spec.dataset_repo, split=spec.split, revision=revision)
+    # A row leaves out the fields it has no value for, so the files need not share
+    # one column set. Each is read on its own, keeping the fields the baseline reads.
+    fields = [spec.text_field, spec.label_field]
+    if spec.exclude_prefix is not None:
+        fields.append(spec.exclude_prefix[0])
+    return concatenate_datasets(
+        [
+            load_dataset(
+                spec.dataset_repo, data_files=name, split="train", revision=revision
+            ).select_columns(fields)
+            for name in spec.data_files
+        ]
+    )
+
+
 def load_rows(
-    spec: TaskSpec, mapping: dict[str, int], limit: int | None
+    spec: TaskSpec, mapping: dict[str, int], limit: int | None, revision: str
 ) -> tuple[list[str], np.ndarray, int]:
     """Load the held-out split and map every row onto the artifact's class order."""
-    dataset = load_dataset(spec.dataset_repo, split=spec.split)
+    dataset = load_split(spec, revision)
     if spec.exclude_prefix is not None:
         field, prefix = spec.exclude_prefix
         dataset = dataset.filter(lambda row: not str(row[field]).startswith(prefix))

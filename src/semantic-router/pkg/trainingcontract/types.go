@@ -3,7 +3,7 @@ package trainingcontract
 
 import "time"
 
-const Version = "semantic-router.training/v1"
+const Version = "semantic-router.training/v2"
 
 type Target string
 
@@ -26,7 +26,7 @@ const (
 )
 
 type Metadata struct {
-	SchemaVersion string    `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion string    `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	ID            string    `json:"id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
 	CreatedAt     time.Time `json:"created_at"`
 }

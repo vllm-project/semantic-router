@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -25,22 +25,18 @@ type batchClassificationService interface {
 type auxiliaryClassificationService interface {
 	ClassifyFactCheck(ctx context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error)
 	ClassifyUserFeedback(ctx context.Context, req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error)
-	ClassifyNLI(ctx context.Context, req services.NLIRequest) (*services.NLIResponse, error)
-	IsNLIReady() bool
 	HasClassifier() bool
 }
 
 type classificationReadinessService interface {
 	HasFactCheckClassifier() bool
 	HasHallucinationDetector() bool
-	HasHallucinationExplainer() bool
 	HasFeedbackDetector() bool
 }
 
 type classificationInventoryReadinessService interface {
 	HasAnyFactCheckClassifier() bool
 	HasAnyHallucinationDetector() bool
-	HasAnyHallucinationExplainer() bool
 	HasAnyFeedbackDetector() bool
 }
 
@@ -195,18 +191,6 @@ func (s *liveClassificationService) ClassifyUserFeedback(
 	return svc.ClassifyUserFeedback(ctx, req)
 }
 
-func (s *liveClassificationService) ClassifyNLI(ctx context.Context, req services.NLIRequest) (*services.NLIResponse, error) {
-	svc, release := s.acquire()
-	defer release()
-	return svc.ClassifyNLI(ctx, req)
-}
-
-func (s *liveClassificationService) IsNLIReady() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.IsNLIReady()
-}
-
 func (s *liveClassificationService) HasUnifiedClassifier() bool {
 	svc, release := s.acquire()
 	defer release()
@@ -231,12 +215,6 @@ func (s *liveClassificationService) HasHallucinationDetector() bool {
 	return svc.HasHallucinationDetector()
 }
 
-func (s *liveClassificationService) HasHallucinationExplainer() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.HasHallucinationExplainer()
-}
-
 func (s *liveClassificationService) HasFeedbackDetector() bool {
 	svc, release := s.acquire()
 	defer release()
@@ -259,15 +237,6 @@ func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
 		return inventory.HasAnyHallucinationDetector()
 	}
 	return current.HasHallucinationDetector()
-}
-
-func (s *liveClassificationService) HasAnyHallucinationExplainer() bool {
-	current, release := s.acquire()
-	defer release()
-	if inventory, ok := current.(classificationInventoryReadinessService); ok {
-		return inventory.HasAnyHallucinationExplainer()
-	}
-	return current.HasHallucinationExplainer()
 }
 
 func (s *liveClassificationService) HasAnyFeedbackDetector() bool {

@@ -4,7 +4,7 @@ description: 记录语义路由为何保持逐查询，而容量管理留在服�
 created: 2026-07-14
 status: 决策 record
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/batch-and-capacity-aware-routing.md"
   outdated: false
 ---
@@ -33,6 +33,8 @@ flowchart LR
 
 当算法显式支持时，路由器可以消费有界、对请求安全的性能信号。它不会在 ExtProc 热路径上收集批次并求解联合分配。
 
+内置模型运行时也是 serving 层：副本池根据有界队列与健康信息选择就绪 worker，不会重新匹配语义决策或选择不同逻辑模型。扩展判断模型副本与选择 Chat 后端是独立控制。
+
 ## 理由 {#rationale}
 
 - **延迟：** 等待组成批次会在路由开始前增加排队延迟。
@@ -47,7 +49,7 @@ flowchart LR
 
 Semantic Router 不能保证首选模型有即时容量。服务层可能排队、拒绝，或使用显式兼容的回退。跨模型回退仍需要自己的安全契约，因为更换逻辑模型不等于选择另一副本。
 
-机队规模和容量规划仍是离线关注点。Fleet Simulator 可以评估候选机队形态，而不把优化器放进请求路径。
+机队规模和容量规划仍是离线关注点，不在请求路径中。
 
 ## 范围与非目标 {#scope-and-non-goals}
 
@@ -66,6 +68,5 @@ Semantic Router 不能保证首选模型有即时容量。服务层可能排队�
 
 ## 参考资料 {#references}
 
-- [Fleet Simulator 概览](../fleet-sim/overview)
 - [延迟感知选择](../tutorials/algorithm/selection/latency-aware)
 - [模型执行回退](./model-execution-fallback)

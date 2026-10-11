@@ -1,28 +1,48 @@
 #!/usr/bin/env python3
-"""Execute the published-model contract and reject silent skips or empty selection."""
+"""Run the published-model contract through the model runtime; reject skips and empty selection.
+
+Every listed Vela 1.0 test serves its package through a managed model runtime
+(``servingtest.Managed``) and reads the package from an environment variable;
+this runner provisions the runtime's pinned packages as plain directories and
+points those variables at them. The Vela 2.0 tests ask a runtime that serves
+one pinned size on CPU: the runner downloads each size's pinned files into the
+runtime cache, serves it offline from there at the profile the Router's
+implicit CPU deployment runs it with, and names the endpoint for the size's
+tests. Every listed test must pass: a skip, a failure or a missing test fails
+the contract.
+"""
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import shlex
+import shutil
+import signal
+import socket
 import subprocess
 import sys
+import time
+import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-FAMILIES = (
-    "Domain",
-    "Guard",
-    "PII",
-    "FactCheck",
-    "Feedback",
-    "Modality",
-    "Safety",
-    "Hazard",
-    "Embedding",
-    "Reranker",
-)
+ROUTER = ROOT / "src/semantic-router"
+# Environment variable -> the runtime's built-in package it names.
+PACKAGES = {
+    "VLLM_SR_DOMAIN_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+    "VLLM_SR_PII_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+    "VLLM_SR_JAILBREAK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+    "VLLM_SR_FACTCHECK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+    "VLLM_SR_FEEDBACK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+    "VLLM_SR_MMBERT_TEST_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+}
+# Router consumers read their label mappings from the package directory; the
+# runtime's pinned file list leaves them out.
+ROUTER_FILES = ["*_mapping.json"]
 CLASSIFIER_TESTS = (
     "TestJailbreakDistributionRealModel",
     "TestJailbreakRiskRealModelContract",
@@ -34,65 +54,186 @@ CLASSIFIER_TESTS = (
     "TestLocalClassifierMaintainedCPU",
     "TestUnifiedClassifierPublishedModels",
 )
-CANDLE_CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
-MULTIMODAL_BINDING_TESTS = (
-    "TestMultiModalEmbeddingInit",
-    "TestMultiModalEncodeText",
-    "TestMultiModalInputValidation",
-)
-
-# Supported CPU additions have distinct task contracts and artifact formats.
-# They deliberately do not imply Halu/ORT or Omni/Candle qualification.
-RUNTIME_ADDITIONS = {"candle": ("Halu",), "ort": ("OmniNano", "OmniMini")}
-OWNED_OMNI_TESTS = {
+CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
+# The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
+OMNI_TESTS = {
     "classification": (
         "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
         "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
     ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
-    "modeldownload": ("TestPublishedOmniPreparedInventory",),
 }
-HALU_CASES = tuple(
-    "TestPublishedVelaHalu/" + name
-    for name in ("supported", "unsupported", "unicode", "input-budget")
+# Log -> the Vela 2.0 size a runtime of its own serves for the tests that log
+# there: its repository, the profile the Router's implicit CPU deployment runs
+# it with (config.ImplicitModelRuntimeDeployment), the variable that names the
+# endpoint and the tests.
+VELA2_SUITES = {
+    "vela2-0.3b.jsonl": (
+        "vllm-sr/Vela-2.0-0.3B",
+        "max_speed",
+        "VLLM_SRUN_VELA2_ENDPOINT",
+        ("TestVela2PublishedAnswers03BRealModel", "TestVela2RouterMatchesSystemOne"),
+    ),
+    "vela2-0.8b.jsonl": (
+        "vllm-sr/Vela-2.0-0.8B",
+        "exact",
+        "VLLM_SRUN_VELA2_08B_ENDPOINT",
+        ("TestVela2PublishedAnswers08BRealModel",),
+    ),
+}
+SELECTIONS = (
+    ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
+    ("./pkg/cache", CACHE_TESTS, "cache.jsonl"),
+    *(
+        ("./pkg/" + package, names, "omni-" + package + ".jsonl")
+        for package, names in OMNI_TESTS.items()
+    ),
+    *(("./pkg/classification", suite[3], log) for log, suite in VELA2_SUITES.items()),
 )
-OMNI_CASES = tuple(
-    "TestPublishedOmniModels/" + name for name in ("nano", "mini", "nano-revisit")
-)
+# A cold CPU load reads the weights and runs the golden check; the 0.8B takes
+# about half a minute on four cores.
+VELA2_READY_TIMEOUT_SECONDS = 900
 
 
-def runtime_families(provider: str) -> tuple[str, ...]:
-    return FAMILIES + RUNTIME_ADDITIONS[provider]
-
-
-def required_inventory(provider: str, suite: str = "runtime") -> set[tuple[str, str]]:
+def required_inventory() -> set[tuple[str, str]]:
     """The receipt cannot shorten the checked-in mandatory case inventory."""
-    if suite == "multimodal" and provider == "candle":
-        return {(".", name) for name in MULTIMODAL_BINDING_TESTS}
-    if suite != "runtime" or provider not in RUNTIME_ADDITIONS:
-        raise ValueError(f"unsupported model suite {suite}/{provider}")
-    cases = {
-        ("./pkg/modelruntime/native", "TestPublishedVelaModels/" + name)
-        for name in FAMILIES
-    }
-    cases.update(("./pkg/classification", name) for name in CLASSIFIER_TESTS)
-    if provider == "candle":
-        cases.update(("./pkg/cache", name) for name in CANDLE_CACHE_TESTS)
-        cases.update(("./pkg/modelruntime/native", name) for name in HALU_CASES)
-    else:
-        cases.add(
-            (
-                "./pkg/modelruntime",
-                "TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",
+    return {(package, name) for package, names, _ in SELECTIONS for name in names}
+
+
+def provision(models_dir: Path) -> dict[str, dict]:
+    """Copy each pinned package into ``models_dir`` as plain files (the runtime refuses links)."""
+    from vllm_srun.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+        fetch,
+        resolve,
+    )
+
+    cache = models_dir / ".runtime-cache"
+    models = {}
+    for env, repo in PACKAGES.items():
+        target = models_dir / repo.split("/", 1)[1]
+        ref = fetch(resolve(repo, cache_dir=cache), ROUTER_FILES, cache_dir=cache)
+        if not _complete(target, ref):
+            shutil.rmtree(target, ignore_errors=True)
+            shutil.copytree(ref.root, target, symlinks=False)
+            (target / ".complete").write_text(ref.revision + "\n")
+        models[env] = {
+            "env": env,
+            "repo_id": repo,
+            "revision": ref.revision,
+            "path": str(target),
+        }
+    return models
+
+
+def _complete(target: Path, ref) -> bool:
+    marker = target / ".complete"
+    if not marker.is_file() or marker.read_text().strip() != ref.revision:
+        return False
+    return all(
+        (target / path.relative_to(ref.root)).is_file()
+        for path in ref.root.rglob("*")
+        if path.is_file()
+    )
+
+
+def provision_vela2(cache: Path) -> dict[str, dict]:
+    """Download each Vela 2.0 size's pinned files into the runtime cache, which serves them offline."""
+    from vllm_srun.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+        resolve,
+    )
+
+    models = {}
+    for log, (repo, profile, env, _) in VELA2_SUITES.items():
+        started = time.monotonic()
+        ref = resolve(repo, cache_dir=cache)
+        models[log] = {
+            "env": env,
+            "repo_id": repo,
+            "revision": ref.revision,
+            "profile": profile,
+            "bytes": sum(
+                path.stat().st_size for path in ref.root.rglob("*") if path.is_file()
+            ),
+            "provision_seconds": round(time.monotonic() - started, 1),
+        }
+    return models
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def wait_ready(
+    process: subprocess.Popen, endpoint: str, started: float, runtime: str
+) -> None:
+    """Poll a starting runtime's /health until it answers; fail when it exits or takes too long."""
+    while True:
+        if process.poll() is not None:
+            raise RuntimeError(f"{runtime}: the runtime exited {process.returncode}")
+        if time.monotonic() - started > VELA2_READY_TIMEOUT_SECONDS:
+            raise RuntimeError(
+                f"{runtime}: not ready in {VELA2_READY_TIMEOUT_SECONDS} s"
             )
+        try:
+            with urllib.request.urlopen(endpoint + "/health", timeout=5):
+                return
+        except OSError:
+            time.sleep(0.5)
+
+
+@contextlib.contextmanager
+def serve_vela2(model: dict, cache: Path, log: Path) -> Iterator[str]:
+    """Serve one pinned Vela 2.0 size on CPU, offline, until the block ends; yield its endpoint.
+
+    The result cache is off, so a repeated request runs the model again.
+    """
+    port = free_port()
+    command = [
+        *shlex.split(os.environ.get("VLLM_SRUN_COMMAND", "vllm-srun")),
+        "serve",
+        model["repo_id"],
+        "--revision",
+        model["revision"],
+        "--device",
+        "cpu",
+        "--profile",
+        model["profile"],
+        "--cache-dir",
+        str(cache),
+        "--offline",
+        "--result-cache-entries",
+        "0",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+    ]
+    endpoint = f"http://127.0.0.1:{port}"
+    started = time.monotonic()
+    with log.open("w") as output:
+        process = subprocess.Popen(
+            command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True
         )
-        cases.update(("./pkg/modelruntime/native", name) for name in OMNI_CASES)
-        cases.update(
-            ("./pkg/" + package, name)
-            for package, names in OWNED_OMNI_TESTS.items()
-            for name in names
-        )
-    return cases
+        try:
+            wait_ready(process, endpoint, started, f"{model['repo_id']} ({log.name})")
+            model["ready_seconds"] = round(time.monotonic() - started, 1)
+            print(
+                f"{model['repo_id']}@{model['revision'][:12]} ready on CPU "
+                f"({model['profile']}) after {model['ready_seconds']} s",
+                flush=True,
+            )
+            yield endpoint
+        finally:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
 
 
 def validate_results(events: list[dict], expected: set[str]) -> dict:
@@ -117,15 +258,7 @@ def validate_results(events: list[dict], expected: set[str]) -> dict:
     }
 
 
-def run_suite(
-    package: str,
-    names: tuple[str, ...],
-    expected: set[str],
-    env: dict,
-    output: Path,
-    *,
-    cwd: Path,
-) -> dict:
+def run_suite(package: str, names: tuple[str, ...], env: dict, output: Path) -> dict:
     args = [
         "go",
         "test",
@@ -133,8 +266,6 @@ def run_suite(
         "-count=1",
         "-timeout=45m",
         "-p=1",
-        "-ldflags=-X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider="
-        + env["VLLM_SR_MODEL_TEST_PROVIDER"],
         "-run",
         "^(" + "|".join(names) + ")$",
         package,
@@ -143,7 +274,7 @@ def run_suite(
     with output.open("w") as log:
         process = subprocess.Popen(
             args,
-            cwd=cwd,
+            cwd=ROUTER,
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -162,148 +293,101 @@ def run_suite(
             if event.get("Output"):
                 print(event["Output"], end="", flush=True)
         code = process.wait()
-    result = validate_results(events, expected)
-    result.update(package=package, exit_code=code, expected=sorted(expected))
+    result = validate_results(events, set(names))
+    result.update(package=package, exit_code=code, expected=sorted(names))
     result["success"] = result["success"] and code == 0
     return result
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--suite", choices=("runtime", "multimodal"), default="runtime")
-    # Adding a matrix entry cannot qualify a GPU through the CPU-only contract.
-    parser.add_argument("--device", choices=("cpu",), default="cpu")
-    args = parser.parse_args()
-    manifest = json.loads(args.manifest.read_text())
-    provider = manifest["provider"]
-    providers = {"candle", "ort"} if args.suite == "runtime" else {"candle"}
-    if provider not in providers:
-        raise ValueError(f"unsupported runtime {provider!r} for {args.suite} suite")
-    families = (
-        runtime_families(provider) if args.suite == "runtime" else ("Multimodal",)
-    )
-    models = manifest["models"]
-    if len(models) != len(families) or {m["name"] for m in models} != set(families):
-        raise ValueError(f"{args.suite} manifest must cover exactly {families}")
-    if args.suite == "multimodal" and (
-        models[0].get("env") != "MULTIMODAL_MODEL_PATH" or not models[0].get("path")
-    ):
-        raise ValueError(
-            "multimodal manifest requires an explicit MULTIMODAL_MODEL_PATH"
+def run_vela2_suite(
+    package: str,
+    names: tuple[str, ...],
+    env: dict,
+    output: Path,
+    model: dict,
+    cache: Path,
+) -> dict:
+    """Run a Vela 2.0 size's tests against a runtime serving it; a runtime that never gets ready fails them."""
+    try:
+        with serve_vela2(model, cache, output.with_suffix(".runtime.log")) as endpoint:
+            return run_suite(package, names, {**env, model["env"]: endpoint}, output)
+    except RuntimeError as error:
+        print(f"::error::{error}", flush=True)
+        result = validate_results([], set(names))
+        result.update(
+            package=package, exit_code=1, expected=sorted(names), error=str(error)
         )
+        return result
+
+
+def record_vela2(models_dir: Path, output: Path) -> int:
+    """Rewrite the recorded answers of every Vela 2.0 size from the served pinned size."""
+    cache = models_dir / ".runtime-cache"
     env = {
         **os.environ,
         "VLLM_SR_REQUIRE_MODEL_TESTS": "1",
-        "VLLM_SR_MODEL_TEST_PROVIDER": provider,
-        "VLLM_SR_MODEL_TEST_DEVICE": args.device,
-        "CGO_ENABLED": "1",
+        "VLLM_SR_VELA2_RECORD": "1",
     }
-    for model in manifest["models"]:
-        env[model["env"]] = model["path"]
-        if model["name"] == "Domain":
-            env["CANDLE_GENERIC_CLASSIFIER_MODEL"] = model["path"]
-        if model["name"] == "Embedding" and provider == "candle":
-            env["VLLM_SR_MMBERT_TEST_MODEL"] = model["path"]
-    args.output.mkdir(parents=True, exist_ok=True)
-    suites = []
-    selections = (
-        (
-            ROOT / "src/semantic-router",
-            "./pkg/modelruntime/native",
-            ("TestPublishedVelaModels",),
-            {"TestPublishedVelaModels/" + name for name in FAMILIES},
-            "native.jsonl",
-        ),
-        (
-            ROOT / "src/semantic-router",
+    suites = [
+        run_vela2_suite(
             "./pkg/classification",
-            CLASSIFIER_TESTS,
-            set(CLASSIFIER_TESTS),
-            "classification.jsonl",
-        ),
+            VELA2_SUITES[log][3][:1],
+            env,
+            output / log,
+            model,
+            cache,
+        )
+        for log, model in provision_vela2(cache).items()
+    ]
+    return 0 if all(suite["success"] for suite in suites) else 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--models-dir", type=Path, required=True)
+    parser.add_argument(
+        "--omni", type=Path, required=True, help="the pinned Vela Omni Nano snapshot"
     )
-    if args.suite == "multimodal":
-        selections = (
-            (
-                ROOT / "candle-binding",
-                ".",
-                MULTIMODAL_BINDING_TESTS,
-                set(MULTIMODAL_BINDING_TESTS),
-                "binding.jsonl",
-            ),
-        )
-    elif provider == "candle":
-        selections += (
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/cache",
-                CANDLE_CACHE_TESTS,
-                set(CANDLE_CACHE_TESTS),
-                "cache.jsonl",
-            ),
-        )
-    elif provider == "ort":
-        selections += (
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/modelruntime",
-                ("TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",),
-                {"TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride"},
-                "default-execution.jsonl",
-            ),
-        )
-    if args.suite == "runtime" and provider == "candle":
-        env.update(VLLM_SR_REQUIRE_HALU_TESTS="1", VLLM_SR_HALU_REFERENCE="")
-        selections += (
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/modelruntime/native",
-                ("TestPublishedVelaHalu",),
-                set(HALU_CASES),
-                "grounding.jsonl",
-            ),
-        )
-    elif args.suite == "runtime" and provider == "ort":
-        env.update(
-            REQUIRE_OMNI_TESTS="1",
-            VELA_OMNI_ARTIFACT=next(
-                model["path"] for model in models if model["name"] == "OmniNano"
-            ),
-        )
-        selections += (
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/modelruntime/native",
-                ("TestPublishedOmniModels",),
-                set(OMNI_CASES),
-                "omni.jsonl",
-            ),
-        )
-        selections += tuple(
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/" + package,
-                names,
-                set(names),
-                "omni-" + package + ".jsonl",
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--record-vela2",
+        action="store_true",
+        help="rewrite the Vela 2.0 tests' recorded answers on this CPU instead of running the contract",
+    )
+    args = parser.parse_args()
+    args.output.mkdir(parents=True, exist_ok=True)
+    if args.record_vela2:
+        return record_vela2(args.models_dir.resolve(), args.output)
+    models = provision(args.models_dir.resolve())
+    cache = args.models_dir.resolve() / ".runtime-cache"
+    vela2 = provision_vela2(cache)
+    env = {
+        **os.environ,
+        "VLLM_SR_REQUIRE_MODEL_TESTS": "1",
+        "REQUIRE_OMNI_TESTS": "1",
+        "VELA_OMNI_ARTIFACT": str(args.omni.resolve()),
+        **{env: model["path"] for env, model in models.items()},
+    }
+    suites = []
+    for package, names, filename in SELECTIONS:
+        output = args.output / filename
+        if filename in vela2:
+            suites.append(
+                run_vela2_suite(package, names, env, output, vela2[filename], cache)
             )
-            for package, names in OWNED_OMNI_TESTS.items()
-        )
-    for cwd, package, names, expected, filename in selections:
-        suites.append(
-            run_suite(package, names, expected, env, args.output / filename, cwd=cwd)
-        )
+        else:
+            suites.append(run_suite(package, names, env, output))
     report = {
         "source_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
-        "environment": "native",
-        "suite": args.suite,
-        "provider": provider,
-        "device": args.device,
-        "models": manifest["models"],
+        "runtime": "model-runtime",
+        "device": "cpu",
+        "models": [
+            *models.values(),
+            *vela2.values(),
+            {"env": "VELA_OMNI_ARTIFACT", "path": str(args.omni.resolve())},
+        ],
         "suites": suites,
         "success": all(s["success"] for s in suites),
     }

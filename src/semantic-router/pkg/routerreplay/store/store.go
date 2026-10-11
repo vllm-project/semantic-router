@@ -262,19 +262,18 @@ type DecisionRanking struct {
 	DecidedBy  string `json:"decided_by"`
 	Winner     string `json:"winner"`
 	Candidates int    `json:"candidates"`
+	RunnerUp   string `json:"runner_up,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
-// HallucinationSpan is a single unsupported span with its NLI explanation,
-// mirroring extproc.EnhancedHallucinationSpan for replay persistence.
+// HallucinationSpan is a single unsupported span with its details, mirroring
+// extproc.EnhancedHallucinationSpan for replay persistence.
 type HallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"`
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`
 	Explanation             string  `json:"explanation"`
 }

@@ -127,3 +127,47 @@ func TestChatStreamAcceptsGroqChunkMetadata(t *testing.T) {
 		t.Fatalf("x_groq omission was not explicit: %+v", diagnostics)
 	}
 }
+
+// Ollama's OpenAI compatible stream puts a top-level timings object on the usage
+// chunk (issue #4585). It is generation metadata, so the stream goes through
+// and the drop is reported, whichever provider profile serves it.
+func TestChatStreamAcceptsOllamaTimingsOnUsageChunk(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl-633\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":null}]}\n\n" +
+			"data: {\"id\":\"chatcmpl-633\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[],\"usage\":{\"prompt_tokens\":30,\"prompt_tokens_details\":{\"cached_tokens\":29},\"completion_tokens\":10,\"total_tokens\":40},\"timings\":{\"prompt_n\":30,\"prompt_ms\":28,\"prompt_per_token_ms\":0.93,\"prompt_per_second\":1071.4,\"predicted_n\":10,\"predicted_ms\":106,\"predicted_per_token_ms\":10.6,\"predicted_per_second\":94.3}}\n\n" +
+			"data: {\"id\":\"chatcmpl-633\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	_, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("usage chunk with timings was rejected: %v", err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Field != "stream.timings" || diagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("timings omission was not explicit: %+v", diagnostics)
+	}
+}
+
+// timings is accepted only as an object, and every other unknown field is still
+// rejected.
+func TestChatStreamTimingsStaysStrict(t *testing.T) {
+	for name, extra := range map[string]string{
+		"timings is a string":     `"timings":"x"`,
+		"timings is an array":     `"timings":[1]`,
+		"unrelated unknown field": `"surprise":{"a":1}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			decoder := OpenAIChatCodec{}.NewDecoder(
+				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+				llmprotocol.DefaultPolicy(),
+			)
+			payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[]," + extra + "}\n\n")
+			if _, _, err := decoder.Push(payload); err == nil {
+				t.Fatalf("chunk with %s was accepted", extra)
+			}
+		})
+	}
+}

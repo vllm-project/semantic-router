@@ -28,6 +28,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	}
 
 	requiredAlgorithmFragments := map[string]string{
+		"cascade":       filepath.Join("native", "cascade.yaml"),
 		"automix":       filepath.Join("selection", "automix.yaml"),
 		"confidence":    filepath.Join("looper", "confidence.yaml"),
 		"fusion":        filepath.Join("looper", "fusion.yaml"),

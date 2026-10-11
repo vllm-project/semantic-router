@@ -253,7 +253,7 @@ spec:
           mountPath: /app/cache
       containers:
       - name: semantic-router
-        image: ghcr.io/vllm-project/semantic-router/extproc:latest
+        image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -272,8 +272,6 @@ spec:
           name: classify-api
           protocol: TCP
         env:
-        - name: LD_LIBRARY_PATH
-          value: "/app/lib"
         # Lets the config write API patch this ConfigMap through the
         # Kubernetes API instead of the read-only mounted file (#3688).
         - name: VLLM_SR_K8S_CONFIGMAP_NAME
@@ -283,7 +281,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: VLLM_SR_CONFIG_BACKUP_DIR
-          value: "/app/models/.vllm-sr/config-backups"
+          value: "/tmp/vllm-sr/config-history"
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE
@@ -315,7 +313,7 @@ spec:
           timeoutSeconds: 10
           failureThreshold: 3
         readinessProbe:
-          tcpSocket:
+          grpc:
             port: 50051
           initialDelaySeconds: 90
           periodSeconds: 30

@@ -28,6 +28,7 @@ from recipe_conformance_runtime import (
     management_auth_bindings,
     prepare_builtin_runtime,
     verify_composed_policy,
+    with_runtime_preview_budget,
 )
 from recipe_conformance_sources import (
     discover_recipe_sources,
@@ -66,8 +67,7 @@ REQUIRED_MODEL_CARD_HEADINGS = (
 )
 RUNTIME_RECIPE_DIRECTORIES = frozenset({".vllm-sr"})
 RECIPE_CATALOG_DIRECTORIES = frozenset({"built-in"})
-DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto", "auto")
-DEFAULT_AUTO_MODEL_NAME = "MoM"
+DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto",)
 
 
 @dataclass(frozen=True)
@@ -211,28 +211,23 @@ def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def config_auto_entrypoints(config: dict[str, Any]) -> tuple[str, ...]:
-    global_config = _mapping(config.get("global"))
-    if not global_config:
-        return ()
     if config.get("recipes") and not any(
         key in config for key in ("providers", "routing", "entrypoints")
     ):
-        # Portable bundles may carry global defaults without declaring a
-        # runtime. Their entrypoints are supplied when recipes are composed.
         return ()
-    router = _mapping(global_config.get("router"))
-    if "auto_model_names" in router:
-        raw_names = _sequence(router.get("auto_model_names"))
-    else:
-        configured = str(
-            router.get("auto_model_name") or DEFAULT_AUTO_MODEL_NAME
-        ).strip()
-        raw_names = [*DEFAULT_AUTO_ENTRYPOINTS, configured]
+    mappings = [
+        entry
+        for entry in _sequence(config.get("entrypoints"))
+        if _mapping(entry).get("recipe") == "default"
+    ]
+    if not mappings:
+        return DEFAULT_AUTO_ENTRYPOINTS
     return tuple(
         dict.fromkeys(
-            normalized
-            for raw_name in raw_names
-            if (normalized := str(raw_name).strip())
+            str(name).strip()
+            for entry in mappings
+            for name in _sequence(_mapping(entry).get("model_names"))
+            if str(name).strip()
         )
     )
 
@@ -445,7 +440,14 @@ def _assert_probe_coverage(context: ProbeReferenceContext) -> None:
             f"{context.path}: decisions without probes: "
             + ", ".join(f"{recipe}:{name}" for recipe, name in missing_decisions)
         )
-    missing_entrypoints = sorted(set(context.entrypoints) - context.covered_entrypoints)
+    # The built-in default name remains discoverable in a named-only runtime,
+    # but an empty profile has no authored decision for a conformance probe.
+    # Coverage applies to entrypoints of the recipe policies under evaluation.
+    policy_recipes = {recipe for recipe, _ in context.decisions}
+    policy_entrypoints = {
+        name for name, recipe in context.entrypoints.items() if recipe in policy_recipes
+    }
+    missing_entrypoints = sorted(policy_entrypoints - context.covered_entrypoints)
     if missing_entrypoints:
         raise ValueError(
             f"{context.path}: entrypoints without probes: "
@@ -733,13 +735,17 @@ def command_prepare_runtime(args: argparse.Namespace) -> int:
     recipe_path = args.recipes_root / args.recipe
     build_recipe_inventory(recipe_path)
     authored = load_yaml_mapping(recipe_path / "config.yaml")
+    manifest, _probes = load_probe_manifest(recipe_path / "probes.yaml")
     if not any(key in authored for key in ("providers", "routing", "entrypoints")):
-        composed = prepare_builtin_runtime(recipe_path, args.config, REPO_ROOT)
-        verify_composed_policy(authored, composed)
+        composed = prepare_builtin_runtime(
+            recipe_path, args.config, REPO_ROOT, manifest
+        )
+        verify_composed_policy(authored, composed, manifest)
     else:
+        prepared = with_runtime_preview_budget(authored, manifest)
         args.config.parent.mkdir(parents=True, exist_ok=True)
         with args.config.open("x", encoding="utf-8") as output:
-            output.write((recipe_path / "config.yaml").read_text(encoding="utf-8"))
+            yaml.safe_dump(prepared, output, sort_keys=False)
     return 0
 
 

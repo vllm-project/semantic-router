@@ -1,5 +1,3 @@
-//go:build !riscv64
-
 package memory
 
 import (
@@ -74,7 +72,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	}
 
 	vc := options.ValkeyConfig
@@ -257,22 +255,23 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		status = "error"
 		return fmt.Errorf("failed to build hash fields: %w", err)
 	}
+	operationID, err := valkeyNewStoreOperationID()
+	if err != nil {
+		status = "error"
+		return fmt.Errorf("failed to generate store operation ID: %w", err)
+	}
 
 	key := v.hashKey(memory.ID)
+	command := valkeyBuildAtomicStoreCommand(key, fields, operationID)
 
-	// Enforce uniqueness atomically using HSetNX as a reservation on the "id" field.
-	// HSetNX is atomic: if the key already exists, it returns false without writing.
-	// This avoids the TOCTOU race of a separate EXISTS check.
+	// Write the complete hash in one Lua operation. The operation ID is stored with
+	// the document so a retry after a lost response can recognize its own write.
 	err = v.retryWithBackoff(ctx, func() error {
-		reserved, hsetNXErr := v.client.HSetNX(ctx, key, "id", memory.ID)
-		if hsetNXErr != nil {
-			return hsetNXErr
+		result, commandErr := v.client.CustomCommand(ctx, command)
+		if commandErr != nil {
+			return commandErr
 		}
-		if !reserved {
-			return fmt.Errorf("%w: memory id=%s", errValkeyMemoryAlreadyExists, memory.ID)
-		}
-		_, hsetErr := v.client.HSet(ctx, key, fields)
-		return hsetErr
+		return valkeyAtomicStoreResult(result, memory.ID)
 	})
 	if err != nil {
 		status = "error"
@@ -289,7 +288,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 // rerankAndFilter applies hybrid re-ranking, adaptive threshold, score filtering, and access tracking.
 func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts RetrieveOptions, threshold float32, limit int) []*RetrieveResult {
 	if opts.HybridSearch && len(candidates) > 1 {
-		candidates = v.hybridRerank(candidates, opts)
+		candidates = hybridRerankCandidates(candidates, opts)
 	}
 
 	if opts.AdaptiveThreshold && len(candidates) > 1 {

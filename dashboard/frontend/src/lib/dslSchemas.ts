@@ -409,10 +409,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
     case 'jailbreak':
       return JAILBREAK_SIGNAL_FIELDS
     case 'hallucination':
-      return [
-        { key: 'use_nli', label: 'Use NLI Explanations', type: 'boolean' },
-        { key: 'description', label: 'Description', type: 'string' },
-      ]
+      return [{ key: 'description', label: 'Description', type: 'string' }]
     case 'pii':
       return PII_SIGNAL_FIELDS
     case 'kb':

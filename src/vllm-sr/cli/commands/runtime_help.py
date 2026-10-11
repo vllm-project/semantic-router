@@ -7,24 +7,35 @@ Serve uses --config or config.yaml and preserves the Dashboard-first setup flow.
 Connect physical models and publish Mixture-of-Model entrypoints in the
 Dashboard, then keep the same stack running with this single command.
 
-Virtual models are routing policies. Semantic Router starts Router, Envoy, the
-Dashboard, and supporting services; it does not download or launch the physical
-LLM engines referenced by provider backends. Connect user-owned single or
-multiple model endpoints through one canonical config or the Dashboard.
+Virtual models are routing policies. Semantic Router starts the Router, which
+serves the OpenAI-compatible API itself, the Dashboard and supporting services;
+it does not download or launch the physical LLM engines referenced by provider
+backends. Connect user-owned single or multiple model endpoints through one
+canonical config or the Dashboard.
 
 Ports are configured in the selected config under the listeners section.
 
 Local startup waits up to 1800 seconds for Router readiness, or Dashboard
-readiness during first-run setup. Use --startup-timeout SECONDS for a different
+readiness during first-run setup. During setup the command keeps waiting, and
+once you activate a config in the Dashboard it starts the Router from it. Use --startup-timeout SECONDS for a different
 positive budget when model loading or GPU compilation needs more time.
 The wait begins after containers start. It does not change inference deadlines.
 Timeout exits the CLI with an error and leaves containers available for inspection.
 
+GATEWAY MODES:
+
+\b
+standalone - The Router serves the OpenAI-compatible API itself (default)
+extproc    - An Envoy-based gateway in front of the Router: the Envoy container
+             on docker, as before standalone became the default; your gateway
+             on kubernetes
+
 DEPLOYMENT TARGETS:
 
 \b
-docker  - Local Docker deployment (default)
-k8s     - Kubernetes deployment via Helm
+docker     - Local Docker deployment (default)
+kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
+             release only)
 
 MODEL SELECTION ALGORITHMS:
 
@@ -49,12 +60,14 @@ Examples:
 \b
   # Dashboard-first setup or an existing ./config.yaml
   vllm-sr serve
+  # Envoy in front of the Router, as before standalone became the default
+  vllm-sr serve --gateway extproc
   # User-owned single or multi-model topology
   vllm-sr serve --config my-models.yaml
   # Explicitly replace Dashboard-edited runtime state from reviewed source YAML
   vllm-sr serve --config my-models.yaml --replace-active-config
   # Deploy a user-owned config to Kubernetes
-  vllm-sr serve --target k8s --config my-models.yaml --namespace my-ns
+  vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
   # Runtime policy and image overrides
   vllm-sr serve --algorithm latency_aware
   vllm-sr serve --image-pull-policy always
@@ -62,7 +75,7 @@ Examples:
   vllm-sr serve --minimal
   vllm-sr serve --log-level debug
   # AMD ROCm image, device passthrough, and router internal GPU defaults
-  vllm-sr serve --platform amd
-  vllm-sr serve --platform amd --startup-timeout 7200
-  VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
+  vllm-sr serve --platform rocm
+  vllm-sr serve --platform rocm --startup-timeout 7200
+  VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform rocm
 """

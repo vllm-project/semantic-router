@@ -15,7 +15,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestDefaultOperatorSamplesSelectVelaModels(t *testing.T) {
+func TestDefaultOperatorSamplesSelectTheVela2Defaults(t *testing.T) {
 	for _, name := range []string{
 		"vllm_v1alpha1_semanticrouter.yaml",
 		"vllm.ai_v1alpha1_semanticrouter_openshift.yaml",
@@ -30,29 +30,32 @@ func TestDefaultOperatorSamplesSelectVelaModels(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			const prefix = "models/Vela-1.0-Encoder-307M-"
-			if cfg.MmBertModelPath != prefix+"Embedding" {
+			if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" {
 				t.Fatalf("embedding artifact = %q", cfg.MmBertModelPath)
 			}
-			if cfg.PromptGuard.ModelID != prefix+"Guard" || cfg.PromptGuard.Variant != routerconfig.PromptGuardVariantMmBERT32K {
+			if cfg.PromptGuard.ModelID != routerconfig.Vela2SignalModel || cfg.PromptGuard.Threshold != .75 {
 				t.Fatalf("guard model = %+v", cfg.PromptGuard)
 			}
-			if cfg.CategoryModel.ModelID != prefix+"Domain" || cfg.Variant != routerconfig.CategoryVariantMmBERT32K {
+			if cfg.CategoryModel.ModelID != routerconfig.Vela2SignalModel {
 				t.Fatalf("domain model = %+v", cfg.CategoryModel)
 			}
-			if cfg.PIIModel.ModelID != prefix+"PII" || !cfg.PIIModel.UseMmBERT32K || cfg.PIIMappingPath != prefix+"PII/pii_mapping.json" {
+			if cfg.PIIModel.ModelID != routerconfig.Vela2SignalModel || cfg.PIIMappingPath != "" {
 				t.Fatalf("PII model = %+v", cfg.PIIModel)
 			}
 		})
 	}
 }
 
-func TestTypedOperatorSampleUsesPublishedPIIMapping(t *testing.T) {
+func TestTypedOperatorSampleServesThePinnedVelaPII(t *testing.T) {
 	canonical := sampleModelConfig(t, "vllm.ai_v1alpha1_semanticrouter_model_runtime.yaml")
 	binding := canonical.Routing.ModelBindings["pii_classifier"]
-	want := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier.PII.PIIMappingPath
-	if binding.MappingPath != want {
-		t.Fatalf("PII binding requests %q, published Vela mapping is %q", binding.MappingPath, want)
+	if binding.MappingPath != "" {
+		t.Fatalf("PII binding names a mapping file instead of the served labels: %q", binding.MappingPath)
+	}
+	release := routerconfig.GetModelByPath("models/Vela-1.0-Encoder-307M-PII")
+	deployment := canonical.Global.ModelCatalog.Deployments[binding.Deployment]
+	if !deployment.IsModelRuntime() || deployment.Artifact != release.RepoID || deployment.Revision != release.Revision {
+		t.Fatalf("PII deployment is not the pinned Vela release on the model runtime: %+v", deployment)
 	}
 }
 
@@ -90,10 +93,10 @@ func TestOperatorCIUsesCanonicalVelaModels(t *testing.T) {
 	if cfg.MmBertModelPath != defaults.MmBertModelPath || cfg.EmbeddingConfig.ModelType != "mmbert" || !cfg.UseCPU {
 		t.Fatalf("CI embedding must use the canonical CPU model: %+v", cfg.EmbeddingModels)
 	}
-	if cfg.CategoryModel.ModelID != system.DomainClassifier || cfg.Variant != routerconfig.CategoryVariantMmBERT32K || !cfg.CategoryModel.UseCPU {
+	if cfg.CategoryModel.ModelID != system.DomainClassifier || !cfg.CategoryModel.UseCPU {
 		t.Fatalf("CI domain classifier must inherit canonical CPU defaults: %+v", cfg.CategoryModel)
 	}
-	if cfg.PIIModel.ModelID != system.PIIClassifier || !cfg.PIIModel.UseMmBERT32K || !cfg.PIIModel.UseCPU {
+	if cfg.PIIModel.ModelID != system.PIIClassifier || !cfg.PIIModel.UseCPU {
 		t.Fatalf("CI PII classifier must inherit canonical CPU defaults: %+v", cfg.PIIModel)
 	}
 }
