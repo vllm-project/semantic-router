@@ -263,6 +263,10 @@ python -m pytest \
   bench/router_flow/real_eval/test_*.py
 ```
 
+`make test-bench-tools` runs the grounded fusion, hallucination, reasoning, Router
+Flow and agent crew tests, which CI runs when those directories change. Each area
+also has its own target, such as `make test-agent-crew`.
+
 When changing a CLI, update its `--help`, tests, and this index only if the
 reader's choice of runner or first command changes. Detailed experiment design
 belongs with the runner that implements it.

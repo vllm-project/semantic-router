@@ -244,6 +244,16 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: test-learning-tools
     inventory: routing-authoring-calibration-and-learning-tools-framework-discovery
+  bench-tools:
+    display_name: Benchmark Tools
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: test-bench-tools
+    inventory: bench-research-tools-pytest-discovery
 
   harness-tools:
     display_name: CI Harness
