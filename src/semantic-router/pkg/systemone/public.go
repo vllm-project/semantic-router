@@ -16,6 +16,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
+// RequestLimit bounds one native request body. Requests may carry images as
+// base64 data URLs; the managed runtime accepts larger bodies than this.
+const RequestLimit = 32 << 20
+
 // Invoke is a retained inference call supplied by the serving owner.
 type Invoke func(context.Context, string, json.RawMessage) (int, []byte, error)
 
@@ -54,7 +58,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": models})
 			return
 		}
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 2<<20))
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, RequestLimit))
 		var request map[string]json.RawMessage
 		if err != nil || json.Unmarshal(body, &request) != nil || request == nil {
 			publicSystemOneError(w, 400, "invalid_request")
