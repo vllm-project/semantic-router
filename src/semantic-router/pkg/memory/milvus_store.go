@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -29,11 +28,7 @@ type MilvusStore struct {
 	maxRetries      int
 	retryBaseDelay  time.Duration
 	embeddingConfig EmbeddingConfig // Unified embedding configuration
-	// Milvus access tracking is a read-modify-upsert operation. Serialize it
-	// within this store so concurrent background retrieval batches cannot lose
-	// access-count increments by reading the same previous record.
-	retrievalUpdateMu sync.Mutex
-	life              storeLifecycle
+	life            storeLifecycle
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore

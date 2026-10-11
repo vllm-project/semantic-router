@@ -63,33 +63,6 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 	return nil
 }
 
-func (m *MilvusStore) recordRetrievalBatch(parent context.Context, ids []string) {
-	m.retrievalUpdateMu.Lock()
-	defer m.retrievalUpdateMu.Unlock()
-
-	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
-	defer cancel()
-	for _, id := range ids {
-		if ctx.Err() != nil {
-			return
-		}
-		if err := m.recordRetrieval(ctx, id); err != nil {
-			logging.Warnf("MilvusStore.recordRetrievalBatch: id=%s: %v", id, err)
-		}
-	}
-}
-
-func (m *MilvusStore) recordRetrieval(ctx context.Context, id string) error {
-	existing, err := m.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	existing.AccessCount++
-	existing.LastAccessed = time.Now()
-	existing.UpdatedAt = existing.LastAccessed
-	return m.Update(ctx, id, existing)
-}
-
 func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 	startTime := time.Now()
 	backend := "milvus"
