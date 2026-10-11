@@ -255,9 +255,11 @@ func (r *OpenAIRouter) performCacheLookup(
 	if service == nil {
 		return nil, false
 	}
+	maxAge := responseCacheMaxAgeDuration(ctx)
 	lookupResult, cacheErr := service.LookupSemantic(lookupContext, cache.SemanticLookup{
 		Identity:  identity,
 		Threshold: threshold,
+		MaxAge:    maxAge,
 	})
 	cachedResponse := lookupResult.ResponseBody
 	found := lookupResult.Found
