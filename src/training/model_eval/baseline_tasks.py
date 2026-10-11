@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,9 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 logger = logging.getLogger("QualityBaseline")
 
 MAX_REPORTED_UNMAPPED = 10
+# Draws the class-matched selection, so the same pinned file always yields the
+# same scored rows for every artifact and every rerun.
+MATCHED_SELECTION_SEED: int = 20261011
 
 
 @dataclass(frozen=True)
@@ -39,7 +43,10 @@ class TaskSpec:
 
     ``revision`` pins the dataset, so the rows scored are the rows the manifest
     names. ``data_files`` reads the split from these files of the repository
-    instead of from a published split.
+    instead of from a published split. ``match_strata`` names the columns the
+    scored rows are class-matched inside, ``qmark`` being computed from the
+    text: a stratum that does not carry every label contributes no rows, so no
+    single feature of the corpus hands one class to the model.
     """
 
     dataset_repo: str
@@ -57,6 +64,9 @@ class TaskSpec:
     # itself, for which none of its rows is held out.
     exclude_prefix: tuple[str, str] | None = None
     trained_on_repos: tuple[str, ...] = ()
+    # Columns the scored rows are class-matched inside before any model sees
+    # them; ``qmark`` is computed from the text rather than read.
+    match_strata: tuple[str, ...] = ()
 
     def validate_artifact(self, repo: str) -> None:
         """Refuse source labels that cannot rank this artifact."""
@@ -118,10 +128,14 @@ TASK_SPECS: dict[str, TaskSpec] = {
     # corpus the suite never touched, deduplicated against every suite row, so
     # it is new to both feedback checkpoints - the legacy detector trained on
     # the feedback-detector dataset and Vela Feedback on WildFeedback and
-    # Schema-Guided Dialogue. Classes are matched inside corpus, script, length
-    # and question-mark strata, so neither the corpus nor the punctuation gives
-    # the label away. The set carries SAT and NO_FEEDBACK; the classes with no
-    # published held-out text keep #4301 open.
+    # Schema-Guided Dialogue. The fresh build keeps the corpus's own label
+    # proportions, and here every satisfied turn is a question-mark-free thank
+    # while most other turns are questions, so the punctuation alone separates
+    # the classes; the runner scores a class-matched subset inside the source,
+    # script, length and question-mark strata instead. The dialogue act the
+    # label is read from (subsource) names the class rather than matching it.
+    # The set carries SAT and NO_FEEDBACK; the classes with no published
+    # held-out text keep #4301 open.
     "feedback": TaskSpec(
         dataset_repo="vllm-sr/router-signal-suite",
         revision="fa08b2a642df30955ad2ad2206d74050c7f12b5c",
@@ -130,6 +144,7 @@ TASK_SPECS: dict[str, TaskSpec] = {
         text_field="text",
         label_field="label",
         split_rule="by_source",
+        match_strata=("source", "script", "length_bin", "qmark"),
     ),
     # Vela Domain trains on Global-MMLU and moves the MMLU questions that match
     # MMLU-Pro into training, so the MMLU-derived rows are left out. The legacy
@@ -256,6 +271,9 @@ def load_split(spec: TaskSpec, revision: str):
     fields = [spec.text_field, spec.label_field]
     if spec.exclude_prefix is not None:
         fields.append(spec.exclude_prefix[0])
+    for name in spec.match_strata:
+        if name != "qmark" and name not in fields:
+            fields.append(name)
     return concatenate_datasets(
         [
             load_dataset(
@@ -266,9 +284,65 @@ def load_split(spec: TaskSpec, revision: str):
     )
 
 
+def stratum_of(row: dict[str, Any], spec: TaskSpec) -> tuple[Any, ...]:
+    """The row's values for ``spec.match_strata``; ``qmark`` comes from the text."""
+    text = str(row.get(spec.text_field) or "")
+    return tuple(
+        ("q" if "?" in text else "n") if name == "qmark" else row.get(name)
+        for name in spec.match_strata
+    )
+
+
+def select_matched_rows(
+    dataset: Any, spec: TaskSpec, seed: int | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Keep a class-balanced subset inside every ``spec.match_strata`` stratum.
+
+    A fresh held-out file keeps its corpus's own label proportions, and a
+    corpus can tie one class to a single surface feature: in CrossWOZ every
+    satisfied turn is a question-mark-free thank while most other turns are
+    questions, so the punctuation alone separates the classes. Scoring the raw
+    file would measure that feature instead of the task, so each stratum
+    contributes only as many rows of each label as its rarest label has, drawn
+    in a seeded order, and the record names the pinned distribution beside the
+    counts that were kept.
+    """
+    rows = list(dataset)
+    labels = sorted({str(row.get(spec.label_field)) for row in rows})
+    before = dict.fromkeys(labels, 0)
+    for row in rows:
+        before[str(row.get(spec.label_field))] += 1
+    grouped: dict[tuple[tuple[Any, ...], str], list[int]] = {}
+    for index, row in enumerate(rows):
+        key = (stratum_of(row, spec), str(row.get(spec.label_field)))
+        grouped.setdefault(key, []).append(index)
+    draw = MATCHED_SELECTION_SEED if seed is None else seed
+    rng = random.Random(draw)
+    keep: list[int] = []
+    selected = dict.fromkeys(labels, 0)
+    strata = sorted(
+        {stratum for stratum, _ in grouped}, key=lambda s: tuple(str(v) for v in s)
+    )
+    for stratum in strata:
+        groups = {label: grouped.get((stratum, label), []) for label in labels}
+        quota = min(len(group) for group in groups.values())
+        for label in labels:
+            group = groups[label]
+            rng.shuffle(group)
+            keep.extend(group[:quota])
+            selected[label] += quota
+    record = {
+        "strata": list(spec.match_strata),
+        "seed": draw,
+        "rows_by_label": before,
+        "selected_by_label": selected,
+    }
+    return [rows[index] for index in sorted(keep)], record
+
+
 def load_rows(
     spec: TaskSpec, mapping: dict[str, int], limit: int | None, revision: str
-) -> tuple[list[str], np.ndarray, int]:
+) -> tuple[list[str], np.ndarray, int, dict[str, Any] | None]:
     """Load the held-out split and map every row onto the artifact's class order."""
     dataset = load_split(spec, revision)
     if spec.exclude_prefix is not None:
@@ -277,6 +351,9 @@ def load_rows(
     available = len(dataset)
     if limit is not None:
         dataset = dataset.select(range(min(available, limit)))
+    matched: dict[str, Any] | None = None
+    if spec.match_strata:
+        dataset, matched = select_matched_rows(dataset, spec)
 
     texts: list[str] = []
     labels: list[int] = []
@@ -309,7 +386,7 @@ def load_rows(
             "dropped rows with labels the artifact does not define: %s",
             ", ".join(sorted(unmapped)[:MAX_REPORTED_UNMAPPED]),
         )
-    return texts, np.array(labels, dtype=np.int64), available
+    return texts, np.array(labels, dtype=np.int64), available, matched
 
 
 def tokenizer_class(model_dir: Path) -> str | None:

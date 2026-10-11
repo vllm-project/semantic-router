@@ -169,12 +169,18 @@ pinned revision: its CrossWOZ rows, read file by file. CrossWOZ is a corpus the
 suite never touched and the fresh build deduplicated against every suite row,
 so it is new to both feedback checkpoints - the legacy detector trained on the
 feedback-detector dataset and Vela Feedback on WildFeedback and
-Schema-Guided Dialogue. Classes are matched inside corpus, script, length and
-question-mark strata, so neither the corpus nor the punctuation gives the label
-away. Both feedback checkpoints are scored. The set carries SAT and
-NO_FEEDBACK; WRONG_ANSWER and WANT_DIFFERENT have no published held-out text
-yet, so those classes stay unmeasured. The legacy checkpoint's label map
-predates NO_FEEDBACK, so it scores the SAT rows of this set only.
+Schema-Guided Dialogue. The fresh build keeps the corpus's own label
+proportions, and in CrossWOZ every satisfied turn is a question-mark-free thank
+while 68% of the other turns are questions, so the punctuation alone would
+separate the classes. The runner therefore scores a class-matched subset, drawn
+in a seeded order inside the source, script, length and question-mark strata,
+and records the pinned distribution beside the kept counts in the result's
+`dataset.stratum_matched`. The dialogue act a label is read from (`subsource`)
+names the class rather than matching it. Both feedback checkpoints are scored.
+The set carries SAT and NO_FEEDBACK; WRONG_ANSWER and WANT_DIFFERENT have no
+published held-out text yet, so those classes stay unmeasured. The legacy
+checkpoint's label map predates NO_FEEDBACK, so it scores the SAT rows the
+matched selection keeps.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the
