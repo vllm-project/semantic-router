@@ -166,7 +166,12 @@ def concurrent_pass(client: Client, work: list[str], concurrency: int) -> dict:
 
     def one(text: str) -> None:
         nonlocal failures
-        elapsed, status, _ = client.preview(text)
+        try:
+            elapsed, status, _ = client.preview(text)
+        except (http.client.HTTPException, OSError):
+            with lock:
+                failures += 1
+            return
         with lock:
             latencies.append(elapsed)
             if status != 200:
@@ -191,7 +196,15 @@ def cmd_run(args: argparse.Namespace) -> None:
     started = time.perf_counter()
     for repeat in range(args.repeat):
         for text in texts:
-            elapsed, status, parsed = client.preview(text)
+            try:
+                elapsed, status, parsed = client.preview(text)
+            except (http.client.HTTPException, OSError):
+                errors += 1
+                if repeat == 0:
+                    outcomes.append(
+                        {"status": "error", "decision": None, "model": None}
+                    )
+                continue
             sequential.append(elapsed)
             if status != 200:
                 errors += 1
@@ -204,7 +217,10 @@ def cmd_run(args: argparse.Namespace) -> None:
         "errors": errors,
     }
     result["outcomes"] = outcomes
-    result["first_response"] = client.preview(texts[0])[2]
+    try:
+        result["first_response"] = client.preview(texts[0])[2]
+    except (http.client.HTTPException, OSError):
+        result["first_response"] = {"error": "first input request failed"}
     for concurrency in args.concurrency:
         result["passes"][f"concurrency_{concurrency}"] = concurrent_pass(
             client, texts * args.repeat, concurrency
