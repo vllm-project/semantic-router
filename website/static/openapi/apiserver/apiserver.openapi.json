@@ -8233,6 +8233,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -9553,6 +9560,13 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "action": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -15511,8 +15525,8 @@
         "x-vllm-sr-visibility": "advanced"
       },
       "post": {
-        "summary": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline",
-        "description": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 2 MiB request, 4 MiB response, 30 second deadline",
+        "summary": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 32 MiB request, 4 MiB response, 30 second deadline",
+        "description": "Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 32 MiB request, 4 MiB response, 30 second deadline",
         "operationId": "post_api_v1_diagnostics_models_systemone",
         "tags": [
           "diagnostics"
@@ -16575,7 +16589,7 @@
           }
         },
         "requestBody": {
-          "description": "application/json request payload. Limit: 10485760 bytes.",
+          "description": "application/json request payload. Limit: 33562624 bytes.",
           "required": true,
           "content": {
             "application/json": {
@@ -16591,6 +16605,13 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "images": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "model": {
                         "nullable": true,
                         "type": "string"
@@ -16713,6 +16734,13 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "images": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "questions": {
                               "nullable": true,
                               "type": "object",
@@ -17315,7 +17343,7 @@
           }
         },
         "requestBody": {
-          "description": "application/json request payload. Limit: 2105344 bytes.",
+          "description": "application/json request payload. Limit: 33562624 bytes.",
           "required": true,
           "content": {
             "application/json": {
@@ -19343,6 +19371,13 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "images": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "model": {
                         "nullable": true,
                         "type": "string"
@@ -19465,6 +19500,13 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "images": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "questions": {
                               "nullable": true,
                               "type": "object",
@@ -37021,6 +37063,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -37202,6 +37251,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -37376,6 +37432,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -37637,6 +37700,99 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "action": {
+                          "type": "object",
+                          "properties": {
+                            "confidence": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "confidence_available": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
+                            "execution_time_ms": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "policy_default": {
+                              "type": "string"
+                            },
+                            "rules": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "content_token_windows": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "type": "string"
+                                  },
+                                  "execution_time_ms": {
+                                    "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "policy_sha256": {
+                                    "type": "string"
+                                  },
+                                  "precision": {
+                                    "type": "string"
+                                  },
+                                  "processed_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "thresholds": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "window_batch_size": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "policy_sha256",
+                                  "provider",
+                                  "device",
+                                  "precision",
+                                  "input_tokens",
+                                  "processed_tokens",
+                                  "truncated",
+                                  "content_token_windows",
+                                  "thresholds",
+                                  "window_batch_size",
+                                  "execution_time_ms"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "execution_time_ms",
+                            "confidence"
+                          ]
+                        },
                         "authz": {
                           "type": "object",
                           "properties": {
@@ -39800,6 +39956,7 @@
                         "metadata",
                         "classifier",
                         "input_modality",
+                        "action",
                         "decision"
                       ]
                     },
@@ -40464,6 +40621,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "action": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -40645,6 +40809,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "action": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -40819,6 +40990,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "action": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -41080,6 +41258,99 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "action": {
+                              "type": "object",
+                              "properties": {
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "confidence_available": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "execution_time_ms": {
+                                  "type": "number"
+                                },
+                                "method": {
+                                  "type": "string"
+                                },
+                                "policy_default": {
+                                  "type": "string"
+                                },
+                                "rules": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "content_token_windows": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "integer"
+                                          }
+                                        }
+                                      },
+                                      "device": {
+                                        "type": "string"
+                                      },
+                                      "execution_time_ms": {
+                                        "type": "number"
+                                      },
+                                      "input_tokens": {
+                                        "type": "integer"
+                                      },
+                                      "policy_sha256": {
+                                        "type": "string"
+                                      },
+                                      "precision": {
+                                        "type": "string"
+                                      },
+                                      "processed_tokens": {
+                                        "type": "integer"
+                                      },
+                                      "provider": {
+                                        "type": "string"
+                                      },
+                                      "thresholds": {
+                                        "nullable": true,
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "truncated": {
+                                        "type": "boolean"
+                                      },
+                                      "window_batch_size": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "required": [
+                                      "policy_sha256",
+                                      "provider",
+                                      "device",
+                                      "precision",
+                                      "input_tokens",
+                                      "processed_tokens",
+                                      "truncated",
+                                      "content_token_windows",
+                                      "thresholds",
+                                      "window_batch_size",
+                                      "execution_time_ms"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "execution_time_ms",
+                                "confidence"
+                              ]
+                            },
                             "authz": {
                               "type": "object",
                               "properties": {
@@ -43243,6 +43514,7 @@
                             "metadata",
                             "classifier",
                             "input_modality",
+                            "action",
                             "decision"
                           ]
                         },

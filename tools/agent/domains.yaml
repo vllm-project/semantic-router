@@ -142,6 +142,7 @@ domains:
       - src/model-runtime/vllm_srun/families/decision1/family.py
       - src/model-runtime/vllm_srun/families/decision1/questions.py
       - src/model-runtime/vllm_srun/families/decision2/family.py
+      - src/model-runtime/vllm_srun/families/decision3/family.py
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
@@ -463,7 +464,14 @@ domains:
 
   helm:
     owner: deployment
-    paths: [deploy/helm/**]
+    paths:
+      - deploy/helm/**
+      # These Grafana deployments share the offline render tests in the Helm gate.
+      - deploy/kubernetes/observability/grafana/**
+      - deploy/kubernetes/observability/README.md
+      - deploy/openshift/observability/grafana/**
+      - deploy/openshift/deploy-to-openshift.sh
+      - deploy/openshift/README.md
     checks: [make helm-lint]
     verify:
       - make helm-ci-validate HELM_REPO_UPDATE=false
