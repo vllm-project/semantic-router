@@ -124,6 +124,29 @@ config:
                   - v1
               scope: eligible_history
               failure_mode: fail_open
+      - name: history_reset_enabled_probe_decision
+        description: "Deterministic keyword-gated route carrying an enabled history_reset plugin, used by the history-reset-topic-change E2E to assert that an explicit topic change removes the prior turn and a continuation keeps it (issue #3343)."
+        priority: 606
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_enabled_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: true
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+                accepted_versions:
+                  - v1
+              scope: eligible_history
+              failure_mode: fail_open
       - name: looper_metrics_probe_decision
         description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
         priority: 610
@@ -927,6 +950,11 @@ config:
           keywords:
             - __HISTORY_RESET_PROBE__
           case_sensitive: false
+        - name: history_reset_enabled_probe_keywords
+          operator: OR
+          keywords:
+            - __HISTORY_RESET_ENABLED_PROBE__
+          case_sensitive: false
         - name: looper_metrics_probe_keywords
           operator: OR
           keywords:
@@ -964,6 +992,12 @@ config:
           description: Current user turn closely repeats the last two billing complaints.
           threshold: 0.8
           lookback_turns: 2
+      # Evidence for the enabled history_reset probe route. Declared rules
+      # are evaluated for every request in this recipe; only that route reads
+      # the result.
+      topic_continuity:
+        - name: topic_boundary
+          description: Whether the live turn still depends on retained history.
       context:
         - name: long_context
           description: Requests estimated at 500 tokens or more.

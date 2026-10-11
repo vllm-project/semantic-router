@@ -46,6 +46,9 @@ var BaselineRouterContract = []string{
 	// A configured but disabled history_reset forwards the complete
 	// conversation (issue #3343)
 	"history-reset-negative",
+	// An enabled history_reset acts on the topic_boundary rule: an explicit
+	// change removes the prior turn, a continuation keeps it (issue #3343)
+	"history-reset-topic-change",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
