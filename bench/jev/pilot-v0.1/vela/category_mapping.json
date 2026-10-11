@@ -1,0 +1,34 @@
+{
+  "category_to_idx": {
+    "biology": 0,
+    "business": 1,
+    "chemistry": 2,
+    "computer science": 3,
+    "economics": 4,
+    "engineering": 5,
+    "health": 6,
+    "history": 7,
+    "law": 8,
+    "math": 9,
+    "other": 10,
+    "philosophy": 11,
+    "physics": 12,
+    "psychology": 13
+  },
+  "idx_to_category": {
+    "0": "biology",
+    "1": "business",
+    "2": "chemistry",
+    "3": "computer science",
+    "4": "economics",
+    "5": "engineering",
+    "6": "health",
+    "7": "history",
+    "8": "law",
+    "9": "math",
+    "10": "other",
+    "11": "philosophy",
+    "12": "physics",
+    "13": "psychology"
+  }
+}

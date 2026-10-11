@@ -1,0 +1,77 @@
+{
+  "status": "local-handoff-ready-not-published",
+  "shared_protocol_frozen": false,
+  "files": {
+    "inputs": {
+      "path": "inputs.jsonl",
+      "sha256": "671c09f62dc9fc9b864efe54b0adfef0ec666f309f74b776dcec3d6d8cdd2ef6"
+    },
+    "question_and_descriptions": {
+      "path": "question.json",
+      "sha256": "33f7ef7c4826df98a4bc23c2e0fc2302ea3ab61e18b8b45d0515e51e64f69738"
+    }
+  },
+  "task": "English subject-domain classification",
+  "question_key": "intent",
+  "label_order": [
+    "biology",
+    "business",
+    "chemistry",
+    "computer science",
+    "economics",
+    "engineering",
+    "health",
+    "history",
+    "law",
+    "math",
+    "other",
+    "philosophy",
+    "physics",
+    "psychology"
+  ],
+  "scored_cases": [
+    "pilot-001",
+    "pilot-002",
+    "pilot-003",
+    "pilot-004",
+    "pilot-005"
+  ],
+  "diagnostic_cases": [
+    "pilot-006"
+  ],
+  "models": {
+    "jev": {
+      "owner": "yuki-uix",
+      "model": "jev-1.13.0",
+      "runtime": "local research harness; exact source to be captured per run"
+    },
+    "kai": {
+      "owner": "subin9",
+      "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "revision": "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
+      "runtime_pr": 4086,
+      "runtime_revision": "58cd660b51ba19aff01ad6f89e66f2d07f13908b",
+      "device": "cpu",
+      "dtype": "fp32",
+      "threads": 8
+    },
+    "vela": {
+      "owner": "lyy26299",
+      "model": "llm-semantic-router/Vela-1.0-Encoder-307M-Domain",
+      "revision": "f6354f54adcf38770f635ad903be2b00577f6c11",
+      "runtime": "owner records exact runner and hardware per run"
+    }
+  },
+  "execution": {
+    "concurrency": 1,
+    "automatic_retries": 0,
+    "failure_policy_status": "not jointly agreed; disclose per-arm behavior and review incomplete runs",
+    "jev_actual_policy": "stop after first call or contract failure; no failures occurred in the supplied run"
+  },
+  "review_sources": [
+    "https://github.com/vllm-project/semantic-router/issues/3970#issuecomment-5862850851",
+    "https://github.com/vllm-project/semantic-router/issues/3970#issuecomment-5864164596",
+    "https://github.com/vllm-project/semantic-router/issues/3970#issuecomment-5866560949"
+  ],
+  "protocol_version": "pilot-v0.1"
+}
