@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"net"
 	"os"
 
@@ -29,4 +30,12 @@ func storageMemoryVectors() storagetest.Vectors {
 		"User A's secret preference is dark chocolate":         "chocolate",
 		"User B's secret preference is white chocolate":        "chocolate",
 	}}
+}
+
+// resetRedisCacheUser clears leftovers from earlier runs without starting the
+// post-invalidation write hold, which would stop the test from caching.
+func resetRedisCacheUser(ctx context.Context, cache *RedisCache, userID string) {
+	keys, _ := cache.client.SMembers(ctx, cache.userIndexKey(userID)).Result()
+	keys = append(keys, cache.userIndexKey(userID), cache.generationKey(userID), cache.holdKey(userID))
+	_ = cache.client.Del(ctx, keys...).Err()
 }

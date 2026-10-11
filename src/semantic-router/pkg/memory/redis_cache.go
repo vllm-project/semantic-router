@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -21,7 +22,40 @@ const (
 	defaultMemoryCacheKeyPrefix = "memory_cache:"
 	defaultMemoryCacheTTL       = 300 // 5 minutes
 	memoryCacheKeyVersion       = "v2:"
+	// cacheWriteHold outlasts Milvus Bounded-consistency staleness (5 s), so a
+	// read that still sees a just-deleted row is never written back to the cache.
+	cacheWriteHold = 10 * time.Second
 )
+
+// admitScript returns the user's generation token, creating one if none exists,
+// or "" during a post-write hold. Tokens are random, so an expired fence can
+// never come back as a generation an in-flight read was admitted under.
+var admitScript = redis.NewScript(`
+if redis.call('EXISTS', KEYS[2]) == 1 then
+	return ''
+end
+local generation = redis.call('GET', KEYS[1])
+if not generation then
+	generation = ARGV[1]
+	redis.call('SET', KEYS[1], generation, 'PX', ARGV[2])
+else
+	redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return generation
+`)
+
+// setIfCurrentScript caches a result only if the user's generation token is
+// still the one the read was admitted under and no write hold is active.
+var setIfCurrentScript = redis.NewScript(`
+local generation = redis.call('GET', KEYS[1])
+if generation ~= ARGV[1] or redis.call('EXISTS', KEYS[2]) == 1 then
+	return 0
+end
+redis.call('SET', KEYS[3], ARGV[2], 'PX', ARGV[3])
+redis.call('SADD', KEYS[4], KEYS[3])
+redis.call('PEXPIRE', KEYS[4], ARGV[3])
+return 1
+`)
 
 // RedisCacheConfig configures the Redis hot cache for memory retrieval.
 type RedisCacheConfig struct {
@@ -119,6 +153,68 @@ func (c *RedisCache) userIndexKey(userID string) string {
 	return c.prefix + "u:" + userID
 }
 
+// generationKey and holdKey fence retrievals that raced an invalidation; their
+// "g:" and "h:" namespaces are disjoint from value and index keys.
+func (c *RedisCache) generationKey(userID string) string {
+	return c.prefix + "g:" + userID
+}
+
+func (c *RedisCache) holdKey(userID string) string {
+	return c.prefix + "h:" + userID
+}
+
+// fenceTTL keeps a generation token alive well past any cached value.
+func (c *RedisCache) fenceTTL() time.Duration {
+	return 2*c.ttl + cacheWriteHold
+}
+
+func newCacheGeneration() (string, error) {
+	var token [16]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(token[:]), nil
+}
+
+// generation admits a retrieval for caching and returns the user's generation
+// token. ok is false when the cache cannot be used safely: no user, a Redis
+// error, or a post-write hold, since a read begun then may be stale when it ends.
+func (c *RedisCache) generation(ctx context.Context, userID string) (string, bool) {
+	if c == nil || c.client == nil || userID == "" {
+		return "", false
+	}
+	candidate, err := newCacheGeneration()
+	if err != nil {
+		return "", false
+	}
+	keys := []string{c.generationKey(userID), c.holdKey(userID)}
+	generation, err := admitScript.Run(ctx, c.client, keys, candidate, c.fenceTTL().Milliseconds()).Text()
+	if err != nil {
+		logging.Debugf("Memory Redis cache generation read error: %v", err)
+		return "", false
+	}
+	return generation, generation != ""
+}
+
+// setIfCurrent caches results read after the caller observed generation.
+func (c *RedisCache) setIfCurrent(ctx context.Context, opts RetrieveOptions, generation string, results []*RetrieveResult) {
+	if c == nil || c.client == nil || opts.UserID == "" {
+		return
+	}
+	val, err := json.Marshal(results)
+	if err != nil {
+		logging.Warnf("Memory Redis cache set marshal error: %v", err)
+		return
+	}
+	keys := []string{
+		c.generationKey(opts.UserID), c.holdKey(opts.UserID),
+		cacheKey(c.prefix, opts.UserID, opts), c.userIndexKey(opts.UserID),
+	}
+	if err := setIfCurrentScript.Run(ctx, c.client, keys, generation, val, c.ttl.Milliseconds()).Err(); err != nil {
+		logging.Debugf("Memory Redis cache set error: %v", err)
+	}
+}
+
 // Get retrieves cached results for the given options. Returns (nil, nil) on miss or error (no fatal).
 func (c *RedisCache) Get(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, bool) {
 	if c == nil || c.client == nil {
@@ -140,7 +236,7 @@ func (c *RedisCache) Get(ctx context.Context, opts RetrieveOptions) ([]*Retrieve
 	return results, true
 }
 
-// Set stores retrieval results in the cache.
+// Set stores retrieval results unconditionally. Retrieval paths use setIfCurrent.
 func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*RetrieveResult) {
 	if c == nil || c.client == nil {
 		return
@@ -176,6 +272,18 @@ func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*R
 func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error {
 	if c == nil || c.client == nil || userID == "" {
 		return nil
+	}
+	// Fence in-flight retrievals before deleting, so none can re-cache old results.
+	generation, err := newCacheGeneration()
+	if err != nil {
+		return err
+	}
+	pipe := c.client.TxPipeline()
+	pipe.Set(ctx, c.generationKey(userID), generation, c.fenceTTL())
+	pipe.Set(ctx, c.holdKey(userID), "1", cacheWriteHold)
+	if _, err := pipe.Exec(ctx); err != nil {
+		logging.Warnf("Memory Redis cache generation bump failed for user %s, entries remain cached until TTL: %v", userID, err)
+		return err
 	}
 	idxKey := c.userIndexKey(userID)
 	keys, err := c.client.SMembers(ctx, idxKey).Result()

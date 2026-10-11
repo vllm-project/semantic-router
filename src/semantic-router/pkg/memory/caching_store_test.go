@@ -164,13 +164,18 @@ func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
 	require.NoError(t, wrapped.Store(context.Background(), mem2))
 	_, hit = redisCache.Get(context.Background(), opts)
 	require.False(t, hit, "storing a memory must invalidate the user's cached retrieval")
-	// Next Retrieve must refill Redis with the still-matching coffee memory.
+	// During the write hold a retrieval reads the backend but does not refill Redis.
 	r3, err := wrapped.Retrieve(context.Background(), opts)
 	require.NoError(t, err)
 	require.Len(t, r3, 1)
 	assert.Equal(t, mem.ID, r3[0].Memory.ID)
 	_, hit = redisCache.Get(context.Background(), opts)
-	assert.True(t, hit, "retrieval after invalidation must refill Redis")
+	assert.False(t, hit, "retrieval during the write hold must not refill Redis")
+	require.NoError(t, redisCache.client.Del(context.Background(), redisCache.holdKey("u1")).Err())
+	_, err = wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	_, hit = redisCache.Get(context.Background(), opts)
+	assert.True(t, hit, "retrieval after the hold must refill Redis")
 }
 
 // TestCachingStore_ForgetByScope_InvalidatesCache verifies that ForgetByScope invalidates cache for that user.
