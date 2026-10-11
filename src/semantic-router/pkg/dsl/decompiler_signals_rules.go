@@ -244,6 +244,9 @@ func (d *decompiler) decompileDecisionModelSignals() {
 		if rule.TimeoutMs > 0 {
 			d.write("  timeout_ms: %d\n", rule.TimeoutMs)
 		}
+		if rule.PriorUserTurns > 0 {
+			d.write("  prior_user_turns: %d\n", rule.PriorUserTurns)
+		}
 		d.write("}\n\n")
 	}
 }

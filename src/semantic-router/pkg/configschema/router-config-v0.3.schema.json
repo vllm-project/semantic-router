@@ -2663,6 +2663,9 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "prior_user_turns": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,

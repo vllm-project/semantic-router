@@ -167,6 +167,37 @@ routing:
         - model: large-reasoner
 ```
 
+### 后续轮次
+
+问题读取当前用户轮次。像"Rewrite your previous answer in fewer words"这样的后续请求本身几乎说明不了任务，因此问题还可以通过 `prior_user_turns`（0 到 8）读取更早的用户轮次：
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: auto
+
+routing:
+  signals:
+    decision:
+      - name: request_kind
+        deployment: decision-kai
+        prior_user_turns: 1
+        question:
+          type: choice
+          instructions: What kind of request is the latest user turn?
+          choices:
+            - key: code
+              description: Writing, reviewing or debugging code
+            - key: chat
+              description: Anything else
+```
+
+此时状态依次为最多这么多个更早的用户轮次（从最早开始），然后是当前轮次，中间空一行。更早的轮次共享 1,760 个字符，从最近的轮次往前填充，因此无论问题读取多少轮次，增加的上下文都有同样的上限。助手和工具消息不包含在内。发往同一部署的问题只有在读取相同轮次数时才共用一次调用。在 MT-Bench 的 80 段两轮对话上，对第二轮按其类别做八选一 Choice，仅看该轮时正确率为 41% 到 55%，同时读取第一轮时为 71% 到 84%（Decision 2.0 Kai-0.6B 到 Lux-9B）；在 Vela 2.0 0.3B 到 9B 上分别为 35% 到 51% 和 67.5% 到 87.5%。
+
 ### Set 和 Span 问题 {#set-and-span-questions}
 
 `set` 问题列出标签并询问哪些适用；`span` 问题询问请求中每个标签出现的位置。两者都使用 `labels` 而非 `choices`，每个标签包含 `key` 和可选的 `description`；规则条件通过标签名引用它们：

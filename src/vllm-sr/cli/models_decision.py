@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .models_predicates import NumericPredicate
 
 MAX_DECISION_TIMEOUT_MS = 60_000
+MAX_DECISION_PRIOR_USER_TURNS = 8
 MIN_DECISION_CHOICES = 2
 MAX_DECISION_CHOICES = 255
 MIN_DECISION_LEVELS = 2
@@ -117,6 +118,10 @@ class DecisionSignalRule(BaseModel):
     question: DecisionQuestion
     predicate: NumericPredicate | None = None
     timeout_ms: int | None = Field(default=None, ge=0, le=MAX_DECISION_TIMEOUT_MS)
+    # Earlier user turns read before the current one, oldest first.
+    prior_user_turns: int | None = Field(
+        default=None, ge=0, le=MAX_DECISION_PRIOR_USER_TURNS
+    )
 
     @model_validator(mode="after")
     def validate_rule(self):

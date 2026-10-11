@@ -106,6 +106,25 @@ config:
               - key: chat
                 description: Anything else
           timeout_ms: 10000
+        # testcases/decision_prior_user_turns.go: reads the previous user turn
+        # too, so a conversation's follow-up is a separate call.
+        - name: follow_up_kind
+          description: Which kind of work the latest turn continues.
+          deployment: decision-fixture
+          prior_user_turns: 1
+          question:
+            type: choice
+            instructions: What kind of work does the latest user turn ask for?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: writing
+                description: Prose, poems or other writing
+              - key: chat
+                description: Anything else
+          timeout_ms: 10000
         - name: attached_answered
           description: Matches whenever the attached decision model answers.
           deployment: attached-decisions
@@ -254,6 +273,10 @@ config:
             - {type: decision, name: request_kind, label: code}
             - {type: decision, name: request_kind, label: math}
             - {type: decision, name: request_kind, label: chat}
+            - {type: decision, name: follow_up_kind, label: code}
+            - {type: decision, name: follow_up_kind, label: math}
+            - {type: decision, name: follow_up_kind, label: writing}
+            - {type: decision, name: follow_up_kind, label: chat}
             - {type: decision, name: topics, label: billing}
             - {type: decision, name: topics, label: shipping}
             - {type: decision, name: names, label: city}
