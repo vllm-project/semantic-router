@@ -7886,6 +7886,26 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "GET /health",
+        "tags": [
+          "health"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "getHealthz",

@@ -32,6 +32,15 @@ func StaticFileServer(staticDir string) http.Handler {
 			return
 		}
 
+		// Probe paths must not take the SPA shell: a liveness check
+		// pointed at one of them would read the dashboard's HTML with a
+		// green status as a healthy answer.
+		switch strings.TrimSuffix(p, "/") {
+		case "/health", "/ready", "/live":
+			http.NotFound(w, r)
+			return
+		}
+
 		full := path.Join(staticDir, path.Clean(p))
 
 		// Check if file exists
