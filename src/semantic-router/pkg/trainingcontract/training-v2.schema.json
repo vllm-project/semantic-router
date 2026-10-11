@@ -1167,6 +1167,9 @@
         "required"
       ]
     },
+    "Parameters": {
+      "type": "object"
+    },
     "PlanDiagnostic": {
       "properties": {
         "code": {
@@ -1588,7 +1591,7 @@
           "$ref": "#/$defs/Component"
         },
         "parameters": {
-          "type": "object"
+          "$ref": "#/$defs/Parameters"
         },
         "tasks": {
           "items": {
@@ -2168,7 +2171,7 @@
           "$ref": "#/$defs/Component"
         },
         "parameters": {
-          "type": "object"
+          "$ref": "#/$defs/Parameters"
         },
         "snapshot": {
           "$ref": "#/$defs/DataSnapshot"

@@ -89,6 +89,7 @@ COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observa
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
 COPY src/semantic-router/pkg/routing/ /app/src/semantic-router/pkg/routing/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trainingcontract/
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
