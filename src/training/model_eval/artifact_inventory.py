@@ -155,9 +155,6 @@ DECISION_MODELS = (
     _vela2_decision_model("Vela-2.0-9B", "models/Vela-2.0-9B"),
 )
 
-# The built-in registry's repo-id form of each decision model, the shape
-# ServedModel returns for a managed deployment.
-
 # The built-in registry's repo-id to local-path translation, mirroring
 # DefaultModelRegistry in the Router's config package: decisionModelSpec
 # rewrites a served artifact to its registered local path and leaves an
@@ -204,6 +201,8 @@ _REGISTRY_LOCAL_PATHS = {
     "vllm-sr/multi-modal-embed-small": "models/mom-embedding-multimodal",
 }
 
+# The built-in registry's repo-id form of each decision model, the shape
+# ServedModel returns for a managed deployment.
 DECISION_MODELS_BY_REPO = {
     f"{HF_ORG}/{spec.model.removeprefix(MODEL_PREFIX)}": spec
     for spec in DECISION_MODELS
