@@ -52,6 +52,7 @@ func (c *Client) callModelAsHop(
 			Decision:  options.DecisionName,
 			Recipe:    string(routingRecipeFromContext(ctx)),
 			Iteration: options.Iteration,
+			Stage:     string(options.Stage),
 			// A Looper's calls never fell back across models; the
 			// algorithm owns its candidates.
 			Fallback: fallback.Disabled(),

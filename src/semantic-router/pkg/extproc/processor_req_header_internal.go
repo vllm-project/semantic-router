@@ -6,6 +6,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 var looperInternalContextHeaders = []string{
@@ -58,6 +59,14 @@ func looperHopDecision(ctx *RequestContext) string {
 		return ""
 	}
 	return ctx.Hop.Decision
+}
+
+// looperHopStage is the request-graph stage of the model call a hop makes.
+func looperHopStage(ctx *RequestContext) llmprotocol.TrustedStage {
+	if ctx.Hop == nil {
+		return ""
+	}
+	return llmprotocol.TrustedStage(ctx.Hop.Stage)
 }
 
 // looperHopRecipe names the recipe a hop's decision belongs to.

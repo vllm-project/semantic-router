@@ -20,6 +20,10 @@ type Hop struct {
 	Recipe string
 	// Iteration numbers the hops of one client request from 1.
 	Iteration int
+	// Stage is the call's role in the request graph: candidate, verifier,
+	// advisor, or final. The hop's decision evaluates its tool policy for
+	// this stage; empty names none, which no stage-scoped policy allows.
+	Stage string
 	// Fallback overrides the decision's cross-model fallback for this hop,
 	// field by field: the request-graph step's layer. Nil keeps the
 	// decision's.

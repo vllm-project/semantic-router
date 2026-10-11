@@ -166,6 +166,12 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if err != nil {
 		return r.createErrorResponse(400, "Invalid request body"), nil
 	}
+	// A hop is one model call of the request graph, so the decision's
+	// trusted facts are evaluated for that call's own stage before anything
+	// else reads the request: a candidate attempt is never authorized as the
+	// final answer, and a final-only policy keeps tools from every other
+	// call. A hop that names no stage matches no stage role.
+	r.applyTrustedFactsGate(request, ctx, decision.GetToolsConfig(), looperHopStage(ctx))
 
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil

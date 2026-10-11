@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func validateWorkflowStepResumeState(state *workflowPendingToolState) error {
@@ -68,7 +69,7 @@ func (l *WorkflowsLooper) callWorkflowAgentAfterTool(
 	if err != nil {
 		return nil, nil, err
 	}
-	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, true, state.Iteration+1, req)
+	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, workflowPhaseStage(workflowToolPhase(state)), true, state.Iteration+1, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow tool resume failed for model %q: %w", state.Model, err)
 	}
@@ -126,7 +127,7 @@ func (l *WorkflowsLooper) finishCurrentWorkflowStepAfterResume(
 
 	for modelIndex := state.ModelIndex + 1; modelIndex < len(step.Models); modelIndex++ {
 		modelName := step.Models[modelIndex]
-		nextResp, callErr := l.callWorkflowModel(ctx, state.StepRequest, cfg, modelName, true, workflowResumeModelIteration(state, modelIndex), req)
+		nextResp, callErr := l.callWorkflowModel(ctx, state.StepRequest, cfg, modelName, llmprotocol.TrustedStageCandidate, true, workflowResumeModelIteration(state, modelIndex), req)
 		if callErr != nil {
 			currentFailed = append(currentFailed, FusionFailedModel{Model: modelName, Error: modelFailureReason(callErr)})
 			if cfg.OnError == config.WorkflowOnErrorFail {

@@ -77,13 +77,19 @@ plugins:
   tools database must have loaded successfully within `freshness_seconds`,
   which is required with this source.
 - `stage_roles`: the roles that may receive tools. Request-path selection is
-  the `candidate` stage; Looper execution is the `final` stage.
+  the `candidate` stage. Looper checks each model call at its own stage:
+  Confidence attempts, Ratings calls, Fusion panel members, and Workflows
+  steps are `candidate`; Confidence self-verification is `verifier`; Fusion's
+  separate analysis and the Workflows planner are `advisor`; Fusion synthesis
+  and its quorum fallback, Workflows final synthesis, the ReMoM final round,
+  and the Base Looper's answer are `final`.
 
 Under `authoritative`, a missing authorization or excluded stage removes every
 tool, including the Responses hosted `image_generation` tool. Missing or stale
 availability keeps only the tools the plugin's mode and allow/block lists
 already permit, with no retrieval expansion; `mode: none` still removes every
-tool. Each outcome is recorded on the request's Router Replay record.
+tool. Each outcome is recorded on the Router Replay record of the request,
+or of the Looper call it gated.
 
 Tool selection controls what reaches the model; it does not authorize tool
 execution. Enforce permissions at the tool service and treat tool schemas and

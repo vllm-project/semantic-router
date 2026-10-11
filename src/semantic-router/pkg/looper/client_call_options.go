@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // ModelTarget identifies one concrete model deployment for a Looper call.
@@ -53,6 +55,10 @@ type CallOptions struct {
 	Iteration    int
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
+	// Stage is the call's role in the request graph. Its hop carries it so
+	// the Router evaluates the decision's tool policy for this call, not
+	// for the whole run.
+	Stage llmprotocol.TrustedStage
 
 	// candidateRequest retains admission policy through final wire mutations.
 	// It is request-scoped; a shared Client never stores recipe policy.

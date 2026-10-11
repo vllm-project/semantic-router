@@ -13,13 +13,9 @@ import (
 // trustedFactsRequestStage is the Looper role attributed to request-body tool
 // selection. The request path proposes tool candidates before relevance or
 // learned ranking; final-stage binding is a separate seam and stays denied
-// unless the decision's stage_roles authorize it.
+// unless the decision's stage_roles authorize it. Looper calls are gated per
+// hop at the stage each call names (see looperHopStage).
 const trustedFactsRequestStage = llmprotocol.TrustedStageCandidate
-
-// trustedFactsLooperStage is the role attributed to Looper execution: Looper
-// forwards the tool-bearing request to the models that produce the final
-// answer, so it binds tools at the final stage.
-const trustedFactsLooperStage = llmprotocol.TrustedStageFinal
 
 // trustedFactsNow is the clock for availability freshness; tests override it.
 var trustedFactsNow = time.Now

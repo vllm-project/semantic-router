@@ -113,6 +113,8 @@ type TrustedFactsConfig struct {
 	FreshnessSeconds int `json:"freshness_seconds,omitempty" yaml:"freshness_seconds,omitempty"`
 	// StageRoles lists the Looper stage roles this decision may authorize.
 	// Allowed values are "candidate", "verifier", "advisor", and "final".
+	// Request-path selection is the candidate stage; each Looper model call
+	// is checked at its own stage.
 	// Must declare at least one when Enabled.
 	StageRoles []string `json:"stage_roles,omitempty" yaml:"stage_roles,omitempty"`
 }

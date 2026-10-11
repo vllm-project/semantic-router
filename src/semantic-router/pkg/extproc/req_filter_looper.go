@@ -120,12 +120,9 @@ func (r *OpenAIRouter) handleLooperExecution(
 		}
 		defer r.WorkflowStateService.Release()
 	}
-	// Looper forwards the original tool-bearing request and never reaches
-	// handleToolSelection, so the trusted-facts gate runs here at the final
-	// stage before any model sees the tools.
-	if decision != nil {
-		r.applyTrustedFactsGate(request, reqCtx, decision.GetToolsConfig(), trustedFactsLooperStage)
-	}
+	// Looper never reaches handleToolSelection. Its trusted-facts gate runs
+	// per hop, at each model call's own stage, in
+	// handleLooperInternalRequestWithPlugins.
 	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil

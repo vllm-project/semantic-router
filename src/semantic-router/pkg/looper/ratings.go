@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -120,6 +121,7 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 					DecisionName: req.DecisionName,
 					Iteration:    idx + 1,
 					Mode:         responseMode(req.IsStreaming),
+					Stage:        llmprotocol.TrustedStageCandidate,
 				},
 			)
 
