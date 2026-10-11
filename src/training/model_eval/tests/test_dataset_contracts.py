@@ -5,6 +5,7 @@ import ast
 import importlib
 import importlib.util
 import logging
+import random
 import sys
 import unittest
 from collections.abc import Sequence
@@ -90,12 +91,22 @@ class Split(list):
 def baseline_loader(load_dataset):
     return load_definitions(
         "baseline_tasks.py",
-        {"TaskSpec", "TASK_SPECS", "load_split", "load_rows"},
+        {
+            "TaskSpec",
+            "TASK_SPECS",
+            "load_split",
+            "load_rows",
+            "select_matched_rows",
+            "stratum_of",
+            "MATCHED_SELECTION_SEED",
+        },
         {
             "dataclass": dataclass,
+            "Any": Any,
             "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
             "BaselineError": ValueError,
             "load_dataset": load_dataset,
+            "random": random,
             "concatenate_datasets": lambda parts: Split(
                 row for part in parts for row in part
             ),
@@ -170,21 +181,206 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
-    def test_feedback_split_only_scores_its_legacy_checkpoint(self):
-        namespace = load_definitions(
-            "baseline_tasks.py",
-            {"TaskSpec", "TASK_SPECS"},
-            {
-                "dataclass": dataclass,
-                "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
-                "BaselineError": ValueError,
-            },
-        )
+    def test_feedback_reads_the_pinned_fresh_held_out_set_file_by_file(self):
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "a",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "b",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+            ],
+        }
+        reads = []
+
+        def load_dataset(repo, data_files, split, revision):
+            reads.append((repo, data_files, split, revision))
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
         spec = namespace["TASK_SPECS"]["feedback"]
-        for key in ("id", "lora_id"):
-            spec.validate_artifact(LEGACY_MODEL_REGISTRY["feedback"][key])
-        with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
-            spec.validate_artifact(MODEL_REGISTRY["feedback"]["id"])
+        self.assertEqual(spec.split_rule, "by_source")
+        self.assertRegex(spec.revision, r"^[0-9a-f]{40}$")
+        self.assertEqual(spec.dataset_repo, "vllm-sr/router-signal-suite")
+        self.assertFalse(
+            [name for name in spec.data_files if "feedback-detector" in name]
+        )
+        for repo in (
+            LEGACY_MODEL_REGISTRY["feedback"]["id"],
+            LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
+            MODEL_REGISTRY["feedback"]["id"],
+        ):
+            spec.validate_artifact(repo)
+        mapping = {"SAT": 1, "NO_FEEDBACK": 0}
+        texts, labels, available, matched = namespace["load_rows"](
+            spec, mapping, None, spec.revision
+        )
+        self.assertEqual((texts, labels, available), (["a", "b"], [1, 0], 2))
+        self.assertEqual(spec.match_strata, ("source", "script", "length_bin", "qmark"))
+        self.assertEqual(matched["rows_by_label"], {"NO_FEEDBACK": 1, "SAT": 1})
+        self.assertEqual(matched["selected_by_label"], {"NO_FEEDBACK": 1, "SAT": 1})
+        self.assertEqual(
+            reads,
+            [
+                (spec.dataset_repo, name, "train", spec.revision)
+                for name in spec.data_files
+            ],
+        )
+
+    def test_feedback_fresh_set_is_class_matched_inside_the_stated_strata(self):
+        # The pinned file's shape: every SAT row is a question-mark-free thank,
+        # most other turns are questions, and the shortest bin holds more
+        # NO_FEEDBACK rows than the match keeps.
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "thanks",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "thanks a lot",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 7,
+                },
+                {
+                    "text": "where is it?",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 9,
+                },
+                {
+                    "text": "book a table",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "cheap food",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "a table for two",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "open now",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 7,
+                },
+            ],
+        }
+
+        def load_dataset(repo, data_files, split, revision):
+            return Split(published[data_files])
+
+        mapping = {"SAT": 1, "NO_FEEDBACK": 0}
+
+        def scored():
+            namespace = baseline_loader(load_dataset)
+            spec = namespace["TASK_SPECS"]["feedback"]
+            return namespace["load_rows"](spec, mapping, None, spec.revision)
+
+        texts, labels, available, matched = scored()
+        # The question-mark row shares no stratum with any SAT row, so its
+        # stratum keeps nothing; each kept stratum holds one row per class.
+        self.assertEqual(available, 7)
+        self.assertEqual(matched["rows_by_label"], {"NO_FEEDBACK": 5, "SAT": 2})
+        self.assertEqual(matched["selected_by_label"], {"NO_FEEDBACK": 2, "SAT": 2})
+        self.assertEqual(matched["strata"], ["source", "script", "length_bin", "qmark"])
+        self.assertEqual(matched["seed"], 20261011)
+        self.assertEqual(texts, ["thanks", "thanks a lot", "book a table", "open now"])
+        self.assertEqual(labels, [1, 1, 0, 0])
+        # The seeded draw is stable, so a rerun scores the same rows.
+        again, _, _, _ = scored()
+        self.assertEqual(again, texts)
+        # The draw is the seed's, not the file's order: another seed keeps the
+        # counts and takes a different row from the over-supplied bin.
+        namespace = baseline_loader(load_dataset)
+        select = namespace["select_matched_rows"]
+        spec = namespace["TASK_SPECS"]["feedback"]
+        published_rows = published["text/crosswoz/feedback/fresh-crosswoz.jsonl"]
+        drawn, _ = select(list(published_rows), spec)
+        other, _ = select(list(published_rows), spec, seed=7)
+        self.assertEqual(
+            [row["text"] for row in drawn],
+            ["thanks", "thanks a lot", "book a table", "open now"],
+        )
+        self.assertEqual(other[2]["text"], "a table for two")
+
+    def test_a_question_mark_row_in_a_scored_bin_is_never_a_candidate(self):
+        # The question mark is its own stratum value, so a question in a bin the
+        # SAT rows occupy shares no stratum with them and cannot be drawn.
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "thanks",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "thanks a lot",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "book a table",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "where is it?",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+            ],
+        }
+
+        def load_dataset(repo, data_files, split, revision):
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
+        spec = namespace["TASK_SPECS"]["feedback"]
+        texts, _, available, matched = namespace["load_rows"](
+            spec, {"SAT": 1, "NO_FEEDBACK": 0}, None, spec.revision
+        )
+        self.assertEqual(available, 4)
+        self.assertEqual(matched["rows_by_label"], {"NO_FEEDBACK": 2, "SAT": 2})
+        self.assertEqual(matched["selected_by_label"], {"NO_FEEDBACK": 1, "SAT": 1})
+        self.assertEqual(len(texts), 2)
+        self.assertNotIn("where is it?", texts)
+        self.assertIn("book a table", texts)
 
     def test_fact_check_reads_the_pinned_corpus_matched_test_file_by_file(self):
         # One file carries lang and the other does not, as the published files do.
@@ -219,12 +415,13 @@ class DatasetContractTest(unittest.TestCase):
         ):
             spec.validate_artifact(repo)
         mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
-        texts, labels, available = namespace["load_rows"](
+        texts, labels, available, matched = namespace["load_rows"](
             spec, mapping, None, spec.revision
         )
         self.assertEqual(
             (texts, labels, available), (["a", "b", "c", "d"], [1, 0, 0, 1], 4)
         )
+        self.assertIsNone(matched)
         self.assertEqual(
             reads,
             [
@@ -332,10 +529,11 @@ class DatasetContractTest(unittest.TestCase):
         namespace = domain_baseline()
         spec = namespace["TASK_SPECS"]["domain"]
         self.assertEqual(spec.split_rule, "by_source")
-        texts, labels, available = namespace["load_rows"](
+        texts, labels, available, matched = namespace["load_rows"](
             spec, DOMAIN_SUBSET, None, "revision"
         )
         self.assertEqual((texts, labels, available), (["b", "d"], [1, 0], 2))
+        self.assertIsNone(matched)
         spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
         for key in ("id", "lora_id"):
             with self.assertRaisesRegex(
@@ -345,7 +543,7 @@ class DatasetContractTest(unittest.TestCase):
 
     def test_filtered_domain_report_leaves_labels_without_rows_unmeasured(self):
         namespace = domain_baseline()
-        _, labels, _ = namespace["load_rows"](
+        _, labels, _, _ = namespace["load_rows"](
             namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None, "revision"
         )
         # Perfect predictions on the rows the filter keeps.
