@@ -225,6 +225,8 @@ You can layer a Redis/Valkey hot cache in front of the Valkey memory store for f
         key_prefix: "memory_cache:"
 ```
 
+Every store, update, or delete invalidates that user's cached retrievals. For the next 10 seconds that user's retrievals go to the memory store and are not cached, so a deleted memory cannot be written back into the cache by a slower or slightly stale read.
+
 ## Per-Decision Memory Plugin
 
 Routes can override global memory settings using the `memory` plugin:
