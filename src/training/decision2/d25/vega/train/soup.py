@@ -93,6 +93,7 @@ def build_soup(
         max_length=base["max_length"],
         provenance=provenance,
     )
+    decision.update(base_model=base["base_model"], revision=base["revision"])
     M.export_checkpoint(
         out,
         config=M.load_config(members[0]),
