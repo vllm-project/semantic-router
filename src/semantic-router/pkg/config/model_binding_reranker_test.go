@@ -59,3 +59,50 @@ func TestRAGNeuralRerankBoundsAndRecipeBinding(t *testing.T) {
 		t.Fatal("accepted more retained hits than candidates")
 	}
 }
+
+func TestRAGDecisionBindingIsExplicitAndRejectsNativeOptions(t *testing.T) {
+	deployment := ModelDeployment{Provider: ModelRuntimeProvider}.WithDefaults()
+	binding := ModelBinding{Deployment: "judge", Contract: DecisionTaskContract}
+	if err := validateTaskModelBinding(RAGRerankerConsumer, binding, deployment); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"adapter", "head", "mapping", "exit", "operating", "remote", "truncate"} {
+		t.Run(kind, func(t *testing.T) {
+			b, d := binding, deployment
+			switch kind {
+			case "adapter":
+				b.Adapter = "vela_reranker"
+			case "head":
+				b.Head = "default"
+			case "mapping":
+				b.MappingPath = "labels.json"
+			case "exit":
+				b.PairScorer = &PairScorerSelection{Layer: 22}
+			case "operating":
+				b.OperatingPoint = &OperatingPointReference{}
+			case "remote":
+				d.Provider = "http"
+			case "truncate":
+				d.Input.Overflow = "truncate"
+			}
+			if err := validateTaskModelBinding(RAGRerankerConsumer, b, d); err == nil {
+				t.Fatal("accepted incompatible decision binding")
+			}
+		})
+	}
+}
+
+func TestRAGDecisionCandidateCapIsValidatedBeforeServing(t *testing.T) {
+	count := MaxDecisionRAGCandidates + 1
+	rag := RAGPluginConfig{Enabled: true, Backend: "vectorstore", TopK: &count, Rerank: &RAGRerankConfig{}}
+	decision := Decision{Name: "retrieve", Plugins: []DecisionPlugin{{Type: "rag", Configuration: MustStructuredPayload(rag)}}}
+	cfg := &RouterConfig{}
+	cfg.ModelBindings = map[string]ModelBinding{RAGRerankerConsumer: {Contract: DecisionTaskContract}}
+	if err := validateDecisionRAGAndMemoryPlugins(cfg, &decision); err == nil {
+		t.Fatal("accepted oversized decision ranking batch")
+	}
+	cfg.ModelBindings[RAGRerankerConsumer] = ModelBinding{Contract: RelevanceScoresContract}
+	if err := validateDecisionRAGAndMemoryPlugins(cfg, &decision); err != nil {
+		t.Fatalf("changed native reranker bounds: %v", err)
+	}
+}

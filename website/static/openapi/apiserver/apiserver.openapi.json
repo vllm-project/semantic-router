@@ -14610,7 +14610,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Relevance logits in input order and actual binding identity",
+            "description": "Typed relevance scores in input order and actual binding identity",
             "content": {
               "application/json": {
                 "schema": {
@@ -14768,6 +14768,17 @@
                     "result": {
                       "type": "object",
                       "properties": {
+                        "coverage": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "input_tokens": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
                         "inputs": {
                           "nullable": true,
                           "type": "array",
