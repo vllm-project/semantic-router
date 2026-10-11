@@ -68,6 +68,14 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
     assert signal_names["event"] == {"critical_event"}
 
 
+def test_action_signals_accept_only_the_fixed_vocabulary():
+    signals = Signals(actions=[{"name": "fix"}, {"name": "explain"}])
+
+    assert build_signal_reference_index(signals)["action"] == {"fix", "explain"}
+    with pytest.raises(ValueError, match="actions"):
+        Signals(actions=[{"name": "review"}])
+
+
 def test_signal_reference_exists_is_scoped_by_family_and_exact_runtime_name():
     signal_names = {
         "keyword": {"security"},

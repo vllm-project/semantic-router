@@ -715,6 +715,48 @@ config:
               enabled: true
               system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
               mode: replace
+      - name: explain_action
+        description: Coding requests that ask for an explanation of code or behavior
+        priority: 30
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+            - type: action
+              name: explain
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+      - name: fix_action
+        description: Coding requests that ask to repair a bug or failing behavior
+        priority: 30
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+            - type: action
+              name: fix
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+      - name: generate_action
+        description: Coding requests that ask to write new code
+        priority: 30
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+            - type: action
+              name: generate
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
       - name: reask_escalation
         description: User has repeated a similar question across recent turns without resolution
         priority: 45
@@ -873,6 +915,17 @@ config:
       language:
         - name: es
           description: Spanish-language requests.
+      actions:
+        - name: generate
+          description: Write new code, configuration, or scripts.
+        - name: explain
+          description: Describe code or answer a question without editing anything.
+        - name: fix
+          description: Repair a bug or a failing behavior.
+        - name: refactor
+          description: Change existing code without changing what it does.
+        - name: test
+          description: Write or extend tests.
       reasks:
         - name: repeated_billing_question
           description: Current user turn closely repeats the last two billing complaints.

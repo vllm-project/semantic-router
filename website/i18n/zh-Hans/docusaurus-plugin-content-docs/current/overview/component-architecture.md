@@ -23,7 +23,7 @@ vLLM-SR 由请求前端、可选的路由决策引擎和模型服务资源组成
 | 组件 | 职责 |
 | --- | --- |
 | **Frontend（前端）** | 接收请求、执行 listener 访问控制、适配 API 协议。 |
-| **Decision Engine（决策引擎）** | 将路由入口解析到配方，执行信号和策略，选择或协调 Chat 后端。 |
+| **Decision Engine（决策引擎）** | 将路由入口解析到配方，执行信号和决策，协调 Chat 或原生判断模型后端。 |
 | **Serving Engine / 模型运行时** | 通过受管或附加 worker 运行判断、分类、embedding 和重排序模型。 |
 | **Chat 后端** | 通过你部署的 vLLM、Ollama 或提供方服务生成回答。 |
 
@@ -45,7 +45,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
 
 [![协议适配、配方决策阶段、任务绑定，以及当前原生 API 的直达路径](/img/architecture/system-one/02-frontend-and-decision-engine.svg)](/img/architecture/system-one/02-frontend-and-decision-engine.svg)
 
-经过路由的 Chat 请求主要遵循以下策略路径：
+经过路由的请求主要遵循以下决策路径：
 
 1. 将公开模型名解析到入口及其配方。
 2. 执行所需的 **signals（信号）**，计算 **projections（投影）**。
@@ -55,7 +55,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
 
 配方插件在各自的请求、执行或响应钩子上运行，并不是全部排在选模后的最后一步。依赖模型的任务通过自己的 binding 解析部署，与它们帮助选择的 Chat 后端分离。策略编写见[路由流水线](signal-driven-decisions)。
 
-Chat Completions、Responses 和 Messages 使用协议 codec；System One 有独立的类型化请求 handler。当前 System One 直接调用已发布的具体 deployment，不进入配方路由。具体 Chat 后端 ID 也会绕过配方信号、决策和插件。
+Chat Completions、Responses 和 Messages 使用协议 codec；System One 有独立的类型化请求 handler。具体原生模型 ID 直接调用模型，不执行配方；显式发布的原生入口则进入其 System One 配方。具体 Chat 后端 ID 也会绕过配方信号、决策和插件。原生配方支持的信号和算法范围比 Chat 配方更窄，见[级联指南（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)。
 
 ### 区分公共 API 与 worker API {#keep-public-and-worker-apis-distinct}
 
@@ -86,13 +86,41 @@ vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 
 DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](../model-runtime/deploy)和 [Profiles](../model-runtime/profiles)。
 
-## Roadmap：让 System One 在判断模型之间路由 {#roadmap-route-system-one-across-decision-models}
+## 在判断模型之间路由 System One {#route-system-one-across-decision-models}
 
-[![规划中的 System One auto 配方选择本地、独立服务或外部判断模型后端](/img/architecture/system-one/04-system-one-auto-roadmap.svg)](/img/architecture/system-one/04-system-one-auto-roadmap.svg)
+```mermaid
+flowchart LR
+    Request["System One 请求"] --> Frontend["Frontend codec + listener 授权"]
+    Frontend -->|"具体模型"| Backends
+    Frontend -->|"原生入口"| Recipe["配方：signals → decision"]
+    Recipe --> Algorithm["有界级联"]
+    Algorithm --> Backends
+    subgraph Backends["显式声明的模型后端"]
+        Local["本地模型运行时"]
+        Engine["远程 Engine 前端"]
+        External["兼容 Decision API"]
+    end
+    Local --> Replicas["就绪副本"]
+    Engine --> RemoteReplicas["就绪副本"]
+    Backends --> Evidence["完整类型化回答 + 证据"]
+    Evidence -->|"下一阶段"| Algorithm
+    Evidence -->|"接受"| Result["原生响应"]
+```
 
-最后一张图是**规划中的扩展**，不是当前请求路径。目标是让 System One 的 `vllm-sr/auto` 入口选择配方，复用 signals、decisions 和 algorithms，选择一个兼容的判断模型后端。候选可以是本地 deployment、独立的 vLLM-SR Engine 服务，或外部判断模型 provider。选定 deployment 后，再由它选择自己的副本；不是向所有模型广播请求。
+显式声明的 `api: systemone` 入口选择独立的原生配方。配方的信号和决策选择实验性的
+`cascade` 算法。每个级联保持 Choice / Score / Noul 问题包完整，在自己的 deadline
+和调用次数预算内访问已声明的判断模型后端。信号先于算法执行，使用自己的超时和
+请求取消机制，不消耗随后选中算法的预算。后端可以是本地 deployment、独立的
+vLLM-SR Engine 服务，或兼容的外部 System One API。
 
-当前原生模型发现返回的是 `routing: false` 的具体模型；请求 System One 路由入口会得到 `systemone_routing_not_supported`。请在当前 API 中使用已发布的具体模型 ID。Chat 默认入口 `vllm-sr/auto` 不会隐式启用原生 auto 路由。
+配方负责选模型；每个 deployment 再选择自己的副本。级联先运行快速阶段，只有
+接受条件不满足时才继续。可选的 LLM judge 可以选择完整的已有候选或弃权，不能
+制造原生概率。完整配置见 [System One 级联（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)。
+
+原生模型发现区分具体模型（`routing: false`）和已发布的原生配方
+（`routing: true`），两者都需要 listener 显式授权。默认 Chat 入口
+`vllm-sr/auto` 不会隐式启用原生 auto；Engine 模式继续直接服务具体模型，
+不执行配方。
 
 ## 下一步 {#next}
 

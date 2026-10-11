@@ -12,6 +12,7 @@ from cli.envoy_backend_pool import project_envoy_backend_group
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
 from cli.models import BackendRef, Model, UserConfig
+from cli.validation_error import ValidationError
 
 
 class CatalogProviderProjectionError(ValueError):
@@ -28,6 +29,7 @@ _API_FORMAT_TO_PROTOCOL = {
     "openai": "openai/chat-completions@1",
     "responses": "openai/responses@1",
     "anthropic": "anthropic/messages@1",
+    "systemone": "vllm-sr/systemone@1",
 }
 _PROTOCOL_TO_API_FORMAT = {
     protocol: api_format for api_format, protocol in _API_FORMAT_TO_PROTOCOL.items()
@@ -82,9 +84,13 @@ def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, .
     snapshot consumed by the Router and Dashboard.
     """
 
-    return _project_provider_models(
-        user_config,
-        allow_backendless_physical=False,
+    return tuple(
+        model
+        for model in _project_provider_models(
+            user_config,
+            allow_backendless_physical=False,
+        )
+        if model.api_format != "systemone"
     )
 
 
@@ -109,6 +115,25 @@ def validate_provider_model_configuration(
             project_envoy_backend_group(model)
         except ValueError as backend_error:
             raise CatalogProviderProjectionError(str(backend_error)) from backend_error
+
+
+def provider_projection_errors(config: UserConfig) -> list[ValidationError]:
+    """Return provider projection failures without mutating the authored config.
+
+    Projection works on deep copies and resolves only structural catalog
+    defaults. It does not read provider credentials.
+    """
+
+    try:
+        validate_provider_model_configuration(
+            config,
+            allow_backendless_physical=(
+                "listeners" in config.model_fields_set and not config.listeners
+            ),
+        )
+    except CatalogProviderProjectionError as projection_error:
+        return [ValidationError(str(projection_error))]
+    return []
 
 
 def _project_provider_models(
@@ -174,6 +199,7 @@ def _validate_physical_backend_requirement(
 
     if (
         model.backend_refs
+        or model.deployment
         or card.get("kind") == "virtual"
         or allow_backendless_physical
     ):
@@ -487,7 +513,7 @@ def _protocol_for_api_format(api_format: str, path: str) -> str:
     if protocol is None:
         raise CatalogProviderProjectionError(
             f"{path}.api_format {api_format!r} is unsupported; use openai, "
-            "responses, or anthropic"
+            "responses, anthropic, or systemone"
         )
     return protocol
 

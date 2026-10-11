@@ -738,6 +738,319 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/decision-model/routes": {
+      "get": {
+        "operationId": "listDecisionRoutes",
+        "summary": "List active System One routes",
+        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm execution deadline in the recipe; signals have separate timeouts.",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Frontend route inventory with available and routes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request wrapper or native request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The frontend endpoint or selected route is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request exceeds 2 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The frontend is unreachable or returned an invalid response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The frontend or selected algorithm deadline elapsed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      },
+      "post": {
+        "operationId": "runDecisionRoute",
+        "summary": "Run an active System One route",
+        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. The selected algorithm controls its execution deadline and physical call budget; signals use their own timeouts.",
+        "tags": [
+          "decision-model"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "description": "An active route model alias and the original native request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "request": {
+                    "type": "object",
+                    "description": "System One request containing state and named questions; validated by the configured frontend",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "model",
+                  "request"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Selected native response with routing outcome: recipe, decision, algorithm, stage, selected_model, quality, and model_calls",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request wrapper or native request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Text for Dashboard authentication or permission failures; JSON for a frontend management authorization failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The frontend endpoint or selected route is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request exceeds 2 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The frontend is unreachable or returned an invalid response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The frontend or selected algorithm deadline elapsed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "evaluation.run",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "evaluation",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 2097152,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/decision-model/tasks": {
       "get": {
         "operationId": "getApiDecisionModelTasks",

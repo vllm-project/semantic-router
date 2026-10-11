@@ -159,8 +159,9 @@ usage cannot be priced from the final selected model alone. Dashboard can
 select registered targets but cannot edit their destinations or credentials.
 
 A target with `session_mode: session_aware` sends one session identity per task
-on its subject calls; [Read the results](./results.md) describes the header and
-the report label. Targets are `stateless` by default.
+on its subject calls. Configure the mode on each registered target; targets are
+`stateless` by default. See [the results guide](./results.md) for request headers
+and report labels.
 
 An operator can freeze native generation settings in a target's `request_params`.
 These settings override the run's `sampling` defaults, including temperature,
