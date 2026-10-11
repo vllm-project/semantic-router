@@ -44,7 +44,7 @@ Conversion uses PyTorch 2.7 and coremltools 9.0. We checked the Core ML release 
 | | d3-lite | d3-nano | d3-mini |
 |---|---|---|---|
 | **JevBench public** (231 tasks), PyTorch → Core ML | 73.2% → **74.0%** | 75.3% → **75.8%** | 81.8% → **81.8%** |
-| **typed-decisions TEST** (2,000 questions), PyTorch → Core ML | 51.6% → **51.6%** | 62.7% → **62.7%** | running |
+| **typed-decisions TEST** (2,000 questions), PyTorch → Core ML | 51.6% → **51.6%** | 62.7% → **62.7%** | 73.6% → **73.9%** |
 | Median JevBench request, PyTorch → Core ML | 204 → **53 ms** | 173 → **69 ms** | 438 → **169 ms** |
 | Download | 3.7 GB | 10.5 GB | 19.6 GB |
 
