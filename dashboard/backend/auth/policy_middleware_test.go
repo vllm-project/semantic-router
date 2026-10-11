@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"database/sql"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -345,14 +347,30 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 	if response.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("handshake status = %d", response.StatusCode)
 	}
-	var recordedStatus int
-	if err := svc.store.db.QueryRow(`SELECT status_code FROM user_audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1`,
-		"probe.ws.connect").Scan(&recordedStatus); err != nil {
-		t.Fatal(err)
-	}
+	recordedStatus := waitForAuditStatus(t, svc.store.db, "probe.ws.connect")
 	if recordedStatus != http.StatusSwitchingProtocols {
 		t.Fatalf("audited handshake status = %d, want 101", recordedStatus)
 	}
+}
+
+// waitForAuditStatus polls for the newest audit row of one action. The record
+// is written by the server goroutine after the upgraded handler returns, so a
+// single query races the insert and fails with "sql: no rows in result set"
+// when the query wins (#4582).
+func waitForAuditStatus(t *testing.T, db *sql.DB, action string) int {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var status int
+		err := db.QueryRow(`SELECT status_code FROM user_audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1`,
+			action).Scan(&status)
+		if err == nil {
+			return status
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("no audit row for %s arrived within the deadline", action)
+	return 0
 }
 
 func TestMutationRejectsRevocationWhileBodyIsPaused(t *testing.T) {
