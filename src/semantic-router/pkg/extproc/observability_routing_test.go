@@ -304,7 +304,7 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 			headers := &ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
 				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}}},
 			}}
-			if err := router.processResponseHeaders(stream, headers, ctx); err != nil {
+			if err := router.processResponseHeaders(stream, &ext_proc.ProcessingRequest{}, headers, ctx); err != nil {
 				t.Fatal(err)
 			}
 			body := []byte(`{"id":"fixture","object":"chat.completion","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"fixture response"},"finish_reason":"stop"}]}`)
@@ -351,7 +351,7 @@ func TestRoutingTraceSkipProcessingPreservesHTTPStatus(t *testing.T) {
 	ctx := &RequestContext{SkipProcessing: true}
 	ctx.TraceContext, ctx.RequestSpan = tracing.StartSpan(t.Context(), tracing.SpanRequest)
 	router := &OpenAIRouter{}
-	if err := router.processResponseHeaders(NewMockStream(nil), &ext_proc.ProcessingRequest_ResponseHeaders{
+	if err := router.processResponseHeaders(NewMockStream(nil), &ext_proc.ProcessingRequest{}, &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{EndOfStream: true, Headers: &core.HeaderMap{
 			Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}},
 		}},

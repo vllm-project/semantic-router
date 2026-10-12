@@ -1,13 +1,16 @@
-"""The Decision 3.0 model family plugin: d3 code-readout packages, with image inputs.
+"""The Decision 3.0 model family plugin: d3 code-readout packages, with image and video inputs.
 
 A question is one prompt (``prompt.py``) whose options are listed under
 single-token answer codes. The backbone reads it left-padded with noncausal
 full attention, and the FP32 readout scores the question's codes at the last
 position: softmax over the codes at the package temperature, then the answer.
 A request's questions run in request order, eight per forward pass, as the
-released runtime runs them. Images (``images.py``) are shared by every
-question of a request; each question of a pass carries its own copy of them
-through the vision tower, as the released runtime's processor hands them on.
+released runtime runs them. Images (``images.py``) and videos (``videos.py``)
+are shared by every question of a request. Without videos, each question of a
+pass carries its own copy of the images through the vision tower, as the
+released runtime's processor hands them on; with videos, the tower reads the
+request's images and videos once and every question reuses their features, as
+the d3 runtime does.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ from ...plugins.base import (
     ModelSpec,
     PackageRef,
     VerifiedPackage,
+    VideoInputs,
 )
 from ...plugins.decisions import DecisionModel, RequestPlan
 from ...registry import builtin, policy
@@ -54,6 +58,7 @@ from ...systemone import (
 from . import images as img
 from . import package as pkg
 from . import prompt
+from . import videos as vid
 
 __all__ = ["Decision3Family", "Decision3Model"]
 
@@ -91,11 +96,22 @@ GOLDEN_IMAGE_QUESTIONS = {
 
 
 @dataclass(frozen=True)
-class RequestImages:
-    """A request's processed images, shared by its questions; their patch rows are copied to a device once."""
+class RequestMedia:
+    """A request's processed images and videos, shared by its questions.
+
+    The images' patch rows are copied to a device once (``rows_on``). With
+    videos, the tower's features of the images and of the videos are computed
+    once per device (``features``). ``video_ids`` holds each video's
+    placeholder expansion as token IDs.
+    """
 
     images: tuple[img.ProcessedImage, ...]
+    videos: tuple[vid.ProcessedVideo, ...] = ()
+    video_ids: tuple[tuple[int, ...], ...] = ()
     placed: dict[str, torch.Tensor] = field(
+        default_factory=dict, compare=False, repr=False
+    )
+    features: dict[str, tuple[torch.Tensor, torch.Tensor]] = field(
         default_factory=dict, compare=False, repr=False
     )
 
@@ -112,14 +128,14 @@ class RequestImages:
 
 @dataclass(frozen=True)
 class Item:
-    """One rendered question: its full token IDs (image placeholders expanded) and how its answer reads."""
+    """One rendered question: its full token IDs (media placeholders expanded) and how its answer reads."""
 
     question_id: str
     task_type: str
     ids: list[int]
     keys: list[str]
     descriptions: list[Any]
-    images: RequestImages | None = None
+    media: RequestMedia | None = None
 
 
 class Decision3Family(ModelFamily):
@@ -134,7 +150,7 @@ class Decision3Family(ModelFamily):
             "surfaces": sorted(cls.surfaces),
             "formats": [pkg.MANIFEST_SCHEMA],
             "question_types": ["choice", "noul", "score"],
-            "modalities": ["text", "image"],
+            "modalities": ["text", "image", "video"],
         }
 
     def detect(self, package: PackageRef) -> bool:
@@ -240,7 +256,19 @@ class Decision3Family(ModelFamily):
         image_token = backend.token_to_id(prompt.IMAGE_TOKEN)
         if reads_images and image_token != details.config.get("image_token_id"):
             raise PackageError("the tokenizer's image token differs from config.json")
-        limits = {
+        video_settings = (
+            vid.VideoSettings.from_config(details.video_config)
+            if settings is not None
+            and details.video_config is not None
+            and vid.available() is None
+            else None
+        )
+        video_token = backend.token_to_id(prompt.VIDEO_TOKEN)
+        if video_settings is not None and video_token != details.config.get(
+            "video_token_id"
+        ):
+            raise PackageError("the tokenizer's video token differs from config.json")
+        limits: dict[str, Any] = {
             "max_input_tokens": package.max_input_tokens,
             "min_options": MIN_OPTIONS,
             "max_options": MAX_OPTIONS,
@@ -253,6 +281,18 @@ class Decision3Family(ModelFamily):
                 "image_source_max_pixels": img.MAX_SOURCE_PIXELS,
                 "image_max_bytes": img.MAX_IMAGE_BYTES,
             }
+        modalities: tuple[str, ...] = ("text", "image") if settings else ("text",)
+        if video_settings is not None:
+            limits |= {
+                "video_fps": vid.FPS,
+                "video_max_frames": vid.MAX_FRAMES,
+                "video_max_pixels": vid.MAX_PIXELS,
+                "video_max_tokens": vid.MAX_TOKENS,
+                "video_max_bytes": vid.MAX_VIDEO_BYTES,
+                "video_max_seconds": vid.MAX_SECONDS,
+                "video_source_max_pixels": vid.MAX_SOURCE_PIXELS,
+            }
+            modalities += ("video",)
         info = ModelInfo(
             id=package.model_name,
             family=self.name,
@@ -266,7 +306,7 @@ class Decision3Family(ModelFamily):
             licence=package.licence,
             parameters=parameters,
             dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
-            modalities=("text", "image") if settings is not None else ("text",),
+            modalities=modalities,
         )
         return Decision3Model(
             info,
@@ -277,6 +317,8 @@ class Decision3Family(ModelFamily):
             decision,
             settings,
             image_token,
+            video_settings,
+            video_token,
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
@@ -354,6 +396,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         decision: dict[str, Any],
         settings: img.ProcessorSettings | None,
         image_token: int | None,
+        video_settings: vid.VideoSettings | None = None,
+        video_token: int | None = None,
     ):
         self.info = info
         self.engine_model = engine_model
@@ -364,6 +408,9 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.temperature = float(decision.get("temperature", 1.0))
         self.settings = settings
         self.image_token = image_token
+        self.video_settings = video_settings
+        self.video_token = video_token
+        self.video_inputs = video_settings is not None
         self.limit = info.limits["max_input_tokens"]
 
     def forward_token_budget(self) -> int | None:
@@ -420,12 +467,16 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self,
         state: Any,
         questions: dict[str, Any],
-        images: RequestImages | None,
+        media: RequestMedia | None,
     ) -> RequestPlan[Item]:
         if not valid_state(state):
             raise ValueError("state must be text, an object, or an array")
-        count = len(images.images) if images else 0
-        visual = sum(image.tokens for image in images.images) if images else 0
+        images = len(media.images) if media else 0
+        videos = len(media.videos) if media else 0
+        visual = 0
+        if media:
+            visual += sum(image.tokens for image in media.images)
+            visual += sum(len(ids) for ids in media.video_ids)
         items: list[Item] = []
         errors: dict[str, dict[str, Any]] = {}
         tokens = 0
@@ -434,31 +485,33 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             try:
                 kind, instructions, keys, texts, descriptions = self._question(question)
                 text = prompt.render(
-                    prompt.user_prompt(state, instructions, texts, self.codes), count
+                    prompt.user_prompt(state, instructions, texts, self.codes),
+                    images,
+                    videos,
                 )
-                if images and (
-                    text.count(prompt.IMAGE_TOKEN) != count
-                    or prompt.VIDEO_TOKEN in text
+                if media and (
+                    text.count(prompt.IMAGE_TOKEN) != images
+                    or text.count(prompt.VIDEO_TOKEN) != videos
                 ):
                     raise QuestionError(
                         INVALID_QUESTION,
                         "the state or question contains a literal image or video placeholder token",
                     )
                 ids = self.tokenizer.encode(text, add_special_tokens=False).ids
-                length = len(ids) - count + visual
+                length = len(ids) - images - videos + visual
                 if length > self.limit:
                     raise QuestionError(
                         MAX_LENGTH_EXCEEDED,
                         f"the question prompt has {length} tokens, over the maximum context length of "
                         f"{self.limit} tokens; nothing was truncated",
                     )
-                if images:
-                    ids = self._expand(ids, images)
+                if media:
+                    ids = self._expand(ids, media)
             except QuestionError as exc:
                 errors[question_id] = question_error(kind, exc)
                 continue
             tokens += len(ids)
-            items.append(Item(question_id, kind, ids, keys, descriptions, images))
+            items.append(Item(question_id, kind, ids, keys, descriptions, media))
         return RequestPlan(
             question_ids=list(questions),
             items=items,
@@ -473,13 +526,17 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             ),
         )
 
-    def _expand(self, ids: list[int], images: RequestImages) -> list[int]:
-        """Each image placeholder repeated once per input token of its image, images in order."""
+    def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
+        """Each image placeholder repeated once per input token of its image, and each video placeholder as its
+        expansion (timestamped frame pairs), images and videos in order."""
         out: list[int] = []
-        pending = iter(images.images)
+        images = iter(media.images)
+        videos = iter(media.video_ids)
         for token in ids:
             if token == self.image_token:
-                out.extend([token] * next(pending).tokens)
+                out.extend([token] * next(images).tokens)
+            elif media.videos and token == self.video_token:
+                out.extend(next(videos))
             else:
                 out.append(token)
         return out
@@ -490,7 +547,11 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return self._plan(state, questions, None)
 
     def plan_images(
-        self, state: Any, questions: dict[str, Any], images: list[Any]
+        self,
+        state: Any,
+        questions: dict[str, Any],
+        images: list[Any],
+        videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
         if self.settings is None:
             raise ValueError(
@@ -503,7 +564,46 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 processed.append(img.preprocess(picture, digest, self.settings))
             except ValueError as exc:
                 raise ValueError(f"images[{number}]: {exc}") from exc
-        return self._plan(state, questions, RequestImages(tuple(processed)))
+        clips: list[vid.ProcessedVideo] = []
+        if videos:
+            settings = self.video_settings
+            if settings is None:
+                raise ValueError(f"model {self.info.id} reads no videos")
+            decoded = []
+            for number, value in enumerate(videos):
+                try:
+                    decoded.append(vid.decode(value))
+                except ValueError as exc:
+                    raise ValueError(f"videos[{number}]: {exc}") from exc
+            try:
+                planned = sum(
+                    vid.input_tokens(settings, *clip.frames.shape[:3])
+                    for clip in decoded
+                )
+            except ValueError as exc:
+                raise ValueError(f"video rejected by the processor: {exc}") from exc
+            if planned > vid.MAX_TOKENS:
+                raise ValueError(
+                    f"the videos take {planned:,} input tokens, over the {vid.MAX_TOKENS:,} tokens a "
+                    "request may spend on videos; send fewer or shorter videos"
+                )
+            clips = [vid.preprocess(clip, settings) for clip in decoded]
+        expansions = tuple(
+            tuple(
+                self.tokenizer.encode(
+                    clip.placeholder(
+                        prompt.VISION_START, prompt.VIDEO_TOKEN, prompt.VISION_END
+                    ),
+                    add_special_tokens=False,
+                ).ids
+            )
+            for clip in clips
+        )
+        return self._plan(
+            state,
+            questions,
+            RequestMedia(tuple(processed), tuple(clips), expansions),
+        )
 
     # ------------------------------------------------------------------ forwards
 
@@ -513,7 +613,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         start = 0
         while start < len(items):
             end = start + 1
-            while end < len(items) and items[end].images is items[start].images:
+            while end < len(items) and items[end].media is items[start].media:
                 end += 1
             out.extend(self._pass(items[start:end]))
             start = end
@@ -530,9 +630,24 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             )
             mask[row, width - len(item.ids) :] = 1
         last = torch.full((rows,), width - 1, dtype=torch.long)
-        shared = items[0].images
+        shared = items[0].media
         images = None
-        if shared is not None:
+        if shared is not None and shared.videos:
+            assert self.image_token is not None and self.video_token is not None
+            image_features, video_features = self._features(shared)
+            images = ImageInputs(
+                pixel_values=None,
+                grids=[image.grid for _ in items for image in shared.images],
+                token_id=self.image_token,
+                tower=VISION_TOWER,
+                features=torch.cat([image_features] * rows),
+                videos=VideoInputs(
+                    features=torch.cat([video_features] * rows),
+                    grids=[clip.grid for _ in items for clip in shared.videos],
+                    token_id=self.video_token,
+                ),
+            )
+        elif shared is not None:
             assert self.image_token is not None
             placed = shared.rows_on(self.engine_model.device)
             images = ImageInputs(
@@ -568,6 +683,30 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             ).softmax(-1)
             values = probs.cpu().tolist()
         return [row[: len(item.keys)] for row, item in zip(values, items, strict=True)]
+
+    def _features(self, media: RequestMedia) -> tuple[torch.Tensor, torch.Tensor]:
+        """The tower's features of a request's images and of its videos (one call each), once per device."""
+        device = self.engine_model.device
+        cached = media.features.get(str(device))
+        if cached is None:
+            engine = self.engine_model
+            if media.images:
+                image_features = engine.tower_features(
+                    VISION_TOWER,
+                    media.rows_on(device),
+                    [image.grid for image in media.images],
+                )
+            else:
+                image_features = torch.empty(
+                    (0, self.readout.shape[1]), device=device, dtype=torch.bfloat16
+                )
+            video_features = engine.tower_features(
+                VISION_TOWER,
+                torch.cat([clip.pixel_values for clip in media.videos]).to(device),
+                [clip.grid for clip in media.videos],
+            )
+            cached = media.features[str(device)] = (image_features, video_features)
+        return cached
 
     def answer(self, item: Any, values: list[float] | None) -> dict[str, Any]:
         if values is None:
