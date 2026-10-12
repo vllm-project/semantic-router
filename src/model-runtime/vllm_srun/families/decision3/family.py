@@ -25,6 +25,7 @@ from ...errors import (
     INVALID_MODEL_OUTPUT,
     INVALID_QUESTION,
     MAX_LENGTH_EXCEEDED,
+    MediaError,
     PackageError,
     QuestionError,
     question_error,
@@ -554,25 +555,32 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
         if self.settings is None:
-            raise ValueError(
-                f"model {self.info.id} has no vision tower; images are not supported"
+            raise MediaError(
+                "image_unsupported",
+                f"model {self.info.id} has no vision tower; images are not supported",
             )
         processed = []
         for number, value in enumerate(images):
             try:
                 picture, digest = img.decode(value)
                 processed.append(img.preprocess(picture, digest, self.settings))
+            except MediaError as exc:
+                raise exc.at(f"images[{number}]") from exc
             except ValueError as exc:
                 raise ValueError(f"images[{number}]: {exc}") from exc
         clips: list[vid.ProcessedVideo] = []
         if videos:
             settings = self.video_settings
             if settings is None:
-                raise ValueError(f"model {self.info.id} reads no videos")
+                raise MediaError(
+                    "video_unsupported", f"model {self.info.id} reads no videos"
+                )
             decoded = []
             for number, value in enumerate(videos):
                 try:
                     decoded.append(vid.decode(value))
+                except MediaError as exc:
+                    raise exc.at(f"videos[{number}]") from exc
                 except ValueError as exc:
                     raise ValueError(f"videos[{number}]: {exc}") from exc
             try:
@@ -580,12 +588,18 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                     vid.input_tokens(settings, *clip.frames.shape[:3])
                     for clip in decoded
                 )
+            except MediaError as exc:
+                raise exc.at("video rejected by the processor") from exc
             except ValueError as exc:
-                raise ValueError(f"video rejected by the processor: {exc}") from exc
+                raise MediaError(
+                    "video_malformed", f"video rejected by the processor: {exc}"
+                ) from exc
             if planned > vid.MAX_TOKENS:
-                raise ValueError(
+                raise MediaError(
+                    "video_tokens",
                     f"the videos take {planned:,} input tokens, over the {vid.MAX_TOKENS:,} tokens a "
-                    "request may spend on videos; send fewer or shorter videos"
+                    "request may spend on videos; send fewer or shorter videos",
+                    vid.MAX_TOKENS,
                 )
             clips = [vid.preprocess(clip, settings) for clip in decoded]
         expansions = tuple(
