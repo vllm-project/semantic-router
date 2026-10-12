@@ -98,11 +98,11 @@ d3-lite handles the demo where speed matters; d3-mini handles screenshots and vi
   Every move, d3-lite answers three yes/no questions about close-ups just ahead of Mario. Right: its answers and time per decision. Bottom: GPU load and the decision log.
 </ArticleVideo>
 
-**Play Super Mario Bros. (d3-flash, then a distilled d3-lite).** While Mario is on the ground, the game pauses and d3 answers three yes/no questions about close-ups just ahead of him: is there an enemy, a pipe or step, a gap? Mario jumps if any answer is yes, and runs otherwise. The harness reads Mario's position from the emulator's memory and plays fixed button moves; d3 only answers the questions. The setup is the one JEV-9B used to clear World 1-1.
+**Play Super Mario Bros.: a proof of concept.** d3 is a general decision model, not a game agent, and nothing here was built for Mario. We gave it the setup JEV-9B used to clear World 1-1. While Mario is on the ground, the game pauses and d3 answers three plain yes/no questions about close-ups just ahead of him: is there an enemy, a pipe or step, a gap? Mario jumps if any answer is yes, and runs otherwise. The harness reads Mario's position from the emulator's memory and plays fixed button moves; d3 only answers the questions.
 
-Out of the box, d3-lite, d3-nano and d3-mini don't finish the level. **d3-flash 9B clears 1-1 on Core ML in 56 decisions, at 1.25 s per decision.** It's converted as 8 chained 4-layer parts with 8-bit weights, so it fits on a 24 GB Mac.
+**d3-flash 9B clears 1-1 out of the box, on Core ML, in 56 decisions at 1.25 s per decision.** It gets no game-specific prompt, examples or training: just the same Choice / Noul interface it uses for routing and policy questions. d3-flash is converted as 8 chained 4-layer parts with 8-bit weights, so it fits on a 24 GB Mac. The smaller sizes don't finish the level on their own.
 
-We then distilled d3-flash into d3-lite: a LoRA trained only on d3-flash's answers to the same three questions, over states from 28 of the 32 levels (4 held out for testing). **The distilled d3-lite clears 1-1 on Core ML in 65 decisions, at 0.31 s per decision**: 4× faster than its teacher, with the same three questions and the same harness.
+Distillation closes that gap. A d3-lite LoRA trained only on d3-flash's answers to the same three questions (states from 28 of the 32 levels, 4 held out) **clears 1-1 on Core ML in 65 decisions at 0.31 s per decision**, 4× faster than its teacher.
 
 ## Try it
 
