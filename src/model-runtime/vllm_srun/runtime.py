@@ -150,7 +150,7 @@ __all__ = [
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "images", "options"},
+    "decisions": {"model", "state", "questions", "images", "videos", "options"},
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
