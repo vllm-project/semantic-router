@@ -4,7 +4,7 @@ description: 用持久的前端伺候决策模型、放置独立副本，以及�
 translation:
   source_commit: "b7af14a25907821546549e86fd688cbb946f1cb6"
   source_file: "docs/model-runtime/deploy.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
