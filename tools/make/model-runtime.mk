@@ -12,10 +12,18 @@ OAPI_CODEGEN_VERSION ?= v2.4.1
 
 ##@ Model runtime
 
+# The lock is compiled for the image's Python. test-local.yml installs the
+# runtime on 3.11 through vllm-sr-test-integration, so the constraint is gated
+# on the interpreter it was compiled for; any other version installs without
+# pins it cannot resolve.
 model-runtime-install: ## Install the model runtime with CPU PyTorch, every engine and its test extras
 	@$(LOG_TARGET)
 	@"$(MODEL_RUNTIME_PYTHON)" -m pip install "$(MODEL_RUNTIME_TORCH)" --index-url "$(MODEL_RUNTIME_TORCH_INDEX)"
-	@"$(MODEL_RUNTIME_PYTHON)" -m pip install -c "$(MODEL_RUNTIME_DIR)/requirements-lock.txt" -e "$(MODEL_RUNTIME_DIR)[test,reference,onnx,multimodal]"
+	@if "$(MODEL_RUNTIME_PYTHON)" -c 'import sys; sys.version_info[:2] == (3, 12)'; then \
+		"$(MODEL_RUNTIME_PYTHON)" -m pip install -c "$(MODEL_RUNTIME_DIR)/requirements-lock.txt" -e "$(MODEL_RUNTIME_DIR)[test,reference,onnx,multimodal]"; \
+	else \
+		"$(MODEL_RUNTIME_PYTHON)" -m pip install -e "$(MODEL_RUNTIME_DIR)[test,reference,onnx,multimodal]"; \
+	fi
 
 model-runtime-test: ## Type-check the runtime, its engines and families, and run the model runtime tests on CPU (tiny fixtures; GPU and full-weight cases are deselected)
 	@$(LOG_TARGET)
