@@ -762,7 +762,7 @@ def serve(
             context,
             profile,
             chart_dir,
-            resolve_container_runtime(ctx, container_runtime, runtime),
+            runtime,
             recipe_env_names,
             startup_timeout,
             gateway,
