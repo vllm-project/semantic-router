@@ -19,7 +19,7 @@ const (
 	workflowRedisKeyPrefix = "vllm-sr:flow:state:"
 	// workflowFlowModel is the Router's default Flow alias. A backend model
 	// named as a Flow alias would send all of its traffic to Flow decisions.
-	workflowFlowModel = "vllm-sr/flow"
+	workflowFlowModel = "vllm-sr/auto"
 )
 
 func init() {

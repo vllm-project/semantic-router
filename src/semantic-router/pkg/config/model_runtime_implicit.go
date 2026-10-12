@@ -27,6 +27,8 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 		return moduleModel{module: module, model: strings.TrimSpace(model), useCPU: useCPU}, strings.TrimSpace(model) != ""
 	}
 	switch consumer {
+	case "preference", "complexity":
+		return local(consumer, c.DecisionModelSpec().Model, true)
 	case "domain_classifier":
 		if c.CategoryModel.Backend == nil {
 			return local(consumer, c.CategoryModel.ModelID, c.CategoryModel.UseCPU)
@@ -59,6 +61,9 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 		return local("safety", c.SafetyModels.Safety.ModelID, c.SafetyModels.Safety.UseCPU)
 	case strings.HasPrefix(consumer, "classifier."):
 		if rule := classifierSignalRuleByName(c.ClassifierRules, strings.TrimPrefix(consumer, "classifier.")); rule != nil && rule.Model == "" {
+			if rule.ModelPath == "" {
+				return local(consumer, c.DecisionModelSpec().Model, true)
+			}
 			return local(string(c.recipeScope())+"/"+consumer, rule.ModelPath, rule.UseCPU)
 		}
 	}
@@ -81,6 +86,11 @@ func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, dep
 	module, ok := c.implicitModule(consumer)
 	if !ok {
 		return "", ModelDeployment{}, false, nil
+	}
+	// A default task uses the declared resource, including its device/profile.
+	// Sharing is by resource identity, not by a newly manufactured module alias.
+	if selected, resource, found, resolveErr := c.DecisionModelDeployment(); found && resolveErr == nil && module.model == c.DecisionModelSpec().Model {
+		return selected, resource, true, nil
 	}
 	deployment, err = ImplicitModelRuntimeDeployment(module.model, module.useCPU)
 	if spec := GetModelByPath(module.model); spec != nil && spec.SharedDeployment {
@@ -186,7 +196,7 @@ func (c *RouterConfig) RuntimeServedModelPaths() map[string]bool {
 
 // implicitConsumers lists the task consumers a scope's modules and rules may run.
 func (c *RouterConfig) implicitConsumers() []string {
-	consumers := []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "modality_detector", "hallucination_detector"}
+	consumers := []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "modality_detector", "hallucination_detector", "preference", "reask", "complexity"}
 	for _, rule := range c.ClassifierRules {
 		consumers = append(consumers, "classifier."+rule.Name)
 	}

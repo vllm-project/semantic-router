@@ -6,7 +6,8 @@ description: Fix the common problems of the model runtime and answers to frequen
 
 # Troubleshooting and FAQ
 
-Start with what the runtime says about itself. For a runtime you started:
+Start with what the runtime says about itself. For an independent `vllm-srun`
+worker listening on port 8100:
 
 ```bash
 curl -s localhost:8100/health
@@ -21,6 +22,10 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 `vsr_model_runtime_ready{deployment="..."} 1` means the deployment answers.
 The router log names each managed runtime process and why it stopped.
+
+For `vllm-sr serve ARTIFACT --engine`, use the frontend listener and
+`/v1/systemone/models` instead. Public `/v1/models` describes Chat models, not
+the private worker inventory. Include the listener API key when configured.
 
 ## Startup waits for the models
 
@@ -38,6 +43,12 @@ deployment in `model_deployments` with its state:
 ```bash
 curl -s localhost:8080/startup-status
 ```
+
+An offline attached runtime does not block custom `decision` questions or
+explicit `decision.v1` task bindings from being prepared. Those tasks remain
+unavailable until current capability metadata is ready and compatible.
+Implicit and native-head bindings may still need metadata at startup. See
+[deployment readiness](./deploy.md#when-a-model-is-not-ready).
 
 A first start downloads the models, so it takes longer than the next ones. The
 wait ends after `VLLM_SRUN_READY_TIMEOUT` (10 minutes by default) with
@@ -123,7 +134,7 @@ reasons:
 | a file hash does not match | The download is damaged or the repository changed. Delete that model from the cache and start again. |
 | a revision is required | A repository that is not built in needs `revision` with a 40-character commit. |
 | access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. |
-| does not fit, out of memory | Use a smaller model, a GPU with more memory, or give the model its own `process`. |
+| does not fit, out of memory | Use a smaller model, a GPU with more memory, or place replicas on separate GPUs. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
 | no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
@@ -208,6 +219,13 @@ global:
           overflow: window
 ```
 
+For prompt guard and safety signals, if a native model rejects the length of
+one input, the router retries overlapping windows that cover the entire text,
+with bounded concurrency. It keeps the highest window risk and requires
+complete input coverage from each window. An unfinished scan stays unresolved;
+the scan budget and deadline still apply. Direct `/v1/decisions` calls retain
+the model's input limits.
+
 A jailbreak or PII rule matches content its model did not read in full: an
 input over the model's `max_tokens` under `reject`, over its cap, truncated, or
 not scanned within the signals' deadline. The match reports the type
@@ -247,8 +265,14 @@ not finish its safety scan within it.
 - For a runtime you started, look at `vllm_srun_request_duration_seconds` and
   `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
   `Server-Timing` header of its responses.
-- On CPU, models of one process share the CPU threads. Start the runtime with
-  `--threads` set to the cores you can give it.
+- Managed CPU workers default to half the router's available CPU budget,
+  rounded down, with a minimum of one thread and a maximum of 16. Set
+  `VLLM_SRUN_CPU_THREADS` before `vllm-sr serve` to choose a positive thread count
+  per worker, up to the full CPU budget. Compare real input lengths and concurrency:
+  fewer threads can reduce contention between busy models, while longer inputs
+  on dedicated cores may benefit from more. See [CPU threads](model-runtime/deploy.md#cpu-threads).
+  For a runtime you start and attach yourself, set its `--threads` instead;
+  models in that process share its threads.
 - CPU models slow down sharply when other work holds some of their cores,
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on
@@ -277,7 +301,8 @@ against its pinned hash before loading.
 router the same `endpoint`.
 
 **Can one runtime serve several models?** Yes. Pass several models to
-`vllm-sr serve`, or let the router group its deployments into processes.
+`vllm-srun serve` and attach deployments through `endpoint`. Router-managed
+deployments and replicas each use their own worker.
 
 **What happens to my cached and stored vectors when I change the embedding
 model?** They stay apart from new ones and are not reused. See

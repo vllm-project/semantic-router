@@ -13,6 +13,8 @@ from unittest import mock
 
 import cli_test_base
 import run_cli_tests
+import test_integration_engine_mode
+from cli.runtime_stack import normalize_port_offset, resolve_runtime_stack
 from cli_test_base import CLITestBase, stack_scoped_test_container_name
 
 
@@ -384,6 +386,40 @@ class TestCLITestRunnerRuntimeDetection(unittest.TestCase):
             ),
         ):
             self.assertEqual(run_cli_tests.detect_container_runtime(), "docker")
+
+
+class TestEngineModePortAllocation(unittest.TestCase):
+    def test_offset_is_valid_for_every_derived_stack_port(self):
+        with mock.patch.object(test_integration_engine_mode.socket, "socket") as socket:
+            offset = test_integration_engine_mode.available_offset()
+
+        self.assertEqual(normalize_port_offset(offset), offset)
+        layout = resolve_runtime_stack(stack_name="engine-e2e", port_offset=offset)
+        self.assertEqual(layout.port_offset, offset)
+        self.assertEqual(
+            socket.return_value.bind.call_args_list,
+            [
+                mock.call(("127.0.0.1", port + offset))
+                for port in (6379, 8080, 8899, 9190)
+            ],
+        )
+        self.assertEqual(socket.return_value.close.call_count, 4)
+
+    def test_busy_port_retries_a_valid_range_and_closes_all_probes(self):
+        with mock.patch.object(test_integration_engine_mode.socket, "socket") as socket:
+            socket.return_value.bind.side_effect = [
+                OSError("in use"),
+                None,
+                None,
+                None,
+                None,
+            ]
+            offset = test_integration_engine_mode.available_offset()
+
+        self.assertEqual(normalize_port_offset(offset), offset)
+        attempted = [args[0][0][1] for args in socket.return_value.bind.call_args_list]
+        self.assertGreater(attempted[1], attempted[0])
+        self.assertEqual(socket.return_value.close.call_count, 5)
 
 
 if __name__ == "__main__":

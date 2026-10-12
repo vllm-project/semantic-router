@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/response-cache.md"
-  outdated: true
+  outdated: false
 ---
 
 # 响应缓存
@@ -73,7 +73,7 @@ plugins:
 
 `semantic-cache`、`semantic_cache` 和 `response-cache` 作为已弃用别名被接受，并规范化为 `response_cache`。同样，`global.stores.semantic_cache` 会被读取为 `global.stores.response_cache` 的已弃用别名。不要在同一文档中同时配置两种拼写。导出、控制面板保存和 DSL 反编译始终发出规范名称。
 
-来自模型运行时的嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。语义缓存需要本地分词器窗口，因此 Router 会拒绝为其使用[远程嵌入端点](model-runtime/guides/embeddings.md#use-an-external-embedding-service)。
+来自模型运行时的嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。语义缓存需要本地分词器窗口，因此 Router 会拒绝为其使用[远程嵌入端点](../../model-runtime/guides/embeddings#use-an-external-embedding-service)。
 
 ## 运维 {#operations}
 

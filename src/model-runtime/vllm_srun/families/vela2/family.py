@@ -394,16 +394,14 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         if not truncating or (whole and all(len(p.ids) <= budget for p in parts)):
             together = [q for q in request.questions if q.id not in request.errors]
             rows = rows_for(together, parts)
-            items, mapping = self.member.plan(rows, self.tokens)
+            rows, items, mapping = self._plan_rows(rows)
             if truncating and windowed(mapping):
                 rows = None
         if rows is None:
             whole_rows = rows_for(whole, parts)
-            items, mapping = self.member.plan(whole_rows, self.tokens)
+            whole_rows, items, mapping = self._plan_rows(whole_rows)
             cut_rows = rows_for(truncating, [part.cut(cut) for part in parts])
-            cut_items, cut_mapping = self.member.plan(
-                cut_rows, self.tokens, cut > max_len
-            )
+            cut_rows, cut_items, cut_mapping = self._plan_rows(cut_rows, cut > max_len)
             rows = whole_rows + cut_rows
             mapping = [*mapping, *shifted(cut_mapping, len(items))]
             items = [*items, *cut_items]
@@ -416,6 +414,33 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
             rows=rows,
             mapping=mapping,
         )
+
+    def _plan_rows(
+        self, rows: list[Row], in_windows: bool = True
+    ) -> tuple[list[Row], list[Any], list[Any]]:
+        """Keep the published layout when it fits; isolate strict failures per question.
+
+        A long span can window successfully while a scalar question sharing
+        its original row cannot. Retrying only failed mixed rows prevents
+        either question from borrowing the other's coverage proof.
+        """
+        items, mapping = self.member.plan(rows, self.tokens, in_windows)
+        separate: list[Row] = []
+        retry = False
+        for row, group in zip(rows, mapping, strict=True):
+            if group is None and row.requires_full_input and len(row.questions) > 1:
+                retry = True
+                ordinary = [q for q in row.questions if not q.require_full_input]
+                separate.extend(rows_for(ordinary, row.parts))
+                separate.extend(
+                    Row([q], row.parts) for q in row.questions if q.require_full_input
+                )
+            else:
+                separate.append(row)
+        if retry:
+            items, mapping = self.member.plan(separate, self.tokens, in_windows)
+            return separate, items, mapping
+        return rows, items, mapping
 
     def shared_context(self, items: list[Any], token_budget: int | None) -> int:
         """The decoder trees always pack on the shared-context path; the 0.3B has one exact path."""
@@ -482,6 +507,15 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
                 }
                 continue
             self.answerer.answer(question, raw, request.state, response)
+            if question.require_full_input and "error" not in answers.get(
+                question_id, {}
+            ):
+                if question.type == "set":
+                    response["sets"][question_id]["input_coverage"] = "complete"
+                    for label in question.names:
+                        answers[f"{question_id}.{label}"]["input_coverage"] = "complete"
+                else:
+                    answers[question_id]["input_coverage"] = "complete"
         used = sum(raw.input_tokens for raw in raws if raw is not None)
         ordered = {
             "answers": answers,

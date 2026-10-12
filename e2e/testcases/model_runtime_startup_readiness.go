@@ -61,13 +61,9 @@ func testModelRuntimeStartupReadiness(ctx context.Context, client *kubernetes.Cl
 	listed := make([]string, 0, len(status.ModelDeployments))
 	for _, deployment := range status.ModelDeployments {
 		listed = append(listed, deployment.Name)
-		process := mrDeviceProcess
-		if deployment.Name == mrDecisionDeployment {
-			process = mrDecisionsProcess
-		}
-		if !deployment.Ready || deployment.State != "ready" || deployment.Process != process ||
+		if !deployment.Ready || deployment.State != "ready" || deployment.Process == "" ||
 			!strings.HasPrefix(deployment.Artifact, "/tmp/vsr-fixtures/") {
-			return fmt.Errorf("startup status lists %s as %+v, want it ready in process %s with its fixture artifact", deployment.Name, deployment, process)
+			return fmt.Errorf("startup status lists %s as %+v, want a ready independent worker with its fixture artifact", deployment.Name, deployment)
 		}
 	}
 	managed := slices.Clone(mrManagedDeployments)

@@ -32,6 +32,11 @@ func (f *fakeServices) Card(_ context.Context, deployment string) (modelservice.
 	return card, nil
 }
 
+func (f *fakeServices) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
+	card, ok := f.cards[deployment]
+	return card, ok
+}
+
 func (f *fakeServices) Classify(_ context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
 	f.mu.Lock()
 	f.requests = append(f.requests, request)

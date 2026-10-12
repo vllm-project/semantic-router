@@ -127,6 +127,7 @@ def test_dashboard_docker_published_address(monkeypatch, host_bind, expected):
         common_env={},
         listener_port=8899,
         runtime_paths={
+            "instance_socket_dir": "/tmp/instance/socket",
             "log_spool_dashboard_mount": "/tmp/dashboard-log:/app/logs",
             "log_spool_root": "/tmp/logs",
             "active_recipe_root": "",

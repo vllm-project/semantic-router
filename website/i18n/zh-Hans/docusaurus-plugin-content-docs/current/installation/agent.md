@@ -31,7 +31,7 @@ Skill 与本文档一样跟随 `main`。稳定版具备 standalone 模式时，�
 ## Agent 会做什么
 
 1. **预检**，不做任何改动：Docker 访问权限、Python 及其 `venv` 支持、可用磁盘和端口、AMD 或 NVIDIA GPU 设备，以及已在运行的 `vllm-sr` 栈。
-2. **选择路径**：发布渠道；平台，主机有相应 GPU 时用 `--platform amd` 或 `--platform nvidia`；standalone 模式，需要 Envoy 时用 `--gateway extproc`；Docker 或 Kubernetes；以及模型端点，并按 Router 容器访问它的方式检查连通性。
+2. **选择路径**：发布渠道；平台，主机有相应 GPU 时用 `--platform rocm` 或 `--platform cuda`；standalone 模式，需要 Envoy 时用 `--gateway extproc`；Docker 或 Kubernetes；以及模型端点，并按 Router 容器访问它的方式检查连通性。
 3. **安装 CLI**：使用 curl 安装脚本，不启动栈。
 4. **编写配置**：面向你的模型，推理 API 绑定到 `127.0.0.1`，并带一条关键词路由来证明信号能到达决策；然后用 `vllm-sr config validate` 校验。
 5. **启动栈**：运行 `vllm-sr serve --config config.yaml`，绝不进入会等待人工操作的设置模式。
@@ -56,7 +56,7 @@ Agent 使用的契约与 CLI 和控制面板相同。需要控制面板验证时
 | 应用可热重载的变更 | `vllm-sr config apply`，执行前会重新规划 |
 | 测试路由逻辑 | `vllm-sr route preview` |
 | 测试完整数据路径 | `vllm-sr route probe` |
-| 单独运行一个 Router 模型 | `vllm-sr serve MODEL`（引擎模式） |
+| 单独运行一个 Router 模型 | `vllm-sr serve ARTIFACT --engine`（引擎模式） |
 
 管理源（本地栈的 8080 端口）提供健康检查、发现、配置和 OpenAPI。推理监听器（8899 端口）单独提供[受支持的推理协议](protocol-compatibility)。Agent 必须分别发现两者，而不能从其中一个推断另一个。
 

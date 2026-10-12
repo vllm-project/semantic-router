@@ -106,6 +106,16 @@ func (r *Runtime) DeploymentCard(ctx context.Context, name string, deployment co
 	return r.card(ctx, config.ResolvedModelBinding{Name: name, Binding: config.ModelBinding{Deployment: name}, Deployment: deployment.WithDefaults()})
 }
 
+// CurrentDeploymentCard reads this generation's observed ready metadata.
+// Attached services may recover independently of Router startup; consumers
+// can check their capabilities without waiting or discovering at request time.
+func (r *Runtime) CurrentDeploymentCard(name string) (modelservice.ModelCard, bool) {
+	if r.services == nil {
+		return modelservice.ModelCard{}, false
+	}
+	return r.services.CurrentCard(name)
+}
+
 // preparationContext bounds a preparation whose caller set no deadline, so a
 // runtime that never becomes ready fails the generation instead of blocking it.
 func preparationContext(ctx context.Context) (context.Context, context.CancelFunc) {

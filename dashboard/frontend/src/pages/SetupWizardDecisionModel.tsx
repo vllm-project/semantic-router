@@ -16,8 +16,9 @@ export function SetupDecisionModelSection({ value, onChange }: SetupDecisionMode
           </h3>
           <p className={styles.presetSectionDescription}>
             The Vela model that answers the Router&apos;s questions: the built-in signals, and every
-            decision question that names no deployment, in one call per request. Each size brings
-            its own calibrated thresholds.
+            decision question that names no deployment, in one call per request. A decision
+            selector that names no deployment asks it too. Each size brings its own calibrated
+            thresholds.
           </p>
         </div>
         <span className={styles.presetSummaryBadge}>{value}</span>

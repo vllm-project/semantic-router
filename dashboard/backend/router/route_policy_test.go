@@ -82,10 +82,23 @@ func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
 func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 	server := setupRouteInventoryServer(t)
 	for _, test := range []struct{ method, path, permission string }{
+		{http.MethodPost, "/api/dsl/compile", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/validate", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/parse", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/decompile", auth.PermConfigRead},
+		{http.MethodPost, "/api/dsl/format", auth.PermConfigRead},
+		{http.MethodGet, "/api/instance", auth.PermConfigRead},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/config/deploy", auth.PermConfigDeploy},
+		{http.MethodGet, "/api/router/api/v1/inventory/model-runtime", auth.PermConfigRead},
+		{http.MethodGet, "/api/decision-model/capabilities", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/test", auth.PermEvalRun},
+		{http.MethodGet, "/api/decision-model/routes", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/routes", auth.PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/diagnostics/models/systemone", auth.PermConfigRead},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/systemone", auth.PermEvalRun},
 		{http.MethodPost, "/api/mcp/tools/execute", auth.PermToolsUse},
 		{http.MethodPatch, "/api/admin/users/user-1", auth.PermUsersManage},
 		{http.MethodGet, "/api/mcp/servers", auth.PermMcpRead},
@@ -95,6 +108,9 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		if result != auth.RouteFound || policy.Permission != test.permission {
 			t.Errorf("%s %s: lookup=%v permission=%q, want %q", test.method, test.path, result, policy.Permission, test.permission)
 		}
+	}
+	if _, result := server.routePolicies.LookupRoutePolicy(http.MethodPost, "/api/instance/deploy"); result != auth.RouteNotFound {
+		t.Errorf("retired instance mode route lookup=%v", result)
 	}
 	rawGlobal := "/api/router/config/global/raw"
 	if policy, result := server.routePolicies.LookupRoutePolicy(http.MethodGet, rawGlobal); result != auth.RouteFound ||
@@ -175,6 +191,10 @@ func TestDashboardProductionRoutePermissionsGrantAndRevokeIndependently(t *testi
 	t.Cleanup(func() { _ = db.Close() })
 	routes := []struct{ method, path, permission string }{
 		{http.MethodGet, "/api/router/config/all", auth.PermConfigRead},
+		{http.MethodGet, "/api/decision-model/capabilities", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/test", auth.PermEvalRun},
+		{http.MethodGet, "/api/decision-model/routes", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/routes", auth.PermEvalRun},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},

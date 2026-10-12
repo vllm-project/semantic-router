@@ -30,8 +30,6 @@ var (
 		validateComplexityModelBackendContracts,
 		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
-		validateReMoMContracts,
-		validateFusionContracts,
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
@@ -45,19 +43,21 @@ var (
 
 	// These contracts need the complete routing graph, including all recipes.
 	routingConfigContractValidators = []configContractValidator{
+		validateKVTransferConfig,
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
-		warnLooperAliasCollisions,
 		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
 		validatePromptGuardBackend,
+		validatePIIContracts,
 		ValidatePIIWindow,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateActionContracts,
 		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
@@ -76,6 +76,7 @@ var (
 		validateJailbreakContracts,
 		validateSignalStageContracts,
 		validateHallucinationSignalContracts,
+		validateTopicContinuityContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

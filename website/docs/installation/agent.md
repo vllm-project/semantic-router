@@ -36,8 +36,8 @@ agent installs the development channel and tells you so.
 1. **Preflight**, without changing anything: Docker access, Python and its
    `venv` support, free disk and ports, AMD or NVIDIA GPU devices, and any
    `vllm-sr` stack that already runs.
-2. **Chooses the path:** the release channel; the platform, `--platform amd` or
-   `--platform nvidia` when the host has those GPUs; standalone mode, or
+2. **Chooses the path:** the release channel; the platform, `--platform rocm` or
+   `--platform cuda` when the host has those GPUs; standalone mode, or
    `--gateway extproc` when you need Envoy; Docker or Kubernetes; and the model
    endpoint, checked the way the Router container will reach it.
 3. **Installs the CLI** with the curl installer, without starting a stack.
@@ -78,7 +78,7 @@ Playground output when requested.
 | Apply a hot-reloadable change | `vllm-sr config apply`, which plans again before applying |
 | Test routing logic | `vllm-sr route preview` |
 | Test the complete data path | `vllm-sr route probe` |
-| Serve a Router model alone | `vllm-sr serve MODEL` (engine mode) |
+| Serve a Router model alone | `vllm-sr serve ARTIFACT --engine` |
 
 The management origin, port 8080 on a local stack, serves health, discovery,
 configuration, and OpenAPI. The inference listener, port 8899, separately

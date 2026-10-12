@@ -5,7 +5,16 @@ Vela 2.0 is public on Hugging Face:
 Apache-2.0, with no token needed. The model runtime keeps the revisions it
 pins, so nothing it loads changes.
 
-## What changes by default
+This note records the initial Vela 2.0 default rollout and its measured A/B.
+The measurements and original threshold decisions below are historical. Since
+then, [decision-model selection](./decision-model.md) and the
+[model runtime](./built-in-model-runtime.md) added shared task bindings, complete
+safety scans and stage-aware bundles. Follow [Choose a model](../model-runtime/choose-a-model)
+for current configuration. In particular, supplying a model does not imply
+Engine mode, one deployment does not imply one forward, and the operator now
+lets unbound tasks follow the selected default model.
+
+## Initial rollout defaults
 
 With no model configured, the domain, prompt guard, safety, fact check, user
 feedback, modality, PII and hallucination signals run on one deployment of
@@ -101,4 +110,4 @@ One line brings back one signal, and the others stay on the 0.3B:
 
 A signal moved back takes its Vela 1.0 rule thresholds with it, for example
 `mom-v1`'s prompt guard 0.5, safety 0.5 and PII 0.7. See
-[Choose a model](model-runtime/choose-a-model.md#vela-20).
+[Choose a model](../model-runtime/choose-a-model#vela-20).

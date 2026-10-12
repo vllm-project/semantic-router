@@ -7,10 +7,10 @@ it applies.
 
 ## GPU platforms
 
-`--platform amd` selects the `vllm-sr-rocm` image (about 20 GB on disk), passes
+`--platform rocm` selects the `vllm-sr-rocm` image (about 20 GB on disk), passes
 `/dev/kfd` and `/dev/dri` into the Router container, and runs the Router's own
 models on the GPU by default. AMD Instinct MI300X and MI325X are validated.
-`--platform nvidia` selects `vllm-sr-cuda` and passes `--gpus all`; it needs
+`--platform cuda` selects `vllm-sr-cuda` and passes `--gpus all`; it needs
 the NVIDIA Container Toolkit and works, but is not yet validated. On macOS the
 Docker target runs on the CPU only.
 
@@ -22,31 +22,44 @@ Docker target runs on the CPU only.
   first validated GPU with enough free memory, else the CPU). A named GPU must
   exist, or the model fails to load with the reason. See
   [Choose a model](https://vllm-sr.ai/docs/model-runtime/choose-a-model).
-- `config init`'s configuration loads no Router model, so `--platform amd`
-  alone exercises nothing; the main skill's step 6 checks the GPU in engine
-  mode instead.
-- Router models load after `serve` returns, and `/ready` is green before they
-  answer. Until a model signal is available, requests take the fallback route.
-  `vllm-sr route preview --model vllm-sr/auto --prompt '…' --trace --json`
-  shows each condition in `eval_trace`; a leaf with `"state": "unknown"` and a
-  `signal_error` such as `decision_unavailable` is still loading. Repeat until
-  it isn't. With the model cached that took about 11 s; the first start also
-  downloads it into `models/` next to `config.yaml`.
+- The default decision model, model consumers and native grants determine
+  which resources load. Inspect `vllm-sr instance models` for actual ready
+  replicas; an exposed frontend or healthy process alone does not prove model
+  readiness. Use a bounded inference request to verify a chosen model.
+- `--platform auto` inspects the actual container host. If both CUDA and ROCm
+  are available, select one explicitly. Existing visibility masks are honored;
+  automatic discovery never guesses remote daemon hardware from the CLI host.
 
-## Engine mode
+## Engine mode and replicas
 
-`vllm-sr serve MODEL` serves Router models with the model runtime alone, without
-the Router: decision models (`POST /v1/decisions`), classifiers
-(`/v1/classify`), embedders (`/v1/embeddings`) and rerankers (`/v1/rerank`),
-with `/health` and `/v1/models`. It runs in the foreground in a container named
-`vllm-sr-engine-PORT`, published on `127.0.0.1:8100` unless `--host` or
-`--port` say otherwise; Ctrl-C or SIGINT stops it and removes the container.
-`--device` takes `cpu`, `rocm[:N]` with `--platform amd` or `cuda[:N]` with
-`--platform nvidia`. Downloads persist in `~/.cache/vllm-sr/models`. For the
-Router container to reach an engine-mode server, start it with
-`--host 0.0.0.0` and use `http://host.docker.internal:PORT` as the deployment's
-`endpoint`. See the
-[model runtime Quickstart](https://vllm-sr.ai/docs/model-runtime/quickstart).
+`vllm-sr serve MODEL --engine` (or `-e`) starts the persistent instance frontend,
+Dashboard and managed model pool with routing disabled. Without `-e`, every
+invocation starts Router mode, including an existing Engine config. MODEL alone
+does not choose Engine mode. Dashboard observes this startup choice and manages
+model resources independently.
+
+The frontend publishes `POST /v1/systemone`, its `/v1/decisions` alias, and
+`GET /v1/systemone/models` according to `listeners[].systemone.models` and the
+listener's API keys. Initial Engine bootstrap grants the chosen model on port
+8899. Existing listener grants never widen when selecting another model.
+Classify, embeddings, rerank and bundle endpoints belong to direct `vllm-srun`
+workers and are not automatically exposed by this frontend. Use `vllm-sr stop`
+with the same stack identity to stop the persistent stack.
+
+MODEL replaces only the configured default judgment deployment's artifact.
+Other model flags are optional: `--runtime-profile` preserves the configured
+value unless supplied; `--revision` resolves a branch, tag or full commit once
+before startup and records the immutable pin for every replica. Built-in
+models use their release pin by default. Bare serve keeps the configured
+default deployment, or starts with Vela 2.0 0.3B for a new config.
+
+`-dp N` (`--data-parallel-size N`) writes canonical replicas. A new placement
+uses the first N available GPUs; explicitly use `--device-ids 0` to colocate
+all N workers on one host GPU, or `--device-ids 0,1` for two workers across two
+GPUs. Device IDs do not change the visible mask. Existing masks map host IDs
+to runtime ordinals, and existing configured placements scale in their saved
+order. Kubernetes uses pod allocation ordinals in config, not host device IDs.
+See the [model runtime Quickstart](https://vllm-sr.ai/docs/model-runtime/quickstart).
 
 ## Envoy in front: `--gateway extproc`
 
@@ -82,8 +95,9 @@ vllm-sr serve --target kubernetes --config config.yaml --namespace NAMESPACE
 
 On Kubernetes, set the listener's `address` to `0.0.0.0`: the Service, not the
 host, publishes it.
-Add `--context` to name a kubectl context, `--platform amd` or `nvidia` for the
-GPU image and a request for one `amd.com/gpu` or `nvidia.com/gpu`,
+Add `--context` to name a kubectl context, `--platform rocm` or `cuda` for the
+GPU image and resources derived from canonical placement (`amd.com/gpu` or
+`nvidia.com/gpu`),
 `--gateway extproc` for an Envoy-based gateway in the cluster, and `--minimal`
 to leave out the observability stack (Prometheus, Grafana, Jaeger and their
 exporters). The Router keeps its models on a persistent volume of storage class

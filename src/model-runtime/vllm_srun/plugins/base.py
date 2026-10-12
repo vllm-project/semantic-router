@@ -142,7 +142,8 @@ class DtypePolicy:
     ``bf16_resident`` holds BF16-exact Linear weights in BF16 on GPUs, which
     BF16 autocast multiplies with anyway. ``gpu_weights`` holds every backbone
     parameter in that dtype on GPUs, so the hidden-state stream follows it
-    (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
+    (released runtimes that load the backbone in BF16); CPU keeps ``weights``
+    unless ``cpu_weights`` names the dtype a released runtime held there too.
     ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
     the backbone's linear layers when the configured profile asks for one
     (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
@@ -150,7 +151,10 @@ class DtypePolicy:
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
     exact weights. A family consents only
     where its records show at least 99% label agreement with the exact path
-    (embeddings: cosine of at least 0.999).
+    (embeddings: cosine of at least 0.999). ``approximate_kernels`` consents,
+    on the same evidence per question type, to the accelerator's approximate
+    kernels when the profile allows them (``EngineOptions.exact_kernels_only``
+    off).
     """
 
     weights: str = "float32"
@@ -158,8 +162,10 @@ class DtypePolicy:
     head: str = "float32"
     bf16_resident: bool = True
     gpu_weights: str | None = None
+    cpu_weights: str | None = None
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
+    approximate_kernels: bool = False
 
 
 @dataclass(frozen=True)
@@ -293,6 +299,40 @@ class EngineOptions:
 
 
 @dataclass
+class VideoInputs:
+    """The videos of a decoder batch: their tower ``features`` (merged, every row's videos, rows in order).
+
+    ``grids`` holds each video's (t, h, w) patch grid in the same order; each
+    group of ``h * w`` patches (a pair of frames) takes the next run of the
+    batch's ``token_id`` placeholders.
+    """
+
+    features: torch.Tensor
+    grids: list[tuple[int, int, int]]
+    token_id: int
+
+
+@dataclass
+class ImageInputs:
+    """The images of a decoder batch, for a model whose ``ModelSpec.towers`` holds a vision tower.
+
+    ``pixel_values`` holds the patch rows of every image of every row, rows in
+    order and each row's images in order; ``grids`` each image's (t, h, w)
+    patch grid in the same order. The tower's features replace the batch's
+    ``token_id`` placeholders, in the same order. ``features``, when given, are
+    those features already computed (``EngineModel.tower_features``) and
+    ``pixel_values`` is not read; ``videos`` are the rows' video inputs.
+    """
+
+    pixel_values: torch.Tensor | None
+    grids: list[tuple[int, int, int]]
+    token_id: int
+    tower: str = "vision"
+    features: torch.Tensor | None = None
+    videos: VideoInputs | None = None
+
+
+@dataclass
 class ForwardBatch:
     """Padded token rows and the positions whose hidden states the readout needs.
 
@@ -300,7 +340,8 @@ class ForwardBatch:
     ``query`` holds one query position per row; ``lengths`` the unpadded lengths.
     ``shared_prefix`` > 0 asks an engine that ``supports_shared_context`` to run the
     rows as one shared-context tree whose first ``shared_prefix`` tokens (common to
-    every row, before any endpoint) are computed once.
+    every row, before any endpoint) are computed once. ``images`` are the rows'
+    image inputs, for a backbone that reads them.
     """
 
     input_ids: torch.Tensor
@@ -309,6 +350,7 @@ class ForwardBatch:
     query: torch.Tensor
     lengths: list[int]
     shared_prefix: int = 0
+    images: ImageInputs | None = None
 
 
 @dataclass
@@ -421,6 +463,12 @@ class EngineModel(ABC):
     def tree(self, batch: TreeBatch) -> TreeOutput:
         """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
         raise NotImplementedError(f"{type(self).__name__} has no tree forward")
+
+    def tower_features(
+        self, name: str, pixel_values: torch.Tensor, grids: list[tuple[int, int, int]]
+    ) -> torch.Tensor:
+        """A tower's merged features for its inputs (``ImageInputs.features``), on the device."""
+        raise NotImplementedError(f"{type(self).__name__} has no {name} tower")
 
     @abstractmethod
     def parameter_count(self) -> int: ...
@@ -604,7 +652,11 @@ class RerankInfo:
 
 @dataclass(frozen=True)
 class ModelInfo:
-    """What ``/v1/models`` reports about a loaded model."""
+    """What ``/v1/models`` reports about a loaded model.
+
+    ``modalities`` are the inputs a decisions request may carry: ``text``, and
+    ``image`` for a model that reads a request's ``images``.
+    """
 
     id: str
     family: str
@@ -622,6 +674,7 @@ class ModelInfo:
     embedding: EmbeddingInfo | None = None
     rerank: RerankInfo | None = None
     presets: tuple[str, ...] = ()
+    modalities: tuple[str, ...] = ("text",)
 
 
 @dataclass(frozen=True)
@@ -630,7 +683,9 @@ class SurfaceRequest:
 
     ``body`` is the JSON body; the runtime has checked its top-level fields
     and parsed the generic options (deadline, profile, return_meta). The
-    family validates everything else in ``plan_surface``.
+    family validates everything else in ``plan_surface``. ``part`` marks one
+    state of a decisions request with several (``states``): only the whole
+    request is refused when none of its questions is valid.
     """
 
     surface: str
@@ -639,6 +694,7 @@ class SurfaceRequest:
     profile: str
     return_meta: bool
     received: float
+    part: bool = False
 
     @property
     def options(self) -> dict[str, Any]:

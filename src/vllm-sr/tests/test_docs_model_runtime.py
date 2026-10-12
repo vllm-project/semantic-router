@@ -268,7 +268,8 @@ def _openapi_validator(schema_name: str) -> jsonschema.Draft4Validator:
 
 
 def _validate_request(path: str, body: dict, where: str) -> None:
-    validator = _openapi_validator(REQUEST_SCHEMAS[path])
+    schema_path = "/v1/decisions" if path == "/v1/systemone" else path
+    validator = _openapi_validator(REQUEST_SCHEMAS[schema_path])
     problems = [error.message for error in validator.iter_errors(body)]
     assert problems == [], f"{where} {path}: {problems}"
 
@@ -293,7 +294,7 @@ def test_json_request_examples_follow_the_runtime_contract():
     examples = [block for block in _blocks("json") if block.title.startswith("POST ")]
 
     assert {block.title for block in examples} == {
-        f"POST {path}" for path in REQUEST_SCHEMAS
+        f"POST {path}" for path in [*REQUEST_SCHEMAS, "/v1/systemone"]
     }
     for block in examples:
         _validate_request(

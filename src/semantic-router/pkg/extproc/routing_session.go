@@ -73,6 +73,10 @@ func (r *OpenAIRouter) newRoutingSession(ctx context.Context, release func()) *r
 	}
 	if hop, ok := routing.HopFrom(ctx); ok {
 		session.ctx.Hop = &hop
+	} else if models, ok := routing.ListenerModelsFrom(ctx); ok {
+		// A hop's context derives from its client request's, so only a
+		// client request takes the listener's restriction.
+		session.ctx.ListenerModels = models
 	}
 	return session
 }

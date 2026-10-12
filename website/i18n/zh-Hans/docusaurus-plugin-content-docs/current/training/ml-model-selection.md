@@ -20,7 +20,7 @@ translation:
 | [KNN](/zh-Hans/docs/tutorials/algorithm/selection/knn) | 在相似查询上组合记录的质量和速度 | 相似请求往往偏好同一模型，且可追溯性很重要 |
 | [KMeans](/zh-Hans/docs/tutorials/algorithm/selection/kmeans) | 将请求映射到已学习的簇 | 工作负载形成稳定簇，且查找成本很重要 |
 | [SVM](/zh-Hans/docs/tutorials/algorithm/selection/svm) | 使用已学习的决策边界 | 候选模型在特征空间中干净分离 |
-| [MLP](/zh-Hans/docs/tutorials/algorithm/selection/mlp) | 用神经网络为候选打分 | 你有足够数据训练非线性选择器，并能运维其运行时依赖 |
+| [MLP](/zh-Hans/docs/tutorials/algorithm/selection/mlp) | 用神经网络为候选打分 | 你有足够数据训练非线性选择器；Router 在 CPU 上执行训练后的产物 |
 
 没有普遍最好的选择器。将每个候选与简单基线比较，例如固定默认、随机选择，以及同一留出数据集上的最佳单模型。
 

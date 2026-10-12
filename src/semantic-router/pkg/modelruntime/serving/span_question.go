@@ -18,7 +18,7 @@ import (
 // hallucination bindings through /v1/decisions instead of a classify head.
 // The binding asks the preset and reads its spans as token_spans.v1, so its
 // consumer is unchanged. In a request stage the question travels in the same
-// call as the deployment's other questions about the same text (see
+// call as the stage's other questions to the deployment (see
 // modelservice.Bundle).
 
 // spanPresets names the ready-made question each span consumer asks.
@@ -38,7 +38,7 @@ func spanQuestion(spec config.ResolvedModelBinding, preset string) modelservice.
 // deployment's model answers decisions rather than classify heads.
 func spanPreset(spec config.ResolvedModelBinding, card modelservice.ModelCard) (string, bool) {
 	preset, ok := spanPresets[spec.Name]
-	return preset, ok && card.Serves("decisions") && !card.Serves("classify")
+	return preset, ok && card.Serves("decisions") && (spec.Binding.Head == "" || spec.Binding.Head == config.DecisionSpanHeadRouter)
 }
 
 // prepareSpanQuestion checks a span binding against its deployment's card:
@@ -51,8 +51,8 @@ func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedM
 	if !ok {
 		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the model runtime services of deployment %q answer no decisions", binding.ErrCapability, spec.Binding.Deployment)
 	}
-	if !card.HasPreset(preset) {
-		return nil, binding.Capability{}, nil, fmt.Errorf("%w: deployment %q serves %s, which has no classify head and no ready-made %s question; bind a token head or a model that defines the %s question, such as Vela 2.0", binding.ErrCapability, spec.Binding.Deployment, card.ID, preset, preset)
+	if !card.HasPreset(preset) && !card.Answers("span") {
+		return nil, binding.Capability{}, nil, fmt.Errorf("%w: deployment %q serves %s, which has no native span capability or ready-made %s question; bind a token head or a model that supports the %s task", binding.ErrCapability, spec.Binding.Deployment, card.ID, preset, preset)
 	}
 	if spec.Binding.Head != "" && spec.Binding.Head != config.DecisionSpanHeadRouter {
 		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the %s question of deployment %q is answered by its router span head; set head to router or remove it", binding.ErrCapability, preset, spec.Binding.Deployment)
@@ -70,15 +70,22 @@ func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedM
 	}
 	capability := binding.Capability{
 		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Preset: preset,
-		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
+		Deployment: spec.Binding.Deployment,
+		Limits:     binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
 	return &target{spec: spec, deployment: spec.Binding.Deployment, card: card, resource: resource, scan: scan}, capability, decider, nil
 }
 
 // askSpans asks one span question and returns its spans in text order.
-func askSpans(ctx context.Context, decider modelservice.Decider, deployment string, request modelservice.Request) ([]modelservice.Span, error) {
+func askSpans(ctx context.Context, decider modelservice.Decider, deployment string, request modelservice.Request, cards ...modelservice.ModelCard) ([]modelservice.Span, error) {
 	question := request.Questions[0]
-	response, err := decider.Decide(ctx, deployment, request)
+	var response modelservice.Response
+	var err error
+	if len(cards) > 0 {
+		response, err = modelservice.ExecuteQuestions(ctx, decider, deployment, cards[0], request)
+	} else {
+		response, err = decider.Decide(ctx, deployment, request)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +119,22 @@ func (r *Runtime) spanTokens(ctx context.Context, spec config.ResolvedModelBindi
 		return nil, err
 	}
 	question := spanQuestion(spec, preset)
+	if !card.HasPreset(preset) {
+		taskID := "pii_spans"
+		if spec.Name == "hallucination_detector" {
+			taskID = "hallucination_spans"
+		}
+		definition, _ := modelservice.BuiltinTask(taskID)
+		question = definition.Question
+		question.ID = spec.Name + ":" + taskID
+		capability.Preset, capability.Question = "", taskID
+	}
+	question.TaskID, question.Stage = "pii_spans", "request"
+	if spec.Name == "hallucination_detector" {
+		question.TaskID, question.Stage = "hallucination_spans", "response"
+	}
 	return publish(ctx, r.tokens, t, capability, func(ctx context.Context, _ io.Closer, text string) (tasks.TokenClassificationResult, error) {
-		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{State: text, Questions: []modelservice.Question{question}}, true, t.scan))
+		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{State: text, Questions: []modelservice.Question{question}}, true, t.scan), card)
 		if err != nil {
 			return tasks.TokenClassificationResult{}, err
 		}
@@ -130,13 +151,27 @@ func (r *Runtime) spanGrounded(ctx context.Context, spec config.ResolvedModelBin
 		return nil, err
 	}
 	question := spanQuestion(spec, preset)
+	if !card.HasPreset(preset) {
+		taskID := "pii_spans"
+		if spec.Name == "hallucination_detector" {
+			taskID = "hallucination_spans"
+		}
+		definition, _ := modelservice.BuiltinTask(taskID)
+		question = definition.Question
+		question.ID = spec.Name + ":" + taskID
+		capability.Preset, capability.Question = "", taskID
+	}
+	question.TaskID, question.Stage = "pii_spans", "request"
+	if spec.Name == "hallucination_detector" {
+		question.TaskID, question.Stage = "hallucination_spans", "response"
+	}
 	warmup := tasks.GroundedTextRequest{Context: "A warmup sentence.", Question: "What is this?", Answer: "A sentence."}
 	return publish(ctx, r.grounded, t, capability, func(ctx context.Context, _ io.Closer, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
 		parts := map[string]string{"context": input.Context, "answer": input.Answer}
 		if strings.TrimSpace(input.Question) != "" {
 			parts["request"] = input.Question
 		}
-		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{Parts: parts, Questions: []modelservice.Question{question}}, true, t.scan))
+		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{Parts: parts, Questions: []modelservice.Question{question}}, true, t.scan), card)
 		if err != nil {
 			return tasks.TokenClassificationResult{}, err
 		}

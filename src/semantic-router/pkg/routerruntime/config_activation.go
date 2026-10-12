@@ -172,6 +172,24 @@ func (r *Registry) ConfigSnapshot() *configsnapshot.Snapshot {
 	return r.configSnapshot
 }
 
+// AcquireConfigSnapshot retains the published frontend generation, including
+// its model clients, while a management transport serves a native request.
+func (r *Registry) AcquireConfigSnapshot() (*configsnapshot.Snapshot, func(), bool) {
+	if r == nil {
+		return nil, nil, false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.configSnapshot == nil || r.acquireGeneration == nil {
+		return nil, nil, false
+	}
+	release, ok := r.acquireGeneration()
+	if !ok {
+		return nil, nil, false
+	}
+	return r.configSnapshot, release, true
+}
+
 func cloneConfigActivation(activation ConfigActivation) ConfigActivation {
 	if activation.FinishedAt != nil {
 		finished := *activation.FinishedAt

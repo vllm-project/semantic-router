@@ -2,6 +2,7 @@
 
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
+from cli.validator_recipe_contracts import effective_entrypoints
 
 
 def validate_prompt_dependencies(
@@ -10,7 +11,7 @@ def validate_prompt_dependencies(
     errors: list[ValidationError] = []
     model_by_name = {model.name: model for model in config.providers.models}
     model_cards = {model.name: model for model in config.routing.model_cards}
-    auto_model_names = _auto_model_names(config)
+    entrypoint_model_names = _entrypoint_model_names(config)
     profiles = [("decisions", config.routing)]
     profiles.extend(
         (f"recipes.{recipe.name}.decisions", recipe.routing)
@@ -31,7 +32,7 @@ def validate_prompt_dependencies(
                     helper_model,
                     helper_card,
                     field_prefix,
-                    auto_model_names,
+                    entrypoint_model_names,
                 )
             )
     return errors
@@ -43,7 +44,7 @@ def _prompt_model_errors(
     helper_model,
     helper_card,
     field_prefix: str,
-    auto_model_names: set[str],
+    entrypoint_model_names: set[str],
 ) -> list[ValidationError]:
     field = f"{field_prefix}.{decision_name}.algorithm.prompt.model"
     if helper_model is None:
@@ -53,10 +54,10 @@ def _prompt_model_errors(
                 field=field,
             )
         ]
-    if helper in auto_model_names:
+    if helper in entrypoint_model_names:
         return [
             ValidationError(
-                f"Decision '{decision_name}' prompt helper model must be a concrete non-auto provider model",
+                f"Decision '{decision_name}' prompt helper model must be a concrete provider model instead of an entrypoint",
                 field=field,
             )
         ]
@@ -80,19 +81,7 @@ def _prompt_model_errors(
     return []
 
 
-def _auto_model_names(config: UserConfig) -> set[str]:
-    global_config = config.global_ if isinstance(config.global_, dict) else {}
-    router = global_config.get("router")
-    if not isinstance(router, dict):
-        router = {}
-    raw_names = router.get("auto_model_names")
-    if not isinstance(raw_names, list):
-        raw_names = []
-    configured = {str(name).strip() for name in raw_names if str(name).strip()}
-    if configured:
-        return configured
+def _entrypoint_model_names(config: UserConfig) -> set[str]:
     return {
-        "vllm-sr/auto",
-        "auto",
-        str(router.get("auto_model_name") or "MoM").strip(),
+        name for entry in effective_entrypoints(config) for name in entry.model_names
     }

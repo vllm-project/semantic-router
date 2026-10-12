@@ -123,7 +123,7 @@ result in the current run.
 | Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and model-selection tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Model runtime | `make model-runtime-test` | Families, engines, scheduling, the HTTP contract, and golden answers on CPU. |
-| Published models | `make test-models` | Classifier, cache, and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, without a skip. |
+| Published models | `make test-models` | Classifier, cache, and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, and the pinned Vela 2.0 0.3B and 0.8B served on CPU answering the Router's questions in one decisions call per stage, within tolerance of their recorded answers, without a skip. |
 | Image-routing conformance | `make verify-image-routing-calibration` | Prepared Nano identity, every authored scored image, prototype provenance, frozen threshold/validation assertions, and multimodal profile package tests. |
 | Local Stack serving contracts | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, request behavior, and service isolation. |
 | Local Stack memory contracts | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, user isolation, and persistence failure behavior. |
@@ -175,7 +175,11 @@ parity and maximum-context qualifications that require explicit inputs remain
 separately declared; a shorter input acceptance test cannot qualify full context.
 
 `make test-models` provisions its own prerequisites, and benchmarks let the
-runtime download each pinned model on first start. Product startup instead
+runtime download each pinned model on first start. The Vela 2.0 tests compare
+the Router's fused decisions calls with answers recorded on CPU
+(`src/semantic-router/pkg/classification/testdata/vela2_published_answers.json`);
+after an intended change of the questions, their fusion or a pin,
+`make record-vela2-answers` records them again. Product startup instead
 provisions the models the active configuration references: the model runtime
 downloads each model it serves, and the Router provisions label maps and the Omni
 bundles. That is not the full test inventory. A pre-existing local model

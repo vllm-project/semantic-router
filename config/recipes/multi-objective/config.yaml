@@ -1733,9 +1733,7 @@ global:
   router:
     config_source: file
     strategy: priority
-    auto_model_name: MoM
-    auto_model_names: []
-    include_config_models_in_list: false
+    list_backend_models: false
     clear_route_cache: true
     model_selection:
       enabled: true

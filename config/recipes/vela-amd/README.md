@@ -86,10 +86,10 @@ connect the backend described above, and download the recipe:
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
-`--platform amd` selects the AMD image and device access; the recipe's explicit
+`--platform rocm` selects the AMD image and device access; the recipe's explicit
 deployments select which models use the GPU. It does not override an authored
 CPU deployment. On a shared machine, select the Router's visible GPU with
 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`; deployment index `0` refers to that visible

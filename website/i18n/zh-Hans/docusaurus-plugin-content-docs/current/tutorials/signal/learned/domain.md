@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "44132430a2606482044633513f8a9a98bb6f6825"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/domain.md"
-  outdated: true
+  outdated: false
 ---
 
 # 领域信号 {#domain-signal}
@@ -64,7 +64,7 @@ routing:
 
 ### 本地与远程分类器选择 {#local-and-remote-classifier-selection}
 
-没有 `backend` 时，领域分类器（默认 Vela 2.0 0.3B）运行在[模型运行时](model-runtime/guides/classify.md)中。运行时从模型包读取架构，因此无需设置本地选择器；`vllm-sr config migrate` 会移除早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 键。
+没有 `backend` 时，领域分类器（默认 Vela 2.0 0.3B）运行在[模型运行时](../../../model-runtime/guides/classify)中。运行时从模型包读取架构，因此无需设置本地选择器；`vllm-sr config migrate` 会移除早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 键。
 
 远程类别分类器使用共享 backend 块。其 `model` 是 `global.model_catalog.external[]` 中的显式名称，该目录条目必须有 `model_role: classification`。Category 目前只接受 `http_classify` 协议与 `label_distribution.v1` 约定，以便完整标签分布继续供给领域匹配与路由决策。
 

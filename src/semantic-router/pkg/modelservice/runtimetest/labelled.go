@@ -121,7 +121,7 @@ func (r *Runtime) decideLabelled(model Model, body api.DecisionRequest) api.Deci
 		case "":
 			response.Answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_question")}
 		default:
-			response.Answers[id] = answer(question)
+			response.Answers[id] = jointAnswer(model, question, len(body.Questions))
 		}
 	}
 	response.Sets, response.Spans, response.Thresholds = &sets, &spans, &thresholds

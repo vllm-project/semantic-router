@@ -5,8 +5,11 @@ description: Choose where client traffic enters the Router, standalone or behind
 
 # Gateway Modes
 
-`vllm-sr serve` makes two choices: the **gateway mode**, which is where client
-traffic enters, and the **target**, which is where the stack runs.
+Gateway mode chooses where client traffic enters; the target chooses where
+the stack runs. These are separate from `--engine`, which serves native
+judgment requests without Chat routing. Omitting `--engine` starts Router
+mode. See [component architecture](../overview/component-architecture) for
+the shared frontend and model runtime.
 
 | Mode | Client traffic enters at | Use it for |
 | --- | --- | --- |
@@ -37,7 +40,7 @@ deliberate differences, such as the `x-envoy-*` headers that only Envoy adds.
 
 :::note Upgrading
 Earlier releases always put Envoy in front of the Router. Standalone is now the
-default; `vllm-sr serve --gateway extproc` restores the previous stack exactly.
+default; `vllm-sr serve --gateway extproc` restores Envoy ingress.
 See the [release note](../release-notes/standalone-mode).
 :::
 
@@ -49,6 +52,8 @@ See the [release note](../release-notes/standalone-mode).
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
   OpenAI-style 401. The key is removed before the request reaches a provider.
+- **Model allow-list:** with `models` set, the listener accepts only those
+  request models (see [Model allow-list](#model-allow-list)).
 - **TLS:** `tls` serves the listener over TLS 1.2 or later, with HTTP/2 or
   HTTP/1.1 negotiated by ALPN. Relative paths are relative to the config file's
   directory. The Router reloads the key pair when its files change, so a renewed
@@ -82,8 +87,45 @@ See the [release note](../release-notes/standalone-mode).
   metrics port (9190).
 - **Reloads:** the Router reloads its config in place. A change to a listener's
   address, port, timeout or `tls` paths, or a new or removed listener, is
-  rejected as `restart_required` until the Router restarts; API keys reload in
-  place.
+  rejected as `restart_required` until the Router restarts; API keys and model
+  allow-lists reload in place.
+
+### Model allow-list
+
+A listener's `models` lists the only request `model` values it accepts. Use it
+to give a public key access to the router's auto model and nothing else, while
+an internal listener keeps every model:
+
+```yaml
+listeners:
+  - name: dashboard-internal   # first listener: the Dashboard Playground uses it
+    address: 127.0.0.1
+    port: 8898
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    api_keys: ["${WORKSHOP_KEY}"]
+    models: [vllm-sr/auto]
+```
+
+- Names match exactly (case-sensitive, after trimming the request value), and
+  aliases are not expanded: list every name clients may send. Empty or absent,
+  the listener accepts every model.
+- The check runs after the API key check and before any signal, cache or
+  decision, on the model the Router parsed for routing. Any other model,
+  including a provider model that would otherwise pass through, gets
+  `403` with `{"error": {"code": "model_not_allowed", ...}}` in the client's
+  protocol. A request without a model gets `400 model_required`.
+- `GET /v1/models` on the listener lists only the allowed names the catalog
+  has.
+- The model calls a decision makes in process (Looper and request-graph hops)
+  are not client requests and are not restricted, so `vllm-sr/auto` can still
+  reach every provider model its decisions name.
+- The listener ignores the `x-vsr-skip-processing` opt-out even when
+  `global.router.skip_processing.enabled` is on, because a skipped request
+  would bypass the check.
+- `--gateway extproc` rejects a listener with `models` as unsupported: the
+  Envoy listener the CLI generates does not enforce it yet.
 
 ### Identity headers
 
@@ -134,14 +176,17 @@ matching are planned for standalone mode; until then they need Envoy as well.
 
 ## Targets and platforms
 
-`--platform cpu|amd|nvidia` works on both targets. It selects the image:
-`vllm-sr` for the CPU, `vllm-sr-rocm` for AMD and `vllm-sr-cuda` for NVIDIA.
+`--platform auto` detects the execution backend on the selected target.
+Choose `cpu`, `rocm` or `cuda` explicitly to use `vllm-sr`, `vllm-sr-rocm`
+or `vllm-sr-cuda`, respectively.
 
-- **docker:** `amd` passes the ROCm devices through, and `nvidia` the NVIDIA GPUs
-  (`--gpus all`).
+- **docker:** `rocm` passes the ROCm devices through, and `cuda` the NVIDIA GPUs.
+  Use `--device-ids` to select host GPUs for the default model deployment.
 - **kubernetes:** the generated Helm values set `gateway.mode`, the image
-  repository for the platform, and a request for one GPU (`amd.com/gpu: 1` or
-  `nvidia.com/gpu: 1`). `--target k8s` is the old name of `--target kubernetes`
+  repository for the platform, and GPU resources (`amd.com/gpu` or
+  `nvidia.com/gpu`) for the configured placements. The cluster needs the matching
+  device plugin. Use allocation ordinals such as `rocm:0` in YAML; host
+  `--device-ids` applies only to Docker. `--target k8s` is the old name of `--target kubernetes`
   and works for this release only.
 
 Without the CLI, the Helm chart takes the same value, `gateway.mode` (default
@@ -154,7 +199,7 @@ an Envoy-based gateway calls, see
 
 On macOS the docker target is CPU only: the built-in models run on the CPU in
 the arm64 image, because Apple's virtualization gives Docker's Linux VM no Metal
-or GPU compute. `--platform amd` and `--platform nvidia` fail there with a clear
+or GPU compute. `--platform rocm` and `--platform cuda` fail there with a clear
 message. GPU support through the host is tracked in
 [#4636](https://github.com/vllm-project/semantic-router/issues/4636).
 
@@ -168,20 +213,22 @@ message. GPU support through the host is tracked in
 
 ## Options of `vllm-sr serve`
 
-`vllm-sr serve --help` lists the options in groups. Each group applies to some
-of the three ways `serve` runs: the Router on the docker target, the Router on
-the kubernetes target, and engine mode (`vllm-sr serve MODEL`, the model
-runtime in a container). An option used where its group does not apply is an
-error that says where it applies.
+`vllm-sr serve --help` groups options by deployment target. Router and Engine
+run the same instance frontend: `--engine` (`-e`) disables routing at startup;
+every invocation without it starts Router mode and retains saved routing. Both retain model
+management, Dashboard and the explicitly published System One API.
 
 | Group | Applies to | Options |
 | --- | --- | --- |
-| Common options | docker, kubernetes, engine mode | `--platform`, `--image`, `--log-level` |
-| Router options | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm` |
-| Container options | docker, engine mode | `--image-pull-policy`, `--container-runtime` |
-| Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env` |
+| Instance and models | docker, kubernetes | `MODEL`, `--engine`, `--revision`, `--data-parallel-size`, `--runtime-profile`, `--platform`, `--image`, `--log-level` |
+| Instance configuration | docker, kubernetes | `--config`, `--target`, `--gateway`, `--minimal`, `--readonly`, `--algorithm` |
+| Container options | docker | `--image-pull-policy`, `--container-runtime` |
+| Docker target | docker | `--router-image`, `--envoy-image` (with `--gateway extproc`), `--dashboard-image`, `--startup-timeout`, `--replace-active-config`, `--recipe-env`, `--device-ids` |
 | Kubernetes target | kubernetes | `--namespace`, `--context`, `--profile`, `--chart-dir` |
-| Engine mode | engine mode | `--models`, `--revision`, `--device`, `--host`, `--port`, `--runtime-profile` |
+
+Multiple models, replica placement, listener ports and API grants use the
+canonical config. Model resource flags update the configured default deployment;
+MODEL and all resource overrides are optional.
 
 `--container-runtime` (`docker` or `podman`) replaces `--runtime`, which works
 for this release only, on `serve`, `status`, `logs`, `stop` and `dashboard`.

@@ -73,7 +73,7 @@ Router Learning observability, require `x-vsr-debug`.
 
 | Header | Surface | Description | Example |
 | ------ | ------- | ----------- | ------- |
-| `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `support` |
+| `x-vsr-selected-recipe` | default | Routing isolation scope selected by the effective entrypoint. Omitted for concrete backend passthrough. | `support` |
 | `x-vsr-selected-decision` | default | Final decision selected by the decision engine. Omitted when no decision matched and the request went to the default model; `x-vsr-response-path` is still `upstream`. | `complex-request` |
 | `x-vsr-selected-confidence` | default | Model-derived score for the selected decision. Absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy. | `0.9100` |
 | `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |
@@ -92,6 +92,7 @@ Router Learning observability, require `x-vsr-debug`.
 | `x-vsr-learning-scopes` | debug | Method-keyed identity scopes used by learning. | `protection=conversation` |
 | `x-vsr-learning-reasons` | debug | Method-keyed machine-readable reasons for actions. | `adaptation=sampled_win,protection=switch_allowed` |
 | `x-vsr-injected-system-prompt` | debug | Whether a system-prompt plugin injected text into the request. | `true` |
+| `x-vsr-decision-ranking` | debug | The matched decision the selected one beat and the comparison that settled it. Prose; parse `decision_ranking` in Router Replay instead. Omitted when only one decision matched. | `escalate-extreme over escalate-hard: equal priority 0, no comparable confidence, decision name ordering` |
 
 For UI display guidance, translate `x-vsr-learning-actions` into user-facing
 phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`.
@@ -255,7 +256,7 @@ x-vsr-replay-id: replay_01J...
 ## Compatibility and interpretation
 
 - Use `x-vsr-schema-version` before parsing optional headers; the current value
-  is `2`. Routed inference responses always carry it. Responses answered by the
+  is `2`. Routed inference responses not served from the response cache carry it. Responses answered by the
   Router's own handlers, such as `GET /v1/models`, never carry this header, so
   its absence there is expected rather than a contract violation.
 - `x-vsr-matched-projections` is the projection header. The singular form is

@@ -5,8 +5,6 @@ import (
 	"reflect"
 
 	"gopkg.in/yaml.v2"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 type routingFragmentDocument struct {
@@ -25,17 +23,10 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, rejectErr
 	}
 
-	// Fragment decoding omits infrastructure validation. Validate policy
-	// fields independently of those broader checks.
-	routing := nestedStringMap(raw["routing"])
-	for field, target := range map[string]reflect.Type{
-		"candidate_requirements": reflect.TypeOf(CandidateRequirements{}),
-		"data_policy":            reflect.TypeOf(RoutingDataPolicy{}),
-		"fallback":               reflect.TypeOf(fallback.FallbackPolicy{}),
-	} {
-		if err := validateKnownFields(nestedStringMap(routing[field]), target); err != nil {
-			return nil, fmt.Errorf("routing.%s: %w", field, err)
-		}
+	// Fragments share the canonical routing vocabulary while omitting only
+	// infrastructure cross-reference validation.
+	if err := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); err != nil {
+		return nil, err
 	}
 
 	doc := &routingFragmentDocument{}
@@ -54,7 +45,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	cfg := DefaultGlobalConfig()
 	cfg.RoutingFragmentOnly = true
 	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
-	cfg.DataPolicy = doc.Routing.DataPolicy.Clone()
+	cfg.Strategy = doc.Routing.Strategy
 	if doc.Routing.Fallback != nil {
 		cfg.Fallback = doc.Routing.Fallback.Clone()
 	}
