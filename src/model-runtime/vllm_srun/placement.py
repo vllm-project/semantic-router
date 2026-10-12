@@ -110,7 +110,14 @@ def place(
                 if lacking:
                     unsupported += [accelerator.lacks(info, need) for need in lacking]
                     continue
-            if name != "cpu" and spec.dtype.autocast == "bfloat16" and not info.bf16:
+            if (
+                name != "cpu"
+                and not info.bf16
+                and (
+                    spec.dtype.autocast == "bfloat16"
+                    or spec.dtype.gpu_weights == "bfloat16"
+                )
+            ):
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
             if (

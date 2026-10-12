@@ -587,7 +587,10 @@ class NativeEngine(Engine):
         if (
             device.accelerator != "cpu"
             and not device.bf16
-            and spec.dtype.autocast == "bfloat16"
+            and (
+                spec.dtype.autocast == "bfloat16"
+                or spec.dtype.gpu_weights == "bfloat16"
+            )
         ):
             return f"{device.label} has no BF16 support"
         return None
