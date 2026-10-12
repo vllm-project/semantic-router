@@ -65,19 +65,21 @@ A request may carry any number of `images` as base64 PNG, JPEG or WebP data
 URLs and `videos` as base64 MP4, WebM, QuickTime or Matroska data URLs; every
 question sees them, images first, then videos, in front of the text. Each
 image may have up to 8,000,000 bytes and 16,000,000 pixels, and the model
-reads it at up to 1.6 megapixels:
+reads it at up to 1.6 megapixels. Send the body on standard input, as below:
+a command-line argument holds at most 128 KiB.
 
 ```bash
-IMAGE="data:image/png;base64,$(base64 -w0 chart.png)"
-curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
+{
   "model": "vllm-sr/d3-lite",
   "state": "What does the attached image show?",
-  "images": ["'"$IMAGE"'"],
+  "images": ["data:image/png;base64,$(base64 -w0 chart.png)"],
   "questions": {
     "kind": {"type": "choice", "instructions": "What kind of image is this?",
              "criteria": {"chart": "A chart or plot", "photo": "A photograph", "document": "A document"}}
   }
-}'
+}
+EOF
 ```
 
 Each video may have up to 32,000,000 bytes, 300 seconds and 8,294,400 pixels
@@ -87,19 +89,23 @@ request take at most 16,384 input tokens, and a request body may have up to
 48 MiB:
 
 ```bash
-VIDEO="data:video/mp4;base64,$(base64 -w0 clip.mp4)"
-curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
+{
   "model": "vllm-sr/d3-lite",
   "state": "What happens in the clip?",
-  "videos": ["'"$VIDEO"'"],
+  "videos": ["data:video/mp4;base64,$(base64 -w0 clip.mp4)"],
   "questions": {
     "moving": {"type": "noul", "instructions": "Does something move across the scene?"}
   }
-}'
+}
+EOF
 ```
 
-A model that does not read a request's images or videos answers it with
-`invalid_request`. The runtime's model card lists the `modalities` a model
+A malformed or over-limit image or video, or one sent to a model that does
+not read it, is answered 400 `invalid_request` with the reason as the
+message, such as `video longer than 300 s`, `image exceeds 8 MB` or
+`model does not read videos`; a body over 48 MiB is answered 413
+`request_too_large`. The runtime's model card lists the `modalities` a model
 reads and its image and video `limits`.
 
 Use canonical YAML for additional deployments, task bindings, attached workers
