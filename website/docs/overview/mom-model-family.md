@@ -39,7 +39,7 @@ internal architecture does not change the routing abstraction.
 
 Router system models support the decision process. A decision deployment can
 also be published directly through System One. Routing System One across
-several decision models is a [roadmap extension](component-architecture#roadmap-route-system-one-across-decision-models),
+several decision models uses an explicit [native recipe](component-architecture#route-system-one-across-decision-models),
 separate from the current Chat Mixture of Models.
 
 ## Execution patterns

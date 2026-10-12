@@ -10,10 +10,10 @@ import styles from './RuntimeModes.module.css'
 
 export default function RuntimeModes(): React.JSX.Element {
   return (
-    <section id="runtime-modes" className={shared.bandSection} aria-labelledby="runtime-modes-title">
+    <section id="runtime-modes" className={styles.compactSection} aria-labelledby="runtime-modes-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={`site-section-intro ${shared.sectionHeader}`}>
+          <header className={`site-section-intro ${shared.sectionHeader} ${styles.compactHeader}`}>
             <SectionLabel>
               <Translate id="homepage.runtimeModes.label">Where it fits</Translate>
             </SectionLabel>
@@ -58,11 +58,11 @@ export default function RuntimeModes(): React.JSX.Element {
                 </Translate>
               </p>
               <footer className={styles.modeFooter}>
-                <Link to="/docs/installation">
+                <Link to="/docs/next/installation">
                   <Translate id="homepage.runtimeModes.router.cta">Run the Router</Translate>
                   <FiArrowRight aria-hidden="true" />
                 </Link>
-                <Link to="/docs/installation/gateway-modes">
+                <Link to="/docs/next/installation/gateway-modes">
                   <Translate id="homepage.runtimeModes.router.gatewayCta">Compare gateway modes</Translate>
                 </Link>
               </footer>
@@ -94,11 +94,11 @@ export default function RuntimeModes(): React.JSX.Element {
                 </Translate>
               </p>
               <footer className={styles.modeFooter}>
-                <Link to="/docs/model-runtime/quickstart">
+                <Link to="/docs/next/model-runtime/quickstart">
                   <Translate id="homepage.runtimeModes.engine.cta">Run the Engine</Translate>
                   <FiArrowRight aria-hidden="true" />
                 </Link>
-                <Link to="/docs/model-runtime/overview">
+                <Link to="/docs/next/model-runtime/overview">
                   <Translate id="homepage.runtimeModes.engine.modelsCta">Explore the model runtime</Translate>
                 </Link>
               </footer>
@@ -106,7 +106,7 @@ export default function RuntimeModes(): React.JSX.Element {
           </ScrollReveal>
         </div>
         <p className={styles.startupNote}>
-          <Link to="/docs/installation">
+          <Link to="/docs/next/installation">
             <Translate id="homepage.runtimeModes.devChannel">Development channel</Translate>
           </Link>
           <span aria-hidden="true"> · </span>

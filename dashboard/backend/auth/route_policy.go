@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/apicontract"
 )
 
 type Sensitivity string
@@ -59,11 +61,34 @@ type RoutePolicy struct {
 	StreamBody            bool
 	ProxyUpstream         bool
 	MaxAuthAge            time.Duration
+	// Operation describes request and response schemas for the published OpenAPI document.
+	Operation *apicontract.Operation
+}
+
+// CSRFRequired reports whether a cookie-authenticated request to this policy
+// must carry the CSRF header. Bearer requests are always exempt.
+func (p RoutePolicy) CSRFRequired() bool {
+	return !p.Public && requiresCSRFCheck(p.Method)
 }
 
 type RouteContract struct {
 	Pattern  string
 	Policies []RoutePolicy
+}
+
+// Describe attaches an OpenAPI operation to the policy for method. A method
+// without a policy is a registration bug, so it panics like other startup
+// route errors.
+func (c RouteContract) Describe(method string, operation apicontract.Operation) RouteContract {
+	policies := append([]RoutePolicy(nil), c.Policies...)
+	for index := range policies {
+		if strings.EqualFold(policies[index].Method, method) {
+			policies[index].Operation = &operation
+			c.Policies = policies
+			return c
+		}
+	}
+	panic(fmt.Sprintf("route %q has no %s policy to describe", c.Pattern, method))
 }
 
 type RouteLookup int

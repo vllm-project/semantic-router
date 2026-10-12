@@ -54,4 +54,4 @@ vLLM Semantic Router 围绕五个目标设计：
 
 ## 下一步
 
-阅读[系统概览](semantic-router-overview)了解组件与请求生命周期，再看[使用场景](use-cases)了解具体路由模式，并通过 [agent harness 指南](/zh-Hans/docs/installation/agent-harness)完成集成。
+阅读[系统概览](semantic-router-overview)了解组件与请求生命周期，再看[使用场景](use-cases)了解具体路由模式，并通过 [agent harness 指南](../installation/agent-harness)完成集成。

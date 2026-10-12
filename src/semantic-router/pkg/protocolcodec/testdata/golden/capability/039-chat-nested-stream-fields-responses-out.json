@@ -196,6 +196,10 @@
             "action": "dropped"
           },
           {
+            "field": "stream.p",
+            "action": "dropped"
+          },
+          {
             "field": "stream.moderation",
             "action": "dropped"
           }

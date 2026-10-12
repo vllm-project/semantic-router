@@ -301,10 +301,23 @@ def validate_systemone_listener_models(
         if public_name:
             identities.setdefault(public_name, []).append((key, deployment))
     errors = []
+    native_names = {
+        model.name
+        for model in config.providers.models
+        if model.api_format == "systemone"
+    }
+    native_names.update(
+        name
+        for entry in config.entrypoints
+        if entry.api == "systemone"
+        for name in entry.model_names
+    )
     for listener in config.listeners:
         if listener.systemone is None:
             continue
         for public_name in listener.systemone.models:
+            if public_name in native_names:
+                continue
             candidates = identities.get(public_name, [])
             message = None
             if not candidates:

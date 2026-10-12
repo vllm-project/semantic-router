@@ -44,11 +44,12 @@ func NewClient(endpoint string) (*Client, error) {
 		return nil, err
 	}
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(httpClient))
+	physical := budgetTransport{next: httpClient}
+	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(physical))
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{endpoint: endpoint, base: base, httpClient: httpClient, api: generated}
+	client := &Client{endpoint: endpoint, base: base, httpClient: physical, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
 	client.apiMinor.Store(-1)
 	return client, nil
@@ -317,7 +318,7 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 			decoded.Answers[question.ID] = answer
 		}
 	}
-	return decoded
+	return checkAnswers(questions, decoded)
 }
 
 func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer, bool) {
