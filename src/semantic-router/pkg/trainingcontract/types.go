@@ -115,13 +115,13 @@ type TaskSpec struct {
 // RunSpec freezes dataset identity, trainer version and JSON parameters at submission.
 // Trainer-specific parameter validation belongs to the capability planner.
 type RunSpec struct {
-	BaseModel      *ModelRef      `json:"base_model,omitempty"`
-	ExperimentID   string         `json:"experiment_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
-	SnapshotID     string         `json:"snapshot_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
-	TargetContract Target         `json:"target_contract"`
-	Trainer        Component      `json:"trainer"`
-	Parameters     map[string]any `json:"parameters,omitempty"`
-	Tasks          []TaskSpec     `json:"tasks" jsonschema:"minItems=1"`
+	BaseModel      *ModelRef  `json:"base_model,omitempty"`
+	ExperimentID   string     `json:"experiment_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
+	SnapshotID     string     `json:"snapshot_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
+	TargetContract Target     `json:"target_contract"`
+	Trainer        Component  `json:"trainer"`
+	Parameters     Parameters `json:"parameters,omitempty"`
+	Tasks          []TaskSpec `json:"tasks" jsonschema:"minItems=1"`
 }
 type TrainingRun struct {
 	Metadata

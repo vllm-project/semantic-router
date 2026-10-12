@@ -37,6 +37,7 @@ func TestSupportedAlgorithms_Tier(t *testing.T) {
 		{"router_dc", NewRouterDCSelector(DefaultRouterDCConfig())},
 		{"latency_aware", NewLatencyAwareSelector(nil)},
 		{"hybrid", NewHybridSelector(DefaultHybridConfig())},
+		{"random", NewRandomSelector()},
 	}
 
 	for _, tt := range tests {
@@ -144,6 +145,7 @@ func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
 		MethodRouterDC:     TierSupported,
 		MethodLatencyAware: TierSupported,
 		MethodHybrid:       TierSupported,
+		MethodRandom:       TierSupported,
 		MethodAutoMix:      TierExperimental,
 		MethodRLDriven:     TierExperimental,
 		MethodGMTRouter:    TierExperimental,
