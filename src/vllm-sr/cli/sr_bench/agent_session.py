@@ -1,39 +1,32 @@
-#!/usr/bin/env python3
+"""Replay the recorded coding-agent session fixture turn by turn.
+
+The fixture (`bench/data/coding_agent_session.v1.json` in the repository)
+records one coding-agent session: a tool catalog and turns labelled
+`user_turn`, `tool_loop` and `follow_up`. Each turn appends recorded messages;
+a replay resends the cumulative prefix, never feeding generated output back or
+executing tools. One case is one replay, so a session-aware target gives every
+replay exactly one session ID.
+"""
+
 from __future__ import annotations
 
-import argparse
+import hashlib
 import json
-import os
-import sys
-import time
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agentic_routing_live_benchmark import (
-    HTTP_OK,
-    HTTP_REDIRECT_START,
-    cached_tokens,
-    parse_extra_headers,
-    post_json,
-    selected_model_from,
-    usage_value,
-)
+from .contracts import SESSION_AWARE
 
-SCHEMA_VERSION: str = "agent-session-fixture.v1"
-DEFAULT_FIXTURE: Path = (
-    Path(__file__).with_name("data") / "coding_agent_session.v1.json"
-)
+BENCHMARK_ID = "agent-session-replay"
+ADAPTER_VERSION = "agent-session-replay-v1"
+SCHEMA_VERSION = "agent-session-fixture.v1"
+FIXTURE_PATH_HINT = "bench/data/coding_agent_session.v1.json"
 FIXTURE_KEYS: frozenset[str] = frozenset(
     {"schema_version", "id", "description", "tools", "turns"}
 )
 TURN_KEYS: frozenset[str] = frozenset({"id", "phase", "append_messages"})
-ROUTER_HEADERS: tuple[str, ...] = (
-    "x-vsr-selected-decision",
-    "x-vsr-session-phase",
-    "x-vsr-replay-id",
-)
+CASE_TURN_KEYS: frozenset[str] = frozenset({"id", "phase", "message_count"})
 
 
 class FixtureError(ValueError):
@@ -55,16 +48,6 @@ class AgentSession:
     turns: tuple[Turn, ...]
 
 
-def load_session(path: Path = DEFAULT_FIXTURE) -> AgentSession:
-    try:
-        raw = json.loads(
-            path.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys
-        )
-    except json.JSONDecodeError as exc:
-        raise FixtureError(f"{path}: {exc}") from exc
-    return parse_session(raw)
-
-
 def parse_session(raw: Any) -> AgentSession:
     fixture = _object(value=raw, where="fixture", allowed=FIXTURE_KEYS)
     if fixture.get("schema_version") != SCHEMA_VERSION:
@@ -80,154 +63,160 @@ def parse_session(raw: Any) -> AgentSession:
     )
 
 
-def build_request(
-    *,
-    session: AgentSession,
-    turn: Turn,
-    model: str,
-    max_tokens: int,
-    temperature: float,
-) -> dict[str, Any]:
+def build_case(session: AgentSession, *, split: str = "dev") -> dict[str, Any]:
     return {
-        "model": model,
-        "messages": list(session.messages[: turn.message_count]),
-        "tools": list(session.tools),
-        "max_tokens": max_tokens,
-        "temperature": temperature,
+        "id": session.id,
+        "benchmark": BENCHMARK_ID,
+        "messages": [dict(message) for message in session.messages],
+        "tools": [dict(tool) for tool in session.tools],
+        "metadata": {
+            "schema_version": SCHEMA_VERSION,
+            "split": split,
+            "turns": [
+                {
+                    "id": turn.id,
+                    "phase": turn.phase,
+                    "message_count": turn.message_count,
+                }
+                for turn in session.turns
+            ],
+        },
     }
 
 
-def replay(session: AgentSession, args: argparse.Namespace) -> list[dict[str, Any]]:
-    url = args.base_url.rstrip("/") + "/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": "vllm-sr-agent-session-replay",
-        args.session_header: args.session_id,
-    }
-    if args.api_key_env:
-        headers["Authorization"] = "Bearer " + os.environ[args.api_key_env]
-    headers.update(parse_extra_headers(args.extra_header))
+def case_turns(case: dict[str, Any]) -> list[dict[str, Any]]:
+    """Validate the recorded turn boundaries an inline case may hand-edit."""
+    messages = case.get("messages")
+    metadata = case.get("metadata")
+    turns = metadata.get("turns") if isinstance(metadata, dict) else None
+    if not isinstance(messages, list) or not isinstance(turns, list) or not turns:
+        raise ValueError("Agent-session cases require recorded messages and turns")
+    previous = 0
+    for turn in turns:
+        if not isinstance(turn, dict) or set(turn) != CASE_TURN_KEYS:
+            raise ValueError("Agent-session turns require id, phase and message_count")
+        for key in ("id", "phase"):
+            if not isinstance(turn[key], str) or not turn[key].strip():
+                raise ValueError(f"Agent-session turn {key} must be nonempty text")
+        count = turn["message_count"]
+        if isinstance(count, bool) or not isinstance(count, int) or count <= previous:
+            raise ValueError("Agent-session turn boundaries must strictly grow")
+        if count > len(messages):
+            raise ValueError("Agent-session turn exceeds the recorded transcript")
+        last_role = messages[count - 1].get("role")
+        if last_role not in {"user", "tool"}:
+            raise ValueError(
+                "Agent-session turns must end with a user message or tool result"
+            )
+        if (turn["phase"] == "tool_loop") != (last_role == "tool"):
+            raise ValueError(
+                "Agent-session tool_loop turns must end with a tool result"
+            )
+        previous = count
+    if previous != len(messages):
+        raise ValueError("Agent-session turns must cover the recorded transcript")
+    return turns
+
+
+def execute(case: dict[str, Any], context: Any) -> dict[str, Any]:
+    turns = case_turns(case)
     rows: list[dict[str, Any]] = []
-    previous_model = ""
-    for turn in session.turns:
-        body = build_request(
-            session=session,
-            turn=turn,
-            model=args.model,
-            max_tokens=args.max_tokens,
-            temperature=args.temperature,
+    answer = None
+    for turn in turns:
+        result = context.call(
+            case["messages"][: turn["message_count"]],
+            extra_body={"tools": case["tools"]},
+            fixture_phase=turn["phase"],
         )
-        row: dict[str, Any] = {
-            "turn": turn.id,
-            "phase": turn.phase,
-            "messages": turn.message_count,
-            "request_bytes": len(json.dumps(body)),
-        }
-        if not args.dry_run:
-            result = post_json(
-                url=url, body=body, headers=headers, timeout=args.timeout
-            )
-            row.update(
-                result_row(
-                    result=result, phase=turn.phase, previous_model=previous_model
-                )
-            )
-            previous_model = row["selected_model"] or previous_model
-        rows.append(row)
-    return rows
+        answer = result.get("final") or answer
+        rows.append(
+            {
+                "turn": turn["id"],
+                "phase": turn["phase"],
+                "selected_model": result.get("selected_model") or "",
+                "finish_reason": result.get("finish_reason") or "",
+            }
+        )
+    return {"answer": answer, "correct": True, "score": 1, "details": {"turns": rows}}
 
 
-def result_row(
-    *, result: dict[str, Any], phase: str, previous_model: str
+def preflight(case: dict[str, Any], manifest: dict[str, Any], cache: Any) -> None:
+    del cache
+    case_turns(case)
+    tools = case.get("tools")
+    if not isinstance(tools, list) or not tools:
+        raise ValueError("Agent-session cases require the recorded tool catalog")
+    for target in manifest.get("targets", []):
+        if target.get("session_mode") != SESSION_AWARE:
+            raise ValueError(
+                "agent-session-replay sends one session ID per replay; every "
+                "target requires session_mode: session_aware"
+            )
+
+
+def prepare(
+    *,
+    benchmark: str,
+    profile: str,
+    store: Any,
+    source_path: Any = None,
+    revision: str | None = None,
+    seed: int = 20260918,
+    limit: int | None = None,
 ) -> dict[str, Any]:
-    response = result.get("json") or {}
-    headers = result.get("headers") or {}
-    status = int(result.get("status") or 0)
-    selected = selected_model_from(result)
-    switched = bool(previous_model and selected and selected != previous_model)
-    choices = response.get("choices") or [{}]
-    return {
-        "status": status,
-        "success": HTTP_OK <= status < HTTP_REDIRECT_START,
-        "latency_ms": round(float(result.get("latency_ms") or 0), 1),
-        "selected_model": selected,
-        "model_switched": switched,
-        "tool_loop_switch_violation": phase == "tool_loop" and switched,
-        "prompt_tokens": usage_value(response, "prompt_tokens"),
-        "cached_tokens": cached_tokens(response),
-        "finish_reason": choices[0].get("finish_reason") or "",
-        "error": result.get("error", ""),
-        **{name: headers.get(name, "") for name in ROUTER_HEADERS},
-    }
-
-
-def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    sent = [row for row in rows if "status" in row]
-    return {
-        "requests": len(rows),
-        "sent": len(sent),
-        "succeeded": sum(row["success"] for row in sent),
-        "model_switches": sum(row["model_switched"] for row in sent),
-        "tool_loop_switch_violations": sum(
-            row["tool_loop_switch_violation"] for row in sent
-        ),
-        "selected_models": sorted(
-            {row["selected_model"] for row in sent if row["selected_model"]}
-        ),
-    }
-
-
-def stable_prefix_bytes(session: AgentSession) -> int:
-    return len(json.dumps(session.messages[0])) + len(json.dumps(list(session.tools)))
-
-
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Replay a recorded coding-agent session through a router."
-    )
-    parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
-    parser.add_argument("--base-url", default="http://127.0.0.1:8899/v1")
-    parser.add_argument("--model", default="auto")
-    parser.add_argument(
-        "--api-key-env", default="", help="Environment variable holding the API key."
-    )
-    parser.add_argument("--session-header", default="x-session-id")
-    parser.add_argument(
-        "--session-id", default="", help="Defaults to a new ID for every run."
-    )
-    parser.add_argument("--max-tokens", type=int, default=128)
-    parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--timeout", type=float, default=300.0)
-    parser.add_argument("--extra-header", action="append", default=[])
-    parser.add_argument("--dry-run", action="store_true")
-    return parser.parse_args(argv)
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(argv)
+    if benchmark != BENCHMARK_ID:
+        raise ValueError("Unknown benchmark for the agent-session adapter")
+    if profile not in {"smoke", "quick", "standard"}:
+        raise ValueError("Unknown benchmark or profile")
+    if source_path is None:
+        raise ValueError(
+            "agent-session-replay prepares from the repository fixture; pass "
+            f"--local --source-path {FIXTURE_PATH_HINT}"
+        )
+    if limit is not None and limit < 1:
+        raise ValueError("limit cannot drop the only recorded session")
+    path = Path(source_path).expanduser()
+    raw_bytes = path.read_bytes()
     try:
-        session = load_session(args.fixture)
-    except (OSError, FixtureError) as exc:
-        print(f"invalid fixture: {exc}", file=sys.stderr)
-        return 2
-    if args.api_key_env and not os.environ.get(args.api_key_env):
-        print(f"{args.api_key_env} is not set", file=sys.stderr)
-        return 2
-    if not args.session_id:
-        args.session_id = f"agent-session-fixture-{session.id}-{int(time.time())}"
-    rows = replay(session, args)
-    report = {
-        "fixture": session.id,
-        "session_id": args.session_id,
-        "dry_run": args.dry_run,
-        "tools": len(session.tools),
-        "stable_prefix_bytes": stable_prefix_bytes(session),
-        "turns": rows,
-        "summary": summarize(rows),
+        raw = json.loads(raw_bytes.decode("utf-8"), object_pairs_hook=_unique_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FixtureError(f"{path}: {exc}") from exc
+    session = parse_session(raw)
+    case = build_case(session, split="holdout" if profile == "standard" else "dev")
+    source = {
+        "url": "local-import",
+        "revision": revision or SCHEMA_VERSION,
+        "files": [{"name": path.name, "sha256": hashlib.sha256(raw_bytes).hexdigest()}],
+        "revision_verification": "declared-revision-with-content-digest",
+        "access_note": (
+            "Operator-supplied source; retain upstream access and license "
+            "records alongside this manifest."
+        ),
+        "normalizer": ADAPTER_VERSION,
     }
-    print(json.dumps(report, indent=2))
-    return 0 if all(row.get("success", True) for row in rows) else 1
+    # Dataset publication imports adapter registration.
+    from .sources import _write_dataset  # noqa: PLC0415
+
+    return _write_dataset(store, [case], profile, seed, {BENCHMARK_ID: source})
+
+
+def build_adapter():
+    # Adapter registration imports this module.
+    from .adapters import BenchmarkAdapter  # noqa: PLC0415
+
+    return BenchmarkAdapter(
+        id=BENCHMARK_ID,
+        title="Agent session replay",
+        kind="agent",
+        source_url=(
+            "https://github.com/vllm-project/semantic-router/blob/main/"
+            "bench/data/coding_agent_session.v1.json"
+        ),
+        version=ADAPTER_VERSION,
+        execute=execute,
+        preflight=preflight,
+        prepare=prepare,
+    )
 
 
 def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -376,7 +365,3 @@ def _check_tool_call(
     if not isinstance(arguments, dict):
         raise FixtureError(f"{where} call {call_id!r} arguments must be a JSON object")
     seen_calls.add(call_id)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -67,7 +67,9 @@ class Context:
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
 
-    def call(self, messages, role="subject", target=None, extra_body=None):
+    def call(
+        self, messages, role="subject", target=None, extra_body=None, fixture_phase=None
+    ):
         if self.cancelled():
             raise CallFailure("Run cancelled or wall-time budget exhausted")
         if self.quality_failure:
@@ -168,6 +170,10 @@ class Context:
         if role == "subject":
             call_data["phase"] = request_phase(messages)
             call_data["phase_source"] = "request"
+            if fixture_phase is not None:
+                if not isinstance(fixture_phase, str) or not fixture_phase.strip():
+                    raise ValueError("fixture_phase must be nonempty text")
+                call_data["fixture_phase"] = fixture_phase
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
