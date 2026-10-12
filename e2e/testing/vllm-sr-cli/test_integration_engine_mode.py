@@ -35,6 +35,8 @@ MANAGEMENT_KEY = "engine-e2e-management-key"
 PUBLIC_MODEL = "test/decision"
 # The public System One API accepted at most 2 MiB before images.
 FORMER_REQUEST_LIMIT = 2 << 20
+# The most bytes of a request body the public System One API reads.
+REQUEST_LIMIT = 48 << 20
 # A 64 x 48 MPEG-4 clip (8 frames, 4 per second) of a blue square moving over a green ramp.
 TINY_MP4 = (
     "data:video/mp4;base64,"
@@ -333,6 +335,8 @@ class TestEngineModeImages(EngineStack):
         self.assertNotEqual(both["answers"], seen["answers"])
         status, failure = self.ask("/v1/systemone", ["data:image/png;base64,AAAA"])
         self.assertEqual(status, 400, failure)
+        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["message"], "malformed image", failure)
         status, clip = self.ask("/v1/systemone", videos=[TINY_MP4])
         self.assertEqual(status, 200, clip)
         self.assertNotEqual(clip["answers"], text["answers"])
@@ -341,6 +345,14 @@ class TestEngineModeImages(EngineStack):
             "/v1/systemone", videos=["data:video/mp4;base64,AAAA"]
         )
         self.assertEqual(status, 400, failure)
+        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["message"], "malformed video", failure)
+        body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
+        body["model"] = PUBLIC_MODEL
+        body["state"] = "x" * (REQUEST_LIMIT + 1024)
+        status, failure = self.public("/v1/systemone", body)
+        self.assertEqual(status, 413, failure)
+        self.assertEqual(failure["error"]["code"], "request_too_large", failure)
 
 
 if __name__ == "__main__":
