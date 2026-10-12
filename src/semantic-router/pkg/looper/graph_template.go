@@ -73,5 +73,12 @@ func Template(cfg *config.LooperConfig, algorithm string, workflows *WorkflowSta
 			{ID: algorithm, Type: StepType, Node: &algorithmStep{cfg: cfg, algorithm: algorithm, workflows: workflows}},
 			{ID: "respond", Type: graph.TypeRespond, Node: &graph.Respond{}},
 		},
+		// The run's hard per-request call budget. The same budget rejects
+		// configurations that are already over it at config load, so a
+		// statically valid program only reaches it through call counts that
+		// are knowable during execution (retries, nested and multi-stage
+		// fan-out). A run that would cross it fails closed with
+		// graph.ErrHopLimit instead of amplifying past the limit.
+		Limits: graph.Limits{MaxHops: config.MaxUpstreamCallsPerRequest},
 	}, nil
 }
