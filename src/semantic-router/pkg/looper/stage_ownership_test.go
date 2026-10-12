@@ -101,7 +101,7 @@ func TestFusionFinalStageOwnership(t *testing.T) {
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
 	})
 
-	t.Run("fallback to AnalysisModels[0] preserving LoRA when analysis_models and model_refs have different order", func(t *testing.T) {
+	t.Run("fallback to AnalysisModels[0] matching provider-observed model when analysis_models and model_refs have different order", func(t *testing.T) {
 		req := &Request{
 			IsStreaming: true,
 			Algorithm: &config.AlgorithmConfig{
@@ -119,7 +119,31 @@ func TestFusionFinalStageOwnership(t *testing.T) {
 		ownership := ResolveFinalStageOwnership(req)
 		assert.Equal(t, config.DecisionAlgorithmFusion, ownership.AlgorithmType)
 		assert.Equal(t, "synthesis", ownership.StageName)
-		assert.Equal(t, "worker-b-lora", ownership.TargetModel)
+		assert.Equal(t, "worker-b", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
+	})
+
+	t.Run("provider-observed model ignores ModelRef LoRA adapter when analysis_models is explicitly configured", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmFusion,
+				Fusion: &config.FusionAlgorithmConfig{
+					AnalysisModels: []string{"worker-b"},
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{Model: "worker-b", LoRAName: "adapter-b"},
+			},
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, config.DecisionAlgorithmFusion, ownership.AlgorithmType)
+		assert.Equal(t, "synthesis", ownership.StageName)
+		assert.Equal(t, "worker-b", ownership.TargetModel)
 		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
 		assert.True(t, ownership.IsFinalUserVisible)
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
@@ -389,12 +413,16 @@ func TestWorkflowsFinalStageOwnership(t *testing.T) {
 		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
 	})
 
-	t.Run("static workflow preserves LoRA adapter for worker from static roles", func(t *testing.T) {
+	t.Run("static workflow without explicit final.model selects planner when configured", func(t *testing.T) {
 		req := &Request{
 			IsStreaming: true,
 			Algorithm: &config.AlgorithmConfig{
 				Type: config.DecisionAlgorithmWorkflows,
 				Workflows: &config.WorkflowsAlgorithmConfig{
+					Mode: config.WorkflowModeStatic,
+					Planner: config.WorkflowPlannerConfig{
+						Model: "planner-a",
+					},
 					Roles: []config.WorkflowRoleConfig{
 						{
 							Name:   "worker",
@@ -405,14 +433,14 @@ func TestWorkflowsFinalStageOwnership(t *testing.T) {
 			},
 			ModelRefs: []config.ModelRef{
 				{Model: "worker-a"},
-				{Model: "worker-b", LoRAName: "worker-b-lora"},
+				{Model: "worker-b"},
 			},
 		}
 
 		ownership := ResolveFinalStageOwnership(req)
 		assert.Equal(t, config.DecisionAlgorithmWorkflows, ownership.AlgorithmType)
 		assert.Equal(t, "synthesis", ownership.StageName)
-		assert.Equal(t, "worker-b-lora", ownership.TargetModel)
+		assert.Equal(t, "planner-a", ownership.TargetModel)
 		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
 		assert.True(t, ownership.IsFinalUserVisible)
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
