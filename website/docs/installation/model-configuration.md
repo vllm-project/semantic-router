@@ -215,6 +215,35 @@ standalone mode the Router probes each replica. Behind Envoy, Envoy probes
 them, and the model calls the Router makes itself, such as a Looper
 algorithm's, leave the rotation to outlier ejection (`consecutive_5xx`).
 
+### Name each replica's serving engine
+
+A self-hosted backend can name the serving engine behind it, so the Router can
+read that engine's load metrics:
+
+```yaml
+      backend_refs:
+        - name: replica-a
+          provider: vllm
+          endpoint: 10.0.0.1:8000
+          engine: vllm
+        - name: replica-b
+          provider: vllm
+          endpoint: 10.0.0.2:8000
+          engine: tensorrt-llm
+          metrics:
+            port: 8002
+            path: /metrics
+```
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `engine` | none | `vllm`, `sglang`, `atom`, or `tensorrt-llm`. A backend without one reports no load metrics. |
+| `metrics.port` | the endpoint's port | Port where the engine serves Prometheus metrics; Triton serves them on `8002`. |
+| `metrics.path` | `/metrics` | Path of those metrics. |
+
+Naming an engine changes nothing on its own; it only tells the Router where
+load evidence for that replica can be found.
+
 ### Override timeouts and retries for one decision
 
 A decision can carry its own `reliability` block for the requests it routes,

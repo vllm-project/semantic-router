@@ -529,6 +529,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CanonicalBackendMetrics": {
+      "properties": {
+        "port": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalBackendRef": {
       "properties": {
         "name": {
@@ -575,6 +587,12 @@
         },
         "openai_compat_gateway": {
           "type": "boolean"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/CanonicalBackendMetrics"
         }
       },
       "additionalProperties": false,
