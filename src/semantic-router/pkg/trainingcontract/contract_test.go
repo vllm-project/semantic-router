@@ -130,10 +130,10 @@ func TestSharedInvalidInputs(t *testing.T) {
 				validationErr = json.Unmarshal(tc.Value, &snapshot)
 			case "Profile":
 				var p Profile
-				if unmarshalErr := json.Unmarshal(tc.Value, &p); unmarshalErr != nil {
-					t.Fatal(unmarshalErr)
+				validationErr = json.Unmarshal(tc.Value, &p)
+				if validationErr == nil {
+					validationErr = ValidateProfile(p)
 				}
-				validationErr = ValidateProfile(p)
 			case "ArtifactVariantSpec":
 				var spec ArtifactVariantSpec
 				if unmarshalErr := json.Unmarshal(tc.Value, &spec); unmarshalErr != nil {
@@ -185,5 +185,14 @@ func TestClassifierLabelOrder(t *testing.T) {
 	p.Classifier.LabelMapping = map[string]int{"negative": 0, "positive": 0}
 	if ValidateProfile(p) == nil {
 		t.Fatal("accepted ambiguous class order")
+	}
+}
+
+func TestClassifierProfileRejectsUnknownFields(t *testing.T) {
+	decoder := json.NewDecoder(bytes.NewBufferString(`{"target_contract":"signal.label-scores/v1","classifier":{"label_mapping":{"negative":0,"positive":1},"unknown":true}}`))
+	decoder.DisallowUnknownFields()
+	var p Profile
+	if err := decoder.Decode(&p); err == nil {
+		t.Fatal("accepted unknown classifier field")
 	}
 }
