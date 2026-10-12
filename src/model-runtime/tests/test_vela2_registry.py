@@ -95,7 +95,7 @@ def test_recorded_references_are_for_the_pinned_revisions(file_name) -> None:
 
 @pytest.mark.parametrize("model", MODELS, ids=size)
 def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+    assert set(model.golden_answers) == {"cpu", "rocm", "cuda"}
     levels = GOLDEN_QUESTIONS["urgency"]["criteria"]
     for answers in model.golden_answers.values():
         assert set(answers) == GOLDEN_IDS
@@ -110,12 +110,20 @@ def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
         assert answers["urgency"]["legend"] == {
             str(index): level for index, level in enumerate(levels)
         }
-    cpu, rocm = model.golden_answers["cpu"], model.golden_answers["rocm"]
+    cpu, rocm, cuda = (
+        model.golden_answers["cpu"],
+        model.golden_answers["rocm"],
+        model.golden_answers["cuda"],
+    )
     assert compare_answers(cpu, rocm, GPU_TOLERANCE) == (
         len(GOLDEN_IDS),
         len(GOLDEN_IDS),
     )
-    assert cpu["domain"]["choice"] == rocm["domain"]["choice"]
+    assert compare_answers(cpu, cuda, GPU_TOLERANCE) == (
+        len(GOLDEN_IDS),
+        len(GOLDEN_IDS),
+    )
+    assert cpu["domain"]["choice"] == rocm["domain"]["choice"] == cuda["domain"]["choice"]
 
 
 @pytest.mark.parametrize("model", DECODERS, ids=size)
