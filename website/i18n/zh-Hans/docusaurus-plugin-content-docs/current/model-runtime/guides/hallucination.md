@@ -4,7 +4,7 @@ description: 把模型的答案和给它的上下文对一遍，标出上下文�
 translation:
   source_commit: "439c22531380dfd51abf2ce33ce6dc4db87b1fb7"
   source_file: "docs/model-runtime/guides/hallucination.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
