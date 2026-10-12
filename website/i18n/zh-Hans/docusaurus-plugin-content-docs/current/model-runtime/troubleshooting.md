@@ -5,7 +5,7 @@ description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/troubleshooting.md"
-  outdated: false
+  outdated: true
 ---
 
 # 故障排查与常见问题
