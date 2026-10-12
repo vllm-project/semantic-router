@@ -179,6 +179,12 @@ order with their roles, content, and tool links, so a retrieval returns the
 original exchange rather than a summary. Retrieval never re-executes historical
 tool calls and never changes durable conversation state.
 
+Recovery is scoped to the request and to a trusted user identity, so stored
+turns can never be retrieved across users. A request without that identity
+cannot store recoverable content, so it reports `recovery_unavailable` and the
+configured failure mode decides. Router Replay records whether recovery
+happened, but never the issued keys.
+
 Recovery is one request-level facility shared with `context_compression`: one
 store, one budget, one reserved tool, one key set. When both plugins enable it,
 their `recovery.store` values must match — configuration validation rejects a
