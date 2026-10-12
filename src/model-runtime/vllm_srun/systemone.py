@@ -130,6 +130,16 @@ def content(value: Any, where: str, *, nullable: bool = False) -> Any:
     raise _invalid(f"{where} must be text, an object or an array")
 
 
+def require_full_input(question: dict[str, Any]) -> bool:
+    """Validate the opt-in completeness contract without changing ordinary questions."""
+    value = question.get("require_full_input", False)
+    if not isinstance(value, bool):
+        raise _invalid("require_full_input must be a boolean")
+    if value and question.get("overflow") == "truncate":
+        raise _invalid("require_full_input cannot be combined with overflow truncate")
+    return value
+
+
 def read_question(
     question: Any, *, extra_fields: frozenset[str] = frozenset()
 ) -> Question:
@@ -145,7 +155,8 @@ def read_question(
     kind = question.get("type")
     if kind not in QUESTION_TYPES:
         raise _invalid(f"type must be one of {list(QUESTION_TYPES)}")
-    unknown = set(question) - FIELDS[kind] - extra_fields
+    require_full_input(question)
+    unknown = set(question) - FIELDS[kind] - extra_fields - {"require_full_input"}
     if unknown:
         raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
     if "instructions" not in question:
@@ -200,21 +211,28 @@ def named_options(criteria: Any, minimum: int = MIN_OPTIONS) -> dict[str, Any]:
 
 def _options(choices: Any, keys: tuple[str, ...] | None) -> dict[str, Any]:
     """``choices`` ([{key, description}]) as criteria; keys unique and non-blank (or from ``keys``)."""
-    if not isinstance(choices, list):
-        raise _invalid("choices must be a list of {key, description}")
+    return listed_options(choices, "choices", keys)
+
+
+def listed_options(
+    items: Any, field: str, keys: tuple[str, ...] | None = None
+) -> dict[str, Any]:
+    """An ordered ``[{key, description}]`` field (``choices``, a family's ``labels``) as criteria."""
+    if not isinstance(items, list):
+        raise _invalid(f"{field} must be a list of {{key, description}}")
     criteria: dict[str, Any] = {}
-    for option in choices:
+    for option in items:
         if (
             not isinstance(option, dict)
             or "key" not in option
             or set(option) - {"key", "description"}
         ):
-            raise _invalid("each choice is {key, description}")
+            raise _invalid(f"each entry of {field} is {{key, description}}")
         key = option["key"]
         if not isinstance(key, str) or not key.strip() or key in criteria:
-            raise _invalid("choice keys must be unique nonempty strings")
+            raise _invalid(f"{field} keys must be unique nonempty strings")
         if keys is not None and key not in keys:
-            raise _invalid(f"choices may contain only {list(keys)}")
+            raise _invalid(f"{field} may contain only {list(keys)}")
         criteria[key] = option.get("description")
     return criteria
 

@@ -25,9 +25,7 @@ import type {
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
-    auto_model_name: 'vllm-sr/auto',
-    auto_model_names: ['vllm-sr/auto', 'auto', 'MoM'],
-    include_config_models_in_list: false,
+    list_backend_models: false,
     clear_route_cache: true,
     model_selection: {
       enabled: true,
@@ -67,6 +65,13 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     store_backend: 'memory',
     ttl_seconds: 2592000,
     async_writes: false,
+    capture_request_body: true,
+    capture_response_body: true,
+    capture_personal_data: true,
+    max_records: 10000,
+    max_body_bytes: 4096,
+    max_tool_trace_bytes: 0,
+    max_tool_trace_steps: 100,
   } satisfies RouterReplayConfig,
   authz: {
     fail_open: false,
@@ -120,22 +125,19 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   prompt_guard: {
     enabled: true,
     model_ref: 'prompt_guard',
-    threshold: 0.7,
+    threshold: 0.75,
     use_cpu: true,
-    jailbreak_mapping_path: 'models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
       model_ref: 'domain_classifier',
-      threshold: 0.5,
+      threshold: 0.28,
       use_cpu: true,
-      category_mapping_path: 'models/Vela-1.0-Encoder-307M-Domain/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
-      threshold: 0.9,
+      threshold: 0.01,
       use_cpu: true,
-      pii_mapping_path: 'models/Vela-1.0-Encoder-307M-PII/pii_mapping.json',
     },
     preference: {
       use_contrastive: false,
@@ -145,7 +147,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.85,
+      threshold: 0.93,
       use_cpu: true,
     },
     detector: {
@@ -160,20 +162,15 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   feedback_detector: {
     enabled: true,
     model_ref: 'feedback_detector',
-    threshold: 0.7,
+    threshold: 0.37,
     use_cpu: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
   complexity: {},
   external_models: [],
-  knowledge_bases: [],
   admission: {},
+  // Every module follows the decision model unless a line binds it.
   system_models: {
-    prompt_guard: 'models/Vela-1.0-Encoder-307M-Guard',
-    domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
-    pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
-    fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
-    hallucination_detector: 'models/Vela-1.0-Encoder-307M-Halu',
-    feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
+    decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',
@@ -264,7 +261,7 @@ export const SECTION_META: Record<
     title: 'Router Replay',
     eyebrow: 'Services',
     description:
-      'Persistence policy for replay records written by replay-enabled decision plugins.',
+      'Shared Replay storage and capture defaults. Each decision can override capture settings through its Replay plugin.',
   },
   authz: {
     title: 'Authorization',
@@ -339,20 +336,16 @@ export const SECTION_META: Record<
     eyebrow: 'Model Catalog',
     description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
   },
-  knowledge_bases: {
-    title: 'Knowledge Bases',
-    eyebrow: 'Model Catalog',
-    description: 'Canonical knowledge-base definitions available to KB-aware routing signals.',
-  },
   admission: {
     title: 'Model Admission',
     eyebrow: 'Model Catalog',
     description: 'Named admission policies used to qualify models before routing.',
   },
   system_models: {
-    title: 'System Model Bindings',
+    title: 'Decision Model & Bindings',
     eyebrow: 'Model Catalog',
-    description: 'Stable capability-to-model bindings for the router-owned built-in model catalog.',
+    description:
+      'Choose the Vela decision model for built-in signals and decision questions, with optional per-signal model overrides.',
   },
   embedding_models: {
     title: 'Embedding Models',

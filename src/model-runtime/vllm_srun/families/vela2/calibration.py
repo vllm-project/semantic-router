@@ -14,26 +14,30 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from .words import decode_spans
 
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
 ROUTER_HEAD, BROAD_HEAD = "router", "broad"
 SPAN_HEADS = (ROUTER_HEAD, BROAD_HEAD)
 
 
-def sigmoid(values: Any) -> np.ndarray:
+def sigmoid(values: Any) -> NDArray[np.float64]:
     """Elementwise logistic in float64, as the packages compute probabilities."""
     return 1 / (1 + np.exp(-np.asarray(values, dtype=np.float64)))
 
 
-def softmax(values: Any) -> np.ndarray:
+def softmax(values: Any) -> NDArray[np.float64]:
     """Softmax over a vector in float64."""
     values = np.asarray(values, dtype=np.float64)
     exponentials = np.exp(values - values.max())
-    return exponentials / exponentials.sum()
+    normalized: NDArray[np.float64] = exponentials / exponentials.sum()
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -107,8 +111,8 @@ class Calibration:
 
     def sparse_gate(
         self,
-        probabilities: np.ndarray,
-        offsets: np.ndarray,
+        probabilities: NDArray[np.float64],
+        offsets: NDArray[np.int32],
         labels: list[str],
         text: str,
         threshold: float,

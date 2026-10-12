@@ -11,7 +11,7 @@ translation:
 
 `remom` 在有界轮次中运行多个候选模型，并将它们的响应合成一个答案。
 
-运行时也支持通过 `global.integrations.looper.remom.model_names` 使用直接 ReMoM 模型 slug。内置默认值是 `vllm-sr/remom`。直接 ReMoM 调用只评估 `algorithm.type=remom` 的决策，这与直接 Fusion 和 Flow 模型表面一致。
+通过 `entrypoints` 将公开模型名映射到 recipe 来暴露 remom。公开名字没有内置分发逻辑：所选 recipe 评估自己的 signals 和 decisions，由 `algorithm.type=remom` 启动算法。若入口只应运行 remom 策略，请将这些策略放在独立 recipe 中。
 
 **灵感来源**：[PaCoRe](https://arxiv.org/abs/2601.05593) — 扩展为支持模型混合。
 
@@ -89,17 +89,12 @@ flowchart TD
 
 ## 配置
 
-注册直接模型 slug：
+将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      remom:
-        model_names:
-          - vllm-sr/remom
+entrypoints:
+  - model_names: [vllm-sr/remom]
+    recipe: default
 ```
 
 配置一条 ReMoM 决策：

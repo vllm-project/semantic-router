@@ -17,7 +17,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -313,7 +312,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, opts *framework.Setu
 		Namespace:   semanticNamespace,
 		ValuesFiles: []string{"e2e/profiles/llm-d/values.yaml"},
 		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
+			"gateway.mode":     "extproc",
+			"image.repository": "ghcr.io/vllm-project/semantic-router/vllm-sr",
 			"image.tag":        opts.ImageTag,
 			"image.pullPolicy": "Never",
 		},
@@ -552,6 +552,7 @@ func (p *Profile) kubectlApply(ctx context.Context, target string) error {
 func (p *Profile) kubectlDelete(ctx context.Context, target string) error {
 	return p.runCmd(ctx, "kubectl", "delete", "-f", target, "--ignore-not-found")
 }
+
 func (p *Profile) patchEnvoyFilterForGateway(ctx context.Context) error {
 	// Add match.context=GATEWAY and listener.portNumber=80 to the first configPatch via JSON patch
 	patch := `[

@@ -332,7 +332,7 @@ func TestHallucinationSignalReadsTheSelectedRecipeRules(t *testing.T) {
 		TraceContext: context.Background(), Headers: map[string]string{},
 		FactCheckNeeded: true, HasToolsForFactCheck: true, ToolResultsContext: hallucinationContext,
 	}
-	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, plain)
+	router.resolveEntrypointForRequest(config.DefaultEntrypointModel, plain)
 	if recipe := plain.Routing.SelectedRecipe(); recipe == nil || recipe.Name != config.DefaultRecipeName {
 		t.Fatalf("auto model resolved %+v, want the default recipe", recipe)
 	}

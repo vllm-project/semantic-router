@@ -2,7 +2,7 @@
 title: 自定义模型
 description: 为私有、自托管或新发布的模型配置可选元数据和同构后端副本。
 translation:
-  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/custom-models.md"
   outdated: false
 ---
@@ -110,7 +110,7 @@ providers:
 
 ## 使用控制面板
 
-打开 **Build → Models → Add Model**：
+打开 **Build → Routing → Models → Add Model**：
 
 - 选择 Provider，并在连接流程中输入自定义模型 ID；或
 - 选择 **Manual setup**，编辑完整的身份、推理、Model Card、定价、可靠性和后端引用字段。

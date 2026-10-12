@@ -258,6 +258,27 @@ def test_selector_candidates_must_be_model_refs():
     )
 
 
+def test_selector_without_deployment_asks_the_decision_model():
+    def omit(document):
+        del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+
+    assert _errors(_config(omit)) == []
+
+    def alternate(document):
+        omit(document)
+        document["global"]["model_catalog"]["system"] = {
+            "decision_model": {"deployment": "decision-kai"}
+        }
+
+    assert _errors(_config(alternate)) == []
+
+    def blank(document):
+        document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"] = " "
+
+    with pytest.raises(ValidationError, match="omit it to ask the decision model"):
+        UserConfig.model_validate(_config(blank))
+
+
 def test_decision_type_requires_its_configuration():
     def mutate(document):
         document["routing"]["decisions"][0]["algorithm"] = {"type": "decision"}
@@ -271,7 +292,7 @@ def test_decision_type_requires_its_configuration():
     [
         ({"artifact": "vllm-sr/Decision-2.0-Kai-0.6B"}, None),
         ({"endpoint": "unix:///run/vllm-sr/runtime.sock"}, None),
-        ({"endpoint": "http://runtime:8100", "device": "rocm:1"}, None),
+        ({"endpoint": "http://runtime:8100", "device": "rocm:1"}, "cannot set device"),
         ({"artifact": "/models/kai", "profile": "batching"}, None),
         ({"artifact": "./models/kai"}, "Hub repository ID or an absolute"),
         ({"artifact": "/models/kai", "revision": REVISION}, "only to Hub"),
@@ -283,12 +304,12 @@ def test_decision_type_requires_its_configuration():
         ({"artifact": "vllm-sr/x", "input": {"overflow": "truncate"}}, None),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "cut"}}, "input.overflow"),
         ({"artifact": "vllm-sr/x", "input": {"max_tokens": -1}}, "not be negative"),
-        ({"artifact": "vllm-sr/x", "process": "decisions"}, None),
-        ({"artifact": "vllm-sr/x", "process": "-bad name"}, "short name"),
+        ({"artifact": "vllm-sr/x", "process": "decisions"}, "retired"),
+        ({"artifact": "vllm-sr/x", "process": "-bad name"}, "retired"),
         ({"artifact": "vllm-sr/x", "served_name": "kai"}, "attached endpoint"),
         ({"endpoint": "http://runtime:8100", "served_name": "kai"}, None),
         ({"endpoint": "http://runtime:8100", "served_name": " kai"}, "trimmed"),
-        ({"endpoint": "http://runtime:8100", "process": "x"}, "managed"),
+        ({"endpoint": "http://runtime:8100", "process": "x"}, "retired"),
         ({"endpoint": "tcp://runtime:8100"}, "unix://, http:// or https://"),
         ({"endpoint": "unix://relative.sock"}, "absolute socket path"),
         ({}, "requires artifact"),
@@ -347,3 +368,102 @@ def test_decision_deployments_reject_an_input_budget():
         deployment["input"] = {"max_tokens": 4096, "overflow": "truncate"}
 
     assert any("never truncate" in e for e in _errors(_config(budget)))
+
+
+@pytest.mark.parametrize(
+    "models,expected",
+    [
+        (["vllm-sr/Decision-2.0-Kai-0.6B"], None),
+        (["decision-kai"], "is not declared"),
+        (["small"], "is not declared"),
+    ],
+)
+def test_systemone_listener_uses_public_identity_not_chat_or_resource_key(
+    models, expected
+):
+    document = copy.deepcopy(BASE)
+    document["listeners"][0]["models"] = ["small"]
+    document["listeners"][0]["systemone"] = {"models": models}
+    errors = _errors(document)
+    assert (
+        not errors if expected is None else any(expected in error for error in errors)
+    )
+
+
+def test_systemone_duplicate_identity_requires_explicit_public_names():
+    document = copy.deepcopy(BASE)
+    catalog = document["global"]["model_catalog"]["deployments"]
+    catalog["second"] = dict(catalog["decision-kai"])
+    document["listeners"][0]["systemone"] = {
+        "models": [catalog["decision-kai"]["artifact"]]
+    }
+    assert any("multiple deployments" in error for error in _errors(document))
+    catalog["second"]["public_name"] = "alternate"
+    assert _errors(document) == []
+
+
+def test_decision_window_input_is_a_supported_scan_budget():
+    document = copy.deepcopy(BASE)
+    document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+        "max_tokens": 4096,
+        "overflow": "window",
+    }
+    assert _errors(document) == []
+
+
+@pytest.mark.parametrize(
+    "replicas",
+    [
+        [],
+        [{"device": "cpu"}],
+        [{"device": "rocm:0"}, {"device": "rocm:0"}],
+        [
+            {"endpoint": "http://worker:8100", "served_name": "first"},
+            {"endpoint": "http://worker:8100", "served_name": "second"},
+        ],
+    ],
+)
+def test_replicas_share_one_logical_artifact(replicas):
+    assert (
+        model_runtime_deployment_error(
+            {"provider": "model_runtime", "artifact": "org/judge", "replicas": replicas}
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "updates,message",
+    [
+        ({"replicas": {}}, "must be a list"),
+        ({"replicas": [{}] * 65}, "at most 64"),
+        ({"replicas": [{}], "device": "cpu"}, "top-level"),
+        ({"replicas": [{"artifact": "other/model"}]}, "only device"),
+        ({"replicas": [{"endpoint": "http://worker:8100"}] * 2}, "duplicate attached"),
+        (
+            {
+                "replicas": [
+                    {"endpoint": "http://worker:8100"},
+                    {"endpoint": "http://worker:8100/"},
+                ]
+            },
+            "duplicate attached",
+        ),
+        (
+            {
+                "replicas": [
+                    {"endpoint": "http://worker:8100", "served_name": "bad\rname"}
+                ]
+            },
+            "trimmed model name",
+        ),
+        (
+            {"replicas": [{"endpoint": "http://worker:8100", "device": "cpu"}]},
+            "cannot set device",
+        ),
+    ],
+)
+def test_invalid_replica_placements_fail(updates, message):
+    assert message in model_runtime_deployment_error(
+        {"provider": "model_runtime", "artifact": "org/judge", **updates}
+    )

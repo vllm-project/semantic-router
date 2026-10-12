@@ -15,19 +15,6 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: npm
-    directory: /dashboard/wizmap
-    schedule:
-      interval: weekly
-      day: monday
-      time: "04:00"
-      timezone: UTC
-    open-pull-requests-limit: 0
-    groups:
-      dashboard-wizmap-security:
-        applies-to: security-updates
-        patterns: ["*"]
-
-  - package-ecosystem: npm
     directory: /website
     schedule:
       interval: weekly

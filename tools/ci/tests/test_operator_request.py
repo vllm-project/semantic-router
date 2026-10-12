@@ -57,7 +57,7 @@ class OperatorRequestTests(unittest.TestCase):
 
     def test_backend_must_observe_model_rewrite_and_this_payload(self):
         for change in (
-            {"model": "auto"},
+            {"model": "vllm-sr/auto"},
             {"user": ["stale nonce"]},
             {"mock": "health"},
         ):

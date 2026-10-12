@@ -68,7 +68,8 @@ def expected_parameters(details: pkg.Decision1Package) -> int | None:
     if text is None:
         return None
     hidden, head_dim = details.backbone_config["hidden_size"], config["head_dim"]
-    return text + 4 * hidden + 4 * hidden * head_dim + 2 * head_dim
+    parameters: int = text + 4 * hidden + 4 * hidden * head_dim + 2 * head_dim
+    return parameters
 
 
 class Decision1Family(ModelFamily):
@@ -213,7 +214,7 @@ class Decision1Family(ModelFamily):
         tokenizer_dir = (root / files.tokenizer["json"]).parent
         if (root / files.tokenizer["json"]).name != "tokenizer.json":
             raise PackageError("the tokenizer file must be named tokenizer.json")
-        tokenizer = Tokenizer.from_package(tokenizer_dir)
+        tokenizer = Tokenizer.from_package(tokenizer_dir, package.max_input_tokens)
         hidden = spec.backbone.config["hidden_size"]
         if files.runtime == pkg.VELA:
             head = vela.check_config(details.model_config)

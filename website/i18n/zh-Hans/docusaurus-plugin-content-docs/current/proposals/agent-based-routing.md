@@ -4,7 +4,7 @@ description: 在 Epic #2994 下，关于有界智能体事实、外部运行时�
 created: 2026-08-29
 status: 提案
 translation:
-  source_commit: "5658f7f90975cd63fbac4db11b2c6e4ba8ae546f"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/agent-based-routing.md"
   outdated: false
 ---
@@ -22,7 +22,7 @@ translation:
 定义智能体感知的**事实**和**交接信封**，使 Router 能为外部智能体运行时安全地选择逻辑模型。保持 v0.3 契约：
 
 - Router 选择逻辑 **Model**；
-- Envoy 和面向客户端的网关拥有上游传输；
+- 所选前端传输（standalone 或 Envoy）拥有上游传输；
 - 配方的 **决策保持与模型无关**，而 **入口拥有 `model_names`**；
 - 可选智能体服务位于 Router **之外**。
 
@@ -42,7 +42,7 @@ flowchart LR
   Runtime["External agent runtime"] -->|"bounded facts + handoff envelope"| Gateway["Client-facing gateway"]
   Gateway -->|"validated request facts"| Router["Router: signals → decision → logical model"]
   Router -->|"selected model + constraints + provenance"| Gateway
-  Gateway -->|"transport"| Envoy["Envoy / upstream"]
+  Gateway -->|"transport"| Envoy["Standalone / Envoy upstream"]
   Envoy --> Model["Inference endpoint"]
   Runtime -.->|"orchestration, tools, durable state"| Runtime
 ```

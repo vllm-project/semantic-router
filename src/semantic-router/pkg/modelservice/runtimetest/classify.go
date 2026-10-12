@@ -82,6 +82,9 @@ func classifyOne(model Model, head Head, input api.ClassifyItem, options api.Cla
 	if tokens > limit {
 		if overflow != "truncate" {
 			failure := api.ItemError("max_length_exceeded")
+			if overflow == "window" {
+				failure = "scan_budget_exceeded"
+			}
 			return api.ClassifyResult{Error: &failure, Input: usage}
 		}
 		all = all[:limit-specialTokens]

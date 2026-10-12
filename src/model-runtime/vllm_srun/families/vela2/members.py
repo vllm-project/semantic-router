@@ -11,7 +11,7 @@ them) and reads the blocks with the candidate head and the span heads.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -27,6 +27,9 @@ from .encoder_layout import EncoderLayout, EncoderSequence, batch_indices, split
 from .layout import Row, SchemaTooLongError, Tokens
 from .package import Vela2Package
 from .raw import RawRow
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 GRAPH_OUTPUTS = ("opt_logits", "span_logits")
 INDEX_INPUTS = ("q_index", "opt_index", "unit_index", "ent_index")
@@ -113,14 +116,17 @@ class EncoderMember:
         return 0 if self.graph else sum(p.numel() for p in self.readout.parameters())
 
     def plan(
-        self, rows: list[Row], tokens: Tokens
+        self, rows: list[Row], tokens: Tokens, in_windows: bool = True
     ) -> tuple[list[EncoderSequence], list[list[int] | None]]:
-        """Sequences of every row and, per row, the indices of its sequences (None when it cannot fit)."""
+        """Sequences of every row and, per row, the indices of its sequences (None when it cannot fit).
+
+        Without ``in_windows`` a row is one sequence, its parts cut to fit.
+        """
         items: list[EncoderSequence] = []
         groups: list[list[int] | None] = []
         for row in rows:
             try:
-                sequences = self.layout.sequences(row, tokens)
+                sequences = self.layout.sequences(row, tokens, in_windows)
             except SchemaTooLongError:
                 groups.append(None)
                 continue
@@ -130,7 +136,7 @@ class EncoderMember:
 
     def _encode(
         self, items: list[EncoderSequence], packed: bool = False, reduced: bool = False
-    ) -> tuple[EncoderOutput, dict[str, np.ndarray]]:
+    ) -> tuple[EncoderOutput, dict[str, NDArray[np.int64]]]:
         """One batch through the engine: padded, asking for the graph outputs (graph engines return
         them), or packed back to back (hidden states only); ``reduced`` asks for the engine's
         reduced copy, which runs where the engine loaded one."""
@@ -294,8 +300,9 @@ class DecoderMember:
         )
 
     def plan(
-        self, rows: list[Row], tokens: Tokens
+        self, rows: list[Row], tokens: Tokens, in_windows: bool = True
     ) -> tuple[list[DecoderTree], list[RowTrees | None]]:
+        """The rows' trees; a span target over the repeat limit is read in windows either way."""
         return self.layout.trees(rows, tokens)
 
     def batches(self, items: list[DecoderTree]) -> list[list[int]]:
@@ -319,9 +326,9 @@ class DecoderMember:
 
     def run(
         self, items: list[DecoderTree], packed: bool = False
-    ) -> list[list[np.ndarray | None]]:
+    ) -> list[list[NDArray[np.float32] | None]]:
         """Per tree, each block's readout in block order (None for a block nobody reads)."""
-        results: list[list[np.ndarray | None]] = [
+        results: list[list[NDArray[np.float32] | None]] = [
             [None] * len(tree.blocks) for tree in items
         ]
         if packed:
@@ -370,10 +377,10 @@ class DecoderMember:
 
     def _read(
         self, blocks: list[Block], hidden: torch.Tensor
-    ) -> list[np.ndarray | None]:
+    ) -> list[NDArray[np.float32] | None]:
         """Readouts of one forward's blocks: the candidate head over every question block at once."""
         device = hidden.device
-        results: list[np.ndarray | None] = [None] * len(blocks)
+        results: list[NDArray[np.float32] | None] = [None] * len(blocks)
         questions = [index for index, block in enumerate(blocks) if not block.is_span]
         with torch.inference_mode():
             if questions:
@@ -401,7 +408,7 @@ class DecoderMember:
                     results[index] = self._span(block, hidden[index])
         return results
 
-    def _span(self, block: Block, rows: torch.Tensor) -> np.ndarray:
+    def _span(self, block: Block, rows: torch.Tensor) -> NDArray[np.float32]:
         """Word x label logits of one span block from its hidden rows (labels: mean over each label block)."""
         labels = torch.stack(
             [
@@ -410,4 +417,7 @@ class DecoderMember:
             ]
         )
         words = rows[torch.as_tensor(block.words, device=rows.device)]
-        return self.spans[block.head](words, labels).float().cpu().numpy()
+        logits: NDArray[np.float32] = (
+            self.spans[block.head](words, labels).float().cpu().numpy()
+        )
+        return logits

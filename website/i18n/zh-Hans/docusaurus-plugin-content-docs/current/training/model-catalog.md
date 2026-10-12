@@ -2,7 +2,7 @@
 title: Vela 模型目录
 sidebar_label: 模型目录
 translation:
-  source_commit: "19c03bfd28b6c53df9b682bbfc3e5fc1d372c803"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/training/model-catalog.md"
   outdated: false
 ---
@@ -28,7 +28,7 @@ translation:
 | [Embedding](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Embedding) | 比较请求并检索相关文档 |
 | [Reranker](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Reranker) | 按相关性重新排列候选文档 |
 
-Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。Shield 是单独训练的模型，与 Safety 使用相同的 `safe`/`unsafe` 接口；Safety 仍是默认模型，改用 Shield 的方法见英文版 [Safety 信号指南](https://vllm-sr.ai/docs/tutorials/signal/learned/safety#select-vela-shield)。
+Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。Shield 是单独训练的模型，与 Safety 使用相同的 `safe`/`unsafe` 接口；二者都是显式专用模型；默认判断部署使用 Vela 2.0 0.3B。选择 Shield 的方法见 [Safety 信号指南](../tutorials/signal/learned/safety.md#select-vela-shield)。
 
 Embedding 和 Reranker 提供四种编码器深度和五种维度，方便权衡质量、延迟和内存。选择方法见 [Embedding 和 Reranking](./mmbert-32k-models)。
 

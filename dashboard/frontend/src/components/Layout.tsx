@@ -159,7 +159,7 @@ const Layout: React.FC<LayoutProps> = ({
         isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
       }
       onFocus={() => void preloadDashboardRoute(link.to)}
-      onPointerEnter={() => void preloadDashboardRoute(link.to)}
+      onPointerDown={() => void preloadDashboardRoute(link.to)}
       onClick={closeMenus}
     >
       <ProductIcon name={link.icon} className={styles.navIcon} />

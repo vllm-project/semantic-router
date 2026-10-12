@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -351,6 +352,53 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	}
 	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
 		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	}
+}
+
+func TestBuildCanonicalConfigCarriesDecisionReliabilityAndFallback(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Decisions: []vllmv1alpha1.DecisionConfig{{
+					Name: "long_report",
+					Rules: vllmv1alpha1.RuleCombinationConfig{
+						Operator:   "AND",
+						Conditions: []vllmv1alpha1.RuleConditionConfig{{Type: "keyword", Name: "long_report"}},
+					},
+					ModelRefs: []vllmv1alpha1.ModelRefConfig{{Model: "small"}, {Model: "large"}},
+					Reliability: &vllmv1alpha1.DecisionReliabilityConfig{
+						TotalTimeout: "600s", PerTryTimeout: "300s", RetryCount: ptr.To[int32](1),
+						RetryOn: "reset", RetriableStatusCodes: []int32{429},
+					},
+					Fallback: &vllmv1alpha1.DecisionFallbackConfig{
+						Enabled: ptr.To(true), MaxAttempts: 2, TotalTimeout: "900s", PerAttemptTimeout: "450s",
+						RetryableStatusCodes: []int32{502, 503},
+					},
+				}},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+	if len(canonical.Routing.Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	}
+	decision := canonical.Routing.Decisions[0]
+	reliability := decision.Reliability
+	if reliability == nil || reliability.TotalTimeout != "600s" || reliability.PerTryTimeout != "300s" ||
+		reliability.RetryCount == nil || *reliability.RetryCount != 1 || reliability.RetryOn != "reset" ||
+		len(reliability.RetriableStatusCodes) != 1 || reliability.RetriableStatusCodes[0] != 429 {
+		t.Fatalf("decision reliability = %#v, want the CR's block", reliability)
+	}
+	fallback := decision.Fallback
+	if fallback == nil || fallback.Enabled == nil || !*fallback.Enabled || fallback.MaxAttempts != 2 ||
+		fallback.TotalTimeout != 900*time.Second || fallback.PerAttemptTimeout != 450*time.Second ||
+		len(fallback.RetryableStatusCodes) != 2 {
+		t.Fatalf("decision fallback = %#v, want the CR's block", fallback)
 	}
 }
 

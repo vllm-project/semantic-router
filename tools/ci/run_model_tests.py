@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
 """Run the published-model contract through the model runtime; reject skips and empty selection.
 
-Every listed Go test serves its Vela 1.0 package through a managed model
-runtime (``servingtest.Managed``) and reads the package from an environment
-variable. This runner provisions the runtime's pinned packages as plain
-directories, points those variables at them, and requires every listed test to
-pass: a skip, a failure or a missing test fails the contract.
+Every listed Vela 1.0 test serves its package through a managed model runtime
+(``servingtest.Managed``) and reads the package from an environment variable;
+this runner provisions the runtime's pinned packages as plain directories and
+points those variables at them. The Vela 2.0 tests ask a runtime that serves
+one pinned size on CPU: the runner downloads each size's pinned files into the
+runtime cache, serves it offline from there at the profile the Router's
+implicit CPU deployment runs it with, and names the endpoint for the size's
+tests. Every listed test must pass: a skip, a failure or a missing test fails
+the contract.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import shlex
 import shutil
+import signal
+import socket
 import subprocess
 import sys
+import time
+import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +63,24 @@ OMNI_TESTS = {
     ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
 }
+# Log -> the Vela 2.0 size a runtime of its own serves for the tests that log
+# there: its repository, the profile the Router's implicit CPU deployment runs
+# it with (config.ImplicitModelRuntimeDeployment), the variable that names the
+# endpoint and the tests.
+VELA2_SUITES = {
+    "vela2-0.3b.jsonl": (
+        "vllm-sr/Vela-2.0-0.3B",
+        "max_speed",
+        "VLLM_SRUN_VELA2_ENDPOINT",
+        ("TestVela2PublishedAnswers03BRealModel", "TestVela2RouterMatchesSystemOne"),
+    ),
+    "vela2-0.8b.jsonl": (
+        "vllm-sr/Vela-2.0-0.8B",
+        "exact",
+        "VLLM_SRUN_VELA2_08B_ENDPOINT",
+        ("TestVela2PublishedAnswers08BRealModel",),
+    ),
+}
 SELECTIONS = (
     ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
     ("./pkg/cache", CACHE_TESTS, "cache.jsonl"),
@@ -59,7 +88,11 @@ SELECTIONS = (
         ("./pkg/" + package, names, "omni-" + package + ".jsonl")
         for package, names in OMNI_TESTS.items()
     ),
+    *(("./pkg/classification", suite[3], log) for log, suite in VELA2_SUITES.items()),
 )
+# A cold CPU load reads the weights and runs the golden check; the 0.8B takes
+# about half a minute on four cores.
+VELA2_READY_TIMEOUT_SECONDS = 900
 
 
 def required_inventory() -> set[tuple[str, str]]:
@@ -101,6 +134,106 @@ def _complete(target: Path, ref) -> bool:
         for path in ref.root.rglob("*")
         if path.is_file()
     )
+
+
+def provision_vela2(cache: Path) -> dict[str, dict]:
+    """Download each Vela 2.0 size's pinned files into the runtime cache, which serves them offline."""
+    from vllm_srun.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+        resolve,
+    )
+
+    models = {}
+    for log, (repo, profile, env, _) in VELA2_SUITES.items():
+        started = time.monotonic()
+        ref = resolve(repo, cache_dir=cache)
+        models[log] = {
+            "env": env,
+            "repo_id": repo,
+            "revision": ref.revision,
+            "profile": profile,
+            "bytes": sum(
+                path.stat().st_size for path in ref.root.rglob("*") if path.is_file()
+            ),
+            "provision_seconds": round(time.monotonic() - started, 1),
+        }
+    return models
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def wait_ready(
+    process: subprocess.Popen, endpoint: str, started: float, runtime: str
+) -> None:
+    """Poll a starting runtime's /health until it answers; fail when it exits or takes too long."""
+    while True:
+        if process.poll() is not None:
+            raise RuntimeError(f"{runtime}: the runtime exited {process.returncode}")
+        if time.monotonic() - started > VELA2_READY_TIMEOUT_SECONDS:
+            raise RuntimeError(
+                f"{runtime}: not ready in {VELA2_READY_TIMEOUT_SECONDS} s"
+            )
+        try:
+            with urllib.request.urlopen(endpoint + "/health", timeout=5):
+                return
+        except OSError:
+            time.sleep(0.5)
+
+
+@contextlib.contextmanager
+def serve_vela2(model: dict, cache: Path, log: Path) -> Iterator[str]:
+    """Serve one pinned Vela 2.0 size on CPU, offline, until the block ends; yield its endpoint.
+
+    The result cache is off, so a repeated request runs the model again.
+    """
+    port = free_port()
+    command = [
+        *shlex.split(os.environ.get("VLLM_SRUN_COMMAND", "vllm-srun")),
+        "serve",
+        model["repo_id"],
+        "--revision",
+        model["revision"],
+        "--device",
+        "cpu",
+        "--profile",
+        model["profile"],
+        "--cache-dir",
+        str(cache),
+        "--offline",
+        "--result-cache-entries",
+        "0",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+    ]
+    endpoint = f"http://127.0.0.1:{port}"
+    started = time.monotonic()
+    with log.open("w") as output:
+        process = subprocess.Popen(
+            command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True
+        )
+        try:
+            wait_ready(process, endpoint, started, f"{model['repo_id']} ({log.name})")
+            model["ready_seconds"] = round(time.monotonic() - started, 1)
+            print(
+                f"{model['repo_id']}@{model['revision'][:12]} ready on CPU "
+                f"({model['profile']}) after {model['ready_seconds']} s",
+                flush=True,
+            )
+            yield endpoint
+        finally:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
 
 
 def validate_results(events: list[dict], expected: set[str]) -> dict:
@@ -166,6 +299,49 @@ def run_suite(package: str, names: tuple[str, ...], env: dict, output: Path) -> 
     return result
 
 
+def run_vela2_suite(
+    package: str,
+    names: tuple[str, ...],
+    env: dict,
+    output: Path,
+    model: dict,
+    cache: Path,
+) -> dict:
+    """Run a Vela 2.0 size's tests against a runtime serving it; a runtime that never gets ready fails them."""
+    try:
+        with serve_vela2(model, cache, output.with_suffix(".runtime.log")) as endpoint:
+            return run_suite(package, names, {**env, model["env"]: endpoint}, output)
+    except RuntimeError as error:
+        print(f"::error::{error}", flush=True)
+        result = validate_results([], set(names))
+        result.update(
+            package=package, exit_code=1, expected=sorted(names), error=str(error)
+        )
+        return result
+
+
+def record_vela2(models_dir: Path, output: Path) -> int:
+    """Rewrite the recorded answers of every Vela 2.0 size from the served pinned size."""
+    cache = models_dir / ".runtime-cache"
+    env = {
+        **os.environ,
+        "VLLM_SR_REQUIRE_MODEL_TESTS": "1",
+        "VLLM_SR_VELA2_RECORD": "1",
+    }
+    suites = [
+        run_vela2_suite(
+            "./pkg/classification",
+            VELA2_SUITES[log][3][:1],
+            env,
+            output / log,
+            model,
+            cache,
+        )
+        for log, model in provision_vela2(cache).items()
+    ]
+    return 0 if all(suite["success"] for suite in suites) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models-dir", type=Path, required=True)
@@ -173,9 +349,18 @@ def main() -> int:
         "--omni", type=Path, required=True, help="the pinned Vela Omni Nano snapshot"
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--record-vela2",
+        action="store_true",
+        help="rewrite the Vela 2.0 tests' recorded answers on this CPU instead of running the contract",
+    )
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    if args.record_vela2:
+        return record_vela2(args.models_dir.resolve(), args.output)
     models = provision(args.models_dir.resolve())
+    cache = args.models_dir.resolve() / ".runtime-cache"
+    vela2 = provision_vela2(cache)
     env = {
         **os.environ,
         "VLLM_SR_REQUIRE_MODEL_TESTS": "1",
@@ -183,10 +368,15 @@ def main() -> int:
         "VELA_OMNI_ARTIFACT": str(args.omni.resolve()),
         **{env: model["path"] for env, model in models.items()},
     }
-    suites = [
-        run_suite(package, names, env, args.output / filename)
-        for package, names, filename in SELECTIONS
-    ]
+    suites = []
+    for package, names, filename in SELECTIONS:
+        output = args.output / filename
+        if filename in vela2:
+            suites.append(
+                run_vela2_suite(package, names, env, output, vela2[filename], cache)
+            )
+        else:
+            suites.append(run_suite(package, names, env, output))
     report = {
         "source_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
@@ -195,6 +385,7 @@ def main() -> int:
         "device": "cpu",
         "models": [
             *models.values(),
+            *vela2.values(),
             {"env": "VELA_OMNI_ARTIFACT", "path": str(args.omni.resolve())},
         ],
         "suites": suites,

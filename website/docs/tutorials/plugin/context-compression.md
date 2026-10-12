@@ -106,8 +106,8 @@ For an ordinary rewrite failure, `fail_open` keeps the payload unchanged and
 History compression protects every system message, the live user turn, the
 latest assistant turn, and complete tool exchanges. Optional `recoverable`
 targets store original content in a shared Redis/Valkey store, inject the
-reserved `vsr_context_retrieve` tool, and use the configured Looper endpoint for
-a non-streaming follow-up. Recovery is request- and trusted-user-scoped, bounded
+reserved `vsr_context_retrieve` tool, and make the non-streaming follow-up call
+in process. Recovery is request- and trusted-user-scoped, bounded
 by TTL, bytes, and retrieval count. Streaming requests preserve recoverable
 targets rather than exposing the internal tool.
 

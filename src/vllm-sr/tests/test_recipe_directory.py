@@ -159,11 +159,6 @@ def test_dashboard_receives_only_fixed_recipe_asset_mounts(tmp_path, monkeypatch
             "dashboard": "dashboard-image",
         },
     )
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(tmp_path / "docker"),
-    )
     captured = _capture_run_commands(monkeypatch)
 
     return_code, _, _ = container_start.container_start_vllm_sr(
@@ -220,11 +215,6 @@ def test_recipe_env_bindings_use_name_only_container_arguments(tmp_path, monkeyp
             "dashboard": "dashboard-image",
         },
     )
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(tmp_path / "docker"),
-    )
     captured = _capture_run_commands(monkeypatch)
 
     return_code, _, _ = container_start.container_start_vllm_sr(
@@ -280,11 +270,6 @@ providers:
             "dashboard": "dashboard-image",
         },
     )
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(tmp_path / "docker"),
-    )
     captured = _capture_run_commands(monkeypatch)
 
     with caplog.at_level("DEBUG", logger="cli.container_start"):
@@ -329,11 +314,6 @@ def test_bare_config_cannot_inherit_stale_recipe_directory_env(tmp_path, monkeyp
             "envoy": "envoy-image",
             "dashboard": "dashboard-image",
         },
-    )
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(tmp_path / "docker"),
     )
     captured = _capture_run_commands(monkeypatch)
 

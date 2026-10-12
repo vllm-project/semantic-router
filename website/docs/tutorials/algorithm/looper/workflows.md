@@ -10,11 +10,7 @@ agent harness owns the outer agent loop, task state, and tool execution
 permissions. When Flow returns a tool call, the harness executes it and sends
 the result back so Flow can resume its pending workflow.
 
-The runtime also supports a direct Flow model slug through
-`global.integrations.looper.flow.model_names`. The built-in default is
-`vllm-sr/flow`. Direct Flow calls evaluate only decisions with
-`algorithm.type=workflows`; they do not silently fall back to normal single-model
-routes.
+Expose `flow` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=workflows` activates the algorithm. Use a dedicated recipe when this entrypoint should run only flow policies.
 
 ## Key Advantages
 
@@ -43,17 +39,17 @@ surface as small as `vllm-sr/flow`.
 
 ## Configuration
 
-Register the direct model slug:
+Map the public name to the recipe shown below. Move the `routing` block into a named recipe to isolate it from default routing.
 
 ```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: default
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
+      max_response_bytes_mb: 32
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -104,7 +100,8 @@ makes no model calls. An explicit planner override keeps that target and must
 pass the same stage checks; it is not replaced by another model on failure.
 If no eligible planner exists, the request fails closed. An explicit planner
 may be a separately configured helper outside the worker `modelRefs`, but must
-still have an operator-assigned backend. Worker calls remain constrained to
+still have an operator-assigned backend in `providers.models[].backend_refs`;
+without one, the configuration fails to load. Worker calls remain constrained to
 `modelRefs`; the executor rejects a plan that names a worker outside that list.
 Planner selection does not reduce a configured minimum of distinct successful
 workers.
@@ -159,7 +156,6 @@ routing:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |

@@ -37,7 +37,9 @@ import (
 	responsejailbreak "github.com/vllm-project/semantic-router/e2e/profiles/response-jailbreak"
 	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
+	routingerrors "github.com/vllm-project/semantic-router/e2e/profiles/routing-errors"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	standalone "github.com/vllm-project/semantic-router/e2e/profiles/standalone"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
@@ -105,6 +107,7 @@ func init() {
 	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("routing-errors", func() framework.Profile { return routingerrors.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
@@ -181,6 +184,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})
+	register("standalone", func() framework.Profile { return standalone.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"vectorstore-registry",

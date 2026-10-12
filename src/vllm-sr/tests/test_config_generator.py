@@ -181,6 +181,67 @@ routing: {}
         assert accepted_at < inline_code.index(strip) < returned_at
 
 
+def test_envoy_mode_refuses_a_tls_listener(tmp_path, monkeypatch):
+    with pytest.raises(
+        ValueError, match="listener 'https-8443': tls is served in standalone mode"
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: https-8443
+    address: 0.0.0.0
+    port: 8443
+    tls:
+      cert_file: certs/tls.crt
+      key_file: certs/tls.key
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+routing: {}
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
+def test_envoy_mode_refuses_a_listener_model_allow_list(tmp_path, monkeypatch):
+    with pytest.raises(
+        ValueError, match="listener 'public': models is enforced in standalone mode"
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    api_keys: [workshop-key]
+    models: [vllm-sr/auto]
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+routing: {}
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
     """Weighted refs should retain endpoint weights and one shared route path."""
     rendered = _render_envoy_config(
@@ -450,9 +511,21 @@ routing:
     )
 
     route = _model_route(rendered, "test-model")["route"]
+    # Retries prefer an endpoint the request has not tried, as the native
+    # gateway's do.
     assert route["retry_policy"] == {
         "retry_on": "connect-failure,refused-stream",
         "num_retries": 2,
+        "retry_host_predicate": [
+            {
+                "name": "envoy.retry_host_predicates.previous_hosts",
+                "typed_config": {
+                    "@type": "type.googleapis.com/envoy.extensions.retry.host."
+                    "previous_hosts.v3.PreviousHostsPredicate"
+                },
+            }
+        ],
+        "host_selection_retry_max_attempts": 3,
     }
     cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["lb_policy"] == "LEAST_REQUEST"

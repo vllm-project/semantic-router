@@ -2,7 +2,10 @@ import React from "react";
 
 import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import styles from "./BuilderPage.module.css";
-import type { EditableListener } from "./builderPageGlobalSettingsSupport";
+import type {
+  EditableListener,
+  EditableListenerField,
+} from "./builderPageGlobalSettingsSupport";
 import { getBool, getNum, getStr } from "./builderPageGlobalSettingsSupport";
 
 interface GlobalSettingsRoutingSectionProps {
@@ -20,7 +23,7 @@ interface GlobalSettingsRoutingSectionProps {
   ) => void;
   onUpdateListener: (
     index: number,
-    field: keyof EditableListener,
+    field: EditableListenerField,
     value: string | number,
   ) => void;
   onAddListener: () => void;
@@ -177,8 +180,8 @@ const GlobalSettingsRoutingSection: React.FC<
                     color: "var(--color-text-muted)",
                   }}
                 >
-                  These listeners are emitted into `config.yaml` and control
-                  the ports OpenClaw and Envoy will target.
+                  These listeners are emitted into `config.yaml` and set the
+                  ports clients send requests to.
                 </span>
               </div>
             </div>
@@ -237,34 +240,21 @@ const GlobalSettingsRoutingSection: React.FC<
             </div>
           </div>
           <div className={styles.gsRow}>
-            <label className={styles.gsLabel}>Looper Endpoint</label>
+            <label className={styles.gsLabel}>Looper Timeout (s)</label>
             <input
               className={styles.fieldInput}
-              value={getStr(looper, "endpoint")}
+              type="number"
+              style={{ width: "6rem" }}
+              value={getNum(looper, "timeout_seconds", 1200)}
               onChange={(event) =>
-                onSetNestedField("looper", "endpoint", event.target.value)
+                onSetNestedField(
+                  "looper",
+                  "timeout_seconds",
+                  parseInt(event.target.value, 10) || 0,
+                )
               }
-              placeholder="http://looper:8080"
             />
           </div>
-          {getStr(looper, "endpoint") && (
-            <div className={styles.gsRow}>
-              <label className={styles.gsLabel}>Looper Timeout (s)</label>
-              <input
-                className={styles.fieldInput}
-                type="number"
-                style={{ width: "6rem" }}
-                value={getNum(looper, "timeout_seconds", 30)}
-                onChange={(event) =>
-                  onSetNestedField(
-                    "looper",
-                    "timeout_seconds",
-                    parseInt(event.target.value, 10) || 0,
-                  )
-                }
-              />
-            </div>
-          )}
         </div>
       )}
     </div>

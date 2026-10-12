@@ -18,11 +18,11 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 			return fmt.Errorf("routing.signals.decision[%d]: duplicate name %q", index, rule.Name)
 		}
 		seen[rule.Name] = struct{}{}
-		if err := validateModelRuntimeReference(cfg, rule.Deployment); err != nil {
+		if err := validateDecisionDeployment(cfg, rule.Deployment, "question"); err != nil {
 			return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
 		}
 	}
-	if err := validateSetLabelAnswerKeys(cfg.DecisionRules); err != nil {
+	if err := validateSetLabelAnswerKeys(cfg, cfg.DecisionRules); err != nil {
 		return err
 	}
 	for _, decision := range cfg.Decisions {
@@ -30,7 +30,7 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 		if algorithm == nil || !strings.EqualFold(strings.TrimSpace(algorithm.Type), DecisionAlgorithmDecision) || algorithm.Decision == nil {
 			continue
 		}
-		if err := validateModelRuntimeReference(cfg, algorithm.Decision.Deployment); err != nil {
+		if err := validateDecisionDeployment(cfg, algorithm.Decision.Deployment, "selector"); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.decision: %w", decision.Name, err)
 		}
 	}
@@ -42,9 +42,6 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 	if strings.TrimSpace(rule.Name) == "" || strings.TrimSpace(rule.Name) != rule.Name || strings.Contains(rule.Name, ":") {
 		return fmt.Errorf("name is required, trimmed and without ':'")
-	}
-	if strings.TrimSpace(rule.Deployment) == "" {
-		return fmt.Errorf("deployment is required")
 	}
 	if rule.TimeoutMs < 0 || rule.TimeoutMs > MaxDecisionTimeoutMs {
 		return fmt.Errorf("timeout_ms must be within [1, %d] when set", MaxDecisionTimeoutMs)
@@ -61,21 +58,35 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 	return nil
 }
 
+// validateDecisionDeployment checks the deployment a decision question or
+// selector asks: a declared model_runtime deployment, or, when it names none,
+// the decision model, which must support the requested task.
+func validateDecisionDeployment(cfg *RouterConfig, deployment, asker string) error {
+	if deployment != "" {
+		return validateModelRuntimeReference(cfg, deployment)
+	}
+	if _, _, _, err := cfg.DecisionModelDeployment(); err != nil {
+		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
+	}
+	return nil
+}
+
 // validateSetLabelAnswerKeys rejects a rule whose name equals the answer key
 // ("<rule>.<label>") of a Set question asked of the same deployment: the
 // model answers each Set label under that key in the same call.
-func validateSetLabelAnswerKeys(rules []DecisionSignalRule) error {
+func validateSetLabelAnswerKeys(cfg *RouterConfig, rules []DecisionSignalRule) error {
 	names := make(map[string]string, len(rules))
 	for _, rule := range rules {
-		names[rule.Deployment+"\x00"+rule.Name] = rule.Name
+		names[cfg.DecisionQuestionDeployment(rule)+"\x00"+rule.Name] = rule.Name
 	}
 	for _, rule := range rules {
 		if rule.Question.Type != DecisionQuestionSet {
 			continue
 		}
+		deployment := cfg.DecisionQuestionDeployment(rule)
 		for _, label := range rule.Question.Labels {
-			if other, exists := names[rule.Deployment+"\x00"+rule.Name+"."+label.Key]; exists {
-				return fmt.Errorf("routing.signals.decision[%s]: the name collides with the answer key of set question %q's label %q on deployment %q; rename one of them", other, rule.Name, label.Key, rule.Deployment)
+			if other, exists := names[deployment+"\x00"+rule.Name+"."+label.Key]; exists {
+				return fmt.Errorf("routing.signals.decision[%s]: the name collides with the answer key of set question %q's label %q on deployment %q; rename one of them", other, rule.Name, label.Key, deployment)
 			}
 		}
 	}
@@ -191,10 +202,7 @@ func validateModelRuntimeReference(cfg *RouterConfig, name string) error {
 	if !deployment.IsModelRuntime() {
 		return fmt.Errorf("deployment %q must use provider %s", name, ModelRuntimeProvider)
 	}
-	if input := deployment.WithDefaults().Input; input.MaxTokens != 0 || input.Overflow != "reject" {
-		return fmt.Errorf("deployment %q: decision models reject over-length input and never truncate; remove input", name)
-	}
-	return nil
+	return deployment.ValidateDecisionInput(name)
 }
 
 func decisionSignalRuleByName(rules []DecisionSignalRule, name string) *DecisionSignalRule {
@@ -233,8 +241,8 @@ func validateDecisionSelectorConfig(decisionName string, modelRefs []ModelRef, a
 		return fmt.Errorf("decision '%s': algorithm.type=decision requires algorithm.decision configuration", decisionName)
 	}
 	path := fmt.Sprintf("decision '%s', algorithm.decision", decisionName)
-	if strings.TrimSpace(cfg.Deployment) == "" {
-		return fmt.Errorf("%s: deployment is required", path)
+	if strings.TrimSpace(cfg.Deployment) != cfg.Deployment {
+		return fmt.Errorf("%s: deployment must name a model_runtime deployment; omit it to ask the decision model", path)
 	}
 	if strings.TrimSpace(cfg.Instructions) == "" {
 		return fmt.Errorf("%s: instructions are required", path)

@@ -46,7 +46,7 @@ func piiMappingFromLabels(labels []string) (*PIIMapping, error) {
 		return nil, fmt.Errorf("PII %s repeat a label", servedLabelsSource)
 	}
 	if mapping.hasReservedLabel() {
-		return nil, fmt.Errorf("PII %s: label %q is reserved for the on_error: block sentinel", servedLabelsSource, PIIClassificationErrorType)
+		return nil, fmt.Errorf("PII %s: labels %q and %q are reserved for the on_error and on_unscanned sentinels", servedLabelsSource, PIIClassificationErrorType, PIIUnscannedType)
 	}
 	return mapping, nil
 }
@@ -62,6 +62,9 @@ func jailbreakMappingFromLabels(labels []string) (*JailbreakMapping, error) {
 	}
 	if _, collides := mapping.GetIndexForJailbreakType(JailbreakClassificationErrorType); collides {
 		return nil, fmt.Errorf("jailbreak %s: label %q is reserved for the on_error: block sentinel", servedLabelsSource, JailbreakClassificationErrorType)
+	}
+	if _, collides := mapping.GetIndexForJailbreakType(JailbreakUnscannedType); collides {
+		return nil, fmt.Errorf("jailbreak %s: label %q is reserved for content the model did not read", servedLabelsSource, JailbreakUnscannedType)
 	}
 	return mapping, nil
 }

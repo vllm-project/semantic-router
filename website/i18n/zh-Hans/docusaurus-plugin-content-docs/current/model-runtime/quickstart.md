@@ -2,60 +2,66 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "2e7e0775e88b0fc9426daf7c4fa0fe6e0ec20654"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
 
 # 快速开始
 
-大约十分钟内，你将安装模型运行时，在 CPU 上运行一个模型并向它提问，
+大约十分钟内，你将安装 `vllm-sr` CLI，在 CPU 上运行一个模型并向它提问，
 然后让路由器用同一个模型做路由。
 
-你需要 Linux 或 macOS、Python 3.10 或更新版本，以及约 3 GB 可用磁盘空间用于下载模型。
-不需要 GPU。
+你需要装有 Docker 或 Podman 的 Linux、macOS 或 WSL2、Python 3.10 或更新版本，以及几 GB 可用磁盘空间，
+用于路由器镜像和模型下载。不需要 GPU。engine 模式（`vllm-sr serve ARTIFACT --engine`）晚于 0.4.0 版本；
+见[发布渠道说明](../installation/installation.md)。
 
 ## 1. 安装 {#1-install}
 
-运行时是 Python 包 `vllm-srun`。每个路由器镜像都自带它，它不发布到 PyPI，所以在你自己的机器上，
-要从仓库 checkout 安装它，和 `vllm-sr` CLI 放在一起。用 CPU 版 PyTorch 把两者装进同一个虚拟环境：
+安装包含 Engine 模式的开发渠道，安装脚本会使用独立的虚拟环境。
+`--no-launch` 将启动留到下一步：
 
 ```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-router
-python3 -m venv .venv
-. .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install ./src/vllm-sr ./src/model-runtime
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 ```
 
-使用 GPU 时，请改从[与你的硬件匹配的索引](https://pytorch.org/get-started/locally/)（CUDA 或 ROCm）
-安装 PyTorch。在 ROCm 上，只有路由器镜像保证答案与已发布的模型包逐字节一致，因为镜像携带发布时所用的
-PyTorch 构建。用官方 PyTorch wheel 经 `pip` 安装同样能运行这些模型，但答案可能略有差异
-（见[选择模型](./choose-a-model.md#hardware)）。
+模型运行时是 Python 包 `vllm-srun`，只随路由器镜像发布。`vllm-sr serve ARTIFACT --engine` 在 `vllm-sr`
+镜像中启动同一实例前端及受管理的模型worker，CLI 首次使用时拉取该镜像，所以你的机器上不用再装别的东西。在 GPU 主机上，
+`--platform rocm` 或 `--platform cuda` 选用 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像并把 GPU
+透传进容器；在 macOS 上运行时只用 CPU，因为那里的容器拿不到 GPU。镜像携带发布时所用的 PyTorch
+构建，所以答案就是模型发布时的答案（见[选择模型](./choose-a-model.md#hardware)）。
 
-确认运行时能看到它的内置模型：
-
-```bash
-vllm-srun models
-```
+不加 `--engine`（简写 `-e`）的每次启动都使用 Router 模式，包括已保存的 Engine
+配置。MODEL 只修改默认判断模型的 artifact，保留已有副本位置和 profile；全新配置
+默认使用 Vela 2.0 0.3B。`--platform auto` 检查实际部署目标，可显式选择 `cpu`、`cuda`
+或 `rocm`；`--device-ids` 使用 Docker 主机 GPU 编号并遵守已有可见设备掩码。
 
 ## 2. 运行模型 {#2-serve-a-model}
 
 启动最小的决策模型 Decision 2.0 Kai。决策模型回答你用自然语言写下的问题。
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 ```
 
-首次启动会把模型（约 1.5 GB）下载到 Hugging Face 缓存，并对照固定的哈希校验每个文件。
-健康检查通过后模型即就绪。在第二个终端中：
+在 AMD GPU 上，用下面的命令在第一块 GPU 上运行同一个模型：
 
 ```bash
-curl -s localhost:8100/health
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-ids 0
 ```
 
-模型加载完成并通过自检后，它返回 `{"status": "ready", ...}`；在此之前返回 HTTP 503 和当前阶段。
+首次使用时 `vllm-sr-rocm` 镜像约需下载 6.5 GB。`--device-ids N` 选择另一块主机 GPU；canonical YAML 使用映射后的 `rocm:N` 运行时序号。
+
+CLI 启动持久运行的前端、Dashboard 和模型 worker。首次启动下载模型到实例的
+模型缓存，后续启动复用缓存。`vllm-sr status` 查看状态，`vllm-sr stop` 停止实例。
+
+首次 Engine 配置会在默认 listener 发布选中的模型。已有配置保留自己的
+`listeners[].systemone.models` 和 API Key；模式或模型切换不会扩展授权范围。
+在第二个终端查看原生模型列表：
+
+```bash
+curl -s localhost:8899/v1/systemone/models
+```
 
 ## 3. 发送请求 {#3-send-a-request}
 
@@ -63,7 +69,8 @@ curl -s localhost:8100/health
 以及回答它是否需要多步推理（一个**是/否问题**，称为 **noul**）。
 
 ```bash
-curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
   "state": "Write a Python function that merges two sorted lists.",
   "questions": {
     "kind": {"type": "choice", "instructions": "What kind of work is this?",
@@ -77,7 +84,7 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 
 ```json title="Response"
 {
-  "model": "Decision-2.0-Kai-0.6B",
+  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
   "answers": {
     "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.106},
     "reasoning": {"type": "noul", "noul": 0.519}
@@ -86,23 +93,16 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 }
 ```
 
-在请求中加上 `"options": {"return_meta": true}`，响应还会带上 `meta`：作答的 revision、profile、设备以及耗时。在 16 个 CPU 核上，
-这个请求约需 0.2 秒。`GET /v1/models` 显示已加载的模型、运行位置以及是否通过自检。
-
-同一个命令也能运行分类器。用 Ctrl-C 停止服务，改为运行 Vela Domain 分类器：
-
-```bash
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain --device cpu --port 8100
-curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
-  -d '{"input": ["What is the derivative of x squared?"]}'
-```
-
-结果列出最可能的领域（`label`）以及全部 14 个领域各自的概率。
+在请求中加上 `"options": {"return_meta": true}` 可查看作答 revision、profile、设备和耗时。
+记录的 worker benchmark 在 16 个 CPU 核上约需 0.2 秒。`POST /v1/decisions` 是
+`/v1/systemone` 的别名，都要求明确的公开模型 ID。原生模型发现使用
+`/v1/systemone/models`，`/v1/models` 仍属于 Chat。classify、embeddings、rerank
+和 bundle 属于独立的 worker API，参见[任务指南](model-runtime/guides/classify.md)。
 
 ## 4. 在路由器中使用 {#4-use-it-from-the-router}
 
 路由器会替你运行模型。把模型声明为 `provider: model_runtime` 的 **deployment**，
-然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `vllm:8000`
+然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `host.docker.internal:8000`
 换成为你的用户提供回答的 OpenAI 兼容后端：
 
 ```yaml
@@ -111,6 +111,8 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
+    systemone:
+      models: [vllm-sr/Decision-2.0-Kai-0.6B]
 providers:
   defaults:
     model: answer-model
@@ -118,7 +120,7 @@ providers:
     - name: answer-model
       backend_refs:
         - name: answer
-          endpoint: vllm:8000
+          endpoint: host.docker.internal:8000
           protocol: http
 routing:
   modelCards:
@@ -126,7 +128,7 @@ routing:
   signals:
     decision:
       - name: needs_reasoning
-        deployment: decision-kai
+        deployment: primary
         question:
           type: noul
           instructions: Does answering this request need multi-step reasoning?
@@ -155,35 +157,36 @@ routing:
 global:
   model_catalog:
     deployments:
-      decision-kai:
+      primary:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: cpu
 ```
 
-校验配置文件并启动路由器：
+校验配置文件，然后使用这份配置重启到 Router 模式：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --config config.yaml --replace-active-config
 ```
 
-路由器会为 `decision-kai` 启动自己的运行时。首次启动时，它把模型的一份副本下载到
-`config.yaml` 旁边的 `models/` 目录，供以后启动复用。通过路由器发送一个请求，看看它选择了哪条路由：
+`--replace-active-config` 用刚写入的文件替换此前保存的 Engine 配置。
+后续重启可以省略它，以保留 Dashboard 中的修改。`primary` 部署同时回答路由问题
+和直接 System One 请求；listener 显式发布它的原生模型名。
+然后发送 Chat 请求查看选择的路由：
 
 ```bash
 curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
   -H 'content-type: application/json' -H 'x-vsr-debug: true' \
-  -d '{"model": "auto", "messages": [{"role": "user", "content": "Plan a three-step proof that there are infinitely many primes."}]}' \
+  -d '{"model": "vllm-sr/auto", "messages": [{"role": "user", "content": "Plan a three-step proof that there are infinitely many primes."}]}' \
   | grep -i '^x-vsr-'
 ```
 
 `x-vsr-selected-decision` 给出路由名称，`x-vsr-matched-decision-model` 列出匹配的决策信号。
-模型仍在加载时，该信号为未知，`on_unknown: no_match` 会把请求送到 `default-route`。
+如果运行时之后重启，在模型恢复之前该信号为未知，`on_unknown: no_match` 会在此期间把请求送到 `default-route`。
 
-如果想复用第 2 步启动的服务，而不是再运行一份模型，把 `artifact` 和 `device` 换成它的地址，
-例如 `endpoint: http://host.docker.internal:8100`，并用 `--host 0.0.0.0` 启动那个服务，
-让路由器容器能够访问它。
+Engine 与 Router 共享同一个受管理实例。若要接入独立运营的 worker，明确配置
+`endpoint` 和 `served_name`；[部署指南](model-runtime/deploy.md) 说明其独立 API 和生命周期。
 
 ## 下一步 {#next-steps}
 

@@ -107,3 +107,14 @@ func TestInventoryEndpointKeepsOnlyTheTransport(t *testing.T) {
 		}
 	}
 }
+
+func TestModelRuntimeInventoryPreservesLogicalReplicaStatus(t *testing.T) {
+	inventory := modelRuntimeInventory([]modelservice.DeploymentStatus{{Name: "primary", Ready: true, State: "degraded", DesiredReplicas: 2, ReadyReplicas: 1, Replicas: []modelservice.ReplicaStatus{{ID: "r-opaque", Managed: true, Device: "rocm:0", Ready: true, Inflight: 2, EstimatedWork: 4096}, {ID: "r-other", State: "backoff"}}}})
+	if inventory.Count != 1 || inventory.Deployments[0].DesiredReplicas != 2 || inventory.Deployments[0].ReadyReplicas != 1 || inventory.Deployments[0].Replicas[0].Inflight != 2 {
+		t.Fatalf("pool inventory lost: %+v", inventory)
+	}
+	encoded, _ := json.Marshal(inventory)
+	if strings.Contains(string(encoded), "http://") || strings.Contains(string(encoded), "unix://") {
+		t.Fatalf("worker location leaked: %s", encoded)
+	}
+}

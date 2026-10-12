@@ -320,8 +320,6 @@ routing:
     - text
 global:
   router:
-    auto_model_names:
-    - vela-auto
     model_selection:
       enabled: false
   services:
@@ -488,3 +486,7 @@ global:
         classifier:
           model_path: models/Vela-1.0-Encoder-307M-Modality
         confidence_threshold: 0.7
+
+entrypoints:
+- model_names: ["vela-auto"]
+  recipe: default

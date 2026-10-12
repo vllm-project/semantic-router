@@ -29,6 +29,7 @@ from ..errors import (
 )
 from ..plugins.base import DEADLINE, RerankInfo, SurfacePlan, SurfaceRequest
 from ..registry.artifacts import read_json, safetensors_header
+from ..text import bounds
 from .task import Head, Item, Rows, cache_key, positive_option
 
 MAX_DOCUMENTS = 1024
@@ -269,25 +270,55 @@ class RerankSurface:
     def plan(
         self, request: SurfaceRequest, identity: str, max_input_tokens: int
     ) -> SurfacePlan[Item]:
-        """Every pair tokenized with the tokenizer's pair template; the query once."""
+        """Every pair tokenized with the tokenizer's pair template; the query once.
+
+        A pair is read only as far as its budget decides (``bounds.read``): the
+        query within the budget, each document within what the query leaves; a
+        text certainly over that (``bounds.surely_over``) is not read at all.
+        """
         parsed = self.parse(request, max_input_tokens)
         head = self.heads[parsed.exit]
         tokenizer = self.tokenizer
-        query = tokenizer.encode(parsed.query, add_special_tokens=False)
         specials = tokenizer.num_special_tokens_to_add(True)
-        documents = tokenizer.encode_batch(
-            list(parsed.documents), add_special_tokens=False
-        )
+        room = parsed.max_tokens - specials
+        query = None
+        if not bounds.surely_over(tokenizer, parsed.query, room):
+            query = bounds.read(tokenizer, parsed.query, room + 1)
+        reads: dict[int, bounds.Read] = {}
+        if query is not None and query.complete:
+            left = room - query.tokens
+            readable = [
+                index
+                for index, text in enumerate(parsed.documents)
+                if text.strip() and not bounds.surely_over(tokenizer, text, left)
+            ]
+            texts = [parsed.documents[index] for index in readable]
+            reads = dict(
+                zip(
+                    readable,
+                    bounds.read_batch(tokenizer, texts, left + 1),
+                    strict=True,
+                )
+            )
         items: list[Item] = []
         slots: list[int | str] = []
         usages: list[dict[str, Any] | None] = []
-        for text, document in zip(parsed.documents, documents, strict=True):
-            tokens = len(query.ids) + len(document.ids) + specials
-            if not text.strip() or tokens > parsed.max_tokens:
-                slots.append(INVALID_INPUT if not text.strip() else MAX_LENGTH_EXCEEDED)
+        for index in range(len(parsed.documents)):
+            document = reads.get(index)
+            if not parsed.documents[index].strip():
+                slots.append(INVALID_INPUT)
                 usages.append(None)
                 continue
-            ids = tuple(tokenizer.post_process(query, document).ids)
+            if query is None or document is None or not document.complete:
+                slots.append(MAX_LENGTH_EXCEEDED)
+                usages.append(None)
+                continue
+            tokens = query.tokens + document.tokens + specials
+            if tokens > parsed.max_tokens:
+                slots.append(MAX_LENGTH_EXCEEDED)
+                usages.append(None)
+                continue
+            ids = tuple(tokenizer.post_process(query.encoding, document.encoding).ids)
             slots.append(len(items))
             usages.append(
                 {"tokens": tokens, "processed_tokens": tokens, "truncated": False}

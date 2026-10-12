@@ -13,9 +13,9 @@ func TestResolveServesThePinnedCatalogModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := config.GetModelByPath(config.DefaultGlobalConfig().CategoryModel.ModelID)
+	spec := config.GetModelByPath(config.Vela1SystemModels().DomainClassifier)
 	if artifact.RepoID != spec.RepoID || artifact.Revision != spec.Revision || artifact.Path != "" {
-		t.Fatalf("domain must serve its pinned catalog model: %+v", artifact)
+		t.Fatalf("domain must serve its pinned Vela 1.0 specialist: %+v", artifact)
 	}
 	deployment := artifact.Deployment("cpu", config.ModelInputBudget{MaxTokens: 512, Overflow: "truncate"})
 	if !deployment.Managed() || deployment.Artifact != spec.RepoID || deployment.Revision != spec.Revision || deployment.Device != "cpu" {
