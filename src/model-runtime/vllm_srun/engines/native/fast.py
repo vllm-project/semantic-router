@@ -23,8 +23,8 @@ four scored panels), so it belongs to the exact profile:
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
   several forwards each. Graphs are captured until there are ``MAX_GRAPHS`` of
-  them or the device's used memory has grown by ``MAX_GRAPH_BYTES`` since the
-  first capture; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
+  them or the device's used memory has grown since the first capture by
+  ``MAX_GRAPH_BYTES`` or by half of what was free then, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
   batches of Index traffic, led to GPU memory access faults. On CUDA the same
   runner also replays Vela 2.0's forest forward (``models/forest.py``) per
@@ -638,11 +638,6 @@ class Masks:
         }
 
 
-def _device_used(device: torch.device) -> int:
-    free, total = torch.cuda.mem_get_info(device)
-    return total - free
-
-
 class Graphs:
     """Graphs of the backbone forward per exact padded shape (see the module docstring)."""
 
@@ -666,6 +661,7 @@ class Graphs:
         self.seen: dict[Hashable, int] = {}
         self.failed: set[Hashable] = set()
         self.base: int | None = None
+        self.budget = max_bytes
         self.pool: Any = None
         self.stats = {
             "captures": 0,
@@ -737,10 +733,12 @@ class Graphs:
     ) -> dict[str, Any] | None:
         # A graph costs far more than its output, and part of it is taken only
         # after the capture, so the budget is the device's growth since the first.
-        used = _device_used(inputs[0].device)
+        free, total = torch.cuda.mem_get_info(inputs[0].device)
+        used = total - free
         if self.base is None:
-            self.base = used
-        if len(self.graphs) >= self.max_graphs or used - self.base >= self.max_bytes:
+            # Half of what is free leaves room for eager forwards on a shared card.
+            self.base, self.budget = used, min(self.max_bytes, free // 2)
+        if len(self.graphs) >= self.max_graphs or used - self.base >= self.budget:
             self.stats["full"] += 1
             return None
         static = tuple(value.clone() for value in inputs)

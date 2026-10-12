@@ -41,9 +41,10 @@ replay.
   requests of distinct lengths on the 0.8B left 87 forest graphs and 2,822 MiB
   more in use than before them (26 MiB with graphs off), about 32 MiB a graph
   against 0.5 MiB of output. So captures stop at `MAX_GRAPHS` or once the
-  device's used memory has grown by `MAX_GRAPH_BYTES` (4 GiB) since the first
-  capture. With the budget set to 1 GiB the same run stopped at 21 graphs and
-  968 MiB.
+  device's used memory has grown since the first capture by `MAX_GRAPH_BYTES`
+  (4 GiB) or by half of what was free then, whichever is less. With the budget
+  set to 1 GiB the same run stopped at 21 graphs and 968 MiB. With the card
+  filled to leave 3,071 MiB free, it stopped at 29 graphs and 1,332 MiB.
 
 ## Exactness
 
