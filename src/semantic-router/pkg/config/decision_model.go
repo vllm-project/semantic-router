@@ -45,7 +45,7 @@ func decisionModelSpec(name string, deployment ModelDeployment) DecisionModelSpe
 		}
 	}
 	return DecisionModelSpec{Name: name, Model: model, Modality: model, System: CanonicalSystemModels{
-		Safety: model, Hazard: model, PromptGuard: model, DomainClassifier: model,
+		Safety: model, Hazard: vela1HazardModel, PromptGuard: model, DomainClassifier: model,
 		PIIClassifier: model, FactCheckClassifier: model, HallucinationDetector: model, FeedbackDetector: model,
 	}}
 }

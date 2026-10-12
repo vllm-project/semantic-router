@@ -14,6 +14,7 @@ const globalConfig = {
           model_type: 'mmbert',
           target_dimension: 768,
           preload_embeddings: true,
+          top_k: 0,
         },
       },
     },
@@ -151,6 +152,37 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
         },
       },
     })
+  })
+
+  test('saves the default local provider without edits', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockRemoteEmbeddingDashboard(page)
+
+    let updateBody: Record<string, unknown> | null = null
+    await page.route('**/api/router/config/global/update', async (route) => {
+      updateBody = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' })
+    })
+
+    await page.goto('/config/global-config')
+    await page.getByRole('button', { name: /Model Catalog/ }).click()
+    const card = page.locator('article').filter({
+      has: page.getByRole('heading', { name: 'Embedding Models' }),
+    })
+    await card.getByRole('button', { name: 'Edit' }).click()
+
+    const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
+    await expect(modal.getByLabel(/^Top K/)).toHaveValue('0')
+    await modal.getByRole('button', { name: 'Save' }).click()
+
+    await expect(modal).toBeHidden()
+    await expect.poll(() => updateBody).not.toBeNull()
+    expect(updateBody).toMatchObject({
+      model_catalog: {
+        embeddings: { semantic: { embedding_config: { backend: 'model_runtime', top_k: 0 } } },
+      },
+    })
+    expect(updateBody).not.toHaveProperty('model_catalog.embeddings.bert')
   })
 
   test('keeps service availability inside desktop and mobile layouts', async ({ page }) => {

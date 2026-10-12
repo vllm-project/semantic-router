@@ -86,35 +86,47 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 }
 
 func (c *Classifier) evaluateDecisionPIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, history []string, backend *decisionPIIBackend) {
+	c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, text, history, nil, false, backend)
+}
+
+func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, history, toolTexts []string, toolIncomplete bool, backend *decisionPIIBackend) {
 	started := time.Now()
-	contents := []string{}
-	if text != "" {
-		contents = append(contents, text)
-	}
+	var contents []piiCacheKey
+	seen := map[piiCacheKey]bool{}
 	for _, rule := range c.Config.PIIRules {
-		if rule.IncludeHistory {
-			for _, item := range history {
-				if item != "" && !slices.Contains(contents, item) {
-					contents = append(contents, item)
-				}
+		for _, content := range collectPIIRuleContentsForSource(rule, text, history, toolTexts) {
+			key := piiCacheKey{source: piiCacheSource(rule.Source), content: content}
+			if !seen[key] {
+				seen[key] = true
+				contents = append(contents, key)
 			}
 		}
 	}
 	judgments := make([]privacyJudgmentResult, len(contents))
-	modelservice.Fan(ctx, len(contents), func(i int) {
-		judgments[i] = c.judgePII(ctx, contents[i], backend)
+	var selected []int
+	budget := piiToolResultScanBudget{remainingInferenceCalls: maxPIIToolResultInferenceCalls}
+	for i, key := range contents {
+		if key.source == config.PIISourceToolResult && !budget.consumeInferenceCall() {
+			judgments[i].err = ErrTokenSpansTruncated
+		} else {
+			selected = append(selected, i)
+		}
+	}
+	modelservice.Fan(ctx, len(selected), func(j int) {
+		i := selected[j]
+		judgments[i] = c.judgePII(ctx, contents[i].content, backend)
 		judgments[i].err = signalDeadline(ctx, judgments[i].err)
 	})
-	byContent := make(map[string]privacyJudgmentResult, len(contents))
-	verified := len(contents) > 0 && len(c.Config.PIIRules) > 0
-	for i, content := range contents {
-		byContent[content] = judgments[i]
+	byContent := make(map[piiCacheKey]privacyJudgmentResult, len(contents))
+	verified := len(contents) > 0 && len(c.Config.PIIRules) > 0 && !toolIncomplete
+	for i, key := range contents {
+		byContent[key] = judgments[i]
 		if judgments[i].err != nil {
 			verified = false
 		}
 	}
-	for _, content := range history {
-		if content != "" && !slices.Contains(contents, content) {
+	for _, content := range append(append([]string{text}, history...), toolTexts...) {
+		if content != "" && !seen[piiCacheKey{source: "legacy", content: content}] && !seen[piiCacheKey{source: config.PIISourceToolResult, content: content}] {
 			verified = false
 		}
 	}
@@ -125,10 +137,14 @@ func (c *Classifier) evaluateDecisionPIISignal(ctx context.Context, results *Sig
 	}
 	for _, rule := range c.Config.PIIRules {
 		entities := map[string]bool{}
-		failed, unscanned := false, false
+		incomplete := rule.Source == config.PIISourceToolResult && toolIncomplete
+		failed, unscanned := incomplete, false
 		code := ""
-		for _, content := range collectPIIRuleContents(text, history, rule.IncludeHistory) {
-			result := byContent[content]
+		if incomplete {
+			code = piiEvaluationIncompleteCode
+		}
+		for _, content := range collectPIIRuleContentsForSource(rule, text, history, toolTexts) {
+			result := byContent[piiCacheKey{source: piiCacheSource(rule.Source), content: content}]
 			if result.err != nil {
 				failed = true
 				code = mergeSignalErrorCode(code, boundedSignalErrorCode(result.err, piiEvaluationFailedCode))
@@ -178,10 +194,14 @@ func (c *Classifier) evaluateDecisionPIISignal(ctx context.Context, results *Sig
 		}
 		c.recordSignalExtraction(config.SignalTypePII, rule.Name, time.Since(started).Seconds())
 	}
-	for i, content := range contents {
+	for i, key := range contents {
 		result := judgments[i]
-		clean := result.err == nil
+		complete := result.err == nil && (key.source != config.PIISourceToolResult || !toolIncomplete)
+		clean := complete
 		for _, rule := range c.Config.PIIRules {
+			if piiCacheSource(rule.Source) != key.source {
+				continue
+			}
 			if result.presence >= float64(rule.Threshold) {
 				clean = false
 			}
@@ -191,7 +211,7 @@ func (c *Classifier) evaluateDecisionPIISignal(ctx context.Context, results *Sig
 				}
 			}
 		}
-		results.PIIEvidence = append(results.PIIEvidence, NewPrivacyEvidence("request", content, result.err == nil, clean))
+		results.PIIEvidence = append(results.PIIEvidence, NewPrivacyEvidence("request", key.content, complete, clean))
 	}
 	results.PIIContentVerified = verified
 	results.Metrics.PII.ExecutionTimeMs = float64(time.Since(started).Microseconds()) / 1000

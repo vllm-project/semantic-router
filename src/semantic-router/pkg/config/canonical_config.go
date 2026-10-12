@@ -111,7 +111,11 @@ type CanonicalSignals struct {
 	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
 	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
+	Actions       []ActionRule           `yaml:"actions,omitempty"`
 	Decision      []DecisionSignalRule   `yaml:"decision,omitempty"`
+
+	// TopicContinuity declares context-policy evidence sources.
+	TopicContinuity []TopicContinuityRule `yaml:"topic_continuity,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -560,7 +564,10 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		ClassifierRules:    append([]ClassifierSignalRule(nil), signals.Classifiers...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		ActionRules:        append([]ActionRule(nil), signals.Actions...),
 		DecisionRules:      append([]DecisionSignalRule(nil), signals.Decision...),
+
+		TopicContinuityRules: append([]TopicContinuityRule(nil), signals.TopicContinuity...),
 	}
 
 	if len(result.Categories) == 0 {
