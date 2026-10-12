@@ -10,7 +10,7 @@ are shared by every question of a request. Without videos, each question of a
 pass carries its own copy of the images through the vision tower, as the
 released runtime's processor hands them on; with videos, the tower reads the
 request's images and videos once and every question reuses their features, as
-the d3 runtime does.
+the d3 runtime does. Batches of an approximate profile read images once too.
 """
 
 from __future__ import annotations
@@ -623,17 +623,28 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def run(self, items: list[Item]) -> list[list[float] | None]:
         """Each run of items that share their images as one left-padded pass (released numerics)."""
+        return self._run(items, shared_tower=False)
+
+    def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
+        """As ``run``, but the tower reads each request's images once for all its questions.
+
+        The released runtime runs the tower on one copy of the images per
+        question in a pass, and the copies' batch changes the features' rounding.
+        """
+        return self._run(items, shared_tower=True)
+
+    def _run(self, items: list[Item], shared_tower: bool) -> list[list[float] | None]:
         out: list[list[float] | None] = []
         start = 0
         while start < len(items):
             end = start + 1
             while end < len(items) and items[end].media is items[start].media:
                 end += 1
-            out.extend(self._pass(items[start:end]))
+            out.extend(self._pass(items[start:end], shared_tower))
             start = end
         return out
 
-    def _pass(self, items: list[Item]) -> list[list[float] | None]:
+    def _pass(self, items: list[Item], shared_tower: bool) -> list[list[float] | None]:
         width = max(len(item.ids) for item in items)
         rows = len(items)
         ids = torch.full((rows, width), self.pad_id, dtype=torch.long)
@@ -646,20 +657,24 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         last = torch.full((rows,), width - 1, dtype=torch.long)
         shared = items[0].media
         images = None
-        if shared is not None and shared.videos:
-            assert self.image_token is not None and self.video_token is not None
+        if shared is not None and (shared.videos or shared_tower):
+            assert self.image_token is not None
             image_features, video_features = self._features(shared)
+            videos = None
+            if shared.videos:
+                assert self.video_token is not None
+                videos = VideoInputs(
+                    features=torch.cat([video_features] * rows),
+                    grids=[clip.grid for _ in items for clip in shared.videos],
+                    token_id=self.video_token,
+                )
             images = ImageInputs(
                 pixel_values=None,
                 grids=[image.grid for _ in items for image in shared.images],
                 token_id=self.image_token,
                 tower=VISION_TOWER,
                 features=torch.cat([image_features] * rows),
-                videos=VideoInputs(
-                    features=torch.cat([video_features] * rows),
-                    grids=[clip.grid for _ in items for clip in shared.videos],
-                    token_id=self.video_token,
-                ),
+                videos=videos,
             )
         elif shared is not None:
             assert self.image_token is not None
@@ -714,10 +729,14 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 image_features = torch.empty(
                     (0, self.readout.shape[1]), device=device, dtype=torch.bfloat16
                 )
-            video_features = engine.tower_features(
-                VISION_TOWER,
-                torch.cat([clip.pixel_values for clip in media.videos]).to(device),
-                [clip.grid for clip in media.videos],
+            video_features = (
+                engine.tower_features(
+                    VISION_TOWER,
+                    torch.cat([clip.pixel_values for clip in media.videos]).to(device),
+                    [clip.grid for clip in media.videos],
+                )
+                if media.videos
+                else image_features[:0]
             )
             cached = media.features[str(device)] = (image_features, video_features)
         return cached

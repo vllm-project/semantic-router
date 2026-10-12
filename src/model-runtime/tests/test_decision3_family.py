@@ -423,6 +423,29 @@ def test_questions_run_eight_per_pass_in_request_order(d3_runtime):
     assert model.shared_context(list(plan.items), None) == 0
 
 
+def test_approximate_batches_read_images_once(d3_runtime, png_url, monkeypatch):
+    """Exact passes run the tower on one copy of the images per question; approximate ones once."""
+    model = d3_runtime.lookup(None).model
+    images = [png_url(300, 200, 1), png_url(64, 64, 2)]
+    plan = model.plan_images("What is shown?", QUESTIONS, images)
+    items = list(plan.items)
+    exact = model.run(items)
+    engine = model.engine_model
+    calls = []
+    tower_features = engine.tower_features
+
+    def counted(name, pixel_values, grids):
+        calls.append(len(grids))
+        return tower_features(name, pixel_values, grids)
+
+    monkeypatch.setattr(engine, "tower_features", counted)
+    approximate = model.run_approximate(items)
+    assert calls == [len(images)]
+    for want, got in zip(exact, approximate, strict=True):
+        assert len(want) == len(got)
+        assert max(abs(a - b) for a, b in zip(want, got, strict=True)) < 1e-3
+
+
 def test_the_prompt_lists_codes_and_renders_the_chat_format(d3_runtime):
     model = d3_runtime.lookup(None).model
     user = prompt.user_prompt(

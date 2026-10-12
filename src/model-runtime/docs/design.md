@@ -798,7 +798,11 @@ images through the native Qwen3.5 vision tower (the matrix-product patch
 embedding, bilinearly resampled learned positions, axial rotary attention per
 image and the patch merger). In a request with videos, the tower reads the
 request's images in one call and its videos in another, once per request, and
-every question reuses those features, as the d3 runtime does. Each video's
+every question reuses those features, as the d3 runtime does. Batches of the
+approximate profiles (`batching`, `max_speed`) read an image request's images
+once as well: the copies' batch changes the features' rounding, and 5 of 900
+decisions on MMMU and none on ScienceQA changed on d3-flash
+([`decision3-shared-tower.md`](records/decision3-shared-tower.md)). Each video's
 placeholder expands to its frame pairs, each after its timestamp (`<0.2
 seconds>`); a frame pair is an image of one temporal patch for the
 multimodal rotary positions, and image features replace the image placeholders
