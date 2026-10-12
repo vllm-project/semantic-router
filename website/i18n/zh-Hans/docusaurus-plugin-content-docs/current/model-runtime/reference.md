@@ -4,7 +4,7 @@ description: 模型 runtime 的命令选项、models 文件、HTTP API、环境�
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/model-runtime/reference.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
