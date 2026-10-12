@@ -10,8 +10,15 @@ from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
 
 DEVICE = re.compile(r"(?P<kind>[a-z][a-z0-9_]*)(?::(?P<index>\d+))?\Z")
-BYTES_PER_PARAMETER = 4
+DTYPE_BYTES = {"float32": 4, "bfloat16": 2, "float16": 2}
+FP32_BYTES = DTYPE_BYTES["float32"]
 ACTIVATION_RESERVE = 2 << 30
+# Weights held exactly in a 16-bit dtype get this share of their size again:
+# in Engine mode on MI325X the six Decision 3.0 models peaked 1.4 to 1.7 GiB
+# above their BF16 weights while loading and answering the model card's text,
+# image and video requests (docs/records/decision3-device-memory.md).
+RESIDENT_HEADROOM = 0.10
+GIB = 1 << 30
 
 
 @dataclass(frozen=True)
@@ -69,9 +76,29 @@ def check_device(model: str, device: str) -> None:
     raise PlacementError(f"no device can serve {model}: {reason}")
 
 
-def estimate_bytes(parameters: int) -> int:
-    """Weights in FP32 (BF16-resident Linear weights only lower it) plus an activation reserve."""
-    return parameters * BYTES_PER_PARAMETER + ACTIVATION_RESERVE
+def resident_dtype(spec: ModelSpec, accelerator: str) -> str:
+    """The dtype ``accelerator`` holds the model's backbone weights in."""
+    policy = spec.dtype
+    if accelerator == "cpu":
+        return policy.cpu_weights or policy.weights
+    return policy.gpu_weights or policy.weights
+
+
+def estimate_bytes(spec: ModelSpec, parameters: int, accelerator: str) -> int:
+    """The weights in the dtype ``accelerator`` holds them in, plus an activation reserve.
+
+    Weights a family holds in BF16 there (``gpu_weights`` / ``cpu_weights``)
+    count two bytes each plus ``RESIDENT_HEADROOM``; FP32 stays an upper bound
+    for the others (BF16-resident Linear weights only lower it). The reserve
+    covers loading and ordinary requests: inputs of tens of thousands of
+    tokens need more, and a forward that runs out of device memory fails
+    only its own requests.
+    """
+    width = DTYPE_BYTES.get(resident_dtype(spec, accelerator), FP32_BYTES)
+    weights = parameters * width
+    if width < FP32_BYTES:
+        weights += int(weights * RESIDENT_HEADROOM)
+    return weights + ACTIVATION_RESERVE
 
 
 def place(
@@ -81,23 +108,28 @@ def place(
     memory_budget_gib: float | None = None,
 ) -> Placement:
     kind, index = parse_device(device)
-    needed = estimate_bytes(parameters)
-    budget = int(memory_budget_gib * (1 << 30)) if memory_budget_gib else None
-    if budget is not None and needed > budget:
-        raise PlacementError(
-            f"{spec.name} needs about {needed / (1 << 30):.1f} GiB, above --memory-budget {memory_budget_gib} GiB"
-        )
+    budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
     candidates = auto_order() if kind == "auto" else [kind]
-    reasons = []
-    unsupported = []
+    gpu_reasons: list[str] = []
+    cpu_reasons: list[str] = []
+    absent: list[str] = []
+    unsupported: list[str] = []
     for name in candidates:
+        reasons = cpu_reasons if name == "cpu" else gpu_reasons
         try:
             accelerator = registry.instantiate("accelerators", name)
         except KeyError as exc:
             reasons.append(str(exc))
             continue
         if not accelerator.available():
-            reasons.append(f"{name}: not available on this host")
+            absent.append(f"{name}: not available on this host")
+            continue
+        needed = estimate_bytes(spec, parameters, name)
+        if budget is not None and needed > budget:
+            reasons.append(
+                f"{name}: {spec.name} needs about {needed / GIB:.1f} GiB, "
+                f"above --memory-budget {memory_budget_gib} GiB"
+            )
             continue
         devices = accelerator.devices()
         if index is not None:
@@ -119,7 +151,8 @@ def place(
                 and info.free_memory < needed
             ):
                 reasons.append(
-                    f"{info.label}: {info.free_memory / (1 << 30):.1f} GiB free"
+                    f"{info.label}: {spec.name} needs about {needed / GIB:.1f} GiB, "
+                    f"{info.free_memory / GIB:.1f} GiB free"
                 )
                 continue
             return Placement(
@@ -131,7 +164,10 @@ def place(
                 if index is not None
                 else f"{name}: no devices"
             )
-    message = f"no device can serve {spec.name}: " + "; ".join(reasons + unsupported)
-    if unsupported and not reasons:
+    # A host with a GPU states the GPU's reason first and leaves out the
+    # accelerators it does not have; the CPU's reasons come last.
+    shown = (gpu_reasons or absent) + cpu_reasons + unsupported
+    message = f"no device can serve {spec.name}: " + "; ".join(shown)
+    if unsupported and not (gpu_reasons or cpu_reasons or absent):
         raise UnsupportedDeviceError(message)
     raise PlacementError(message)

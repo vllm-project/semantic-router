@@ -64,6 +64,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
 | [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
+| [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
 | [`vllm-sr config router`](#vllm-sr-config-router) | Print the canonical router configuration. |
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
@@ -830,6 +831,29 @@ Validate and plan an exact remote mutation without changing the Router.
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr config propose` {#vllm-sr-config-propose}
+
+```text
+Usage: vllm-sr config propose [OPTIONS]
+```
+
+Print a reviewable config proposal. This command does not apply it.
+
+Examples:
+
+```bash
+vllm-sr config propose --config config.yaml \
+    --intent selection.latency-aware --decision default-route
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
+| `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
+| `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr config rollback` {#vllm-sr-config-rollback}
 
 ```text
@@ -1412,6 +1436,7 @@ kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
+random     - Uniform pick among eligible candidates (no configuration)
 ```
 
 Cross-request learning lives under global.router.learning.adaptation and
@@ -1453,8 +1478,13 @@ vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm -dp 2 --device-ids 0
 ```
 
 Without --engine the instance starts in Router mode, including on restart.
---engine (-e) disables recipe routing; the frontend, Dashboard and native
-System One APIs remain available. Saved routing configuration is retained.
+--engine (-e) disables recipe routing and serves the model. On the docker
+target only the Router container (the frontend, the native System One APIs
+and the model runtime) starts; --dashboard, --observability or --no-minimal
+add the rest. Without --config, and with no ./config.yaml, Engine mode keeps
+each model's config and state in ~/.local/state/vllm-sr/engine/&lt;model&gt; and
+prints a short summary (--verbose prints every detail). Saved routing
+configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
 Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
@@ -1474,10 +1504,13 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
-| `--minimal` | Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana) Default: false. |
+| `--minimal / --no-minimal` | Start without the Dashboard, sr-bench and the observability stack (Jaeger, Prometheus, Grafana). The default in engine mode; --no-minimal starts them all. |
+| `--dashboard` | Also start the Dashboard and sr-bench when minimal (engine mode's default). Default: false. |
+| `--observability` | Also start Jaeger, Prometheus and Grafana when minimal (engine mode's default). Default: false. |
+| `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |

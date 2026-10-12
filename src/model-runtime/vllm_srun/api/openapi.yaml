@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.2.0
+  version: 2.4.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
@@ -265,6 +265,10 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        images:
+          $ref: '#/components/schemas/DecisionImages'
+        videos:
+          $ref: '#/components/schemas/DecisionVideos'
         states:
           type: object
           description: |
@@ -289,6 +293,33 @@ components:
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
+        images:
+          $ref: '#/components/schemas/DecisionImages'
+        videos:
+          $ref: '#/components/schemas/DecisionVideos'
+    DecisionImages:
+      type: array
+      description: |
+        Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
+        JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
+        `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
+        pixels, in front of the text, in this order. A model without the modality answers a non-empty list with
+        invalid_request, as it does a malformed image.
+      items:
+        type: string
+    DecisionVideos:
+      type: array
+      description: |
+        Videos every question of the state sees, after its images, for models whose card lists the `video`
+        modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+        `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+        pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
+        `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
+        every pair of frames is one group of input tokens after its timestamp, and the videos of one request take
+        at most `limits.video_max_tokens` of them. A model without the modality answers a non-empty list with
+        invalid_request, as it does a malformed or over-limit video.
+      items:
+        type: string
     Question:
       type: object
       additionalProperties: false
@@ -1147,6 +1178,18 @@ components:
           enum: [invalid_request, model_not_found, request_too_large, unsupported_surface, overloaded, internal_error, not_ready]
         message:
           type: string
+        reason:
+          type: string
+          description: |
+            Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+            data, so a gateway may show them where it must not show `message`.
+          enum: [image_format, image_too_large, image_pixels, image_aspect_ratio, image_malformed, image_unsupported, video_format, video_too_large, video_too_long, video_pixels, video_aspect_ratio, video_malformed, video_tokens, video_unsupported]
+        limit:
+          type: integer
+          description: |
+            The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
+            for `video_too_long`, input tokens for `video_tokens` and the longer side over the shorter for
+            `*_aspect_ratio`.
     ModelList:
       type: object
       required: [object, data, api_version, limits]
@@ -1210,6 +1253,11 @@ components:
         presets:
           type: array
           description: Questions the model defines (Question.preset).
+          items:
+            type: string
+        modalities:
+          type: array
+          description: Decision models only; the inputs a decisions request may carry (`text`, `image` for `images`, `video` for `videos`).
           items:
             type: string
         heads:
@@ -1382,6 +1430,36 @@ components:
         max_inputs:
           type: integer
           description: Most inputs or documents one classify, embeddings or rerank request may carry.
+        image_max_pixels:
+          type: integer
+          description: Models that read images; the most pixels the model reads of one image (larger images are resized).
+        image_source_max_pixels:
+          type: integer
+          description: Models that read images; the most pixels one supplied image may have.
+        image_max_bytes:
+          type: integer
+          description: Models that read images; the most bytes one supplied image may have.
+        video_fps:
+          type: number
+          description: Models that read videos; the frames per second the model samples.
+        video_max_frames:
+          type: integer
+          description: Models that read videos; the most frames the model reads of one video.
+        video_max_pixels:
+          type: integer
+          description: Models that read videos; the most pixels the model reads of one frame (larger frames are resized).
+        video_max_tokens:
+          type: integer
+          description: Models that read videos; the most input tokens the videos of one request may take.
+        video_max_bytes:
+          type: integer
+          description: Models that read videos; the most bytes one supplied video may have.
+        video_max_seconds:
+          type: integer
+          description: Models that read videos; the longest supplied video, in seconds.
+        video_source_max_pixels:
+          type: integer
+          description: Models that read videos; the most pixels one frame of a supplied video may have.
     ProfileInfo:
       type: object
       required: [name, numerics]

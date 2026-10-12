@@ -219,11 +219,18 @@ def _prepare_qwen3(layer: Qwen3Layer) -> dict[str, Any]:
 
 
 def fused_applies(hidden_states: torch.Tensor) -> bool:
-    """The fused kernels reproduce the eager layer under BF16 autocast on an FP32 or BF16 stream."""
+    """The fused kernels reproduce the eager layer under BF16 autocast on an FP32 or BF16 stream.
+
+    A BF16 stream without autocast (a backbone held in BF16 and run eagerly, as
+    Decision 3.0's released runtime runs it) rounds the same way: every op the
+    kernels replace already reads and writes BF16 there.
+    """
+    if not hidden_states.is_cuda:
+        return False
+    if not torch.is_autocast_enabled("cuda"):
+        return hidden_states.dtype == torch.bfloat16
     return (
         hidden_states.dtype in (torch.float32, torch.bfloat16)
-        and hidden_states.is_cuda
-        and torch.is_autocast_enabled("cuda")
         and torch.get_autocast_dtype("cuda") == torch.bfloat16
     )
 
@@ -425,7 +432,10 @@ def _gated_delta(
     mask: torch.Tensor | Tree | None,
     kernels: KernelSet,
 ) -> torch.Tensor:
-    if kernels.select("causal_conv1d").variant is not None:
+    conv = kernels.select("causal_conv1d").variant
+    if conv is not None and (
+        not kernels.has("gdn_prep") or kernels.select("gdn_prep").variant != conv
+    ):
         # The model's released convolution (a kernel variant) is not what gdn_prep fuses.
         eager: torch.Tensor = m(normed, mask, kernels)
         return eager

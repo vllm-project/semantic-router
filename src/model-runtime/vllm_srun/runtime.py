@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
+from .accel.cpu import cap_threads
 from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
 from .errors import (
     PackageError,
@@ -149,7 +150,7 @@ __all__ = [
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "options"},
+    "decisions": {"model", "state", "questions", "images", "videos", "options"},
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
@@ -349,7 +350,14 @@ class ServedModel:
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )
-        self.health.set("loading", f"loading weights on {placement.device.label}")
+        needed = f"needs about {placement.estimated_bytes / (1 << 30):.1f} GiB"
+        free = device.free_memory
+        self.health.set(
+            "loading",
+            f"loading weights on {device.label} ("
+            + (needed if free is None else f"{needed}, {free / (1 << 30):.1f} GiB free")
+            + ")",
+        )
         pinned = self.kernel_choices
 
         def execute(work: Any) -> Any:
@@ -672,6 +680,8 @@ class ServedModel:
             }
         if info.presets:
             card["presets"] = list(info.presets)
+        if "decisions" in info.surfaces:
+            card["modalities"] = list(info.modalities)
         return card
 
 
@@ -741,6 +751,13 @@ class Runtime:
     # -- lifecycle -----------------------------------------------------------
 
     def start(self, *, background: bool = True) -> None:
+        capped = cap_threads(self.config.threads)
+        if capped:
+            log.info(
+                "PyTorch CPU threads %d -> %d (the container's CPUs)",
+                capped["from"],
+                capped["to"],
+            )
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True
@@ -936,7 +953,7 @@ class Runtime:
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            raise RuntimeServiceError.invalid(exc) from exc
         return Prepared(served, request, plan)
 
     def finish(
@@ -1060,9 +1077,7 @@ class Runtime:
             try:
                 split = split_states(body) if surface == "decisions" else None
             except ValueError as exc:
-                failed = _error_outcome(
-                    RuntimeServiceError("invalid_request", str(exc))
-                )
+                failed = _error_outcome(RuntimeServiceError.invalid(exc))
                 joins.append((len(parts), None, failed))
                 continue
             if split is None:

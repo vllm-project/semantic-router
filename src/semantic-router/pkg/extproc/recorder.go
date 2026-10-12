@@ -281,29 +281,27 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
+	// The sanitiser drops tool-result payloads on every route; a masking route
+	// additionally persists no request text at all, because Replay snapshots
+	// the request before masking runs (D3, #3566).
 	suppressBody := replaySuppressesBody(ctx)
-	if ctx.SemanticRequest != nil && !suppressBody {
-		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
-			record.RequestBody = string(requestBody)
+	if ctx.SemanticRequest != nil {
+		replayRequest := replaySafeSemanticRequest(*ctx.SemanticRequest)
+		prompt, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
+		// Tool definitions are operator-authored, not user content, so they
+		// are kept even when the prompt is suppressed.
+		record.ToolDefinitions = toolDefinitions
+		if !suppressBody {
+			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
+				record.RequestBody = string(requestBody)
+			}
+			record.Prompt = prompt
 		}
-	}
-
-	// Extract structured fields from neutral IR before recorder truncation.
-	// Tool definitions are operator-authored, not user content, so they are
-	// kept even when the prompt is suppressed (D3, #3566).
-	prompt, toolDefinitions := extractSemanticPromptAndTools(ctx.SemanticRequest)
-	record.ToolDefinitions = toolDefinitions
-	if !suppressBody {
-		record.Prompt = prompt
 	}
 
 	return record
 }
 
-// replaySuppressesBody reports whether a masking route must not persist the
-// pre-mask request. Replay snapshots the neutral request before dispatch, so
-// the only safe option is to omit the body rather than store it raw (D3,
-// #3566).
 // replayRequestToolTrace drops the request trace on a masking route. It
 // carries user text and tool arguments and results, and every record is
 // written before masking runs -- including the Looper path and a failed
@@ -317,6 +315,9 @@ func replayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 	return buildReplayRequestToolTrace(ctx)
 }
 
+// replaySuppressesBody reports whether a masking route must not persist the
+// pre-mask request. Replay snapshots the neutral request before dispatch, so
+// omitting the body is the only option that cannot store it raw (D3, #3566).
 func replaySuppressesBody(ctx *RequestContext) bool {
 	if ctx == nil || ctx.VSRSelectedDecision == nil {
 		return false

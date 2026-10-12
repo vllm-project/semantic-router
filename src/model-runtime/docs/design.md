@@ -1,7 +1,7 @@
 # vLLM Semantic Router Model Runtime
 
 Design for the built-in model runtime of vLLM Semantic Router (vllm-sr). The
-runtime serves every model the router runs: Decision 2.0 and 1.0, Vela 1.0 and
+runtime serves every model the router runs: Decision 3.0, 2.0 and 1.0, Vela 1.0 and
 2.0, and third-party models that a family plugin understands. Phase 1 served
 Decision 2.0. Phases 2–4 move Decision 1.0 and Vela 1.0 onto the runtime, add
 Vela 2.0 and the classify, embeddings and rerank surfaces, and delete the
@@ -78,7 +78,7 @@ running packaged remote code (`trust_remote_code`).
 | Config | The canonical layout stays. `provider: model_runtime` deployments may serve task bindings. The providers `candle`, `ort` and `openvino` and their execution fields are removed from the parser; `vllm-sr config migrate` rewrites them. |
 | Retirements | The NLI model (hallucination explainer, response-cache polarity guard) and the OpenVINO provider retire, as decided in the runtime proposal. Every other legacy model migrates or has a documented replacement (section 16). |
 | Exactness | Decision 2.0 `exact` stays byte-identical. Decision 1.0 `exact` targets bit-identity with the packages' bundled runtime on the same device class. Vela 1.0 `exact` is FP32 on every device, with parity records against the legacy path. |
-| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Its other dependencies install at the versions in `requirements-lock.txt`, so every build of a release gets the same set. The Rust build stages are deleted. |
+| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Its other dependencies install at the versions in `requirements-lock.txt`, so every build of a release gets the same set. Model-backed validation of the image runs in development CI: recipe conformance serves the maintained recipes' models through the CI-built image, and Published Models serves the published Vela models through the runtime from source. The release workflow rebuilds the tagged source without running tests (#4273), so the published digest itself is not model-run. The Rust build stages are deleted. |
 
 ## 3. Overview
 
@@ -96,7 +96,7 @@ running packaged remote code (`trust_remote_code`).
  +------------------------------ vllm_srun (one Python process, one or more models) ---------------+
  | api: /v1/decisions /v1/systemone /v1/classify /v1/embeddings /v1/rerank /v1/bundle /v1/models /health |
  | per model: scheduler (admission, deadlines, profile hook, micro-batches) and one worker on its device |
- | families: decision2 | decision1 | task_heads | vela2 | multimodal_embedding  (render, readout, answers)|
+ | families: decision3 | decision2 | decision1 | task_heads | vela2 | multimodal_embedding (render, readout)|
  | engines: native (PyTorch: Qwen3, Qwen3.5, ModernBERT, BERT, LoRA, Omni towers) | onnxruntime (optional)|
  | accelerators: cpu | cuda | rocm | xpu | mps  (detection, kernels, pure-torch fallbacks)               |
  | registry: pinned Hub revisions, cache, manifest / file-hash verification, licence and access policy  |
@@ -139,9 +139,9 @@ src/model-runtime/
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       artifacts.py          # file inventories and hash verification for packages without a manifest
       builtin.py            # the first-party models: the tables the installed families name
-      tables/               # the built-in families' tables: decision2.py, decision1.py, vela1.py, vela2.py, omni.py
+      tables/               # the built-in families' tables: decision3.py, decision2.py, decision1.py, vela1.py, vela2.py, omni.py
       golden_answers*.json  # golden references per family, per device class
-      kernel_choices.json   # pinned autotuned kernel choices (Decision 2.0)
+      kernel_choices.json   # pinned autotuned kernel choices (Qwen3.5 decoders)
       policy.py             # licence and access policy, token handling
     scheduler/              # planner, scheduler (one per model)
     placement.py            # device choice and memory budget
@@ -179,7 +179,7 @@ so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_srun.families` | `ModelFamily` | `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
+| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
 | `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
 | `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
 | `vllm_srun.profiles` | `Profile` | `exact`, `shared_context`, `batching`, `max_speed` |
@@ -586,6 +586,7 @@ Before any model code runs, the family verifies the package:
 
 | Family | Models | Pinned revisions |
 | --- | --- | --- |
+| `decision3` | `vllm-sr/{d3, d3-flash, d3-mini, d3-nano, d3-lite, d3-edge}` | d3 `cbff3a3c`, flash `521525ef`, mini `a475367d`, nano `3aeb1c22`, lite `a8d25a91`, edge `18d61df7` (only the files the family loads are fetched) |
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
@@ -753,6 +754,61 @@ the exact processors) for the optional `onnxruntime` engine: a deployment
 names the bundle directory and `engine: onnxruntime`, with the `onnx` extra
 installed. The router images ship neither ONNX Runtime nor a bundle.
 
+### 8.6 Decision 3.0 (`decision3`)
+
+Decision 3.0 packages (`d3-package-manifest/1`) are a Transformers
+`Qwen3_5Model` checkpoint with its vision tower, a 255-way answer-code readout
+and `decision_config.json`. The family verifies every file it loads against
+`MODEL_MANIFEST.json` and recomputes the scored identity (the weight, readout,
+tokenizer and chat-template digests plus the inference fields of
+`decision_config.json`); the bundled `d3_*.py` runtime is never fetched for a
+built-in model and never imported.
+
+One question is one prompt: the chat-templated system and user turns, with the
+options listed under single-token answer codes, and the generation prompt with
+thinking off. The family renders the chat format itself for the templates it
+knows by digest, and builds the tokenizer as Transformers 5.17 builds
+`Qwen2Tokenizer` (the Qwen2 pre-tokenizer pattern and every special token of
+`tokenizer_config.json`), which the released runtime tokenized with. The
+backbone holds BF16 parameters on every device and runs without autocast; its
+full-attention layers see the whole left-padded prompt (`attention_mode:
+noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
+layers follow the package's `layer_types`, so a pruned backbone (d3-edge keeps
+12 of d3-lite's 24 layers, whose `full_attention_interval` no longer describes
+them) loads as it is. The FP32 readout scores the question's codes at the last
+position, and the answer is the softmax over them at the package temperature.
+A request's questions run in request order, eight per forward.
+
+A request's `images` (base64 PNG, JPEG or WebP data URLs) are decoded by PIL
+and processed as the Transformers 5.17 torchvision `Qwen2VLImageProcessor`
+processes them: `smart_resize` to 65,536 to 1,638,400 pixels, a uint8 bicubic
+antialiased resize, one FP32 normalization and the patch layout. Its `videos`
+(base64 MP4, WebM, QuickTime or Matroska data URLs) are decoded as the d3
+runtime decodes them, by OpenCV's FFmpeg backend from a temporary file: 2
+frames per second, at least 4 and at most 32 spread evenly over the whole
+video, converted to RGB, an odd count padded with the last frame. The
+Transformers 5.17 `Qwen3VLVideoProcessor` path follows with the d3 runtime's
+budget: at most 200,704 pixels per frame, the same resize and normalization,
+and the patch layout over each pair of frames. The videos of a request take at
+most 16,384 input tokens.
+
+Images and videos go in front of the text of every question, images first. In
+an image request, each question of a forward carries its own copy of the
+images through the native Qwen3.5 vision tower (the matrix-product patch
+embedding, bilinearly resampled learned positions, axial rotary attention per
+image and the patch merger). In a request with videos, the tower reads the
+request's images in one call and its videos in another, once per request, and
+every question reuses those features, as the d3 runtime does. Each video's
+placeholder expands to its frame pairs, each after its timestamp (`<0.2
+seconds>`); a frame pair is an image of one temporal patch for the
+multimodal rotary positions, and image features replace the image placeholders
+before video features replace the video placeholders. On gfx942 the depthwise
+convolution is the `fp64_naive` variant (MIOpen's naive kernel, which the
+released runtime ran) and the fused decoder layers run on the BF16 stream.
+Each model pins the FLA kernel choices of its release
+(`registry/kernel_choices.json`, from the autotune cache its release runs
+used), so every process rounds as the release did (§11).
+
 ## 9. Scheduler and planner
 
 ```text
@@ -829,9 +885,14 @@ downloaded.
 `auto` tries the accelerators in the order of their `auto_priority` (ROCm,
 CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
-available device with enough free memory. The memory estimate is the weight
-bytes under the dtype policy plus the activation bound; `--memory-budget`
-caps it per model. A model names the device capabilities it requires per
+available device with enough free memory. The memory estimate is the weights
+in the dtype the accelerator holds them in (FP32 as an upper bound, or BF16
+plus 10% for a family whose `gpu_weights` / `cpu_weights` name it) plus a
+2 GiB activation reserve, matched to the peaks in
+[the Decision 3.0 device memory record](records/decision3-device-memory.md);
+`--memory-budget` caps it per model. A refusal names, per device, what the
+model needs and how much is free; on a host with a GPU the GPU's reasons come
+first and the CPU's last. A model names the device capabilities it requires per
 accelerator (`ModelSpec.requires`; a backbone architecture declares its own
 once, in `BackboneSpec.requires`, and the families pass it on), and placement
 refuses a device whose accelerator does not report one, before any weights
@@ -1318,6 +1379,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Model group | Reference | Device classes | Pass thresholds |
 | --- | --- | --- | --- |
 | Decision 2.0 | released package runtime | CPU, ROCm | Bit-identical answers (unchanged) |
+| Decision 3.0 | the packages' own server (`d3_server.py`), same requests, text, images and videos | CPU, ROCm | Bit-identical answers ([`decision3-parity.md`](records/decision3-parity.md)) |
 | Decision 1.0 | the packages' bundled runtime, same requests | CPU, ROCm | Bit-identical on the same device class, else every answer within 1e-6 and recorded |
 | Vela 1.0 sequence and scores heads | the legacy router path (candle CPU; ORT on the AMD recipe), same inputs | CPU (CI fixtures and real models), ROCm | CPU: label agreement 100% outside near ties (top-two margin under 1e-3), max \|Δp\| ≤ 1e-3; ROCm: label agreement ≥ 99.5%, max \|Δp\| ≤ 0.02 |
 | Vela 1.0 token and grounded heads | the legacy router path | CPU, ROCm | CPU: identical span sets on ≥ 99.5% of inputs, max \|Δp\| ≤ 1e-3; ROCm: identical span sets on ≥ 98% |

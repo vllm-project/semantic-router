@@ -34,6 +34,9 @@ type Signals struct {
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
 	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
 	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	// TopicContinuityRules are context-policy evidence sources; they are not
+	// decision-referenceable.
+	TopicContinuityRules []TopicContinuityRule `yaml:"topic_continuity,omitempty"`
 }
 
 // HallucinationRule declares the response-stage hallucination observation:
@@ -211,6 +214,7 @@ type PIIRule struct {
 	Threshold       float32  `yaml:"threshold"`
 	PIITypesAllowed []string `yaml:"pii_types_allowed,omitempty"`
 	IncludeHistory  bool     `yaml:"include_history,omitempty"`
+	Source          string   `yaml:"source,omitempty"`
 	Description     string   `yaml:"description,omitempty"`
 }
 

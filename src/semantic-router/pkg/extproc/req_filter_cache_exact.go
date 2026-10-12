@@ -54,11 +54,7 @@ func exactCacheLookupInput(
 	if identity.ExactFingerprint == "" {
 		identity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
 	}
-	var maxAge *time.Duration
-	if ctx.CacheMaxAgeSeconds != nil {
-		value := time.Duration(*ctx.CacheMaxAgeSeconds) * time.Second
-		maxAge = &value
-	}
+	maxAge := responseCacheMaxAgeDuration(ctx)
 	lookupContext := ctx.TraceContext
 	if lookupContext == nil {
 		lookupContext = context.Background()
