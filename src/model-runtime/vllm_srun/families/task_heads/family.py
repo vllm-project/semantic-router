@@ -465,6 +465,12 @@ class TaskHeadsFamily(ModelFamily):
         return exits
 
     def verify(self, package: PackageRef) -> VerifiedPackage:
+        """Check the package and return its identity.
+
+        A missing file raises ``PackageError`` before the backbone is built.
+        mmBERT-shaped ModernBERT classifiers, including Vela 1.0, load through
+        this family. Verification returns before any backbone is constructed.
+        """
         selection = self._option_exits("pair_scorer")
         task = pkg.read(package.root, selection[0] if selection else None)
         files = named_files(package.root, task.files)
