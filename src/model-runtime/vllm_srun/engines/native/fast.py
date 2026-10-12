@@ -18,7 +18,8 @@ four scored panels), so it belongs to the exact profile:
 - **Graphs.** The backbone forward of each exact padded shape (rows, padded
   length, whether any row is padded) is captured once as a HIP / CUDA graph on
   the shape's second use and replayed afterwards, with the masks built from the
-  host-known row lengths as the eager path builds them. Shapes above
+  host-known row lengths as the eager path builds them (a noncausal backbone's
+  as ``noncausal_masks`` builds them, ``NoncausalMasks``). Shapes above
   ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
@@ -44,6 +45,7 @@ from .models import Backbone
 from .models.common import attention
 from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
+from .models.qwen3_5 import noncausal_masks
 from .models.tree import Tree, is_tree, suffix_rule
 
 if TYPE_CHECKING:
@@ -635,6 +637,21 @@ class Masks:
         }
 
 
+class NoncausalMasks(Masks):
+    """The masks of a noncausal backbone (``noncausal_masks``) from host-known padding.
+
+    Both are read from the attention mask on the device without a read-back, so
+    a graph captures them: the full-attention key mask is always given, and the
+    gated-delta layers get the 2D mask only when the batch is padded.
+    """
+
+    def build(
+        self, attention_mask: torch.Tensor, padded: bool
+    ) -> dict[str, torch.Tensor | None]:
+        full, linear = noncausal_masks(attention_mask, padded)
+        return {"full": full, "linear": linear}
+
+
 def _output_bytes(value: torch.Tensor) -> int:
     return value.numel() * value.element_size()
 
@@ -734,16 +751,20 @@ class Graphs:
             return self.eager(static["input_ids"], static["attention_mask"], padded)
 
         try:
+            # One capture stream: BLAS keeps a workspace per stream, so a new stream per
+            # capture would leave a workspace behind for every graph. A shape captured
+            # after an eager use has already compiled and tuned its kernels, so only the
+            # stream's first capture (or a first-use capture) runs the forward beforehand.
+            warmups = 0 if self.capture_after > 1 else 1
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-                # One capture stream: BLAS keeps a workspace per stream, so a new stream per
-                # capture would leave a workspace behind for every graph.
                 self.stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+                warmups = 1
             stream = self.stream
             stream.wait_stream(torch.cuda.current_stream())
             with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
                 with torch.cuda.stream(stream):
-                    for _ in range(2):
+                    for _ in range(warmups):
                         body()
                 torch.cuda.current_stream().wait_stream(stream)
                 torch.cuda.synchronize()
