@@ -282,6 +282,8 @@ server, see [Decision models](../../../model-runtime/guides/decisions.md).
 Decision deployments can opt into inline user images and videos. The setting
 is off by default and applies to request-stage decision signals, compatible built-in questions
 sharing their call, and the decision model selection algorithm.
+The policy is per deployment, with no per-question override. Questions sharing
+a deployment's call receive the same media.
 Response-stage jailbreak and hallucination checks do not inherit user attachments,
 even when they share a deployment.
 
@@ -316,6 +318,9 @@ The Router skips malformed, unsupported, excessive, or oversized attachments.
 preparation for a request. It exposes neither URLs nor payloads. Timeouts and
 refused runtime calls retain the existing unknown-signal behavior.
 
-Chat Completions accepts `video_url` parts independently of the decision-media
-opt-in. Dispatch still requires a backend with `video_input` capability. With
-the opt-in absent, decision model calls remain text-only.
+Chat Completions `video_url` parts are no longer refused at ingress, even when
+decision media is disabled. A backend with a recognized capability declaration
+must include `video_input` to receive the request. When a backend has no capability
+declaration, the Router forwards the video as it does images; this does not verify
+that the backend model supports video. With `input.media` absent, decision model
+calls remain text-only.
