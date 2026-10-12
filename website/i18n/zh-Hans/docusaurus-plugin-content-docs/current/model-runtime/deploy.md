@@ -4,7 +4,7 @@ description: 用持久的前端伺候决策模型、放置独立副本，以及�
 translation:
   source_commit: "b7af14a25907821546549e86fd688cbb946f1cb6"
   source_file: "docs/model-runtime/deploy.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
@@ -85,9 +85,9 @@ global:
 用 `-dp` 设置默认部署的独立 worker 数。数值档位和放置位置分开管：
 
 ```bash
-# 两个 worker 放在一块显式指定的宿主机 GPU 上。
+# Two workers on one explicitly selected host GPU.
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
-# 两个 worker 分放两块宿主机 GPU。
+# Two workers across two host GPUs.
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 ```
 

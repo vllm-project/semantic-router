@@ -35,6 +35,7 @@ from cli.commands.runtime_support import (
 )
 from cli.commands.serve_options import (
     GroupedServeCommand,
+    explicit,
     reject_envoy_options,
     reject_misplaced_options,
     resolve_container_runtime,
@@ -69,8 +70,17 @@ from cli.gateway_mode import (
     log_gateway_mode,
     resolve_gateway,
 )
+from cli.instance_paths import engine_workspace_directory
 from cli.runtime_lifecycle import validate_startup_timeout
-from cli.terminal import echo, fields, heading, success
+from cli.terminal import (
+    echo,
+    fields,
+    heading,
+    progress,
+    quiet_logs,
+    set_quiet_logs,
+    success,
+)
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -124,8 +134,13 @@ def _build_backend(target: str | None, **k8s_kwargs):
 def _resolve_serve_config(
     config: str,
     resolved_target: str,
+    *,
+    announce: bool = True,
 ) -> tuple[Path, bool]:
-    """Resolve one user-owned config or bootstrap the local Dashboard workspace."""
+    """Resolve one user-owned config or bootstrap the local Dashboard workspace.
+
+    Without *announce*, a bootstrapped workspace is the CLI's own and is not reported.
+    """
 
     if resolved_target != TARGET_DOCKER:
         config_path = Path(config).expanduser()
@@ -141,7 +156,8 @@ def _resolve_serve_config(
             )
         return config_path, False
     bootstrap = ensure_bootstrap_workspace(Path(config))
-    log_bootstrap_result(config, bootstrap)
+    if announce:
+        log_bootstrap_result(config, bootstrap)
     return bootstrap.config_path, bootstrap.setup_mode
 
 
@@ -175,8 +191,9 @@ def _deploy_serve_backend(
     startup_timeout: int | None,
     gateway: str,
     platform: str,
+    observability: bool,
 ) -> None:
-    """Deploy one prepared runtime."""
+    """Deploy one prepared runtime; *minimal* leaves the Dashboard out."""
 
     backend = _build_backend(
         resolved_target,
@@ -197,7 +214,7 @@ def _deploy_serve_backend(
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
         pull_policy=image_pull_policy,
-        enable_observability=not minimal,
+        enable_observability=observability,
         minimal=minimal,
         readonly=readonly,
         gateway=gateway,
@@ -230,8 +247,17 @@ def _execute_serve(
     gateway: str | None = None,
     engine: bool = False,
     model_options: dict | None = None,
+    observability: bool | None = None,
+    cli_workspace: bool = False,
 ) -> None:
-    """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
+    """Bootstrap workspace, resolve config, and delegate to the deployment backend.
+
+    *minimal* leaves the Dashboard (and sr-bench) out; *observability*
+    (default: not *minimal*) starts Jaeger, Prometheus and Grafana.
+    *cli_workspace*: *config* is Engine mode's own workspace, not the user's.
+    """
+    if observability is None:
+        observability = not minimal
     resolved_target = resolve_target(target)
     resolved_gateway = resolve_gateway(gateway)
     if startup_timeout is not None:
@@ -244,6 +270,9 @@ def _execute_serve(
     platform = resolve_execution_platform(
         platform, target=resolved_target, context=context
     )
+    if engine and quiet_logs():
+        artifact = (model_options or {}).get("artifact") or "the configured model"
+        progress(f"Engine mode: serving {artifact} on the {platform} platform")
     available_devices = ()
     if model_options and any(
         key in model_options for key in ("data_parallel_size", "device_ids")
@@ -268,7 +297,9 @@ def _execute_serve(
                 model_options["device_ids"],
                 model_options["device_ordinals"],
             )
-    config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
+    config_path, source_setup_mode = _resolve_serve_config(
+        config, resolved_target, announce=not cli_workspace
+    )
     log.info(f"Using config file: {config_path}")
 
     env_vars: dict[str, str] = (
@@ -296,6 +327,7 @@ def _execute_serve(
                 engine=engine,
                 available_devices=available_devices,
                 model_options=model_options,
+                observability=observability,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -335,6 +367,7 @@ def _execute_serve(
             startup_timeout=startup_timeout,
             gateway=resolved_gateway,
             platform=_platform_hint(platform),
+            observability=observability,
         )
     finally:
         if runtime_lock is not None:
@@ -413,10 +446,34 @@ def _execute_serve(
     help="Run dashboard in read-only mode (disable config editing, allow playground only)",
 )
 @click.option(
-    "--minimal",
+    "--minimal/--no-minimal",
+    default=None,
+    help=(
+        "Start without the Dashboard, sr-bench and the observability stack "
+        "(Jaeger, Prometheus, Grafana). The default in engine mode; "
+        "--no-minimal starts them all."
+    ),
+)
+@click.option(
+    "--dashboard",
+    "with_dashboard",
     is_flag=True,
     default=False,
-    help="Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana)",
+    help="Also start the Dashboard and sr-bench when minimal (engine mode's default).",
+)
+@click.option(
+    "--observability",
+    "with_observability",
+    is_flag=True,
+    default=False,
+    help="Also start Jaeger, Prometheus and Grafana when minimal (engine mode's default).",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Show every startup detail; engine mode otherwise prints a short summary.",
 )
 @click.option(
     "--log-level",
@@ -526,7 +583,10 @@ def serve(
     dashboard_image: str | None,
     image_pull_policy: str,
     readonly: bool,
-    minimal: bool,
+    minimal: bool | None,
+    with_dashboard: bool,
+    with_observability: bool,
+    verbose: bool,
     log_level: str | None,
     platform: str | None,
     algorithm: str | None,
@@ -556,31 +616,49 @@ def serve(
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
     reject_envoy_options(ctx, resolve_gateway(gateway))
-    _execute_serve(
-        config,
-        replace_active_config,
-        image,
-        router_image,
-        envoy_image,
-        dashboard_image,
-        image_pull_policy,
-        readonly,
-        minimal,
-        log_level,
-        platform,
-        algorithm,
-        resolved_target,
-        namespace,
-        context,
-        profile,
-        chart_dir,
-        resolve_container_runtime(ctx, container_runtime, runtime),
-        recipe_env_names,
-        startup_timeout,
-        gateway,
-        engine=engine,
-        model_options=model_options,
+    if minimal is None:
+        minimal = engine and resolved_target == TARGET_DOCKER
+    workspace = (
+        engine
+        and resolved_target == TARGET_DOCKER
+        and not explicit(ctx, "config")
+        and not Path(config).exists()
     )
+    if workspace:
+        # Engine mode keeps a config of its own out of the working directory.
+        config = str(engine_workspace_directory(model) / "config.yaml")
+    quiet = engine and resolved_target == TARGET_DOCKER and not verbose
+    set_quiet_logs(quiet)
+    try:
+        _execute_serve(
+            config,
+            replace_active_config,
+            image,
+            router_image,
+            envoy_image,
+            dashboard_image,
+            image_pull_policy,
+            readonly,
+            minimal and not with_dashboard,
+            log_level,
+            platform,
+            algorithm,
+            resolved_target,
+            namespace,
+            context,
+            profile,
+            chart_dir,
+            resolve_container_runtime(ctx, container_runtime, runtime),
+            recipe_env_names,
+            startup_timeout,
+            gateway,
+            engine=engine,
+            model_options=model_options,
+            observability=not minimal or with_observability,
+            cli_workspace=workspace,
+        )
+    finally:
+        set_quiet_logs(False)
 
 
 @click.command()
