@@ -297,19 +297,27 @@ def rope_index(
     grids: list[tuple[int, int, int]],
     image_token_id: int,
     merge: int,
+    video_grids: list[tuple[int, int, int]] | None = None,
+    video_token_id: int | None = None,
 ) -> torch.Tensor:
-    """``Qwen3_5Model.get_rope_index`` for image prompts: rotary positions ``[3, B, L]``, 0 on padding.
+    """``Qwen3_5Model.get_rope_index`` for image and video prompts: rotary positions ``[3, B, L]``, 0 on padding.
 
     Over each row's real tokens, text runs count on from the position reached and
     each image's tokens take (t, row, column) positions offset by it; the image
-    then advances the position by its longer merged side. Images are consumed in
-    row order.
+    then advances the position by its longer merged side. A video is split into
+    its frame pairs, each an image of one temporal patch (timestamps separate
+    them). Images and videos are consumed in row order.
     """
     positions = torch.zeros(
         3, *input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
     )
     types = (input_ids == image_token_id).to(torch.int32)
-    images = iter(grids)
+    pending = {1: iter(grids)}
+    if video_token_id is not None:
+        types[input_ids == video_token_id] = 2
+        pending[2] = iter(
+            [(1, h, w) for t, h, w in video_grids or [] for _ in range(t)]
+        )
     device = input_ids.device
     for row in range(input_ids.shape[0]):
         keep = attention_mask[row].bool()
@@ -326,7 +334,7 @@ def rope_index(
                 )
                 current += span
                 continue
-            t, h, w = next(images)
+            t, h, w = next(pending[kind])
             grid_t, grid_h, grid_w = t, h // merge, w // merge
             temporal = torch.arange(grid_t, device=device) * 1
             rows = torch.arange(grid_h, device=device) + current
@@ -425,13 +433,21 @@ class Qwen3_5Backbone(nn.Module):
         image_token_id: int,
         positions: torch.Tensor,
         padded: bool,
+        videos: tuple[torch.Tensor, int] | None = None,
     ) -> torch.Tensor:
-        """A noncausal image prompt: image features in place of the placeholder tokens, rotary ``positions`` (``rope_index``)."""
+        """A noncausal image prompt: image (then video) features in place of their placeholder tokens, rotary
+        ``positions`` (``rope_index``)."""
         embeds = self.embed_tokens(input_ids)
         embeds = embeds.masked_scatter(
             (input_ids == image_token_id).unsqueeze(-1),
             features.to(embeds.device, embeds.dtype),
         )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
         full_mask, linear_mask = noncausal_masks(attention_mask, padded)
         return self.forward_embeds(embeds, positions, full_mask, linear_mask)
 

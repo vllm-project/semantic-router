@@ -178,6 +178,24 @@ RECIPE speed {
     expect(mutated).toContain('keywords: ["unchanged"]')
   })
 
+  it('applies mutations inside a recipe whose description contains parentheses or braces', () => {
+    const source = `RECIPE balanced (description = "Everyday routing (beta, {draft})") {
+  SIGNAL keyword balanced-keyword {
+    keywords: ["before"]
+  }
+}`
+
+    const mutated = mutateBuilderRecipeSource(source, 'balanced', (program) =>
+      updateSignal(program, 'keyword', 'balanced-keyword', { keywords: ['after'] }),
+    )
+
+    expect(mutated).toBe(`RECIPE balanced (description = "Everyday routing (beta, {draft})") {
+  SIGNAL keyword balanced-keyword {
+    keywords: ["after"]
+  }
+}`)
+  })
+
   it('keeps bindings-only default routing visible and isolates recipe bindings', () => {
     const binding = { deployment: 'shared', contract: 'embedding.v1', adapter: 'mmbert' }
     const ast: ASTProgram = { ...scopedAst, modelBindings: { embedding: binding } }
