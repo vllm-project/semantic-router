@@ -21,6 +21,8 @@ export interface ProviderEndpoint {
   provider?: string
   api_key?: string
   api_key_env?: string
+  engine?: 'vllm' | 'sglang' | 'atom' | 'tensorrt-llm'
+  metrics?: { port?: number; path?: string }
 }
 
 export interface ProviderModel {

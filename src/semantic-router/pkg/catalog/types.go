@@ -212,6 +212,18 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
+	// Telemetry carries where the instance's serving engine exposes load
+	// metrics from the Router config to its runtime endpoints. Like
+	// AuthPrefixSet it is internal: catalogs never declare it.
+	Telemetry InstanceTelemetry `json:"-" yaml:"-"`
+}
+
+// InstanceTelemetry names a provider instance's serving engine and metrics
+// location. The zero value means the instance reports no telemetry.
+type InstanceTelemetry struct {
+	Engine      string
+	MetricsPort int
+	MetricsPath string
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider

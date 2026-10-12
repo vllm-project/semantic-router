@@ -50,6 +50,8 @@ describe('model form backend targets', () => {
       api_key_env: 'PROVIDER_API_KEY',
       auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
       headers: { 'X-Org': 'acme' },
+      engine: 'tensorrt-llm',
+      metrics: { port: 8002, path: '/v2/metrics' },
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
@@ -58,6 +60,34 @@ describe('model form backend targets', () => {
     expect(Object.keys(backend).sort()).toEqual(
       Object.keys(ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties).sort(),
     )
+  })
+
+  it('keeps backend telemetry metrics through a model save', () => {
+    const payload = buildProviderModelPayload('qwen3-8b', {
+      backend_refs: [
+        {
+          name: 'gpu-a',
+          endpoint: '10.0.0.1:8000',
+          engine: 'vllm',
+          metrics: { port: 9100, path: '/custom-metrics' },
+        },
+      ],
+    })
+
+    expect(payload.backend_refs).toEqual([
+      {
+        name: 'gpu-a',
+        endpoint: '10.0.0.1:8000',
+        engine: 'vllm',
+        metrics: { port: 9100, path: '/custom-metrics' },
+      },
+    ])
+  })
+
+  it('drops an unknown engine and an empty metrics block', () => {
+    expect(
+      normalizeModelBackendRefs([{ name: 'gpu-a', engine: 'triton', metrics: { port: 0 } }]),
+    ).toEqual([{ name: 'gpu-a' }])
   })
 
   it('preserves an explicitly empty authentication prefix through the model payload', () => {

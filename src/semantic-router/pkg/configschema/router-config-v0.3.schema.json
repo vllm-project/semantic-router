@@ -529,6 +529,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CanonicalBackendMetrics": {
+      "properties": {
+        "port": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalBackendRef": {
       "properties": {
         "name": {
@@ -581,6 +593,12 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/CanonicalBackendMetrics"
         }
       },
       "additionalProperties": false,

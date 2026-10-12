@@ -2641,6 +2641,15 @@ class ReasoningFamily(BaseModel):
 REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
 
 
+class BackendMetrics(BaseModel):
+    """Where a backend's serving engine exposes metrics (default: its port, /metrics)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    port: Optional[int] = Field(default=None, ge=1, le=65535)
+    path: Optional[str] = Field(default=None, pattern=r"^/[^?# ]*$")
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
@@ -2659,6 +2668,9 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # Serving engine whose load metrics backend telemetry reads.
+    engine: Optional[Literal["vllm", "sglang", "atom", "tensorrt-llm"]] = None
+    metrics: Optional[BackendMetrics] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -2674,6 +2686,12 @@ class BackendRef(BaseModel):
                         "accepted by default, so delete it"
                     )
         return data
+
+    @model_validator(mode="after")
+    def _metrics_require_engine(self) -> "BackendRef":
+        if self.metrics is not None and self.engine is None:
+            raise ValueError("metrics requires engine")
+        return self
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

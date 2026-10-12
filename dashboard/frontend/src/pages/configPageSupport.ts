@@ -190,6 +190,17 @@ export interface BackendRefEntry {
   api_key_env?: string
   auth?: BackendRefAuth
   headers?: Record<string, string>
+  engine?: BackendEngine
+  metrics?: BackendMetrics
+}
+
+/** Serving engines whose load metrics backend telemetry can read. */
+export const BACKEND_ENGINES = ['vllm', 'sglang', 'atom', 'tensorrt-llm'] as const
+export type BackendEngine = (typeof BACKEND_ENGINES)[number]
+
+export interface BackendMetrics {
+  port?: number
+  path?: string
 }
 
 export interface ModelReasoningConfig {
