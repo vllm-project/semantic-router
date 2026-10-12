@@ -65,6 +65,9 @@ __all__ = ["Decision3Family", "Decision3Model"]
 
 BATCH_SIZE = 8
 VISION_TOWER = "vision"
+# Approximate text passes small enough to replay a graph pad their width to a multiple of this,
+# so many lengths share one captured graph (docs/records/decision3-buckets.md).
+BUCKET_TOKENS = 32
 # MIOpen's naive depthwise convolution (FP64 accumulation), which the released runtime ran on ROCm,
 # alone and inside the fused gated-delta preparation.
 CONV_VARIANT = {"causal_conv1d": "fp64_naive", "gdn_prep": "fp64_naive"}
@@ -623,18 +626,31 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def run(self, items: list[Item]) -> list[list[float] | None]:
         """Each run of items that share their images as one left-padded pass (released numerics)."""
+        return self._run(items, bucket=1)
+
+    def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
+        """``run`` with text passes that fit a graph padded to ``BUCKET_TOKENS``."""
+        return self._run(items, bucket=BUCKET_TOKENS)
+
+    def _run(self, items: list[Item], bucket: int) -> list[list[float] | None]:
         out: list[list[float] | None] = []
         start = 0
         while start < len(items):
             end = start + 1
             while end < len(items) and items[end].media is items[start].media:
                 end += 1
-            out.extend(self._pass(items[start:end]))
+            out.extend(self._pass(items[start:end], bucket))
             start = end
         return out
 
-    def _pass(self, items: list[Item]) -> list[list[float] | None]:
+    def _pass(self, items: list[Item], bucket: int) -> list[list[float] | None]:
         width = max(len(item.ids) for item in items)
+        bucketed = -(-width // bucket) * bucket
+        if (
+            items[0].media is None
+            and len(items) * bucketed <= self.engine_model.graph_tokens
+        ):
+            width = bucketed
         rows = len(items)
         ids = torch.full((rows, width), self.pad_id, dtype=torch.long)
         mask = torch.zeros((rows, width), dtype=torch.long)

@@ -13,7 +13,11 @@ from vllm_srun.families.decision3 import images as img
 from vllm_srun.families.decision3 import package as pkg
 from vllm_srun.families.decision3 import prompt
 from vllm_srun.families.decision3 import videos as vid
-from vllm_srun.families.decision3.family import BATCH_SIZE, Decision3Family
+from vllm_srun.families.decision3.family import (
+    BATCH_SIZE,
+    BUCKET_TOKENS,
+    Decision3Family,
+)
 from vllm_srun.registry.tables.decision3 import DECISION3_MODELS
 
 QUESTIONS = {
@@ -421,6 +425,33 @@ def test_questions_run_eight_per_pass_in_request_order(d3_runtime):
         list(range(BATCH_SIZE, BATCH_SIZE + 3)),
     ]
     assert model.shared_context(list(plan.items), None) == 0
+
+
+def test_approximate_text_passes_pad_to_a_bucket_that_fits_a_graph(
+    d3_runtime, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    engine = model.engine_model
+    items = list(model.plan("Merge two sorted lists.", QUESTIONS).items)
+    widest = max(len(item.ids) for item in items)
+    bucketed = -(-widest // BUCKET_TOKENS) * BUCKET_TOKENS
+    assert bucketed != widest
+    shapes = []
+    forward = engine.forward
+
+    def spy(batch):
+        shapes.append(tuple(batch.input_ids.shape))
+        return forward(batch)
+
+    monkeypatch.setattr(engine, "forward", spy)
+    exact = model.run(items)
+    model.run_approximate(items)
+    for limit in (len(items) * bucketed, len(items) * bucketed - 1):
+        monkeypatch.setattr(type(engine), "graph_tokens", limit)
+        approximate = model.run_approximate(items)
+    rows = len(items)
+    assert shapes == [(rows, widest), (rows, widest), (rows, bucketed), (rows, widest)]
+    assert [len(row) for row in approximate] == [len(row) for row in exact]
 
 
 def test_the_prompt_lists_codes_and_renders_the_chat_format(d3_runtime):

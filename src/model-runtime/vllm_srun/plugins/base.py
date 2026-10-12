@@ -452,6 +452,11 @@ class EngineModel(ABC):
         """Whether decoder forwards replay captured device graphs."""
         return False
 
+    @property
+    def graph_tokens(self) -> int:
+        """The most padded tokens a decoder forward may hold and still replay a graph (0: none)."""
+        return 0
+
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         """Run a decoder backbone and gather the requested rows (on the device)."""
         raise NotImplementedError(f"{type(self).__name__} has no decoder forward")

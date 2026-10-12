@@ -220,6 +220,10 @@ class NativeEngineModel(EngineModel):
     def replays_graphs(self) -> bool:
         return self.graphs is not None
 
+    @property
+    def graph_tokens(self) -> int:
+        return 0 if self.graphs is None else self.graphs.max_tokens
+
     def _run_tree(
         self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
     ) -> torch.Tensor:
