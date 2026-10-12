@@ -21,6 +21,9 @@ const (
 	defaultMemoryCacheKeyPrefix = "memory_cache:"
 	defaultMemoryCacheTTL       = 300 // 5 minutes
 	memoryCacheKeyVersion       = "v3:"
+	// cacheWriteHold outlasts Milvus Bounded-consistency staleness (5 s), so a
+	// read that still sees a just-deleted row is never written back to the cache.
+	cacheWriteHold = 10 * time.Second
 )
 
 // RedisCacheConfig configures the Redis hot cache for memory retrieval.
@@ -47,16 +50,20 @@ type RedisCache struct {
 }
 
 // readCacheEntryScript reads the value and its refill generation atomically.
+// During a post-write hold it returns no generation, so nothing read then is cached.
 // A short-lived random generation token is created when needed. Its expiry is
 // safe: conditional writes reject a missing token, so an old in-flight query
 // cannot mistake an expired generation for a fresh one.
 var readCacheEntryScript = redis.NewScript(`
+local value = redis.call("GET", KEYS[1])
+if redis.call("EXISTS", KEYS[3]) == 1 then
+  return {value or false, ""}
+end
 local generation = redis.call("GET", KEYS[2])
 if not generation then
   generation = ARGV[1]
   redis.call("SET", KEYS[2], generation, "PX", ARGV[2])
 end
-local value = redis.call("GET", KEYS[1])
 return {value or false, generation}
 `)
 
@@ -92,6 +99,7 @@ for _, key in ipairs(keys) do
   redis.call("DEL", key)
 end
 redis.call("DEL", KEYS[1], KEYS[2])
+redis.call("SET", KEYS[3], "1", "PX", ARGV[1])
 return #keys
 `)
 
@@ -180,6 +188,11 @@ func (c *RedisCache) userGenerationKey(userID string) string {
 	return c.prefix + "g:" + userID
 }
 
+// holdKey marks a user's post-write hold; see cacheWriteHold.
+func (c *RedisCache) holdKey(userID string) string {
+	return c.prefix + "h:" + userID
+}
+
 func newCacheGenerationToken() (string, error) {
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
@@ -199,7 +212,8 @@ func (c *RedisCache) Get(ctx context.Context, opts RetrieveOptions) ([]*Retrieve
 // token while loading from the backing store, then pass it to SetIfGeneration;
 // this prevents a completed invalidation from being undone by a slow refill.
 // On a hit, return the cached value without refilling it. Redis errors return
-// an empty token and disable caching that retrieval result. The token is opaque
+// an empty token and disable caching that retrieval result, as does a post-write
+// hold. The token is opaque
 // and valid only for a conditional write using the same user and cache options.
 func (c *RedisCache) GetWithGeneration(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, string, bool) {
 	if c == nil || c.client == nil {
@@ -212,7 +226,7 @@ func (c *RedisCache) GetWithGeneration(ctx context.Context, opts RetrieveOptions
 	}
 	key := cacheKey(c.prefix, opts.UserID, opts)
 	result, err := readCacheEntryScript.Run(ctx, c.client,
-		[]string{key, c.userGenerationKey(opts.UserID)},
+		[]string{key, c.userGenerationKey(opts.UserID), c.holdKey(opts.UserID)},
 		token, c.ttl.Milliseconds(),
 	).Result()
 	if err != nil {
@@ -225,7 +239,7 @@ func (c *RedisCache) GetWithGeneration(ctx context.Context, opts RetrieveOptions
 		return nil, "", false
 	}
 	generation, ok := redisResultString(parts[1])
-	if !ok || generation == "" {
+	if !ok {
 		logging.Debugf("Memory Redis cache returned an invalid generation token")
 		return nil, "", false
 	}
@@ -318,7 +332,8 @@ func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error 
 	}
 	idxKey := c.userIndexKey(userID)
 	if _, err := invalidateUserCacheScript.Run(ctx, c.client,
-		[]string{idxKey, c.userGenerationKey(userID)},
+		[]string{idxKey, c.userGenerationKey(userID), c.holdKey(userID)},
+		cacheWriteHold.Milliseconds(),
 	).Int(); err != nil {
 		logging.Warnf("Memory Redis cache invalidate failed for user %s; entries may remain cached until TTL: %v", userID, err)
 		return err
