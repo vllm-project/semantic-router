@@ -414,21 +414,30 @@ func decodeAnswer(answer api.Answer) Answer {
 	return checkedAnswer(decoded)
 }
 
-// checkedAnswer replaces an answer holding a non-finite number with an
-// invalid_model_output error.
+// checkedAnswer rejects non-finite numbers and confidence or probabilities
+// outside [0, 1], including answers whose type comes from a model preset.
 func checkedAnswer(answer Answer) Answer {
-	if !finiteAnswer(answer) {
+	if !validAnswerNumbers(answer) {
 		return Answer{Type: answer.Type, Error: "invalid_model_output"}
 	}
 	return answer
 }
 
-func finiteAnswer(answer Answer) bool {
+func validAnswerNumbers(answer Answer) bool {
+	if answer.Confidence < 0 || answer.Confidence > 1 {
+		return false
+	}
 	values := []float64{answer.Noul, answer.Score, answer.Confidence, answer.Threshold}
 	for _, probability := range answer.Probabilities {
+		if probability < 0 || probability > 1 {
+			return false
+		}
 		values = append(values, probability)
 	}
 	for _, span := range answer.Spans {
+		if span.Probability < 0 || span.Probability > 1 {
+			return false
+		}
 		values = append(values, span.Probability)
 	}
 	for _, value := range values {
