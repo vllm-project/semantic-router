@@ -74,7 +74,7 @@ plugins, not an additional plugin type.
 
 A plugin that acts on request content runs only when the request needs that
 content and the selected model can take it. `rag` and `memory` retrieval act on
-text, so they are skipped when the request has no text block, or when the
+text, so they are skipped when the request has no text in its instructions or messages, or when the
 selected model declares capabilities and `text` is not one of them. Other
 plugin types are not gated and still run on configuration alone.
 
