@@ -10,8 +10,10 @@ An AVX2/emulated-BF16 CPU worker also served all **21/21** requests with exact
 answers and usage, stable repeats and **5/5 matched goldens**, resolving the
 reproduced CPU readiness failure.
 
-This record covers the direct `vllm-srun` HTTP worker. The managed
-`vllm-sr serve --engine` Docker/Router path remains untested.
+The managed `vllm-sr serve --engine` Docker/Router path also passed on an
+AVX-512/native-BF16 CPU: **21/21** requests matched the same-host package server
+exactly, and a complete stack stop/start reproduced that panel. Managed CUDA
+container serving remains untested.
 
 ## Package and environment
 
@@ -155,7 +157,129 @@ The restarted CUDA worker showed about 1,590 MiB process GPU memory after the
 panel and 6,851–6,854 MiB host RSS. These are snapshots, not peak memory results.
 Single second-call timings are not a latency or throughput benchmark.
 
-## Reproduction
+## Managed CPU container qualification
+
+A separate ephemeral Modal VM ran a real Docker daemon. The Router image was
+built with `tools/docker/Dockerfile.extproc` from signed source commit
+`ab8ac7b8681c4bb76399777603326ce5ae942f9f`, tagged
+`d3-router-local:ab8ac7b86`; its image ID was
+`sha256:a47b30cc8eeaeddcbc7a14022057435445aeb078c65b00f0166d124e1873325f`.
+The CLI was built from the same source, including its staged built-in catalog.
+No published Router image substituted for the local build.
+
+The VM exposed AVX-512/native BF16, running PyTorch `2.10.0+cpu` and the media
+versions above. Both the managed worker and separate reference process used
+12 threads. The worker's hardware key was `cpu:x86_64:avx512:bf16_native`;
+because that key has no dedicated entry, it retained the generic `cpu` reference.
+Its native model card confirmed the checkpoint revision and model/manifest
+hashes above, `profile: exact`, `ready: true`, and **5/5 matched goldens**.
+
+`vllm-sr serve` started the actual Router frontend, its managed worker and Redis
+with `--engine --gateway standalone --minimal --platform cpu`. Docker published
+the inference and management ports only on loopback. The isolated test oracle
+used a derivative image with torchvision, Transformers and FastAPI added;
+package Python executed only in that oracle container, never in the Router.
+
+| Assertion | First start | After complete CLI stop/start |
+| --- | --- | --- |
+| Public `/v1/systemone`: 21 requests / 73 questions | 21/21 exact | 21/21 exact |
+| Answer probabilities and usage | Maximum difference 0.0 | Maximum difference 0.0 |
+| Two calls per request | Stable throughout | Stable throughout |
+| Managed worker startup goldens | 5/5, reference `cpu` | 5/5, reference `cpu` |
+| `/v1/systemone/models` | Only the granted D3-edge model | Same grant |
+| `/v1/decisions` alias | Text answers/usage identical | Image answers/usage identical |
+| Ungranted model | HTTP 403 | HTTP 403 |
+
+The first run also required HTTP 400 for malformed images, malformed videos,
+unsupported Span questions and requests missing the public model name. The
+restart used frozen same-host reference responses and required matching request
+hashes; it did not regenerate expected answers from the worker.
+
+```text
+Router is ready (after 10s, 6 checks)
+WORKER_CARD_PASS {'status': 'matched', 'checked': 5, 'matched': 5, 'reference': 'cpu'}
+MANAGED_STACK_PASS: 21/21 exact, max_numeric_delta=0.0
+MANAGED_RESTART_PASS: 21/21 exact, max_numeric_delta=0.0
+```
+
+This closes the CPU CLI/container gap on AVX-512/native BF16. It does not add
+a managed AVX2 or CUDA container qualification, nor test Dashboard, Envoy or
+Chat recipe routing. Minimal stacks intentionally omit the Dashboard-dependent
+instance controller; worker readiness was checked through its actual Unix-socket
+model inventory. All test containers were stopped and the VM terminated.
+
+### Run the managed CPU smoke test
+
+Build the local image from this branch, then save this complete declaration as
+`d3-config.yaml` in a dedicated test directory:
+
+```yaml
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 127.0.0.1
+    port: 8899
+    timeout: 300s
+    systemone:
+      models: [vllm-sr/d3-edge]
+global:
+  router:
+    enabled: false
+  model_catalog:
+    system:
+      decision_model: {deployment: primary}
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/d3-edge
+        device: auto
+        profile: exact
+        revision: 18d61df78684675463af9ae732872478845c5a79
+```
+
+Use the same stack identity and state directory for every command:
+
+```bash
+docker build --platform linux/amd64 --build-arg ACCELERATOR=cpu \
+  --build-arg TARGETARCH=amd64 -f tools/docker/Dockerfile.extproc \
+  -t d3-router-local:ab8ac7b86 .
+export VLLM_SR_STACK_NAME=d3-managed-probe
+export VLLM_SR_STATE_ROOT_DIR=/absolute/path/to/dedicated-test-directory
+vllm-sr serve vllm-sr/d3-edge --engine \
+  --revision 18d61df78684675463af9ae732872478845c5a79 \
+  --runtime-profile exact --config "$VLLM_SR_STATE_ROOT_DIR/d3-config.yaml" \
+  --image d3-router-local:ab8ac7b86 --image-pull-policy never \
+  --platform cpu --gateway standalone --minimal --startup-timeout 600
+curl -fsS http://127.0.0.1:8899/v1/systemone/models
+curl -fsS http://127.0.0.1:8899/v1/systemone \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"vllm-sr/d3-edge","state":"Explain why Python returns None.","questions":{"reasoning":{"type":"noul","instructions":"Does this need reasoning?"}}}'
+vllm-sr stop
+```
+
+For full public parity, start the isolated CPU oracle described below on the
+same host, then add the required public model field to both request panels:
+
+```bash
+PYTHONPATH=src/model-runtime/tools python - <<'PY'
+from decision3_parity import collect, compare, panel
+
+cases = panel()
+for case in cases:
+    case["body"]["model"] = "vllm-sr/d3-edge"
+reference = collect("http://127.0.0.1:8101", cases)
+actual = collect("http://127.0.0.1:8899", cases)
+result = compare(reference, actual)
+print(result)
+assert result["passed"] == result["total"] == 19
+PY
+```
+
+This standard panel has 19 requests; the recorded run additionally included
+the two family golden requests. Keep the managed stack running until the
+comparison finishes, and stop it afterwards.
+
+## Direct worker reproduction
 
 Install the runtime and its multimodal dependencies with the pinned versions
 above. Download the checkpoint into an ignored directory:
