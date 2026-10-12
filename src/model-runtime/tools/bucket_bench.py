@@ -191,7 +191,7 @@ def main() -> int:
         "requests": len(timed),
         "seconds": seconds,
         "requests_per_s": len(timed) / seconds,
-        "wave_ms_mean": statistics.mean(latencies),
+        "wave_ms_mean": statistics.mean(latencies) if latencies else None,
         "graphs": {
             key: after[key] - before.get(key, 0)
             for key in ("captures", "replays", "eager", "full")
