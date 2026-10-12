@@ -1,9 +1,11 @@
 """Adaptive CPU intra-op threads: the resolver learns, and answers never change.
 
 The record (``cpu-forward-thread-scaling-arm``) proved responses bit-identical
-across intra-op thread counts on the real models; here the same guarantee is
-checked on a fixture, through the real request path, with the resolver
-exploring live.
+across intra-op thread counts on the measured Arm models; x86 hosts can move
+within a bucket. The level-1 tests here hold on any host — the configured
+count serves everything — and the level-2 serving test asserts whichever
+path the host's numerics take: serving on a bit-identical host, retired on
+one that drifts.
 """
 
 import pytest
@@ -51,11 +53,15 @@ def test_bit_equal_reaches_into_dicts_of_tensors():
     assert not NativeEngineModel._bit_equal(same, {"0": same["0"]})
 
 
-def test_env_gate(monkeypatch):
+def test_env_levels(monkeypatch):
     monkeypatch.delenv(adaptive.ENV, raising=False)
-    assert adaptive.enabled() is False
-    monkeypatch.setenv(adaptive.ENV, "1")
-    assert adaptive.enabled() is True
+    assert adaptive.level() == 0 and adaptive.enabled() is False
+    for raw in ("1", "true", "yes", "on"):
+        monkeypatch.setenv(adaptive.ENV, raw)
+        assert adaptive.level() == 1 and adaptive.enabled() is True
+        assert adaptive.serving_enabled() is False
+    monkeypatch.setenv(adaptive.ENV, "2")
+    assert adaptive.level() == 2 and adaptive.serving_enabled() is True
 
 
 def test_resolver_learns_buckets_and_falls_back():
@@ -141,11 +147,11 @@ def test_drift_after_the_table_builds_retires_adaptation():
     """The learned counts keep verifying after the table builds; drift retires.
 
     Verification samples are inputs: a count that only agreed on the
-    exploration window must not serve. The table's counts shadow the served
-    answers for a few more requests, and one observed drift there retires
-    adaptation exactly as during exploration.
+    exploration window must not serve. At level 2 the table's counts shadow
+    the served answers for a few more requests, and one observed drift there
+    retires adaptation exactly as during exploration.
     """
-    resolver = adaptive.AdaptiveThreads(base=8, explore=12)
+    resolver = adaptive.AdaptiveThreads(base=8, explore=12, serve=True)
     resolver.start()
     for _ in range(12):
         resolver.pick(16)
@@ -157,13 +163,47 @@ def test_drift_after_the_table_builds_retires_adaptation():
     assert resolver.pick(16) == 8 and resolver.pick(2000) == 8
 
 
+def test_the_warm_base_pass_pairs_with_the_shadow_timing():
+    """A warm configured-count pass files under base, beside the warm shadows.
+
+    The cold configured pass that serves the request pays cold caches; the
+    shadow pays warm ones. Timing a second, warm configured pass and filing
+    it under base keeps the caches out of which count looks fastest — and
+    the warm pass never advances the exploration window on its own.
+    """
+    resolver = adaptive.AdaptiveThreads(base=4, explore=6)
+    resolver.start()
+    for _ in range(2):
+        resolver.pick(64)  # cycles the shadow counts; base still serves
+        resolver.record_base(64, 8.0)  # warm configured pass
+        resolver.record(64, 5.0)  # shadow pass: warm caches, faster
+    assert resolver._samples[4] == [(64, 8.0)] * 2
+    assert resolver._seen == 2  # the shadow drives the window, not the warm pass
+    assert resolver._table is None
+
+
+def test_level_2_transition_only_when_serving():
+    """The post-table transition exists to verify learned counts that serve.
+
+    At level 1 the table never serves, so there is nothing to transition:
+    adoption turns immediately and the exploration cost stops at its window.
+    """
+    reporter = adaptive.AdaptiveThreads(base=8, explore=12, serve=False)
+    reporter.start()
+    for _ in range(12):
+        reporter.pick(16)
+        reporter.record(16, 10.0)
+    assert reporter.adopted and reporter._transition == 0
+
+
 def test_exploration_starts_once_the_runtime_is_ready(
     qwen3_package, monkeypatch, default_cpu_threads
 ):
     """The runtime starts exploration once the startup golden check has passed.
 
     Through the real runtime path: the served model is ready — the golden
-    check passed — and it samples the requests it serves.
+    check passed — and the first request either gets sampled or retires the
+    learning on a host whose answers move across counts.
     """
     monkeypatch.setenv(adaptive.ENV, "1")
     runtime = start_runtime(qwen3_package, threads=4)
@@ -175,21 +215,50 @@ def test_exploration_starts_once_the_runtime_is_ready(
             "/v1/decisions", json={"state": "state 0", "questions": QUESTIONS}
         )
         assert r.status_code == 200
-        assert resolver._seen > 0
+        assert resolver._seen > 0 or resolver.retired
     finally:
         runtime.stop()
 
 
-def test_the_learned_count_serves_after_adoption(
+def test_level_1_reports_the_learned_counts_but_never_serves_them(
     qwen3_package, monkeypatch, default_cpu_threads
 ):
-    """Once exploration builds the table, the learned count serves requests.
+    """The default level learns and reports; the configured count still serves.
 
-    Through the real runtime path: past the exploration window the serving
-    pass states the learned count on the shared CPU context, so the learned
-    setting reaches execution instead of only feeding a table.
+    Through the real runtime path: past the exploration window the table is
+    built and logged, and every request — sampled or not — still runs and
+    answers at the configured count, on any host.
     """
     monkeypatch.setenv(adaptive.ENV, "1")
+    runtime = start_runtime(qwen3_package, threads=4)
+    try:
+        client = TestClient(create_app(runtime))
+        resolver = runtime.served[0].model.engine_model.threads_resolver
+        for i in range(60):
+            r = client.post(
+                "/v1/decisions", json={"state": f"state {i}", "questions": QUESTIONS}
+            )
+            assert r.status_code == 200
+        if resolver.retired:
+            assert adaptive.CpuTeam._active == 4  # a drifting host: base serves
+            return
+        assert resolver.adopted and not resolver.serving
+        assert adaptive.CpuTeam._active == 4  # the configured count, always
+    finally:
+        runtime.stop()
+
+
+def test_level_2_serves_the_learned_count_after_adoption(
+    qwen3_package, monkeypatch, default_cpu_threads
+):
+    """At level 2 the learned count serves once its verification completes.
+
+    Through the real runtime path: exploration, then the transition, then
+    the serving pass states the learned count on the shared CPU context. On
+    a host whose answers move across counts the first drifting shadow
+    retires the resolver instead — that branch is the level-2 safety net.
+    """
+    monkeypatch.setenv(adaptive.ENV, "2")
     runtime = start_runtime(qwen3_package, threads=4)
     try:
         client = TestClient(create_app(runtime))
@@ -199,7 +268,10 @@ def test_the_learned_count_serves_after_adoption(
                 "/v1/decisions", json={"state": f"state {i}", "questions": QUESTIONS}
             )
             assert r.status_code == 200
-        assert resolver.adopted  # exploration and the transition are both over
+        if resolver.retired:
+            assert resolver.pick(64) == 4  # a drifting host keeps its count
+            return
+        assert resolver.adopted and resolver.serving
         sampled = [tokens for per in resolver._samples.values() for tokens, _ in per]
         count = resolver.pick(sampled[0])
         r = client.post(
@@ -216,11 +288,11 @@ def test_opting_in_never_changes_an_answer(
 ):
     """The served answers never change while the setting is on.
 
-    The configured count serves every request through exploration and the
-    post-table transition — sixty requests reach deep into both — so the
-    assertion holds on any host, including hosts whose thread counts
-    disagree bitwise: the shadow verification is exactly what retires
-    adaptation there instead of ever letting a drifting count serve.
+    At the default level the configured count serves every request —
+    exploration, report-only steady state, all sixty — so the answers are
+    those of the plain runtime on any host, however its thread counts
+    disagree bitwise; verification retires the learning there instead of
+    ever letting a drifting count near an answer.
     """
     questions = dict(QUESTIONS)
 

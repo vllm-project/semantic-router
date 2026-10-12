@@ -135,7 +135,9 @@ class NativeEngineModel(EngineModel):
         self.graphs: fast.Graphs | None = None
         self._cpu_threads = options.threads or torch.get_num_threads()
         self.threads_resolver = (
-            adaptive_threads.AdaptiveThreads(self._cpu_threads)
+            adaptive_threads.AdaptiveThreads(
+                self._cpu_threads, serve=adaptive_threads.serving_enabled()
+            )
             if self.device.type == "cpu" and adaptive_threads.enabled()
             else None
         )
@@ -353,15 +355,16 @@ class NativeEngineModel(EngineModel):
     def _with_threads(self, tokens: int, run: Callable[[], _T]) -> _T:
         """Run one batch under the resolver's thread discipline.
 
-        Exploration never changes an answer: the batch is served by the
-        configured count, and any other allowed count only runs as a shadow
-        pass that has to reproduce the served answer bit for bit before its
-        timing counts. The shadow restores the configured count before it
-        returns, so everything that runs after the engine — a family's
-        readout, the answer assembly — never inherits the shadow's team size.
-        Once the resolver has adopted counts, the learned count serves the
-        batch itself — only counts that kept the answers identical on this
-        host were adopted.
+        The served answer always comes from the configured count. Exploration
+        times the allowed counts against it in shadow passes that must
+        reproduce the served answer bit for bit — a cold configured pass
+        times nothing, and a warm configured pass timed beside the shadows
+        keeps the caches out of the comparison — and the shadow restores the
+        configured count before it returns, so everything after the engine,
+        a family's readout included, never inherits the shadow's team size.
+        Past adoption the learned counts serve only where serving was
+        opted into (level 2); otherwise the table reports and the answers
+        stay on the configured count.
         """
         resolver = self.threads_resolver
         if resolver is None:
@@ -369,19 +372,20 @@ class NativeEngineModel(EngineModel):
                 adaptive_threads.CpuTeam.apply(self._cpu_threads)
             return run()
         count = resolver.pick(tokens)
-        if resolver.adopted:
+        if resolver.adopted and resolver.serving:
             adaptive_threads.CpuTeam.apply(count)
             return run()
         base = resolver.base
-        # Exploring: the configured count serves; another count only shadows.
+        # Exploring (or reporting): the configured count serves; another
+        # count only shadows.
         adaptive_threads.CpuTeam.apply(base)
         started = time.perf_counter()
         try:
             result = run()
         finally:
-            base_ms = (time.perf_counter() - started) * 1000.0
+            cold_ms = time.perf_counter() - started
         if count == base:
-            resolver.record(tokens, base_ms)
+            resolver.record(tokens, cold_ms * 1000.0)
             return result
         adaptive_threads.CpuTeam.apply(count)
         started = time.perf_counter()
@@ -391,6 +395,13 @@ class NativeEngineModel(EngineModel):
             shadow_ms = (time.perf_counter() - started) * 1000.0
             adaptive_threads.CpuTeam.apply(base)
         resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
+        if resolver.adopted:
+            return result
+        # A warm configured-count pass, timed beside the warm shadow: the
+        # caches both just built, so the counts compare evenly.
+        started = time.perf_counter()
+        run()
+        resolver.record_base(tokens, (time.perf_counter() - started) * 1000.0)
         return result
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -500,8 +511,18 @@ class NativeEngineModel(EngineModel):
 
         Packed rows stay packed and padded rows padded. A reduced batch runs its
         stack's reduced copy when one is loaded, and every stack has its graphs.
-        A batch that names a tower runs it on its named inputs.
+        A batch that names a tower runs it on its named inputs. Towers carry
+        image/audio inputs with no token count, so they run the configured
+        count and stay out of the token-size learning.
         """
+        if batch.tower is not None:
+            if self.device.type == "cpu":
+                adaptive_threads.CpuTeam.apply(
+                    self.threads_resolver.base
+                    if self.threads_resolver is not None
+                    else self._cpu_threads
+                )
+            return self._encode(batch)
         return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
 
     def _encode(self, batch: EncoderBatch) -> EncoderOutput:
