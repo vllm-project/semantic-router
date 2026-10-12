@@ -129,7 +129,7 @@ def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
 @pytest.mark.parametrize("model", DECODERS, ids=size)
 def test_decoders_pin_the_kernel_choices_of_the_backbone_they_continue(model) -> None:
     base = builtin.lookup(f"vllm-sr/Decision-2.0-{BASES[size(model)]}")
-    assert set(model.kernel_choices) == {"rocm:gfx942"}
+    assert set(model.kernel_choices) == {"rocm:gfx942", "cuda:sm_90"}
     assert model.kernel_choices == base.kernel_choices
     assert model.min_device_memory_gib == base.min_device_memory_gib
 

@@ -123,6 +123,22 @@ def test_built_in_models_pin_their_released_kernel_choices_on_gfx942(tmp_path):
         assert set(choices["kernels"]) == FLA_FORWARD_KERNELS, model.repo_id
 
 
+def test_qwen3_5_decoders_pin_released_kernel_choices_on_cuda_sm_90() -> None:
+    known = builtin.lookup("vllm-sr/Decision-2.0-Eos-0.8B")
+    recorded = builtin.kernel_choices(known.model_sha256, "cuda", "sm_90")
+    assert recorded == known.kernel_choices["cuda:sm_90"]
+    assert builtin.kernel_choices(known.model_sha256, "cuda", "sm_89") == {}
+    for family in ("decision1", "decision2", "vela2"):
+        for model in builtin.all_models(family):
+            choices = model.kernel_choices.get("cuda:sm_90")
+            if model.backbone != "qwen3_5_text":
+                assert choices is None, model.repo_id
+                continue
+            assert choices["fla"] == "0.5.2", model.repo_id
+            assert choices["triton"] == "3.6.0", model.repo_id
+            assert set(choices["kernels"]) == FLA_FORWARD_KERNELS, model.repo_id
+
+
 def test_autotune_cache_comes_from_the_flag_or_the_environment(monkeypatch):
     monkeypatch.setenv("VLLM_SRUN_AUTOTUNE_CACHE", "/cache/from-env")
     parsed = build_parser().parse_args(["serve", "/models/kai"])
