@@ -3623,6 +3623,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
