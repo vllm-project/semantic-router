@@ -147,6 +147,81 @@ config:
                   - v1
               scope: eligible_history
               failure_mode: fail_open
+      - name: history_reset_fail_closed_probe_decision
+        description: "Keyword-gated fail_closed history_reset route: an inconclusive follow-up is rejected before dispatch and an opening turn is served (history-reset-failure-modes, issue #3343)."
+        priority: 607
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_fail_closed_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: true
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+                accepted_versions:
+                  - v1
+              scope: eligible_history
+              failure_mode: fail_closed
+      - name: history_reset_recovery_open_probe_decision
+        description: "Keyword-gated fail_open history_reset route requiring recovery on the memory-backed cache, which has no recovery store: an accepted change keeps the full history (history-reset-failure-modes, issue #3343)."
+        priority: 608
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_recovery_open_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: true
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+                accepted_versions:
+                  - v1
+              scope: eligible_history
+              failure_mode: fail_open
+              recovery:
+                enabled: true
+                store: response_cache
+      - name: history_reset_recovery_closed_probe_decision
+        description: "Keyword-gated fail_closed history_reset route requiring recovery on the memory-backed cache: an accepted change is rejected before dispatch (history-reset-failure-modes, issue #3343)."
+        priority: 609
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_recovery_closed_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: true
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+                accepted_versions:
+                  - v1
+              scope: eligible_history
+              failure_mode: fail_closed
+              recovery:
+                enabled: true
+                store: response_cache
       - name: looper_metrics_probe_decision
         description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
         priority: 610
@@ -954,6 +1029,21 @@ config:
           operator: OR
           keywords:
             - __HISTORY_RESET_ENABLED_PROBE__
+          case_sensitive: false
+        - name: history_reset_fail_closed_probe_keywords
+          operator: OR
+          keywords:
+            - __HISTORY_RESET_FAIL_CLOSED_PROBE__
+          case_sensitive: false
+        - name: history_reset_recovery_open_probe_keywords
+          operator: OR
+          keywords:
+            - __HISTORY_RESET_RECOVERY_OPEN_PROBE__
+          case_sensitive: false
+        - name: history_reset_recovery_closed_probe_keywords
+          operator: OR
+          keywords:
+            - __HISTORY_RESET_RECOVERY_CLOSED_PROBE__
           case_sensitive: false
         - name: looper_metrics_probe_keywords
           operator: OR
