@@ -13,8 +13,8 @@ SIGNAL keyword ai_pc_external_ok {
 }
 
 SIGNAL context ai_pc_exceeds_local_window {
-  description: "Input is larger than the local model's declared window."
-  min_tokens: "8K"
+  description: "Input leaves too little room for a reply in the local model's window."
+  min_tokens: "6K"
   max_tokens: "1M"
 }
 
@@ -61,11 +61,11 @@ ROUTE unsupported_image_input (description = "Decline image input: this profile 
   }
 }
 
-ROUTE local_window_exceeded (description = "Decline input the local model cannot hold instead of sending it out silently.") {
+ROUTE local_window_exceeded (description = "Decline input that leaves the local model too little room to reply, instead of sending it out silently.") {
   PRIORITY 250
   WHEN context("ai_pc_exceeds_local_window") AND (keyword("ai_pc_local_only") OR NOT keyword("ai_pc_external_ok"))
   PLUGIN fast_response {
-    message: "This input is larger than the local model's context window. Shorten it, or explicitly allow an external model in the request."
+    message: "This input is too large for the local model's context window. Shorten it, or explicitly allow an external model in the request."
   }
 }
 

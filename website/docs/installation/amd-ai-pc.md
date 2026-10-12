@@ -43,7 +43,7 @@ tag `llama3.2:3b` through `host.docker.internal:11434`:
 ollama pull llama3.2:3b
 ```
 
-The recipe declares an 8192-token window for this model. Set the Ollama server's
+The recipe declares an 8192-token window for this model and refuses estimated input of 6K tokens or more, which leaves room for the reply. Set the Ollama server's
 context length to at least that value, or the declared limit is higher than what
 the server accepts.
 
@@ -62,7 +62,7 @@ Entrypoint. Clients then use the model name `vllm-sr/auto`.
 | Request | Result |
 | --- | --- |
 | Contains an image | Declined with a fixed message. No model is called. |
-| Larger than the local window, and not marked as allowing an external model, or marked local-only | Declined with a fixed message. No model is called. |
+| Estimated at 6K tokens or more, and not marked as allowing an external model, or marked local-only | Declined with a fixed message. No model is called. |
 | Contains a local-only phrase, such as `keep this local` | Served by the local model. |
 | Contains an opt-in phrase, such as `you may use a cloud model`, and no local-only phrase | Served by the external model. |
 | Anything else | Served by the local model. |

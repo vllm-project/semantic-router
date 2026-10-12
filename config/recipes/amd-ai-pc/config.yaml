@@ -52,11 +52,11 @@ routing:
           - name: ai_pc_has_images
             type: conversation
         operator: AND
-    - description: Decline input the local model cannot hold instead of sending it out silently.
+    - description: Decline input that leaves the local model too little room to reply, instead of sending it out silently.
       name: local_window_exceeded
       plugins:
         - configuration:
-            message: This input is larger than the local model's context window. Shorten it, or explicitly allow an external model in the request.
+            message: This input is too large for the local model's context window. Shorten it, or explicitly allow an external model in the request.
           type: fast_response
       priority: 250
       rules:
@@ -143,9 +143,9 @@ routing:
         - role:local
   signals:
     context:
-      - description: Input is larger than the local model's declared window.
+      - description: Input leaves too little room for a reply in the local model's window.
         max_tokens: 1M
-        min_tokens: 8K
+        min_tokens: 6K
         name: ai_pc_exceeds_local_window
     conversation:
       - description: Request contains at least one image content part.

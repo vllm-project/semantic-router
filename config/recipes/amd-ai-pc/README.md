@@ -5,7 +5,7 @@
 The AMD AI PC recipe runs ordinary requests on a small text model served on the
 machine's CPU. It sends a request to an external model only when the request
 itself says that is allowed. It also refuses two things this profile cannot do:
-image input, and input larger than the local model's declared window.
+image input, and input too large for the local model's window.
 
 The recipe covers the CPU path only. Radeon iGPU and Ryzen AI NPU acceleration
 are not part of this recipe and are not qualified; see the
@@ -19,7 +19,7 @@ are not part of this recipe and are not qualified; see the
 | External | `cloud/external-chat` | Requests that explicitly allow an external model. |
 
 Clients use `vllm-sr/auto`. The local alias is bound to the Ollama tag
-`llama3.2:3b` and declares an 8192-token window. Replace both aliases with
+`llama3.2:3b`, declares an 8192-token window, and refuses estimated input of 6K tokens or more, which leaves room for the reply. Replace both aliases with
 backends that match the machine's memory and the deployment's data policy.
 
 ## Intended use
@@ -37,7 +37,7 @@ Do not use it for image input or for workloads that need a vision model.
 | Request pattern | Route | Behavior |
 | --- | --- | --- |
 | Contains an image | `unsupported_image_input` | Declined with a fixed message; no model is called. |
-| Larger than the local window, and not opted in to an external model or marked local-only | `local_window_exceeded` | Declined with a fixed message; no model is called. |
+| Estimated at 6K tokens or more, and not opted in to an external model or marked local-only | `local_window_exceeded` | Declined with a fixed message; no model is called. |
 | Marked local-only | `local_only` | Served by `local/ai-pc`. |
 | Allows an external model and is not marked local-only | `external_opt_in` | Served by `cloud/external-chat`. |
 | Everything else | `local_default` | Served by `local/ai-pc`. |

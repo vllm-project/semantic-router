@@ -73,7 +73,7 @@ decisions:
     expected_decision: local_window_exceeded
     expected_selection_status: not_required
     expected_plugins: [fast_response]
-    objective: Input larger than the local window is declined unless the request allows an external model.
+    objective: Input too large for the local window is declined unless the request allows an external model.
     variants:
       - id: long_input_without_opt_in
         query: Summarize the staffing changes in the reports above in five bullet points.
