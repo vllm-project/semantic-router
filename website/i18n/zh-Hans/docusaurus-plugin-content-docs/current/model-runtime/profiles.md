@@ -4,7 +4,7 @@ description: 在发布的答案和更快、近似的设置之间做选择。
 translation:
   source_commit: "abae8ff99df2fdab372f0fb6d032b305907b9f44"
   source_file: "docs/model-runtime/profiles.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
