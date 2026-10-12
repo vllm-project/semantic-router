@@ -197,6 +197,7 @@ def reconcile_bench_container(
     result = subprocess.run(
         [
             command[0],
+            "container",
             "inspect",
             "--format",
             '{"id":{{json .Id}},"status":{{json .State.Status}},'
