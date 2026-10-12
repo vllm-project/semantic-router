@@ -32,6 +32,20 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 render_observability_template = _render_observability_template
 
+# Pinned deliberately: `redis:7-alpine` still declares VOLUME /data, while
+# newer tags (`redis:8`, `redis:alpine`) dropped the declaration. Bumping
+# this tag would make the anonymous volume of an unadopted stack vanish and
+# take its data with it, so a bump has to come with a migration that has
+# already recorded a named volume for every managed stack.
+REDIS_IMAGE = "docker.io/library/redis:7-alpine"
+# Pinned deliberately, for the same reason as the Redis tag above:
+# `postgres:16-alpine` declares VOLUME /var/lib/postgresql/data, and a stack
+# that has not been adopted yet keeps its only copy of the database in the
+# anonymous volume that declaration creates. A major bump also changes the
+# on-disk data directory format, which a recreated container cannot read.
+POSTGRES_IMAGE = "docker.io/library/postgres:16-alpine"
+MILVUS_IMAGE = "docker.io/milvusdb/milvus:v2.3.3"
+
 # The router allows 30 seconds to drain and close native model owners.
 CONTAINER_STOP_GRACE_SECONDS = 40
 CONTAINER_STOP_COMMAND_TIMEOUT_SECONDS = CONTAINER_STOP_GRACE_SECONDS + 10
@@ -329,12 +343,7 @@ def container_start_redis(
     volume = data_volume or adopted_volume
     if volume:
         cmd += ["-v", f"{volume}:{REDIS_DATA_MOUNT_PATH}"]
-    # Pinned deliberately: `redis:7-alpine` still declares VOLUME /data, while
-    # newer tags (`redis:8`, `redis:alpine`) dropped the declaration. Bumping
-    # this tag would make the anonymous volume of an unadopted stack vanish and
-    # take its data with it, so a bump has to come with a migration that has
-    # already recorded a named volume for every managed stack.
-    cmd.append("docker.io/library/redis:7-alpine")
+    cmd.append(REDIS_IMAGE)
     cmd += ["redis-server", CONTAINER_REDIS_CONF_PATH]
     return _run_service_start(cmd, "Redis")
 
@@ -411,12 +420,7 @@ def container_start_postgres(
     if volume:
         cmd += ["-v", f"{volume}:{POSTGRES_DATA_MOUNT_PATH}"]
     cmd += ["-p", f"127.0.0.1:{stack_layout.postgres_port}:5432"]
-    # Pinned deliberately, for the same reason as the Redis tag above:
-    # `postgres:16-alpine` declares VOLUME /var/lib/postgresql/data, and a stack
-    # that has not been adopted yet keeps its only copy of the database in the
-    # anonymous volume that declaration creates. A major bump also changes the
-    # on-disk data directory format, which a recreated container cannot read.
-    cmd.append("docker.io/library/postgres:16-alpine")
+    cmd.append(POSTGRES_IMAGE)
     return _run_service_start(cmd, "Postgres")
 
 
@@ -493,7 +497,7 @@ def container_start_milvus(
         f"127.0.0.1:{stack_layout.milvus_port}:19530",
         "-v",
         f"{os.path.abspath(mount_data_dir)}:/var/lib/milvus:z",
-        "docker.io/milvusdb/milvus:v2.3.3",
+        MILVUS_IMAGE,
         "milvus",
         "run",
         "standalone",
