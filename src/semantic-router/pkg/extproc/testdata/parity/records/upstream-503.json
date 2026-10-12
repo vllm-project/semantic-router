@@ -140,7 +140,8 @@
           ],
           "remove": [
             "x-vsr-effective-input-tokens",
-            "x-vsr-effective-max-output-tokens"
+            "x-vsr-effective-max-output-tokens",
+            "x-vsr-upstream-host"
           ]
         }
       }
