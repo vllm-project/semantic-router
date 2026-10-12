@@ -20,7 +20,8 @@ func assertRuntimeServed(t *testing.T, cfg *config.RouterConfig, specs []ModelSp
 	}
 	for name, deployment := range config.ModelRuntimeDeploymentsInUse(cfg) {
 		if config.SameModelRepo(deployment.Artifact, model.RepoID) || config.ResolveModelPath(deployment.Artifact) == model.LocalPath {
-			if deployment.Revision != model.Revision {
+			// An omitted revision delegates the built-in pin to the model runtime.
+			if deployment.Revision != "" && deployment.Revision != model.Revision {
 				t.Fatalf("deployment %q serves %s at %q, want the release %q", name, path, deployment.Revision, model.Revision)
 			}
 			return
@@ -69,5 +70,5 @@ routing:
 	if len(specs) != 0 || cfg.PIIModel.PIIMappingPath != "" {
 		t.Fatalf("default PII needs no mapping file, its card carries the labels: mapping %q, downloads %+v", cfg.PIIModel.PIIMappingPath, specs)
 	}
-	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-PII")
+	assertRuntimeServed(t, cfg, specs, config.DefaultSystemModels().PIIClassifier)
 }

@@ -61,10 +61,11 @@ func TestGuardProvenanceDispatch(t *testing.T) {
 			results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalConfidences: map[string]float64{}}
 			dispatchers := classifier.buildPolicySignalDispatchers(results, &sync.Mutex{},
 				func(string) string { return "flat-text" }, []string{"legacy-user"}, []string{"trusted-routing-context"},
+				nil, false,
 				ConversationFacts{}, RequestFacts{JailbreakInput: test.input}, nil)
 			for _, dispatcher := range dispatchers {
 				if dispatcher.signalType == config.SignalTypeJailbreak {
-					dispatcher.evaluate()
+					dispatcher.evaluate(context.Background())
 				}
 			}
 			slices.Sort(recorder.inputs)

@@ -22,12 +22,27 @@ type ModelDeployment struct {
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
 	// not manage (unix:///path, http://host:port or https://host:port).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
-	// Process groups managed model_runtime deployments into one runtime
-	// process; without it the Router runs one process per device.
-	Process string `yaml:"process,omitempty" json:"process,omitempty"`
+	// Replicas places independent workers for this logical resource. Omission
+	// uses the single device/endpoint placement above.
+	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
 	// ServedName selects the model on an attached runtime that serves several
 	// (default: the deployment name).
 	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
+	// PublicName is the inference API identity. It never identifies a socket,
+	// local package path, or internal deployment key.
+	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
+}
+
+// PublicModelName returns a safe public identity, independently of the name
+// used by an attached upstream runtime. Local artifacts require public_name.
+func (d ModelDeployment) PublicModelName() string {
+	if name := strings.TrimSpace(d.PublicName); name != "" {
+		return name
+	}
+	if !strings.HasPrefix(d.Artifact, "models/") && !strings.HasPrefix(d.Artifact, "./") && !strings.HasPrefix(d.Artifact, "../") && hubRepositoryID.MatchString(d.Artifact) {
+		return d.Artifact
+	}
+	return ""
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
@@ -51,6 +66,11 @@ type ModelBinding struct {
 	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
 	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
 }
+
+// DecisionTaskContract binds a semantic judgment without requiring token
+// positions or a classifier head. Its concrete typed question comes from the
+// consumer's task definition.
+const DecisionTaskContract = "decision.v1"
 
 // ResolvedModelBinding is immutable preparation input, containing no engine
 // handles or secrets. The runtime attaches the corresponding typed task handle
@@ -79,8 +99,9 @@ func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModel
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
+	d.Replicas = append([]ModelReplica(nil), d.Replicas...)
 	if d.Provider == ModelRuntimeProvider {
-		if d.Device == "" {
+		if d.Device == "" && len(d.Replicas) == 0 && d.Endpoint == "" {
 			d.Device = "auto"
 		}
 		if d.Profile == "" {
@@ -93,7 +114,31 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 	return d
 }
 
+// ScanBudget is the scan budget a decision deployment declares with input
+// {overflow: window, max_tokens}: the most tokens of one state part a model
+// that reads a long part in windows (Vela 2.0) reads. Zero keeps the model's
+// own budget.
+func (d ModelDeployment) ScanBudget() int {
+	if d.Input.Overflow == "window" {
+		return d.Input.MaxTokens
+	}
+	return 0
+}
+
+// ValidateDecisionInput checks the input of a deployment that answers
+// decisions: none, or a scan budget. Decision models never truncate.
+func (d ModelDeployment) ValidateDecisionInput(name string) error {
+	input := d.WithDefaults().Input
+	if (input.MaxTokens == 0 && input.Overflow == "reject") || (input.Overflow == "window" && input.MaxTokens > 0) {
+		return nil
+	}
+	return fmt.Errorf("deployment %q: decision models never truncate; input takes overflow: window with max_tokens, the scan budget of a model that reads a long part in windows, or nothing", name)
+}
+
 func (d ModelDeployment) validate(cfg *RouterConfig) error {
+	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
+		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
+	}
 	switch d.Provider {
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
@@ -110,8 +155,8 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
-	if d.Profile != "" || d.Endpoint != "" || d.Process != "" || d.ServedName != "" {
-		return fmt.Errorf("profile, endpoint, process and served_name apply only to model_runtime deployments")
+	if d.Profile != "" || d.Endpoint != "" || len(d.Replicas) != 0 || d.ServedName != "" {
+		return fmt.Errorf("profile, endpoint, replicas and served_name apply only to model_runtime deployments")
 	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")
@@ -185,6 +230,13 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
+	if decl.Contract == DecisionTaskContract {
+		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
+		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
+			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
+		}
+		return nil
+	}
 	want := ""
 	if decl.OperatingPoint != nil {
 		if !strings.HasPrefix(name, "classifier.") {
@@ -290,7 +342,12 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 	}
 	cloned := make(map[string]T, len(values))
 	for key, value := range values {
-		cloned[key] = value
+		if deployment, ok := any(value).(ModelDeployment); ok {
+			deployment.Replicas = append([]ModelReplica(nil), deployment.Replicas...)
+			cloned[key] = any(deployment).(T)
+		} else {
+			cloned[key] = value
+		}
 	}
 	return cloned
 }

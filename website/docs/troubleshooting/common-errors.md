@@ -11,7 +11,7 @@ once:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 vllm-sr config validate --config config.yaml
 ```
 
@@ -101,13 +101,14 @@ entrypoints:
     recipe: production
 ```
 
-### Model or reserved alias collision
+### Default entrypoint name collision {#model-or-reserved-alias-collision}
 
 ```text
-Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
-Hint: Use a distinct entrypoint model name; do not reuse a configured model or
-reserved alias such as vllm-sr/auto.
+Entrypoint model 'vllm-sr/auto' is mapped more than once
 ```
+
+`vllm-sr/auto` publishes the default recipe unless an explicit entrypoint
+replaces it. Giving that same name to a named recipe creates a duplicate.
 
 Broken:
 
@@ -125,9 +126,47 @@ entrypoints:
     recipe: production
 ```
 
+### Entrypoint name collides with a backend model
+
+A public recipe entrypoint must have its own name. The Router rejects an
+entrypoint whose name also identifies a backend model, including Fusion,
+ReMoM and Flow entrypoints. There is no special dispatch namespace for these
+algorithms.
+
+Broken, if `openai/gpt-oss-20b` is a configured backend:
+
+```yaml
+entrypoints:
+  - model_names: [openai/gpt-oss-20b]
+    recipe: flow
+```
+
+Corrected, with Flow requests sent to `vllm-sr/flow` and the flow recipe
+containing decisions with `algorithm.type: workflows`:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: flow
+```
+
 See the
 [entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
 and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
+
+## A request returns a routing error code
+
+Look the code up in [routing errors](../api/router.md#routing-errors), then
+find the Router's own reason in its log under the request's `x-request-id`:
+
+```bash
+vllm-sr logs router | grep '<x-request-id>'
+```
+
+For `no_route`, the `entrypoint_routing_no_selection` line names the model,
+the recipe, and any decision that matched. Fusion, Flow and ReMoM are
+selected by decisions inside that recipe; their public names are ordinary
+entrypoints. Check the entrypoint mapping and recipe rules first.
 
 ## Response cache cannot start
 
@@ -398,7 +437,7 @@ See [Container connectivity](./container-connectivity) for end-to-end checks.
 
 ## A classifier or embedding model cannot load
 
-Every model runs in the [model runtime](model-runtime/overview.md). When a
+Every model runs in the [model runtime](../model-runtime/overview.md). When a
 model cannot load, its feature reports unknown results and the runtime records
 why. Check the router's `vsr_model_runtime_ready{deployment="..."}` metric and
 the router log, or ask a runtime you run yourself:
@@ -410,7 +449,7 @@ curl -s localhost:8100/v1/models
 Each model's `status` and `reason` say what failed: a damaged download, a
 missing `revision`, a private repository without a token, a device that does
 not exist, or a model too large for its device.
-[Troubleshooting and FAQ](model-runtime/troubleshooting.md) lists each
+[Troubleshooting and FAQ](../model-runtime/troubleshooting.md) lists each
 reason and the fix.
 
 ## Container image has no matching platform
@@ -459,7 +498,7 @@ vllm-sr status
 
 # Read component logs without depending on generated container names.
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 
 # Check the public listener and model catalog.
 curl -sS http://localhost:8899/v1/models

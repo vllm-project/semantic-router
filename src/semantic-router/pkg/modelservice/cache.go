@@ -6,6 +6,7 @@ import (
 	"hash/maphash"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 )
@@ -33,6 +34,7 @@ type cacheKey struct {
 const (
 	surfaceClassify byte = iota + 1
 	surfaceDecide
+	surfaceDecideStates
 )
 
 var cacheSeeds = [2]maphash.Seed{maphash.MakeSeed(), maphash.MakeSeed()}
@@ -103,23 +105,77 @@ func classifyKey(request ClassifyRequest) cacheKey {
 
 func decideKey(request Request) cacheKey {
 	w := newKeyWriter(surfaceDecide)
-	w.string(request.State)
-	w.int(len(request.Questions))
-	for _, question := range request.Questions {
-		w.string(question.ID)
-		w.string(question.Type)
-		w.string(question.Instructions)
-		w.int(len(question.Choices))
-		for _, choice := range question.Choices {
-			w.string(choice.Key)
-			w.string(choice.Description)
-		}
-		w.int(len(question.Levels))
-		for _, level := range question.Levels {
-			w.string(level)
-		}
+	w.request(request)
+	return w.key()
+}
+
+// decideStatesKey keys a decisions call about several states: each state's
+// name (the request's own is "") and request, in request order.
+func decideStatesKey(names []string, requests []Request) cacheKey {
+	w := newKeyWriter(surfaceDecideStates)
+	w.int(len(requests))
+	for index, request := range requests {
+		w.string(names[index])
+		w.request(request)
 	}
 	return w.key()
+}
+
+func (w *keyWriter) request(request Request) {
+	w.string(request.State)
+	w.int(request.MaxTokens)
+	if request.Parts != nil {
+		names := make([]string, 0, len(request.Parts))
+		for name := range request.Parts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		w.int(len(names))
+		for _, name := range names {
+			w.string(name)
+			w.string(request.Parts[name])
+		}
+	} else {
+		w.int(-1)
+	}
+	w.int(len(request.Questions))
+	for _, question := range request.Questions {
+		w.question(question)
+	}
+}
+
+func (w *keyWriter) question(question Question) {
+	w.string(question.ID)
+	w.string(question.Type)
+	w.string(question.Instructions)
+	w.string(question.Preset)
+	w.string(question.Head)
+	if question.RequireFullInput {
+		w.int(1)
+	} else {
+		w.int(0)
+	}
+	if question.Truncate {
+		w.int(1)
+	} else {
+		w.int(0)
+	}
+	if question.Threshold != nil {
+		w.float(*question.Threshold)
+	} else {
+		w.int(-1)
+	}
+	for _, options := range [][]Choice{question.Choices, question.Labels} {
+		w.int(len(options))
+		for _, option := range options {
+			w.string(option.Key)
+			w.string(option.Description)
+		}
+	}
+	w.int(len(question.Levels))
+	for _, level := range question.Levels {
+		w.string(level)
+	}
 }
 
 // resultCache is a bounded LRU of complete results for one served model.

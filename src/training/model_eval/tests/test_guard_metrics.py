@@ -8,11 +8,10 @@ never pooled away.
 """
 
 import math
+import re
 import sys
 import unittest
 from pathlib import Path
-
-import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -390,40 +389,25 @@ class WindowTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             guard_metrics.token_windows(4096, 512, 510)
 
-    def test_the_shipped_guard_window_scans(self):
+    def test_the_router_guard_window_scans(self):
         """The contract and the runtime read the same geometry.
 
-        The values come from the config the router loads, so a change there is
-        a change here rather than a silent disagreement.
+        The values come from the window the router gives Vela 1.0 Guard, so a
+        change there is a change here rather than a silent disagreement.
         """
-        config = yaml.safe_load(
-            (Path(__file__).resolve().parents[4] / "config" / "config.yaml").read_text()
+        source = (
+            Path(__file__).resolve().parents[4]
+            / "src/semantic-router/pkg/classification"
+            / "classifier_jailbreak_window_default.go"
+        ).read_text()
+        window = re.search(
+            r"SequenceHeadWindowConfig\{Size: (\d+), Overlap: (\d+)\}", source
         )
-
-        def guard_window(node):
-            if isinstance(node, dict):
-                if node.get("model_ref") == "prompt_guard" and isinstance(
-                    node.get("window"), dict
-                ):
-                    return node["window"]
-                children = node.values()
-            elif isinstance(node, list):
-                children = node
-            else:
-                return None
-            for child in children:
-                found = guard_window(child)
-                if found:
-                    return found
-            return None
-
-        window = guard_window(config)
-        self.assertIsNotNone(window, "the shipped config carries no guard window")
-        ranges = guard_metrics.token_windows(
-            window["size"] * 2, window["size"], window["overlap"]
-        )
+        self.assertIsNotNone(window, "the router gives Vela 1.0 Guard no window")
+        size, overlap = int(window[1]), int(window[2])
+        ranges = guard_metrics.token_windows(size * 2, size, overlap)
         self.assertGreater(len(ranges), 1)
-        self.assertEqual(ranges[-1][1], window["size"] * 2)
+        self.assertEqual(ranges[-1][1], size * 2)
 
 
 if __name__ == "__main__":

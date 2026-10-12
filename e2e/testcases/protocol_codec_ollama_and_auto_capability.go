@@ -159,7 +159,7 @@ func testProtocolCodecAutoUnsupportedCapability(ctx context.Context, client *kub
 	const prompt = "Auto capability control"
 	controlID := "auto-capability-control-" + uuid.NewString()
 	control, err := sendProtocolMatrixRaw(ctx, session, "/v1/messages", map[string]any{
-		"model": "auto", "max_tokens": 16,
+		"model": "vllm-sr/auto", "max_tokens": 16,
 		"messages": []map[string]string{{"role": "user", "content": prompt}},
 	}, false, map[string]string{"x-vsr-test-session-id": controlID})
 	if err != nil {
@@ -178,7 +178,7 @@ func testProtocolCodecAutoUnsupportedCapability(ctx context.Context, client *kub
 
 	for _, check := range []struct {
 		name, model string
-	}{{"auto", "auto"}, {"named", chatBackendModel}} {
+	}{{"auto", "vllm-sr/auto"}, {"named", chatBackendModel}} {
 		sessionID := "disabled-capability-" + uuid.NewString()
 		result, requestErr := sendProtocolMatrixRaw(ctx, session, "/v1/messages", map[string]any{
 			"model": check.model, "max_tokens": 16,

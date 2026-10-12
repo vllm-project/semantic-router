@@ -42,7 +42,7 @@ Useful lifecycle commands:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy -f
+vllm-sr logs envoy -f  # --gateway extproc only
 vllm-sr dashboard
 vllm-sr stop
 ```
@@ -50,9 +50,9 @@ vllm-sr stop
 For ROCm-specific work:
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
-  vllm-sr serve --image-pull-policy never --platform amd
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
 
 If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
@@ -83,9 +83,6 @@ make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# Fleet simulator
-make vllm-sr-sim-test
 ```
 
 Select integration or E2E explicitly when a change is visible through startup,
@@ -155,7 +152,8 @@ offset.
 
 - Inspect component logs with `vllm-sr logs <service>` before relying on
   container names.
-- Set `RUST_LOG=debug` for native-library diagnostics.
+- Inspect worker readiness and failure reasons through the model-runtime status
+  and logs; see [runtime troubleshooting](../model-runtime/troubleshooting.md).
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
 - Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.

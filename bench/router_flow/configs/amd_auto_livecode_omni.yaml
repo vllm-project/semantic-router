@@ -7,9 +7,6 @@ listeners:
     timeout: 1200s
 
 global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   integrations:
     looper:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
@@ -520,3 +517,7 @@ routing:
 
             If code is requested, return exactly one complete ```python code
             block and no prose.
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

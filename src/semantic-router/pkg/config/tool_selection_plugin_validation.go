@@ -7,15 +7,15 @@ import (
 )
 
 // ErrToolSelectionStickyUnsupported is returned when sticky.enabled is true.
-// Phase 1 (issue #3347) ships only the config/state/trust contract — no
+// Phases 1–2 (issue #3347) ship the config/state/trust contract and planner — no
 // request path consumes ResolveStickyToolIdentity or the sessiontools store
 // yet — so accepting sticky.enabled: true would construct successfully and
 // then silently never activate sticky selection for any request. Fail
 // closed at validation time instead of shipping a silent no-op; this is
-// lifted once Phase 2 wires runtime sticky finalization to a real call
-// site.
+// lifted only by Phase 3 (#4519), which integrates reuse, authorization,
+// invalidation, recovery and fallback together.
 var ErrToolSelectionStickyUnsupported = errors.New(
-	"tool_selection plugin: sticky.enabled is not supported in this release (runtime integration scheduled for Phase 2, issue #3347)",
+	"tool_selection plugin: sticky.enabled is not supported in this release (runtime integration scheduled for Phase 3, issue #4519)",
 )
 
 func (c *ToolSelectionPluginConfig) Validate() error {

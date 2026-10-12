@@ -25,16 +25,36 @@ from typing import Any
 
 import numpy as np
 
+from ..errors import MAX_LENGTH_EXCEEDED, SCAN_BUDGET_EXCEEDED
+from . import bounds
+
 PROBES = ("", "a", "Hello, world!", "<bos> <eos> 中文 🚀\n\t")
 
 
 class InputTooLongError(ValueError):
-    """An input exceeds its token budget under the requested overflow policy."""
+    """An input exceeds its token budget under the requested overflow policy.
 
-    def __init__(self, tokens: int, limit: int, what: str = "input"):
+    ``code`` is the item error: ``scan_budget_exceeded`` for an input read in
+    windows (none of it was scanned), ``max_length_exceeded`` otherwise.
+    """
+
+    def __init__(
+        self,
+        tokens: int,
+        limit: int,
+        what: str = "input",
+        code: str = MAX_LENGTH_EXCEEDED,
+    ):
         super().__init__(f"{what} has {tokens} tokens, the budget is {limit}")
         self.tokens = tokens
         self.limit = limit
+        self.code = code
+
+
+def over_budget(tokens: int, limit: int, overflow: str) -> InputTooLongError:
+    """The error for an input over its budget under ``overflow`` (``tokens`` may be a lower bound)."""
+    code = SCAN_BUDGET_EXCEEDED if overflow == "window" else MAX_LENGTH_EXCEEDED
+    return InputTooLongError(tokens, limit, code=code)
 
 
 @dataclass(frozen=True)
@@ -81,12 +101,18 @@ class Envelope:
 
 @dataclass(frozen=True)
 class Encoded:
-    """One text tokenized once: content token IDs and their code-point offsets."""
+    """One text tokenized once: content token IDs and their code-point offsets.
+
+    ``complete`` is False when only the text's first tokens were read (a text
+    over its budget, ``bounds.read``); ``tokens`` then exceeds the budget and is
+    a lower bound.
+    """
 
     text: str
     content: tuple[int, ...]
     offsets: tuple[tuple[int, int], ...]
     envelope: Envelope
+    complete: bool = True
 
     @property
     def tokens(self) -> int:
@@ -96,11 +122,50 @@ class Encoded:
     def framed(self, start: int = 0, end: int | None = None) -> list[int]:
         return self.envelope.frame(self.content[start:end])
 
+    def usage(self) -> dict[str, Any]:
+        """The input usage of reading the text whole (``tokens_lower_bound`` when it was read in part)."""
+        tokens = self.tokens
+        usage: dict[str, Any] = {
+            "tokens": tokens,
+            "processed_tokens": tokens,
+            "truncated": False,
+        }
+        if not self.complete:
+            usage["tokens_lower_bound"] = True
+        return usage
 
-def encode(tokenizer: Any, envelope: Envelope, text: str) -> Encoded:
-    encoding = tokenizer.encode(text, add_special_tokens=False)
+
+def encode(
+    tokenizer: Any,
+    envelope: Envelope,
+    text: str,
+    budget: int | None = None,
+    overflow: str = "truncate",
+) -> Encoded:
+    """``text`` tokenized once; with ``budget``, only as far as deciding and reading that budget needs.
+
+    Unless ``overflow`` truncates, a text with certainly more tokens than the
+    budget (``bounds.surely_over``) fails before it is tokenized.
+    """
+    if (
+        budget is not None
+        and overflow != "truncate"
+        and bounds.surely_over(tokenizer, text, budget - envelope.size)
+    ):
+        raise over_budget(budget + 1, budget, overflow)
+    if budget is None:
+        encoding = tokenizer.encode(text, add_special_tokens=False)
+        return Encoded(
+            text, tuple(encoding.ids), tuple(map(tuple, encoding.offsets)), envelope
+        )
+    read = bounds.read(tokenizer, text, budget - envelope.size + 1)
+    count = read.tokens
     return Encoded(
-        text, tuple(encoding.ids), tuple(map(tuple, encoding.offsets)), envelope
+        text,
+        tuple(read.encoding.ids[:count]),
+        tuple(map(tuple, read.encoding.offsets[:count])),
+        envelope,
+        read.complete,
     )
 
 

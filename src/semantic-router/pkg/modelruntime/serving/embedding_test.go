@@ -41,6 +41,11 @@ func (f *embedServices) Card(_ context.Context, deployment string) (modelservice
 	return card, nil
 }
 
+func (f *embedServices) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
+	card, ok := f.cards[deployment]
+	return card, ok
+}
+
 func (f *embedServices) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
 	return modelservice.ClassifyResponse{}, errors.New("not used")
 }

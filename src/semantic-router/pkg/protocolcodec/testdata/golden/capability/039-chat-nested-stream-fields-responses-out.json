@@ -18,6 +18,14 @@
             "action": "dropped"
           },
           {
+            "field": "stream.timings",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.p",
+            "action": "dropped"
+          },
+          {
             "field": "stream.moderation",
             "action": "dropped"
           }

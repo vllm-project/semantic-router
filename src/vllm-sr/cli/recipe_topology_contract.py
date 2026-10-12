@@ -208,7 +208,8 @@ def _validate_storage_transitions(
     transitions: list[dict[str, Any]], before: set[str], after: set[str]
 ) -> None:
     by_service = {transition["service"]: transition for transition in transitions}
-    if "router" not in by_service or "envoy" not in by_service:
+    # A standalone stack has no Envoy container; its Router serves the listeners.
+    if "router" not in by_service:
         raise TopologyReconcileError("runtime topology transitions are incomplete")
     for service in _STORAGE:
         transition = by_service.get(service)

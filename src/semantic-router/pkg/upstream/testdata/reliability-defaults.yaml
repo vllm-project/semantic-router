@@ -1,0 +1,42 @@
+# What every data plane does when providers.models[].reliability leaves a
+# field out. The upstream package's tests check the native gateway against
+# this table and the CLI's tests check the rendered Envoy config against it,
+# so the two cannot drift apart. Durations use Go's syntax.
+
+# The listener timeout a config without listeners gets. It is the route
+# timeout and the stream idle timeout.
+listener_timeout: 300s
+connect_timeout: 10s
+lb_policy: round_robin
+least_request_choice_count: 2
+
+# Retries, once retry_count is set.
+retry_on: connect-failure,refused-stream
+retry_back_off_base: 25ms
+retry_back_off_max: 250ms
+host_selection_retry_max_attempts: 3
+
+# Circuit breakers. max_requests rises once retries or ejection are on.
+max_connections: 1024
+max_pending_requests: 1024
+max_requests: 1024
+max_requests_with_retries_or_ejection: 4096
+max_retries: 3
+retry_budget_percent: 20
+retry_budget_min_concurrency: 3
+
+# Outlier detection, once consecutive_5xx is set and there are two endpoints.
+outlier_interval: 10s
+base_ejection_time: 30s
+max_ejection_time: 300s
+max_ejection_percent: 50
+
+# Active health checks, once health_check_path is set.
+health_check_interval: 10s
+health_check_timeout: 2s
+health_check_no_traffic_interval: 60s
+unhealthy_threshold: 3
+healthy_threshold: 1
+
+# Below this share of healthy endpoints a cluster balances over all of them.
+healthy_panic_percent: 50

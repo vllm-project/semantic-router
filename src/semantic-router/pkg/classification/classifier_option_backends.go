@@ -102,6 +102,15 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 }
 
 func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, models ...*classifierModelRuntime) (PIIInitializer, PIIInference, error) {
+	if cfg.NeedsPIIMappingForRouting() && cfg.PIIModel.Backend == nil && cfg.PIIModel.Window == nil {
+		backend, err := prepareDecisionPII(consumerModelRuntime(models))
+		if err != nil {
+			return nil, nil, err
+		}
+		if backend != nil {
+			return backend, backend, nil
+		}
+	}
 	if cfg.PIIModel.Window != nil {
 		backend, err := newWindowedPIIBackend(cfg.PIIModel, piiMapping, models...)
 		if err != nil {

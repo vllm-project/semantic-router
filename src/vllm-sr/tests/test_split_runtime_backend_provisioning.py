@@ -80,15 +80,9 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(
         runtime_lifecycle, "container_exec", lambda *args, **kwargs: (0, "ok", "")
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
-    )
-    monkeypatch.setattr(
         runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
     )
     monkeypatch.setattr(core, "_wait_and_verify_runtime", record("wait_ready"))
-    monkeypatch.setattr(
-        core, "recover_openclaw_containers", lambda *args, **kwargs: None
-    )
     monkeypatch.setattr(core, "log_runtime_summary", record("log_runtime_summary"))
     monkeypatch.setattr(core, "maybe_finish_setup_mode", lambda *args, **kwargs: False)
 

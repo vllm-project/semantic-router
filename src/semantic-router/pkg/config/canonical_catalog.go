@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -44,14 +45,19 @@ func applyEffectiveModelRegistry(
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.ProviderProfiles = make(map[string]ProviderProfile)
 	cfg.VLLMEndpoints = nil
+	cfg.ProviderModelOrder = make([]string, 0, len(authoredModels))
 	authoredByAlias := make(map[string]*CanonicalProviderModel, len(authoredModels))
 	for _, model := range authoredModels {
 		authoredByAlias[model.Name] = cloneCanonicalProviderModel(&model)
+		cfg.ProviderModelOrder = append(cfg.ProviderModelOrder, model.Name)
 	}
 
 	for _, model := range models {
 		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex, defaults.ReasoningEffort)
 		params.AuthoredModel = authoredByAlias[model.Alias]
+		if params.AuthoredModel != nil {
+			params.Deployment = params.AuthoredModel.Deployment
+		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
 			if err != nil {
@@ -215,7 +221,7 @@ func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, 
 	if params.Pricing == (ModelPricing{}) {
 		params.Pricing = modelPricingFromCatalog(pricing)
 	}
-	if params.Reliability == (ProviderReliability{}) {
+	if params.Reliability.IsZero() {
 		params.Reliability = providerReliabilityFromCatalog(effective.Binding.Reliability)
 	}
 }
@@ -381,6 +387,8 @@ func resolveProviderCredential(credentials modelcatalog.CredentialsRef) string {
 
 func apiFormatForProtocol(protocol string) (string, error) {
 	switch protocol {
+	case "vllm-sr/systemone@1":
+		return APIFormatSystemOne, nil
 	case "openai/chat-completions@1":
 		return APIFormatOpenAI, nil
 	case "openai/responses@1":
@@ -401,12 +409,9 @@ func modelPricingFromCatalog(pricing modelcatalog.Pricing) ModelPricing {
 }
 
 func providerReliabilityFromCatalog(reliability modelcatalog.Reliability) ProviderReliability {
-	return ProviderReliability{
-		LBPolicy: reliability.LBPolicy, RetryCount: reliability.RetryCount, RetryOn: reliability.RetryOn,
-		Consecutive5xx: reliability.Consecutive5xx, BaseEjectionTime: reliability.BaseEjectionTime,
-		MaxEjectionPercent: reliability.MaxEjectionPercent, HealthCheckPath: reliability.HealthCheckPath,
-		HealthCheckInterval: reliability.HealthCheckInterval, HealthCheckTimeout: reliability.HealthCheckTimeout,
-	}
+	converted := ProviderReliability(reliability)
+	converted.RetriableStatusCodes = slices.Clone(reliability.RetriableStatusCodes)
+	return converted
 }
 
 func cloneCatalogIndexResults(source map[string]modelcatalog.IndexResult) map[string]modelcatalog.IndexResult {

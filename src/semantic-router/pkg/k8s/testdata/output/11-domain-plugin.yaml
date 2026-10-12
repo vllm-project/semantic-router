@@ -50,7 +50,7 @@ routing:
 global:
   router:
     config_source: kubernetes
-    include_config_models_in_list: false
+    list_backend_models: false
     clear_route_cache: false
     streamed_body:
       enabled: false
@@ -132,8 +132,7 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
-    looper:
-      endpoint: ""
+    looper: {}
   model_catalog:
     embeddings:
       semantic:

@@ -12,6 +12,7 @@ import (
 const decisionSelectorQuestionID = "selector"
 
 // newDecisionModelSelector binds the decision selector to the model runtime.
+// A selector that names no deployment asks the decision model's deployment.
 func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConfig) selection.Selector {
 	descriptions := make(map[string]string, len(r.Config.ModelConfig))
 	for model, params := range r.Config.ModelConfig {
@@ -21,6 +22,9 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 	if decider == nil {
 		decider = modelservice.Default()
 	}
+	cfg.Deployment = r.Config.DecisionSelectorDeployment(cfg)
+	scan := r.Config.ModelDeployments[cfg.Deployment].ScanBudget()
+	card, prepared := r.decisionCards[cfg.Deployment]
 	invoke := func(
 		ctx context.Context,
 		instructions string,
@@ -29,11 +33,20 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 	) (selection.DecisionModelAnswer, error) {
 		callCtx, cancel := context.WithTimeout(ctx, cfg.EffectiveTimeout())
 		defer cancel()
-		question := modelservice.Question{ID: decisionSelectorQuestionID, Type: config.DecisionQuestionChoice, Instructions: instructions}
+		if !prepared {
+			return selection.DecisionModelAnswer{}, fmt.Errorf("decision selector requires a prepared model card")
+		}
+		// Selection routes, so a long state is read only as far as its first tokens.
+		question := modelservice.Question{ID: decisionSelectorQuestionID, Type: config.DecisionQuestionChoice, Instructions: instructions, Truncate: true}
 		for _, choice := range choices {
 			question.Choices = append(question.Choices, modelservice.Choice{Key: choice.Key, Description: choice.Description})
 		}
-		response, err := decider.Decide(callCtx, cfg.Deployment, modelservice.Request{State: state, Questions: []modelservice.Question{question}})
+		definition, _ := modelservice.BuiltinTask("model_selection")
+		plan, err := modelservice.CompileTask(definition, question, card)
+		if err != nil {
+			return selection.DecisionModelAnswer{}, err
+		}
+		response, _, err := modelservice.ExecuteTaskPlans(callCtx, decider, cfg.Deployment, modelservice.Request{State: state, MaxTokens: scan}, []modelservice.TaskPlan{plan})
 		if err != nil {
 			modelservice.RecordUnknown(cfg.Deployment, modelservice.ErrorReason(err), 1)
 			return selection.DecisionModelAnswer{}, err

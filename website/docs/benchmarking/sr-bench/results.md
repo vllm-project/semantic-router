@@ -40,8 +40,35 @@ a switch: switches are counted between the known selections around it, and
 `unknown_model_requests` records it. A request that made several inference calls
 under Fusion, Confidence, Workflows or fallback hides its own model sequence, so
 its task is counted only in `multi_inference_tasks`. A switch is reported as a
-fact, not a penalty. sr-bench sends no session identity, so these runs measure
-routing without session state.
+fact, not a penalty. Each continuity block reports the target's `session_mode`.
+Targets are `stateless` by default. A target with `session_mode: session_aware`
+sends an opaque `x-session-id` on every subject call in a live run. The value
+stays the same across calls in one case and differs across runs, cases and
+targets. Judge and simulator calls never carry the header. Subject call receipts
+retain the value as `session_id`. The Router session policy itself must be
+enabled in its configuration. Preview and replay reports remain `stateless`. To
+compare both modes on the same tasks, include a target of each mode against the
+same Router.
+
+Subject call receipts include `phase` and `phase_source`. For MoM targets,
+sr-bench requests the Router debug response headers to read its session policy
+phase. A `router` source means the response contained `x-vsr-session-phase`; a
+`request` source means sr-bench derived `tool_loop` or `user_turn` from the
+latest messages because that header was absent. An unsupported nonempty Router
+phase is stored as `unknown` with `phase_source: "router"`.
+`model_switches_by_phase` counts a switch under the phase of the later request.
+Provider cache fields retain their presence separately from their numeric values:
+`cache_read_reported` and `cache_write_reported` are true only when the provider
+sent the corresponding field, including an explicit zero. The target and
+benchmark metrics expose `cache_read_ratio` and `cache_read_call_count`; only
+subject calls with `cache_read_reported=true` are included, so missing cache
+usage stays unknown instead of becoming a zero-hit observation. Older stored
+runs remain readable: missing phases group under `unknown`, and cache-read
+metrics report a null ratio with a zero sample count. For streamed calls,
+`cache_read_usage` retains the normalized usage event that reported cache reads;
+later events that omit cache fields do not erase that observation. If that event
+lacks normalized prompt usage, its sample is counted but its ratio remains null
+because its denominator is unknown.
 
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and

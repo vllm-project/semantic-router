@@ -2,11 +2,16 @@
 
 Decision-2.0 Eos, Sol, Nox and Lux are full checkpoints of this backbone;
 Vega-27B is a LoRA over the Qwen3.8-27B text model with the same layout.
+Decision 3.0 configs set ``attention_mode: noncausal_full_attention``: the
+full-attention layers then see the whole (left-padded) prompt while the Gated
+DeltaNet layers stay causal, and image prompts take the multimodal rotary
+positions of ``rope_index``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+import itertools
+from typing import Any, cast
 
 import torch
 import torch.nn.functional as F
@@ -23,7 +28,7 @@ from .common import (
     recurrent_mask,
 )
 from .forest import Forest, ForestShape, forest_attention, forest_gated_delta
-from .tree import Tree, tree_gated_delta
+from .tree import Tree, is_tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
 
@@ -61,9 +66,12 @@ class GatedDeltaNet(nn.Module):
         self.in_proj_a = nn.Linear(hidden, self.num_v_heads, bias=False)
 
     def forward(
-        self, hidden_states: torch.Tensor, mask: torch.Tensor | None, kernels: KernelSet
+        self,
+        hidden_states: torch.Tensor,
+        mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
     ) -> torch.Tensor:
-        if getattr(mask, "is_tree", False):
+        if is_tree(mask):
             return tree_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
@@ -107,7 +115,8 @@ class GatedDeltaNet(nn.Module):
         z = z.reshape(-1, self.head_v_dim)
         core = self.norm(core, z)
         core = core.reshape(batch_size, seq_len, -1)
-        return self.out_proj(core)
+        out: torch.Tensor = self.out_proj(core)
+        return out
 
 
 class GatedAttention(nn.Module):
@@ -135,7 +144,13 @@ class GatedAttention(nn.Module):
         self.q_norm = ZeroCenteredRMSNorm(self.head_dim, config["rms_norm_eps"])
         self.k_norm = ZeroCenteredRMSNorm(self.head_dim, config["rms_norm_eps"])
 
-    def forward(self, hidden_states, rotary, mask, kernels: KernelSet):
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
         query, gate = torch.chunk(
@@ -154,7 +169,8 @@ class GatedAttention(nn.Module):
         )
         output = output.reshape(*input_shape, -1).contiguous()
         output = output * torch.sigmoid(gate)
-        return self.o_proj(output)
+        out: torch.Tensor = self.o_proj(output)
+        return out
 
 
 class Qwen3_5Layer(nn.Module):
@@ -176,8 +192,13 @@ class Qwen3_5Layer(nn.Module):
         )
 
     def forward(
-        self, hidden_states, rotary, full_mask, linear_mask, kernels: KernelSet
-    ):
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        full_mask: torch.Tensor | Tree | None,
+        linear_mask: torch.Tensor | Tree | None,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         if self.kind == "linear_attention":
@@ -191,8 +212,15 @@ class Qwen3_5Layer(nn.Module):
         return residual + hidden_states
 
     def forward_forest(
-        self, prefix, blocks, rotary, forest: Forest, kernels: KernelSet
-    ):
+        self,
+        prefix: torch.Tensor,
+        blocks: torch.Tensor,
+        rotary: tuple[
+            tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]
+        ],
+        forest: Forest,
+        kernels: KernelSet,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """The layer over prefix rows and blocks (``forest.py``); ``rotary`` holds both tables."""
         normed_prefix = self.input_layernorm(prefix)
         normed_blocks = self.input_layernorm(blocks)
@@ -213,6 +241,8 @@ class Qwen3_5Layer(nn.Module):
 class Qwen3_5Rotary(nn.Module):
     """Interleaved multimodal RoPE; text positions are equal across its three sections."""
 
+    inv_freq: torch.Tensor
+
     def __init__(self, config: dict[str, Any]):
         super().__init__()
         rope = config["rope_parameters"]
@@ -230,7 +260,9 @@ class Qwen3_5Rotary(nn.Module):
         self.mrope_section = rope.get("mrope_section", [11, 11, 10])
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor, position_ids: torch.Tensor):
+    def forward(
+        self, x: torch.Tensor, position_ids: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         inv_freq_expanded = (
             self.inv_freq[None, None, :, None]
             .float()
@@ -256,6 +288,81 @@ class Qwen3_5Rotary(nn.Module):
         return torch.cat((freqs_thw, freqs_thw), dim=-1)
 
 
+NONCAUSAL = "noncausal_full_attention"
+
+
+def rope_index(
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    grids: list[tuple[int, int, int]],
+    image_token_id: int,
+    merge: int,
+    video_grids: list[tuple[int, int, int]] | None = None,
+    video_token_id: int | None = None,
+) -> torch.Tensor:
+    """``Qwen3_5Model.get_rope_index`` for image and video prompts: rotary positions ``[3, B, L]``, 0 on padding.
+
+    Over each row's real tokens, text runs count on from the position reached and
+    each image's tokens take (t, row, column) positions offset by it; the image
+    then advances the position by its longer merged side. A video is split into
+    its frame pairs, each an image of one temporal patch (timestamps separate
+    them). Images and videos are consumed in row order.
+    """
+    positions = torch.zeros(
+        3, *input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+    )
+    types = (input_ids == image_token_id).to(torch.int32)
+    pending = {1: iter(grids)}
+    if video_token_id is not None:
+        types[input_ids == video_token_id] = 2
+        pending[2] = iter(
+            [(1, h, w) for t, h, w in video_grids or [] for _ in range(t)]
+        )
+    device = input_ids.device
+    for row in range(input_ids.shape[0]):
+        keep = attention_mask[row].bool()
+        kinds = types[row][keep].tolist()
+        parts = []
+        current = 0
+        for kind, group in itertools.groupby(enumerate(kinds), lambda item: item[1]):
+            members = list(group)
+            span = members[-1][0] + 1 - members[0][0]
+            if kind == 0:
+                parts.append(
+                    torch.arange(span, device=device).view(1, -1).expand(3, -1)
+                    + current
+                )
+                current += span
+                continue
+            t, h, w = next(pending[kind])
+            grid_t, grid_h, grid_w = t, h // merge, w // merge
+            temporal = torch.arange(grid_t, device=device) * 1
+            rows = torch.arange(grid_h, device=device) + current
+            cols = torch.arange(grid_w, device=device) + current
+            t_grid, h_grid, w_grid = torch.meshgrid(temporal, rows, cols, indexing="ij")
+            vision = torch.stack([t_grid, h_grid, w_grid], dim=0).reshape(3, -1)
+            vision[0] += current
+            parts.append(vision)
+            current += max(h, w) // merge
+        positions[:, row, keep] = (
+            torch.cat(parts, dim=1).reshape(3, -1).to(positions.device)
+        )
+    return positions
+
+
+def noncausal_masks(
+    attention_mask: torch.Tensor, padded: bool | None = None
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """The full-attention padding mask ``[B, 1, 1, L]`` (always given) and the gated-delta padding mask.
+
+    ``padded`` (host-known) skips reading the mask back; None derives it from the mask.
+    """
+    full = attention_mask.bool()[:, None, None, :]
+    if padded is None:
+        return full, recurrent_mask(attention_mask, attention_mask.shape[1])
+    return full, attention_mask if padded and attention_mask.shape[1] > 1 else None
+
+
 class Qwen3_5Backbone(nn.Module):
     model_type = MODEL_TYPE
 
@@ -265,6 +372,7 @@ class Qwen3_5Backbone(nn.Module):
         kinds = config["layer_types"]
         if len(kinds) != config["num_hidden_layers"]:
             raise ValueError("layer_types must name every layer")
+        self.noncausal = config.get("attention_mode", "causal") == NONCAUSAL
         self.embed_tokens = nn.Embedding(config["vocab_size"], config["hidden_size"])
         self.layers = nn.ModuleList([Qwen3_5Layer(config, kind) for kind in kinds])
         self.norm = ZeroCenteredRMSNorm(config["hidden_size"], config["rms_norm_eps"])
@@ -279,7 +387,6 @@ class Qwen3_5Backbone(nn.Module):
     ) -> torch.Tensor:
         """``masks`` (``{"full", "linear"}``, built from host-known padding) replaces the masks derived
         from ``attention_mask``, which read the mask back to the host."""
-        assert self.kernels is not None, "bind kernels before running the backbone"
         hidden_states = self.embed_tokens(input_ids)
         batch, length = hidden_states.shape[:2]
         position_ids = (
@@ -287,18 +394,62 @@ class Qwen3_5Backbone(nn.Module):
             .view(1, 1, -1)
             .expand(4, batch, -1)
         )
-        rope_positions = position_ids[1:]
-        if masks is None:
+        if masks is not None:
+            full_mask, linear_mask = masks["full"], masks["linear"]
+        elif self.noncausal:
+            assert (
+                attention_mask is not None
+            ), "noncausal attention needs the padding mask"
+            full_mask, linear_mask = noncausal_masks(attention_mask)
+        else:
             full_mask = causal_mask(attention_mask, length)
             linear_mask = recurrent_mask(attention_mask, length)
-        else:
-            full_mask, linear_mask = masks["full"], masks["linear"]
+        return self.forward_embeds(
+            hidden_states, position_ids[1:], full_mask, linear_mask
+        )
+
+    def forward_embeds(
+        self,
+        hidden_states: torch.Tensor,
+        rope_positions: torch.Tensor,
+        full_mask: torch.Tensor | Tree | None,
+        linear_mask: torch.Tensor | Tree | None,
+    ) -> torch.Tensor:
+        """Every layer and the final norm over input embeddings, with rotary positions ``[3, B, L]``."""
+        assert self.kernels is not None, "bind kernels before running the backbone"
         rotary = self.rotary_emb(hidden_states, rope_positions)
         for layer in self.layers:
             hidden_states = layer(
                 hidden_states, rotary, full_mask, linear_mask, self.kernels
             )
-        return self.norm(hidden_states)
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed
+
+    def forward_images(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        features: torch.Tensor,
+        image_token_id: int,
+        positions: torch.Tensor,
+        padded: bool,
+        videos: tuple[torch.Tensor, int] | None = None,
+    ) -> torch.Tensor:
+        """A noncausal image prompt: image (then video) features in place of their placeholder tokens, rotary
+        ``positions`` (``rope_index``)."""
+        embeds = self.embed_tokens(input_ids)
+        embeds = embeds.masked_scatter(
+            (input_ids == image_token_id).unsqueeze(-1),
+            features.to(embeds.device, embeds.dtype),
+        )
+        if videos is not None:
+            video_features, video_token_id = videos
+            embeds = embeds.masked_scatter(
+                (input_ids == video_token_id).unsqueeze(-1),
+                video_features.to(embeds.device, embeds.dtype),
+            )
+        full_mask, linear_mask = noncausal_masks(attention_mask, padded)
+        return self.forward_embeds(embeds, positions, full_mask, linear_mask)
 
     def forward_forest(
         self,
@@ -334,7 +485,7 @@ class Qwen3_5Backbone(nn.Module):
         )
         forest = Forest(prefix_mask, block_mask, owner, shape)
         for layer in self.layers:
-            prefix, blocks = layer.forward_forest(
+            prefix, blocks = cast(Qwen3_5Layer, layer).forward_forest(
                 prefix, blocks, rotary, forest, self.kernels
             )
         return self.norm(prefix), self.norm(blocks)
@@ -347,4 +498,5 @@ class Qwen3_5Backbone(nn.Module):
         rotary = self.rotary_emb(hidden_states, rope_positions)
         for layer in self.layers:
             hidden_states = layer(hidden_states, rotary, tree, tree, self.kernels)
-        return self.norm(hidden_states)
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed

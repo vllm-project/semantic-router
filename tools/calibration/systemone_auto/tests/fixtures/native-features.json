@@ -1,0 +1,951 @@
+{
+  "schema_version": "systemone-features/v1",
+  "feature_names": [
+    "bias",
+    "min_top_probability",
+    "mean_top_probability",
+    "max_entropy",
+    "min_margin",
+    "log_state_bytes",
+    "log_questions",
+    "fraction_choice",
+    "fraction_noul",
+    "fraction_score",
+    "invalid_response"
+  ],
+  "cases": [
+    {
+      "name": "mixed_complete",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.8,
+        0.8333333333333334,
+        0.5816718657178868,
+        0.65,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.0
+      ]
+    },
+    {
+      "name": "missing_probability",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": null,
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.0,
+        0.5666666666666667,
+        1.0,
+        0.0,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        1.0
+      ]
+    },
+    {
+      "name": "wrong_options",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.1,
+              "9": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.0,
+        0.5666666666666667,
+        1.0,
+        0.0,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        1.0
+      ]
+    },
+    {
+      "name": "incomplete_coverage",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "partial"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": false,
+      "features": [
+        1.0,
+        0.0,
+        0.5666666666666667,
+        1.0,
+        0.0,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        1.0
+      ]
+    },
+    {
+      "name": "normalization_tolerance",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.10005
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.8,
+        0.8333333333333334,
+        0.5817311375441754,
+        0.65,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.0
+      ]
+    },
+    {
+      "name": "empty_error",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete",
+            "error": ""
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.8,
+        0.8333333333333334,
+        0.5816718657178868,
+        0.65,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.0
+      ]
+    },
+    {
+      "name": "out_of_range_noul",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 1.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": false,
+      "features": [
+        1.0,
+        0.0,
+        0.5333333333333333,
+        1.0,
+        0.0,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        1.0
+      ]
+    },
+    {
+      "name": "missing_answer",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": false,
+      "features": [
+        1.0,
+        0.0,
+        0.5333333333333333,
+        1.0,
+        0.0,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        1.0
+      ]
+    },
+    {
+      "name": "extra_answer",
+      "request": {
+        "state": {
+          "amount": -16,
+          "threshold": -3
+        },
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          },
+          "ignored": {
+            "type": "choice",
+            "choice": "bad"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.8,
+        0.8333333333333334,
+        0.5816718657178868,
+        0.65,
+        3.4011973816621555,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.0
+      ]
+    },
+    {
+      "name": "unicode_state",
+      "request": {
+        "state": "Multilingual 判断 café 🚀",
+        "questions": {
+          "comparison": {
+            "type": "choice",
+            "instructions": "Compare amount with threshold. Use only the supplied numeric values.",
+            "require_full_input": true,
+            "criteria": {
+              "below": "below",
+              "equal": "equal",
+              "above": "above"
+            }
+          },
+          "exceeds": {
+            "type": "noul",
+            "instructions": "Is amount strictly greater than threshold?",
+            "require_full_input": true
+          },
+          "distance": {
+            "type": "score",
+            "instructions": "Rate absolute distance between amount and threshold: zero, one, or at least two.",
+            "require_full_input": true,
+            "criteria": [
+              "zero",
+              "one",
+              "at least two"
+            ]
+          }
+        },
+        "options": {
+          "return_meta": true
+        }
+      },
+      "labels": {
+        "comparison": {
+          "label": "below"
+        },
+        "exceeds": {
+          "label": "false"
+        },
+        "distance": {
+          "label": "2"
+        }
+      },
+      "response": {
+        "answers": {
+          "comparison": {
+            "type": "choice",
+            "choice": "below",
+            "probabilities": {
+              "below": 0.8,
+              "equal": 0.1,
+              "above": 0.1
+            },
+            "confidence": 0.42,
+            "input_coverage": "complete"
+          },
+          "exceeds": {
+            "type": "noul",
+            "noul": 0.1,
+            "input_coverage": "complete"
+          },
+          "distance": {
+            "type": "score",
+            "score": 1.75,
+            "probabilities": {
+              "0": 0.05,
+              "1": 0.15,
+              "2": 0.8
+            },
+            "input_coverage": "complete"
+          }
+        }
+      },
+      "valid": true,
+      "features": [
+        1.0,
+        0.8,
+        0.8333333333333334,
+        0.5816718657178868,
+        0.65,
+        3.4965075614664802,
+        1.3862943611198906,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.0
+      ]
+    }
+  ]
+}

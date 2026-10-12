@@ -35,9 +35,6 @@ routing:
           use_reasoning: false
 
 global:
-  router:
-    auto_model_names:
-      - "vllm-sr/auto"
   stores:
     response_cache:
       enabled: false
@@ -66,3 +63,7 @@ global:
         enabled: false
         model_ref: ""
         model_id: ""
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

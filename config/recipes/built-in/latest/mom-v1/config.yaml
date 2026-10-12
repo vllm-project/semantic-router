@@ -2808,7 +2808,8 @@ recipes:
           default_max_tokens: 8192
 - name: vault
   description: Keep private traffic inside the assigned deployment boundary, with
-    tools and Router content storage disabled.
+    client tools, memory, response caching, and Responses writes disabled. Replay
+    capture follows the shared service and decision settings.
   routing:
     strategy: priority
     candidate_requirements:
@@ -2817,22 +2818,22 @@ recipes:
     signals:
       jailbreak:
       - name: prompt_attack
-        threshold: 0.5
+        threshold: 0.75
         include_history: true
       safety:
       - name: unsafe
-        threshold: 0.5
+        threshold: 0.46
       pii:
       - name: personal_data
         description: Personal identifiers trigger sensitive handling independently of context.
         include_history: true
-        threshold: 0.7
+        threshold: 0.01
         pii_types_allowed:
         - NRP
       - name: personal_attribute
         description: Nationality, religious and political attributes require personal context.
         include_history: true
-        threshold: 0.7
+        threshold: 0.01
         pii_types_allowed:
         - AGE
         - CREDIT_CARD
@@ -3299,8 +3300,6 @@ recipes:
       - kind: retention
         retention:
           drop: true
-    data_policy:
-      replay: true
     model_bindings:
       classifier.content-risk:
         deployment: hazard

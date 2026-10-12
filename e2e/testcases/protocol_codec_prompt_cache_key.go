@@ -40,7 +40,7 @@ func testProtocolCodecPromptCacheKeyAnthropic(ctx context.Context, client *kuber
 		for _, stream := range []bool{false, true} {
 			marker := protocolCodecAnthropicProbe + " prompt_cache_key " + api.name
 			sessionID := "prompt-cache-key-" + uuid.NewString()
-			body := api.request("MoM", marker, stream)
+			body := api.request("vllm-sr/auto", marker, stream)
 			body["prompt_cache_key"] = sessionID
 			result, requestErr := sendProtocolMatrixRaw(ctx, session, api.path, body, stream,
 				map[string]string{"x-vsr-test-session-id": sessionID})

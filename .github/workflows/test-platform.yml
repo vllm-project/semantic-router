@@ -35,7 +35,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: models/
-          key: ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-${{ hashFiles('src/model-runtime/vllm_srun/registry/**', 'tools/ci/prepare_model_test_assets.py') }}
+          key: ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-${{ hashFiles('src/model-runtime/vllm_srun/registry/**', 'tools/ci/prepare_model_test_assets.py', 'tools/ci/run_model_tests.py') }}
           restore-keys: |
             ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-
             ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-

@@ -1,0 +1,561 @@
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+providers:
+  defaults:
+    model: qwen/qwen3.8-27b
+  models:
+    - name: zai/glm-5.3-flash
+      catalog: zai/glm-5.3-flash
+      provider_model_id: zai/glm-5.3-flash
+      backend_refs:
+        - name: glm-5.3-flash
+          endpoint: vllm-glm-5.3-flash:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+      pricing:
+        currency: XXX
+        prompt_per_1m: 0.44
+        completion_per_1m: 4.35
+    - name: qwen/qwen3.8-flash-next
+      catalog: qwen/qwen3.8-flash-next
+      provider_model_id: qwen/qwen3.8-flash-next
+      backend_refs:
+        - name: qwen3.8-flash-next
+          endpoint: vllm-qwen3.8-flash-next:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+      pricing:
+        currency: XXX
+        prompt_per_1m: 0.2
+        completion_per_1m: 1.99
+    - name: qwen/qwen3.8-27b
+      catalog: qwen/qwen3.8-27b
+      provider_model_id: qwen/qwen3.8-27b
+      backend_refs:
+        - name: qwen3.8-27b
+          endpoint: vllm-qwen3.8-27b:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+      pricing:
+        currency: XXX
+        prompt_per_1m: 0.1
+        completion_per_1m: 1.0
+evaluation:
+  indices:
+    - id: decision-balance/operator-reasoning@1.0.0
+      display_name: Decision Balance operator reasoning rating
+      description: >-
+        Operator reasoning ratings for the reasoning efforts that have no
+        third-party record; see the Decision Balance Model Card.
+      aggregation: weighted_mean
+      scale: [0, 100]
+      missing:
+        policy: require_all
+      domains:
+        operator: 1.0
+      components:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          benchmark_profiles: [operator]
+          metric: score
+          weight: 1.0
+          normalization:
+            type: identity
+  records:
+    - model: qwen/qwen3.8-27b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      benchmark_profile: operator
+      reasoning_effort: medium
+      metrics:
+        score: 0.493
+      source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+      metadata:
+        derivation: Mean of the catalog's third-party GPQA Diamond (0.845) and HLE text-only (0.141) records at medium effort.
+    - model: qwen/qwen3.8-flash-next
+      benchmark: vllm-sr/operator-rating@1.0.0
+      benchmark_profile: operator
+      reasoning_effort: medium
+      metrics:
+        score: 0.517
+      source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+      metadata:
+        derivation: >-
+          Operator estimate without third-party data: the GPQA Diamond and HLE
+          text-only mean at xhigh (0.652) scaled by Qwen3.8-27B's medium-to-xhigh
+          ratio (0.493 / 0.622).
+routing:
+  modelCards:
+    - name: zai/glm-5.3-flash
+      description: >-
+        Strongest model in the pool on agentic work, expert knowledge and
+        exact facts; thinking cannot be turned off; four GPUs per replica.
+      tags: [gpus:4, role:agentic, role:facts]
+    - name: qwen/qwen3.8-flash-next
+      description: >-
+        Fastest generation; strongest on code, competition mathematics and
+        instruction following; two GPUs per replica.
+      tags: [gpus:2, role:reasoning]
+    - name: qwen/qwen3.8-27b
+      description: >-
+        Smallest and cheapest model; strong on documents and screenshots; one
+        GPU per replica.
+      tags: [gpus:1, role:default]
+  signals:
+    keywords:
+      - name: brief_request
+        operator: OR
+        keywords:
+          - answer briefly
+          - brief answer
+          - quick answer
+          - keep it short
+          - in one sentence
+          - one-word answer
+          - just the answer
+          - only the answer
+          - tl;dr
+          - 简短回答
+          - 简单回答
+          - 一句话
+          - 只要答案
+          - 直接给答案
+    conversation:
+      - name: has_image
+        description: The request carries at least one image.
+        feature:
+          type: exists
+          source:
+            type: image_content
+      - name: has_tools
+        description: The request declares at least one tool.
+        feature:
+          type: exists
+          source:
+            type: tool_definition
+      - name: tool_loop
+        description: The request continues an active tool loop.
+        feature:
+          type: exists
+          source:
+            type: active_tool_loop
+      - name: has_prior_answer
+        description: The conversation already holds an assistant answer.
+        feature:
+          type: exists
+          source:
+            type: message
+            role: assistant
+    context:
+      - name: beyond_qwen_window
+        min_tokens: 200K
+        description: Long inputs that leave too little room on a 256K-token model.
+    jailbreak:
+      - name: prompt_attack
+        threshold: 0.95
+        include_history: false
+    pii:
+      - name: personal_data
+        description: >-
+          Personal data located by the decision model's span head. Places,
+          organizations, dates, titles, domain names and nationality, religious
+          or political group names do not identify a person on their own.
+        include_history: false
+        pii_types_allowed:
+          - GPE
+          - ORGANIZATION
+          - DATE_TIME
+          - NRP
+          - TITLE
+          - DOMAIN_NAME
+    safety:
+      - name: unsafe_request
+        labels: [safe, unsafe]
+        unsafe_labels: [unsafe]
+        threshold: 0.9
+    decision:
+      - name: task
+        description: What kind of work the request asks for.
+        question:
+          type: choice
+          instructions: What kind of work does this request ask for?
+          choices:
+            - key: chat
+              description: Casual conversation, greetings, opinions or everyday advice
+            - key: writing
+              description: Writing, rewriting, translating or summarizing text
+            - key: code
+              description: Writing, explaining, reviewing or debugging code
+            - key: stem
+              description: A mathematics, science or engineering problem
+            - key: facts
+              description: Looking up a specific fact, name, date, number or quote
+            - key: analysis
+              description: Comparing options, planning or reasoning through a question
+            - key: agentic
+              description: Multi-step work that uses tools, files, systems or the web
+            - key: document
+              description: Questions about a document, table or long text in the request
+      - name: difficulty
+        description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer this request well?
+          levels:
+            - Answer immediately, with no thinking
+            - A little thought, one or two simple steps
+            - Multi-step reasoning or a careful check
+            - Deep expert reasoning on a hard problem
+            - Research-level work on an open or frontier problem
+        predicate:
+          gte: 2
+      - name: precise_facts
+        description: The answer depends on specific facts that most people would have to look up.
+        question:
+          type: noul
+          instructions: >-
+            Does a correct answer depend on recalling specific facts that are easy
+            to misremember, such as exact dates, figures, names or citations that
+            most people would have to look up?
+          choices:
+            - key: "false"
+              description: Common knowledge, reasoning or creativity is enough
+            - key: "true"
+              description: Specific facts that most people would have to look up
+        predicate:
+          gte: 0.8
+      - name: needs
+        description: What a good answer needs.
+        question:
+          type: set
+          instructions: What does a good answer to this request need?
+          labels:
+            - key: deliberation
+              description: A derivation, proof or careful step-by-step check
+            - key: tools
+              description: Calling tools or functions, running code or browsing
+            - key: verification
+              description: Checking facts against sources or citing references
+            - key: long_output
+              description: A long answer such as a full program, report or essay
+            - key: creativity
+              description: Original creative writing such as a story, poem or slogan
+      - name: correction
+        description: The user says the assistant's previous answer was wrong.
+        question:
+          type: noul
+          instructions: >-
+            In the latest message, does the user say the assistant's previous
+            answer was wrong and ask for a corrected answer?
+          choices:
+            - key: "false"
+              description: "No: the user continues, asks something new, or is satisfied"
+            - key: "true"
+              description: "Yes: the user says the previous answer was wrong"
+        predicate:
+          gte: 0.6
+  projections:
+    scores:
+      - name: effort_score
+        method: weighted_sum
+        inputs:
+          - type: decision
+            name: difficulty
+            weight: 0.3
+            value_source: raw
+          - type: decision
+            name: needs:deliberation
+            weight: 0.35
+            value_source: raw
+          - type: decision
+            name: needs:verification
+            weight: 0.1
+            value_source: raw
+          - type: keyword
+            name: brief_request
+            weight: -0.35
+    mappings:
+      - name: effort
+        source: effort_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10
+        outputs:
+          - name: effort_off
+            lt: 0.4
+          - name: effort_medium
+            gte: 0.4
+            lt: 0.675
+          - name: effort_high
+            gte: 0.675
+            lt: 1.15
+          - name: effort_max
+            gte: 1.15
+  decisions:
+    - name: guard
+      description: Refuse prompt attacks and unsafe requests without calling a model.
+      priority: 1000
+      rules:
+        operator: OR
+        conditions:
+          - type: jailbreak
+            name: prompt_attack
+          - type: safety
+            name: unsafe_request
+      plugins:
+        - type: fast_response
+          configuration:
+            message: This request was declined by the router's safety guard. Please rephrase it.
+    - name: long_context
+      description: Inputs beyond the Qwen windows go to GLM-5.3-Flash, which reads up to 1M tokens.
+      priority: 900
+      rules:
+        operator: AND
+        conditions:
+          - type: context
+            name: beyond_qwen_window
+      modelRefs:
+        - model: zai/glm-5.3-flash
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: static
+    - name: vision
+      description: Image requests go to Qwen3.8-27B, strong on documents and screenshots and the cheapest model.
+      priority: 850
+      rules:
+        operator: AND
+        conditions:
+          - type: conversation
+            name: has_image
+      modelRefs:
+        - model: qwen/qwen3.8-27b
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: static
+    - name: recovery
+      description: A user who says the last answer was wrong gets GLM-5.3-Flash at maximum effort, a different model family.
+      priority: 800
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: conversation
+            name: has_prior_answer
+          - type: decision
+            name: correction
+      modelRefs:
+        - model: zai/glm-5.3-flash
+          use_reasoning: true
+          reasoning_effort: max
+      algorithm:
+        type: static
+    - name: agentic
+      description: Requests that call the declared tools go to GLM-5.3-Flash, the strongest agent in the pool.
+      priority: 700
+      rules:
+        operator: OR
+        on_unknown: no_match
+        conditions:
+          - type: conversation
+            name: tool_loop
+          - operator: AND
+            conditions:
+              - type: conversation
+                name: has_tools
+              - operator: OR
+                conditions:
+                  - type: decision
+                    name: task
+                    label: agentic
+                  - type: decision
+                    name: needs
+                    label: tools
+                    predicate:
+                      gte: 0.5
+      modelRefs:
+        - model: zai/glm-5.3-flash
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: static
+    - name: facts
+      description: Answers that depend on exact facts go to GLM-5.3-Flash, which hallucinates least and abstains when unsure.
+      priority: 600
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: precise_facts
+          - operator: OR
+            conditions:
+              - type: decision
+                name: task
+                label: facts
+              - type: decision
+                name: task
+                label: analysis
+              - type: decision
+                name: task
+                label: writing
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: effort_max
+      modelRefs:
+        - model: zai/glm-5.3-flash
+          use_reasoning: true
+          reasoning_effort: low
+      algorithm:
+        type: static
+    - name: frontier
+      description: The hardest requests; the decision model chooses GLM-5.3-Flash max or Qwen3.8-Flash-Next xhigh.
+      priority: 500
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: effort_max
+      modelRefs:
+        - model: zai/glm-5.3-flash
+          use_reasoning: true
+          reasoning_effort: max
+        - model: qwen/qwen3.8-flash-next
+          use_reasoning: true
+          reasoning_effort: xhigh
+      algorithm:
+        type: decision
+        decision:
+          instructions: Which model should answer this research-level request?
+          candidates:
+            zai/glm-5.3-flash: >-
+              GLM-5.3-Flash: strongest on research-level science, expert knowledge
+              and long agentic plans, and most reliable on exact facts
+            qwen/qwen3.8-flash-next: >-
+              Qwen3.8-Flash-Next: strongest on competition mathematics, code
+              generation and precise instruction following
+          timeout_ms: 1000
+    - name: code
+      description: Code that needs reasoning goes to Qwen3.8-Flash-Next at medium effort, the strongest coder of the pool.
+      priority: 450
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: task
+            label: code
+          - operator: OR
+            conditions:
+              - type: projection
+                name: effort_medium
+              - type: projection
+                name: effort_high
+      modelRefs:
+        - model: qwen/qwen3.8-flash-next
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: static
+    - name: hard
+      description: High effort, or a STEM problem that needs multi-step reasoning, at extra-high effort; multi_factor balances quality, GPU cost, latency and load.
+      priority: 400
+      rules:
+        operator: OR
+        on_unknown: no_match
+        conditions:
+          - type: projection
+            name: effort_high
+          - operator: AND
+            conditions:
+              - type: decision
+                name: task
+                label: stem
+              - type: decision
+                name: difficulty
+      modelRefs:
+        - model: qwen/qwen3.8-flash-next
+          use_reasoning: true
+          reasoning_effort: xhigh
+        - model: qwen/qwen3.8-27b
+          use_reasoning: true
+          reasoning_effort: xhigh
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          quality:
+            index: vllm-sr/reasoning@1.0.0
+            on_missing: exclude
+          weights:
+            quality: 0.25
+            latency: 0.1
+            cost: 0.4
+            load: 0.25
+          latency_metric: tpot
+          on_no_candidates: cheapest
+    - name: standard
+      description: Some reasoning at medium effort; multi_factor balances quality, GPU cost, latency and load.
+      priority: 300
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: effort_medium
+      modelRefs:
+        - model: qwen/qwen3.8-flash-next
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: qwen/qwen3.8-27b
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          quality:
+            index: decision-balance/operator-reasoning@1.0.0
+            on_missing: exclude
+          weights:
+            quality: 0.25
+            latency: 0.1
+            cost: 0.4
+            load: 0.25
+          latency_metric: tpot
+          on_no_candidates: cheapest
+    - name: fast
+      description: Everything else goes to Qwen3.8-27B with thinking off.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen/qwen3.8-27b
+          use_reasoning: false
+      algorithm:
+        type: static
+global:
+  services:
+    router_replay:
+      enabled: true
+      capture_personal_data: false
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        device: rocm
+        profile: exact
+    system:
+      decision_model:
+        deployment: primary
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default
