@@ -17,6 +17,26 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ActionRule": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "explain",
+            "fix",
+            "refactor",
+            "test",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AdmissionConfig": {
       "properties": {
         "max_concurrency": {
@@ -161,6 +181,7 @@
             "mlp",
             "multi_factor",
             "prompt",
+            "random",
             "ratings",
             "remom",
             "router_dc",
@@ -1460,9 +1481,21 @@
           },
           "type": "array"
         },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionRule"
+          },
+          "type": "array"
+        },
         "decision": {
           "items": {
             "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
+        },
+        "topic_continuity": {
+          "items": {
+            "$ref": "#/$defs/TopicContinuityRule"
           },
           "type": "array"
         }
@@ -5164,6 +5197,9 @@
         "include_history": {
           "type": "boolean"
         },
+        "source": {
+          "type": "string"
+        },
         "description": {
           "type": "string"
         }
@@ -6836,6 +6872,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "action",
             "authz",
             "classifier",
             "complexity",
@@ -7343,6 +7380,54 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityEvidenceLimits": {
+      "properties": {
+        "max_prior_turns": {
+          "type": "integer"
+        },
+        "max_turn_bytes": {
+          "type": "integer"
+        },
+        "max_input_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "include_assistant": {
+          "type": "boolean"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/TopicContinuityThresholds"
+        },
+        "limits": {
+          "$ref": "#/$defs/TopicContinuityEvidenceLimits"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TopicContinuityThresholds": {
+      "properties": {
+        "continuation": {
+          "type": "number"
+        },
+        "change": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -8091,6 +8176,14 @@
         "schema_ref": "#/$defs/InputModalityRule"
       },
       {
+        "type": "action",
+        "display_name": "Action",
+        "collection": "actions",
+        "observation_key": "action",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ActionRule"
+      },
+      {
         "type": "decision",
         "display_name": "Decision Model",
         "collection": "decision",
@@ -8098,6 +8191,13 @@
         "decision_referenceable": true,
         "reference_qualifier": "label",
         "schema_ref": "#/$defs/DecisionSignalRule"
+      },
+      {
+        "type": "topic_continuity",
+        "display_name": "Topic Continuity",
+        "collection": "topic_continuity",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/TopicContinuityRule"
       }
     ],
     "algorithms": [
@@ -8182,6 +8282,13 @@
         "execution": "selector",
         "config_field": "multi_factor",
         "schema_ref": "#/$defs/MultiFactorSelectionConfig"
+      },
+      {
+        "type": "random",
+        "display_name": "Random",
+        "description": "Select uniformly from the eligible candidate models.",
+        "tier": "supported",
+        "execution": "selector"
       },
       {
         "type": "ratings",

@@ -429,6 +429,38 @@ messages a history-aware jailbreak or PII rule reads:
 The response answers the request's own `state` in its own fields, and has
 `"states": {"1": {"model", "answers", "usage", ...}}`.
 
+A model whose card lists the `image` modality (Decision 3.0) also reads
+`images`: base64 PNG, JPEG or WebP data URLs, each of at most
+`limits.image_max_bytes` bytes and `limits.image_source_max_pixels` pixels.
+Every question of the state sees them, in front of its text and in this order;
+the model resizes each to at most `limits.image_max_pixels` pixels. A model
+whose card lists the `video` modality also reads `videos`: base64 MP4, WebM,
+QuickTime or Matroska data URLs, each of at most `limits.video_max_bytes`
+bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+pixels per frame, after the images. The model reads `limits.video_fps` frames
+per second, at least 4 and at most `limits.video_max_frames` spread over the
+whole video, each at up to `limits.video_max_pixels` pixels; every pair of
+frames is one group of input tokens after its timestamp, and the videos of a
+request take at most `limits.video_max_tokens` input tokens. An entry of
+`states` may carry its own `images` and `videos`. Their tokens count in
+`usage`. A malformed or over-limit image or video, or one sent to a model
+without its modality, fails the request with 400 `invalid_request`. A worker
+started directly reads bodies of at most `--max-request-bytes`, so raise it to
+send large videos; the Router gives the workers it manages 64 MiB.
+
+```json title="POST /v1/systemone"
+{
+  "model": "d3-lite",
+  "state": "Is the attached receipt complete, and does the clip show it being paid?",
+  "images": ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."],
+  "videos": ["data:video/mp4;base64,AAAAIGZ0eXBpc29t..."],
+  "questions": {
+    "complete": {"type": "noul", "instructions": "Does the receipt show a total, a date and a merchant?"},
+    "paid": {"type": "noul", "instructions": "Does the clip show the receipt being paid?"}
+  }
+}
+```
+
 `src/model-runtime/tools/reference_examples.py --url <runtime>` sends this
 section's requests to a runtime that serves Vela 2.0 0.3B and checks that the
 answers match.
