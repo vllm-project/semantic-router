@@ -101,6 +101,7 @@ def golden_check(
     ],
     goldens: list[dict[str, Any]],
     device_class: str,
+    reference_key: str | None = None,
 ) -> GoldenResult:
     """Run each golden request twice; require determinism, well-formed answers and the reference when known.
 
@@ -108,8 +109,9 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    References are keyed by device class (``cpu``, ``rocm``, ``cuda``); answers
-    must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
+    Prefer ``reference_key`` when recorded, otherwise the device-class reference.
+    The device class still selects the tolerance: ``CPU_TOLERANCE`` on CPUs
+    and ``GPU_TOLERANCE`` on GPUs. Never try another reference after a mismatch.
     """
     result = GoldenResult(status="unverified")
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
@@ -121,7 +123,13 @@ def golden_check(
             return GoldenResult(
                 status="failed", detail="golden answers are not deterministic"
             )
-        reference = (golden.get("expected") or {}).get(device_class)
+        expected = golden.get("expected") or {}
+        selected = (
+            reference_key
+            if reference_key is not None and reference_key in expected
+            else device_class
+        )
+        reference = expected.get(selected)
         counts = compare(surface, first, reference or {}, tolerance)
         if counts is None:
             return GoldenResult(status="failed", detail="golden answers are malformed")
@@ -130,13 +138,13 @@ def golden_check(
         checked, matched = counts
         result.checked += checked
         result.matched += matched
-        result.reference = device_class
+        result.reference = selected
         if matched != checked:
             return GoldenResult(
                 status="failed",
                 checked=result.checked,
                 matched=result.matched,
-                reference=device_class,
+                reference=selected,
                 detail="golden answers differ from the reference",
             )
     if result.reference is not None:

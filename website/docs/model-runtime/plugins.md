@@ -132,7 +132,10 @@ reads. Without it, all of `load` is device work.
 **3. An accelerator or a profile, if you need one.** For new hardware,
 subclass `Accelerator` (`available`, `devices`, `torch_device`, `kernels`), and
 set `auto_priority` if `device: auto` may pick it; without it, only a request
-that names the device uses it. For a new way to run requests together,
+that names the device uses it. The optional `golden_reference(device)` hook
+names a hardware reference for readiness; the default is `accelerator:arch`.
+If that key is absent, the runtime uses the existing device-class reference.
+For a new way to run requests together,
 subclass `Profile` (`plan`, and `bind` for what it reads from the model).
 
 **4. Register it** in your `pyproject.toml`:

@@ -1,5 +1,7 @@
 import os
 
+import pytest
+import torch
 from vllm_srun.accel.autotune import freeze_autotune
 from vllm_srun.cli import build_parser, config_from_args
 from vllm_srun.families.decision2.family import Decision2Family
@@ -85,6 +87,86 @@ def test_a_device_class_without_a_reference_is_unverified():
     )
     assert result.status == "unverified"
     assert result.checked == 0
+
+
+def test_qualified_reference_precedes_the_legacy_reference():
+    golden = decisions_golden(
+        {"cpu": answers(0.6), "cpu:x86_64:avx2:bf16_emulated": answers(0.5)}
+    )
+    result = golden_check(
+        answers_of(answers(0.5)),
+        decisions,
+        [golden],
+        "cpu",
+        "cpu:x86_64:avx2:bf16_emulated",
+    )
+    assert result.status == "matched"
+    assert result.reference == "cpu:x86_64:avx2:bf16_emulated"
+    assert result.checked == result.matched == 1
+    # The unqualified check still rejects the original cross-host drift.
+    assert (
+        golden_check(answers_of(answers(0.5)), decisions, [golden], "cpu").status
+        == "failed"
+    )
+
+
+def test_qualified_reference_does_not_widen_tolerance_or_try_another_reference():
+    golden = decisions_golden(
+        {
+            "cpu": answers(0.5),
+            "cpu:x86_64:avx2:bf16_emulated": answers(0.5 + 2 * CPU_TOLERANCE),
+        }
+    )
+    result = golden_check(
+        answers_of(answers(0.5)),
+        decisions,
+        [golden],
+        "cpu",
+        "cpu:x86_64:avx2:bf16_emulated",
+    )
+    assert result.status == "failed" and result.matched == 0
+    assert result.reference == "cpu:x86_64:avx2:bf16_emulated"
+
+
+def test_unrecorded_hardware_uses_only_its_legacy_device_class():
+    golden = decisions_golden({"cpu": answers(0.5), "cuda:sm_89": answers(0.9)})
+    result = golden_check(
+        answers_of(answers(0.5)),
+        decisions,
+        [golden],
+        "cpu",
+        "cpu:x86_64:avx512:bf16_emulated",
+    )
+    assert result.status == "matched" and result.reference == "cpu"
+    result = golden_check(
+        answers_of(answers(0.5)), decisions, [golden], "cuda", "cuda:sm_80"
+    )
+    assert result.status == "unverified" and result.reference is None
+    result = golden_check(
+        answers_of(answers(0.9)), decisions, [golden], "cuda", "cuda:sm_89"
+    )
+    assert result.status == "matched" and result.reference == "cuda:sm_89"
+
+
+@pytest.mark.parametrize("capability", ["AVX2", "AVX512", "NO AVX"])
+@pytest.mark.parametrize("bf16", [False, True])
+def test_accelerator_selects_the_cpu_instruction_set_reference(
+    monkeypatch, capability, bf16
+):
+    from vllm_srun.accel.cpu import CPUAccelerator
+    from vllm_srun.accel.cuda import CUDAAccelerator
+
+    monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: capability)
+    device = DeviceInfo("cpu", None, "host", arch="x86_64", bf16=bf16)
+    assert (
+        CPUAccelerator().golden_reference(device)
+        == f"cpu:x86_64:{capability.lower().replace(' ', '_')}:{'bf16_native' if bf16 else 'bf16_emulated'}"
+    )
+    assert (
+        CUDAAccelerator().golden_reference(DeviceInfo("cuda", 0, "L4", arch="sm_89"))
+        == "cuda:sm_89"
+    )
+    assert CPUAccelerator().golden_reference(DeviceInfo("cpu", None, "unknown")) is None
 
 
 def test_freeze_autotune_points_triton_at_one_cache(tmp_path, monkeypatch):

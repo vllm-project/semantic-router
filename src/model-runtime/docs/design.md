@@ -315,6 +315,11 @@ reproduce and whether it is bit-exact; a kernel that is not bit-exact is only
 selectable by an opt-in profile. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
+`Accelerator.golden_reference(device)` names an optional hardware-qualified
+golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
+instruction set and native or emulated BF16 capability, for example
+`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+
 ### 5.4 Profile
 
 | Profile | Numerics | What it does |
@@ -904,7 +909,11 @@ Per model: `loading` (resolve, verify, load, identity) → `warming` (golden
 answers) → `ready`, or `failed` with a reason. Readiness is gated on golden
 answers per surface: every built-in revision carries golden requests with
 reference answers per device class (1e-3 on CPU, 0.02 on GPUs; encoder
-embeddings compare by cosine). Every golden request runs through its
+embeddings compare by cosine). A recorded hardware-qualified key takes
+precedence over the device-class reference; otherwise the existing device-class
+reference is used. A selected reference that fails is never replaced by another
+candidate. The tolerance is selected by device class, not reference key.
+Every golden request runs through its
 surface the same way: the loaded model's `golden_values` and `golden_compare`
 say what to compare and how, so decisions count questions and the other
 surfaces count values. Without a reference the runtime checks

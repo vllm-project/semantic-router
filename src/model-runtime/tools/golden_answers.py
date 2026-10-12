@@ -10,8 +10,8 @@ The model is served as ``vllm-srun serve`` serves it (verification,
 pinned kernel choices, readiness) and answers its family's golden requests on
 the exact profile, recorded as the readiness check compares them: decision
 answers, or a surface response's numbers (``LoadedModel.golden_values``).
-``--record`` merges this device class into the file's entries, keyed by
-repository and pinned revision.
+``--record`` merges this hardware-qualified reference into the file's entries,
+keyed by repository and pinned revision. Older device-class references remain.
 """
 
 from __future__ import annotations
@@ -54,7 +54,10 @@ def answers(
             "model_sha256": info.model_sha256,
             "device": served.placement.device.label,
             "readiness": served.health.golden.describe(),
-            "golden_answers": {served.placement.device.accelerator: values},
+            "golden_answers": {
+                served.placement.accelerator.golden_reference(served.placement.device)
+                or served.placement.device.accelerator: values
+            },
         }
     finally:
         runtime.stop()

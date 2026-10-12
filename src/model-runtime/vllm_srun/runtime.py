@@ -443,6 +443,7 @@ class ServedModel:
             model.golden_compare,
             self.family.golden(self.package),
             placement.device.accelerator,
+            placement.accelerator.golden_reference(placement.device),
         )
         if self.health.golden.status == "failed":
             raise VerificationError(self.health.golden.detail or "golden check failed")

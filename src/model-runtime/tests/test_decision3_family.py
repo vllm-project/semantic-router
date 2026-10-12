@@ -528,8 +528,13 @@ FLA_KERNELS = {
 
 
 @pytest.mark.parametrize("model", DECISION3_MODELS, ids=lambda model: model.repo_id)
-def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+def test_every_model_records_goldens_and_kernel_choices(model):
+    expected = {"cpu", "rocm"}
+    devices = {"rocm:gfx942"}
+    if model.repo_id == "vllm-sr/d3-edge":
+        expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
+        devices.add("cuda:sm_89")
+    assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {
             "difficulty",
@@ -538,10 +543,13 @@ def test_every_model_records_golden_answers_and_rocm_kernel_choices(model):
             "image_colour",
             "image_photo",
         }
-    assert set(model.kernel_choices) == {"rocm:gfx942"}
-    choices = model.kernel_choices["rocm:gfx942"]
-    assert choices["fla"] == "0.5.2"
-    assert set(choices["kernels"]) == FLA_KERNELS
+    assert set(model.kernel_choices) == devices
+    for device in devices:
+        choices = model.kernel_choices[device]
+        assert choices["fla"] == "0.5.2"
+        assert set(choices["kernels"]) == FLA_KERNELS
+    if "cuda:sm_89" in devices:
+        assert model.kernel_choices["cuda:sm_89"]["triton"] == "3.6.0"
 
 
 def test_threads_stay_within_the_container_unless_configured(monkeypatch):
