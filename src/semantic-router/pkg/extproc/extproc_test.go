@@ -2937,14 +2937,14 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 			ModelConfig: map[string]config.ModelParams{
 				"fast-model": {
 					Reliability: config.ProviderReliability{
-						TotalTimeout: "2s",
-						IdleTimeout:  "2s",
+						TotalTimeout:   "2s",
+						IdleTimeout:    "2s",
 						ConnectTimeout: "2s",
 					},
 				},
 				"slow-model": {
 					Reliability: config.ProviderReliability{
-						TotalTimeout: "15s",
+						TotalTimeout:   "15s",
 						ConnectTimeout: "5s",
 					},
 				},
@@ -2955,8 +2955,8 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 				},
 				"subsecond-model": {
 					Reliability: config.ProviderReliability{
-						TotalTimeout: "100ms",
-						IdleTimeout:  "100ms",
+						TotalTimeout:   "100ms",
+						IdleTimeout:    "100ms",
 						ConnectTimeout: "100ms",
 					},
 				},
@@ -3266,4 +3266,3 @@ func TestConnectFailure503RecordsUpstream5xxMetric(t *testing.T) {
 		t.Fatalf("expected upstream_5xx metric to increment on connection failure 503: before=%v after=%v", before5xx, after5xx)
 	}
 }
-

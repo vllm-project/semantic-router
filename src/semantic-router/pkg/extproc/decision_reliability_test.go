@@ -150,4 +150,3 @@ func TestEnvoyReliabilityHeadersRoundsUpPositiveSubmillisecondDeadlines(t *testi
 	zeroHeaders := headerValues(envoyReliabilityHeaders(zeroOverride, true))
 	require.Equal(t, "0", zeroHeaders["x-envoy-upstream-rq-timeout-ms"])
 }
-
