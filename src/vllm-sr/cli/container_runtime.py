@@ -26,6 +26,7 @@ from cli.consts import (
     CONTAINER_RUNTIME_PODMAN,
     SUPPORTED_CONTAINER_RUNTIMES,
 )
+from cli.terminal import HEADLINE
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -325,7 +326,7 @@ def container_pull_image(image_name):
     """
     runtime = get_container_runtime()
     try:
-        log.info(f"Pulling container image: {image_name}")
+        log.info(f"Pulling container image: {image_name}", extra=HEADLINE)
         log.info("This may take a few minutes...")
 
         subprocess.run(

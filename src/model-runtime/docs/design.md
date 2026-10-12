@@ -78,7 +78,7 @@ running packaged remote code (`trust_remote_code`).
 | Config | The canonical layout stays. `provider: model_runtime` deployments may serve task bindings. The providers `candle`, `ort` and `openvino` and their execution fields are removed from the parser; `vllm-sr config migrate` rewrites them. |
 | Retirements | The NLI model (hallucination explainer, response-cache polarity guard) and the OpenVINO provider retire, as decided in the runtime proposal. Every other legacy model migrates or has a documented replacement (section 16). |
 | Exactness | Decision 2.0 `exact` stays byte-identical. Decision 1.0 `exact` targets bit-identity with the packages' bundled runtime on the same device class. Vela 1.0 `exact` is FP32 on every device, with parity records against the legacy path. |
-| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Its other dependencies install at the versions in `requirements-lock.txt`, so every build of a release gets the same set. The Rust build stages are deleted. |
+| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Its other dependencies install at the versions in `requirements-lock.txt`, so every build of a release gets the same set. Model-backed validation of the image runs in development CI: recipe conformance serves the maintained recipes' models through the CI-built image, and Published Models serves the published Vela models through the runtime from source. The release workflow rebuilds the tagged source without running tests (#4273), so the published digest itself is not model-run. The Rust build stages are deleted. |
 
 ## 3. Overview
 
@@ -885,9 +885,14 @@ downloaded.
 `auto` tries the accelerators in the order of their `auto_priority` (ROCm,
 CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
-available device with enough free memory. The memory estimate is the weight
-bytes under the dtype policy plus the activation bound; `--memory-budget`
-caps it per model. A model names the device capabilities it requires per
+available device with enough free memory. The memory estimate is the weights
+in the dtype the accelerator holds them in (FP32 as an upper bound, or BF16
+plus 10% for a family whose `gpu_weights` / `cpu_weights` name it) plus a
+2 GiB activation reserve, matched to the peaks in
+[the Decision 3.0 device memory record](records/decision3-device-memory.md);
+`--memory-budget` caps it per model. A refusal names, per device, what the
+model needs and how much is free; on a host with a GPU the GPU's reasons come
+first and the CPU's last. A model names the device capabilities it requires per
 accelerator (`ModelSpec.requires`; a backbone architecture declares its own
 once, in `BackboneSpec.requires`, and the families pass it on), and placement
 refuses a device whose accelerator does not report one, before any weights

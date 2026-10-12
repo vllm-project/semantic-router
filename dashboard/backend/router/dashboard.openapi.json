@@ -7858,6 +7858,713 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/training/v2/artifact-variants/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2ArtifactVariantsId",
+        "summary": "GET /api/training/v2/artifact-variants/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/artifacts/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2ArtifactsId",
+        "summary": "GET /api/training/v2/artifacts/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/artifacts/{id}/variants": {
+      "get": {
+        "operationId": "getApiTrainingV2ArtifactsIdVariants",
+        "summary": "GET /api/training/v2/artifacts/{id}/variants",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-assets": {
+      "post": {
+        "operationId": "postApiTrainingV2DataAssets",
+        "summary": "POST /api/training/v2/data-assets",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./data-assets",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-assets/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2DataAssetsId",
+        "summary": "GET /api/training/v2/data-assets/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-snapshots": {
+      "post": {
+        "operationId": "postApiTrainingV2DataSnapshots",
+        "summary": "POST /api/training/v2/data-snapshots",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./data-snapshots",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/data-snapshots/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2DataSnapshotsId",
+        "summary": "GET /api/training/v2/data-snapshots/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/evaluations/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2EvaluationsId",
+        "summary": "GET /api/training/v2/evaluations/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/experiments": {
+      "post": {
+        "operationId": "postApiTrainingV2Experiments",
+        "summary": "POST /api/training/v2/experiments",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./experiments",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/experiments/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2ExperimentsId",
+        "summary": "GET /api/training/v2/experiments/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/files/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2FilesId",
+        "summary": "GET /api/training/v2/files/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs": {
+      "get": {
+        "operationId": "getApiTrainingV2Runs",
+        "summary": "GET /api/training/v2/runs",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      },
+      "post": {
+        "operationId": "postApiTrainingV2Runs",
+        "summary": "POST /api/training/v2/runs",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training.submit",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/compare": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsCompare",
+        "summary": "POST /api/training/v2/runs/compare",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/compare",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/validate": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsValidate",
+        "summary": "POST /api/training/v2/runs/validate",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/validate",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}": {
+      "get": {
+        "operationId": "getApiTrainingV2RunsId",
+        "summary": "GET /api/training/v2/runs/{id}",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}/cancel": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsIdCancel",
+        "summary": "POST /api/training/v2/runs/{id}/cancel",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/{id}/cancel",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}/events": {
+      "get": {
+        "operationId": "getApiTrainingV2RunsIdEvents",
+        "summary": "GET /api/training/v2/runs/{id}/events",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/runs/{id}/retry": {
+      "post": {
+        "operationId": "postApiTrainingV2RunsIdRetry",
+        "summary": "POST /api/training/v2/runs/{id}/retry",
+        "tags": [
+          "training"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training./runs/{id}/retry",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/training/v2/uploads": {
+      "post": {
+        "operationId": "postApiTrainingV2Uploads",
+        "summary": "POST /api/training/v2/uploads",
+        "tags": [
+          "training"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "training.upload",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 67108864,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/workflows/health": {
       "get": {
         "operationId": "getApiWorkflowsHealth",
@@ -7881,6 +8588,26 @@
         "x-vllm-sr-permission": "config.read",
         "x-vllm-sr-sensitivity": "operational",
         "x-vllm-sr-resource-owner": "workflow",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "GET /health",
+        "tags": [
+          "health"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": false,
         "x-vllm-sr-schema-status": "undocumented"
