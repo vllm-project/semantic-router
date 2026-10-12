@@ -39,14 +39,16 @@ separate earlier `plan` does not pin that later call. Use the discovered API's
 `If-Match` contract when the reviewed revision must be fixed; there is no CLI
 `--etag` option.
 
-`apply` waits 15 s by default (`--timeout`). A timeout doesn't mean the change
+`apply` waits up to 120 s (`--timeout`). A timeout doesn't mean the change
 failed: it can activate a moment later, so read `config versions` before
 retrying.
 
-For `RESTART_REQUIRED` (listeners or the provider topology changed), use the
-authorized deployment replacement workflow. Local Docker supports
-`serve --config candidate.yaml --replace-active-config`; ordinary `serve`
-preserves active edits. Verify readiness, active revision and representative
+A change the running Router can't take (in standalone mode a listener change;
+with `--gateway extproc`, also the provider topology) is `restart_required`.
+On a local Docker stack, `config apply` saves it and prints `Restart required:
+run vllm-sr serve to apply.`; `status` reports it until `serve` applies it.
+Elsewhere, use the authorized deployment replacement workflow, such as
+`helm upgrade` on Kubernetes. Verify readiness, active revision and representative
 routed requests after activation. Discover `config versions` and
 `config rollback` when recovery is needed.
 

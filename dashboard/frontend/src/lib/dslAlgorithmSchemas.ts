@@ -39,15 +39,33 @@ const FUSION_INCLUDE_ANALYSIS_FIELD: FieldSchema = {
   description: 'Return structured judge analysis in the Fusion trace',
 }
 
+export function isNativeAlgorithm(type: string): boolean {
+  return (
+    ROUTER_CONFIG_EXTENSION.algorithms.find((surface) => surface.type === type)?.execution ===
+    'native'
+  )
+}
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
   return mergeRouterFieldSchemas(algorithmFieldsFromRouterSchema(algoType), [
-    ...COMMON_ALGORITHM_FIELDS,
+    ...(isNativeAlgorithm(algoType) ? [] : COMMON_ALGORITHM_FIELDS),
     ...getAlgorithmSpecificFieldSchema(algoType),
   ])
 }
 
 function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
   switch (algoType) {
+    case 'cascade':
+      return [
+        {
+          key: 'budget',
+          label: 'Execution Budget',
+          type: 'object',
+          required: true,
+          description:
+            'Limit backend calls and execution time after a decision selects this cascade. Signal evaluation is separate.',
+        },
+      ]
     case 'confidence':
       return [
         {

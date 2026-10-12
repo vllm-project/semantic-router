@@ -137,16 +137,18 @@ export default function SemanticTerrainHero(): JSX.Element {
               <div className={styles.actions}>
                 <PillLink
                   className={styles.primaryCta}
-                  to="/docs/installation/agent-harness"
+                  href="https://app.vllm-sr.ai/playground"
+                  target="_blank"
+                  rel="noreferrer"
                 >
                   <Translate id="homepage.hero.primaryCta">
-                    Connect your harness
+                    Try the Playground
                   </Translate>
                   <span aria-hidden="true">→</span>
                 </PillLink>
-                <PillLink className={styles.secondaryCta} to="/docs/intro" muted>
+                <PillLink className={styles.secondaryCta} to="/docs/installation/" muted>
                   <Translate id="homepage.hero.secondaryCta">
-                    Read the Docs
+                    Get started
                   </Translate>
                   <span aria-hidden="true">→</span>
                 </PillLink>

@@ -116,14 +116,17 @@ class EncoderMember:
         return 0 if self.graph else sum(p.numel() for p in self.readout.parameters())
 
     def plan(
-        self, rows: list[Row], tokens: Tokens
+        self, rows: list[Row], tokens: Tokens, in_windows: bool = True
     ) -> tuple[list[EncoderSequence], list[list[int] | None]]:
-        """Sequences of every row and, per row, the indices of its sequences (None when it cannot fit)."""
+        """Sequences of every row and, per row, the indices of its sequences (None when it cannot fit).
+
+        Without ``in_windows`` a row is one sequence, its parts cut to fit.
+        """
         items: list[EncoderSequence] = []
         groups: list[list[int] | None] = []
         for row in rows:
             try:
-                sequences = self.layout.sequences(row, tokens)
+                sequences = self.layout.sequences(row, tokens, in_windows)
             except SchemaTooLongError:
                 groups.append(None)
                 continue
@@ -297,8 +300,9 @@ class DecoderMember:
         )
 
     def plan(
-        self, rows: list[Row], tokens: Tokens
+        self, rows: list[Row], tokens: Tokens, in_windows: bool = True
     ) -> tuple[list[DecoderTree], list[RowTrees | None]]:
+        """The rows' trees; a span target over the repeat limit is read in windows either way."""
         return self.layout.trees(rows, tokens)
 
     def batches(self, items: list[DecoderTree]) -> list[list[int]]:

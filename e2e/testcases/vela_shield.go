@@ -43,7 +43,7 @@ func testVelaShieldSafety(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 	defer cleanup()
 	for _, probe := range velaShieldProbes {
-		resp, err := sendLocalChatCompletion(ctx, port, "auto", probe.prompt, 120*time.Second)
+		resp, err := sendLocalChatCompletion(ctx, port, "vllm-sr/auto", probe.prompt, 120*time.Second)
 		if err != nil {
 			return fmt.Errorf("%s: %w", probe.name, err)
 		}

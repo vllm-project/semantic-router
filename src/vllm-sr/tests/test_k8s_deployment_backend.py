@@ -14,7 +14,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli.commands import runtime as rt  # noqa: E402
 from cli.deployment_backend import resolve_target  # noqa: E402
-from cli.k8s_backend import K8sBackend, client_service_port  # noqa: E402
+from cli.k8s_backend import (  # noqa: E402
+    PUBLISHED_CHART,
+    K8sBackend,
+    client_service_port,
+    published_chart_version,
+)
 from cli.main import main  # noqa: E402
 from click.testing import CliRunner  # noqa: E402
 
@@ -481,10 +486,16 @@ class TestK8sBackend:
 
 class TestCLITargetRouting:
     def test_serve_default_target_builds_docker_backend(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            "cli.runtime_lifecycle.get_container_runtime", lambda: "docker"
+        )
+        monkeypatch.setattr(
+            "cli.runtime_lifecycle.container_status_strict", lambda _name: "not found"
+        )
         built = []
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -504,7 +515,7 @@ class TestCLITargetRouting:
         )
 
         runner = CliRunner()
-        runner.invoke(
+        result = runner.invoke(
             main,
             [
                 "serve",
@@ -515,7 +526,8 @@ class TestCLITargetRouting:
             ],
         )
 
-        assert built and built[0] == "docker"
+        assert result.exit_code == 0, result.output
+        assert built == ["docker"]
 
     def test_stop_target_k8s_builds_k8s_backend(self, monkeypatch):
         built = []
@@ -539,7 +551,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -612,7 +624,7 @@ class TestCLITargetRouting:
         config_path = tmp_path / "config.yaml"
         source = {
             "version": "v0.3",
-            "listeners": [{"name": "http", "port": 8899}],
+            "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
             "global": {
                 "services": {},
                 "stores": {},
@@ -639,7 +651,12 @@ class TestCLITargetRouting:
 
         assert result.exit_code == 0, result.output
         assert Path(captured["config_file"]).resolve() == config_path.resolve()
-        assert captured["config_document"] == source
+        effective = captured["config_document"]
+        assert effective["global"]["services"] == {}
+        assert effective["global"]["stores"] == {}
+        assert effective["global"]["integrations"] == {"looper": {}}
+        assert effective == source
+        assert yaml.safe_load(config_path.read_text()) == source
         assert not (tmp_path / ".vllm-sr").exists()
 
     def test_k8s_overrides_never_publish_local_runtime_state(
@@ -647,11 +664,11 @@ class TestCLITargetRouting:
         monkeypatch,
         tmp_path,
     ):
-        monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
-        monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
+        monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
+        monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
         source = {
             "version": "v0.3",
-            "listeners": [{"name": "http", "port": 8899}],
+            "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
             "routing": {
                 "decisions": [{"name": "route", "algorithm": {"type": "multi_factor"}}]
             },
@@ -708,9 +725,9 @@ class TestCLITargetRouting:
     @pytest.mark.parametrize(
         ("override_args", "env_name", "env_value", "expected"),
         [
-            (["--platform", "amd"], None, None, "amd"),
-            ([], "VLLM_SR_PLATFORM", "nvidia", "nvidia"),
-            ([], "DASHBOARD_PLATFORM", "amd", "amd"),
+            (["--platform", "rocm"], None, None, "rocm"),
+            ([], "VLLM_SR_PLATFORM", "cuda", "cuda"),
+            ([], "DASHBOARD_PLATFORM", "rocm", "rocm"),
         ],
     )
     def test_kubernetes_gpu_platform_reaches_the_backend(
@@ -729,7 +746,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -803,3 +820,78 @@ def test_kubernetes_summary_port_forwards_the_client_port(capsys):
     out = capsys.readouterr().out
     assert "kubectl port-forward -n test-ns svc/sr 8899:8899" in out
     assert "8080:8080" not in out
+
+
+class TestK8sChartResolution:
+    """Only deploy needs a chart; without a checkout it runs the published one."""
+
+    @staticmethod
+    def _pull_into_untardir(calls: list[list[str]], returncode: int = 0):
+        def run(cmd, check=True, **_kwargs):
+            calls.append(cmd)
+            if returncode == 0:
+                chart = Path(cmd[cmd.index("--untardir") + 1]) / "semantic-router"
+                chart.mkdir(parents=True)
+                (chart / "Chart.yaml").write_text("name: semantic-router\n")
+            return subprocess.CompletedProcess(
+                cmd, returncode, "", "Error: unauthorized"
+            )
+
+        return staticmethod(run)
+
+    def test_a_backend_away_from_a_checkout_needs_no_chart(self, tmp_path, monkeypatch):
+        # status, logs, stop and dashboard build the backend too (#4710).
+        monkeypatch.chdir(tmp_path)
+
+        backend = rt._build_backend("kubernetes", namespace="sr")
+
+        assert backend.chart_dir is None
+
+    def test_deploy_fetches_the_published_chart_once(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        calls: list[list[str]] = []
+        monkeypatch.setattr(K8sBackend, "_run", self._pull_into_untardir(calls))
+        backend = K8sBackend()
+
+        chart = backend._resolve_chart_dir()
+
+        assert backend._resolve_chart_dir() == chart
+        assert (Path(chart) / "Chart.yaml").is_file()
+        assert len(calls) == 1
+        assert calls[0][:5] == [
+            "helm",
+            "pull",
+            PUBLISHED_CHART,
+            "--version",
+            published_chart_version(),
+        ]
+
+    def test_a_failed_fetch_names_the_way_out(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            K8sBackend, "_run", self._pull_into_untardir([], returncode=1)
+        )
+
+        with pytest.raises(SystemExit, match=r"unauthorized\. Pass --chart-dir"):
+            K8sBackend()._resolve_chart_dir()
+
+    def test_a_chart_dir_or_a_checkout_is_used_as_is(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            K8sBackend, "_run", self._pull_into_untardir([], returncode=1)
+        )
+        assert (
+            K8sBackend(chart_dir="/charts/mine")._resolve_chart_dir() == "/charts/mine"
+        )
+
+        checkout = tmp_path / "deploy" / "helm" / "semantic-router"
+        checkout.mkdir(parents=True)
+        (checkout / "Chart.yaml").write_text("name: semantic-router\n")
+        monkeypatch.chdir(tmp_path)
+        assert K8sBackend()._resolve_chart_dir() == str(checkout)
+
+    def test_the_published_chart_follows_the_image_channel(self, monkeypatch):
+        assert published_chart_version("0.5.0.dev20261007101233") == "0.0.0-latest"
+        monkeypatch.setattr(
+            "cli.k8s_backend.image_tag_for_cli_version", lambda version: f"v{version}"
+        )
+        assert published_chart_version("0.5.0") == "0.5.0"

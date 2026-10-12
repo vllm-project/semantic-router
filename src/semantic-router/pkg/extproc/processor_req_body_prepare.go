@@ -48,6 +48,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 
 func (r *OpenAIRouter) runRequestPreRoutingStages(
 	originalModel string,
+	request *llmprotocol.Request,
 	snapshot *requestSignalSnapshot,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
@@ -56,7 +57,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
-	history := signalConversationHistoryFromSnapshot(snapshot)
+	// Keep the general snapshot payload-free, but attach tool-result text at the
+	// signal-history boundary so opt-in PII rules can inspect it. This is the
+	// only pre-routing path for normal request-body processing.
+	history := signalConversationHistoryFromRequest(request, snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
@@ -172,8 +176,8 @@ func (r *OpenAIRouter) respondRoutingRejected(
 	// Retain exactly the client-visible error in Replay, including streams
 	// rejected before the provider has started an SSE response.
 	resp = r.encodeImmediateResponseForClient(resp, ctx)
-	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
-		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, nil)
+	if r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
 	r.updateRouterReplayStatus(ctx, status, false)
@@ -229,6 +233,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
+	// Topic-continuity evidence reads the original history captured before RAG
+	// and Memory, and is ready before any context transformation reads it.
+	r.evaluateTopicContinuity(ctx)
 	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}

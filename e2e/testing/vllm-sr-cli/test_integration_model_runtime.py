@@ -117,8 +117,6 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         config["routing"]["signals"] = {"decision": [signal]}
         config["routing"]["decisions"].insert(0, route)
         config["global"]["model_catalog"]["deployments"] = deployments
-        # The page names no auto model names, so its request's "auto" routes.
-        config["global"].get("router", {}).pop("auto_model_names", None)
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
         )
@@ -129,12 +127,12 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         deadline = time.time() + ANSWER_TIMEOUT_SECONDS
         selected = matched = ""
         while time.time() < deadline:
-            # As on the page: "auto" lets the Router choose, a named model
+            # As on the page: "vllm-sr/auto" lets the Router choose; a named model
             # would skip the decisions.
             headers = self._send_mock_chat_completion(
                 mock_container,
                 request_headers={"x-vsr-debug": "true"},
-                model="auto",
+                model="vllm-sr/auto",
                 content="Plan a three-step proof that there are infinitely many primes.",
             )
             selected = headers.get("x-vsr-selected-decision", "")

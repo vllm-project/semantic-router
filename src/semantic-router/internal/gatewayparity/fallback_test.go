@@ -174,12 +174,20 @@ const clientTag = "X-Client-Tag"
 
 func postChat(t *testing.T, frontend *httptest.Server) answer {
 	t.Helper()
+	return postChatWithHeaders(t, frontend, nil)
+}
+
+func postChatWithHeaders(t *testing.T, frontend *httptest.Server, extra map[string]string) answer {
+	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, frontend.URL+"/v1/chat/completions", strings.NewReader(fallbackRequest))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(clientTag, "from-the-client")
+	for name, value := range extra {
+		req.Header.Set(name, value)
+	}
 	resp, err := frontend.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -262,12 +270,10 @@ func TestFallbackServesTheCandidateInBothModes(t *testing.T) {
 // chain falls back on it: a deliberate difference, since a primary that is
 // down is what fallback is for.
 func TestARefusedPrimaryFallsBackOnlyInNativeMode(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	refused := listener.Addr().String()
-	_ = listener.Close()
+	// The port stays reserved. Closing it lets another server bind the address,
+	// and a real HTTP answer is not Envoy's local reply: the response-phase
+	// fallback then calls the candidate.
+	refused := resetListener(t)
 	configYAML := strings.Replace(fallbackConfig, "PRIMARY", refused, 1)
 
 	for _, native := range []bool{true, false} {
@@ -287,6 +293,30 @@ func TestARefusedPrimaryFallsBackOnlyInNativeMode(t *testing.T) {
 			t.Fatalf("envoy: the candidate got %d calls, want none", secondary.hits.Load())
 		}
 	}
+}
+
+// resetListener holds a loopback port and resets every connection, so the
+// dial fails with Envoy's local reply and no other server can claim the port.
+func resetListener(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			if tcp, ok := conn.(*net.TCPConn); ok {
+				_ = tcp.SetLinger(0)
+			}
+			_ = conn.Close()
+		}
+	}()
+	return listener.Addr().String()
 }
 
 // When every candidate fails, the client gets the primary's failure, and the

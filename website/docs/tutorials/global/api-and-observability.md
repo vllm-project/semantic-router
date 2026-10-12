@@ -295,7 +295,8 @@ The Helm chart exposes the same gate as a top-level value
 without editing the embedded canonical config:
 
 ```bash
-helm install vsr ./deploy/helm/semantic-router \
+helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
   --set router.skipProcessing.enabled=true
 ```
 

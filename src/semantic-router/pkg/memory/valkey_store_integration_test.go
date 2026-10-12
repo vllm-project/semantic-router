@@ -4,6 +4,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -257,6 +258,66 @@ func TestValkeyStoreInteg_Retrieve(t *testing.T) {
 		assert.NotEmpty(t, r.Memory.ID)
 		assert.NotEmpty(t, r.Memory.Content)
 		assert.Positive(t, r.Score, "score should be positive")
+	}
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.T) {
+	store, client := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+	const legacyCount = 50
+	const query = "What are the user's display preferences?"
+	userID := fmt.Sprintf("legacy_project_user_%d", time.Now().UnixNano())
+
+	queryEmbedding, err := storageMemoryVectors().Embed(ctx, query)
+	require.NoError(t, err)
+	scopedEmbedding := append([]float32(nil), queryEmbedding...)
+	scopedEmbedding[0] = -scopedEmbedding[0]
+
+	for i := 0; i < legacyCount; i++ {
+		legacy := &Memory{
+			ID:        fmt.Sprintf("legacy_default_%d_%d", time.Now().UnixNano(), i),
+			Type:      MemoryTypeSemantic,
+			Content:   "legacy unscoped display preference",
+			UserID:    userID,
+			Embedding: queryEmbedding,
+		}
+		require.NoError(t, store.Store(ctx, legacy))
+
+		// Emulate the pre-fix write path: the indexed field said "default"
+		// while metadata (the scope source of truth) remained unscoped.
+		_, err = client.HSet(ctx, store.hashKey(legacy.ID), map[string]string{"project_id": "default"})
+		require.NoError(t, err)
+	}
+
+	scoped := &Memory{
+		ID:        fmt.Sprintf("named_default_%d", time.Now().UnixNano()),
+		Type:      MemoryTypeSemantic,
+		Content:   "explicit default display preference",
+		UserID:    userID,
+		ProjectID: "default",
+		Embedding: scopedEmbedding,
+	}
+	require.NoError(t, store.Store(ctx, scoped))
+	time.Sleep(500 * time.Millisecond)
+
+	for _, mode := range []struct {
+		name string
+		opts RetrieveOptions
+	}{
+		{name: "vector"},
+		{name: "hybrid", opts: RetrieveOptions{HybridSearch: true, HybridMode: "weighted"}},
+		{name: "adaptive", opts: RetrieveOptions{AdaptiveThreshold: true}},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			opts := mode.opts
+			opts.Query, opts.UserID, opts.ProjectID, opts.Limit, opts.Threshold = query, userID, "default", 5, 0.9
+			results, err := store.Retrieve(ctx, opts)
+
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, scoped.ID, results[0].Memory.ID)
+		})
 	}
 }
 
@@ -609,6 +670,52 @@ func TestValkeyStoreInteg_DuplicateKeys(t *testing.T) {
 	retrieved, err := store.Get(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, "First version", retrieved.Content)
+}
+
+// StorageIntegration: valkey
+func TestValkeyStoreInteg_ConcurrentDuplicateID(t *testing.T) {
+	store, _ := setupValkeyMemoryIntegration(t)
+	ctx := context.Background()
+
+	const writers = 12
+	id := fmt.Sprintf("mem_concurrent_dup_%d", time.Now().UnixNano())
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- store.Store(ctx, &Memory{
+				ID:      id,
+				Type:    MemoryTypeSemantic,
+				Content: fmt.Sprintf("complete concurrent memory %d", i),
+				UserID:  fmt.Sprintf("concurrent_user_%d", i),
+			})
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	duplicates := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, errValkeyMemoryAlreadyExists):
+			duplicates++
+		default:
+			t.Errorf("unexpected store error: %v", err)
+		}
+	}
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, writers-1, duplicates)
+
+	stored, err := store.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Contains(t, stored.Content, "complete concurrent memory ")
+	assert.NotEmpty(t, stored.UserID)
+	assert.NotEmpty(t, stored.Embedding)
 }
 
 // ---------------------------------------------------------------------------

@@ -47,7 +47,7 @@ func TestComponentKeysFollowTheDependencyGraph(t *testing.T) {
 		{
 			name: "global setting only",
 			edit: func(doc string) string {
-				return strings.Replace(doc, "recipes:", "global:\n  router:\n    auto_model_name: chooser\nrecipes:", 1)
+				return strings.Replace(doc, "recipes:", "global:\n  router:\n    list_backend_models: true\nrecipes:", 1)
 			},
 			changed: []Component{ComponentRouter, ComponentSignals},
 		},

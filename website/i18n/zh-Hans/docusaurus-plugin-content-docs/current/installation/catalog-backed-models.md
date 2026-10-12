@@ -2,7 +2,7 @@
 title: 目录支持的模型
 description: 将内置 Model Card 绑定到受支持的 Provider，而无需重复模型元数据或推理规则。
 translation:
-  source_commit: "6a4e51ad570a95c2a493ce4b1494bcedb525fa08"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/catalog-backed-models.md"
   outdated: false
 ---
@@ -32,7 +32,7 @@ routing: {}
 
 `production` 是本地别名。Router 会从 `catalog: openai/gpt-5.6-sol` 解析 canonical card 和 OpenAI 专用映射；不要在 YAML 中重复其推理定义。
 
-在 **Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Build → Models → Add Model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
+在 **Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Build → Routing → Models → Add Model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
 
 ## 在需要时提供部署名称
 

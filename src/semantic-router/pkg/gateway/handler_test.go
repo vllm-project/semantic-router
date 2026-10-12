@@ -24,9 +24,14 @@ type fakeProcessor struct {
 	bodies   [][]byte
 	closed   []error
 	planFail error
+	models   []routing.ListenerModels
 }
 
-func (p *fakeProcessor) Open(context.Context) (routing.Session, error) {
+func (p *fakeProcessor) Open(ctx context.Context) (routing.Session, error) {
+	models, _ := routing.ListenerModelsFrom(ctx)
+	p.mu.Lock()
+	p.models = append(p.models, models)
+	p.mu.Unlock()
 	return &fakeSession{p: p}, nil
 }
 
@@ -261,6 +266,34 @@ func TestHandlerChecksAPIKeysLikeTheTemplate(t *testing.T) {
 				t.Fatalf("client credentials must not reach the engine: %v", h)
 			}
 		})
+	}
+}
+
+func TestHandlerHandsTheListenersModelsToTheRoutingCore(t *testing.T) {
+	for _, models := range [][]string{nil, {"vllm-sr/auto"}} {
+		p := &fakeProcessor{}
+		u := &fakeUpstream{resp: okUpstream("ok", http.Header{})}
+		h, err := NewHandler(Options{
+			Serving: Static(Serving{
+				Engine: routing.NewEngine(p, routing.DefaultOptions), Upstream: u,
+				APIKeys: []string{"sk-1"}, Models: models,
+			}),
+			Listener: "public",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"a"}`))
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		if len(p.models) != 0 {
+			t.Fatalf("models %v: a request without a key reached the routing core", models)
+		}
+		req = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"a"}`))
+		req.Header.Set("Authorization", "Bearer sk-1")
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		if len(p.models) != 1 || len(p.models[0]) != len(models) || (len(models) > 0 && !p.models[0].Allows(models[0])) {
+			t.Fatalf("the routing core saw allow-list %v, want %v", p.models, models)
+		}
 	}
 }
 

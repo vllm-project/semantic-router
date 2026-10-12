@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
+from .accel.cpu import cap_threads
 from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
 from .errors import (
     PackageError,
@@ -55,6 +56,7 @@ from .plugins.base import (
     UnsupportedSurfaceError,
     VerifiedPackage,
 )
+from .plugins.decisions import join_states, split_states
 from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler.scheduler import Scheduler, SchedulerLimits
@@ -148,7 +150,7 @@ __all__ = [
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "options"},
+    "decisions": {"model", "state", "questions", "images", "videos", "options"},
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
@@ -172,7 +174,7 @@ SURFACE_FIELDS = {
     },
 }
 SURFACE_OPTIONS = {
-    "decisions": set(),
+    "decisions": {"max_tokens"},
     "classify": {"overflow", "max_tokens", "window", "threshold", "return_tokens"},
     "embeddings": {"overflow", "max_tokens"},
     "rerank": {"overflow", "max_tokens"},
@@ -348,7 +350,14 @@ class ServedModel:
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )
-        self.health.set("loading", f"loading weights on {placement.device.label}")
+        needed = f"needs about {placement.estimated_bytes / (1 << 30):.1f} GiB"
+        free = device.free_memory
+        self.health.set(
+            "loading",
+            f"loading weights on {device.label} ("
+            + (needed if free is None else f"{needed}, {free / (1 << 30):.1f} GiB free")
+            + ")",
+        )
         pinned = self.kernel_choices
 
         def execute(work: Any) -> Any:
@@ -564,6 +573,7 @@ class ServedModel:
         assert self.model is not None and self.placement is not None
         profile = self.profiles.get(profile_name)
         return {
+            "model_id": self.model.info.repo or self.model.info.id,
             "revision": self.model.info.revision,
             "model_sha256": self.model.info.model_sha256,
             "profile": profile_name,
@@ -670,6 +680,8 @@ class ServedModel:
             }
         if info.presets:
             card["presets"] = list(info.presets)
+        if "decisions" in info.surfaces:
+            card["modalities"] = list(info.modalities)
         return card
 
 
@@ -739,6 +751,13 @@ class Runtime:
     # -- lifecycle -----------------------------------------------------------
 
     def start(self, *, background: bool = True) -> None:
+        capped = cap_threads(self.config.threads)
+        if capped:
+            log.info(
+                "PyTorch CPU threads %d -> %d (the container's CPUs)",
+                capped["from"],
+                capped["to"],
+            )
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True
@@ -892,9 +911,16 @@ class Runtime:
     # -- every surface -------------------------------------------------------
 
     def prepare(
-        self, surface: str, body: Any, received: float | None = None
+        self,
+        surface: str,
+        body: Any,
+        received: float | None = None,
+        part: bool = False,
     ) -> Prepared:
-        """Validate a surface request and plan it for its model (runs off the event loop)."""
+        """Validate a surface request and plan it for its model (runs off the event loop).
+
+        ``part`` marks one state of a decisions request with several (``states``).
+        """
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
         if len(self.served) == 1:
@@ -920,14 +946,14 @@ class Runtime:
             served, surface, body, received
         )
         request = SurfaceRequest(
-            surface, body, deadline, profile, return_meta, received
+            surface, body, deadline, profile, return_meta, received, part
         )
         try:
             plan = served.model.plan_surface(surface, request)
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            raise RuntimeServiceError.invalid(exc) from exc
         return Prepared(served, request, plan)
 
     def finish(
@@ -991,18 +1017,23 @@ class Runtime:
         return 200, {"results": results}
 
     def _prepare_outcome(
-        self, surface: str, body: Any, received: float
+        self, surface: str, body: Any, received: float, part: bool = False
     ) -> Prepared | tuple[int, dict[str, Any]]:
         try:
-            return self.prepare(surface, body, received)
+            return self.prepare(surface, body, received, part)
         except Exception as exc:
             return _error_outcome(exc)
 
     def _prepare_and_run(
-        self, surface: str, body: Any, received: float, timing: ServerTiming
+        self,
+        surface: str,
+        body: Any,
+        part: bool,
+        received: float,
+        timing: ServerTiming,
     ) -> tuple[Prepared | tuple[int, dict[str, Any]], _Lookup | None]:
         """Plan one request off the event loop and run it here if its model is idle."""
-        prepared = self._prepare_outcome(surface, body, received)
+        prepared = self._prepare_outcome(surface, body, received, part)
         timing.tokenize = time.monotonic() - received
         if not isinstance(prepared, Prepared):
             return prepared, None
@@ -1031,16 +1062,58 @@ class Runtime:
 
         A group holds a model's tasks of one profile, whatever their deadlines:
         each job keeps its own. A lone request planned off the event loop runs
-        on its planning thread when its model's scheduler is idle.
+        on its planning thread when its model's scheduler is idle. A decisions
+        request with further ``states`` runs as one request per state, in its
+        model's group, and their answers join into its response.
         """
         if timing is None:
             timing = ServerTiming()
         received = time.monotonic()
+        parts: list[tuple[str, Any, bool]] = []
+        # Per request: where its parts start, and its states' names or the
+        # error it already has.
+        joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
+        for surface, body in requests:
+            try:
+                split = split_states(body) if surface == "decisions" else None
+            except ValueError as exc:
+                failed = _error_outcome(RuntimeServiceError.invalid(exc))
+                joins.append((len(parts), None, failed))
+                continue
+            if split is None:
+                joins.append((len(parts), None, None))
+                parts.append((surface, body, False))
+                continue
+            bodies, names = split
+            joins.append((len(parts), names, None))
+            parts.extend((surface, state_body, True) for state_body in bodies)
+        outcomes = await self._serve_parts(parts, size, timing, received)
+        joined = []
+        for start, states, error in joins:
+            if error is not None:
+                joined.append(error)
+            elif states is None:
+                joined.append(outcomes[start])
+            else:
+                joined.append(
+                    join_states(outcomes[start : start + 1 + len(states)], states)
+                )
+        return joined
+
+    async def _serve_parts(
+        self,
+        requests: list[tuple[str, Any, bool]],
+        size: int | None,
+        timing: ServerTiming,
+        received: float,
+    ) -> list[tuple[int, dict[str, Any]]]:
+        if not requests:
+            return []
         lookups: list[_Lookup | None] = [None] * len(requests)
         if size is not None and size <= INLINE_PLAN_BYTES:
             planned = [
-                self._prepare_outcome(surface, body, received)
-                for surface, body in requests
+                self._prepare_outcome(surface, body, received, part)
+                for surface, body, part in requests
             ]
             timing.tokenize = time.monotonic() - received
         elif len(requests) == 1:
@@ -1055,8 +1128,10 @@ class Runtime:
 
             planned = await asyncio.gather(
                 *(
-                    run_in_threadpool(self._prepare_outcome, surface, body, received)
-                    for surface, body in requests
+                    run_in_threadpool(
+                        self._prepare_outcome, surface, body, received, part
+                    )
+                    for surface, body, part in requests
                 )
             )
             timing.tokenize = time.monotonic() - received
@@ -1277,6 +1352,9 @@ class Runtime:
 
 def with_overrides(config: ServeConfig, **changes: Any) -> ServeConfig:
     return replace(config, **changes)
+
+
+_Outcome = tuple[int, dict[str, Any]]
 
 
 def _error_outcome(error: BaseException) -> tuple[int, dict[str, Any]]:

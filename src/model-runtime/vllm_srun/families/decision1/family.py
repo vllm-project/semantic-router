@@ -214,7 +214,7 @@ class Decision1Family(ModelFamily):
         tokenizer_dir = (root / files.tokenizer["json"]).parent
         if (root / files.tokenizer["json"]).name != "tokenizer.json":
             raise PackageError("the tokenizer file must be named tokenizer.json")
-        tokenizer = Tokenizer.from_package(tokenizer_dir)
+        tokenizer = Tokenizer.from_package(tokenizer_dir, package.max_input_tokens)
         hidden = spec.backbone.config["hidden_size"]
         if files.runtime == pkg.VELA:
             head = vela.check_config(details.model_config)

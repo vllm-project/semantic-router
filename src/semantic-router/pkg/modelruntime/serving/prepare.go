@@ -31,6 +31,8 @@ type target struct {
 	card       modelservice.ModelCard
 	head       modelservice.HeadCard
 	resource   *binding.Resource
+	// scan is a question deployment's scan budget (0: the model's own).
+	scan int
 }
 
 // deploymentPlanner is implemented by services that can start a deployment
@@ -102,6 +104,16 @@ func (r *Runtime) DeploymentCard(ctx context.Context, name string, deployment co
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
 	return r.card(ctx, config.ResolvedModelBinding{Name: name, Binding: config.ModelBinding{Deployment: name}, Deployment: deployment.WithDefaults()})
+}
+
+// CurrentDeploymentCard reads this generation's observed ready metadata.
+// Attached services may recover independently of Router startup; consumers
+// can check their capabilities without waiting or discovering at request time.
+func (r *Runtime) CurrentDeploymentCard(name string) (modelservice.ModelCard, bool) {
+	if r.services == nil {
+		return modelservice.ModelCard{}, false
+	}
+	return r.services.CurrentCard(name)
 }
 
 // preparationContext bounds a preparation whose caller set no deadline, so a

@@ -68,6 +68,7 @@ DECISION_FIELDS = frozenset(
         "expected_alias",
         "expected_signals",
         "expected_signal_values",
+        "expected_signal_errors",
         "forbidden_signals",
         "signal_match",
         "robustness",
@@ -93,6 +94,7 @@ VARIANT_FIELDS = frozenset(
         "expected_selection_status",
         "expected_signals",
         "expected_signal_values",
+        "expected_signal_errors",
     }
 )
 PADDING_FIELDS = frozenset({"text", "repeat", "placement"})
@@ -153,6 +155,7 @@ class Probe:
     forbidden_plugins: tuple[str, ...] = ()
     plugin_match: str = "contains"
     expected_signal_values: dict[str, dict[str, float]] = field(default_factory=dict)
+    expected_signal_errors: dict[str, str] = field(default_factory=dict)
     expected_signals: tuple[tuple[str, str], ...] = ()
     forbidden_signals: tuple[tuple[str, str], ...] = ()
     signal_match: str = "contains"
@@ -186,6 +189,7 @@ class DecisionDefaults:
     plugin_match: str
     expected_alias: str | None
     expected_signal_values: dict[str, dict[str, float]]
+    expected_signal_errors: dict[str, str]
     expected_signals: tuple[tuple[str, str], ...]
     forbidden_signals: tuple[tuple[str, str], ...]
     signal_match: str
@@ -279,6 +283,9 @@ def _load_decision_defaults(
             expected_signal_values=normalize_signal_values(
                 raw_decision.get("expected_signal_values", {}), label
             ),
+            expected_signal_errors=_normalize_signal_errors(
+                raw_decision.get("expected_signal_errors", {}), label
+            ),
             expected_signals=_normalize_expected_signals(
                 raw_decision.get("expected_signals"), decision_id
             ),
@@ -358,6 +365,10 @@ def _load_variant(
         ),
         expected_signal_values=normalize_signal_values(
             raw_variant.get("expected_signal_values", defaults.expected_signal_values),
+            label,
+        ),
+        expected_signal_errors=_normalize_signal_errors(
+            raw_variant.get("expected_signal_errors", defaults.expected_signal_errors),
             label,
         ),
         forbidden_signals=defaults.forbidden_signals,
@@ -515,6 +526,21 @@ def _normalize_selection_status(value: Any, label: str) -> str | None:
             + ", ".join(sorted(SELECTION_STATUSES))
         )
     return value
+
+
+def _normalize_signal_errors(raw: Any, label: str) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        raise TypeError(f"{label} expected_signal_errors must be a mapping")
+    for key, code in raw.items():
+        if any(
+            not isinstance(value, str) or not value or value != value.strip()
+            for value in (key, code)
+        ):
+            raise ValueError(
+                f"{label} expected_signal_errors requires non-empty string keys "
+                "and error codes without surrounding whitespace"
+            )
+    return dict(raw)
 
 
 def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:

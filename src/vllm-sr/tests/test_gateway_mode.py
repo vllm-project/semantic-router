@@ -58,7 +58,7 @@ def test_kubernetes_values_carry_the_gateway_and_a_gpu_platform(tmp_path):
     assert "repository" not in standalone.get("image", {})
 
     amd = translate_config_to_helm_values(
-        str(config), gateway="extproc", platform="amd"
+        str(config), gateway="extproc", platform="rocm"
     )
     assert amd["gateway"] == {"mode": "extproc"}
     assert (
@@ -69,7 +69,7 @@ def test_kubernetes_values_carry_the_gateway_and_a_gpu_platform(tmp_path):
 
     nvidia = translate_config_to_helm_values(
         str(config),
-        platform="nvidia",
+        platform="cuda",
         image="registry.example/router:1",
         profile_values={"resources": {"limits": {"memory": "16Gi"}}},
     )
@@ -81,7 +81,7 @@ def test_kubernetes_values_carry_the_gateway_and_a_gpu_platform(tmp_path):
 def captured_serve(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        runtime_commands, "_execute_serve", lambda *args: calls.append(args)
+        runtime_commands, "_execute_serve", lambda *args, **kwargs: calls.append(args)
     )
     return calls
 
@@ -127,7 +127,7 @@ def test_common_options_serve_both_targets(captured_serve):
                 "--gateway",
                 "extproc",
                 "--platform",
-                "amd",
+                "rocm",
                 "--image",
                 "img:1",
                 "--minimal",
@@ -159,10 +159,10 @@ def test_serve_help_lists_the_option_groups():
     result = CliRunner().invoke(main, ["serve", "--help"])
     assert result.exit_code == 0
     for section in (
-        "Router options (docker and kubernetes targets):",
+        "Instance configuration (docker and kubernetes targets):",
         "Docker target:",
         "Kubernetes target:",
-        "Engine mode (vllm-sr serve MODEL):",
+        "Instance and model options:",
     ):
         assert section in result.output
     assert "--gateway [standalone|extproc]" in result.output

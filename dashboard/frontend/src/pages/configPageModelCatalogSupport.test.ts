@@ -64,7 +64,19 @@ describe('effective model API format', () => {
   const model = { name: 'alias', catalog: modelID, backend_refs: [{ provider: 'test' }] }
 
   it('exposes only formats accepted by canonical provider input', () => {
-    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic'])
+    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic', 'systemone'])
+  })
+
+  it('resolves native backends without pretending they are Chat models', () => {
+    const native = {
+      name: 'remote-decision',
+      api_format: 'systemone',
+      backend_refs: [{ provider: 'systemone-compatible' }],
+    }
+    expect(effectiveModelAPIFormat(native, catalog)).toEqual({ format: 'systemone' })
+    expect(effectiveModelAPIFormat({ ...native, api_format: 'openai' }, catalog).error).toMatch(
+      /cannot create/,
+    )
   })
 
   it('uses the single model protocol ahead of the provider default', () => {

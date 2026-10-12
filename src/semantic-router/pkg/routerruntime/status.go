@@ -90,6 +90,7 @@ type localStartupSnapshot struct {
 
 func cloneStartupState(state startupstatus.State) startupstatus.State {
 	state.PendingModels = slices.Clone(state.PendingModels)
+	state.ModelDeployments = slices.Clone(state.ModelDeployments)
 	if state.EmbeddingProvider != nil {
 		provider := *state.EmbeddingProvider
 		if provider.APIKeyEnvSet != nil {

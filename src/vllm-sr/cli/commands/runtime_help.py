@@ -51,6 +51,7 @@ kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
+random     - Uniform pick among eligible candidates (no configuration)
 
 Cross-request learning lives under global.router.learning.adaptation and
 global.router.learning.protection instead of --algorithm.
@@ -75,7 +76,7 @@ Examples:
   vllm-sr serve --minimal
   vllm-sr serve --log-level debug
   # AMD ROCm image, device passthrough, and router internal GPU defaults
-  vllm-sr serve --platform amd
-  vllm-sr serve --platform amd --startup-timeout 7200
-  VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
+  vllm-sr serve --platform rocm
+  vllm-sr serve --platform rocm --startup-timeout 7200
+  VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform rocm
 """

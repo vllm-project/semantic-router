@@ -76,7 +76,7 @@ routing:
 global:
   router:
     config_source: kubernetes
-    include_config_models_in_list: false
+    list_backend_models: false
     clear_route_cache: false
     streamed_body:
       enabled: false

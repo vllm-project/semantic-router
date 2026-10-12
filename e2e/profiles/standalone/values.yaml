@@ -1,3 +1,7 @@
+# Select the declared judgment deployment; standalone-decision-model checks
+# that the chart preserves this reference in the Router config.
+decisionModel:
+  deployment: primary
 # The chart's default gateway mode (standalone): clients reach the Router's own
 # listener through its Service; no gateway runs in the cluster.
 configOverride:
@@ -8,8 +12,8 @@ configOverride:
       port: 8899
       timeout: 300s
   providers:
-    defaults:
-      model: primary-model
+    # Positive requests use explicit decisions below. Keep the global fallback
+    # unset so the isolated, decisionless error fixture can exercise no_route.
     models:
       - name: primary-model
         backend_refs:
@@ -63,11 +67,23 @@ configOverride:
         modelRefs:
           - model: primary-model
             use_reasoning: false
+  entrypoints:
+    - model_names: [e2e-no-route]
+      recipe: no-route
+  recipes:
+    - name: no-route
+      routing:
+        decisions: []
   global:
     model_catalog:
       kbs: []
+      deployments:
+        primary:
+          provider: model_runtime
+          artifact: vllm-sr/Vela-2.0-0.3B
+          device: cpu
     router:
-      include_config_models_in_list: true
+      list_backend_models: true
       fallback:
         version: 1
         enabled: true

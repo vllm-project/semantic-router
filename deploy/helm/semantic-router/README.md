@@ -97,6 +97,7 @@ the locked chart dependencies.
 | config.global.services.response_api.store_backend | string | `"memory"` |  |
 | config.global.services.response_api.ttl_seconds | int | `86400` |  |
 | configOverride | object | `null` | Complete canonical Router config supplied by deployment tooling. Unlike `config`, this map atomically replaces chart defaults before Kubernetes integration rewrites. |
+| decisionModel | object | `{}` | Optional exact default judgment deployment reference, e.g. `{deployment: primary}`. Declare artifact, device and revision under `config.global.model_catalog.deployments`. A changed reference is applied to the live config on upgrade; empty preserves its choice. |
 | configMap.applyValuesRevision | string | `""` | Chart values seed the ConfigMap at install. Change this revision on an upgrade to explicitly replace the live config with `config` or `configOverride`; repeating the same revision preserves later API edits. |
 | dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
 | dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
@@ -104,7 +105,7 @@ the locked chart dependencies.
 | dashboard.extraEnv | list | `[]` | Extra environment variables for the dashboard container, appended after the chart-managed TARGET_* vars. Use this to set optional integration env the chart does not expose explicitly (for example PROXY_OVERRIDE_ORIGIN, or in extproc mode TARGET_ENVOY_URL for your gateway) without forking the chart. Standard core/v1 EnvVar list. Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it produces a duplicate env key and Kubernetes applies last-wins. |
 | dashboard.image.pullPolicy | string | `"IfNotPresent"` | Dashboard image pull policy |
 | dashboard.image.repository | string | `"ghcr.io/vllm-project/semantic-router/dashboard"` | Dashboard image repository |
-| dashboard.image.tag | string | `"latest"` | Dashboard image tag |
+| dashboard.image.tag | string | `""` | Dashboard image tag (defaults to the chart appVersion) |
 | dashboard.jwtSecret | object | `{"existingSecret":"","existingSecretKey":"jwt-secret"}` | JWT signing secret for dashboard auth sessions. Point this at a Secret you manage (ideally an ExternalSecret) so the signing key is stable. If you leave it unset, the dashboard binary falls back to generating a random secret on every pod start, which invalidates all login sessions on each restart (rolling update, chart bump, or node move forces a re-login). A zero-config install still works (the random fallback is a valid signing key, you can log in and use the dashboard); you just lose existing sessions whenever the pod restarts, so leaving it unset is fine for demos but set this for any deployment where sessions need to survive restarts. |
 | dashboard.jwtSecret.existingSecret | string | `""` | Name of an existing Secret holding the JWT signing key. When set, the dashboard reads DASHBOARD_JWT_SECRET from it via secretKeyRef. When empty, no env is injected and the binary uses its per-start random fallback. |
 | dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
@@ -226,6 +227,7 @@ the locked chart dependencies.
 | gateway.tls.secretName | string | `""` | Standalone only. A `kubernetes.io/tls` Secret mounted at `/app/config/certs`, for listeners whose `tls` names `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is mounted as a volume, so a rotated certificate reaches new connections without a restart. |
 | global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
 | global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
+| grafana."grafana.ini".live.allowed_origins | string | `""` | Comma-separated trusted Dashboard origins (scheme://host[:port], no path). Empty preserves Grafana's default origin checks; do not use "*" to bypass validation. |
 | grafana.image.tag | string | `"11.5.1"` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/vllm-project/semantic-router/vllm-sr"` | Image repository: `vllm-sr` (CPU), `vllm-sr-rocm` (AMD GPUs) or `vllm-sr-cuda` (NVIDIA GPUs). |

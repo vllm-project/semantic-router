@@ -82,7 +82,7 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 			model,
 		)
 	}
-	if cfg.IsAutoModelName(model) || cfg.IsEntrypointModelName(model) {
+	if cfg.IsEntrypointModelName(model) {
 		return fmt.Errorf(
 			"decision '%s', algorithm.prompt.model %q must be a concrete provider model",
 			decision.Name,

@@ -84,7 +84,7 @@ func TestDecisionSignalsBatchPerDeploymentAndMatch(t *testing.T) {
 	for _, rule := range decisionRulesForTest() {
 		used["decision:"+rule.Name] = true
 	}
-	classifier.evaluateDecisionModelSignals(context.Background(), results, &sync.Mutex{}, "merge two lists", used)
+	classifier.evaluateDecisionModelSignals(context.Background(), results, &sync.Mutex{}, "merge two lists", "merge two lists", used)
 
 	if decider.calls["kai"] != 1 || decider.calls["vega"] != 1 {
 		t.Fatalf("one call per deployment expected, got %v", decider.calls)
@@ -169,8 +169,44 @@ func TestSetAndSpanAnswersMatchLabelsAndPublishEveryProbability(t *testing.T) {
 func TestUnusedDecisionSignalsAreNotAsked(t *testing.T) {
 	decider := &fakeDecider{calls: map[string]int{}, requests: map[string]modelservice.Request{}, answers: map[string]modelservice.Answer{}}
 	classifier := newDecisionTestClassifier(decider)
-	classifier.evaluateDecisionModelSignals(context.Background(), newSignalResults(), &sync.Mutex{}, "x", map[string]bool{"decision:remote": true})
+	classifier.evaluateDecisionModelSignals(context.Background(), newSignalResults(), &sync.Mutex{}, "x", "x", map[string]bool{"decision:remote": true})
 	if decider.calls["kai"] != 0 || decider.calls["vega"] != 1 {
 		t.Fatalf("only used signals are asked: %v", decider.calls)
+	}
+}
+
+type deadlineDecider struct {
+	mu        sync.Mutex
+	deadlines map[string]bool
+	states    map[string]string
+}
+
+func (d *deadlineDecider) Decide(ctx context.Context, deployment string, request modelservice.Request) (modelservice.Response, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, bounded := ctx.Deadline()
+	d.deadlines[deployment] = bounded
+	d.states[deployment] = request.State
+	return modelservice.Response{Answers: map[string]modelservice.Answer{}}, nil
+}
+
+func TestADecisionQuestionWithoutDeploymentJoinsTheDecisionModelsCall(t *testing.T) {
+	decider := &deadlineDecider{deadlines: map[string]bool{}, states: map[string]string{}}
+	defaults := config.DefaultGlobalConfig()
+	cfg := &defaults
+	cfg.DecisionRules = []config.DecisionSignalRule{
+		{Name: "tools", Question: config.DecisionQuestion{Type: "noul", Instructions: "Tools?"}},
+		{Name: "hard", Deployment: "kai", Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"}},
+	}
+	classifier := &Classifier{Config: cfg}
+	classifier.SetDecisionDecider(decider)
+	used := map[string]bool{"decision:tools": true, "decision:hard": true}
+	classifier.evaluateDecisionModelSignals(context.Background(), newSignalResults(), &sync.Mutex{}, "short", "the whole text", used)
+
+	if decider.states[config.DefaultDecisionDeployment] != "the whole text" || decider.states["kai"] != "the whole text" {
+		t.Fatalf("every decision question reads the same authored input: %v", decider.states)
+	}
+	if decider.deadlines[config.DefaultDecisionDeployment] || !decider.deadlines["kai"] {
+		t.Fatalf("only a declared deployment's call takes the default timeout: %v", decider.deadlines)
 	}
 }

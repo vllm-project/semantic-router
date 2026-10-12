@@ -258,7 +258,7 @@ func (s *ClassificationService) classifierForRequestModel(modelName string) (*cl
 	}
 	trimmed := strings.TrimSpace(modelName)
 	if trimmed == "" {
-		trimmed = config.DefaultVSRAutoModelName
+		trimmed = s.config.DefaultEntrypointNames()[0]
 	}
 	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
 	if !ok {

@@ -15,10 +15,9 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 
 func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 	return CanonicalRouterGlobal{
-		ConfigSource:              ConfigSourceFile,
-		AutoModelName:             "MoM",
-		IncludeConfigModelsInList: false,
-		ClearRouteCache:           true,
+		ConfigSource:      ConfigSourceFile,
+		ListBackendModels: false,
+		ClearRouteCache:   true,
 		ModelSelection: ModelSelectionConfig{
 			Enabled: true,
 			Method:  "knn",
@@ -55,10 +54,17 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			Enabled:      false,
-			StoreBackend: "memory",
-			TTLSeconds:   2592000,
-			AsyncWrites:  false,
+			CaptureRequestBody:  canonicalBoolPtr(true),
+			CaptureResponseBody: canonicalBoolPtr(true),
+			CapturePersonalData: canonicalBoolPtr(true),
+			MaxRecords:          canonicalIntPtr(defaultRouterReplayMaxRecords),
+			MaxBodyBytes:        canonicalIntPtr(defaultRouterReplayMaxBodyBytes),
+			MaxToolTraceBytes:   canonicalIntPtr(0),
+			MaxToolTraceSteps:   canonicalIntPtr(defaultRouterReplayMaxToolTraceSteps),
+			Enabled:             false,
+			StoreBackend:        "memory",
+			TTLSeconds:          2592000,
+			AsyncWrites:         false,
 		},
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
@@ -153,6 +159,13 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 	if hazard, err := ImplicitModelRuntimeDeployment(catalog.System.Hazard, true); err == nil {
 		hazard.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
 		catalog.Deployments = map[string]ModelDeployment{"hazard": hazard}
+	}
+	primary, err := ImplicitModelRuntimeDeployment(Vela2SignalModel, true)
+	if err == nil {
+		if catalog.Deployments == nil {
+			catalog.Deployments = make(map[string]ModelDeployment)
+		}
+		catalog.Deployments[DefaultDecisionDeployment] = primary
 	}
 	enabledSoftMatching := false
 	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
@@ -277,9 +290,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 				UseCPU:    true,
 			},
 		},
-		Preference: PreferenceModelConfig{
-			UseContrastive: canonicalBoolPtr(true),
-		},
+		Preference: PreferenceModelConfig{},
 	}
 }
 
@@ -322,6 +333,7 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 // one deployment and one call per request, and Vela 1.0 Hazard.
 func DefaultSystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
+		DecisionModel:         DecisionModelBinding{Deployment: DefaultDecisionDeployment},
 		Safety:                Vela2SignalModel,
 		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
 		PromptGuard:           Vela2SignalModel,

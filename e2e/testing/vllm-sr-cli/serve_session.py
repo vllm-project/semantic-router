@@ -118,8 +118,10 @@ class ServeSessionMixin:
             time.sleep(2)
         self.fail("The Dashboard did not open setup")
 
-    def _wait_for_serve_success(self, serve_process: subprocess.Popen) -> None:
-        """Drain the one-shot serve command and require successful startup."""
+    def _wait_for_serve_success(
+        self, serve_process: subprocess.Popen
+    ) -> tuple[str, str]:
+        """Drain the one-shot serve command, require successful startup, return its output."""
         try:
             stdout, stderr = serve_process.communicate(
                 timeout=self.HEALTH_CHECK_TIMEOUT
@@ -151,6 +153,7 @@ class ServeSessionMixin:
                 )
             )
         print("  ✓ Serve command completed runtime startup")
+        return stdout or "", stderr or ""
 
     @contextmanager
     def _running_serve(
@@ -166,6 +169,7 @@ class ServeSessionMixin:
         ensure_models_dir: bool = False,
         skip_processing: bool = False,
         looper: bool = False,
+        arguments: tuple[str, ...] = (),
     ):
         """Start one background serve session and clean it up automatically."""
         self.write_minimal_canonical_config(
@@ -185,7 +189,7 @@ class ServeSessionMixin:
         if env:
             full_env.update(env)
 
-        serve_process = self._start_serve_background(env=full_env)
+        serve_process = self._start_serve_background(env=full_env, arguments=arguments)
         try:
             self._wait_for_serve_success(serve_process)
             yield serve_process

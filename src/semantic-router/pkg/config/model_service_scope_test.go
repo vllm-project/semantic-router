@@ -32,7 +32,7 @@ func TestGlobalModelServicesDoNotBorrowDefaultRecipeOverride(t *testing.T) {
 }
 
 func TestGlobalModelServicesUseOnlyReachableEnabledPlugins(t *testing.T) {
-	cfg := &RouterConfig{RouterOptions: RouterOptions{AutoModelNames: []string{}}}
+	cfg := &RouterConfig{}
 	cfg.Recipes = []RoutingRecipe{
 		{Name: "dormant", Profile: RoutingProfile{Decisions: []Decision{{Plugins: []DecisionPlugin{
 			{Type: "memory", Configuration: MustStructuredPayload(MemoryPluginConfig{Enabled: true})},

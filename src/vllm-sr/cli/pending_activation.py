@@ -1,4 +1,7 @@
-"""Pending activations: configs the Dashboard saved that need `vllm-sr serve` to apply.
+"""Pending activations: saved configs that need `vllm-sr serve` to apply.
+
+`vllm-sr config apply` records one the same way when the Router answers
+`RESTART_REQUIRED`, with origin "cli".
 
 The Dashboard holds no container runtime. When a saved config needs the
 Router (and Envoy with `--gateway extproc`) created anew -- first-run setup
@@ -18,6 +21,7 @@ The Dashboard's half of both files is
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
@@ -40,11 +44,23 @@ SERVE_WAITING = "waiting"
 REASON_SETUP = "setup"
 REASON_RESTART = "restart"
 
+# Who saved the activation. The Dashboard's records carry no origin.
+ORIGIN_DASHBOARD = "dashboard"
+ORIGIN_CLI = "cli"
+
 
 @dataclass(frozen=True)
 class PendingActivation:
     reason: str
     detail: str = ""
+    origin: str = ORIGIN_DASHBOARD
+
+    def saved_by(self) -> str:
+        """Who saved the change, as status and serve name it."""
+
+        if self.origin == ORIGIN_CLI:
+            return "with `vllm-sr config apply`"
+        return "in the Dashboard"
 
 
 class _WaitStoppedError(Exception):
@@ -74,10 +90,40 @@ def read_pending_activation(runtime_config: str | Path) -> PendingActivation | N
         record = {}
     reason = record.get("reason")
     detail = record.get("detail")
+    origin = record.get("origin")
     return PendingActivation(
         reason=reason if reason in (REASON_SETUP, REASON_RESTART) else REASON_SETUP,
         detail=detail if isinstance(detail, str) else "",
+        origin=ORIGIN_CLI if origin == ORIGIN_CLI else ORIGIN_DASHBOARD,
     )
+
+
+def record_pending_activation(
+    runtime_config: str | Path,
+    config: bytes,
+    reason: str,
+    detail: str = "",
+    *,
+    origin: str = ORIGIN_CLI,
+) -> None:
+    """Record that config, already written to runtime_config, waits for serve.
+
+    The record has the Dashboard's format, so each side reads the other's.
+    """
+
+    record = {
+        "reason": reason,
+        "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "config_sha256": hashlib.sha256(config).hexdigest(),
+        "origin": origin,
+    }
+    if detail:
+        record["detail"] = detail
+    target = record_file(runtime_config)
+    staged = target.with_name(f".{target.name}.tmp")
+    staged.write_text(json.dumps(record), encoding="utf-8")
+    os.chmod(staged, 0o644)
+    os.replace(staged, target)
 
 
 def clear_pending_activation(runtime_config: str | Path) -> None:

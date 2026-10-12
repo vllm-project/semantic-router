@@ -266,6 +266,13 @@ type PersistenceSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
+// DecisionModelBinding selects one canonical model deployment.
+type DecisionModelBinding struct {
+	// Deployment is an exact key in model_deployments.
+	// +kubebuilder:validation:MinLength=1
+	Deployment string `json:"deployment" yaml:"deployment"`
+}
+
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
 	// Routing contains canonical v0.3 routing configuration under config.routing.
@@ -276,6 +283,12 @@ type ConfigSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
+
+	// DecisionModel selects the declared deployment that answers default judgment tasks.
+	// Omitted uses the Router's primary deployment. Artifact identity belongs in
+	// model_deployments; the reference never infers a model family or alias.
+	// +optional
+	DecisionModel *DecisionModelBinding `json:"decision_model,omitempty" yaml:"decision_model,omitempty"`
 
 	// ModelDeployments contains canonical global.model_catalog.deployments.
 	// The router validates provider, device, precision and task compatibility.
@@ -1536,11 +1549,11 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default="models/Vela-2.0-0.3B"
+	// ModelID binds the guard to one model; empty runs the decision model.
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.75"
+	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
+	// precision issues; empty takes the threshold calibrated for the model.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`

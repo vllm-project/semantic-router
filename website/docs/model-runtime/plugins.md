@@ -62,20 +62,20 @@ built-in ones:
 vllm-srun serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
 ```
 
-`vllm-sr serve` runs the runtime of a router image, so it serves a plugin
-from an image that has the plugin installed. The example ships a Dockerfile
+For this classify-only plugin, run an explicit worker container from an image
+that has the plugin installed. The instance's System One frontend requires a
+decision-capable model. The example ships a Dockerfile
 that adds it to the router image. From the repository root:
 
 ```bash
 docker build -t vllm-sr-example src/model-runtime/examples/third_party_plugin
-vllm-sr serve /tmp/keywords --image vllm-sr-example --image-pull-policy ifnotpresent --device example_host --runtime-profile example_one_by_one --port 8100
+docker run --rm -p 127.0.0.1:8100:8100 -v /tmp/keywords:/app/keywords:ro --entrypoint vllm-srun vllm-sr-example serve /app/keywords --device example_host --profile example_one_by_one --host 0.0.0.0 --port 8100
 ```
 
-The container reads `/tmp/keywords` through a read-only mount, the CLI
-passes the same names to the runtime, and the runtime picks the example's
-engine by itself. The CLI checks only that `--runtime-profile` is a profile
-name and that a built-in accelerator is one the image runs. The runtime
-refuses a device or profile it has no plugin for and lists the names it has.
+The container reads `/tmp/keywords` through a read-only mount. The runtime
+selects the example's engine and rejects uninstalled devices or profiles.
+A configured instance can attach to this worker using `endpoint` and its model
+name; the classify endpoint remains an independently operated worker API.
 
 ## Write your own
 

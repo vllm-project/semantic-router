@@ -8,6 +8,7 @@ from cli import __version__
 from cli.commands.benchmark import benchmark
 from cli.commands.completion import completion
 from cli.commands.general import config
+from cli.commands.instance import instance
 from cli.commands.optimize import optimize
 from cli.commands.recipe import recipe
 from cli.commands.request import request
@@ -40,6 +41,7 @@ REGISTERED_COMMANDS = (
     completion,
     recipe,
     storage,
+    instance,
 )
 
 
@@ -47,7 +49,7 @@ REGISTERED_COMMANDS = (
 @click.option("--version", is_flag=True, help="Show version and exit.")
 @click.pass_context
 def main(ctx: click.Context, version: bool) -> None:
-    """vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints."""
+    """vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime."""
     if version:
         click.echo(f"vllm-sr version: {__version__}")
         ctx.exit()

@@ -3,8 +3,9 @@
 
 Compares two Router configurations on the evaluation rows of the built-in signals in
 vllm-sr/router-signal-suite: the Router's defaults, where every signal Vela 2.0 answers runs
-on one Vela 2.0 0.3B deployment (``vela2``), and the one-block restore of the Vela 1.0
-specialists (``vela1``).
+on one deployment of the decision model (``vela2``: Vela 2.0 0.3B, or the size
+``--decision-model`` names), and the one-block restore of the Vela 1.0 specialists
+(``vela1``).
 
 config  writes an arm's Router configuration: ``full`` (every built-in request signal, with
         decisions that read each one) or ``latency`` (router-latency-cpu.yaml's signals).
@@ -144,17 +145,35 @@ def latency_config(port: int, record: Path) -> dict[str, Any]:
     return config
 
 
-def arm_config(config: dict[str, Any], arm: str) -> dict[str, Any]:
+# The module paths whose use_cpu `vllm-sr serve --platform amd|nvidia` sets to false.
+GPU_MODULES = [("prompt_guard",), ("classifier", "domain"), ("classifier", "pii"),
+               ("hallucination_mitigation", "fact_check"), ("hallucination_mitigation", "detector"),
+               ("feedback_detector",), ("modality_detector", "classifier"), ("safety", "safety")]  # fmt: skip
+
+
+def arm_config(
+    config: dict[str, Any], arm: str, decision_model: str = "", gpu: bool = False
+) -> dict[str, Any]:
     """An arm of a configuration: ``vela2`` keeps the Router's defaults (a modality
-    classifier without ``model_path`` runs Vela 2.0 0.3B too); ``vela1`` adds the one-block
-    restore of the Vela 1.0 specialists and names Vela 1.0 Modality."""
+    classifier without ``model_path`` runs the decision model too), with
+    ``decision_model`` as global.model_catalog.system.decision_model when given and every
+    module on the GPU when ``gpu``; ``vela1`` adds the one-block restore of the Vela 1.0
+    specialists and names Vela 1.0 Modality."""
     config = copy.deepcopy(config)
-    modules = config.get("global", {}).get("model_catalog", {}).get("modules", {})
+    catalog = config.setdefault("global", {}).setdefault("model_catalog", {})
+    modules = catalog.setdefault("modules", {})
     if arm == "vela2":
         if "modality_detector" in modules:
-            modules["modality_detector"]["classifier"] = {"use_cpu": True}
+            modules["modality_detector"]["classifier"] = {"use_cpu": not gpu}
+        if decision_model:
+            catalog.setdefault("system", {})["decision_model"] = decision_model
+        if gpu:
+            for path in GPU_MODULES:
+                node = modules
+                for key in path:
+                    node = node.setdefault(key, {})
+                node["use_cpu"] = False
         return config
-    catalog = config.setdefault("global", {}).setdefault("model_catalog", {})
     catalog["system"] = dict(VELA1_SYSTEM)
     return config
 
@@ -170,7 +189,7 @@ def cmd_config(args: argparse.Namespace) -> None:
         config = full_config(args.port)
     else:
         config = latency_config(args.port, Path(args.latency_record))
-    config = arm_config(config, args.arm)
+    config = arm_config(config, args.arm, args.decision_model, args.gpu)
     yaml.dump(config, sys.stdout, Dumper=NoAliases, sort_keys=False, allow_unicode=True)
 
 
@@ -396,6 +415,9 @@ def die_with_parent() -> None:
 
 
 def cmd_record(args: argparse.Namespace, rest: list[str]) -> int:
+    if "--uds" not in rest:
+        # Not a serve: `devices`, which the Router asks before it plans deployments.
+        return subprocess.call([args.real, *rest])
     rest = rest + args.append.split()
     socket_path = rest[rest.index("--uds") + 1]
     real = socket_path + ".real"
@@ -1025,6 +1047,24 @@ def matched_threshold(rate: float, values: Any, above: bool) -> float:
     return float(candidates[best])
 
 
+def shipped_threshold(matched: float, values: Any, above: bool) -> float:
+    """The matched threshold to two decimals, or to as many more (up to four) as keep its
+    share of ``values`` at or above it (``above``), or below it, within 0.01 of the matched
+    share: a model whose scores pile up near 0 or 1 needs them."""
+    import numpy as np
+
+    v = np.asarray(values, dtype=float)
+
+    def share(t: float) -> float:
+        return float(np.mean(v >= t) if above else np.mean(v < t))
+
+    target = share(matched)
+    for digits in (2, 3, 4):
+        if abs(share(round(matched, digits)) - target) <= 0.01:
+            return round(matched, digits)
+    return round(matched, 4)
+
+
 def floor_point(
     task: str, rows: list[dict[str, Any]], preds: dict[str, Any], t: float
 ) -> dict[str, float]:
@@ -1108,13 +1148,10 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 below = np.mean(
                     [top_label(pa[r["id"]]["scores"])[1] < t1 for r in rows]
                 )
-                matched = matched_threshold(
-                    float(below),
-                    [top_label(pb[r["id"]]["scores"])[1] for r in rows],
-                    above=False,
-                )
-                # Reported, and shipped, at the matched threshold to two decimals.
-                t2 = round(matched, 2)
+                confidences = [top_label(pb[r["id"]]["scores"])[1] for r in rows]
+                matched = matched_threshold(float(below), confidences, above=False)
+                # Reported, and shipped, at the matched threshold to two decimals or more.
+                t2 = shipped_threshold(matched, confidences, above=False)
                 point = {
                     "a": t1,
                     "b": t2,
@@ -1133,12 +1170,11 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 score = functools.partial(positive_score, task, positive)
                 negatives = [r for r in rows if r["label"] != positive]
                 false_positives = np.mean([score(pa, r) >= t1 for r in negatives])
+                negative_scores = [score(pb, r) for r in negatives]
                 matched = matched_threshold(
-                    float(false_positives),
-                    [score(pb, r) for r in negatives],
-                    above=True,
+                    float(false_positives), negative_scores, above=True
                 )
-                t2 = round(matched, 2)
+                t2 = shipped_threshold(matched, negative_scores, above=True)
                 point = {
                     "a": t1,
                     "b": t2,
@@ -1163,7 +1199,7 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 else "—"
             )
             lines.append(
-                f"| {task} | {t1:g} | {point['b']:.2f} | {k.replace('_', ' ')} {kept} | {arm_pair(point, 'dev')} | {arm_pair(point, 'test')} |"
+                f"| {task} | {t1:g} | {point['b']:g} | {k.replace('_', ' ')} {kept} | {arm_pair(point, 'dev')} | {arm_pair(point, 'test')} |"
             )
         report["tasks"][task] = {"dev_rows": len(rows), "points": points}
     Path(args.out).write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
@@ -1178,6 +1214,12 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("config")
     p.add_argument("--arm", required=True, choices=["vela1", "vela2"])
+    p.add_argument(
+        "--decision-model",
+        default="",
+        help="vela2: global.model_catalog.system.decision_model, e.g. Vela-2.0-4B",
+    )
+    p.add_argument("--gpu", action="store_true", help="vela2: every module on the GPU")
     p.add_argument("--set", default="full", choices=["full", "latency"])
     p.add_argument("--port", type=int, default=18899)
     p.add_argument(
