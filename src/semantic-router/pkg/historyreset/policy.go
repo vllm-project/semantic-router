@@ -58,8 +58,8 @@ type Policy struct {
 	// Timeout bounds the action's own callback: selecting removable turns,
 	// closing over tool dependencies, and persisting recovery content. The
 	// shared executor prepares the transformation view before the callback
-	// runs, and the topic producer is asked before that, so neither is inside
-	// this budget; each bounds its own work.
+	// runs, and the topic-continuity rule is evaluated before that, so neither
+	// is inside this budget; each bounds its own work.
 	Timeout time.Duration
 }
 
@@ -162,7 +162,6 @@ func evaluationFailure(reason string) bool {
 	return true
 }
 
-// skipped builds a no-removal diagnostic carrying the terminal reason.
 func skipped(trigger TriggerResult, reason string) Diagnostics {
 	return Diagnostics{
 		Signal:       trigger.Signal,

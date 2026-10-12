@@ -83,9 +83,6 @@ func (a *Action) propose(
 	ctx context.Context,
 	view contextcompression.TransformationView,
 ) (contextcompression.TransformationEdits, error) {
-	// A blocked action is a step failure in both modes. The step's declared
-	// failure mode then decides whether the remaining plan continues, which is
-	// the shared executor's existing contract.
 	// An inherited follow-up evaluates nothing: the public turn it continues
 	// was already decided, and appended tool results are not a new topic.
 	if a.inherited {
@@ -94,6 +91,9 @@ func (a *Action) propose(
 		a.record(diagnostics)
 		return contextcompression.TransformationEdits{}, nil
 	}
+	// A blocked action is a step failure in both modes. The step's declared
+	// failure mode then decides whether the remaining plan continues, which is
+	// the shared executor's existing contract.
 	if a.blocked != "" {
 		diagnostics := inputCounts(view, a.trigger)
 		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, a.blocked

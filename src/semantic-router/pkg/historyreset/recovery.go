@@ -88,8 +88,6 @@ func (a *Action) buildEnvelope(
 	return a.buildEnvelopeWithSizer(ids, turns, limit, encodedMessageSize)
 }
 
-// recoveryMessageSizer reports a message's encoded size, or refuses to measure
-// a shape it does not model.
 type recoveryMessageSizer func(llmprotocol.Message) (int, error)
 
 // buildEnvelopeWithSizer carries the construction loop. The sizer is a

@@ -84,8 +84,8 @@ func validateHistoryResetLimits(typed *HistoryResetPluginConfig, scope string) e
 	return nil
 }
 
-// validateHistoryResetTrigger checks the trigger's own shape. Whether the
-// referenced family exists is an enablement concern handled separately.
+// validateHistoryResetTrigger checks the trigger's own shape. Whether the named
+// rule is declared is checked per recipe by validateHistoryResetTriggerReferences.
 func validateHistoryResetTrigger(typed *HistoryResetPluginConfig, scope string) error {
 	if typed.Trigger == nil {
 		return nil

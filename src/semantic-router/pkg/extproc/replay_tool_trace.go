@@ -70,7 +70,6 @@ func replaySafeTools(tools []llmprotocol.Tool) []llmprotocol.Tool {
 	return sanitized
 }
 
-// contextRecoveryReplaySchema is the retrieval tool's schema with no keys.
 var contextRecoveryReplaySchema = []byte(`{"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"}`)
 
 func replaySafeMessages(messages []llmprotocol.Message) []llmprotocol.Message {

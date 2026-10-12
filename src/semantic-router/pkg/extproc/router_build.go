@@ -141,8 +141,6 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
-	// Configuration-only contracts are checked before anything is allocated,
-	// so an invalid candidate never builds components it would have to release.
 	if err := verifyContextRecoveryAgreement(cfg); err != nil {
 		return nil, err
 	}
@@ -171,8 +169,6 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
-	// Configuration-only contracts are checked before anything is allocated,
-	// so an invalid candidate never builds components it would have to release.
 	if err := verifyContextRecoveryAgreement(cfg); err != nil {
 		return nil, err
 	}

@@ -454,8 +454,8 @@ type RequestContext struct {
 	// plain structs, so reads are detached copies.
 	TopicContinuityResults map[string]topiccontinuity.Result
 
-	// History reset state. HistoryResetTrigger is the seam a topic-continuity
-	// signal fills; the action treats an absent result as missing evidence.
+	// History reset state. HistoryResetTrigger holds the evidence resolved for
+	// this request; the action treats an absent result as missing evidence.
 	HistoryResetPolicy      *config.HistoryResetPluginConfig
 	HistoryResetBlocked     string
 	HistoryResetTrigger     *historyreset.TriggerResult

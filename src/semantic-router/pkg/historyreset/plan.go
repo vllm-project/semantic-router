@@ -67,9 +67,6 @@ func plan(
 	return contextcompression.TransformationEdits{RemoveMessages: ids}, diagnostics
 }
 
-// historySurvey is the result of one linear pass over the view: each turn's
-// eligibility before tool-exchange closure, whether any message is a removal
-// candidate at all, and whether the history fits the policy's limits.
 type historySurvey struct {
 	removable    map[int]bool
 	candidate    bool
