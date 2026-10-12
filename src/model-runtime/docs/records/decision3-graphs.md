@@ -49,9 +49,11 @@ GPU-bound.
 ## Memory
 
 40 captured shapes added 389 MiB of allocated memory, 157 MiB of it graph
-outputs. Before graphs shared one capture stream, each capture opened a new
-pooled stream with its own BLAS workspace, and the same 40 shapes held
-2,669 MiB.
+outputs. With two warm-up forwards per capture, each on a new pooled stream
+that took its own BLAS workspace, the same 40 shapes held 2,669 MiB. Without
+the warm-ups a new stream per capture takes no workspace of its own (389 MiB
+either way), so the saving at that size comes from the single capture stream
+together with the skipped warm-ups.
 
 ## Not covered
 
