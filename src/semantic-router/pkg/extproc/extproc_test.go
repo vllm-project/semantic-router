@@ -3266,3 +3266,104 @@ func TestConnectFailure503RecordsUpstream5xxMetric(t *testing.T) {
 		t.Fatalf("expected upstream_5xx metric to increment on connection failure 503: before=%v after=%v", before5xx, after5xx)
 	}
 }
+
+func TestAppendReliabilityHeaders(t *testing.T) {
+	r := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"fast-model": {
+						Reliability: config.ProviderReliability{
+							TotalTimeout: "2s",
+							IdleTimeout:  "2s",
+						},
+					},
+					"slow-model": {
+						Reliability: config.ProviderReliability{
+							TotalTimeout: "15s",
+						},
+					},
+					"unbounded-model": {
+						Reliability: config.ProviderReliability{
+							TotalTimeout: "0s",
+							IdleTimeout:  "15s",
+						},
+					},
+					"submillisecond-model": {
+						Reliability: config.ProviderReliability{
+							TotalTimeout: "100us",
+						},
+					},
+					"submillisecond-roundup-model": {
+						Reliability: config.ProviderReliability{
+							TotalTimeout: "1500us",
+						},
+					},
+					"no-rel-model": {},
+				},
+			},
+		},
+	}
+
+	// Case 1: fast-model sets both total and stream idle timeout in config; only rq-timeout is injected as header
+	var headers1 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers1, "fast-model")
+	headerMap1 := make(map[string]string)
+	for _, h := range headers1 {
+		headerMap1[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMap1["x-envoy-upstream-rq-timeout-ms"] != "2000" {
+		t.Fatalf("fast-model: expected x-envoy-upstream-rq-timeout-ms=2000, got %q", headerMap1["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 2: slow-model sets only total timeout
+	var headers2 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers2, "slow-model")
+	headerMap2 := make(map[string]string)
+	for _, h := range headers2 {
+		headerMap2[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMap2["x-envoy-upstream-rq-timeout-ms"] != "15000" {
+		t.Fatalf("slow-model: expected x-envoy-upstream-rq-timeout-ms=15000, got %q", headerMap2["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 3: unbounded-model sets total timeout 0
+	var headers3 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers3, "unbounded-model")
+	headerMap3 := make(map[string]string)
+	for _, h := range headers3 {
+		headerMap3[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMap3["x-envoy-upstream-rq-timeout-ms"] != "0" {
+		t.Fatalf("unbounded-model: expected x-envoy-upstream-rq-timeout-ms=0, got %q", headerMap3["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 4: submillisecond-model (100us) preserves nonzero millisecond bound (rounds up to 1ms instead of 0)
+	var headersSub []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headersSub, "submillisecond-model")
+	headerMapSub := make(map[string]string)
+	for _, h := range headersSub {
+		headerMapSub[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMapSub["x-envoy-upstream-rq-timeout-ms"] != "1" {
+		t.Fatalf("submillisecond-model: expected x-envoy-upstream-rq-timeout-ms=1, got %q", headerMapSub["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 5: submillisecond-roundup-model (1500us) rounds up to 2ms
+	var headersRoundUp []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headersRoundUp, "submillisecond-roundup-model")
+	headerMapRoundUp := make(map[string]string)
+	for _, h := range headersRoundUp {
+		headerMapRoundUp[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMapRoundUp["x-envoy-upstream-rq-timeout-ms"] != "2" {
+		t.Fatalf("submillisecond-roundup-model: expected x-envoy-upstream-rq-timeout-ms=2, got %q", headerMapRoundUp["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 6: model without reliability settings sets no timeout headers
+	var headers4 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers4, "no-rel-model")
+	if len(headers4) != 0 {
+		t.Fatalf("no-rel-model: expected no headers, got %v", headers4)
+	}
+}

@@ -104,6 +104,43 @@ func (r *OpenAIRouter) addEnvoyReliabilityHeaders(response *ext_proc.ProcessingR
 	mutation.SetHeaders = append(mutation.SetHeaders, envoyReliabilityHeaders(override, r.routeHasRetryPolicy(route))...)
 }
 
+// appendReliabilityHeaders appends Envoy's per-request timeout header
+// (x-envoy-upstream-rq-timeout-ms) based on the first configured model's
+// TotalTimeout setting.
+func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueOption, models ...string) {
+	if r == nil || r.Config == nil {
+		return
+	}
+	for _, model := range models {
+		if model == "" {
+			continue
+		}
+		modelParams, ok := r.Config.ModelConfig[model]
+		if !ok {
+			continue
+		}
+		rel := modelParams.Reliability
+		if rel.TotalTimeout != "" {
+			if dur, err := time.ParseDuration(rel.TotalTimeout); err == nil {
+				var timeoutMs int64
+				if dur > 0 {
+					// Round positive durations up to at least 1ms so sub-millisecond durations
+					// do not truncate to 0, which would disable Envoy's request timeout.
+					timeoutMs = int64((dur + time.Millisecond - 1) / time.Millisecond)
+				}
+				*headersOut = append(*headersOut, &core.HeaderValueOption{
+					Header: &core.HeaderValue{
+						Key:      envoyRouteTimeoutHeader,
+						RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
+					},
+					AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+				})
+				return
+			}
+		}
+	}
+}
+
 // envoyReliabilityHeaders renders an override as Envoy's per-request
 // headers: the route and per-try timeouts in milliseconds (0 disables them),
 // the retry count, and the retry conditions and statuses Envoy adds to the
