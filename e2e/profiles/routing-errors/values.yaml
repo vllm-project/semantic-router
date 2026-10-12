@@ -1,0 +1,40 @@
+# This policy is separate from the baseline, whose global provider default is
+# required by decision-fallback-behavior. A real no_route needs no such fallback.
+configOverride:
+  version: v0.3
+  listeners: []
+  providers:
+    models:
+      - name: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+  routing:
+    decisions:
+      - name: positive_control
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+  entrypoints:
+    - model_names: [e2e-no-route]
+      recipe: no-route
+  recipes:
+    - name: no-route
+      routing:
+        decisions: []
+  global:
+    model_catalog:
+      kbs: []
+    stores:
+      response_cache:
+        enabled: false
+    services:
+      response_api:
+        enabled: false
+      observability:
+        tracing:
+          enabled: false

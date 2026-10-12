@@ -19,8 +19,6 @@ DUAL = ["linux/amd64", "linux/arm64"]
 ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
-    "extproc": (".", ROUTER_DOCKERFILE, DUAL),
-    "extproc-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
     "model-runtime": ("src/model-runtime", "src/model-runtime/Dockerfile", DUAL),
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
@@ -28,20 +26,24 @@ DEFINITIONS = {
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
     "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
-    "vllm-sr-sim": (".", "src/fleet-sim/Dockerfile", DUAL),
 }
-# Router images are targets of one Dockerfile: (target, runtime accelerator).
+# Router images are one Dockerfile target per accelerator: (target, accelerator).
 ROUTER_BUILDS = {
-    "extproc": ("extproc", "cpu"),
-    "extproc-rocm": ("extproc", "rocm"),
     "vllm-sr": ("vllm-sr", "cpu"),
     "vllm-sr-cuda": ("vllm-sr", "cuda"),
     "vllm-sr-rocm": ("vllm-sr", "rocm"),
 }
+# Names the router images were published under before they merged. Each one is
+# pushed with the same digests as its image for one release, then removed.
+PUBLICATION_ALIASES = {
+    "vllm-sr": ["extproc"],
+    "vllm-sr-rocm": ["extproc-rocm"],
+}
 IMAGE_ENV = {
-    "vllm-sr": ["VLLM_SR_IMAGE", "VLLM_SR_ROUTER_IMAGE"],
+    # One router image serves every Kind profile and the CLI stack. The first
+    # variable is the one the E2E framework requires.
+    "vllm-sr": ["E2E_PREBUILT_EXT_PROC_IMAGE", "VLLM_SR_IMAGE", "VLLM_SR_ROUTER_IMAGE"],
     "dashboard": ["VLLM_SR_DASHBOARD_IMAGE"],
-    "extproc": ["E2E_PREBUILT_EXT_PROC_IMAGE"],
     "operator": ["E2E_PREBUILT_OPERATOR_IMAGE"],
     "operator-bundle": ["E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"],
     mocker.IMAGE: ["E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "PROVIDER_MOCKER_IMAGE"],
@@ -344,22 +346,33 @@ def main() -> None:
                     print(json.dumps({"reused_qualified_publication": existing["ref"]}))
                     return
             owner = os.environ["GITHUB_REPOSITORY_OWNER"].lower()
-            for tag in publication_tags(
+            tags = publication_tags(
                 args.image, args.mode, args.tag, args.latest, manifest["date"]
-            ):
-                subprocess.run(
-                    [
-                        "skopeo",
-                        "copy",
-                        "--all",
-                        "--preserve-digests",
-                        "--digestfile",
-                        str(args.directory / "published-digest.txt"),
-                        f"oci-archive:{args.directory / 'image.tar'}",
-                        f"docker://ghcr.io/{owner}/semantic-router/{args.image}:{tag}",
-                    ],
-                    check=True,
-                )
+            )
+            aliases = PUBLICATION_ALIASES.get(args.image, [])
+            for name in [args.image, *aliases]:
+                digest = "published-digest.txt"
+                if name != args.image:
+                    digest = f"published-digest-{name}.txt"
+                for tag in tags:
+                    subprocess.run(
+                        [
+                            "skopeo",
+                            "copy",
+                            "--all",
+                            "--preserve-digests",
+                            "--digestfile",
+                            str(args.directory / digest),
+                            f"oci-archive:{args.directory / 'image.tar'}",
+                            f"docker://ghcr.io/{owner}/semantic-router/{name}:{tag}",
+                        ],
+                        check=True,
+                    )
+            for name in aliases:
+                published = (args.directory / "published-digest.txt").read_text()
+                alias = (args.directory / f"published-digest-{name}.txt").read_text()
+                if alias.strip() != published.strip():
+                    raise ValueError(f"{name} was published with a different digest")
         print(json.dumps(manifest, indent=2))
 
 

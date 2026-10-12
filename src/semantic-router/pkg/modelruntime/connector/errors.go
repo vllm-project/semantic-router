@@ -20,6 +20,7 @@ type ErrorKind string
 
 const (
 	KindRequest       ErrorKind = "request"
+	KindBudget        ErrorKind = "budget"
 	KindAuthorization ErrorKind = "authorization"
 	KindTransport     ErrorKind = "transport"
 	KindStatus        ErrorKind = "status"

@@ -184,12 +184,15 @@ const metricsSchema = object('Metrics', {
 export const ROUTER_STRUCTURED_FIELDS: Partial<
   Record<RouterSystemKey, Record<string, RouterStructuredFieldDefinition>>
 > = {
-  router_core: {
-    auto_model_names: {
-      label: 'Auto Model Aliases',
-      description: 'Accepted aliases for automatic model routing.',
-      schema: stringList('Alias', 'vllm-sr/auto'),
+  system_models: {
+    decision_model: {
+      label: 'Default Decision Deployment',
+      description:
+        'Reference a declared deployment. Models and task overrides are managed in System One → Decision Models.',
+      schema: object('Decision Model', { deployment: text('Deployment', { required: true }) }),
     },
+  },
+  router_core: {
     streamed_body: {
       label: 'Streamed Body',
       description: 'Limits for streamed ext-proc request bodies.',
@@ -548,7 +551,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
   looper: {
     headers: {
       label: 'Headers',
-      description: 'Headers sent to the Looper endpoint.',
+      description: 'Headers added to every Looper model call.',
       schema: stringMap('Header'),
     },
   },

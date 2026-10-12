@@ -18,12 +18,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 from torch.nn.attention.bias import causal_lower_right
 
 from .common import apply_partial_rotary
+
+if TYPE_CHECKING:
+    from ....accel.kernels import KernelSet
+    from .qwen3_5 import GatedAttention, GatedDeltaNet
 
 
 @dataclass(frozen=True)
@@ -52,11 +57,11 @@ def _compute_dtype(device: torch.device, fallback: torch.dtype) -> torch.dtype:
 
 
 def forest_gated_delta(
-    m,
+    m: GatedDeltaNet,
     prefix: torch.Tensor,
     blocks: torch.Tensor,
     forest: Forest,
-    kernels,
+    kernels: KernelSet,
     norm: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """``GatedDeltaNet`` over prefix rows ``[B, Lp, H]`` and blocks ``[N, Lb, H]``.
@@ -90,7 +95,9 @@ def forest_gated_delta(
     conv_prefix = F.silu(conv_prefix).transpose(1, 2)
     conv_blocks = F.silu(conv_blocks).transpose(1, 2)
 
-    def split(x: torch.Tensor, n: int, length: int):
+    def split(
+        x: torch.Tensor, n: int, length: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query, key, value = torch.split(x, [m.key_dim, m.key_dim, m.value_dim], dim=-1)
         query = query.reshape(n, length, -1, m.head_k_dim)
         key = key.reshape(n, length, -1, m.head_k_dim)
@@ -101,7 +108,7 @@ def forest_gated_delta(
             key = key.repeat_interleave(repeat, dim=2)
         return query, key, value
 
-    def gates(h: torch.Tensor):
+    def gates(h: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         beta = m.in_proj_b(h).sigmoid()
         g = -m.A_log.float().exp() * F.softplus(m.in_proj_a(h).float() + m.dt_bias)
         return g, beta
@@ -130,14 +137,17 @@ def forest_gated_delta(
     ) -> torch.Tensor:
         z = m.in_proj_z(h).reshape(-1, m.head_v_dim)
         core = norm(core.reshape(-1, m.head_v_dim), z).reshape(n, length, -1)
-        return m.out_proj(core)
+        out: torch.Tensor = m.out_proj(core)
+        return out
 
     return output(out_prefix, prefix, rows, width), output(
         out_blocks, blocks, count, block_width
     )
 
 
-def project_attention(m, h: torch.Tensor, rotary: tuple[torch.Tensor, torch.Tensor]):
+def project_attention(
+    m: GatedAttention, h: torch.Tensor, rotary: tuple[torch.Tensor, torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Queries, keys and values ``[n, heads, L, head_dim]`` (in the values' dtype) and the output gate."""
     shape = h.shape[:-1]
     query, gate = torch.chunk(m.q_proj(h).view(*shape, -1, m.head_dim * 2), 2, dim=-1)
@@ -148,21 +158,29 @@ def project_attention(m, h: torch.Tensor, rotary: tuple[torch.Tensor, torch.Tens
     return query.to(value.dtype), key.to(value.dtype), value, gate.reshape(*shape, -1)
 
 
-def gate_attention(m, out: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
+def gate_attention(
+    m: GatedAttention, out: torch.Tensor, gate: torch.Tensor
+) -> torch.Tensor:
     """The gated output projection of attention outputs ``[n, heads, L, head_dim]``."""
     out = out.transpose(1, 2).reshape(*gate.shape)
-    return m.o_proj(out * torch.sigmoid(gate))
+    gated: torch.Tensor = m.o_proj(out * torch.sigmoid(gate))
+    return gated
 
 
 def forest_attention(
-    m,
+    m: GatedAttention,
     prefix: torch.Tensor,
     blocks: torch.Tensor,
     prefix_rotary: tuple[torch.Tensor, torch.Tensor],
     block_rotary: tuple[torch.Tensor, torch.Tensor],
     forest: Forest,
-    project: Callable = project_attention,
-    gate: Callable = gate_attention,
+    project: Callable[
+        [GatedAttention, torch.Tensor, tuple[torch.Tensor, torch.Tensor]],
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ] = project_attention,
+    gate: Callable[
+        [GatedAttention, torch.Tensor, torch.Tensor], torch.Tensor
+    ] = gate_attention,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """``GatedAttention`` over prefix rows and blocks: one causal call per row and per block.
 

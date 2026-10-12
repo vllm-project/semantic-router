@@ -522,23 +522,9 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-func TestConvertDiagnostics(t *testing.T) {
-	result := convertDiagnostics(nil)
-	if len(result) != 0 {
-		t.Errorf("expected 0 diagnostics, got %d", len(result))
-	}
-}
-
 func TestMarshalJSON(t *testing.T) {
 	result := marshalJSON(map[string]string{"key": "value"})
 	if result != `{"key":"value"}` {
 		t.Errorf("unexpected JSON: %s", result)
-	}
-}
-
-func TestJoinErrors(t *testing.T) {
-	result := joinErrors(nil)
-	if result != "[]" {
-		t.Errorf("expected empty array, got: %s", result)
 	}
 }

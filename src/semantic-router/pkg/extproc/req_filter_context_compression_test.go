@@ -165,7 +165,7 @@ func TestInjectSemanticContextRecoveryToolRejectsReservedNameConflict(t *testing
 func semanticCompressionRequest(toolOutput string) *llmprotocol.Request {
 	return &llmprotocol.Request{
 		Generation: 1,
-		Model:      "auto",
+		Model:      "vllm-sr/auto",
 		Messages: []llmprotocol.Message{
 			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "collect diagnostic data"}}},
 			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{

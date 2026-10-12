@@ -13,9 +13,7 @@ func TestLooperReasoningCapabilityUsesPhysicalModelNotRequestAlias(t *testing.T)
 	const physicalModel = "reasoning-model"
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Looper: config.LooperConfig{
-				ReMoM: config.ReMoMRuntimeConfig{ModelNames: []string{requestAlias}},
-			},
+			Entrypoints: []config.EntrypointMapping{{ModelNames: []string{requestAlias}, Recipe: config.DefaultRecipeName}},
 			BackendModels: config.BackendModels{
 				ModelConfig: map[string]config.ModelParams{
 					physicalModel: {ReasoningFamily: "generic"},

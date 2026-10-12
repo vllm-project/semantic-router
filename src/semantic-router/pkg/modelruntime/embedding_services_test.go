@@ -42,6 +42,11 @@ func (r *embeddingRuntime) Card(_ context.Context, deployment string) (modelserv
 	return card, nil
 }
 
+func (r *embeddingRuntime) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
+	card, ok := r.cards[deployment]
+	return card, ok
+}
+
 func (r *embeddingRuntime) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
 	return modelservice.ClassifyResponse{}, errors.New("not served")
 }

@@ -123,6 +123,7 @@ global:
 | 路由 | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | 选择 | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
 | Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
+| 请求图 | `llm_request_graph_node_duration_seconds` （按 `node_type` 和 `template`） |
 | 缓存 | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | 会话 | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
@@ -193,7 +194,8 @@ global:
 Helm chart 通过顶层值（`router.skipProcessing.enabled`）暴露同一开关，因此可在安装时启用，而无需编辑嵌入的规范配置：
 
 ```bash
-helm install vsr ./deploy/helm/semantic-router \
+helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
   --set router.skipProcessing.enabled=true
 ```
 

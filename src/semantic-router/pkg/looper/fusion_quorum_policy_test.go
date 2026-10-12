@@ -360,7 +360,7 @@ func TestFusionFallbackUsesPostPanelIteration(t *testing.T) {
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		if payload.Model == "backup-model" {
-			if raw := r.Header.Get("x-vsr-looper-iteration"); raw != "" {
+			if raw := r.Header.Get(testHopIteration); raw != "" {
 				var parsed int64
 				_, _ = fmt.Sscanf(raw, "%d", &parsed)
 				fallbackIteration.Store(parsed)
@@ -378,7 +378,7 @@ func TestFusionFallbackUsesPostPanelIteration(t *testing.T) {
 
 	req := belowQuorumFusionRequest(belowQuorumFusionConfig(
 		config.FusionQuorumFailurePolicyFallback, "backup-model"))
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	resp, err := fusionHopsTo(server.URL).Execute(context.Background(), req)
 
 	require.NoError(t, err)
 	assert.Equal(t, 4, resp.Iterations)

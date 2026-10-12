@@ -290,7 +290,6 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
         "- `provider-mocker`",
-        "- `vllm-sr-sim`",
     }
     if any(bullet in release_text for bullet in fixture_bullets):
         errors.append(

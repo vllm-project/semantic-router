@@ -1,5 +1,6 @@
 import type { FieldSchema } from '../lib/dslSchemas'
 import { FieldEditor } from './builderPageFormPrimitives'
+import { isSingleConditionRules } from './configPageDecisionFormSupport'
 import type { DecisionCondition, DecisionRuleSet } from './configPageSupport'
 import styles from './ConfigPageDecisionsSection.module.css'
 
@@ -10,6 +11,7 @@ interface ConfigPageDecisionRulesEditorProps {
 }
 
 const OPERATORS = ['AND', 'OR', 'NOT'] as const
+const SINGLE_CONDITION = 'CONDITION'
 const CONDITION_SCHEMA: FieldSchema = {
   key: 'condition',
   label: 'Condition',
@@ -63,15 +65,21 @@ export default function ConfigPageDecisionRulesEditor({
   onChange,
   readOnly = false,
 }: ConfigPageDecisionRulesEditorProps) {
+  const singleCondition = isSingleConditionRules(value)
+  const { on_unknown: onUnknown, ...rootCondition } = value
+  const rootPolicy = onUnknown ? { on_unknown: onUnknown } : {}
   const operator = value.operator || ''
-  const conditions = value.conditions || []
+  const rootBehavior = singleCondition ? SINGLE_CONDITION : operator
+  const conditions = singleCondition ? [rootCondition] : value.conditions || []
 
   if (readOnly) {
     if (!operator && conditions.length === 0) return <span>Unconditional match</span>
     return (
       <div className={styles.viewStack}>
         <div className={styles.viewBadgeRow}>
-          <span className={styles.viewBadge}>{operator || 'AND'} root</span>
+          <span className={styles.viewBadge}>
+            {singleCondition ? 'Single condition' : `${operator || 'AND'} root`}
+          </span>
           {value.on_unknown ? (
             <span className={styles.viewBadge}>On unknown: {value.on_unknown}</span>
           ) : null}
@@ -86,13 +94,21 @@ export default function ConfigPageDecisionRulesEditor({
   const updateConditions = (nextConditions: DecisionCondition[]) =>
     onChange?.({ ...value, conditions: nextConditions })
 
+  // A blank root would read as unconditional, so keep it as a group condition to fill in.
+  const updateRootCondition = (nextCondition: DecisionCondition) =>
+    onChange?.(
+      isSingleConditionRules(nextCondition) || nextCondition.operator
+        ? { ...nextCondition, ...rootPolicy }
+        : { ...rootPolicy, operator: 'AND', conditions: [nextCondition] },
+    )
+
   return (
     <div className={styles.editorList}>
       <div className={styles.editorGridConditions}>
         <label className={styles.editorControlLabel}>
           <span className={styles.editorControlLabelText}>Root behavior</span>
           <select
-            value={operator}
+            value={rootBehavior}
             className={styles.editorSelect}
             onChange={(event) => {
               const nextOperator = event.target.value as DecisionRuleSet['operator'] | ''
@@ -101,7 +117,7 @@ export default function ConfigPageDecisionRulesEditor({
                 return
               }
               onChange?.({
-                ...value,
+                ...(singleCondition ? rootPolicy : value),
                 operator: nextOperator,
                 conditions:
                   nextOperator === 'NOT'
@@ -113,6 +129,7 @@ export default function ConfigPageDecisionRulesEditor({
             }}
           >
             <option value="">Unconditional match</option>
+            {singleCondition ? <option value={SINGLE_CONDITION}>Single condition</option> : null}
             {OPERATORS.map((candidate) => (
               <option key={candidate} value={candidate}>
                 {candidate} group
@@ -120,7 +137,7 @@ export default function ConfigPageDecisionRulesEditor({
             ))}
           </select>
         </label>
-        {operator ? (
+        {rootBehavior ? (
           <label className={styles.editorControlLabel}>
             <span className={styles.editorControlLabelText}>On unknown</span>
             <select
@@ -141,12 +158,24 @@ export default function ConfigPageDecisionRulesEditor({
           </label>
         ) : null}
       </div>
-      {operator ? (
+      {rootBehavior ? (
         <p className={styles.editorHelp}>
           When a signal evaluator fails, no_match skips this decision, match selects it, and
           fail_request rejects the request. Leave this empty to use a classifier condition&apos;s
           on_error policy.
         </p>
+      ) : null}
+
+      {singleCondition ? (
+        <section className={styles.editorCard}>
+          <FieldEditor
+            schema={CONDITION_SCHEMA}
+            value={rootCondition}
+            onChange={(nextCondition) =>
+              updateRootCondition((nextCondition || {}) as DecisionCondition)
+            }
+          />
+        </section>
       ) : null}
 
       {operator

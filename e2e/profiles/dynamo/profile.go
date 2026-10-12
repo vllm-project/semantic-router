@@ -13,7 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -368,7 +367,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	}
 
 	// Override image to use locally built image
-	imageRepo := "ghcr.io/vllm-project/semantic-router/extproc"
+	imageRepo := "ghcr.io/vllm-project/semantic-router/vllm-sr"
 	imageTag := opts.ImageTag
 
 	installOpts := helm.InstallOptions{
@@ -377,6 +376,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		Namespace:   "vllm-semantic-router-system",
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
+			"gateway.mode":     "extproc",
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,
 			"image.pullPolicy": "Never", // Use local image, don't pull from registry

@@ -64,6 +64,7 @@ type HallucinationDetector struct {
 	spec        config.ResolvedModelBinding
 	specErr     error
 	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	judgment    *decisionJudgment
 	initialized bool
 	mu          sync.RWMutex
 }
@@ -85,6 +86,24 @@ func (d *HallucinationDetector) Initialize() error {
 	defer d.mu.Unlock()
 	if d.initialized {
 		return nil
+	}
+	judgment, err := newDecisionJudgment(d.models, "hallucination_detector", "hallucination", nil)
+	if err != nil {
+		return err
+	}
+	if judgment != nil {
+		explicit, bound := d.models.plan.Lookup(d.models.recipe, "hallucination_detector")
+		useVerdict := !judgment.card.Answers("span") || (bound && explicit.Binding.Contract == config.DecisionTaskContract)
+		if useVerdict {
+			if explicitSpanBinding(d.models, "hallucination_detector") {
+				return fmt.Errorf("%w: hallucination token_spans.v1 binding requires native span capability", binding.ErrCapability)
+			}
+			if d.config.MinSpanLength > 1 || d.config.MinSpanConfidence > 0 {
+				return fmt.Errorf("%w: hallucination span filters require native span capability", binding.ErrCapability)
+			}
+			d.judgment, d.initialized = judgment, true
+			return nil
+		}
 	}
 	if d.specErr != nil {
 		return fmt.Errorf("hallucination detector: %w", d.specErr)
@@ -112,9 +131,10 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 		return merged, fmt.Errorf("context is required for hallucination detection")
 	}
 	chunks := []signalChunkSpan{{Text: answer}}
-	// The published pair adapter owns its complete answer budget. Splitting it
-	// here would change the evidence and the artifact's measured task.
-	if d.spec.Binding.Adapter != "vela_halu" {
+	// The published pair adapter and a decision model's ready-made halu
+	// question own their complete answer budget. Splitting it here would
+	// change the evidence and the artifact's measured task.
+	if d.spec.Binding.Adapter != "vela_halu" && d.handle.Capability().Preset == "" && d.handle.Capability().Question == "" {
 		chunks = hallucinationAnswerChunks(answer)
 	}
 	for _, chunk := range chunks {
@@ -159,6 +179,9 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 func (d *HallucinationDetector) Detect(ctx context.Context, contextText, question, answer string) (*HallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+	if d.judgment != nil {
+		return d.detectJudgment(ctx, contextText, question, answer)
+	}
 	spans, err := d.detectSpans(ctx, contextText, question, answer)
 	if err != nil {
 		return nil, err

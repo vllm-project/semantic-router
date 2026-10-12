@@ -1,0 +1,124 @@
+{
+  "calls": [
+    {
+      "route": "judge",
+      "model": "judge",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          },
+          {
+            "content": "You are the Fusion calling model. Compare the panel responses, resolve contradictions, identify the strongest supported information, and produce the final answer in this single call.\n\nRules:\n- Preserve the original output contract exactly.\n- Do not reveal hidden reasoning, scratch work, panel reasoning, tool traces, or internal deliberation.\n- Do not mention internal model names unless the user asks.\n- Provide a concise explanation only when the original output contract asks for one.\n\nOriginal prompt:\nWhat is the capital of France?\n\nPanel responses:\nResponse 1 (model-a):\nmodel-a says Paris (1b997d5a)\n\nResponse 2 (model-b):\nmodel-b says Paris in detail (1b997d5a)\n\nResponse 3 (model-c):\nmodel-c says Paris in much more detail (1b997d5a)\n\nFinal answer:",
+            "role": "user"
+          }
+        ],
+        "model": "judge",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-a",
+      "model": "model-a",
+      "body": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-a",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-b",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-c",
+      "model": "model-c",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-c",
+        "stream": false
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "application/json",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "looper",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "judge",
+      "x-vsr-selected-recipe": "default"
+    },
+    "body": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "judge says Paris finally (a13cd1e3)",
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": "\u003cvolatile\u003e",
+      "fusion": {
+        "analysis_models": [
+          "model-a",
+          "model-b",
+          "model-c"
+        ],
+        "judge_model": "judge",
+        "prompt_version": "fusion-v1",
+        "responses": [
+          {
+            "content": "model-a says Paris (1b997d5a)",
+            "model": "model-a"
+          },
+          {
+            "content": "model-b says Paris in detail (1b997d5a)",
+            "model": "model-b"
+          },
+          {
+            "content": "model-c says Paris in much more detail (1b997d5a)",
+            "model": "model-c"
+          }
+        ]
+      },
+      "id": "\u003cvolatile\u003e",
+      "model": "judge",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 20,
+        "prompt_tokens": 50,
+        "total_tokens": 70
+      }
+    }
+  }
+}

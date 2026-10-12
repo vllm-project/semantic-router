@@ -193,7 +193,6 @@ export interface ASTRecipeDecl {
 
 export interface ASTProgram {
   candidateRequirements?: { capabilities?: 'declared'; context?: 'known_limits' }
-  dataPolicy?: { replay?: boolean }
   modelBindings?: Record<string, Record<string, string>>
   strategy?: string
   entrypoints?: ASTEntrypointDecl[]

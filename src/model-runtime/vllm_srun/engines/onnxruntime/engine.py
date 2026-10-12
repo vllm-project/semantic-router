@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 import torch
@@ -36,6 +36,9 @@ from ...plugins.base import (
 )
 from . import graphs as graph_files
 from . import providers
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 INSTALL_HINT = (
     "install the runtime's onnx extra from a repository checkout: "
@@ -106,16 +109,17 @@ class GraphSession:
         )
         self.outputs = tuple(item.name for item in self.session.get_outputs())
 
-    def feeds(self, batch: EncoderBatch) -> dict[str, np.ndarray]:
+    def feeds(self, batch: EncoderBatch) -> dict[str, NDArray[Any]]:
         input_ids = batch.input_ids.detach().cpu().numpy()
         rows, width = input_ids.shape
-        feeds: dict[str, np.ndarray] = {}
+        feeds: dict[str, NDArray[Any]] = {}
         for declared in self.inputs:
             if declared.name in batch.graph_inputs:
                 value = batch.graph_inputs[declared.name].detach().cpu().numpy()
             elif declared.name == "input_ids":
                 value = input_ids
             elif declared.name == "attention_mask":
+                assert batch.attention_mask is not None
                 value = batch.attention_mask.detach().cpu().numpy()
             elif declared.name == "position_ids":
                 positions = np.arange(width, dtype=np.int64)[None]

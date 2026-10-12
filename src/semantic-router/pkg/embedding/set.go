@@ -13,6 +13,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
+// ErrModelNotPrepared reports a model the generation prepared no provider for:
+// none of its consumers asked for it.
+var ErrModelNotPrepared = errors.New("was not prepared for this generation")
+
 // Set is one generation's immutable snapshot of prepared embedding providers.
 // Views select dimensions/layers without loading or discovering models in requests.
 // Its owner closes it only after the generation's users drain.
@@ -42,7 +46,7 @@ func (s *Set) Get(model string, dimension, layer int) (Provider, error) {
 	}
 	provider, ok := s.providers[model]
 	if !ok {
-		return nil, fmt.Errorf("%w: embedding model %q was not prepared for this generation", binding.ErrCapability, model)
+		return nil, fmt.Errorf("%w: embedding model %q %w", binding.ErrCapability, model, ErrModelNotPrepared)
 	}
 	if dimension < 0 || dimension > math.MaxInt32 || layer < 0 || layer > math.MaxInt32 {
 		return nil, fmt.Errorf("%w: dimension and layer must fit nonnegative int32", binding.ErrCapability)

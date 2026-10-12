@@ -210,7 +210,7 @@ func (c *Classifier) initializePIIClassifier() error {
 	}
 
 	numPIIClasses := c.PIIMapping.GetPIITypeCount()
-	if numPIIClasses < 2 {
+	if numPIIClasses < 2 && !c.PIIMapping.spanNamed {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 

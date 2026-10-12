@@ -32,6 +32,8 @@ def available() -> bool:
 class PackedLinear(nn.Module):
     """An FP32 ``nn.Linear`` whose weight oneDNN reordered once (x86 CPUs)."""
 
+    packed: torch.Tensor
+
     def __init__(self, linear: nn.Linear):
         super().__init__()
         self.in_features, self.out_features = linear.in_features, linear.out_features

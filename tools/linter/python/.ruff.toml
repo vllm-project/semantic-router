@@ -18,7 +18,7 @@ select = [
 ignore = [
   "E501",
   "PLR09",   # numeric function/method counts are review signals, not correctness gates
-  "PLR1702", # nested-block count is covered by the advisory structure report
+  "PLR1702", # nested-block count is a review signal, not a correctness gate
 ]
 
 [lint.per-file-ignores]
@@ -33,38 +33,6 @@ ignore = [
 "src/vllm-sr/cli/models.py" = ["I001", "N815", "PLC0415", "SIM114", "UP006", "UP035", "UP045"]
 "src/vllm-sr/cli/parser.py" = ["B904", "F541", "I001", "UP006", "UP015", "UP035"]
 "src/vllm-sr/cli/validator.py" = ["F401", "I001", "PLR2004", "RUF013", "SIM102", "UP006", "UP035"]
-# Fleet-sim retains its pre-existing local style conventions; correctness rules
-# remain enabled here.
-"src/fleet-sim/**/*.py" = [
-  "B007",
-  "B008",
-  "B904",
-  "B905",
-  "E402",
-  "E741",
-  "F401",
-  "F821",
-  "F841",
-  "N802",
-  "N803",
-  "N806",
-  "N812",
-  "N814",
-  "PLC0415",
-  "PLR2004",
-  "PLW1510",
-  "PLW2901",
-  "RUF001",
-  "RUF002",
-  "RUF003",
-  "RUF005",
-  "RUF012",
-  "RUF022",
-  "RUF046",
-  "SIM105",
-  "SIM108",
-  "SIM115",
-]
 "tools/calibration/tuning/engine.py" = [
   "E402",     # re-exports at bottom of module (after all definitions)
   "F401",     # re-exported names appear unused locally
@@ -76,6 +44,7 @@ ignore = [
 ]
 "tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/calibration/systemone_auto/tests/*.py" = ["PLR2004"]
 "tools/test/services/mcp-classifier-server/server_*.py" = [
   "N812",     # torch.nn.functional as F is the PyTorch convention
   "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 var admissionDeploymentKeys = map[string]bool{
@@ -68,4 +69,29 @@ func sortedAdmissionDeploymentKeys() []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// maxSignalTimeoutMs is the longest model-signal deadline a recipe may set.
+const maxSignalTimeoutMs = 3_600_000
+
+// DefaultSignalTimeout bounds the model-runtime signals of a request that has
+// no deadline of its own: a served request, whose gateway timeout (Envoy's
+// ext_proc message_timeout, 60 s in the shipped gateways) the Router does not
+// see.
+const DefaultSignalTimeout = 45 * time.Second
+
+func validateModelSignalTimeoutContracts(cfg *RouterConfig) error {
+	if cfg.ModelSignalTimeoutMs < 0 || cfg.ModelSignalTimeoutMs > maxSignalTimeoutMs {
+		return fmt.Errorf("global.model_catalog.signal_timeout_ms must be between 0 and %d", maxSignalTimeoutMs)
+	}
+	return nil
+}
+
+// SignalTimeout is the configured deadline of a request's model-runtime
+// signals; 0 derives it from the request's deadline.
+func (c *RouterConfig) SignalTimeout() time.Duration {
+	if c == nil {
+		return 0
+	}
+	return time.Duration(c.ModelSignalTimeoutMs) * time.Millisecond
 }

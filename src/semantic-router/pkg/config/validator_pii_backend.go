@@ -17,6 +17,9 @@ func validatePIIModelBackendContracts(cfg *RouterConfig) error {
 	if err := model.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
 		return fmt.Errorf("classifier.pii.%w", err)
 	}
+	if err := model.ValidateOnUnscanned(); err != nil {
+		return fmt.Errorf("classifier.pii.%w", err)
+	}
 	if model.Backend == nil {
 		return nil
 	}

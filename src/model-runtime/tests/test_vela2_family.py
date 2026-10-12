@@ -395,10 +395,13 @@ def test_failed_rows_deadlines_and_invalid_questions(models) -> None:
             "bad": {"type": "rank"},
         },
     )
-    assert response["answers"] == {
-        "big": {"type": "choice", "error": "max_length_exceeded"},
-        "bad": {"type": "rank", "error": "invalid_question"},
+    assert {key: answer["error"] for key, answer in response["answers"].items()} == {
+        "big": "max_length_exceeded",
+        "bad": "invalid_question",
     }
+    assert response["answers"]["big"]["type"] == "choice"
+    assert response["answers"]["bad"]["type"] == "rank"
+    assert "type must be one of" in response["answers"]["bad"]["message"]
     plan = model.plan("text", {"q": GOLDEN_QUESTIONS["jailbreak"]})
     expired = model.finish_surface(
         SurfacePlan("decisions", plan.items, plan.input_tokens, plan), DEADLINE
