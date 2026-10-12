@@ -217,7 +217,7 @@ def adopted_volume_name(container_name: str, destination: str) -> str | None:
     A runtime that cannot answer is not the same thing and raises instead.
     Treating an unreachable daemon as "nothing to adopt" would mint a fresh
     volume beside data that is still there, so only an explicit "no such
-    object" counts as absence.
+    container" counts as absence.
     """
 
     try:
