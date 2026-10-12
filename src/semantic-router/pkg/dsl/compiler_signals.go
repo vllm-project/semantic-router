@@ -48,6 +48,9 @@ func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	if v, ok := getIntField(s.Fields, "ngram_arity"); ok {
 		rule.NgramArity = v
 	}
+	if v, ok := getBoolField(s.Fields, "include_history"); ok {
+		rule.IncludeHistory = v
+	}
 	c.config.KeywordRules = append(c.config.KeywordRules, rule)
 }
 
