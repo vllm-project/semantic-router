@@ -28,10 +28,10 @@ def workflow(filename):
 class DisplayNameTests(unittest.TestCase):
     def test_categories_do_not_change_execution_or_verification_identity(self):
         records = catalog.verification_records(load_domain_registry())
-        image = records["native.image-calibration-cpu"]
+        image = records["platform.image-calibration-cpu"]
         self.assertEqual(image["category"], "conformance")
-        self.assertEqual(image["executor"], "native")
-        self.assertEqual(image["runtime"], "ort")
+        self.assertEqual(image["executor"], "platform")
+        self.assertEqual(image["runtime"], "model-runtime")
         self.assertEqual(records["recipe-conformance"]["category"], "conformance")
         self.assertEqual(records["e2e.multimodal-routing"]["category"], "e2e")
         self.assertEqual(catalog.catalog_errors(load_domain_registry()), [])
@@ -94,8 +94,8 @@ class DisplayNameTests(unittest.TestCase):
                 [],
                 source_sha="a" * 40,
                 requested=(
-                    "native.ort-cpu",
-                    "native.image-calibration-cpu",
+                    "platform.models-cpu",
+                    "platform.image-calibration-cpu",
                     "local.memory",
                     "cli-unit",
                     "e2e.vela-omni",
@@ -149,7 +149,7 @@ class DisplayNameTests(unittest.TestCase):
         )
         self.assertLess(encoded_size, 1_048_576)
 
-    def test_local_contracts_use_environment_shards_and_native_feature_is_evidence(
+    def test_local_contracts_use_environment_shards_and_platform_labels_name_the_runtime(
         self,
     ):
         plan = make_plan([], source_sha="a" * 40, full=True)
@@ -157,15 +157,15 @@ class DisplayNameTests(unittest.TestCase):
         self.assertEqual(output["worker_labels"]["local"], ["Shard 1", "Shard 2"])
         self.assertTrue(
             all(
-                "Image" not in label
-                for label in output["worker_labels"]["native-shared"]
+                label.startswith("Model Runtime / CPU / ")
+                for label in output["worker_labels"]["platform"]
             )
         )
         summary = render_plan_summary(plan)
         self.assertIn("Tests / Conformance | Image Routing Conformance", summary)
         self.assertIn("Tests / Conformance | Recipe Preview", summary)
         for filename, job in (
-            ("test-native.yml", "inference"),
+            ("test-platform.yml", "contracts"),
             ("test-local.yml", "integration"),
             ("test-tools.yml", "tests"),
         ):
@@ -175,16 +175,16 @@ class DisplayNameTests(unittest.TestCase):
 
     def test_consumers_wait_only_for_actual_dependency_lanes(self):
         jobs = workflow("ci.yml")["jobs"]
-        self.assertEqual(jobs["recipes"]["needs"], ["plan", "image-local"])
+        self.assertEqual(jobs["recipes"]["needs"], ["plan", "image-router"])
         self.assertEqual(
             jobs["local"]["needs"],
-            ["plan", "image-local", "image-dashboard", "image-fixtures"],
+            ["plan", "image-router", "image-dashboard", "image-fixtures"],
         )
         self.assertEqual(jobs["e2e-router"]["needs"], ["plan", "image-router"])
         self.assertEqual(
             jobs["e2e-fixtures"]["needs"], ["plan", "image-router", "image-fixtures"]
         )
-        self.assertEqual(jobs["native-independent"]["needs"], ["plan"])
+        self.assertEqual(jobs["platform"]["needs"], ["plan"])
         for name, job in jobs.items():
             if name != "gate":
                 self.assertNotIn("image-distribution", job.get("needs", []))

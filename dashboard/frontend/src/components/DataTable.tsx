@@ -41,6 +41,7 @@ export interface DataTableProps<T> {
   onToggleExpand?: (row: T) => void
   emptyMessage?: string
   className?: string
+  stickyActions?: boolean
   readonly?: boolean
   pagination?: DataTablePagination
   selection?: DataTableSelection<T>
@@ -126,6 +127,7 @@ export function DataTable<T>({
   onToggleExpand,
   emptyMessage = 'No data available',
   className = '',
+  stickyActions = true,
   readonly = false,
   pagination,
   selection,
@@ -195,7 +197,9 @@ export function DataTable<T>({
   const auxiliaryColumnCount = (expandable ? 1 : 0) + (selection ? 1 : 0) + (hasActions ? 1 : 0)
 
   return (
-    <div className={`${styles.tableContainer} ${className}`}>
+    <div
+      className={`${styles.tableContainer} ${stickyActions ? '' : styles.scrollingActions} ${className}`}
+    >
       <div className={styles.tableViewport}>
         <table className={styles.table}>
           <colgroup>

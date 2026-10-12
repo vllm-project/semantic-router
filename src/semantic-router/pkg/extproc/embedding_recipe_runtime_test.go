@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
@@ -41,15 +41,17 @@ func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
 	cfg.Tools.Enabled = true
 	cfg.ModelSelection.Enabled = true
 	cfg.ModelSelection.ML.ModelsPath = "test-selection"
+	cfg.ModelSelection.ML.ModelType = config.EmbeddingModelTypeRemote
+	cfg.Decisions = []config.Decision{{Name: "nearest", Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"default-embedding": {Provider: "http", ExternalModel: "default"}, "named-embedding": {Provider: "http", ExternalModel: "named"}}
 	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "default", ModelName: "default", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}, {Name: "named", ModelName: "named", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}}
 	binding := func(deployment string) map[string]config.ModelBinding {
 		return map[string]config.ModelBinding{"embedding": {Deployment: deployment, Contract: "embedding.v1", Adapter: "openai_compatible"}}
 	}
 	cfg.ModelBindings = binding("default-embedding")
-	cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{ModelBindings: binding("default-embedding")}}, {Name: "named", Profile: config.RoutingProfile{ModelBindings: binding("named-embedding")}}}
+	cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{ModelBindings: binding("default-embedding"), Decisions: cfg.Decisions}}, {Name: "named", Profile: config.RoutingProfile{ModelBindings: binding("named-embedding"), Decisions: cfg.Decisions}}}
 	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"named-entry"}, Recipe: "named"}}
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	defaultSet, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
 		t.Fatal(err)

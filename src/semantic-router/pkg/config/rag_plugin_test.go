@@ -97,6 +97,36 @@ func registerRAGValidationSpecs() {
 		Expect(err.Error()).To(ContainSubstring("similarity threshold must be between 0.0 and 1.0"))
 	})
 
+	It("rejects mcp as a hybrid primary or fallback", func() {
+		for _, hybrid := range []*HybridRAGConfig{
+			{Primary: "mcp", Fallback: "milvus"},
+			{Primary: "milvus", Fallback: "mcp"},
+		} {
+			cfg := &RAGPluginConfig{
+				Enabled:       true,
+				Backend:       "hybrid",
+				BackendConfig: MustStructuredPayload(hybrid),
+			}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("MCP tool invoker"))
+		}
+	})
+
+	It("rejects mcp until a tool invoker exists", func() {
+		cfg := &RAGPluginConfig{
+			Enabled: true,
+			Backend: "mcp",
+			BackendConfig: MustStructuredPayload(&MCPRAGConfig{
+				ServerName: "memory",
+				ToolName:   "search",
+			}),
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("MCP tool invoker"))
+	})
+
 	It("rejects invalid injection modes", func() {
 		cfg := &RAGPluginConfig{
 			Enabled:       true,

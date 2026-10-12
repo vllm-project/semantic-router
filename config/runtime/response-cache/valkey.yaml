@@ -43,8 +43,9 @@ index:
     # Name of the vector field
     name: "embedding"
 
-    # Dimension of the embeddings (auto-detected from model at runtime)
-    dimension: 384  # This value is ignored - dimension is auto-detected from the embedding model
+    # Embedding width: 0 takes the embedding model's own; a set width must be one
+    # the model serves (Vela Embedding: 768, 512, 256, 128 or 64)
+    dimension: 0
 
     # Distance metric for similarity calculation
     # Options: COSINE (cosine similarity), L2 (Euclidean distance), IP (inner product)

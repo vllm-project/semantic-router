@@ -1,0 +1,57 @@
+# Language Signal
+
+## Overview
+
+`language` detects the request language and exposes it as a routing signal.
+Define language rules under `routing.signals.language`.
+
+It uses a lightweight language detector rather than a general-purpose
+classifier model.
+
+## Key Advantages
+
+- Lets multilingual traffic route without duplicating decisions per locale.
+- Keeps language handling explicit in the routing graph.
+- Works well with modality, context, and model-family constraints.
+- Avoids paying for a domain classifier when only locale matters.
+
+## What Problem Does It Solve?
+
+If language is ignored, multilingual traffic can land on models that are weak for the detected locale or on plugins that assume English-only behavior.
+
+`language` solves that by turning detected locale into a reusable routing input.
+
+## When to Use
+
+Use `language` when:
+
+- different languages need different model families
+- multilingual support is partial or tiered
+- downstream tools or prompts depend on locale
+- you want a clean split between language detection and route outcomes
+
+## Configuration
+
+```yaml
+routing:
+  signals:
+    language:
+      - name: zh
+        description: Chinese-language requests.
+        threshold: 0.6
+      - name: es
+        description: Spanish-language requests.
+```
+
+The rule names should match the language codes you want decisions to
+reference, such as `zh`, `es`, or `en`. `threshold` is the minimum detector
+confidence from `0` to `1`; omit it (or set `0`) to use the runtime default of
+`0.3`. A higher threshold reduces false positives but can leave more requests
+to the fallback route.
+
+## Dependencies and Limitations
+
+Short, mixed-language, and code-heavy prompts may be ambiguous. Always provide
+a fallback route and evaluate the detector on your traffic. See a complete
+example:
+[`config/fragments/signal/language/multilingual.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/language/multilingual.yaml).

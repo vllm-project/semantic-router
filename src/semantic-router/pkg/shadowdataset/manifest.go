@@ -66,6 +66,16 @@ const (
 	ExcludeRequestTruncated    = "request_body_truncated"
 	ExcludePrimaryModelMissing = "primary_model_missing"
 	ExcludeDuplicateInput      = "duplicate_input"
+	ExcludeBalanceCap          = "balance_cap"
+)
+
+// Balance groups. A dataset is balanced by one of these, and the group of an
+// example is readable from the published manifest, so Validate can check a cap
+// was respected without the records the manifest was built from.
+const (
+	BalanceByRecipe       = "recipe"
+	BalanceByDecision     = "decision"
+	BalanceByPrimaryModel = "primary_model"
 )
 
 // Split is one named part of the dataset. Weights are whole numbers so a split
@@ -83,6 +93,31 @@ type Policy struct {
 	// the same input in different splits, which is the point of recording it.
 	Seed   string  `json:"seed"`
 	Splits []Split `json:"splits"`
+	// Balance is optional. A policy without it is encoded exactly as it was
+	// before balancing existed, so a manifest built under one keeps its digest.
+	Balance *Balance `json:"balance,omitempty"`
+}
+
+// Balance caps how many examples one group may contribute. One recipe or one
+// decision usually dominates live traffic, and a comparison built from that
+// traffic then reads as a statement about the whole router when it is a
+// statement about that decision.
+type Balance struct {
+	By  string `json:"by"`
+	Max int    `json:"max"`
+}
+
+// group reads the balance key of an example. Every key is a field the published
+// manifest already carries.
+func (b Balance) group(example Example) string {
+	switch b.By {
+	case BalanceByRecipe:
+		return example.Lineage.Recipe
+	case BalanceByDecision:
+		return example.Lineage.Decision
+	default:
+		return example.Primary.Model
+	}
 }
 
 // Arm is one model's side of a comparison. OutputDigest is the hash of the text
@@ -153,6 +188,7 @@ func Build(records []store.Record, policy Policy) (Manifest, error) {
 	}
 
 	examples = dropDuplicateInputs(examples, counts.Excluded)
+	examples = capBalanceGroups(examples, policy, counts.Excluded)
 	for i := range examples {
 		examples[i].Split = policy.splitFor(examples[i].ID)
 	}
@@ -198,6 +234,17 @@ func Validate(m Manifest) error {
 		seenInput[example.InputDigest] = example.Split
 	}
 
+	if m.Policy.Balance != nil {
+		taken := make(map[string]int, len(m.Examples))
+		for _, example := range m.Examples {
+			group := m.Policy.Balance.group(example)
+			taken[group]++
+			if taken[group] > m.Policy.Balance.Max {
+				return fmt.Errorf("group %q carries more than the balance cap of %d",
+					group, m.Policy.Balance.Max)
+			}
+		}
+	}
 	if m.Counts.Examples != len(m.Examples) {
 		return fmt.Errorf("manifest counts %d examples, carries %d", m.Counts.Examples, len(m.Examples))
 	}
@@ -259,7 +306,57 @@ func (p Policy) validate() error {
 		}
 		seen[split.Name] = struct{}{}
 	}
+	if p.Balance == nil {
+		return nil
+	}
+	switch p.Balance.By {
+	case BalanceByRecipe, BalanceByDecision, BalanceByPrimaryModel:
+	default:
+		return fmt.Errorf("balance by %q, want one of %s, %s or %s",
+			p.Balance.By, BalanceByRecipe, BalanceByDecision, BalanceByPrimaryModel)
+	}
+	if p.Balance.Max <= 0 {
+		return fmt.Errorf("balance cap is %d, want a positive cap", p.Balance.Max)
+	}
 	return nil
+}
+
+// capBalanceGroups keeps at most Max examples per group. Which ones it keeps
+// follows a seeded hash of the example identity, the same way the split does,
+// so the kept set never depends on the order records arrived in and adding more
+// records of an over represented group cannot displace another group's rows.
+func capBalanceGroups(examples []Example, policy Policy, excluded map[string]int) []Example {
+	if policy.Balance == nil {
+		return examples
+	}
+	ordered := append([]Example(nil), examples...)
+	sort.Slice(ordered, func(i, j int) bool {
+		left, right := balanceRank(policy.Seed, ordered[i].ID), balanceRank(policy.Seed, ordered[j].ID)
+		if left != right {
+			return left < right
+		}
+		return ordered[i].ID < ordered[j].ID
+	})
+
+	taken := make(map[string]int, len(ordered))
+	kept := ordered[:0]
+	for _, example := range ordered {
+		group := policy.Balance.group(example)
+		if taken[group] >= policy.Balance.Max {
+			excluded[ExcludeBalanceCap]++
+			continue
+		}
+		taken[group]++
+		kept = append(kept, example)
+	}
+	return kept
+}
+
+// balanceRank orders examples for the cap. It is a different hash from the one
+// splitFor uses, so a balanced dataset does not lose a split.
+func balanceRank(seed, exampleID string) uint64 {
+	sum := sha256.Sum256([]byte(seed + "\x00balance\x00" + exampleID))
+	return binary.BigEndian.Uint64(sum[:8])
 }
 
 // splitFor places an example by hashing the seed with its identity. The split

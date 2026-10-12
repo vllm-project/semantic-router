@@ -22,13 +22,18 @@ Router Flow has three public concepts:
 
 | Concept | Surface | Purpose |
 | --- | --- | --- |
-| Flow model | `vllm-sr/flow` | A request model name that selects Flow-capable decisions. |
+| Flow model | `vllm-sr/flow` | An ordinary entrypoint mapped to a recipe containing workflow decisions. |
 | Workflow algorithm | `algorithm.type: workflows` | The decision-local orchestration policy. |
 | Worker pool | `modelRefs` | The only models workflow steps may invoke. |
 
+The public name does not implicitly filter decisions by algorithm. Declare its
+entrypoint-to-recipe mapping and the recipe's rules explicitly; a different
+public name can expose the same workflow recipe.
+
 ```mermaid
 flowchart LR
-  Request["model: vllm-sr/flow"] --> Decision["Match Flow decision"]
+  Request["model: vllm-sr/flow"] --> Recipe["Resolve configured entrypoint and recipe"]
+  Recipe --> Decision["Match decision with workflows algorithm"]
   Decision --> Plan{"Workflow mode"}
   Plan -->|"static"| Static["Configured role plan"]
   Plan -->|"dynamic"| Planner["Planner produces a plan"]

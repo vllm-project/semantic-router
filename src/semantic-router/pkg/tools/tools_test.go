@@ -15,7 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -36,7 +36,7 @@ var _ = BeforeSuite(func() {
 		path  string
 	}{
 		{model: "qwen3", path: "../../../../models/mom-embedding-pro"},
-		{model: "gemma", path: "../../../../models/mom-embedding-flash"},
+		{model: "mmbert", path: "../../../../models/Vela-1.0-Encoder-307M-Embedding"},
 	} {
 		_, statErr := os.Stat(candidate.path)
 		if os.IsNotExist(statErr) {
@@ -47,8 +47,8 @@ var _ = BeforeSuite(func() {
 		modelPath = candidate.path
 		break
 	}
-	if modelPath == "" {
-		GinkgoWriter.Println("Tools embedding models are absent; model-dependent cases will skip")
+	if modelPath == "" || !servingtest.Installed() {
+		GinkgoWriter.Println("Tools embedding models or the model runtime are absent; model-dependent cases will skip")
 		return
 	}
 
@@ -58,12 +58,12 @@ var _ = BeforeSuite(func() {
 	cfg.EmbeddingConfig.TargetDimension = 768
 	cfg.Tools.Enabled = true
 	cfg.ModelBindings = map[string]config.ModelBinding{
-		"embedding": {Deployment: "tools-test", Contract: "embedding.v1", Adapter: toolsEmbeddingModel},
+		"embedding": {Deployment: "tools-test", Contract: "embedding.v1"},
 	}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"tools-test": {Provider: "candle", Device: "cpu", Precision: "native", Artifact: modelPath},
+		"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Artifact: modelPath},
 	}
-	set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, servingtest.Managed(GinkgoT()))
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(func() { Expect(set.Close()).To(Succeed()) })
 	toolsEmbeddingProvider, err = set.Get("", 768, 0)

@@ -9,14 +9,19 @@ orchestration instead of restating it.
 Signed-off-by: vLLM-SR Team
 """
 
+import json
 import os
 import subprocess
+import time
 from contextlib import contextmanager
 from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from cli.commands.runtime_support import sensitive_env_names
 
 STARTUP_DIAGNOSTIC_TAIL_CHARS = 4000
+SETUP_TIMEOUT_SECONDS = 600
 
 
 def startup_diagnostics(stdout, stderr, returncode, secret_values=()):
@@ -36,6 +41,10 @@ def startup_diagnostics(stdout, stderr, returncode, secret_values=()):
 class ServeSessionMixin:
     """Start, await, and stop a background `vllm-sr serve` for one test."""
 
+    # The live-stack modules check the split Envoy stack; a module that checks
+    # standalone mode sets its own.
+    SERVE_GATEWAY = "extproc"
+
     def _start_serve_background(
         self,
         env: dict[str, str] | None = None,
@@ -45,6 +54,8 @@ class ServeSessionMixin:
         cmd = [
             "vllm-sr",
             "serve",
+            "--gateway",
+            self.SERVE_GATEWAY,
             *arguments,
             "--image-pull-policy",
             "ifnotpresent",
@@ -82,8 +93,35 @@ class ServeSessionMixin:
             stdout, stderr = serve_process.communicate(timeout=10)
         return stdout or "", stderr or ""
 
-    def _wait_for_serve_success(self, serve_process: subprocess.Popen) -> None:
-        """Drain the one-shot serve command and require successful startup."""
+    def _wait_for_setup_mode(self, serve_process: subprocess.Popen) -> None:
+        """Wait until the Dashboard of a first-run serve opens setup.
+
+        In setup mode `vllm-sr serve` keeps waiting to start the Router, so it
+        does not exit; stopping it leaves the stack in setup mode.
+        """
+        url = f"{self.runtime_stack.dashboard_url}/api/setup/state"
+        deadline = time.time() + SETUP_TIMEOUT_SECONDS
+        while time.time() < deadline:
+            if serve_process.poll() is not None:
+                stdout, stderr = serve_process.communicate()
+                self.fail(
+                    "Serve exited before setup opened:\n"
+                    + startup_diagnostics(stdout, stderr, serve_process.returncode)
+                )
+            try:
+                with urllib_request.urlopen(url, timeout=10) as response:
+                    if json.loads(response.read()).get("setupMode"):
+                        print("  ✓ The Dashboard opened setup")
+                        return
+            except (urllib_error.URLError, ConnectionError, TimeoutError):
+                pass
+            time.sleep(2)
+        self.fail("The Dashboard did not open setup")
+
+    def _wait_for_serve_success(
+        self, serve_process: subprocess.Popen
+    ) -> tuple[str, str]:
+        """Drain the one-shot serve command, require successful startup, return its output."""
         try:
             stdout, stderr = serve_process.communicate(
                 timeout=self.HEALTH_CHECK_TIMEOUT
@@ -115,6 +153,7 @@ class ServeSessionMixin:
                 )
             )
         print("  ✓ Serve command completed runtime startup")
+        return stdout or "", stderr or ""
 
     @contextmanager
     def _running_serve(

@@ -34,11 +34,12 @@ func TestProfileUsesCanonicalHaluWithoutAuxiliaryClassifiers(t *testing.T) {
 	if _, overridden := module["detector"]; overridden {
 		t.Fatal("profile must inherit the canonical pinned Halu detector")
 	}
-	for _, name := range []string{"fact_check", "explainer"} {
-		auxiliary := section(module, name)
-		if auxiliary["model_ref"] != "" || auxiliary["model_id"] != "" {
-			t.Fatalf("profile unexpectedly enables %s", name)
-		}
+	factCheck := section(module, "fact_check")
+	if factCheck["model_ref"] != "" || factCheck["model_id"] != "" {
+		t.Fatal("profile unexpectedly enables fact_check")
+	}
+	if _, retired := module["explainer"]; retired {
+		t.Fatal("the NLI explainer is retired; the profile must not configure it")
 	}
 	routing := section(cfg, "routing")
 	decisions, ok := routing["decisions"].([]any)
@@ -52,7 +53,10 @@ func TestProfileUsesCanonicalHaluWithoutAuxiliaryClassifiers(t *testing.T) {
 	}
 	plugin := plugins[0].(map[string]any)
 	policy := section(plugin, "configuration")
-	if plugin["type"] != "hallucination" || policy["enabled"] != true || policy["use_nli"] != false || policy["include_hallucination_details"] != true {
+	if plugin["type"] != "hallucination" || policy["enabled"] != true || policy["include_hallucination_details"] != true {
 		t.Fatalf("published detector policy changed: %+v", plugin)
+	}
+	if _, retired := policy["use_nli"]; retired {
+		t.Fatal("use_nli is retired; the profile must not set it")
 	}
 }

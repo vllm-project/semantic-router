@@ -11,19 +11,9 @@ global:
     response_cache:
       enabled: false
       backend_type: memory
-  router:
-    auto_model_names:
-      - vllm-sr/auto
   integrations:
     looper:
-      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 300
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-      flow:
-        model_names:
-          - vllm-sr/flow
 
 providers:
   defaults:
@@ -308,3 +298,7 @@ routing:
           reasoning_effort: medium
       algorithm:
         type: static
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

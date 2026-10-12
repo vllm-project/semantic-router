@@ -1,13 +1,12 @@
 package modeldownload
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestVelaHaluPublishedNativeInventory(t *testing.T) {
+func TestVelaHaluDefaultIsServedByTheRuntime(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
 listeners: []
 providers:
@@ -22,14 +21,13 @@ routing:
       modelRefs: [{model: backend}]
       plugins:
         - type: hallucination
-          configuration: {enabled: true, use_nli: false}
+          configuration: {enabled: true}
 global:
   model_catalog:
     modules:
       hallucination_mitigation:
         enabled: true
         fact_check: {model_ref: "", model_id: ""}
-        explainer: {model_ref: "", model_id: ""}
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -38,31 +36,8 @@ global:
 	if err != nil {
 		t.Fatal(err)
 	}
-	registered := config.GetModelByPath("models/Vela-1.0-Encoder-307M-Halu")
-	var spec *ModelSpec
-	for index := range specs {
-		if specs[index].LocalPath == registered.LocalPath {
-			spec = &specs[index]
-			break
-		}
+	if len(specs) != 0 {
+		t.Fatalf("router downloads models for a runtime-served detector: %+v", specs)
 	}
-	if spec == nil {
-		t.Fatalf("profile did not provision Halu: %+v", specs)
-	}
-	if spec.Revision != registered.Revision || spec.RepoID != registered.RepoID || spec.CheckONNX {
-		t.Fatalf("incorrect public artifact: %+v", spec)
-	}
-	for _, file := range []string{"config.json", "tokenizer.json", "operating_point.json"} {
-		if !slices.Contains(spec.RequiredFiles, file) {
-			t.Errorf("published Halu contract missing %s: %+v", file, spec)
-		}
-	}
-	if len(spec.RequiredFileGroups) != 1 || !slices.Contains(spec.RequiredFileGroups[0], "*.safetensors") {
-		t.Fatalf("default does not require native weights: %+v", spec)
-	}
-	for _, candidate := range specs {
-		if candidate.LocalPath == "models/mom-halugate-detector" || candidate.LocalPath == "models/mom-halugate-explainer" {
-			t.Fatalf("profile retained old detector or unused NLI: %+v", candidate)
-		}
-	}
+	assertRuntimeServed(t, cfg, specs, config.DefaultSystemModels().HallucinationDetector)
 }

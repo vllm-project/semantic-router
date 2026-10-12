@@ -1,5 +1,3 @@
-//go:build !windows && cgo
-
 package cache
 
 import (
@@ -10,7 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
 
 // Model-backed regression for #2691 through the production in-memory cache
@@ -47,11 +45,11 @@ func prepareMmbert(t *testing.T) embedding.Provider {
 	if modelPath == "" {
 		t.Skip("set VLLM_SR_MMBERT_TEST_MODEL to run the model-backed polarity regression")
 	}
-	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
+	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
 		Recipe: "cache-regression", Name: "embedding",
-		Binding: config.ModelBinding{Deployment: "mmbert-test", Contract: "embedding.v1", Adapter: "mmbert"},
+		Binding: config.ModelBinding{Deployment: "mmbert-test", Contract: "embedding.v1"},
 		Deployment: config.ModelDeployment{
-			Artifact: modelPath, Provider: "candle", Device: "cpu", Precision: "float32",
+			Artifact: modelPath, Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact",
 			Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"},
 		},
 	}, mmbertMemoryCacheDimension, mmbertMemoryCacheLayer)

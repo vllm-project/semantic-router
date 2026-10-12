@@ -120,7 +120,7 @@ func testProtocolCodecResponsesVerbosityAnthropic(ctx context.Context, client *k
 		marker := protocolCodecAnthropicProbe + " Responses verbosity probe"
 		sessionID := "responses-verbosity-anthropic-" + uuid.NewString()
 		result, requestErr := sendProtocolMatrixRaw(ctx, session, "/v1/responses", map[string]any{
-			"model": "MoM", "input": marker, "stream": stream,
+			"model": "vllm-sr/auto", "input": marker, "stream": stream,
 			"text": map[string]any{"verbosity": "low"},
 		}, stream, map[string]string{"x-vsr-test-session-id": sessionID})
 		if requestErr != nil {

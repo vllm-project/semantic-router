@@ -62,7 +62,7 @@ func testLooperFusionQuorumCallerCancellation(
 	requestErr := make(chan error, 1)
 	go func() {
 		_, sendErr := sendLocalChatCompletion(
-			requestCtx, localPort, "MoM", looperFusionCancelProbeKeyword, 60*time.Second)
+			requestCtx, localPort, "vllm-sr/auto", looperFusionCancelProbeKeyword, 60*time.Second)
 		requestErr <- sendErr
 	}()
 

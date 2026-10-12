@@ -42,7 +42,7 @@ def router_compiler_cache(
     If the image cannot be inspected, startup still works without this cache.
     """
 
-    if platform != "amd":
+    if platform != "rocm":
         return None
     try:
         result = subprocess.run(
@@ -82,7 +82,7 @@ def router_runtime_env(
     """Return router-only env with optional AMD device isolation."""
 
     router_env = dict(common_env)
-    if platform != "amd":
+    if platform != "rocm":
         return router_env
 
     visible_devices = os.getenv(AMD_ROUTER_VISIBLE_DEVICES_ENV, "").strip()

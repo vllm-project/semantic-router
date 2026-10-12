@@ -20,6 +20,9 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // sharedPrefix is longer than the 32-byte window the old hashQuery truncated to.
@@ -74,5 +77,30 @@ func TestRouterDCSelector_UpdateFeedbackKeysAffinityPerQuery(t *testing.T) {
 	}
 	if sqlBucket["dba"] == 0 || sqlBucket["poet"] != 0 {
 		t.Fatalf("sql bucket should only hold dba affinity, got %v", sqlBucket)
+	}
+}
+
+func TestRouterDCSelector_InitializeFromConfigStopsWhenEmbeddingModelIsNotPrepared(t *testing.T) {
+	selector := NewRouterDCSelector(DefaultRouterDCConfig())
+	calls := 0
+	selector.setContextEmbeddingFunc(func(context.Context, string) ([]float32, error) {
+		calls++
+		_, err := embedding.NewSet(nil, "mmbert").Get("mmbert", 0, 0)
+		return nil, err
+	})
+
+	err := selector.InitializeFromConfig(map[string]config.ModelParams{
+		"a": {Description: "fast"},
+		"b": {Description: "careful"},
+		"c": {Description: "cheap"},
+	})
+	if err != nil {
+		t.Fatalf("InitializeFromConfig() error = %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("embedding calls = %d, want 1: an unprepared model fails for every description", calls)
+	}
+	if len(selector.modelEmbeddings) != 0 {
+		t.Fatalf("model embeddings = %v, want none", selector.modelEmbeddings)
 	}
 }

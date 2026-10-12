@@ -35,11 +35,9 @@ func invokeCacheEmbedding(ctx context.Context, provider embedding.Provider, text
 // The cache selects these options; the injected provider only owns execution.
 func cacheEmbeddingOptions(model string, dimension, layer int) embedding.Options {
 	switch normalizeEmbeddingModel(model) {
-	case "bert":
-		return embedding.Options{}
 	case "mmbert":
 		return embedding.Options{Dimension: dimension, Layer: layer}
-	case "qwen3", "gemma", "multimodal":
+	case "qwen3", "multimodal":
 		return embedding.Options{Dimension: dimension}
 	default:
 		return embedding.Options{}

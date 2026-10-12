@@ -892,14 +892,13 @@ RECIPE accuracy (description = "Quality-first answers with deliberate, bounded u
 # RECIPE vault
 # =============================================================================
 
-RECIPE vault (description = "Keep private traffic inside the assigned deployment boundary, with tools and Router content storage disabled.") {
+RECIPE vault (description = "Keep private traffic inside the assigned deployment boundary, with client tools, memory, response caching, and Responses writes disabled. Replay capture follows the shared service and decision settings.") {
   # =============================================================================
   # ROUTING PROFILE
   # =============================================================================
 
   ROUTING {
     candidate_requirements: { capabilities: "declared", context: "known_limits" }
-    data_policy: { replay: true }
     strategy: priority
     model_bindings: { classifier.content-risk: { adapter: "modernbert", contract: "label_scores.v1", deployment: "hazard", operating_point: { path: "operating_point.json", sha256: "e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5" } } }
   }
@@ -979,24 +978,24 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
   }
 
   SIGNAL jailbreak prompt_attack {
-    threshold: 0.5
+    threshold: 0.75
     include_history: true
   }
 
   SIGNAL safety unsafe {
     model: ""
-    threshold: 0.5
+    threshold: 0.46
   }
 
   SIGNAL pii personal_data {
-    threshold: 0.7
+    threshold: 0.01
     pii_types_allowed: ["NRP"]
     include_history: true
     description: "Personal identifiers trigger sensitive handling independently of context."
   }
 
   SIGNAL pii personal_attribute {
-    threshold: 0.7
+    threshold: 0.01
     pii_types_allowed: ["AGE", "CREDIT_CARD", "DATE_TIME", "DOMAIN_NAME", "EMAIL_ADDRESS", "GPE", "IBAN_CODE", "IP_ADDRESS", "ORGANIZATION", "PERSON", "PHONE_NUMBER", "STREET_ADDRESS", "TITLE", "US_DRIVER_LICENSE", "US_SSN", "ZIP_CODE"]
     include_history: true
     description: "Nationality, religious and political attributes require personal context."

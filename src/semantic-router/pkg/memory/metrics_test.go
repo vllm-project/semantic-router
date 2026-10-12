@@ -105,7 +105,7 @@ func TestRecordMemoryRetrieval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			RecordMemoryRetrieval(tt.backend, tt.operation, tt.status, tt.userID, tt.duration, tt.resultCount)
+			RecordMemoryRetrieval(tt.backend, tt.operation, tt.status, tt.duration, tt.resultCount)
 		})
 	}
 }
@@ -293,7 +293,7 @@ func TestUpdateMemoryStoreSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			UpdateMemoryStoreSize(tt.backend, tt.userID, tt.count)
+			UpdateMemoryStoreSize(tt.backend, tt.count)
 		})
 	}
 }
@@ -313,7 +313,7 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name:           "MemoryRetrievalCount labels",
 			metric:         MemoryRetrievalCount,
-			expectedLabels: []string{"backend", "status", "user_id"},
+			expectedLabels: []string{"backend", "status"},
 		},
 		{
 			name:           "MemoryRetrievalResults labels",
@@ -343,7 +343,7 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name:           "MemoryStoreSize labels",
 			metric:         MemoryStoreSize,
-			expectedLabels: []string{"backend", "user_id"},
+			expectedLabels: []string{"backend"},
 		},
 	}
 
@@ -371,10 +371,10 @@ func TestMetricLabels(t *testing.T) {
 
 // TestRecordMemoryRetrievalIncrementsCounter verifies that recording retrieval updates the counter
 func TestRecordMemoryRetrievalIncrementsCounter(t *testing.T) {
-	backend, status, userID := "milvus", "hit", "test_retrieval_counter_user"
-	before := testutil.ToFloat64(MemoryRetrievalCount.WithLabelValues(backend, status, userID))
-	RecordMemoryRetrieval(backend, "retrieve", status, userID, 0.01, 2)
-	after := testutil.ToFloat64(MemoryRetrievalCount.WithLabelValues(backend, status, userID))
+	backend, status := "milvus", "hit"
+	before := testutil.ToFloat64(MemoryRetrievalCount.WithLabelValues(backend, status))
+	RecordMemoryRetrieval(backend, "retrieve", status, 0.01, 2)
+	after := testutil.ToFloat64(MemoryRetrievalCount.WithLabelValues(backend, status))
 	if after != before+1 {
 		t.Errorf("expected counter to increment by 1, got before=%.0f after=%.0f", before, after)
 	}
@@ -404,10 +404,10 @@ func TestRecordMemoryStoreOperationIncrementsCounter(t *testing.T) {
 
 // TestUpdateMemoryStoreSizeSetsGauge verifies that UpdateMemoryStoreSize sets the gauge
 func TestUpdateMemoryStoreSizeSetsGauge(t *testing.T) {
-	backend, userID := "milvus", "test_gauge_user"
+	backend := "milvus"
 	count := 42
-	UpdateMemoryStoreSize(backend, userID, count)
-	got := testutil.ToFloat64(MemoryStoreSize.WithLabelValues(backend, userID))
+	UpdateMemoryStoreSize(backend, count)
+	got := testutil.ToFloat64(MemoryStoreSize.WithLabelValues(backend))
 	if got != float64(count) {
 		t.Errorf("expected gauge %.0f, got %.0f", float64(count), got)
 	}
@@ -473,7 +473,7 @@ func TestMetricsExported(t *testing.T) {
 // TestMetricsHaveSamplesAfterRecording verifies that after recording, metrics have at least one sample
 func TestMetricsHaveSamplesAfterRecording(t *testing.T) {
 	// Record one of each so that all three categories have data
-	RecordMemoryRetrieval("milvus", "retrieve", "hit", "sample_user", 0.01, 1)
+	RecordMemoryRetrieval("milvus", "retrieve", "hit", 0.01, 1)
 	RecordMemoryExtraction("success", 0.1, 1, "semantic")
 	RecordMemoryStoreOperation("milvus", "store", "success", 0.01)
 
@@ -507,9 +507,9 @@ func TestMetricsHaveSamplesAfterRecording(t *testing.T) {
 func TestMetricsIntegration(t *testing.T) {
 	// Simulate a retrieval operation
 	t.Run("retrieval flow", func(t *testing.T) {
-		RecordMemoryRetrieval("milvus", "retrieve", "hit", "test_user", 0.025, 5)
-		RecordMemoryRetrieval("milvus", "retrieve", "miss", "test_user", 0.010, 0)
-		RecordMemoryRetrieval("milvus", "retrieve", "error", "test_user", 0.001, -1)
+		RecordMemoryRetrieval("milvus", "retrieve", "hit", 0.025, 5)
+		RecordMemoryRetrieval("milvus", "retrieve", "miss", 0.010, 0)
+		RecordMemoryRetrieval("milvus", "retrieve", "error", 0.001, -1)
 	})
 
 	// Simulate an extraction operation
@@ -524,6 +524,6 @@ func TestMetricsIntegration(t *testing.T) {
 		RecordMemoryStoreOperation("milvus", "store", "success", 0.050)
 		RecordMemoryStoreOperation("milvus", "update", "success", 0.075)
 		RecordMemoryStoreOperation("milvus", "forget", "success", 0.020)
-		UpdateMemoryStoreSize("milvus", "test_user", 10)
+		UpdateMemoryStoreSize("milvus", 10)
 	})
 }

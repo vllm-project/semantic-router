@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 )
@@ -36,14 +35,6 @@ func testModelArtifactsAvailable(modelPath string) bool {
 		return true
 	}
 	return false
-}
-
-func skipTestIfModelArtifactsMissing(t *testing.T, label string, modelPath string) {
-	t.Helper()
-	if testModelArtifactsAvailable(modelPath) {
-		return
-	}
-	t.Skipf("%s artifacts not available at %s (missing model weights)", label, modelPath)
 }
 
 func skipSpecIfModelArtifactsMissing(label string, modelPath string) {

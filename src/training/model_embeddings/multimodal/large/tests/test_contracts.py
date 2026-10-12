@@ -36,7 +36,7 @@ class LargeProducerContracts(unittest.TestCase):
     def test_production_config_matches_released_hyperparameters(self) -> None:
         text = (ROOT / "configs" / "production.yaml").read_text()
         expected = {
-            "text_encoder_name: llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+            "text_encoder_name: vllm-sr/mmbert-embed-32k-2d-matryoshka",
             "image_encoder_name: google/siglip2-so400m-patch14-384",
             "audio_encoder_name: openai/whisper-medium",
             "embedding_dim: 768",

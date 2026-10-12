@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -137,7 +137,7 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 			EmbeddingProvider: storagetest.Vectors{Size: 384},
 			Enabled:           true,
 			Config:            valkeyConfig,
-			EmbeddingModel:    "bert",
+			EmbeddingModel:    "qwen3",
 		})
 		assert.Error(t, err, "Should fail to connect to invalid host")
 	})
@@ -166,7 +166,7 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 			EmbeddingProvider: storagetest.Vectors{Size: 384},
 			Enabled:           true,
 			Config:            valkeyConfig,
-			EmbeddingModel:    "bert",
+			EmbeddingModel:    "qwen3",
 		})
 		assert.Error(t, err, "Should fail when index doesn't exist and auto-creation is disabled")
 		assert.Contains(t, err.Error(), "does not exist", "Error should mention index doesn't exist")
