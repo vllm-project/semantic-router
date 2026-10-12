@@ -2,7 +2,7 @@
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
-  source_commit: "8d971517501f80107607162e8aebcc084ca71923"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/nvidia-cuda.md"
   outdated: false
 ---
@@ -11,14 +11,14 @@ translation:
 
 模型服务器和 Semantic Router 是独立服务。常见部署将 Router 保留在 CPU 上，并把 NVIDIA GPU 交给 vLLM。当本地嵌入或分类器也需要 GPU 加速时，使用 Router 的 CUDA 镜像。
 
-`--platform nvidia` 仅影响本地 Router 栈。它选择 CUDA Router 镜像，将 NVIDIA GPU 传入 Router 容器，并更改其生成的运行时配置，使受支持的本地信号模型优先使用 CUDA。它**不会**下载语言模型或启动 vLLM 服务器。
+`--platform cuda` 为实例选择 CUDA 执行平台。对于 Docker，它选择 CUDA Router 镜像，将 NVIDIA GPU 传入 Router 容器，并更改其生成的运行时配置，使受支持的本地信号模型优先使用 CUDA。它**不会**下载语言模型或启动 vLLM 服务器。
 
 ## 前置条件
 
 - Linux，以及你计划运行的 vLLM 发行版所支持的 NVIDIA GPU；
 - 使用当前 Semantic Router CUDA 镜像时需要 x86-64 主机；
-- Router 镜像需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），其本地模型按该最低要求编译；构建时可通过 `CUDA_COMPUTE_CAP=<value>` 调整最低计算能力要求；
-- NVIDIA 驱动，以及传入 Router 容器的 GPU。CUDA Router 镜像直接链接驱动库，因此即使所有 Router 侧模型都配置为使用 CPU，没有 GPU 透传时仍无法启动；
+- Router 镜像需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），这是其 PyTorch 构建（CUDA 12.8）包含的最旧架构；
+- NVIDIA 驱动，以及为在 CUDA 上运行的 Router 侧模型传入 Router 容器的 GPU；
 - Docker 和 NVIDIA Container Toolkit；
 - 有足够的 GPU 内存用于 vLLM 模型、KV cache 以及任何 Router 侧模型；以及
 - 一份完整的 Semantic Router 配置，并带有可到达的模型端点。
@@ -95,27 +95,27 @@ providers:
 
 ## 在 NVIDIA 上运行 Router
 
-如果 vLLM 应拥有全部 GPU 内存，将 Router 保留在 CPU 上：
+如果 vLLM 应拥有全部 GPU 内存，用 `--platform cpu` 将 Router 的自动设备选择限制为 CPU；省略时 CLI 会自动检测平台：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --config config.yaml --platform cpu
 ```
 
-要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform nvidia`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
+要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --platform nvidia --config config.yaml
+vllm-sr serve --platform cuda --config config.yaml
 ```
 
 对于源码检出，先构建维护中的 CUDA 镜像，并显式选择它的 `latest` tag。即使采用可编辑安装，只要包版本号是稳定版本，CLI 默认仍会选择发布 tag。设置镜像覆盖后，`ifnotpresent` 会复用本地构建，同时允许 CLI 获取缺失的配套镜像：
 
 ```bash
-VLLM_SR_PLATFORM=nvidia make vllm-sr-build
+VLLM_SR_PLATFORM=cuda make vllm-sr-build
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
   vllm-sr serve \
-  --platform nvidia \
+  --platform cuda \
   --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
@@ -152,11 +152,11 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ### Docker 拒绝 `--gpus all`
 
-用 `nvidia-ctk` 配置 Docker，重启 Docker，并重复 NVIDIA 的示例容器命令。在调试 vLLM 或 Semantic Router 之前，先调试容器运行时。对于 CUDA Router 镜像，GPU 透传是必需的：它链接了驱动库，因此透传不可用时，容器会在启动时退出，并报告 `libcuda.so.1: cannot open shared object file`。
+用 `nvidia-ctk` 配置 Docker，重启 Docker，并重复 NVIDIA 的示例容器命令。在调试 vLLM 或 Semantic Router 之前，先调试容器运行时：透传不可用时，配置为使用 CUDA 的 Router 侧模型无法加载。
 
 ### Router 使用 CPU
 
-确认 `--platform nvidia` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_NVIDIA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
+确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_CUDA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
 
 ### vLLM 或 Router 耗尽 GPU 内存
 
@@ -168,4 +168,4 @@ vLLM 模型、KV cache 和 Router 侧模型争夺同一设备内存。将 Router
 
 ### Kubernetes 不调度 GPU
 
-`--platform nvidia` 是本地容器快捷方式。对于 Kubernetes，通过 Helm values 或 Operator 选择 CUDA 镜像，并配置 GPU 资源、NVIDIA 设备插件和节点放置。部署边界见[配置工作流](configuration-workflows#helm)。
+`--platform cuda` 是本地容器快捷方式。对于 Kubernetes，通过 Helm values 或 Operator 选择 CUDA 镜像，并配置 GPU 资源、NVIDIA 设备插件和节点放置。部署边界见[配置工作流](configuration-workflows#helm)。

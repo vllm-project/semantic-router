@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -115,7 +115,6 @@ config:
           enabled: true
           model_ref: ""
           model_id: ""
-          variant: ""
           backend:
             protocol: http_classify
             contract: label_distribution.v1
@@ -129,18 +128,16 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
         hallucination_mitigation:
           enabled: false
 # See the jailbreak-onerror profile: the router requires a
 # jailbreak_type_mapping.json on disk even for protocol: http_classify, and
-# a minimal stand-in mapping is enough because this profile never runs local
-# candle inference.
+# a minimal stand-in mapping is enough because this profile never runs a
+# local model.
 extraVolumes:
   - name: jailbreak-mapping
     configMap:

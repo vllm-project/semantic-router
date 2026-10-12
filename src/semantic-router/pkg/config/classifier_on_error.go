@@ -63,3 +63,29 @@ func (c ClassifierOnErrorConfig) ValidateOnError() error {
 		return fmt.Errorf("on_error: unrecognized value %q, must be one of: %s, %s", c.OnError, OnErrorAllow, OnErrorBlock)
 	}
 }
+
+// UnscannedConfig is what a safety rule (prompt guard, PII) does with content
+// its model did not read in full: longer than the model's input or scan
+// budget, truncated, or not scanned within the signal's deadline. With
+// OnErrorBlock (the default) the rule matches it, so padding a request cannot
+// carry content past the guard; with OnErrorAllow the content follows
+// on_error, as a backend failure does.
+type UnscannedConfig struct {
+	OnUnscanned string `yaml:"on_unscanned,omitempty"`
+}
+
+// UnscannedBlocks reports whether content the model did not read matches the rule.
+func (c UnscannedConfig) UnscannedBlocks() bool {
+	return c.OnUnscanned != OnErrorAllow
+}
+
+// ValidateOnUnscanned rejects any OnUnscanned value other than the empty
+// default, allow, or block.
+func (c UnscannedConfig) ValidateOnUnscanned() error {
+	switch c.OnUnscanned {
+	case "", OnErrorAllow, OnErrorBlock:
+		return nil
+	default:
+		return fmt.Errorf("on_unscanned: unrecognized value %q, must be one of: %s, %s", c.OnUnscanned, OnErrorAllow, OnErrorBlock)
+	}
+}

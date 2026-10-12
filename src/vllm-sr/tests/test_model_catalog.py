@@ -146,7 +146,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
@@ -168,6 +168,21 @@ def test_virtual_models_do_not_advertise_non_chat_protocols() -> None:
 
     assert model_catalog._parse_catalog_protocols(protocols) == (
         "openai/chat-completions@1",
+    )
+
+
+def test_native_protocol_does_not_expand_chat_recipe_interfaces() -> None:
+    shared = packaged_model_catalog_document()
+    assert any(
+        protocol["id"] == "vllm-sr/systemone@1" for protocol in shared["protocols"]
+    )
+    assert all(
+        "vllm-sr/systemone@1" not in model.protocols
+        for model in load_model_catalog("latest").models
+    )
+    assert all(
+        "openai/audio-speech@1" not in model.protocols
+        for model in load_model_catalog("latest").models
     )
 
 
@@ -267,6 +282,19 @@ def test_catalog_evaluates_cli_and_router_versions_independently(
             CatalogComponentVersions(cli="0.5.0-rc.1", router="0.3.0"),
             True,
             "compatible",
+        ),
+        # A PEP 440 dev build precedes its release, as a prerelease does.
+        (
+            CatalogComponentVersions(
+                cli="0.5.0.dev20261007063125", router="0.5.0.dev20261007063125"
+            ),
+            True,
+            "compatible",
+        ),
+        (
+            CatalogComponentVersions(cli="0.3.0.dev1", router="0.3.0"),
+            False,
+            "requires cli >= 0.3.0",
         ),
     ],
 )

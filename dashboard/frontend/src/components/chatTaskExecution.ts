@@ -40,7 +40,6 @@ type ExecuteTools = (
 
 interface RunPlaygroundTaskOptions {
   buildTaskTools: (task: PlaygroundTask) => ToolDefinition[]
-  clawManagementDisabled: boolean
   clearConversationActiveTask: (conversationId: string, taskId: string) => void
   endpoint: string
   executeTools: ExecuteTools
@@ -156,7 +155,7 @@ const buildExecutionRequest = (
   options: RunPlaygroundTaskOptions,
   preparedTask: PreparedPlaygroundTask,
 ): PlaygroundExecutionRequest => {
-  const { buildTaskTools, clawManagementDisabled, getConversationMessagesSnapshot, task } = options
+  const { buildTaskTools, getConversationMessagesSnapshot, task } = options
   const exactTools = Array.isArray(task.exactRequest?.tools)
     ? (task.exactRequest.tools as ToolDefinition[])
     : null
@@ -166,7 +165,6 @@ const buildExecutionRequest = (
     : buildChatMessages(
         getConversationMessagesSnapshot(task.conversationId),
         preparedTask.trimmedInput,
-        task.requestOptions.enableClawMode && !clawManagementDisabled,
         preparedTask.attachments,
       )
   const requestBody = task.exactRequest

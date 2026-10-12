@@ -18,28 +18,28 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/topiccontinuity"
 )
 
-// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
+// EnhancedHallucinationSpan is one unsupported span with its offsets, score,
+// severity and explanation.
 type EnhancedHallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
 // ResponseHallucinationEvidence is the detector output behind the
 // hallucination signal: the verdict, its confidence, and the spans it rests
-// on, with NLI explanations when the rule asked for them.
+// on, with span details when the detector explains them.
 type ResponseHallucinationEvidence struct {
 	Detected       bool
 	Confidence     float32
@@ -57,6 +57,39 @@ type EnhancedHallucinationInfo struct {
 	Spans          []EnhancedHallucinationSpan `json:"spans"`
 }
 
+// SessionProvenance identifies how RequestContext.SessionID was derived. A
+// closed enum: only the values declared below are valid, and callers must
+// not construct or compare against any other string. See
+// sticky_tool_identity.go for the trust boundary this exists to support.
+type SessionProvenance string
+
+const (
+	// SessionProvenanceNone means no session ID has been derived yet (the
+	// zero value).
+	SessionProvenanceNone SessionProvenance = ""
+	// SessionProvenanceResponseAPI: SessionID came from server-retained
+	// Response API state (ResponseObjectState.SessionTrackingID) — trusted.
+	SessionProvenanceResponseAPI SessionProvenance = "response_api"
+	// SessionProvenanceHeader: SessionID came from the client-supplied
+	// x-session-id header — trusted only because it is scoped inside
+	// AuthenticatedPrincipal's hard namespace by callers that need
+	// trust (a header alone is never authentication).
+	SessionProvenanceHeader SessionProvenance = "header"
+	// SessionProvenanceAnthropicPromptCache: SessionID came from Anthropic
+	// transport/body signals (x-claude-code-session-id or
+	// metadata.user_id) — client-influenced, not trusted for sticky state.
+	SessionProvenanceAnthropicPromptCache SessionProvenance = "anthropic_prompt_cache"
+	// SessionProvenanceMessageHash: SessionID is a derived fingerprint of
+	// message content/structure — a heuristic grouping signal, not an
+	// explicit session declaration; not trusted for sticky state.
+	SessionProvenanceMessageHash SessionProvenance = "message_hash"
+	// SessionProvenanceRequestID: SessionID is a per-request pseudo-session
+	// derived from the request ID — by construction never repeats across
+	// requests, so it cannot carry cross-turn state; not trusted for
+	// sticky state.
+	SessionProvenanceRequestID SessionProvenance = "request_id"
+)
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
@@ -66,8 +99,11 @@ type RequestContext struct {
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
 	RAGRerankerIdentity string
-	Headers             map[string]string
-	RequestID           string
+	// ConfigVersion is the version of the configuration snapshot that serves
+	// the request; 0 when the router serves without the lifecycle.
+	ConfigVersion uint64
+	Headers       map[string]string
+	RequestID     string
 	// IngressBodyBytes records only transport size. Source bytes live in the
 	// bounded, ephemeral protocol envelope and are never general-purpose state.
 	IngressBodyBytes  int
@@ -106,6 +142,12 @@ type RequestContext struct {
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
+	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
+	// Arrival diagnostics, set at end of stream in STREAMED modes only.
+	StreamedBodyStats StreamedBodyStats
+
+	// Request header reply held until a full-duplex body is routed.
+	fullDuplexHold *fullDuplexHeaderHold
 
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
@@ -119,6 +161,8 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
+	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded
 	// downstream to the client. Once true, response headers are committed and no
 	// subsequent replacement or fallback response may be attempted.
@@ -134,13 +178,33 @@ type RequestContext struct {
 	// and inflight.End on it is a no-op.
 	InflightToken uint64
 
+	// InflightModel is the model key whose bucket InflightToken was taken
+	// from. It travels with the token so every End site releases the exact
+	// bucket Begin admitted, even if the routing model is later rewritten
+	// (fallback candidates) or the request errors out before dispatch.
+	InflightModel string
+
 	// Session-aware transition metadata
-	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
-	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
+	SessionID string // Derived from ConversationID (Response API) or message hash (Chat Completions)
+	// SessionProvenance records how SessionID was derived. Only
+	// SessionProvenanceResponseAPI and SessionProvenanceHeader are trusted
+	// enough for session-scoped sticky tool-set selection (issue #3347) to
+	// bind state to — the others are heuristic/derived signals a caller
+	// could influence or collide, not an explicit session declaration. See
+	// ResolveStickyToolIdentity in sticky_tool_identity.go.
+	SessionProvenance SessionProvenance
+	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
+	// (from the configured authz header, via authHeaderUserID) — never a
+	// client-supplied or derived value. Empty when the request carries no
+	// trusted authentication. A header's mere presence is not
+	// authentication; this field must only ever be populated from the
+	// configured auth gateway header, never from request-body content.
+	AuthenticatedPrincipal string
+	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation
@@ -204,10 +268,17 @@ type RequestContext struct {
 	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
 	// Never recover its reasoning settings by searching model names again.
 	VSRSelectedCandidate *config.ModelRef
+	// primaryBackendName is the exact provider backend selected for the primary
+	// dispatch. It is separate from VSRSelectedModel, which preserves the
+	// client-facing logical model or LoRA identity for telemetry and headers.
+	primaryBackendName string
 
 	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
 	FallbackRecord        *fallback.ExecutionRecord
 	FallbackAuditRecorded bool
+	// fallbackExecutedByCaller is set when the native gateway runs the
+	// request's fallback chain; the response phases then never fall back.
+	fallbackExecutedByCaller bool
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -235,6 +306,7 @@ type RequestContext struct {
 	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
 	VSRMatchedPreference      []string // Matched preference signals
 	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
 	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
@@ -253,6 +325,7 @@ type RequestContext struct {
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
@@ -311,9 +384,12 @@ type RequestContext struct {
 	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
-	PIIDetected bool     // True if PII was detected
-	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
-	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+	// PIIContentVerified means the classifier fully scanned the available text without PII.
+	PIIContentVerified bool
+	PIIEvidence        []classification.PrivacyEvidence
+	PIIDetected        bool     // True if PII was detected
+	PIIEntities        []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
@@ -335,15 +411,23 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
+	// RouterReplayContentOmitted records prompt omission. Response/tool capture
+	// separately checks stage-specific evidence and the resolved capture policy.
+	RouterReplayContentOmitted bool
 
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
 
 	// Looper context
-	LooperRequest   bool                  // True only for token-authenticated in-process looper requests
+	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
+	Hop             *routing.Hop          // The routing context of a hop served in process
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+
+	// ListenerModels, when set, are the only request models the listener the
+	// client request arrived on accepts.
+	ListenerModels routing.ListenerModels
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
@@ -358,7 +442,17 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	SemanticResponse         *llmprotocol.Response
+	// originalConversation memoizes one decode of OriginalContextHistory for
+	// the request. It is read-only by contract: consumers must not mutate it.
+	originalConversation       *contextcompression.ConversationHistory
+	originalConversationLoaded bool
+	// TopicContinuityEvaluations holds the selected recipe's topic-continuity
+	// results in rule declaration order, with content-free cost receipts.
+	TopicContinuityEvaluations []topiccontinuity.RuleEvaluation
+	// TopicContinuityResults indexes the same results by rule name. Values are
+	// plain structs, so reads are detached copies.
+	TopicContinuityResults map[string]topiccontinuity.Result
+	SemanticResponse       *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would

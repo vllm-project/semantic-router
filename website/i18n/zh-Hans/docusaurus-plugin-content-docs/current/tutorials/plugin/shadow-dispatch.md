@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "b2db276cf1b5057c31f2ab2bddbd181e5692dbb6"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/plugin/shadow-dispatch.md"
   outdated: false
 ---
@@ -70,7 +70,7 @@ plugins:
 | `max_retries` | `0` | 传输错误或可重试状态上的额外尝试。上限为 `3`。 |
 | `capture_response_body` | `false` | 在结果中存储 shadow 文本的有界摘录。默认关闭；只保留大小、token 和 SHA-256。 |
 | `max_capture_bytes` | `4096` | 开启采集时的摘录上限。 |
-| `tls_skip_verify` | `false` | 跳过由内部 CA 签名的 https shadow 后端的证书校验。主路径通过 Envoy 到达后端，Envoy 不校验上游证书。 |
+| `tls_skip_verify` | `false` | 跳过由内部 CA 签名的 https shadow 后端的证书校验。此设置仅作用于 shadow HTTP 客户端，不会配置主请求的后端传输。 |
 | `forward_headers` | `[]` | Shadow 副本可以携带的决策 `header_mutation` 名称，按不区分大小写匹配。决策为主后端设置的其他内容都不会转发，因此像 `X-Internal-Token` 这样的自定义凭据留在主路径。已知凭据载体（`Authorization`、`Proxy-Authorization`、`Cookie`、`x-api-key`、`api-key`、`x-goog-api-key`、`x-user-*-key` 请求头）即使被列出，也会在配置加载时拒绝并在运行时丢弃。 |
 
 当请求被采样排除，或主分发已经选择了 shadow 模型时，会跳过 shadow，只产生指标而不产生结果。通过 looper 执行的决策（ratings、confidence、fusion、ReMoM、workflows）会在配置加载时拒绝该插件，因为 shadow hook 只在单模型提供商分发上运行。
@@ -121,5 +121,7 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 ```
 
 清单只携带标识、输出摘要与来源信息，不含提示词或响应文本，因此可以与它支撑的数据一同发布。一条观测要么整条进入，要么完全不进入：失败的请求、未结束的请求、输入被截断的请求，以及从未记录摘要的请求都会被排除并按原因计数，`counts` 会报告保留了什么、丢弃了什么。由于清单描述的是构建它的整个选择集，超过 5000 条记录的选择会被拒绝，而不是按页导出。请缩小过滤条件后重新导出。
+
+某一个 recipe 或某一个 decision 通常会主导线上流量，基于它构建的数据集读起来像是关于整个路由器的结论，实际上只是关于那个 decision 的结论。`balance_by` 与 `balance_max` 限制单个分组最多能贡献多少条，分组方式为 `recipe`、`decision` 或 `primary_model`。上限保留哪些行由 seed 决定而非时间先后，因此均衡后的数据集是对流量的采样，而不是对到达时间的采样；因均衡而丢弃的行与其他排除一样计入 `balance_cap`。两个参数必须同时给出，只给其一会被拒绝。
 
 导出需要 `replay.read` 权限，读取的记录与列表 API 相同。被比较的决策必须开启正文采集，否则未采集到请求的观测会以 `request_body_missing` 被排除。

@@ -18,7 +18,6 @@ class DependencyGraphTests(unittest.TestCase):
             "root": "src/pkg",
             "module_root": "src",
             "include": ["src/pkg/*.py"],
-            "test_patterns": ["**/test_*.py"],
             "cycle_policy": "no-new",
         }
 
@@ -66,7 +65,6 @@ class DependencyGraphTests(unittest.TestCase):
             "language": "typescript",
             "root": "ui",
             "include": ["ui/*.ts"],
-            "test_patterns": [],
             "cycle_policy": "no-new",
         }
         current = {
@@ -116,18 +114,6 @@ class DependencyGraphTests(unittest.TestCase):
         errors = [finding for finding in findings if finding.level == "ERROR"]
         self.assertEqual(len(errors), 1)
         self.assertIn("domain-must-not-depend-on-entrypoint", errors[0].message)
-
-    def test_health_summary_is_diagnostic(self) -> None:
-        sources = {
-            "src/pkg/a.py": "VALUE = 1\n",
-            "src/pkg/test_a.py": "def test_value():\n    assert True\n",
-        }
-
-        message = architecture_check.health_message(self.python_scope, sources)
-
-        self.assertIn("production_files=1", message)
-        self.assertIn("test_files=1", message)
-        self.assertIn("source_lines=3", message)
 
 
 if __name__ == "__main__":

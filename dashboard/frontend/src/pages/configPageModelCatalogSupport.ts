@@ -49,6 +49,7 @@ export const modelAPIFormats = [
   'openai',
   'responses',
   'anthropic',
+  'systemone',
   'speech',
 ] as const satisfies readonly NonNullable<ProviderModel['api_format']>[]
 
@@ -56,6 +57,7 @@ export const protocolForModelAPIFormat = (format?: string): string | undefined =
   if (format === 'openai') return 'openai/chat-completions@1'
   if (format === 'responses') return 'openai/responses@1'
   if (format === 'anthropic') return 'anthropic/messages@1'
+  if (format === 'systemone') return 'vllm-sr/systemone@1'
   if (format === 'speech') return 'openai/audio-speech@1'
   return undefined
 }

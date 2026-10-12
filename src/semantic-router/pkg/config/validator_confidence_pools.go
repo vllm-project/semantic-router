@@ -89,10 +89,13 @@ func ambiguousConfidencePools(decisions []Decision) []confidencePoolFallback {
 }
 
 // collectScoreKinds gathers the score kinds a rule tree can report. A
-// predicate leaf answers a threshold rather than reporting a measurement, so
-// it declares no kind.
+// predicate leaf answers a threshold rather than reporting a measurement, and
+// a NOT subtree gates eligibility without reporting its child's score.
 func collectScoreKinds(node *RuleNode, kinds map[ScoreKind]struct{}) {
 	if node == nil {
+		return
+	}
+	if strings.EqualFold(node.Operator, RuleOperatorNot) {
 		return
 	}
 	if len(node.Conditions) > 0 {

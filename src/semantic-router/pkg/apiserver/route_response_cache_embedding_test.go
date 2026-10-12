@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 type responseCacheDiagnosticProvider struct {
@@ -35,10 +34,6 @@ func (p *responseCacheDiagnosticProvider) EmbedBatch(ctx context.Context, texts 
 func (p *responseCacheDiagnosticProvider) Embed(context.Context, string) ([]float32, error) {
 	p.calls++
 	return []float32{1, 0}, nil
-}
-
-func (*responseCacheDiagnosticProvider) Windows(context.Context, string, int) ([]embedding.Window, error) {
-	return []embedding.Window{{Start: 0, End: 1}}, nil
 }
 
 func TestResponseCacheDiagnosticsBorrowActualServiceWithoutDefaultEmbedding(t *testing.T) {

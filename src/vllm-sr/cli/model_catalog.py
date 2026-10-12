@@ -313,17 +313,19 @@ def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
     if not isinstance(value, list) or not value:
         raise ModelCatalogError("built-in catalog has no protocols")
     protocol_ids: list[str] = []
-    chat_protocol_ids: set[str] = set()
     for item in value:
         if not isinstance(item, dict):
             raise ModelCatalogError("catalog protocol entry is invalid")
-        protocol_id = _required_string(item, "id")
-        protocol_ids.append(protocol_id)
-        capabilities = item.get("capabilities")
-        if isinstance(capabilities, list) and "chat" in capabilities:
-            chat_protocol_ids.add(protocol_id)
-    protocols = _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
-    return tuple(protocol for protocol in protocols if protocol in chat_protocol_ids)
+        protocol_ids.append(_required_string(item, "id"))
+    _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
+    # CLI virtual bundles currently materialize Chat recipes. Recognizing a
+    # native protocol in the shared catalog must not advertise it on MoM.
+    chat_protocols = tuple(
+        item["id"] for item in value if "chat" in item.get("capabilities", [])
+    )
+    if not chat_protocols:
+        raise ModelCatalogError("built-in virtual recipes have no Chat protocols")
+    return chat_protocols
 
 
 def _parse_model_verification(

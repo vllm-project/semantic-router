@@ -98,7 +98,10 @@ filters candidates.
 ## Dependencies and Limitations
 
 Token estimates depend on the request representation and are not a guarantee
-that a backend accepts the resulting prompt. Keep model-card context windows
+that a backend accepts the resulting prompt. Prose starts at about four bytes
+per token. The Router then learns the ratio from provider-reported prompt
+usage, but only for requests with at least 4 KiB of text. On shorter requests
+the chat-template overhead dominates the reported count. Keep model-card context windows
 accurate and allow room for generated output. Before selection, the Router
 removes decision candidates whose configured, positive context window is
 smaller than the estimated request. Missing context metadata remains eligible

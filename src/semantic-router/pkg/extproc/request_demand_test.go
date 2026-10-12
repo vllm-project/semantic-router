@@ -12,7 +12,7 @@ import (
 )
 
 func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
-	request := testNeutralRequest("auto", "one two three four")
+	request := testNeutralRequest("vllm-sr/auto", "one two three four")
 	request.Generation = 7
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
 	promptTokens := extractSemanticRequestSignals(request).ContextTokenFloor
@@ -24,7 +24,7 @@ func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
 		promptTokens,
 	)
 
-	if snapshot.Stage != requestDemandStageOriginal || snapshot.Model != "auto" ||
+	if snapshot.Stage != requestDemandStageOriginal || snapshot.Model != "vllm-sr/auto" ||
 		snapshot.Representation != requestDemandRepresentationSemantic {
 		t.Fatalf("unexpected snapshot identity: %+v", snapshot)
 	}
@@ -40,7 +40,7 @@ func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
 }
 
 func TestRequestDemandSnapshotMarksMissingOutputReserveUnknown(t *testing.T) {
-	request := testNeutralRequest("auto", "hello")
+	request := testNeutralRequest("vllm-sr/auto", "hello")
 	snapshot := requestDemandSnapshot(
 		requestDemandStageOriginal,
 		request,

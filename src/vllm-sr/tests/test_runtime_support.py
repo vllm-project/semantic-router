@@ -85,6 +85,20 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
     assert env_vars["SR_LOG_ENCODING"] == "console"
 
 
+@pytest.mark.parametrize(
+    "initial,expected", [({}, "8"), ({"VLLM_SRUN_CPU_THREADS": "4"}, "4")]
+)
+def test_cpu_worker_threads_reach_container_without_overriding_explicit_env(
+    monkeypatch, initial, expected
+):
+    monkeypatch.setenv("VLLM_SRUN_CPU_THREADS", "8")
+
+    env_vars = dict(initial)
+    append_passthrough_env_vars(env_vars)
+
+    assert env_vars["VLLM_SRUN_CPU_THREADS"] == expected
+
+
 def test_append_passthrough_env_vars_includes_envoy_log_level_without_changing_router_level(
     monkeypatch,
 ):

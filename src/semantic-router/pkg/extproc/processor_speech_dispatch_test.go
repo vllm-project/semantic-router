@@ -179,6 +179,7 @@ func TestSpeechAudioResponseIsForwardedUnchangedAndCompletesTheRequest(t *testin
 	router := &OpenAIRouter{Config: &config.RouterConfig{}, ReplayRecorder: recorder}
 	model := "speech-audio-response-test"
 	ctx := speechResponseTestContext(t, recorder, router, model)
+	ctx.InflightModel = model
 	ctx.InflightToken = inflight.Begin(model)
 
 	header, err := router.handleResponseHeaders(speechResponseHeaders("200", "audio/wav"), ctx)

@@ -1,10 +1,13 @@
-# Vela Omni runtime artifacts
+# Vela Omni ONNX bundles
 
-The published Nano and Mini repositories contain native Python models and
-weights. They do not publish the four ONNX graphs used by the router. This
-directory produces those graphs during an explicit build or model preparation
-step, verifies them against the pinned public implementation, and packages only
-data for the native runtime. Serving never imports the published Python code.
+The model runtime serves the published Nano and Mini repositories on its
+native engine, from their weights, by default. This directory produces the
+optional alternative: four ONNX graphs and the exact processors for the
+runtime's `onnxruntime` engine (the `onnx` extra of `vllm-srun`), verified
+against the pinned public implementation and packaged as data only. Serving
+never imports the published Python code. The reference inputs and outputs it
+keeps (`VELA_OMNI_KEEP_GOLDEN=1`) are also the evidence the native towers are
+checked against.
 
 ## Prepare artifacts
 
@@ -24,12 +27,11 @@ outputs. Both variants are exported sequentially, with each modality in a fresh
 process to release its temporary memory. The builder runs offline unit tests
 before downloading models and requires all three modalities to pass parity.
 
-The router Dockerfiles share this producer stage. They place immutable bundles
-in `/opt/router-model-artifacts`, outside the mounted model cache; the router's
-model preparation copies and validates the selected bundle into its configured
-cache. Producer Python, native source weights, and temporary files are absent
-from the final serving image. Source and export scratch files are removed in the
-same build layer. Keep the Docker build cache to reuse unchanged artifacts.
+Router images ship neither ONNX Runtime nor a bundle. To serve one, install
+`vllm-srun[multimodal,onnx]` and name the bundle directory with
+`--engine onnxruntime` (or `engine: onnxruntime` on a router deployment).
+Source and export scratch files are removed in the same build layer. Keep the
+Docker build cache to reuse unchanged artifacts.
 
 For a pre-provisioned source snapshot, use the pinned dependencies in
 `requirements.txt` and export without network access:
@@ -114,26 +116,24 @@ and one/two/three CLAP windows. It checks full embedding shape, finite values,
 absolute/relative error and cosine similarity. The receipt includes source
 identity, dependency versions, producer file hashes, and executed cases. GPU
 qualification requires the requested execution provider with CPU fallback
-disabled; the native model tests additionally audit the execution profile.
+disabled.
 
-Run native source-reference parity explicitly with an artifact retaining goldens
-and `ORT_DYLIB_PATH` pointing to the installed ONNX Runtime library:
+The model runtime's `multimodal_embedding` family serves the bundle on its
+`onnxruntime` engine. Check a bundle exported with its goldens kept
+(`VELA_OMNI_KEEP_GOLDEN=1`) against the official source reference, stage by
+stage and end to end, through the runtime's request path:
 
 ```sh
-VELA_OMNI_ARTIFACT=/models/exported-nano \
-go -C onnx-binding test ./instance -run '^TestPublishedOmniParity$' -count=1 -v
-VELA_OMNI_ARTIFACT=/models/exported-mini \
-go -C onnx-binding test ./instance -run '^TestPublishedOmniFullContext$' -count=1 -v
+python3 src/model-runtime/tools/embed_parity.py omni \
+  --bundle /models/exported-nano --output nano-parity.json
 ```
 
-The second command requires a Mini artifact exported with `--full-context`, or
+Mini 32K qualification needs a Mini bundle exported with `--full-context`, or
 `VELA_OMNI_FULL_CONTEXT_REFERENCE` naming a separately generated matching source
-reference. These explicit reference tests are excluded from model-free Core;
-routine CI does not claim Mini 32K qualification. The image-calibration CI lane
-prepares Nano once, checks export parity, and uses that same immutable artifact
-for owned image classification, prepared inventory, cache/memory integration,
-and the complete frozen routing calibration. Candle's legacy multimodal lane
-retains its separate original binding compatibility tests.
+reference; routine CI does not claim it. The image-calibration CI lane serves
+the pinned Nano release on the native engine instead, for image
+classification, cache and memory integration, and the complete frozen routing
+calibration.
 
 `bundle.py` uses only Python's standard library to verify the complete inventory
 and receipt and to stage a new directory atomically. It rejects missing graphs,

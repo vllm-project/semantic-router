@@ -1,3 +1,48 @@
+- id: stepfun/step-5-preview
+  display_name: Step 5 Preview
+  description: StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.
+  kind: physical
+  publisher: StepFun
+  presentation:
+    logo: package:stepfun
+    monogram: S
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
+  family: step-5
+  reasoning_family: step-3.7
+  parameter_size: 600B (27B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 1000000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: StepFun
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://www.stepfun.com/step-5-preview
+  tags:
+  - proprietary
+  - reasoning
+  - multimodal
+  - agentic
+  - moe
+  - preview
+  released_at: '2026-09-18'
 - id: stepfun/step-3.7-flash
   display_name: Step 3.7 Flash
   description: Open-weight multimodal MoE model for efficient reasoning and agentic workflows.

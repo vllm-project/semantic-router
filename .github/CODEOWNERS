@@ -11,14 +11,10 @@
 
 # Domain mappings generated from the nearest OWNER files.
 /bench/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
-/candle-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /config/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /dashboard/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /deploy/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /e2e/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
-/ml-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
-/nlp-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
-/onnx-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /paper/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /perf/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren
 /src/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu @theohsiung @wilsonwu @Peterren

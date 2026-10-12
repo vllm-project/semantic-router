@@ -6,16 +6,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
 	pkgtestcases.Register("failover-during-traffic", pkgtestcases.TestCase{
-		Description: "While sending benign backend-routed requests, delete one vLLM pod and verify failover and recovery",
-		Tags:        []string{"ha", "failover"},
-		Fn:          testFailoverDuringTraffic,
+		Description:         "While sending benign backend-routed requests, delete one vLLM pod and verify failover and recovery",
+		Tags:                []string{"ha", "failover"},
+		MutatesClusterState: true,
+		Fn:                  testFailoverDuringTraffic,
 	})
 }
 

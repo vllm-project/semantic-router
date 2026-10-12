@@ -29,7 +29,7 @@ translation:
 
 ## 小模型 {#small-model}
 
-[`multi-modal-embed-small`](https://huggingface.co/llm-semantic-router/multi-modal-embed-small)
+[`multi-modal-embed-small`](https://huggingface.co/vllm-sr/multi-modal-embed-small)
 将紧凑的预训练塔与两层融合 Transformer 结合。其规范化 384 维输出在 32、64、128、256 和 384 维受监督，因此部署可以在向量大小和质量之间权衡。
 
 训练分阶段进行，避免一次动摇每个编码器：
@@ -61,7 +61,7 @@ python -m training.model_embeddings.multimodal.small.train \
 
 ## 大模型 {#large-model}
 
-[`multi-modal-embed-large`](https://huggingface.co/llm-semantic-router/multi-modal-embed-large)
+[`multi-modal-embed-large`](https://huggingface.co/vllm-sr/multi-modal-embed-large)
 使用长上下文 mmBERT embedder、更大的 SigLIP2 视觉塔和更大的 Whisper 音频塔。每个塔被投影到共享的 768 维空间。与小型融合架构不同，生产三编码器保持模态编码独立，因此缓存嵌入和成对对比训练保持直接。
 
 原始样本被预处理为已校验的张量分片。训练按顺序加载这些分片，带有有界预取，并使用缓存的 multiple-negatives ranking 损失：匹配对是正例，有效 batch 中的其他样本是负例，配置的难负例使边界更有信息。

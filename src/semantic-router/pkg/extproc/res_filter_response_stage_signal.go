@@ -1,8 +1,10 @@
 package extproc
 
 import (
+	"context"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -18,35 +20,34 @@ func (r *OpenAIRouter) responseJailbreakRules(ctx *RequestContext) []config.Jail
 	return classifierConfig(r.classifierForRequest(ctx)).ResponseJailbreakRules()
 }
 
-// evaluateResponseJailbreakSignal scores the model's output against the
-// jailbreak rules declared with direction: response.
+// responseJailbreakCheck scores the model's output against the jailbreak
+// rules declared with direction: response.
 //
 // It is driven by the rules, not by the plugin: a signal that only existed
 // while an enforcement plugin happened to be enabled would not be a signal, it
 // would be plugin state with a signal's name. The observation is published
 // whether or not the selected decision carries a plugin that acts on it.
-func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assistantContent string) {
+func (r *OpenAIRouter) responseJailbreakCheck(ctx *RequestContext, assistantContent string) responseStageCheck {
 	if ctx == nil || r == nil {
-		return
+		return responseStageCheck{}
 	}
 	rules := r.responseJailbreakRules(ctx)
 	if len(rules) == 0 {
-		return
+		return responseStageCheck{}
 	}
+	unresolved := responseStageCheck{publish: func() { r.publishResponseJailbreakSignal(ctx, rules, nil) }}
 
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil || !classifier.IsJailbreakEnabled() {
 		// Declared but unbacked. Unresolved rather than clean, so the plugin
 		// applies its failure policy instead of reading silence as safe.
-		r.publishResponseJailbreakSignal(ctx, rules, nil)
-		return
+		return unresolved
 	}
 	if assistantContent == "" {
 		// Nothing to score. semanticAssistantContent collects text and refusal
 		// blocks only, so a response made entirely of tool calls or media lands
 		// here, and "could not look" is not "looked and found nothing".
-		r.publishResponseJailbreakSignal(ctx, rules, nil)
-		return
+		return unresolved
 	}
 
 	// One scan serves every rule: they ask the same model the same question
@@ -54,24 +55,34 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 	// scan draws none and each rule thresholds the score itself. It also
 	// reports whether the whole response was scored, which no single threshold
 	// can answer for every rule.
-	start := time.Now()
-	scan, err := classifier.ScanJailbreak(selectionRequestContext(ctx), assistantContent)
-	latency := time.Since(start).Seconds()
-
-	if err != nil {
-		logging.Errorf("Response jailbreak signal evaluation failed: %v", err)
-		metrics.RecordPluginError("response_jailbreak", "detection_error")
-		r.publishResponseJailbreakSignal(ctx, rules, nil)
-		return
+	var (
+		scan    classification.JailbreakScan
+		err     error
+		latency float64
+	)
+	return responseStageCheck{
+		run: func(call context.Context) {
+			start := time.Now()
+			scan, err = classifier.ScanJailbreak(call, assistantContent)
+			latency = time.Since(start).Seconds()
+		},
+		publish: func() {
+			if err != nil {
+				logging.Errorf("Response jailbreak signal evaluation failed: %v", err)
+				metrics.RecordPluginError("response_jailbreak", "detection_error")
+				r.publishResponseJailbreakSignal(ctx, rules, nil)
+				return
+			}
+			for _, rule := range rules {
+				classifier.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
+			}
+			ctx.VSRResponseJailbreakType = scan.Type
+			ctx.VSRResponseJailbreakRisk = scan.RiskScore
+			ctx.VSRResponseJailbreakScoreAvailable = scan.Decision == nil
+			ctx.VSRResponseJailbreakDecision = scan.Decision
+			r.publishResponseJailbreakSignal(ctx, rules, &scan)
+		},
 	}
-	for _, rule := range rules {
-		classifier.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
-	}
-	ctx.VSRResponseJailbreakType = scan.Type
-	ctx.VSRResponseJailbreakRisk = scan.RiskScore
-	ctx.VSRResponseJailbreakScoreAvailable = scan.Decision == nil
-	ctx.VSRResponseJailbreakDecision = scan.Decision
-	r.publishResponseJailbreakSignal(ctx, rules, &scan)
 }
 
 // responseJailbreakSignalDeclared reports whether the selected recipe declares

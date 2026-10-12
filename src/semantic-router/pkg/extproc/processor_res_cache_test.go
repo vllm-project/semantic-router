@@ -175,13 +175,13 @@ func TestUpdateResponseCache_RespectsCacheMode(t *testing.T) {
 			})
 			ctx := withSelectedDecision(&RequestContext{
 				RequestID:                     "req-cache-mode",
-				CacheRequestModel:             "auto",
+				CacheRequestModel:             "vllm-sr/auto",
 				CacheSelectedModel:            "test",
 				CacheExactFingerprint:         "fingerprint",
 				CacheCompatibilityFingerprint: "compatibility",
 				CacheSemanticSafe:             true,
 				CacheQuery:                    "hello",
-				SemanticRequest:               testNeutralRequest("auto", "hello"),
+				SemanticRequest:               testNeutralRequest("vllm-sr/auto", "hello"),
 			}, decision)
 
 			router.updateResponseCache(ctx, []byte(`{"ok":true}`))
@@ -207,13 +207,13 @@ func TestUpdateResponseCache_WritesExactEntryWithRequestIdentity(t *testing.T) {
 	})
 	ctx := withSelectedDecision(&RequestContext{
 		RequestID:                     "req-exact-write",
-		CacheRequestModel:             "auto",
+		CacheRequestModel:             "vllm-sr/auto",
 		CacheSelectedModel:            "test",
 		CacheExactFingerprint:         "fingerprint",
 		CacheCompatibilityFingerprint: "compatibility",
 		CacheSemanticSafe:             true,
 		CacheQuery:                    "hello",
-		SemanticRequest:               testNeutralRequest("auto", "hello"),
+		SemanticRequest:               testNeutralRequest("vllm-sr/auto", "hello"),
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
@@ -245,7 +245,7 @@ func TestUpdateResponseCache_NoStoreControlSkipsSemanticAndExactWrites(t *testin
 	})
 	ctx := withSelectedDecision(&RequestContext{
 		RequestID:                     "req-no-store",
-		CacheRequestModel:             "auto",
+		CacheRequestModel:             "vllm-sr/auto",
 		CacheSelectedModel:            "test",
 		CacheExactFingerprint:         "fingerprint",
 		CacheCompatibilityFingerprint: "compatibility",

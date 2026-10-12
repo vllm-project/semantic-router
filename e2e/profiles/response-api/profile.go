@@ -5,7 +5,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -100,12 +99,15 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-chat-backend-midstream-error-matrix",
 		"protocol-codec-responses-backend-midstream-error-matrix",
 		"protocol-codec-agent-client-fields",
+		"prompt-cache-key-affinity",
 		"protocol-codec-responses-input-compat",
 		"protocol-codec-azure-ingress",
 		"protocol-codec-reasoning-summary-responses-backend",
 		"protocol-codec-reasoning-summary-template-responses-backend",
 		"protocol-codec-ollama-output-limit",
 		"protocol-codec-ollama-empty-content",
+		"protocol-codec-vllm-stop-sequence",
+		"protocol-codec-vllm-reasoning-order",
 		"protocol-codec-auto-unsupported-capability",
 		"protocol-codec-chat-backend-agent-client-replay",
 		"protocol-codec-responses-backend-agent-client-replay",

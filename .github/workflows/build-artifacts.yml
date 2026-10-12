@@ -59,7 +59,7 @@ jobs:
         id: build-args
         env:
           MATRIX_IMAGE: ${{ matrix.image }}
-          CARGO_BUILD_JOBS: '8'
+          ACCELERATOR: ${{ steps.definition.outputs.accelerator }}
           DASHBOARD_VERSION_MODE: ${{ inputs.mode == 'pr' && 'pr' || inputs.mode == 'release' && 'release' || 'publish' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '0' }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -71,6 +71,7 @@ jobs:
         with:
           context: ${{ steps.definition.outputs.context }}
           file: ${{ steps.definition.outputs.dockerfile }}
+          target: ${{ steps.definition.outputs.target }}
           platforms: ${{ steps.definition.outputs.platforms }}
           outputs: type=oci,dest=.agent-harness/image-output/image.tar
           tags: semantic-router-ci/${{ matrix.image }}:${{ github.sha }}

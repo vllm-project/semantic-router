@@ -31,6 +31,7 @@ SUPPORTED_PROTOCOLS = frozenset(
         "openai/chat-completions@1",
         "openai/responses@1",
         "anthropic/messages@1",
+        "vllm-sr/systemone@1",
         "openai/audio-speech@1",
     }
 )
@@ -39,6 +40,7 @@ _SEMVER = re.compile(
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
+_PEP440_DEV = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\.dev(\d+)$")
 _CATALOG_VERSION = re.compile(r"^v\d+\.\d+$")
 _CATALOG_RESOURCE_VERSION = re.compile(r"^(?:latest|v\d+\.\d+)$")
 _SLUG = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
@@ -191,7 +193,14 @@ _SECRET_KEY_TERMS = frozenset(
         "secret",
     }
 )
+# The full block must be first. Replacing only the BEGIN marker leaves the
+# key body and END line in redacted proposal output.
+_PEM_BLOCK = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
 _SECRET_LITERAL_PATTERNS = (
+    _PEM_BLOCK,
     re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)https?://[^\s/:@]+:[^\s/@]+@"),
@@ -206,6 +215,25 @@ _SECRET_LITERAL_PATTERNS = (
         r"\s*[:=]\s*[^\s,;]{8,}"
     ),
 )
+
+
+def find_embedded_secret_literals(text: str) -> frozenset[str]:
+    """Return credential-like substrings maintained for catalog manifest checks."""
+
+    found: set[str] = set()
+    for pattern in _SECRET_LITERAL_PATTERNS:
+        for match in pattern.finditer(text):
+            found.add(match.group(0))
+    return frozenset(found)
+
+
+def redact_embedded_secret_literals(text: str) -> str:
+    """Mask credential-like literals using the same patterns as catalog validation."""
+
+    redacted = text
+    for pattern in _SECRET_LITERAL_PATTERNS:
+        redacted = pattern.sub("***", redacted)
+    return redacted
 
 
 def _compatibility(
@@ -685,7 +713,17 @@ SemVerKey = tuple[int, int, int, int, SemVerPreRelease]
 def _version_tuple(value: str) -> SemVerKey | None:
     match = _SEMVER.fullmatch(value)
     if match is None:
-        return None
+        # A dev build (PEP 440 X.Y.Z.devN) precedes X.Y.Z, like a prerelease.
+        dev = _PEP440_DEV.fullmatch(value)
+        if dev is None:
+            return None
+        return (
+            int(dev.group(1)),
+            int(dev.group(2)),
+            int(dev.group(3)),
+            0,
+            ((1, "dev"), (0, int(dev.group(4)))),
+        )
     major, minor, patch, prerelease = match.groups()
     identifiers: list[tuple[int, int | str]] = []
     if prerelease is not None:

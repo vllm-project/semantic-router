@@ -36,6 +36,7 @@ class PreviewTests(unittest.TestCase):
                 "GITHUB_EVENT_NAME": "issue_comment",
                 "GITHUB_REPOSITORY": REPO,
                 "GITHUB_RUN_ID": "123",
+                "GITHUB_RUN_ATTEMPT": "1",
                 "GITHUB_SERVER_URL": "https://github.com",
                 "GITHUB_OUTPUT": str(self.root / "output"),
                 "GITHUB_STEP_SUMMARY": str(self.root / "summary"),
