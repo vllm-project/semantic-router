@@ -13,9 +13,10 @@ type APIConfig struct {
 }
 
 type ObservabilityConfig struct {
-	Tracing   TracingConfig   `yaml:"tracing"`
-	Metrics   MetricsConfig   `yaml:"metrics"`
-	Profiling ProfilingConfig `yaml:"profiling"`
+	Tracing          TracingConfig          `yaml:"tracing"`
+	Metrics          MetricsConfig          `yaml:"metrics"`
+	Profiling        ProfilingConfig        `yaml:"profiling"`
+	BackendTelemetry BackendTelemetryConfig `yaml:"backend_telemetry,omitempty"`
 }
 
 type MetricsConfig struct {
