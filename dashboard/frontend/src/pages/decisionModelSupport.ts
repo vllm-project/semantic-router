@@ -47,7 +47,7 @@ export const DECISION_MODEL_OPTIONS: readonly DecisionModelOption[] = [
       hardware: `${entry.minMemoryGiB} GiB minimum memory`,
       summary:
         entry.family === 'decision3'
-          ? 'General judgment questions over text and images for classification, scoring and routing decisions.'
+          ? 'General judgment questions over text, images and videos for classification, scoring and routing decisions.'
           : 'General judgment questions for classification, scoring and routing decisions.',
       questionTypes: DECISION_RUNTIME_CAPABILITIES,
       revision: entry.revision,

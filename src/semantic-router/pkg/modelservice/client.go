@@ -318,7 +318,7 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 			decoded.Answers[question.ID] = answer
 		}
 	}
-	return decoded
+	return checkAnswers(questions, decoded)
 }
 
 func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer, bool) {
