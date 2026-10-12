@@ -63,6 +63,7 @@ def container_status(container_name):
         result = subprocess.run(
             [
                 runtime,
+                "container",
                 "inspect",
                 "--format",
                 "{{.State.Status}}",
@@ -93,9 +94,13 @@ def container_status_strict(container_name: str, *, timeout: float = 10) -> str:
 
     runtime = get_container_runtime()
     try:
+        # Only containers: a typeless `inspect` of a removed container reaches
+        # Podman's volume lookup, which accepts a name prefix, so the kept
+        # `<container>-data` volume would answer and fail the template.
         result = subprocess.run(
             [
                 runtime,
+                "container",
                 "inspect",
                 "--format",
                 "{{.State.Status}}",
@@ -640,6 +645,7 @@ def _storage_ports_are_loopback_only(container_name: str) -> tuple[bool, str]:
         result = subprocess.run(
             [
                 runtime,
+                "container",
                 "inspect",
                 "--format",
                 (
