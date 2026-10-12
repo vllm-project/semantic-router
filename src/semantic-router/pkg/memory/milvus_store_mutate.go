@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -215,10 +216,17 @@ func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemorySc
 	// Delete each matching memory
 	// NOTE: Deletes one-by-one for simplicity. For production at scale,
 	// consider batch deletion using "id in [...]" expression for efficiency.
+	var deleteErrors []error
+
 	for _, memID := range idsToDelete {
 		if err := m.Forget(ctx, memID); err != nil {
 			logging.Warnf("MilvusStore.ForgetByScope: failed to delete memory id=%s: %v", memID, err)
+			deleteErrors = append(deleteErrors, fmt.Errorf("delete memory %s: %w", memID, err))
 		}
+	}
+
+	if err := errors.Join(deleteErrors...); err != nil {
+		return fmt.Errorf("failed to delete memories by scope: %w", err)
 	}
 
 	logging.Debugf("MilvusStore.ForgetByScope: deleted %d memories", len(idsToDelete))
