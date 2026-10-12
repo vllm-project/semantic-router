@@ -57,10 +57,15 @@ Instinct MI325X, start one with
 `vllm-sr serve vllm-sr/d3-lite --engine --platform rocm`, and send images and
 videos as described in [Router and Engine modes](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images-and-videos).
 
-The CLI starts the persistent frontend, Dashboard and a managed model worker.
-The first start downloads the model into the instance model cache. Later starts
-reuse it. Startup waits for readiness; use `vllm-sr status` to inspect the stack
-and `vllm-sr stop` to stop it.
+In Engine mode the CLI starts only the persistent frontend and a managed model
+worker: one Router container. `--dashboard` adds the Dashboard, `--observability`
+adds Jaeger, Prometheus and Grafana, and `--no-minimal` starts the whole stack.
+Without `--config`, and with no `config.yaml` in the working directory, Engine
+mode keeps each model's configuration, state and download in
+`~/.local/state/vllm-sr/engine/<model>`. The first start downloads the model;
+later starts reuse it. Startup prints a short summary ending in a `Ready:` line with
+the System One URL (`--verbose` prints every detail); use `vllm-sr status` to
+inspect the stack and `vllm-sr stop` to stop it.
 
 The initial Engine configuration publishes the selected model on the default
 listener. An existing config keeps its explicit `listeners[].systemone.models`
@@ -186,8 +191,8 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml --replace-active-config
 ```
 
-`--replace-active-config` applies the file you just wrote over the saved Engine
-configuration. Later restarts can omit it to retain Dashboard edits. The
+`--replace-active-config` applies the file you just wrote over any configuration
+saved for this directory. Later restarts can omit it to retain Dashboard edits. The
 `primary` deployment answers both the routing question and direct System One
 requests; the listener explicitly publishes its native model name.
 

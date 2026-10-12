@@ -2,8 +2,13 @@
 
 Use Router mode to route Chat, Responses and Messages requests to backend LLMs.
 Use Engine mode to ask decision models native System One questions without
-configuring Chat backends. Both modes use the same instance, Dashboard,
-listeners and model deployments.
+configuring Chat backends. Both modes use the same instance, listeners and model
+deployments. On the docker target, Engine mode starts only the Router container;
+`--dashboard` adds the Dashboard (and with it the host controller that
+`vllm-sr instance` talks to), `--observability` adds Jaeger, Prometheus and
+Grafana, and `--no-minimal` starts the whole stack. Without `--config`, and with
+no `config.yaml` in the working directory, Engine mode keeps each model's
+configuration and state in `~/.local/state/vllm-sr/engine/<model>`.
 
 ## Start an instance
 
@@ -11,10 +16,14 @@ listeners and model deployments.
 # Serve a decision model through the native System One API.
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 
-# Inspect the instance and its model readiness.
-vllm-sr instance --config config.yaml status
-vllm-sr instance --config config.yaml models
+# Inspect the stack and its public native models.
+vllm-sr status
+curl -s localhost:8899/v1/systemone/models
 ```
+
+With the Dashboard (`--dashboard`, or Router mode), `vllm-sr instance --config
+<config> status` and `models` also report the instance's mode and model
+readiness from its host controller.
 
 A new Engine instance publishes the selected model on port 8899. Discover its
 public model ID with `GET /v1/systemone/models`, then send questions to
@@ -65,19 +74,21 @@ A request may carry any number of `images` as base64 PNG, JPEG or WebP data
 URLs and `videos` as base64 MP4, WebM, QuickTime or Matroska data URLs; every
 question sees them, images first, then videos, in front of the text. Each
 image may have up to 8,000,000 bytes and 16,000,000 pixels, and the model
-reads it at up to 1.6 megapixels:
+reads it at up to 1.6 megapixels. Send the body on standard input, as below:
+a command-line argument holds at most 128 KiB.
 
 ```bash
-IMAGE="data:image/png;base64,$(base64 -w0 chart.png)"
-curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
+{
   "model": "vllm-sr/d3-lite",
   "state": "What does the attached image show?",
-  "images": ["'"$IMAGE"'"],
+  "images": ["data:image/png;base64,$(base64 -w0 chart.png)"],
   "questions": {
     "kind": {"type": "choice", "instructions": "What kind of image is this?",
              "criteria": {"chart": "A chart or plot", "photo": "A photograph", "document": "A document"}}
   }
-}'
+}
+EOF
 ```
 
 Each video may have up to 32,000,000 bytes, 300 seconds and 8,294,400 pixels
@@ -87,19 +98,23 @@ request take at most 16,384 input tokens, and a request body may have up to
 48 MiB:
 
 ```bash
-VIDEO="data:video/mp4;base64,$(base64 -w0 clip.mp4)"
-curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
+curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
+{
   "model": "vllm-sr/d3-lite",
   "state": "What happens in the clip?",
-  "videos": ["'"$VIDEO"'"],
+  "videos": ["data:video/mp4;base64,$(base64 -w0 clip.mp4)"],
   "questions": {
     "moving": {"type": "noul", "instructions": "Does something move across the scene?"}
   }
-}'
+}
+EOF
 ```
 
-A model that does not read a request's images or videos answers it with
-`invalid_request`. The runtime's model card lists the `modalities` a model
+A malformed or over-limit image or video, or one sent to a model that does
+not read it, is answered 400 `invalid_request` with the reason as the
+message, such as `video longer than 300 s`, `image exceeds 8 MB` or
+`model does not read videos`; a body over 48 MiB is answered 413
+`request_too_large`. The runtime's model card lists the `modalities` a model
 reads and its image and video `limits`.
 
 Use canonical YAML for additional deployments, task bindings, attached workers

@@ -4,7 +4,7 @@ description: 用大白话向决策模型提出你自己的路由问题，让它�
 translation:
   source_commit: "abae8ff99df2fdab372f0fb6d032b305907b9f44"
   source_file: "docs/model-runtime/guides/decisions.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
