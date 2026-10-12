@@ -8,8 +8,6 @@ package historyreset
 import (
 	"math"
 	"time"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 )
 
 // TriggerClass is the action's consumption view of a topic-continuity result.
@@ -108,7 +106,11 @@ const (
 )
 
 // Diagnostics is the action's bounded receipt detail. Counts describe messages
-// unless the field name says turns. Nothing here identifies content.
+// unless the field name says turns, and they describe what was committed:
+// whenever nothing was removed, every examined message is retained. The one
+// exception is a cancelled evaluation, whose counts are unavailable and left
+// at zero rather than recomputed after the deadline. Nothing here identifies
+// content.
 type Diagnostics struct {
 	Signal            string
 	Scope             string
@@ -205,26 +207,6 @@ func (p Policy) supportsVersion(version string) bool {
 		}
 	}
 	return false
-}
-
-// withinLimits reports whether the examined history stays inside the policy's
-// bounds. Exceeding a bound rejects the whole step; it never resets a prefix.
-func (p Policy) withinLimits(view contextcompression.TransformationView) bool {
-	turns := make(map[int]struct{})
-	bytes := 0
-	for _, message := range view.Messages {
-		if message.Source != contextcompression.SourceHistory {
-			continue
-		}
-		turns[message.TurnID] = struct{}{}
-		for _, block := range message.Blocks {
-			bytes += len(block.Text)
-		}
-	}
-	if p.MaxHistoryTurns > 0 && len(turns) > p.MaxHistoryTurns {
-		return false
-	}
-	return p.MaxHistoryBytes <= 0 || bytes <= p.MaxHistoryBytes
 }
 
 // usableConfidence rejects values that cannot be compared against a threshold.

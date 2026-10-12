@@ -89,11 +89,15 @@ func (a *Action) propose(
 	// An inherited follow-up evaluates nothing: the public turn it continues
 	// was already decided, and appended tool results are not a new topic.
 	if a.inherited {
-		a.record(skipped(a.trigger, ReasonInheritedCompleted))
+		diagnostics := inputCounts(view, a.trigger)
+		diagnostics.Outcome, diagnostics.Reason = OutcomeSkipped, ReasonInheritedCompleted
+		a.record(diagnostics)
 		return contextcompression.TransformationEdits{}, nil
 	}
 	if a.blocked != "" {
-		a.record(failed(a.trigger, a.blocked))
+		diagnostics := inputCounts(view, a.trigger)
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, a.blocked
+		a.record(diagnostics)
 		return contextcompression.TransformationEdits{}, errBlocked(a.blocked)
 	}
 	// One budget covers everything this action does with the request: the
@@ -197,7 +201,7 @@ func (a *Action) Reconcile(
 	}
 	receipt, found := resetReceipt(receipts)
 	if !found {
-		result.RemovedMessages, result.RemovedTurns = 0, 0
+		result = withoutRemoval(result)
 		if result.Outcome == OutcomeApplied {
 			result.Outcome, result.Reason = OutcomeSkipped, ReasonNotEvaluated
 		}
@@ -223,7 +227,7 @@ func applyReceipt(
 		if result.Reason == "" || receipt.Reason != "policy_failed" {
 			result.Reason = receipt.Reason
 		}
-		result.RemovedMessages, result.RemovedTurns = 0, 0
+		result = withoutRemoval(result)
 	default:
 		// Never upgrade an evaluated failure into a skip.
 		if result.Outcome != OutcomeFailed {
@@ -232,8 +236,17 @@ func applyReceipt(
 		if result.Reason == "" {
 			result.Reason = receipt.Reason
 		}
-		result.RemovedMessages, result.RemovedTurns = 0, 0
+		result = withoutRemoval(result)
 	}
+	return result
+}
+
+// withoutRemoval describes a request whose removal was not committed: a
+// failed or abandoned proposal must not leave its removals counted, and every
+// examined message is then still in the request.
+func withoutRemoval(result Diagnostics) Diagnostics {
+	result.RemovedMessages, result.RemovedTurns = 0, 0
+	result.RetainedMessages = result.ExaminedMessages
 	return result
 }
 
@@ -246,12 +259,6 @@ func resetReceipt(
 		}
 	}
 	return contextcompression.TransformationReceipt{}, false
-}
-
-func failed(trigger TriggerResult, reason string) Diagnostics {
-	result := skipped(trigger, reason)
-	result.Outcome = OutcomeFailed
-	return result
 }
 
 type blockedError string

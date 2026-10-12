@@ -196,6 +196,7 @@ func TestHistoryResetRefusesUnrecoverableRemoval(t *testing.T) {
 		ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonRecoveryUnavailable {
 		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
 	}
+	assertReplayRecordsAnUnchangedRequest(t, ctx, len(request.Messages))
 }
 
 // fail_closed stops the plan before dispatch and leaves the request untouched.
@@ -363,6 +364,7 @@ func TestHistoryResetEvidenceFailureModesOnTheRequestPath(t *testing.T) {
 				if ctx.HistoryResetDiagnostics.Outcome != historyreset.OutcomeFailed {
 					t.Fatalf("unusable evidence must record a failed evaluation: %+v", ctx.HistoryResetDiagnostics)
 				}
+				assertReplayRecordsAnUnchangedRequest(t, ctx, len(request.Messages))
 				if failureMode == "fail_closed" {
 					if status, _ := contextTransformationFailure(ctx); status != 503 {
 						t.Fatalf("fail_closed status = %d, want 503", status)
@@ -406,5 +408,60 @@ func TestHistoryResetContinuationIsNeverRejected(t *testing.T) {
 			ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonEvidenceContinuation {
 			t.Fatalf("unexpected outcome %+v", ctx.HistoryResetDiagnostics)
 		}
+		assertReplayRecordsAnUnchangedRequest(t, ctx, len(request.Messages))
+	}
+}
+
+// assertReplayRecordsAnUnchangedRequest checks the Replay record of a request
+// that kept its history: every examined message is retained, none removed.
+func assertReplayRecordsAnUnchangedRequest(t *testing.T, ctx *RequestContext, messages int) {
+	t.Helper()
+	record := historyResetReplayDiagnostics(ctx)
+	if record == nil {
+		t.Fatal("an evaluated policy must produce a Replay record")
+	}
+	if record.ExaminedMessages != messages || record.RetainedMessages != messages ||
+		record.RemovedMessages != 0 || record.RemovedTurns != 0 {
+		t.Fatalf("Replay counts must describe the unchanged request of %d messages: %+v", messages, record)
+	}
+}
+
+// A history over the configured bound is a planning-limit failure: it
+// preserves the request under fail_open, rejects it under fail_closed, and the
+// Replay record still describes every examined message.
+func TestHistoryResetLimitFailureOnTheRequestPath(t *testing.T) {
+	for _, failureMode := range []string{"fail_open", "fail_closed"} {
+		t.Run(failureMode, func(t *testing.T) {
+			request := resetConversation()
+			ctx := &RequestContext{
+				SemanticRequest: request,
+				VSRSelectedDecision: historyResetDecision(t, map[string]interface{}{
+					"enabled":      true,
+					"failure_mode": failureMode,
+					"trigger": map[string]interface{}{
+						"signal":            "topic_boundary",
+						"min_confidence":    0.9,
+						"accepted_versions": []string{"v1"},
+					},
+					"limits": map[string]interface{}{"max_history_turns": 1},
+				}),
+			}
+			bindHistoryResetPolicy(ctx)
+			captureOriginalContextHistory(ctx)
+			ctx.HistoryResetTrigger = &historyreset.TriggerResult{
+				Class: historyreset.TriggerChange, Confidence: 1,
+				Signal: "topic_boundary", Version: "v1",
+				Binding: historyResetEvidenceBinding(ctx),
+			}
+			(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
+			err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request)
+			if (err != nil) != (failureMode == "fail_closed") {
+				t.Fatalf("rejection = %v under %s", err != nil, failureMode)
+			}
+			if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonHistoryLimitExceeded {
+				t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+			}
+			assertReplayRecordsAnUnchangedRequest(t, ctx, len(request.Messages))
+		})
 	}
 }

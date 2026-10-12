@@ -11,6 +11,14 @@ import (
 // remove. An empty proposal is a normal outcome, not a failure. The shared
 // executor independently revalidates every proposal before committing it, so
 // this function is the first of two guards rather than the only one.
+//
+// The order is deliberate. A request with nothing removable is an ordinary
+// no-op, so evidence is judged only once the authoritative removable set is
+// known: otherwise every opening turn, whose topic result is always unknown,
+// would fail under fail_closed. A validated continuation is the one evidence
+// outcome decided early, because it can never authorize a removal and must
+// stay a no-op however long the history is. The history limits are enforced
+// before the tool-exchange closure, which is the expensive part of planning.
 func plan(
 	ctx context.Context,
 	policy Policy,
@@ -23,68 +31,84 @@ func plan(
 	if ctx.Err() != nil {
 		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
 	}
-	// With nothing eligible there is nothing evidence could authorize, so the
-	// request is an ordinary no-op in both failure modes. Judging the evidence
-	// first would turn every opening turn into a failure: with no prior turn
-	// to compare against, its topic result is always unknown.
-	if !anyEligible(view) {
-		diagnostics := countsFor(view, trigger, nil)
-		diagnostics.Outcome, diagnostics.Reason = OutcomeSkipped, ReasonNoEligibleHistory
-		return contextcompression.TransformationEdits{}, diagnostics
-	}
-	if reason := policy.authorize(trigger); reason != "" {
-		return contextcompression.TransformationEdits{}, skipped(trigger, reason)
-	}
-	if !policy.withinLimits(view) {
-		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonHistoryLimitExceeded)
-	}
-
-	removable, ok := selectRemovableTurns(ctx, view)
+	history, ok := surveyHistory(ctx, policy, view)
 	if !ok {
 		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
 	}
-	ids, turns := collectMessages(view, removable)
-	diagnostics := countsFor(view, trigger, ids)
-	if len(ids) == 0 {
-		diagnostics.Outcome, diagnostics.Reason = OutcomeSkipped, ReasonNoEligibleHistory
+	unchanged := func(reason string) (contextcompression.TransformationEdits, Diagnostics) {
+		diagnostics := inputCounts(view, trigger)
+		diagnostics.Outcome, diagnostics.Reason = OutcomeSkipped, reason
 		return contextcompression.TransformationEdits{}, diagnostics
 	}
+	if !history.candidate {
+		return unchanged(ReasonNoEligibleHistory)
+	}
+	authorization := policy.authorize(trigger)
+	if authorization == ReasonEvidenceContinuation {
+		return unchanged(authorization)
+	}
+	if !history.withinLimits {
+		return unchanged(ReasonHistoryLimitExceeded)
+	}
+	if !closeOverExchanges(ctx, view, history.removable) {
+		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
+	}
+	ids, turns := collectMessages(view, history.removable)
+	if len(ids) == 0 {
+		return unchanged(ReasonNoEligibleHistory)
+	}
+	if authorization != "" {
+		return unchanged(authorization)
+	}
+	diagnostics := inputCounts(view, trigger)
 	diagnostics.Outcome, diagnostics.Reason = OutcomeApplied, ReasonApplied
-	diagnostics.RemovedTurns = turns
+	diagnostics.RemovedMessages, diagnostics.RemovedTurns = len(ids), turns
+	diagnostics.RetainedMessages -= len(ids)
 	return contextcompression.TransformationEdits{RemoveMessages: ids}, diagnostics
 }
 
-// selectRemovableTurns returns the turns whose every message may be removed.
-// Removal is decided per turn because the shared layer rejects a partial turn,
-// and the result is then closed over tool exchanges so a retained message can
-// never lose the call or result it depends on.
-func selectRemovableTurns(
-	ctx context.Context,
-	view contextcompression.TransformationView,
-) (map[int]bool, bool) {
-	removable := make(map[int]bool)
-	for index, message := range view.Messages {
-		if index%cancellationCheckInterval == 0 && ctx.Err() != nil {
-			return nil, false
-		}
-		if _, seen := removable[message.TurnID]; !seen {
-			removable[message.TurnID] = true
-		}
-		if !eligible(message) {
-			removable[message.TurnID] = false
-		}
-	}
-	return removable, closeOverExchanges(ctx, view, removable)
+// historySurvey is the result of one linear pass over the view: each turn's
+// eligibility before tool-exchange closure, whether any message is a removal
+// candidate at all, and whether the history fits the policy's limits.
+type historySurvey struct {
+	removable    map[int]bool
+	candidate    bool
+	withinLimits bool
 }
 
-// anyEligible reports whether any message in the view may be removed.
-func anyEligible(view contextcompression.TransformationView) bool {
-	for _, message := range view.Messages {
+// surveyHistory makes the single preflight pass. A turn is removable only
+// when every one of its messages is eligible, because the shared layer
+// rejects a partial turn; closure over tool exchanges happens later.
+func surveyHistory(
+	ctx context.Context,
+	policy Policy,
+	view contextcompression.TransformationView,
+) (historySurvey, bool) {
+	survey := historySurvey{removable: make(map[int]bool)}
+	historyTurns := make(map[int]struct{})
+	historyBytes := 0
+	for index, message := range view.Messages {
+		if index%cancellationCheckInterval == 0 && ctx.Err() != nil {
+			return historySurvey{}, false
+		}
+		if _, seen := survey.removable[message.TurnID]; !seen {
+			survey.removable[message.TurnID] = true
+		}
 		if eligible(message) {
-			return true
+			survey.candidate = true
+		} else {
+			survey.removable[message.TurnID] = false
+		}
+		if message.Source == contextcompression.SourceHistory {
+			historyTurns[message.TurnID] = struct{}{}
+			for _, block := range message.Blocks {
+				historyBytes += len(block.Text)
+			}
 		}
 	}
-	return false
+	survey.withinLimits = (policy.MaxHistoryTurns <= 0 || len(historyTurns) <= policy.MaxHistoryTurns) &&
+		(policy.MaxHistoryBytes <= 0 || historyBytes <= policy.MaxHistoryBytes)
+	return survey, true
 }
 
 // cancellationCheckInterval keeps the deadline responsive without paying for a
@@ -159,22 +183,17 @@ func collectMessages(
 	return ids, len(turns)
 }
 
-// countsFor describes the reset-stage input and the proposal against it.
-// Retained counts are computed against this stage's input, not against a later
-// compressed request, and removed counts are still only proposed here.
-func countsFor(
-	view contextcompression.TransformationView,
-	trigger TriggerResult,
-	proposed []int,
-) Diagnostics {
+// inputCounts describes the reset-stage input with nothing removed: every
+// examined message is retained. An accepted proposal subtracts its removals;
+// the executor's receipt remains authoritative once a removal is committed.
+func inputCounts(view contextcompression.TransformationView, trigger TriggerResult) Diagnostics {
 	diagnostics := Diagnostics{
 		Signal:           trigger.Signal,
 		Scope:            ScopeEligibleHistory,
 		TriggerClass:     trigger.Class,
 		Version:          trigger.Version,
 		ExaminedMessages: len(view.Messages),
-		RemovedMessages:  len(proposed),
-		RetainedMessages: len(view.Messages) - len(proposed),
+		RetainedMessages: len(view.Messages),
 	}
 	for _, message := range view.Messages {
 		if message.Protection != 0 {

@@ -55,9 +55,9 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 		writer, detached, blocked = r.historyResetRecovery(ctx, request)
 	}
 	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, recoverySettings)
-	// A request that is already terminal cannot be changed by any result, so
-	// the producer is not asked: evaluating a topic signal can be expensive,
-	// and its answer could only be discarded.
+	// The topic-continuity rule has already been evaluated by now. A request
+	// that is already terminal cannot be changed by any result, so it does not
+	// consume one.
 	var trigger historyreset.TriggerResult
 	if blocked == "" {
 		trigger = historyResetTrigger(ctx, policy)

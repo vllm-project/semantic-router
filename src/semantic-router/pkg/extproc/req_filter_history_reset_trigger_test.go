@@ -169,7 +169,6 @@ func TestTopicContinuityResultMapping(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 // An opening turn has no prior turn, so its topic result is always unknown.
