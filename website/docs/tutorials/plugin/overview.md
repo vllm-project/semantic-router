@@ -70,6 +70,28 @@ routing:
 [Content Safety](./content-safety) bundles three supported
 plugins, not an additional plugin type.
 
+## Capability Gating
+
+A plugin that acts on request content runs only when the request needs that
+content and the selected model can take it. `rag` and `memory` retrieval act on
+text, so they are skipped when the request has no text block, or when the
+selected model declares capabilities and `text` is not one of them. Other
+plugin types are not gated and still run on configuration alone.
+
+A model with no recognized declaration is not gated. Labels such as `chat` or
+`code` in a model card's `capabilities` do not count as a declaration. A skip is
+typed and carries no request content:
+
+| Reason | Meaning |
+|---|---|
+| `request_does_not_require` | The request has nothing for the plugin to act on. |
+| `backend_lacks_capability` | The selected model declares capabilities and omits one the plugin needs. |
+
+A skip is counted in `llm_plugin_execution_total` with status
+`skipped_<reason>`. For `memory`, the same reason appears as the memory outcome
+with status `skipped`. Non-text content such as images is left unchanged
+whether a plugin runs or not.
+
 ## Operational Boundaries
 
 - Plugins can interact when more than one mutates the provider-bound request or
