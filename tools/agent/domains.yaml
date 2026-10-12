@@ -407,6 +407,24 @@ domains:
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
+  # The CLI unit suite checks the snippets of these pages, and that their
+  # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py).
+  # Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-docs:
+    owner: vllm-sr-cli
+    documentation_check: true
+    paths:
+      - website/docs/model-runtime/**
+      - website/docs/tutorials/global/model-runtime.md
+      - website/docs/tutorials/signal/learned/decision.md
+      - website/docs/tutorials/algorithm/selection/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/decision.md
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
   model-runtime:
     owner: model-runtime
     paths:
