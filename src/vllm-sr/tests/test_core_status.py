@@ -165,8 +165,6 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
         "_managed_container_statuses",
         lambda _stack_layout: dict.fromkeys(managed_names, "not found"),
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_remove_network",
@@ -201,8 +199,6 @@ def test_stop_keeps_network_with_external_endpoints(monkeypatch, capsys):
         "_managed_container_statuses",
         lambda _stack_layout: dict.fromkeys(managed_names, "not found"),
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_remove_network",
@@ -233,8 +229,6 @@ def test_stop_reports_success_when_only_dashboard_exists(monkeypatch, capsys):
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(core, "container_stop_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
@@ -263,8 +257,6 @@ def test_stop_does_not_report_success_when_container_removal_fails(monkeypatch, 
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(core, "container_stop_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_container", lambda _name: False)
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
@@ -297,8 +289,6 @@ def test_stop_reports_success_when_external_backend_keeps_network(monkeypatch, c
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(core, "container_stop_container", lambda _name: True)
     monkeypatch.setattr(core, "container_remove_container", lambda _name: True)
     monkeypatch.setattr(
@@ -331,8 +321,6 @@ def test_stop_propagates_other_network_removal_failures(monkeypatch, capsys):
         "_managed_container_statuses",
         lambda _stack_layout: dict.fromkeys(managed_names, "not found"),
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_remove_network",
@@ -444,7 +432,7 @@ def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
         envoy_image=None,
         dashboard_image="dashboard:missing",
         pull_policy="never",
-        env_vars={"VLLM_SR_PLATFORM": "amd"},
+        env_vars={"VLLM_SR_PLATFORM": "rocm"},
         dashboard_disabled=True,
     )
 
@@ -457,8 +445,6 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
     monkeypatch.setattr(
         core, "_managed_container_statuses", lambda _stack_layout: statuses
     )
-    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
-    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
     monkeypatch.setattr(
         core,
         "container_stop_container",
@@ -470,11 +456,6 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
         lambda name: removed.append(name) or True,
     )
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
-    monkeypatch.setattr(
-        core,
-        "container_network_disconnect_if_attached",
-        lambda _network, _name: (0, "", ""),
-    )
 
 
 def _all_managed_names(stack_layout):

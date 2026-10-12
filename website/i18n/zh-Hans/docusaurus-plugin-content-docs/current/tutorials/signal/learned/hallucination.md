@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "485dba984a011cee07ec21e7d6a6d54f69509dae"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/hallucination.md"
-  outdated: true
+  outdated: false
 ---
 
 # 幻觉检测信号 {#hallucination-signal}
@@ -11,7 +11,7 @@ translation:
 
 `hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `routing.signals.hallucination` 下定义其规则。
 
-该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器，以及规则要求解释时的解释器 NLI 模型。
+该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器（默认是 Vela 2.0 0.3B 的片段头，也可以是 Vela Halu），并在[模型运行时](../../../model-runtime/guides/hallucination)中执行。NLI 解释器已退役。
 
 ## 主要优势 {#key-advantages}
 
@@ -85,7 +85,13 @@ global:
 
 模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；
 `min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。
-同一个部署还可以回答请求的 [`decision`](tutorials/signal/learned/decision.md) 与 [`pii`](tutorials/signal/learned/pii.md#vela-20) 问题。
+同一个部署还可以回答请求的 [`decision`](decision.md) 与 [`pii`](pii.md#vela-20) 问题。
+
+## 仅提供整体判断的模型 {#verdict-only-decision-models}
+
+若使用通用判断模型进行整体检查，将 `routing.model_bindings.hallucination_detector` 绑定到该部署，并设置 `contract: decision.v1`。`hallucination` 任务使用 `noul` 问题，将请求、依据上下文和回答作为独立状态部分。结果供响应观察与插件使用，不会虚构主张位置。`threshold` 作用于该概率；片段过滤参数只作用于实际返回的片段。
+
+`token_spans.v1` 绑定要求原生片段能力。两条路径都要求完整的准入输入和依据上下文；失败或未完成的检查是 unavailable，不能证明回答有据可依。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

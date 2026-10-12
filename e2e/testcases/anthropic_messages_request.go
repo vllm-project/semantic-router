@@ -40,7 +40,7 @@ func testAnthropicMessagesRequest(ctx context.Context, client *kubernetes.Client
 	defer stop()
 
 	resp, err := sendAnthropicMessagesRequest(ctx, anthropicMessagesRequestBody{
-		Model:     "MoM",
+		Model:     "vllm-sr/auto",
 		MaxTokens: 64,
 		Messages: []anthropicMessage{
 			{Role: "user", Content: "Explain the difference between TCP and UDP."},

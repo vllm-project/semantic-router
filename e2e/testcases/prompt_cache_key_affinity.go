@@ -56,7 +56,7 @@ func testPromptCacheKeyAffinity(ctx context.Context, client *kubernetes.Clientse
 			{name: "no key", keyword: cacheAffinityProbeKeyword, wantModel: cacheAffinityTieModel},
 		}
 		for _, step := range steps {
-			body := api.request("MoM", fmt.Sprintf("%s %s %s", step.keyword, step.name, run), false)
+			body := api.request("vllm-sr/auto", fmt.Sprintf("%s %s %s", step.keyword, step.name, run), false)
 			if step.key != "" {
 				body["prompt_cache_key"] = step.key
 			}

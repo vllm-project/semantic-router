@@ -20,7 +20,6 @@ var (
 	modelRuntimeProfile  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 	modelRuntimeDevice   = regexp.MustCompile(`^[a-z][a-z0-9_]*(:[0-9]+)?$`)
 	modelRuntimeRevision = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	modelRuntimeProcess  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 	hubRepositoryID      = regexp.MustCompile(`^[A-Za-z0-9][\w.-]*/[\w.-]+$`)
 )
 
@@ -31,7 +30,15 @@ func (d ModelDeployment) IsModelRuntime() bool {
 
 // Managed reports whether the Router starts and supervises the runtime process.
 func (d ModelDeployment) Managed() bool {
-	return d.IsModelRuntime() && strings.TrimSpace(d.Endpoint) == ""
+	if !d.IsModelRuntime() {
+		return false
+	}
+	for _, placement := range d.Placements() {
+		if placement.Endpoint == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // ServedModel names the model a consumer of the deployment called name runs:
@@ -49,7 +56,8 @@ func (d ModelDeployment) ServedModel(name string) string {
 
 // ModelRuntimeDeploymentsInUse returns the model_runtime deployments that the
 // configuration uses, with defaults applied: those a decision signal or a
-// decision algorithm names, and those an active task binding names in the
+// decision algorithm names, the decision model's for a decision signal or
+// algorithm that names none, and those an active task binding names in the
 // top-level routing surface, a recipe, or the global service catalog.
 // Declared but unused deployments are never started.
 func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
@@ -58,9 +66,45 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 		return used
 	}
 	mark := func(name string) {
+		if name == "" {
+			if shared, deployment, ok, err := cfg.DecisionModelDeployment(); ok && err == nil {
+				used[shared] = deployment.WithDefaults()
+			}
+			return
+		}
 		if deployment, ok := cfg.ModelDeployments[name]; ok && deployment.IsModelRuntime() {
 			used[name] = deployment.WithDefaults()
 		}
+	}
+	for _, listener := range cfg.Listeners {
+		if listener.SystemOne == nil {
+			continue
+		}
+		for _, publicName := range listener.SystemOne.Models {
+			if cfg.IsSystemOneBackend(publicName) {
+				if deployment := cfg.ModelConfig[publicName].Deployment; deployment != "" {
+					mark(deployment)
+				}
+			}
+			if entrypoint, ok := cfg.ResolveEntrypoint(SystemOneAPI, publicName); ok && cfg.RoutingEnabled() {
+				if recipe := findRecipe(cfg.Recipes, entrypoint.Recipe); recipe != nil {
+					for _, decision := range recipe.Profile.Decisions {
+						for _, alias := range decision.Algorithm.NativeStageModels() {
+							if deployment := cfg.ModelConfig[alias].Deployment; deployment != "" {
+								mark(deployment)
+							}
+						}
+					}
+				}
+			}
+			if name, _, err := cfg.ResolveSystemOneDeployment(publicName); err == nil {
+				mark(name)
+			}
+		}
+	}
+	if !cfg.RoutingEnabled() {
+		mark("")
+		return used
 	}
 	scan := func(signals Signals, decisions []Decision) {
 		for _, rule := range signals.DecisionRules {
@@ -146,7 +190,15 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return false
 	}
 	if scope == GlobalModelScope {
-		return name == "embedding" && len(EmbeddingModelsNeeded(scoped, scoped.primaryEmbeddingModel(), true)) > 0
+		if name != "embedding" {
+			return false
+		}
+		// Recipe bindings may override the global default. Only shared services
+		// can activate the global owner directly; inherited recipe bindings are
+		// accounted for in their own scopes.
+		services := scoped.ConfigForGlobalModelServices()
+		primary := services.primaryEmbeddingModel()
+		return EmbeddingModelsNeeded(services, primary, true)[primary]
 	}
 	switch name {
 	case "domain_classifier":
@@ -163,11 +215,32 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 			(scoped.ownsDefaultAPIConsumer() && len(scoped.RoutingProfileSignals().UserFeedbackRules) > 0)
 	case "modality_detector":
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeModality)
+	case "preference":
+		return scoped.UsesSignalTypeInReachableRouting(SignalTypePreference) && scoped.PreferenceUsesDecisionTask()
+	case "reask":
+		return scoped.UsesSignalTypeInReachableRouting(SignalTypeReask) && scoped.ReaskUsesDecisionTask()
+	case "complexity":
+		_, bound := scoped.EffectiveModelBindings(scoped.Signals, scoped.ModelBindings)["complexity"]
+		if !scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) {
+			return false
+		}
+		if bound {
+			return true
+		}
+		if scoped.ComplexityModel.Backend == nil {
+			for _, rule := range scoped.ComplexityRules {
+				if !scoped.ComplexityRuleUsesPrototypes(rule) {
+					return true
+				}
+			}
+		}
+		return false
 	case "hallucination_detector":
 		return scoped.NeedsHallucinationDetectorForRouting() ||
 			(scoped.ownsDefaultAPIConsumer() && scoped.HallucinationMitigation.Enabled)
 	case "embedding":
-		return len(EmbeddingModelsNeeded(scoped, scoped.primaryEmbeddingModel(), false)) > 0
+		primary := scoped.primaryEmbeddingModel()
+		return EmbeddingModelsNeeded(scoped, primary, false)[primary]
 	case RAGRerankerConsumer:
 		return scoped.NeedsRAGReranker()
 	}
@@ -199,29 +272,17 @@ func (d ModelDeployment) validateModelRuntime() error {
 	default:
 		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
 	}
-	if !modelRuntimeDevice.MatchString(d.Device) {
-		return fmt.Errorf("device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1")
-	}
 	if !modelRuntimeProfile.MatchString(d.Profile) {
 		return fmt.Errorf("profile must be a profile name, such as exact or batching")
 	}
 	if d.Revision != "" && !modelRuntimeRevision.MatchString(d.Revision) {
 		return fmt.Errorf("revision must be a 40-hex commit")
 	}
-	if strings.TrimSpace(d.Endpoint) != "" {
-		if d.Process != "" {
-			return fmt.Errorf("process groups apply only to managed deployments; an attached endpoint is one process")
-		}
-		if d.ServedName != "" && (strings.TrimSpace(d.ServedName) != d.ServedName || strings.ContainsAny(d.ServedName, "\x00\n")) {
-			return fmt.Errorf("served_name must be a trimmed model name")
-		}
-		return validateModelRuntimeEndpoint(d.Endpoint)
+	if err := d.validateReplicas(); err != nil {
+		return err
 	}
-	if d.ServedName != "" {
-		return fmt.Errorf("served_name selects a model on an attached endpoint; a managed deployment is served under its own name")
-	}
-	if d.Process != "" && !modelRuntimeProcess.MatchString(d.Process) {
-		return fmt.Errorf("process must be a short name of letters, digits, '.', '_' or '-'")
+	if !d.Managed() && len(d.Replicas) == 0 {
+		return nil
 	}
 	artifact := strings.TrimSpace(d.Artifact)
 	if artifact == "" {

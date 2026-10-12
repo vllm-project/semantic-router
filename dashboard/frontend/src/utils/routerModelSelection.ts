@@ -1,5 +1,3 @@
-export const CANONICAL_AUTO_MODEL = 'vllm-sr/auto'
-
 interface RouterModelRecord {
   id?: unknown
   owned_by?: unknown
@@ -12,6 +10,7 @@ interface RouterModelRoutingRecord {
   selectable?: unknown
   default_route?: unknown
   recipe?: unknown
+  api?: unknown
 }
 
 interface RouterModelsResponse {
@@ -33,9 +32,6 @@ interface RouterModelRoutingMetadata {
   recipe?: string
 }
 
-const LEGACY_AUTO_MODEL_IDS = new Set(['auto', CANONICAL_AUTO_MODEL])
-const RETIRED_ROUTER_MODEL_IDS = new Set(['mom'])
-
 function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
   if (!payload || typeof payload !== 'object') {
     return []
@@ -55,10 +51,6 @@ function modelId(entry: RouterModelRecord): string {
   return typeof entry.id === 'string' ? entry.id.trim() : ''
 }
 
-function isRetiredRouterModel(entry: RouterModelRecord): boolean {
-  return RETIRED_ROUTER_MODEL_IDS.has(modelId(entry).toLocaleLowerCase())
-}
-
 function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetadata | null {
   if (entry.routing !== undefined) {
     if (!entry.routing || typeof entry.routing !== 'object' || Array.isArray(entry.routing)) {
@@ -69,8 +61,10 @@ function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetad
       selectable,
       default_route: defaultRoute,
       recipe,
+      api,
     } = entry.routing as RouterModelRoutingRecord
     if (
+      (api !== undefined && api !== 'chat') ||
       (resolution !== 'virtual' && resolution !== 'passthrough') ||
       typeof selectable !== 'boolean' ||
       (defaultRoute !== undefined && typeof defaultRoute !== 'boolean') ||
@@ -89,41 +83,22 @@ function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetad
     }
   }
 
-  // Older routers do not emit routing metadata. Preserve only their standard
-  // auto aliases; custom aliases require the explicit contract.
-  const owner = typeof entry.owned_by === 'string' ? entry.owned_by.trim().toLowerCase() : ''
-  if (owner !== 'vllm-semantic-router') return null
-  const normalizedId = modelId(entry).toLowerCase()
-  if (!LEGACY_AUTO_MODEL_IDS.has(normalizedId)) return null
-  return { resolution: 'virtual', selectable: true, defaultRoute: true }
+  return null
 }
 
 function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
   const routing = modelRoutingMetadata(entry)
-  return (
-    Boolean(id) &&
-    !isRetiredRouterModel(entry) &&
-    Boolean(routing?.selectable && routing.defaultRoute)
-  )
+  return Boolean(id) && Boolean(routing?.selectable && routing.defaultRoute)
 }
 
 function isSelectableRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
-  return (
-    Boolean(id) && !isRetiredRouterModel(entry) && modelRoutingMetadata(entry)?.selectable === true
-  )
+  return Boolean(id) && modelRoutingMetadata(entry)?.selectable === true
 }
 
 export function selectRouterAutoModel(payload: unknown): string | null {
   const records = normalizeModelRecords(payload)
-  const canonical = records.find(
-    (entry) => modelId(entry) === CANONICAL_AUTO_MODEL && isAutomaticRouterModel(entry),
-  )
-  if (canonical) {
-    return CANONICAL_AUTO_MODEL
-  }
-
   const automatic = records.find(isAutomaticRouterModel)
   return automatic ? modelId(automatic) : null
 }
@@ -148,12 +123,7 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
     description: model.description,
     ...(model.recipe ? { recipe: model.recipe } : {}),
   })
-  const automaticId = selectRouterAutoModel(payload)
-  const automatic = models.find((model) => model.id === automaticId)
-  const explicitModels = models.filter((model) => !model.defaultRoute)
-  // A specialized entrypoint can require a matching rule. Keep the advertised
-  // default available instead of silently making that entrypoint the default.
-  return [...(automatic ? [automatic] : []), ...explicitModels].map(toOption)
+  return models.map(toOption)
 }
 
 export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string {

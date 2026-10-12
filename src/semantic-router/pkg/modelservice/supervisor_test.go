@@ -2,6 +2,8 @@ package modelservice
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -16,7 +18,10 @@ func TestSupervisorLogsAProcessKilledAfterTheGracePeriod(t *testing.T) {
 	grace := stopGracePeriod
 	stopGracePeriod = 100 * time.Millisecond
 	t.Cleanup(func() { stopGracePeriod = grace })
-	s := &supervisor{process: "runtime-0", deployments: []string{"kai"}, command: []string{"sh", "-c", "trap '' TERM; sleep 30"}}
+	// The shell creates ready once it ignores SIGTERM; a SIGTERM before that
+	// ends it within the grace period, and nothing is killed.
+	ready := filepath.Join(t.TempDir(), "ready")
+	s := &supervisor{process: "runtime-0", deployments: []string{"kai"}, command: []string{"sh", "-c", `trap '' TERM; : > "$1"; sleep 30`, "sh", ready}}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -24,16 +29,14 @@ func TestSupervisorLogsAProcessKilledAfterTheGracePeriod(t *testing.T) {
 		close(done)
 	}()
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		s.mu.Lock()
-		running := s.running != nil
-		s.mu.Unlock()
-		if running {
+		if _, err := os.Stat(ready); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("the process never started")
+			t.Fatal("the process never started ignoring SIGTERM")
 		}
 	}
+	stopping := time.Now()
 	cancel()
 	select {
 	case <-done:
@@ -46,5 +49,8 @@ func TestSupervisorLogsAProcessKilledAfterTheGracePeriod(t *testing.T) {
 	}
 	if fields := killed[0].ContextMap(); fields["process"] != "runtime-0" || fields["grace_period"] != "100ms" {
 		t.Fatalf("the log must name the process and the grace period: %+v", fields)
+	}
+	if stopped := time.Since(stopping); stopped < stopGracePeriod {
+		t.Fatalf("the process was killed %v after the stop, within its %v grace period", stopped, stopGracePeriod)
 	}
 }

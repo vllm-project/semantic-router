@@ -25,11 +25,11 @@ import (
 )
 
 func TestFaithfulnessVerifierScoresBySpanCount(t *testing.T) {
-	v := NewFaithfulnessVerifier(func(_ context.Context, contextText, question, answer string) ([]string, float32, error) {
+	v := NewFaithfulnessVerifier(func(_ context.Context, contextText, question, answer string) (GroundingEvidence, error) {
 		if strings.Contains(answer, "bad") {
-			return []string{"unsupported-1", "unsupported-2"}, 0.4, nil
+			return spanEvidence([]string{"unsupported-1", "unsupported-2"}, 0.4), nil
 		}
-		return nil, 0.9, nil
+		return GroundingEvidence{}, nil
 	})
 	res, err := v.Verify(context.Background(), &VerifierRequest{
 		Task:           "q",
@@ -71,17 +71,47 @@ func TestFaithfulnessVerifierNilBackendIsTyped(t *testing.T) {
 	}
 }
 
+func TestGroundingVerdictDoesNotRequireLocalization(t *testing.T) {
+	probability := float32(0.9)
+	detect := func(_ context.Context, _, _, answer string) (GroundingEvidence, error) {
+		if answer == "unsupported" {
+			return GroundingEvidence{Unsupported: true, Probability: &probability}, nil
+		}
+		return GroundingEvidence{}, nil
+	}
+	req := &VerifierRequest{TrustedContext: "source", Candidates: []VerifierCandidate{
+		{ID: "supported", Content: "supported"}, {ID: "unsupported", Content: "unsupported"},
+	}}
+	faithfulness, err := NewFaithfulnessVerifier(detect).Verify(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if faithfulness.Scores[0].Confidence != 1 || math.Abs(faithfulness.Scores[1].Confidence-0.1) > 1e-6 {
+		t.Fatalf("verdict was confused with missing localization: %+v", faithfulness.Scores)
+	}
+	if len(faithfulness.Scores[1].Flags) != 0 {
+		t.Fatal("verdict must not fabricate unsupported text spans")
+	}
+	peers, err := NewPeerConsistencyVerifier(detect, 1).Verify(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(peers.Scores[1].Confidence-0.1) > 1e-6 || len(peers.Scores[1].Flags) != 1 || peers.Scores[1].Flags[0] != "supported" {
+		t.Fatalf("peer verdict lost without spans: %+v", peers.Scores)
+	}
+}
+
 func TestPeerConsistencyVerifierMeanScoringAndFlags(t *testing.T) {
 	// Read against a peer, an answer containing "bad" has a span at 0.8 and a
 	// "partly" answer one at 0.3; anything else is fully supported.
-	detect := func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+	detect := func(_ context.Context, _, _, answer string) (GroundingEvidence, error) {
 		switch {
 		case strings.Contains(answer, "bad"):
-			return []string{"bad"}, 0.8, nil
+			return spanEvidence([]string{"bad"}, 0.8), nil
 		case strings.Contains(answer, "partly"):
-			return []string{"partly"}, 0.3, nil
+			return spanEvidence([]string{"partly"}, 0.3), nil
 		}
-		return nil, 0, nil
+		return GroundingEvidence{}, nil
 	}
 	v := NewPeerConsistencyVerifier(detect, 1.0)
 	res, err := v.Verify(context.Background(), &VerifierRequest{Task: "q", Candidates: []VerifierCandidate{
@@ -111,11 +141,11 @@ func TestPeerConsistencyVerifierMeanScoringAndFlags(t *testing.T) {
 }
 
 func TestPeerConsistencyVerifierPenaltyWeighsContradiction(t *testing.T) {
-	detect := func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+	detect := func(_ context.Context, _, _, answer string) (GroundingEvidence, error) {
 		if answer == "bad" {
-			return []string{"bad"}, 0.5, nil
+			return spanEvidence([]string{"bad"}, 0.5), nil
 		}
-		return nil, 0, nil
+		return GroundingEvidence{}, nil
 	}
 	res, err := NewPeerConsistencyVerifier(detect, 3.0).Verify(context.Background(), &VerifierRequest{Candidates: []VerifierCandidate{
 		{ID: "p0", Content: "good"},
@@ -131,7 +161,7 @@ func TestPeerConsistencyVerifierPenaltyWeighsContradiction(t *testing.T) {
 }
 
 func TestPeerConsistencyVerifierAbstainsWithoutPeers(t *testing.T) {
-	detect := func(_ context.Context, _, _, _ string) ([]string, float32, error) { return nil, 0, nil }
+	detect := func(_ context.Context, _, _, _ string) (GroundingEvidence, error) { return GroundingEvidence{}, nil }
 	v := NewPeerConsistencyVerifier(detect, 1.0)
 	res, err := v.Verify(context.Background(), &VerifierRequest{Candidates: []VerifierCandidate{
 		{ID: "p0", Content: "only one"},
@@ -152,8 +182,8 @@ func TestPeerConsistencyVerifierAbstainsWithoutPeers(t *testing.T) {
 }
 
 func TestPeerConsistencyVerifierDetectorErrorIsTyped(t *testing.T) {
-	detect := func(_ context.Context, _, _, _ string) ([]string, float32, error) {
-		return nil, 0, errors.New("runtime unavailable")
+	detect := func(_ context.Context, _, _, _ string) (GroundingEvidence, error) {
+		return GroundingEvidence{}, errors.New("runtime unavailable")
 	}
 	_, err := NewPeerConsistencyVerifier(detect, 1.0).Verify(context.Background(), &VerifierRequest{
 		Candidates: []VerifierCandidate{{ID: "p0", Content: "a"}, {ID: "p1", Content: "b"}},

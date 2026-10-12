@@ -1,9 +1,9 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import path from 'node:path'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { mockAuthenticatedAppShell, test } from './support/compiler'
 
-// The Builder test uses the real Go WASM compiler built by dashboard-build-wasm.
+// The Builder test uses the production Go compiler through its HTTP handler.
 const kbMetricInput = {
   type: 'kb_metric',
   kb: 'privacy_kb',

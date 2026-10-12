@@ -17,6 +17,7 @@ from cli.runtime_stack import resolve_runtime_stack
 from cli.sr_bench import client
 from cli.sr_bench_runtime import (
     BENCH_IDENTITY_LABEL,
+    BenchWorkerKeptError,
     _remove_idle_bench_container,
     dashboard_bench_env,
     prepare_bench_runtime,
@@ -161,7 +162,7 @@ def test_reuse_requires_running_matching_worker_and_never_starts_a_stopped_one(
             ),
         ),
     )
-    with pytest.raises(ValueError, match="stopped"):
+    with pytest.raises(BenchWorkerKeptError, match="stopped"):
         reconcile_bench_container(command, "bench", {})
     monkeypatch.setattr(
         subprocess,
@@ -173,7 +174,7 @@ def test_reuse_requires_running_matching_worker_and_never_starts_a_stopped_one(
             ),
         ),
     )
-    with pytest.raises(ValueError, match="different"):
+    with pytest.raises(BenchWorkerKeptError, match="not an sr-bench worker"):
         reconcile_bench_container(command, "bench", {})
 
 
@@ -205,7 +206,7 @@ def test_reused_worker_is_not_owned_by_failed_dashboard_start_rollback(monkeypat
             ),
             ("dashboard", "dashboard", (["docker", "run"],)),
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "secret"},
     )
     assert status == 125
@@ -268,7 +269,7 @@ def test_reconciliation_failure_rolls_back_only_new_runtime_containers(monkeypat
             ("envoy", "envoy", (["docker", "run", "envoy"],)),
             ("sr-bench", "worker", (["docker", "run", "worker"],)),
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "secret"},
     )
     assert status == 1
@@ -319,20 +320,20 @@ def test_worker_that_never_started_is_removed_and_its_port_conflict_named(
             )
         ]
         code, _, error = container_start_runner.run_container_specs(
-            specs, storage_secret_values={}, bench_secret_values={}
+            specs, router_secret_values={}, bench_secret_values={}
         )
         assert code == 1
         assert f"port {port} is already in use" in error
         assert "VLLM_SR_BENCH_PORT" in error and "VLLM_SR_PORT_OFFSET" in error
         assert removed == [["rm", "unstarted-id"]]
 
-        # A worker that ran and stopped keeps its evidence, even on a taken port.
+        # A worker that ran and stopped keeps its evidence, even on a taken
+        # port, and does not hold back the rest of the stack.
         worker["status"] = "exited"
         code, _, error = container_start_runner.run_container_specs(
-            specs, storage_secret_values={}, bench_secret_values={}
+            specs, router_secret_values={}, bench_secret_values={}
         )
-        assert code == 1
-        assert "inspect its saved ledger" in error
+        assert code == 0, error
         assert removed == [["rm", "unstarted-id"]]
 
 
@@ -372,7 +373,7 @@ def test_worker_that_never_started_is_removed_and_reports_the_runtime_error(
                 ),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={},
     )
     assert (code, error) == (127, runtime_error)
@@ -421,7 +422,7 @@ def test_serve_replaces_only_idle_image_upgrade_and_preserves_journal(
                 "id": "owned-container-id",
                 "status": "running",
                 "labels": {BENCH_IDENTITY_LABEL: old_identity},
-                "image": "dashboard:old",
+                "args": _worker_args(old[2][0]),
             }
             return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
         elif action == "pause":
@@ -434,7 +435,7 @@ def test_serve_replaces_only_idle_image_upgrade_and_preserves_journal(
 
     monkeypatch.setattr(subprocess, "run", run)
     code, _, error = container_start_runner.run_container_specs(
-        [new], storage_secret_values={}, bench_secret_values=bench.secrets
+        [new], router_secret_values={}, bench_secret_values=bench.secrets
     )
     assert code == 0, error
     assert state == {"exists": True, "paused": False, "image": "dashboard:new"}
@@ -577,14 +578,16 @@ def test_image_upgrade_failure_resumes_previous_worker(tmp_path, monkeypatch, fa
     )
 
 
-@pytest.mark.parametrize(
-    "difference", ["credential", "store", "stack", "port", "missing-label"]
-)
-def test_image_upgrade_never_replaces_different_worker(
-    tmp_path, monkeypatch, difference
-):
+def _worker_args(command):
+    return command[command.index("cli.sr_bench.service") - 1 :]
+
+
+def _launch_difference(tmp_path, difference):
     stack = resolve_runtime_stack(stack_name="upgrade-test", port_offset=1000)
     bench = prepare_bench_runtime(str(tmp_path), stack, {})
+    with sqlite3.connect(bench.store / "journal.sqlite3") as db:
+        db.execute("CREATE TABLE runs(status TEXT)")
+        db.execute("INSERT INTO runs VALUES('completed')")
     kwargs = {
         "runtime": "docker",
         "nofile_limit": 10000,
@@ -595,43 +598,114 @@ def test_image_upgrade_never_replaces_different_worker(
     old = container_start._build_bench_runtime_spec(image="dashboard:old", **kwargs)[2][
         0
     ]
-    new = container_start._build_bench_runtime_spec(image="dashboard:new", **kwargs)[2][
-        0
-    ]
-    old_identity = next(
-        arg.split("=", 1)[1]
-        for arg in old
-        if arg.startswith(BENCH_IDENTITY_LABEL + "=")
+    new_spec = container_start._build_bench_runtime_spec(
+        image="dashboard:new" if difference == "image" else "dashboard:old", **kwargs
     )
-    credentials = dict(bench.secrets)
+    previous_credentials = dict(bench.secrets)
     if difference == "credential":
-        credentials[bench.token_env] = "different-test-token"
-    elif difference == "store":
-        new[new.index("--store") + 1] += "-other"
-    elif difference == "stack":
-        new[new.index("--name") + 1] = "different-stack"
+        previous_credentials[bench.token_env] = "previous-test-token"
+    elif difference == "host-alias":
+        # An older CLI mapped the alias through Docker's host-gateway; an
+        # explicit VLLM_SR_HOST_GATEWAY_IP changes the launch identity.
+        old = [*old[:2], "--add-host=host.docker.internal:host-gateway", *old[2:]]
     elif difference == "port":
-        new[new.index("-p") + 1] = "127.0.0.1:9199:8090"
+        old = list(old)
+        old[old.index("-p") + 1] = "127.0.0.1:9199:8090"
+    label = next(
+        i for i, arg in enumerate(old) if arg.startswith(BENCH_IDENTITY_LABEL + "=")
+    )
+    old_identity = container_start.bench_command_identity(
+        old[: label - 1] + old[label + 1 :], previous_credentials
+    )
     info = {
-        "id": "foreign-id",
+        "id": "owned-id",
         "status": "running",
-        "image": "dashboard:old",
-        "labels": (
-            {}
-            if difference == "missing-label"
-            else {BENCH_IDENTITY_LABEL: old_identity}
-        ),
+        "labels": {BENCH_IDENTITY_LABEL: old_identity},
+        "args": _worker_args(old),
     }
+    return bench, new_spec, dict(bench.secrets), info
+
+
+def test_unchanged_worker_is_reused(tmp_path, monkeypatch):
+    _, spec, credentials, info = _launch_difference(tmp_path, "none")
+
+    def run(command, **kwargs):
+        if command[1] == "run":
+            raise subprocess.CalledProcessError(125, command, stderr="conflict")
+        return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert reconcile_bench_container(spec[2][0], "bench", credentials) == "reuse"
+
+
+@pytest.mark.parametrize("difference", ["image", "credential", "host-alias", "port"])
+def test_any_launch_change_replaces_an_owned_idle_worker(
+    tmp_path, monkeypatch, difference
+):
+    _, spec, credentials, info = _launch_difference(tmp_path, difference)
+    state = {"exists": True}
     actions = []
 
     def run(command, **kwargs):
         actions.append(command[1])
-        return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
+        if command[1] == "run":
+            if state["exists"]:
+                raise subprocess.CalledProcessError(125, command, stderr="conflict")
+            state["exists"] = True
+        elif command[1] == "inspect":
+            return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
+        elif command[1] == "rm":
+            assert command[-1] == "owned-id"
+            state["exists"] = False
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
-    with pytest.raises(ValueError, match="different"):
-        reconcile_bench_container(new, stack.sr_bench_container_name, credentials)
-    assert actions == ["inspect"]
+    code, _, error = container_start_runner.run_container_specs(
+        [spec], router_secret_values={}, bench_secret_values=credentials
+    )
+    assert code == 0, error
+    assert actions == ["run", "inspect", "image", "pause", "rm", "run", "exec"]
+
+
+@pytest.mark.parametrize("blocker", ["active-run", "missing-label", "stopped"])
+def test_worker_that_cannot_be_replaced_is_kept_and_the_stack_still_starts(
+    tmp_path, monkeypatch, blocker
+):
+    bench, spec, credentials, info = _launch_difference(tmp_path, "image")
+    if blocker == "active-run":
+        with sqlite3.connect(bench.store / "journal.sqlite3") as db:
+            db.execute("INSERT INTO runs VALUES('running')")
+    elif blocker == "missing-label":
+        info["labels"] = {}
+    else:
+        info["status"] = "exited"
+    actions = []
+    removed = []
+
+    def run(command, **kwargs):
+        actions.append(command[1:2] + command[-1:])
+        if command[1] == "run" and command[-1] != "dashboard":
+            raise subprocess.CalledProcessError(125, command, stderr="conflict")
+        if command[1] == "inspect":
+            return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(
+        container_start_runner, "_cleanup_started_containers", removed.extend
+    )
+    code, _, error = container_start_runner.run_container_specs(
+        [spec, ("dashboard", "dashboard", (["docker", "run", "dashboard"],))],
+        router_secret_values={},
+        bench_secret_values=credentials,
+    )
+    assert code == 0, error
+    assert removed == []
+    assert ["rm", "owned-id"] not in actions
+    assert ["rm", "--force"] not in [a[:2] for a in actions]
+    assert actions[-1] == ["run", "dashboard"]
+    if blocker == "active-run":
+        assert ["unpause", "owned-id"] in actions
 
 
 def test_managed_bench_port_override_matches_container_and_cli_discovery(
@@ -696,7 +770,7 @@ def test_replaced_worker_is_owned_by_failed_health_rollback(monkeypatch):
                 (["docker", "run"], ["docker", "exec", "health"]),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "fixture"},
     )
     assert code == 125

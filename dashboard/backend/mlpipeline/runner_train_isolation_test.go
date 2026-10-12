@@ -137,7 +137,7 @@ printf 'cached' > "$cache_dir/marker"
 func newTrainIsolationTestRunner(t *testing.T, cfg RunnerConfig) *Runner {
 	t.Helper()
 	root := t.TempDir()
-	store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"), workflowstore.Options{})
+	store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -27,14 +27,14 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 
 	if len(c.Recipes) > 0 {
 		for i := range c.Recipes {
-			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+			if c.ConfigForRecipe(&c.Recipes[i]).profileUsesSignalType(normalizedType) {
 				return true
 			}
 		}
 		return false
 	}
 
-	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+	return c.profileUsesSignalType(normalizedType)
 }
 
 // UsesSignalTypeInReachableRouting reports whether a request-reachable routing
@@ -51,27 +51,20 @@ func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool 
 		return false
 	}
 	if c.RoutingScope != "" {
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	if len(c.Recipes) == 0 {
 		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
 			return false
 		}
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.profileUsesSignalType(normalizedType)
 	}
 	for _, recipe := range c.ReachableRoutingRecipes() {
-		if recipeUsesSignalType(recipe, normalizedType) {
+		if c.ConfigForRecipe(recipe).profileUsesSignalType(normalizedType) {
 			return true
 		}
 	}
 	return false
-}
-
-func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
-	if recipe == nil {
-		return false
-	}
-	return decisionsUseSignalType(recipe.Profile.Decisions, recipe.Profile.Projections, signalType)
 }
 
 func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
@@ -398,4 +391,13 @@ func collectSignalNames(node *RuleNode, signalType string) []string {
 		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
 	}
 	return names
+}
+
+// profileUsesSignalType includes Replay's evidence dependency in addition to
+// decision and projection inputs.
+func (c *RouterConfig) profileUsesSignalType(signalType string) bool {
+	if signalType == SignalTypePII && c.ReplayNeedsPIIEvidence() {
+		return true
+	}
+	return decisionsUseSignalType(c.Decisions, c.Projections, signalType)
 }

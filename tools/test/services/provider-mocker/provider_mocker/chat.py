@@ -169,6 +169,14 @@ async def chat_completions(request: Request):
         if fault_headers:
             return JSONResponse(content=resp, headers=fault_headers)
         return resp
+    vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
+    if vllm_reasoning is not None:
+        if fault_headers:
+            if isinstance(vllm_reasoning, StreamingResponse):
+                vllm_reasoning.headers.update(fault_headers)
+            else:
+                return JSONResponse(content=vllm_reasoning, headers=fault_headers)
+        return vllm_reasoning
     vllm_stop = vllm_fixture.matched_stop(req)
     if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
         if req.stream:

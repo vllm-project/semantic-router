@@ -92,7 +92,7 @@ func assertJSONPromptCompressionRoute(
 ) error {
 	sessionID := fmt.Sprintf("json-compression-%d", time.Now().UnixNano())
 	response, err := sendProtocolMatrixRaw(ctx, router, "/v1/chat/completions", map[string]any{
-		"model":      "auto",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 32,
 		"messages":   []map[string]string{{"role": "user", "content": prompt}},
 	}, false, map[string]string{

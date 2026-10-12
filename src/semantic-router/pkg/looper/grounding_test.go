@@ -28,11 +28,11 @@ func withGroundingDetector(t *testing.T, detect HallucinationDetectFunc) {
 // unsupportedWhen is a detector that flags any answer containing marker as
 // unsupported by its context with the given hallucinated-token score.
 func unsupportedWhen(marker string, score float32) HallucinationDetectFunc {
-	return func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+	return func(_ context.Context, _, _, answer string) (GroundingEvidence, error) {
 		if strings.Contains(answer, marker) {
-			return []string{"unsupported claim"}, score, nil
+			return spanEvidence([]string{"unsupported claim"}, score), nil
 		}
-		return nil, 0, nil
+		return GroundingEvidence{}, nil
 	}
 }
 
@@ -81,11 +81,11 @@ func TestScoreByPanel_ReadsEachResponseAgainstItsPeers(t *testing.T) {
 		mu    sync.Mutex
 		reads []read
 	)
-	withGroundingDetector(t, func(_ context.Context, contextText, question, answer string) ([]string, float32, error) {
+	withGroundingDetector(t, func(_ context.Context, contextText, question, answer string) (GroundingEvidence, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		reads = append(reads, read{contextText, question, answer})
-		return nil, 0, nil
+		return GroundingEvidence{}, nil
 	})
 
 	_, err := scoreByPanel(context.Background(), "q", panel("one", "two", "three"), fusionExecutionConfig{}, groundingDetect)
@@ -442,4 +442,12 @@ func newGroundedTestFusionLooper(cfg *config.LooperConfig) *FusionLooper {
 	looper := NewFusionLooper(cfg)
 	looper.grounding = &GroundingBackends{Detect: groundingDetect}
 	return looper
+}
+
+func spanEvidence(spans []string, score float32) GroundingEvidence {
+	evidence := GroundingEvidence{Unsupported: len(spans) > 0, Spans: spans}
+	if score > 0 {
+		evidence.Probability = &score
+	}
+	return evidence
 }

@@ -24,15 +24,24 @@ subset with messages, tools and response constraints. Discover its schema;
 arbitrary Chat Completions fields are not all accepted. Preserve actual history,
 tool calls and payloads, rather than substituting a display prompt.
 
-Probe sends a real request through Envoy. For example, with origins and entrypoint
-already discovered:
+Probe sends a real request through the stack's inference listener: the Router
+itself in standalone mode, or Envoy with `--gateway extproc`. For example, with
+origins and entrypoint already discovered:
 
 ```bash
 vllm-sr route preview --endpoint "$ROUTER_ORIGIN" --model "$ENTRYPOINT" \
-  --prompt 'Define a readiness probe.' --trace --json
+  --prompt 'Define a readiness probe in one sentence.' --trace --json
 vllm-sr route probe --config config.yaml --base-url "$INFERENCE_BASE_URL" \
-  --model "$ENTRYPOINT" --prompt 'Define a readiness probe.'
+  --model "$ENTRYPOINT" --prompt 'Define a readiness probe in one sentence.' \
+  --max-completion-tokens 256
 ```
+
+Without `--max-completion-tokens`, the probe waits for the backend's whole
+answer, and a slow backend reaches the 120 s default `--timeout`. With one,
+pick a prompt whose answer fits: an answer cut at the cap fails delivery. In
+`eval_trace`, a condition with `"state": "unknown"` and a `signal_error` was not
+evaluated, for example because its model is still loading; it is not a
+`false`.
 
 Add installed `--expect-*` assertions for the intended route. Requested routing
 identity and the backend's returned model name may differ; calibrate them

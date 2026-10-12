@@ -74,28 +74,28 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 		serviceType = sr.Spec.Service.Type
 	}
 
-	ports := []corev1.ServicePort{
-		{
-			Name:       "grpc",
-			Port:       servicePortOrDefault(sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
-			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort)),
+	traffic := corev1.ServicePort{
+		Name:       "grpc",
+		Port:       servicePortOrDefault(sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
+		TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort)),
+		Protocol:   corev1.ProtocolTCP,
+	}
+	if gatewayMode == GatewayModeStandalone {
+		traffic = corev1.ServicePort{
+			Name:       DefaultListenerName,
+			Port:       DefaultListenerPort,
+			TargetPort: intstr.FromString(DefaultListenerName),
 			Protocol:   corev1.ProtocolTCP,
-		},
+		}
+	}
+	ports := []corev1.ServicePort{
+		traffic,
 		{
 			Name:       "api",
 			Port:       servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort),
 			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.API.TargetPort, DefaultAPIPort)),
 			Protocol:   corev1.ProtocolTCP,
 		},
-	}
-
-	if gatewayMode == "standalone" {
-		ports = append(ports, corev1.ServicePort{
-			Name:       "envoy-http",
-			Port:       8801,
-			TargetPort: intstr.FromInt(8801),
-			Protocol:   corev1.ProtocolTCP,
-		})
 	}
 
 	if sr.Spec.Service.Metrics.Enabled == nil || *sr.Spec.Service.Metrics.Enabled {

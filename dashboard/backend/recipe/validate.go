@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -72,6 +73,7 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 	aliasPassed := aliasMatches(probe.Expected.Alias, actualModels)
 	selectionPassed, selectionFailures := compareExpectedSelection(probe.Expected, response, actualModels)
 	checks := ValidationChecks{
+		SignalErrors: maps.Equal(probe.Expected.SignalErrors, response.SignalErrors),
 		Decision:     actualDecision == probe.Expected.Decision,
 		Model:        probe.Model == "" || strings.TrimSpace(response.RequestedModel) == probe.Model,
 		Recipe:       strings.TrimSpace(response.Recipe) == expectedRecipe,
@@ -85,6 +87,9 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 	}
 
 	failures := []string{}
+	if !checks.SignalErrors {
+		failures = append(failures, fmt.Sprintf("signal errors: got %v, want %v", response.SignalErrors, probe.Expected.SignalErrors))
+	}
 	if !checks.Decision {
 		failures = append(failures, fmt.Sprintf("decision: got %q, want %q", actualDecision, probe.Expected.Decision))
 	}
@@ -107,6 +112,7 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 	failures = append(failures, traceFailures...)
 
 	return ActualOutcome{
+		SignalErrors:      cloneSignalErrors(response.SignalErrors),
 		Decision:          actualDecision,
 		Model:             firstNonEmpty(response.FinalModel, response.SelectedModel),
 		RequestedModel:    strings.TrimSpace(response.RequestedModel),
@@ -180,6 +186,7 @@ func expectedSelectionStatuses(algorithm string) []string {
 		"static":        {"selected", "execution_required"},
 		"multi_factor":  {"selected", "execution_required"},
 		"latency_aware": {"selected", "execution_required"},
+		"random":        {"selected", "execution_required"},
 		"workflows":     {"planned_final", "execution_required"},
 		"fusion":        {"planned_final", "execution_required"},
 		"remom":         {"planned_final", "execution_required"},
@@ -202,11 +209,23 @@ func selectionStatusFailures(algorithm string, expectedStatuses []string, status
 	return nil
 }
 
+// Selection short-circuits to "single" for one-candidate decisions, so
+// single-model selectors report "single" rather than the algorithm name (#3273).
+func algorithmAllowsSingleCandidateShortcut(algorithm string) bool {
+	switch algorithm {
+	case "static", "random":
+		return true
+	default:
+		return false
+	}
+}
+
 func selectionMethodFailures(algorithm, method string) []string {
 	if method == "" {
 		return []string{"selection_method is missing"}
 	}
-	if method != algorithm && (algorithm != "static" || method != "single") {
+	if method != algorithm &&
+		(method != "single" || !algorithmAllowsSingleCandidateShortcut(algorithm)) {
 		return []string{fmt.Sprintf(
 			"selection_method=%q, want %q",
 			method,

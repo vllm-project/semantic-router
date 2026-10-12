@@ -60,6 +60,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
+	r.updateKVAddressRegistry(ctx)
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
@@ -188,13 +189,15 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 
 	r.markUnverifiedFactualResponse(ctx)
 	memoryResponse := semanticResponse
-	if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
-		memoryResponse = cloned
-	} else {
-		logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"error":      err.Error(),
-		})
+	if _, _, suppressed := r.suppressedResponseMemoryStore(ctx); !suppressed {
+		if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
+			memoryResponse = cloned
+		} else {
+			logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"error":      err.Error(),
+			})
+		}
 	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)

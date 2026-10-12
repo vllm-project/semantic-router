@@ -10,10 +10,12 @@ import (
 
 // Router metrics of model_runtime deployments (pkg/modelservice).
 const (
-	RouterReadyMetric    = "vsr_model_runtime_ready"
-	RouterRestartsMetric = "vsr_model_runtime_restarts_total"
-	RouterRequestsMetric = "vsr_model_runtime_requests_total"
-	RouterUnknownMetric  = "vsr_model_runtime_unknown_answers_total"
+	RouterReadyMetric     = "vsr_model_runtime_ready"
+	RouterRestartsMetric  = "vsr_model_runtime_restarts_total"
+	RouterRequestsMetric  = "vsr_model_runtime_requests_total"
+	RouterUnknownMetric   = "vsr_model_runtime_unknown_answers_total"
+	RouterTransportMetric = "vsr_model_runtime_transport_seconds"
+	RouterServerMetric    = "vsr_model_runtime_server_seconds"
 )
 
 // Sample is one Prometheus sample.

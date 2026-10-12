@@ -46,8 +46,32 @@ routing:
 ```
 
 Keep the rule names aligned with the route behavior you want decisions to
-reference. Configure the detector through
-`global.model_catalog.modules.modality_detector`.
+reference.
+
+The detector is off by default, so these rules match only with a
+`modality_detector` block. With `method: classifier` and no
+`classifier.model_path`, it runs Vela 2.0 0.3B, whose calibrated
+`confidence_threshold` is 0.51:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      modality_detector:
+        enabled: true
+        method: classifier
+        confidence_threshold: 0.51
+```
+
+Without the block, the Router logs `modality_detector_disabled` when it loads
+the config, and `vllm-sr config validate` prints the same warning from the
+Router's own validation. `method:
+keyword` needs `keywords`; `method: hybrid` also needs `lower_threshold_ratio`
+and a classifier or keywords.
+
+A decision on `BOTH` must reference both an AR model (`modality: ar` in
+`routing.modelCards`) and a diffusion model (`modality: diffusion`), or an omni
+model (`modality: omni`).
 
 ## Dependencies and Limitations
 

@@ -10,9 +10,10 @@ and become the engine's typed questions: Noul is a two-option choice (``no``
 / ``yes``), Choice and Noul show the abstain option, Score levels are the
 options in order. Vela 2.0 adds Set and Span questions (``{label:
 description}`` with an optional ``threshold``; a Span may name its
-``head``), the package's presets, and ``over``, which names a state key, a
-part or a list of them. A question that does not validate gets
-``invalid_question`` and never affects the others.
+``head``), the package's presets, ``over``, which names a state key, a part
+or a list of them, and ``overflow``: ``truncate`` reads a part longer than
+one input only as far as its first tokens. A question that does not validate
+gets ``invalid_question`` and never affects the others.
 """
 
 from __future__ import annotations
@@ -22,9 +23,17 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...errors import INVALID_QUESTION, QuestionError
+from ...errors import INVALID_QUESTION, QuestionError, question_error
 from ...systemone import QUESTION_TYPES as SYSTEM_ONE_TYPES
-from ...systemone import canonical, content, json_payload, named_options, read_question
+from ...systemone import (
+    canonical,
+    content,
+    json_payload,
+    listed_options,
+    named_options,
+    read_question,
+    require_full_input,
+)
 from .calibration import SPAN_HEADS, Calibration
 
 ROLES = ("user", "context", "answer")
@@ -42,10 +51,15 @@ STATE_KEY_ROLES = {
 }
 LABELLED_TYPES = ("set", "span")
 QUESTION_TYPES = (*SYSTEM_ONE_TYPES, *LABELLED_TYPES)
-FAMILY_FIELDS = frozenset({"over", "preset"})
+FAMILY_FIELDS = frozenset({"over", "preset", "overflow", "require_full_input"})
+# How a question reads a part longer than one input: whole, in windows up to
+# the request's scan budget (``window``, the default), or its first tokens.
+OVERFLOW = ("window", "truncate")
 LABELLED_FIELDS = {
-    "set": frozenset({"type", "instructions", "criteria", "threshold"}),
-    "span": frozenset({"type", "instructions", "criteria", "threshold", "head"}),
+    "set": frozenset({"type", "instructions", "criteria", "labels", "threshold"}),
+    "span": frozenset(
+        {"type", "instructions", "criteria", "labels", "threshold", "head"}
+    ),
 }
 NOUL_DEFAULT_NO = "No. The statement or question is not satisfied."
 NOUL_DEFAULT_YES = "Yes. The statement or question is satisfied."
@@ -102,6 +116,8 @@ class Question:
     threshold: float | None = None
     head: str | None = None
     span_range: tuple[int, int] | None = None
+    truncate: bool = False
+    require_full_input: bool = False
 
     @property
     def names(self) -> list[str]:
@@ -214,14 +230,23 @@ def _default_over(kind: str, state: State) -> str | tuple[str, ...]:
 
 
 def _labelled(question: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
-    """A Set or Span question's instructions and ``{label: description}`` criteria (1 to 255 labels)."""
+    """A Set or Span question's instructions and ``{label: description}`` criteria (1 to 255 labels).
+
+    ``labels`` is the ordered ``[{key, description}]`` form the Router config
+    uses, an alternative to the criteria object.
+    """
     kind = question["type"]
     unknown = set(question) - LABELLED_FIELDS[kind] - FAMILY_FIELDS
     if unknown:
         raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
+    criteria = question.get("criteria")
+    if question.get("labels") is not None:
+        if criteria is not None:
+            raise _invalid("use criteria or labels, not both")
+        criteria = listed_options(question["labels"], "labels")
     return (
         content(question.get("instructions"), "instructions"),
-        named_options(question.get("criteria"), minimum=1),
+        named_options(criteria, minimum=1),
     )
 
 
@@ -251,14 +276,20 @@ class QuestionReader:
                 plan.questions.append(self.question(question_id, question, plan.state))
             except QuestionError as exc:
                 kind = question.get("type") if isinstance(question, dict) else None
-                plan.errors[question_id] = {"type": kind, "error": exc.code}
+                plan.errors[question_id] = question_error(kind, exc)
         taken = set(questions)
         for question in list(plan.questions):
             if question.kind == "set" and any(
                 f"{question.id}.{name}" in taken for name in question.names
             ):
                 plan.questions.remove(question)
-                plan.errors[question.id] = {"type": "set", "error": INVALID_QUESTION}
+                plan.errors[question.id] = question_error(
+                    "set",
+                    QuestionError(
+                        INVALID_QUESTION,
+                        f"a label answer {question.id}.<label> is another question's ID",
+                    ),
+                )
         return plan
 
     def question(self, question_id: str, question: Any, state: State) -> Question:
@@ -307,6 +338,9 @@ class QuestionReader:
             or not 0.0 <= threshold <= 1.0
         ):
             raise _invalid("threshold must be a number in [0, 1]")
+        overflow = question.get("overflow", "window")
+        if overflow not in OVERFLOW:
+            raise _invalid(f"overflow must be one of {list(OVERFLOW)}")
         head = question.get("head")
         if head is not None and head not in SPAN_HEADS:
             raise _invalid(f"head must be one of {list(SPAN_HEADS)}")
@@ -325,6 +359,8 @@ class QuestionReader:
             threshold=None if threshold is None else float(threshold),
             head=head,
             span_range=span_range,
+            truncate=overflow == "truncate",
+            require_full_input=require_full_input(question),
         )
 
     def _expand_preset(
@@ -332,16 +368,23 @@ class QuestionReader:
     ) -> tuple[dict[str, Any], list[str] | None]:
         """A preset question with the package's trained schema, and its level names (Score presets).
 
-        ``over`` and ``threshold`` stay the caller's. The relevance preset
+        ``over``, ``threshold`` and ``overflow`` stay the caller's. The relevance preset
         renders its levels as named options with descriptions, as the
         packages' ``score_relevance`` does.
         """
         name = question["preset"]
         if name not in self.presets:
             raise _invalid(f"preset must be one of {list(self.presets)}")
-        if set(question) - {"preset", "type", "over", "threshold"}:
+        if set(question) - {
+            "preset",
+            "type",
+            "over",
+            "threshold",
+            "overflow",
+            "require_full_input",
+        }:
             raise _invalid(
-                "a preset question takes only preset, type, over and threshold"
+                "a preset question takes only preset, type, over, threshold and overflow"
             )
         schema = self.calibration.schema(name) or {}
         named = None
@@ -360,5 +403,9 @@ class QuestionReader:
             }
         if question.get("type") not in (None, expanded["type"]):
             raise _invalid(f"preset {name} is a {expanded['type']} question")
-        kept = {key: question[key] for key in ("over", "threshold") if key in question}
+        kept: dict[str, Any] = {
+            key: question[key]
+            for key in ("over", "threshold", "overflow", "require_full_input")
+            if key in question
+        }
         return {**expanded, "preset": name, **kept}, named

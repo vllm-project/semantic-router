@@ -175,10 +175,10 @@ class DisplayNameTests(unittest.TestCase):
 
     def test_consumers_wait_only_for_actual_dependency_lanes(self):
         jobs = workflow("ci.yml")["jobs"]
-        self.assertEqual(jobs["recipes"]["needs"], ["plan", "image-local"])
+        self.assertEqual(jobs["recipes"]["needs"], ["plan", "image-router"])
         self.assertEqual(
             jobs["local"]["needs"],
-            ["plan", "image-local", "image-dashboard", "image-fixtures"],
+            ["plan", "image-router", "image-dashboard", "image-fixtures"],
         )
         self.assertEqual(jobs["e2e-router"]["needs"], ["plan", "image-router"])
         self.assertEqual(

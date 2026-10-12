@@ -104,6 +104,12 @@ func validateClassifierSignalRules(cfg *RouterConfig) error {
 		}
 		switch rule.Type {
 		case ClassifierSignalTypeLocal:
+			if strings.TrimSpace(rule.ModelPath) == "" && cfg.DecisionModel != "" {
+				if rule.Model != "" || rule.DisableRationale || len(rule.Labels) < 2 {
+					return fmt.Errorf("classifier %q: a default judgment needs two labels and accepts no external model or rationale setting", rule.Name)
+				}
+				continue
+			}
 			if err := validateLocalClassifierSignal(rule); err != nil {
 				return err
 			}

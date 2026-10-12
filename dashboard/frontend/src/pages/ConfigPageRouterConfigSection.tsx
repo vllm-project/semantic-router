@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import ProductIcon from '../components/ProductIcon'
 import styles from './ConfigPageRouterConfigSection.module.css'
 import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
@@ -48,6 +49,7 @@ export default function ConfigPageRouterConfigSection({
   refreshConfig,
   showLegacyCategories = false,
 }: ConfigPageRouterConfigSectionProps) {
+  const { hash } = useLocation()
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
   const [editorMode, setEditorMode] = useState<GlobalEditorMode>('visual')
   const [rawYaml, setRawYaml] = useState('{}\n')
@@ -55,6 +57,12 @@ export default function ConfigPageRouterConfigSection({
   const [rawSaving, setRawSaving] = useState(false)
   const [rawError, setRawError] = useState<string | null>(null)
   const [rawDirty, setRawDirty] = useState(false)
+
+  useEffect(() => {
+    if (editorMode === 'visual' && hash.startsWith('#global-section-')) {
+      document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+    }
+  }, [editorMode, hash])
 
   const loadRawGlobalConfig = useCallback(async () => {
     setRawLoading(true)
@@ -296,7 +304,11 @@ export default function ConfigPageRouterConfigSection({
                   </header>
                   <div className={styles.sectionList}>
                     {group.cards.map((card) => (
-                      <article key={card.key} className={styles.systemRow}>
+                      <article
+                        key={card.key}
+                        id={`global-section-${card.key}`}
+                        className={styles.systemRow}
+                      >
                         <div className={styles.rowMain}>
                           <div className={styles.cardCopy}>
                             <div className={styles.cardTitleRow}>
