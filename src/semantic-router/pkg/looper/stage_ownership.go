@@ -222,14 +222,6 @@ func resolveFusionFinalStage(req *Request) StageOwnership {
 	if targetModel == "" && len(cfg.AnalysisModels) > 0 {
 		targetModel = cfg.AnalysisModels[0]
 	}
-	if targetModel != "" {
-		targetModel = matchModelOrLoRA(targetModel, req.ModelRefs)
-	} else if len(req.ModelRefs) > 0 {
-		targetModel = req.ModelRefs[0].Model
-		if req.ModelRefs[0].LoRAName != "" {
-			targetModel = req.ModelRefs[0].LoRAName
-		}
-	}
 	return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
 }
 
@@ -262,7 +254,6 @@ func resolveWorkflowsFinalStage(req *Request) StageOwnership {
 	cfg := resolveWorkflowsExecutionConfig(req)
 	targetModel := strings.TrimSpace(cfg.Final.Model)
 	if targetModel != "" {
-		targetModel = matchModelOrLoRA(targetModel, req.ModelRefs)
 		return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
 	}
 
@@ -281,12 +272,18 @@ func resolveWorkflowsFinalStage(req *Request) StageOwnership {
 		}
 	}
 
-	// In static workflows without explicit final.model, resolve the final producer from the static roles.
+	// In static workflows without explicit final.model:
+	// resolveWorkflowFinalModel defaults to PlannerModel if configured.
+	if strings.TrimSpace(cfg.PlannerModel) != "" {
+		return ClassifyStage(req, "synthesis", StageRoleSynthesis, strings.TrimSpace(cfg.PlannerModel))
+	}
+
+	// In static workflows without explicit final.model and without PlannerModel:
+	// resolve the final producer from the static roles.
 	if len(cfg.Roles) > 0 {
 		roleModels := normalizeModelNames(cfg.Roles[0].Models)
 		if len(roleModels) == 1 {
-			targetModel = matchModelOrLoRA(roleModels[0], req.ModelRefs)
-			return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
+			return ClassifyStage(req, "synthesis", StageRoleSynthesis, roleModels[0])
 		}
 		// If the first static role specifies multiple alternative candidates, winner selection is pending.
 		return StageOwnership{
@@ -301,11 +298,7 @@ func resolveWorkflowsFinalStage(req *Request) StageOwnership {
 	}
 
 	if len(req.ModelRefs) == 1 {
-		targetModel = req.ModelRefs[0].Model
-		if req.ModelRefs[0].LoRAName != "" {
-			targetModel = req.ModelRefs[0].LoRAName
-		}
-		return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
+		return ClassifyStage(req, "synthesis", StageRoleSynthesis, req.ModelRefs[0].Model)
 	}
 
 	return StageOwnership{
@@ -345,27 +338,7 @@ func ResolveWorkflowPlanFinalStage(req *Request, plan *workflowPlan, stepResults
 			BufferingReason:    BufferingReasonSelectionPending,
 		}
 	}
-	targetModel := matchModelOrLoRA(modelName, req.ModelRefs)
-	return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
-}
-
-func matchModelOrLoRA(modelName string, modelRefs []config.ModelRef) string {
-	modelName = strings.TrimSpace(modelName)
-	if modelName == "" {
-		return ""
-	}
-	for _, ref := range modelRefs {
-		if ref.Model == modelName {
-			if ref.LoRAName != "" {
-				return ref.LoRAName
-			}
-			return ref.Model
-		}
-		if ref.LoRAName == modelName {
-			return ref.LoRAName
-		}
-	}
-	return modelName
+	return ClassifyStage(req, "synthesis", StageRoleSynthesis, strings.TrimSpace(modelName))
 }
 
 func resolveConfidenceFinalStage(req *Request) StageOwnership {
