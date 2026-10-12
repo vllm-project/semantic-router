@@ -150,7 +150,7 @@ __all__ = [
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "images", "options"},
+    "decisions": {"model", "state", "questions", "images", "videos", "options"},
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
@@ -947,7 +947,7 @@ class Runtime:
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            raise RuntimeServiceError.invalid(exc) from exc
         return Prepared(served, request, plan)
 
     def finish(
@@ -1071,9 +1071,7 @@ class Runtime:
             try:
                 split = split_states(body) if surface == "decisions" else None
             except ValueError as exc:
-                failed = _error_outcome(
-                    RuntimeServiceError("invalid_request", str(exc))
-                )
+                failed = _error_outcome(RuntimeServiceError.invalid(exc))
                 joins.append((len(parts), None, failed))
                 continue
             if split is None:

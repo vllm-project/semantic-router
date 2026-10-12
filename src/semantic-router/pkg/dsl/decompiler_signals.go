@@ -25,5 +25,6 @@ func (d *decompiler) decompileSignals() {
 	d.decompileClassifierSignals()
 	d.decompileInputModalitySignals()
 	d.decompileDecisionModelSignals()
+	d.decompileTopicContinuitySignals()
 	d.decompileProjectionSignals()
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -83,6 +84,7 @@ func (r *OpenAIRouter) executeLooperGraph(
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},
 	})
 	if err != nil {
+		logLooperCallBudgetExhaustion(err, outcome, decision, reqCtx)
 		return nil, r.looperExecutionErrorResponse(looperStepError(err), originalModel, decision, reqCtx)
 	}
 	resp, ok := looper.ResponseValue.In(outcome.Values)
@@ -97,8 +99,37 @@ func (r *OpenAIRouter) executeLooperGraph(
 		"iterations":     resp.Iterations,
 		"selected_model": resp.Model,
 		"hops":           outcome.Hops,
+		"physical_calls": outcome.PhysicalCalls,
 	})
 	return resp, nil
+}
+
+// logLooperCallBudgetExhaustion records the typed, content-free diagnostic for
+// a run that stopped at the per-request call budget: the decision, the
+// algorithm, the limit, and the logical and physical counts observed. It logs nothing
+// for other failures.
+func logLooperCallBudgetExhaustion(err error, outcome *graph.Outcome, decision *config.Decision, reqCtx *RequestContext) {
+	if !errors.Is(err, graph.ErrHopLimit) {
+		return
+	}
+	observed := 0
+	physical := 0
+	if outcome != nil {
+		observed = outcome.Hops
+		physical = outcome.PhysicalCalls
+	}
+	algorithm := ""
+	if decision.Algorithm != nil {
+		algorithm = decision.Algorithm.Type
+	}
+	logging.ComponentErrorEvent("extproc", "looper_call_budget_exhausted", map[string]interface{}{
+		"request_id": reqCtx.RequestID,
+		"decision":   decision.Name,
+		"algorithm":  algorithm,
+		"limit":      config.MaxUpstreamCallsPerRequest,
+		"hops":       observed,
+		"calls":      physical,
+	})
 }
 
 // looperStepError is the algorithm's own error, which the client response
@@ -120,6 +151,9 @@ type upstreamSender struct {
 func (s upstreamSender) Send(ctx context.Context, call *routing.Call) (*graph.Delivery, error) {
 	result, err := s.set.Execute(ctx, call, "")
 	if err != nil {
+		if errors.Is(err, budget.ErrExhausted) {
+			return nil, err
+		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

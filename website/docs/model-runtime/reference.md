@@ -170,7 +170,12 @@ A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface` (the
 model does not serve that endpoint), 429 `overloaded`, 503 `not_ready`. A
-failed item of a request (one input or one question) carries its own error
+rejected image or video adds its `reason` (for example `video_too_long`,
+`image_too_large` or `video_malformed`) and, when it broke a limit, the
+`limit`. These fixed words never carry request data, so the Router's public
+System One API answers with them and keeps the runtime's message private: it
+says `video longer than 300 s` where the runtime says why in its own words.
+A failed item of a request (one input or one question) carries its own error
 code and never fails the others.
 
 ### Long inputs
@@ -433,18 +438,31 @@ A model whose card lists the `image` modality (Decision 3.0) also reads
 `images`: base64 PNG, JPEG or WebP data URLs, each of at most
 `limits.image_max_bytes` bytes and `limits.image_source_max_pixels` pixels.
 Every question of the state sees them, in front of its text and in this order;
-the model resizes each to at most `limits.image_max_pixels` pixels. An entry of
-`states` may carry its own `images`. The images' tokens count in `usage`. A
-malformed image, or images sent to a model without the modality, fail the
-request with 400 `invalid_request`.
+the model resizes each to at most `limits.image_max_pixels` pixels. A model
+whose card lists the `video` modality also reads `videos`: base64 MP4, WebM,
+QuickTime or Matroska data URLs, each of at most `limits.video_max_bytes`
+bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
+pixels per frame, after the images. The model reads `limits.video_fps` frames
+per second, at least 4 and at most `limits.video_max_frames` spread over the
+whole video, each at up to `limits.video_max_pixels` pixels; every pair of
+frames is one group of input tokens after its timestamp, and the videos of a
+request take at most `limits.video_max_tokens` input tokens. An entry of
+`states` may carry its own `images` and `videos`. Their tokens count in
+`usage`. A malformed or over-limit image or video, or one sent to a model
+without its modality, fails the request with 400 `invalid_request` and its
+`reason`. A worker
+started directly reads bodies of at most `--max-request-bytes`, so raise it to
+send large videos; the Router gives the workers it manages 64 MiB.
 
 ```json title="POST /v1/systemone"
 {
   "model": "d3-lite",
-  "state": "Is the attached receipt complete?",
+  "state": "Is the attached receipt complete, and does the clip show it being paid?",
   "images": ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."],
+  "videos": ["data:video/mp4;base64,AAAAIGZ0eXBpc29t..."],
   "questions": {
-    "complete": {"type": "noul", "instructions": "Does the receipt show a total, a date and a merchant?"}
+    "complete": {"type": "noul", "instructions": "Does the receipt show a total, a date and a merchant?"},
+    "paid": {"type": "noul", "instructions": "Does the clip show the receipt being paid?"}
   }
 }
 ```

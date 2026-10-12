@@ -299,19 +299,37 @@ class EngineOptions:
 
 
 @dataclass
+class VideoInputs:
+    """The videos of a decoder batch: their tower ``features`` (merged, every row's videos, rows in order).
+
+    ``grids`` holds each video's (t, h, w) patch grid in the same order; each
+    group of ``h * w`` patches (a pair of frames) takes the next run of the
+    batch's ``token_id`` placeholders.
+    """
+
+    features: torch.Tensor
+    grids: list[tuple[int, int, int]]
+    token_id: int
+
+
+@dataclass
 class ImageInputs:
     """The images of a decoder batch, for a model whose ``ModelSpec.towers`` holds a vision tower.
 
     ``pixel_values`` holds the patch rows of every image of every row, rows in
     order and each row's images in order; ``grids`` each image's (t, h, w)
     patch grid in the same order. The tower's features replace the batch's
-    ``token_id`` placeholders, in the same order.
+    ``token_id`` placeholders, in the same order. ``features``, when given, are
+    those features already computed (``EngineModel.tower_features``) and
+    ``pixel_values`` is not read; ``videos`` are the rows' video inputs.
     """
 
-    pixel_values: torch.Tensor
+    pixel_values: torch.Tensor | None
     grids: list[tuple[int, int, int]]
     token_id: int
     tower: str = "vision"
+    features: torch.Tensor | None = None
+    videos: VideoInputs | None = None
 
 
 @dataclass
@@ -445,6 +463,12 @@ class EngineModel(ABC):
     def tree(self, batch: TreeBatch) -> TreeOutput:
         """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
         raise NotImplementedError(f"{type(self).__name__} has no tree forward")
+
+    def tower_features(
+        self, name: str, pixel_values: torch.Tensor, grids: list[tuple[int, int, int]]
+    ) -> torch.Tensor:
+        """A tower's merged features for its inputs (``ImageInputs.features``), on the device."""
+        raise NotImplementedError(f"{type(self).__name__} has no {name} tower")
 
     @abstractmethod
     def parameter_count(self) -> int: ...

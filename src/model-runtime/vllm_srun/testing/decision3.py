@@ -4,8 +4,8 @@ A package follows ``d3-package-manifest/1`` exactly: a ``Qwen3_5Model``
 checkpoint in BF16 (``language_model.*`` and, unless the ``text`` variant,
 ``visual.*``), the 255-way readout, ``decision_config.json``, a byte-level BPE
 tokenizer in which every answer code is one token, the Qwen3.5 chat template
-the released packages ship, the image processor settings and a manifest with
-the scored identity and parameter counts. The bundled ``d3_runtime.py`` raises
+the released packages ship, the image and video processor settings and a
+manifest with the scored identity and parameter counts. The bundled ``d3_runtime.py`` raises
 on import: the runtime must never execute package code.
 """
 
@@ -24,7 +24,16 @@ import torch
 from ..families.decision3 import package as pkg
 from .fixtures import qwen3_5_config, save
 
-VARIANTS = ("vision", "text")
+VARIANTS = ("vision", "text", "pruned")
+# A pruned backbone keeps an irregular subset of its layers, as d3-edge does; full_attention_interval no
+# longer describes them, so the layers must follow layer_types.
+PRUNED_LAYERS = (
+    "linear_attention",
+    "linear_attention",
+    "full_attention",
+    "linear_attention",
+    "full_attention",
+)
 SPECIALS = (
     "<|endoftext|>",
     "<|im_start|>",
@@ -102,6 +111,16 @@ PROCESSOR_CONFIG = {
     "image_std": [0.5, 0.5, 0.5],
     "processor_class": "Qwen3VLProcessor",
     "image_processor_type": "Qwen2VLImageProcessorFast",
+}
+VIDEO_PROCESSOR_CONFIG = {
+    "size": {"longest_edge": 25165824, "shortest_edge": 4096},
+    "patch_size": 16,
+    "temporal_patch_size": 2,
+    "merge_size": 2,
+    "image_mean": [0.5, 0.5, 0.5],
+    "image_std": [0.5, 0.5, 0.5],
+    "processor_class": "Qwen3VLProcessor",
+    "video_processor_type": "Qwen3VLVideoProcessor",
 }
 PACKAGE_CODE = 'raise RuntimeError("the runtime must never import package code")\n'
 
@@ -206,15 +225,22 @@ def sha256(path: Path) -> str:
 
 
 def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
-    """The fixture command's writer: a package that reads images (``vision``) or text only (``text``)."""
+    """The fixture command's writer: a package that reads images (``vision``), text only (``text``) or images
+    with a pruned backbone (``pruned``)."""
     from ..engines.native import models
 
-    vision = (variant or VARIANTS[0]) == "vision"
+    variant = variant or VARIANTS[0]
+    vision = variant != "text"
     root = Path(output)
     root.mkdir(parents=True, exist_ok=False)
     ids, codes = write_tokenizer(root)
     vocab = max(ids.values()) + 1
     text = qwen3_5_config(vocab)
+    if variant == "pruned":
+        text |= {
+            "layer_types": list(PRUNED_LAYERS),
+            "num_hidden_layers": len(PRUNED_LAYERS),
+        }
     tensors = random_tensors(
         models.build("qwen3_5_text", text), "language_model.", seed
     )
@@ -237,6 +263,9 @@ def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
         tensors |= random_tensors(vision_module, "visual.", seed + 1)
         (root / "preprocessor_config.json").write_text(
             json.dumps(PROCESSOR_CONFIG, indent=2) + "\n", encoding="utf-8"
+        )
+        (root / "video_preprocessor_config.json").write_text(
+            json.dumps(VIDEO_PROCESSOR_CONFIG, indent=2) + "\n", encoding="utf-8"
         )
     save(tensors, root / "model.safetensors")
     torch.manual_seed(seed + 2)
