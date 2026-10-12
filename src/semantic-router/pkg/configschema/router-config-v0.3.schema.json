@@ -4701,6 +4701,9 @@
         },
         "cache_write_per_1m": {
           "type": "number"
+        },
+        "cache_write_1h_per_1m": {
+          "type": "number"
         }
       },
       "additionalProperties": false,

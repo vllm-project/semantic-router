@@ -23,8 +23,9 @@ func TestAnthropicPartialOutputTotalOmission(t *testing.T) {
 			State:           llmprotocol.UsageAvailable,
 			InputTotal:      llmprotocol.TokenCount{Value: &inputTotal, Provenance: llmprotocol.UsageAuthoritative},
 			InputCacheRead:  llmprotocol.TokenCount{Value: &cacheRead, Provenance: llmprotocol.UsageAuthoritative},
-			InputCacheWrite: llmprotocol.TokenCount{Value: &cacheWrite, Provenance: llmprotocol.UsageAuthoritative},
-			OutputReasoning: llmprotocol.TokenCount{Value: &reasoning, Provenance: llmprotocol.UsageAuthoritative},
+			InputCacheWrite:   llmprotocol.TokenCount{Value: &cacheWrite, Provenance: llmprotocol.UsageAuthoritative},
+			InputCacheWrite5m: llmprotocol.TokenCount{Value: &cacheWrite, Provenance: llmprotocol.UsageAuthoritative},
+			OutputReasoning:   llmprotocol.TokenCount{Value: &reasoning, Provenance: llmprotocol.UsageAuthoritative},
 		},
 	}
 	engine := NewBuiltinEngine()
