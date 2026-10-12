@@ -15,7 +15,7 @@ const (
 )
 
 // ConsolidateUser scans a user's memories and merges semantically related ones.
-// Groups are formed by word-level Jaccard similarity. Within each group, the
+// Groups are formed by text-unit Jaccard similarity. Within each group, the
 // contents are concatenated into a single summary memory and the originals are
 // deleted. This reduces redundancy and improves retrieval quality over time.
 //

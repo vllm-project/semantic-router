@@ -253,6 +253,16 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
     if not data:
         raise ConfigParseError("Configuration file is empty")
 
+    return parse_user_config_data(data, config_path, log_summary=log_summary)
+
+
+def parse_user_config_data(
+    data: Dict[str, Any], config_path: str, *, log_summary: bool = True
+) -> UserConfig:
+    """Apply the parse_user_config checks to an already loaded document.
+
+    ``config_path`` names the document in error messages only.
+    """
     _reject_invalid_config_surfaces(data, config_path)
     _warn_retired_looper_endpoint(data, config_path)
 

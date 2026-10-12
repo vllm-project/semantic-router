@@ -205,6 +205,12 @@ schema, streaming, tools, or error translation.
   backend formats match. Unknown or unsupported request fields fail closed.
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
+- Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
+  Responses requests. The default strict policy rejects this translation with
+  `lossy_translation`; a false or absent flag remains supported. Anthropic
+  backends preserve the flag. Codec callers explicitly using
+  `LossyAllowWithDiagnostic` may omit the flag with a `tool_result.is_error`
+  diagnostic; the tool-result content is not rewritten.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

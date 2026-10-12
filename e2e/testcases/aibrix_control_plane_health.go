@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {

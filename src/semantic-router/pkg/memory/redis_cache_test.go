@@ -2,10 +2,13 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,6 +65,139 @@ func TestRedisCache_Set_NilReceiver_NoPanic(t *testing.T) {
 	var c *RedisCache
 	c.Set(context.Background(), RetrieveOptions{UserID: "u1", Query: "q"}, nil)
 	c.Set(context.Background(), RetrieveOptions{UserID: "u1", Query: "q"}, []*RetrieveResult{})
+}
+
+func TestRedisCacheSetPreservesHitsAndTTL(t *testing.T) {
+	mr := miniredis.RunT(t)
+	cache, err := NewRedisCache(context.Background(), &RedisCacheConfig{
+		Address: mr.Addr(), KeyPrefix: t.Name() + ":", TTLSeconds: 2,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cache.Close() })
+
+	opts := RetrieveOptions{Query: "ttl", UserID: "ttl-user", Limit: 5, Threshold: 0.5}
+	results := retrieveResultFor(&Memory{ID: "cached", UserID: opts.UserID, Content: "cached result"})
+	cache.Set(context.Background(), opts, results)
+	got, hit := cache.Get(context.Background(), opts)
+	require.True(t, hit, "a normal cache read must hit after Set")
+	require.Len(t, got, 1)
+	assert.Equal(t, "cached", got[0].Memory.ID)
+
+	for _, key := range []string{
+		cacheKey(cache.prefix, opts.UserID, opts),
+		cache.userIndexKey(opts.UserID),
+		cache.userGenerationKey(opts.UserID),
+	} {
+		ttl, err := cache.client.PTTL(context.Background(), key).Result()
+		require.NoError(t, err)
+		assert.Greater(t, ttl, time.Duration(0), "%s must expire", key)
+		assert.LessOrEqual(t, ttl, 2*time.Second, "%s must retain the configured TTL", key)
+	}
+
+	mr.FastForward(3 * time.Second)
+	for _, key := range []string{
+		cacheKey(cache.prefix, opts.UserID, opts),
+		cache.userIndexKey(opts.UserID),
+		cache.userGenerationKey(opts.UserID),
+	} {
+		exists, err := cache.client.Exists(context.Background(), key).Result()
+		require.NoError(t, err)
+		assert.Zero(t, exists, "%s should be reclaimed after the configured TTL", key)
+	}
+	_, hit = cache.Get(context.Background(), opts)
+	assert.False(t, hit, "an expired cache value must remain a miss")
+}
+
+func TestRedisCacheConditionalRefillIsSafeAcrossClients(t *testing.T) {
+	mr := miniredis.RunT(t)
+	ctx := context.Background()
+	cfg := &RedisCacheConfig{Address: mr.Addr(), KeyPrefix: t.Name() + ":", TTLSeconds: 30}
+	reader, err := NewRedisCache(ctx, cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = reader.Close() })
+	writer, err := NewRedisCache(ctx, cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = writer.Close() })
+
+	opts := RetrieveOptions{Query: "shared-redis", UserID: "shared-user", Limit: 5, Threshold: 0.5}
+	_, staleGeneration, hit := reader.GetWithGeneration(ctx, opts)
+	require.False(t, hit)
+	require.NotEmpty(t, staleGeneration)
+
+	// A separate cache client commits a write and invalidates the shared user
+	// namespace while the reader is still waiting on its backing-store query.
+	require.NoError(t, writer.InvalidateByUser(ctx, opts.UserID))
+	_, currentGeneration, hit := writer.GetWithGeneration(ctx, opts)
+	require.False(t, hit)
+	require.NotEmpty(t, currentGeneration)
+	fresh := retrieveResultFor(&Memory{ID: "fresh", UserID: opts.UserID})
+	stored, err := writer.SetIfGeneration(ctx, opts, fresh, currentGeneration)
+	require.NoError(t, err)
+	require.True(t, stored)
+
+	stale := retrieveResultFor(&Memory{ID: "stale", UserID: opts.UserID})
+	stored, err = reader.SetIfGeneration(ctx, opts, stale, staleGeneration)
+	require.NoError(t, err)
+	require.False(t, stored, "a token from before another client's invalidation must be rejected")
+	got, hit := writer.Get(ctx, opts)
+	require.True(t, hit)
+	require.Equal(t, "fresh", got[0].Memory.ID, "a stale refill must not overwrite the new value")
+}
+
+func TestRedisCacheDoesNotReadLateV2RefillAndCleansItUp(t *testing.T) {
+	mr := miniredis.RunT(t)
+	ctx := context.Background()
+	cache, err := NewRedisCache(ctx, &RedisCacheConfig{
+		Address: mr.Addr(), KeyPrefix: t.Name() + ":", TTLSeconds: 30,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cache.Close() })
+
+	opts := RetrieveOptions{Query: "rolling-upgrade", UserID: "rolling-user", Limit: 5, Threshold: 0.5}
+	_, _, hit := cache.GetWithGeneration(ctx, opts)
+	require.False(t, hit)
+	require.NoError(t, cache.InvalidateByUser(ctx, opts.UserID))
+
+	// Simulate an old instance finishing its v2 read-through after invalidation.
+	// It writes a v2 result and registers it in the unchanged per-user index.
+	v2Key := cacheKeyForVersion(cache.prefix, opts.UserID, opts, "v2:")
+	stale, err := json.Marshal(retrieveResultFor(&Memory{ID: "late-v2", UserID: opts.UserID}))
+	require.NoError(t, err)
+	require.NoError(t, cache.client.Set(ctx, v2Key, stale, time.Minute).Err())
+	require.NoError(t, cache.client.SAdd(ctx, cache.userIndexKey(opts.UserID), v2Key).Err())
+
+	_, hit = cache.Get(ctx, opts)
+	require.False(t, hit, "the new v3 reader must not observe an old instance's late v2 refill")
+	_, err = cache.client.Get(ctx, v2Key).Result()
+	require.NoError(t, err, "the simulated late v2 entry should exist until indexed cleanup")
+
+	require.NoError(t, cache.InvalidateByUser(ctx, opts.UserID))
+	exists, err := cache.client.Exists(ctx, v2Key, cache.userIndexKey(opts.UserID)).Result()
+	require.NoError(t, err)
+	require.Zero(t, exists, "the shared user index must still clean up late v2 entries")
+}
+
+func TestRedisCacheSetFailureCannotLeaveUntrackedValue(t *testing.T) {
+	mr := miniredis.RunT(t)
+	cache, err := NewRedisCache(context.Background(), &RedisCacheConfig{
+		Address: mr.Addr(), KeyPrefix: t.Name() + ":", TTLSeconds: 30,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cache.Close() })
+
+	opts := RetrieveOptions{Query: "wrong-index-type", UserID: "u1", Limit: 5}
+	_, generation, hit := cache.GetWithGeneration(context.Background(), opts)
+	require.False(t, hit)
+	require.NotEmpty(t, generation)
+	indexKey := cache.userIndexKey(opts.UserID)
+	require.NoError(t, cache.client.Set(context.Background(), indexKey, "not-a-set", time.Minute).Err())
+
+	stored, err := cache.SetIfGeneration(context.Background(), opts, retrieveResultFor(&Memory{ID: "untracked"}), generation)
+	require.Error(t, err, "a corrupt index type must fail the cache write")
+	assert.False(t, stored)
+	exists, err := cache.client.Exists(context.Background(), cacheKey(cache.prefix, opts.UserID, opts)).Result()
+	require.NoError(t, err)
+	assert.Zero(t, exists, "a cache write error must not leave an untracked value")
 }
 
 func TestRedisCache_InvalidateByUser_NilReceiver_NoPanic(t *testing.T) {
@@ -232,7 +368,7 @@ func TestCacheKeyNormalizesEffectiveHybridMode(t *testing.T) {
 func TestCacheKeyVersionedEncodingPreservesThresholdPrecision(t *testing.T) {
 	base := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
 	key := cacheKey("mem:", "u1", base)
-	assert.Contains(t, key, "mem:v2:u1:")
+	assert.Contains(t, key, "mem:v3:u1:")
 	nearby := base
 	nearby.Threshold = math.Nextafter32(base.Threshold, 1)
 	assert.NotEqual(t, key, cacheKey("mem:", "u1", nearby), "distinct score floors must not round to the same key")
