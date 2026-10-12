@@ -319,9 +319,37 @@ def test_a_kai_binding_fills_the_lines_with_the_served_artifact(tmp_path):
     # pins this.
     for artifact in inventory.values():
         assert artifact.model_path == "vllm-sr/Decision-2.0-Kai-0.6B"
+        # The declared Hub ID is the artifact's identity: the org is not
+        # prepended a second time, so the drift check, the default revision
+        # lookup and baseline matching all see the repository the deployment
+        # declared.
+        assert artifact.hf_repo == "vllm-sr/Decision-2.0-Kai-0.6B"
     assert system_refs(load_config(write_config(tmp_path, config)))["hazard"] == (
         "models/Vela-1.0-Encoder-307M-Hazard"
     )
+
+
+def test_the_kai_identity_survives_the_drift_check(tmp_path):
+    config = yaml.safe_load(yaml.safe_dump(REF_ONLY_CONFIG))
+    config["global"]["model_catalog"]["deployments"] = {
+        "decision-kai": {
+            "provider": "model_runtime",
+            "artifact": "vllm-sr/Decision-2.0-Kai-0.6B",
+            "device": "cpu",
+        }
+    }
+    config["global"]["model_catalog"]["system"]["decision_model"] = {
+        "deployment": "decision-kai"
+    }
+    inventory = served_artifacts(load_config(write_config(tmp_path, config)))
+    registry = {
+        task: {"id": "vllm-sr/Decision-2.0-Kai-0.6B"}
+        for task in ("jailbreak", "intent", "modality")
+    }
+    # The drift check matches the served artifact on its Hub repository. A
+    # registry that measures the repository the deployment declared must not
+    # fire, and must not see the org twice either.
+    assert registry_drift(inventory, registry) == []
 
 
 def test_an_unknown_model_ref_is_reported_and_not_served(tmp_path):

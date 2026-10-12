@@ -235,7 +235,11 @@ class ServedArtifact:
 
     @property
     def hf_repo(self) -> str:
-        return f"{HF_ORG}/{self.artifact_name}"
+        """The Hub repository: a registered local path's org-qualified name,
+        or the repo-id an unregistered artifact's deployment declared."""
+        if self.model_path.startswith(MODEL_PREFIX):
+            return f"{HF_ORG}/{self.artifact_name}"
+        return self.model_path
 
     @property
     def thresholds(self) -> tuple[float, ...]:
