@@ -48,7 +48,7 @@ type cluster struct {
 	closed    bool
 }
 
-func newCluster(spec ClusterSpec, sh *shared, rnd Rand, clock Clock) *cluster {
+func newCluster(spec ClusterSpec, sh *shared, rnd Rand, clock Clock, telemetry TelemetryReader) *cluster {
 	endpoints := make([]*endpoint, len(spec.Endpoints))
 	for i := range spec.Endpoints {
 		endpoints[i] = &endpoint{spec: spec.Endpoints[i]}
@@ -58,7 +58,7 @@ func newCluster(spec ClusterSpec, sh *shared, rnd Rand, clock Clock) *cluster {
 		spec:      spec,
 		shared:    sh,
 		pool:      sh.pools.acquire(poolKeyFor(&spec, connect)),
-		balancer:  newBalancer(spec.LBPolicy, rnd),
+		balancer:  newBalancer(spec.Name, spec.LBPolicy, rnd, telemetry),
 		breaker:   newBreaker(spec.Name, spec.Breakers),
 		clock:     clock,
 		endpoints: endpoints,

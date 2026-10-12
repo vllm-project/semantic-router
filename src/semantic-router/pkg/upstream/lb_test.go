@@ -36,7 +36,7 @@ func pickCounts(b balancer, set *hostSet, n int) map[string]int {
 func TestRoundRobinEqualWeightsRotatesFromSeededStart(t *testing.T) {
 	set := newHostSet(testEndpoints(1, 1, 1))
 	// The first draw seeds the weighted schedule, the second the rotation.
-	b := newBalancer(LBRoundRobin, &scriptedRand{values: []uint64{0, 4}})
+	b := newBalancer("c", LBRoundRobin, &scriptedRand{values: []uint64{0, 4}}, nil)
 	var got []string
 	for range 6 {
 		got = append(got, b.pick(set).spec.Name)
@@ -52,7 +52,7 @@ func TestRoundRobinEqualWeightsRotatesFromSeededStart(t *testing.T) {
 func TestRoundRobinFollowsWeightsExactly(t *testing.T) {
 	for _, seed := range []uint64{0, 1, 7, 12345} {
 		set := newHostSet(testEndpoints(3, 1, 2))
-		b := newBalancer(LBRoundRobin, rand.New(rand.NewPCG(seed, seed)))
+		b := newBalancer("c", LBRoundRobin, rand.New(rand.NewPCG(seed, seed)), nil)
 		// Every full cycle of the schedule holds each host weight times; a
 		// seeded start may split one cycle across the ends of the window.
 		counts := pickCounts(b, set, 600)
@@ -107,7 +107,7 @@ func TestLeastRequestUnequalWeightsDiscountsActiveRequests(t *testing.T) {
 	// Effective weights: a = 2/(3+1) = 0.5, b = 1/(0+1) = 1.
 	endpoints[0].active.Store(3)
 	set := newHostSet(endpoints)
-	b := newBalancer(LBLeastRequest, rand.New(rand.NewPCG(3, 4)))
+	b := newBalancer("c", LBLeastRequest, rand.New(rand.NewPCG(3, 4)), nil)
 	counts := pickCounts(b, set, 300)
 	if diff := counts["b"] - 200; diff < -2 || diff > 2 {
 		t.Fatalf("counts = %v, want about a=100 b=200", counts)
@@ -131,8 +131,8 @@ func TestEDFSchedulerSeededPicksKeepProportions(t *testing.T) {
 }
 
 func TestBalancersHandleEmptyAndSingleHostSets(t *testing.T) {
-	for _, policy := range []LBPolicy{LBRoundRobin, LBLeastRequest} {
-		b := newBalancer(policy, globalRand{})
+	for _, policy := range []LBPolicy{LBRoundRobin, LBLeastRequest, LBLoadAware} {
+		b := newBalancer("c", policy, globalRand{}, nil)
 		if got := b.pick(newHostSet(nil)); got != nil {
 			t.Fatalf("%s picked %v from an empty set", policy, got)
 		}

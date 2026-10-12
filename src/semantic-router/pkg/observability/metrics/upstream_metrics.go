@@ -112,6 +112,18 @@ var (
 		[]string{"cluster", "endpoint", "outcome"},
 	)
 
+	// UpstreamLoadAwarePicksTotal counts load-aware endpoint picks by how they
+	// were made: from telemetry, or the fallback reason (fallback_stale,
+	// fallback_missing_metric, fallback_no_engine, fallback_unhealthy,
+	// fallback_disabled).
+	UpstreamLoadAwarePicksTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_upstream_load_aware_picks_total",
+			Help: "Load-aware endpoint picks by cluster and outcome (telemetry or the fallback reason)",
+		},
+		[]string{"cluster", "outcome"},
+	)
+
 	// UpstreamOverflowTotal counts requests a circuit breaker rejected, by
 	// the limit reached (max_requests, max_pending_requests, max_retries).
 	UpstreamOverflowTotal = promauto.NewCounterVec(
@@ -203,4 +215,9 @@ func DeleteUpstreamCluster(cluster string) {
 	} {
 		vec.DeletePartialMatch(labels)
 	}
+}
+
+// RecordUpstreamLoadAwarePick records how one load-aware pick was made.
+func RecordUpstreamLoadAwarePick(cluster, outcome string) {
+	UpstreamLoadAwarePicksTotal.WithLabelValues(labelOrUnknown(cluster), labelOrUnknown(outcome)).Inc()
 }
