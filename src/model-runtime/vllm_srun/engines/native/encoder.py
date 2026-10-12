@@ -70,6 +70,7 @@ class EncoderGraphs:
         self.seen: dict[GraphKey, int] = {}
         self.failed: set[GraphKey] = set()
         self.pool: Any = None
+        self.stream: Any = None
         self.stats = {"captures": 0, "replays": 0, "eager": 0, "packed": 0, "failed": 0}
 
     def shape(self, lengths: Sequence[int]) -> tuple[int, int] | None:
@@ -180,7 +181,10 @@ class EncoderGraphs:
         try:
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-            stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+                # One capture stream: BLAS keeps a workspace per stream, so a new stream per
+                # capture would leave a workspace behind for every graph.
+                self.stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+            stream = self.stream
             stream.wait_stream(torch.cuda.current_stream())
             with torch.cuda.stream(stream):
                 for _ in range(2):

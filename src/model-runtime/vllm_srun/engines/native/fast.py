@@ -663,6 +663,7 @@ class Graphs:
         self.failed: set[tuple[int, int, bool]] = set()
         self.output_bytes = 0
         self.pool: Any = None
+        self.stream: Any = None
         self.stats = {
             "captures": 0,
             "replays": 0,
@@ -735,7 +736,10 @@ class Graphs:
         try:
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-            stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+                # One capture stream: BLAS keeps a workspace per stream, so a new stream per
+                # capture would leave a workspace behind for every graph.
+                self.stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+            stream = self.stream
             stream.wait_stream(torch.cuda.current_stream())
             with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
                 with torch.cuda.stream(stream):
