@@ -32,7 +32,7 @@ Guard, FactCheck, Feedback. Per-model fields are in `chart_models` in
 | Vela 1.0 FactCheck | yes | 10.2 | 4 |
 | Vela 1.0 Feedback | yes | 9.1 | 10 |
 
-**7 / 7 ready.** Golden answer tensors matched the committed CPU and ROCm
-references within the usual GPU tolerance. Registry readiness stays
-`unverified` because golden files have no `cuda` device key.
+**7 / 7 ready.** The CUDA golden keys for this image, including the 23
+models beyond the chart set, are in
+[`cuda-golden-answers.md`](cuda-golden-answers.md).
 
