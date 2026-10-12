@@ -21,10 +21,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+// redisCacheClient narrows the go-redis surface the cache uses (the FT*
+// search extensions sit outside redis.UniversalClient), so tests can inject
+// a fake without a live Redis.
+type redisCacheClient interface {
+	redis.UniversalClient
+	FTInfo(ctx context.Context, index string) *redis.FTInfoCmd
+	FTDropIndexWithArgs(ctx context.Context, index string, options *redis.FTDropIndexOptions) *redis.StatusCmd
+	FTCreate(ctx context.Context, index string, options *redis.FTCreateOptions, schema ...*redis.FieldSchema) *redis.StatusCmd
+	FTSearchWithArgs(ctx context.Context, index string, query string, options *redis.FTSearchOptions) *redis.FTSearchCmd
+}
+
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
 	embeddingProvider   embedding.Provider
-	client              *redis.Client
+	client              redisCacheClient
 	searchFn            func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error)
 	config              *config.RedisConfig
 	indexName           string
@@ -569,7 +580,11 @@ func (c *RedisCache) addEntry(ctx context.Context, id string, requestID string, 
 
 	// Set TTL if configured (Redis native TTL)
 	if effectiveTTL > 0 {
-		c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second)
+		if expireErr := c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second).Err(); expireErr != nil {
+			// The entry is stored but without a native TTL; the read path still
+			// filters by ttl_seconds, yet the key lingers in Redis until deleted.
+			logging.Warnf("RedisCache.addEntry: failed to set TTL for %s: %v", docKey, expireErr)
+		}
 	}
 
 	logging.Debugf("RedisCache.addEntry: successfully added entry to Redis (key: %s, embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",
