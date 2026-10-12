@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,7 +70,7 @@ type Runtime struct {
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
 // changes it.
-const APIVersion = "2.3.0"
+const APIVersion = "2.4.0"
 
 // defaultLimits are the runtime's default process limits. Like the runtime,
 // the fake reports its limits in /v1/models and refuses a larger bundle or
@@ -534,8 +535,15 @@ func answer(question api.Question) api.Answer {
 		if question.Levels != nil {
 			levels = len(*question.Levels)
 		}
+		// Half of the mass on each middle level (one level when the count is odd).
+		probabilities := make(map[string]float64, levels)
+		for index := range levels {
+			probabilities[strconv.Itoa(index)] = 0
+		}
+		probabilities[strconv.Itoa(levels/2)] += 0.5
+		probabilities[strconv.Itoa((levels-1)/2)] += 0.5
 		score, confidence := float64(levels-1)/2, 0.5
-		result.Score, result.Confidence = &score, &confidence
+		result.Score, result.Confidence, result.Probabilities = &score, &confidence, &probabilities
 	default:
 		if question.Choices != nil && len(*question.Choices) > 0 {
 			choices := *question.Choices
