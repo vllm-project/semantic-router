@@ -85,9 +85,9 @@ global:
 用 `-dp` 设置默认部署的独立 worker 数。数值档位和放置位置分开管：
 
 ```bash
-# 两个 worker 放在一块显式指定的宿主机 GPU 上。
+# Two workers on one explicitly selected host GPU.
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
-# 两个 worker 分放两块宿主机 GPU。
+# Two workers across two host GPUs.
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
