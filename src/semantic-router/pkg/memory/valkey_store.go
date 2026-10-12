@@ -9,6 +9,7 @@ import (
 	"time"
 
 	glide "github.com/valkey-io/valkey-glide/go/v2"
+	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -21,7 +22,7 @@ var errValkeyMemoryAlreadyExists = errors.New("valkey memory already exists")
 // ValkeyStore provides memory storage and retrieval using Valkey with the Search module.
 // Implements the Store interface with HASH-based storage and FT.SEARCH for vector similarity.
 type ValkeyStore struct {
-	client           *glide.Client
+	client           valkeyMemoryClient
 	config           config.MemoryConfig
 	valkeyConfig     *config.MemoryValkeyConfig
 	enabled          bool
@@ -34,6 +35,22 @@ type ValkeyStore struct {
 	dimension        int
 	clusterMode      bool
 }
+
+// valkeyMemoryClient is the subset of Glide used by ValkeyStore. Keeping the
+// constructor's public client type concrete preserves its lifecycle contract.
+type valkeyMemoryClient interface {
+	CustomCommand(ctx context.Context, args []string) (any, error)
+	HGetAll(ctx context.Context, key string) (map[string]string, error)
+	HSet(ctx context.Context, key string, fields map[string]string) (int64, error)
+	Del(ctx context.Context, keys []string) (int64, error)
+	InvokeScriptWithOptions(
+		ctx context.Context,
+		script glideoptions.Script,
+		scriptOptions glideoptions.ScriptOptions,
+	) (any, error)
+}
+
+var _ valkeyMemoryClient = (*glide.Client)(nil)
 
 // ValkeyStoreOptions contains configuration for creating a ValkeyStore.
 type ValkeyStoreOptions struct {
@@ -526,8 +543,8 @@ func (v *ValkeyStore) Get(ctx context.Context, id string) (*Memory, error) {
 	return mem, nil
 }
 
-// Update modifies an existing memory in Valkey using HSET (atomic overwrite).
-// Preserves CreatedAt and access metadata from the existing row and sets UpdatedAt to now.
+// Update modifies an existing memory in Valkey.
+// Preserves CreatedAt and access metadata, re-embeds changed content, and sets UpdatedAt to now.
 func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) error {
 	startTime := time.Now()
 	backend := "valkey"
@@ -554,19 +571,23 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 	memory.ID = id
 	memory.UpdatedAt = time.Now()
 
-	// If CreatedAt, access metadata, or Embedding are missing, fetch from the
-	// existing row so a content update cannot erase retrieval state.
+	// CreatedAt and access metadata come from the existing row. A missing vector
+	// is chosen by memoryUpdateEmbedding: unchanged content keeps its vector,
+	// changed content is re-embedded, and an explicit vector stays authoritative.
+	// The generated vector is written only on the update copy so a later update
+	// does not treat it as caller-supplied input. Access fields are copied onto
+	// the caller object but omitted from the hash write, so concurrent retrieval
+	// tracking is not reset.
+	var existing *Memory
 	if memory.CreatedAt.IsZero() || memory.LastAccessed.IsZero() || memory.AccessCount == 0 || len(memory.Embedding) == 0 {
-		existing, err := v.Get(ctx, id)
+		var err error
+		existing, err = v.Get(ctx, id)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("memory not found: %s", id)
 		}
 		if memory.CreatedAt.IsZero() {
 			memory.CreatedAt = existing.CreatedAt
-		}
-		if len(memory.Embedding) == 0 {
-			memory.Embedding = existing.Embedding
 		}
 		if memory.LastAccessed.IsZero() {
 			memory.LastAccessed = existing.LastAccessed
@@ -575,8 +596,15 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 			memory.AccessCount = existing.AccessCount
 		}
 	}
+	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, v.embeddingConfig)
+	if err != nil {
+		status = "error"
+		return err
+	}
+	writeMemory := *memory
+	writeMemory.Embedding = embedding
 
-	err := v.upsert(ctx, memory)
+	err = v.upsert(ctx, &writeMemory)
 	if err != nil {
 		status = "error"
 		return err

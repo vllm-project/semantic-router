@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any, ClassVar, Generic
 
-from ..errors import INVALID_QUESTION, RuntimeServiceError
+from ..errors import INVALID_QUESTION, MediaError, RuntimeServiceError
 from .base import (
     Expired,
     ItemT,
@@ -258,16 +258,19 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
                 )
         images = body.get("images")
         if images is not None and not isinstance(images, list):
-            raise ValueError("images must be a list of image data URLs")
+            raise MediaError("image_format", "images must be a list of image data URLs")
         if images and not self.image_inputs:
-            raise ValueError(
-                f"model {self.info.id} reads text only; images are not supported"
+            raise MediaError(
+                "image_unsupported",
+                f"model {self.info.id} reads text only; images are not supported",
             )
         videos = body.get("videos")
         if videos is not None and not isinstance(videos, list):
-            raise ValueError("videos must be a list of video data URLs")
+            raise MediaError("video_format", "videos must be a list of video data URLs")
         if videos and not self.video_inputs:
-            raise ValueError(f"model {self.info.id} reads no videos")
+            raise MediaError(
+                "video_unsupported", f"model {self.info.id} reads no videos"
+            )
         plan = (
             self.plan_images(body["state"], questions, images or [], videos or None)
             if images or videos

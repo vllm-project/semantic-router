@@ -39,6 +39,11 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
+              response_headers_to_add:
+              - header:
+                  key: "x-vsr-upstream-host"
+                  value: "%UPSTREAM_HOST%"
+                append_action: OVERWRITE_IF_EXISTS_OR_ADD
               routes:
               # Route /v1/models to semantic router for model aggregation
               - match:
@@ -72,6 +77,8 @@ static_resources:
                 response_body_mode: "BUFFERED"
                 request_trailer_mode: "SKIP"
                 response_trailer_mode: "SKIP"
+              response_attributes:
+              - "upstream.address"
               failure_mode_allow: true
               message_timeout: 300s
           - name: envoy.filters.http.router

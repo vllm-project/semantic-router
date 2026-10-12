@@ -7716,6 +7716,34 @@
                           "confidence": {
                             "type": "number"
                           },
+                          "pii": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "has_pii": {
+                                "type": "boolean"
+                              },
+                              "pii_types": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "scores_available": {
+                                "nullable": true,
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "has_pii",
+                              "confidence"
+                            ]
+                          },
                           "probabilities": {
                             "nullable": true,
                             "type": "object",
@@ -7725,6 +7753,95 @@
                           },
                           "processing_time_ms": {
                             "type": "integer"
+                          },
+                          "security": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "decision": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "categories": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "score": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Value": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "Value"
+                                    ]
+                                  },
+                                  "score_semantics": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Calibrated": {
+                                        "type": "boolean"
+                                      },
+                                      "Direction": {
+                                        "type": "string"
+                                      },
+                                      "Maximum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Minimum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Unit": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "Unit",
+                                      "Direction",
+                                      "Minimum",
+                                      "Maximum",
+                                      "Calibrated"
+                                    ]
+                                  },
+                                  "source_label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "label"
+                                ]
+                              },
+                              "is_jailbreak": {
+                                "type": "boolean"
+                              },
+                              "scores_available": {
+                                "nullable": true,
+                                "type": "boolean"
+                              },
+                              "threat_type": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "is_jailbreak",
+                              "threat_type",
+                              "confidence"
+                            ]
                           }
                         },
                         "required": [
@@ -25392,6 +25509,113 @@
                                 "additionalProperties": {
                                   "type": "string"
                                 }
+                              },
+                              "topic_continuity": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "assistant_included": {
+                                      "type": "boolean"
+                                    },
+                                    "class": {
+                                      "type": "string"
+                                    },
+                                    "classify_us": {
+                                      "type": "integer"
+                                    },
+                                    "combined_score": {
+                                      "type": "number"
+                                    },
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "coverage": {
+                                      "type": "string"
+                                    },
+                                    "entity_score": {
+                                      "type": "number"
+                                    },
+                                    "evaluator_version": {
+                                      "type": "string"
+                                    },
+                                    "excluded_content_present": {
+                                      "type": "boolean"
+                                    },
+                                    "fallback": {
+                                      "type": "boolean"
+                                    },
+                                    "feature_cap_reached": {
+                                      "type": "boolean"
+                                    },
+                                    "history_source": {
+                                      "type": "string"
+                                    },
+                                    "input_bytes": {
+                                      "type": "integer"
+                                    },
+                                    "lexical_score": {
+                                      "type": "number"
+                                    },
+                                    "live_prose_terms": {
+                                      "type": "integer"
+                                    },
+                                    "live_terms": {
+                                      "type": "integer"
+                                    },
+                                    "marker_ambiguous": {
+                                      "type": "boolean"
+                                    },
+                                    "max_entity_score": {
+                                      "type": "number"
+                                    },
+                                    "max_raw_score": {
+                                      "type": "number"
+                                    },
+                                    "prepare_extract_us": {
+                                      "type": "integer"
+                                    },
+                                    "prior_turns_examined": {
+                                      "type": "integer"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    },
+                                    "schema_version": {
+                                      "type": "string"
+                                    },
+                                    "signal": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "signal",
+                                    "schema_version",
+                                    "evaluator_version",
+                                    "class",
+                                    "confidence",
+                                    "reason",
+                                    "fallback",
+                                    "coverage",
+                                    "history_source",
+                                    "assistant_included",
+                                    "excluded_content_present",
+                                    "feature_cap_reached",
+                                    "marker_ambiguous",
+                                    "prior_turns_examined",
+                                    "input_bytes",
+                                    "live_terms",
+                                    "live_prose_terms",
+                                    "lexical_score",
+                                    "entity_score",
+                                    "combined_score",
+                                    "max_raw_score",
+                                    "max_entity_score",
+                                    "classify_us",
+                                    "prepare_extract_us"
+                                  ]
+                                }
                               }
                             }
                           },
@@ -25637,6 +25861,9 @@
                                     "arguments": {
                                       "type": "string"
                                     },
+                                    "content_redacted": {
+                                      "type": "boolean"
+                                    },
                                     "output": {
                                       "type": "string"
                                     },
@@ -25650,6 +25877,9 @@
                                       "type": "string"
                                     },
                                     "source": {
+                                      "type": "string"
+                                    },
+                                    "status": {
                                       "type": "string"
                                     },
                                     "text": {
@@ -29551,6 +29781,113 @@
                           "additionalProperties": {
                             "type": "string"
                           }
+                        },
+                        "topic_continuity": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "assistant_included": {
+                                "type": "boolean"
+                              },
+                              "class": {
+                                "type": "string"
+                              },
+                              "classify_us": {
+                                "type": "integer"
+                              },
+                              "combined_score": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "coverage": {
+                                "type": "string"
+                              },
+                              "entity_score": {
+                                "type": "number"
+                              },
+                              "evaluator_version": {
+                                "type": "string"
+                              },
+                              "excluded_content_present": {
+                                "type": "boolean"
+                              },
+                              "fallback": {
+                                "type": "boolean"
+                              },
+                              "feature_cap_reached": {
+                                "type": "boolean"
+                              },
+                              "history_source": {
+                                "type": "string"
+                              },
+                              "input_bytes": {
+                                "type": "integer"
+                              },
+                              "lexical_score": {
+                                "type": "number"
+                              },
+                              "live_prose_terms": {
+                                "type": "integer"
+                              },
+                              "live_terms": {
+                                "type": "integer"
+                              },
+                              "marker_ambiguous": {
+                                "type": "boolean"
+                              },
+                              "max_entity_score": {
+                                "type": "number"
+                              },
+                              "max_raw_score": {
+                                "type": "number"
+                              },
+                              "prepare_extract_us": {
+                                "type": "integer"
+                              },
+                              "prior_turns_examined": {
+                                "type": "integer"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "schema_version": {
+                                "type": "string"
+                              },
+                              "signal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "signal",
+                              "schema_version",
+                              "evaluator_version",
+                              "class",
+                              "confidence",
+                              "reason",
+                              "fallback",
+                              "coverage",
+                              "history_source",
+                              "assistant_included",
+                              "excluded_content_present",
+                              "feature_cap_reached",
+                              "marker_ambiguous",
+                              "prior_turns_examined",
+                              "input_bytes",
+                              "live_terms",
+                              "live_prose_terms",
+                              "lexical_score",
+                              "entity_score",
+                              "combined_score",
+                              "max_raw_score",
+                              "max_entity_score",
+                              "classify_us",
+                              "prepare_extract_us"
+                            ]
+                          }
                         }
                       }
                     },
@@ -29796,6 +30133,9 @@
                               "arguments": {
                                 "type": "string"
                               },
+                              "content_redacted": {
+                                "type": "boolean"
+                              },
                               "output": {
                                 "type": "string"
                               },
@@ -29809,6 +30149,9 @@
                                 "type": "string"
                               },
                               "source": {
+                                "type": "string"
+                              },
+                              "status": {
                                 "type": "string"
                               },
                               "text": {

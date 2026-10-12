@@ -47,7 +47,7 @@ func TestCachingStoreRetrievalPolicyIsolation(t *testing.T) {
 				t.Fatalf("required isolated Redis: %v", err)
 			}
 			defer cache.Close()
-			_ = cache.InvalidateByUser(ctx, base.UserID)
+			resetRedisCacheUser(ctx, cache, base.UserID)
 			store := &retrievalPolicyStore{}
 			wrapped := NewCachingStore(store, cache, "valkey")
 			first, err := wrapped.Retrieve(ctx, baseline)
