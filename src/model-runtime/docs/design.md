@@ -885,9 +885,14 @@ downloaded.
 `auto` tries the accelerators in the order of their `auto_priority` (ROCm,
 CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
-available device with enough free memory. The memory estimate is the weight
-bytes under the dtype policy plus the activation bound; `--memory-budget`
-caps it per model. A model names the device capabilities it requires per
+available device with enough free memory. The memory estimate is the weights
+in the dtype the accelerator holds them in (FP32 as an upper bound, or BF16
+plus 10% for a family whose `gpu_weights` / `cpu_weights` name it) plus a
+2 GiB activation reserve, matched to the peaks in
+[the Decision 3.0 device memory record](records/decision3-device-memory.md);
+`--memory-budget` caps it per model. A refusal names, per device, what the
+model needs and how much is free; on a host with a GPU the GPU's reasons come
+first and the CPU's last. A model names the device capabilities it requires per
 accelerator (`ModelSpec.requires`; a backbone architecture declares its own
 once, in `BackboneSpec.requires`, and the families pass it on), and placement
 refuses a device whose accelerator does not report one, before any weights

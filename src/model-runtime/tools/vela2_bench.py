@@ -350,13 +350,13 @@ def main() -> int:
     parser.add_argument("--engine", default="native", help="runtime engine plugin")
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--baselines", default="reference,runtime")
+    parser.add_argument("--no-graphs", action="store_true")
+    parser.add_argument("--no-fused", action="store_true")
     parser.add_argument(
         "--questions",
         type=Path,
         help="a JSON object of questions to ask instead of the router's signals",
     )
-    parser.add_argument("--no-graphs", action="store_true")
-    parser.add_argument("--no-fused", action="store_true")
     parser.add_argument(
         "--trace",
         action="store_true",
