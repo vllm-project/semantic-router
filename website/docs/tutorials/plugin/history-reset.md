@@ -114,7 +114,7 @@ routing:
 | `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects; tool arguments and media are not part of that view. Recoverable removal is bounded separately by `recovery.max_bytes_per_request`. |
 | `limits.timeout_ms` | `50` | Budget for the action's own work: selecting removable turns, closing over tool dependencies, and persisting recovery content. It is checked between steps, not inside one: the topic-continuity rule and the shared transformation view are prepared before the action runs, and encoding a single message for recovery cannot be interrupted once started. |
 | `recovery.enabled` | `false` | When true, removed turns must be stored recoverably before removal commits. |
-| `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound. Each removed message's encoded size is computed before it is encoded, so a message that would not fit is refused without allocating it, and the finished envelope is then checked exactly. When `context_compression` also enables recovery, the effective bound is the stricter of the two: neither action can widen the other's budget. |
+| `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound. Each removed message's encoded size is computed before it is encoded, so a message that would not fit is refused without allocating it, and the finished envelope is then checked exactly. When `context_compression` also enables recovery, the effective bound is the stricter of the two, and it is one budget shared by both plugins' writes in the request. |
 
 Configuration cannot widen what may be removed. Eligibility and protection are
 owned by the shared context-transformation layer, and a policy that names a
@@ -188,12 +188,15 @@ happened, but never the issued keys.
 Recovery is one request-level facility shared with `context_compression`: one
 store, one budget, one reserved tool, one key set. When both plugins enable it,
 their `recovery.store` values must match — configuration validation rejects a
-decision that asks for two different stores — and each remaining bound resolves
-to the stricter of the two, which is the bound the action actually enforces
-before it persists anything. The store is built once per process, so every
-decision that enables recovery must agree on one backend and one
-`max_total_bytes`; the router refuses to activate a configuration where two
-routes disagree.
+decision that asks for two different stores. Every other bound first takes each
+plugin's own default where it is omitted (15 minutes, 256 MiB in total, 8
+retrievals, and a per-request bound of 1 MiB for reset or 10 MiB for
+compression), and then resolves to the stricter of the two. Both plugins write
+with that one contract, and the per-request bound is a single budget their
+writes share: reset runs first, and compression may use only what reset left.
+The store is built once per process, so every decision that enables recovery
+must agree on one backend and one effective `max_total_bytes`; the router
+refuses to activate a configuration where two routes disagree.
 
 Required recovery is not supported on streaming requests, because the retrieval
 follow-up has nowhere to run. Such a request preserves its history under

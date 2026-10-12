@@ -21,6 +21,9 @@ const (
 	DefaultHistoryResetMaxHistoryTurns = 128
 	DefaultHistoryResetMaxHistoryBytes = 1 << 20
 	DefaultHistoryResetTimeoutMs       = 50
+	// DefaultHistoryResetRecoveryBytesPerRequest bounds the removed turns one
+	// request may store when recovery omits max_bytes_per_request.
+	DefaultHistoryResetRecoveryBytesPerRequest = 1 << 20
 
 	maxHistoryResetHistoryTurns = 4096
 	maxHistoryResetHistoryBytes = 64 << 20

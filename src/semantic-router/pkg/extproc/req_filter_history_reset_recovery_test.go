@@ -41,7 +41,12 @@ func recoverableResetRouter() *OpenAIRouter {
 	}
 }
 
-func recoverableResetContext(t *testing.T, decision *config.Decision, request *llmprotocol.Request) *RequestContext {
+func recoverableResetContext(
+	t *testing.T,
+	router *OpenAIRouter,
+	decision *config.Decision,
+	request *llmprotocol.Request,
+) *RequestContext {
 	t.Helper()
 	ctx := &RequestContext{
 		RequestID:               "request-1",
@@ -50,7 +55,7 @@ func recoverableResetContext(t *testing.T, decision *config.Decision, request *l
 		Headers:                 map[string]string{"x-authz-user-id": "user-1"},
 		SemanticRequest:         request,
 	}
-	bindHistoryResetPolicy(ctx)
+	router.bindContextPolicy(ctx)
 	captureOriginalContextHistory(ctx)
 	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
 		Class:      historyreset.TriggerChange,
@@ -65,7 +70,7 @@ func recoverableResetContext(t *testing.T, decision *config.Decision, request *l
 func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 	router := recoverableResetRouter()
 	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 
 	router.prepareContextHistorySteps(ctx, request)
 	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
@@ -132,7 +137,7 @@ func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 func TestRecoverableResetLeavesTheOriginalHistoryIntact(t *testing.T) {
 	router := recoverableResetRouter()
 	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 
 	router.prepareContextHistorySteps(ctx, request)
 	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
@@ -149,7 +154,7 @@ func TestRecoverableResetLeavesTheOriginalHistoryIntact(t *testing.T) {
 func TestRecoverableResetRefusesStreamingRequests(t *testing.T) {
 	router := recoverableResetRouter()
 	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 	ctx.ExpectStreamingResponse = true
 
 	router.prepareContextHistorySteps(ctx, request)
@@ -173,7 +178,7 @@ func TestRecoverableResetRefusesAReservedToolCollision(t *testing.T) {
 	router := recoverableResetRouter()
 	request := resetConversation()
 	request.Tools = []llmprotocol.Tool{{Name: contextcompression.RetrieveToolName}}
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 
 	router.prepareContextHistorySteps(ctx, request)
 	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
@@ -191,7 +196,7 @@ func TestRecoverableResetRefusesAReservedToolCollision(t *testing.T) {
 func TestRecoverableResetRefusesRemovalWithoutAStore(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 
 	router.prepareContextHistorySteps(ctx, request)
 	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
@@ -210,7 +215,7 @@ func TestRecoverableResetRefusesRemovalWithoutAStore(t *testing.T) {
 func TestRecoverableResetRefusesRemovalWithoutATrustedScope(t *testing.T) {
 	router := recoverableResetRouter()
 	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 	ctx.Headers = map[string]string{}
 
 	router.prepareContextHistorySteps(ctx, request)
@@ -229,7 +234,7 @@ func TestRecoverableResetFailClosedRejectsBeforeDispatch(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	request := resetConversation()
 	decision := recoverableResetDecision(t, map[string]interface{}{"failure_mode": "fail_closed"})
-	ctx := recoverableResetContext(t, decision, request)
+	ctx := recoverableResetContext(t, router, decision, request)
 
 	router.prepareContextHistorySteps(ctx, request)
 	if err := router.applyContextTransformationPlan(ctx, request); err == nil {
@@ -247,7 +252,7 @@ func TestRecoverableResetFailClosedRejectsBeforeDispatch(t *testing.T) {
 func TestResetRejectsEvidenceBoundToAnotherRequest(t *testing.T) {
 	router := recoverableResetRouter()
 	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	ctx := recoverableResetContext(t, router, recoverableResetDecision(t, nil), request)
 	ctx.HistoryResetTrigger.Binding = "some-other-request"
 
 	router.prepareContextHistorySteps(ctx, request)
@@ -427,62 +432,5 @@ func TestFailClosedResetStatusMapping(t *testing.T) {
 	status, message := contextTransformationFailure(&RequestContext{})
 	if status != 500 || !strings.Contains(message, "Context compression") {
 		t.Fatalf("unexpected compression mapping: %d %q", status, message)
-	}
-}
-
-// Neither action may persist more than the merged contract allows: the budget
-// is the stricter of the two plugins' declared limits, not this plugin's own.
-func TestRecoveryPayloadBudgetUsesTheMergedContract(t *testing.T) {
-	decision := &config.Decision{Name: "context"}
-	decision.Plugins = []config.DecisionPlugin{
-		{
-			Type: config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"recovery": map[string]interface{}{
-					"enabled": true, "store": "redis", "max_bytes_per_request": 4096,
-				},
-			}),
-		},
-		{
-			Type: config.DecisionPluginHistoryReset,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"trigger": map[string]interface{}{
-					"signal":            "topic_boundary",
-					"min_confidence":    0.9,
-					"accepted_versions": []string{"v1"},
-				},
-				"recovery": map[string]interface{}{
-					"enabled": true, "store": "redis", "max_bytes_per_request": 8192,
-				},
-			}),
-		},
-	}
-	request := resetConversation()
-	ctx := recoverableResetContext(t, decision, request)
-
-	settings, err := contextRecoverySettingsForRequest(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, settings)
-	if policy.MaxRecoveryBytes != 4096 {
-		t.Fatalf("recovery budget = %d, want the stricter merged 4096", policy.MaxRecoveryBytes)
-	}
-}
-
-// Enabling recovery without naming a size bound must not mean persisting
-// without one.
-func TestOmittedRecoveryBudgetFallsBackToADocumentedDefault(t *testing.T) {
-	request := resetConversation()
-	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
-	settings, err := contextRecoverySettingsForRequest(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, settings)
-	if policy.MaxRecoveryBytes != defaultContextRecoveryBytesPerRequest {
-		t.Fatalf("recovery budget = %d, want the default bound", policy.MaxRecoveryBytes)
 	}
 }

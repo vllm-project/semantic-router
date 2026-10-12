@@ -52,6 +52,9 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	}
 	policy := contextCompressionPolicy(pluginConfig, ctx.ContextCompressionTargetTokens)
 	policy = compressionPolicyForRequest(policy, ctx)
+	// Recovery bounds come from the request's merged contract, so a
+	// compression write cannot use looser bounds than reset agreed to.
+	applyContextRecoveryContract(&policy.Recovery, ctx.ContextRecovery)
 	// Live-user truncation belongs to the bounded overflow preparation stages.
 	policy.Targets.CurrentUser.Mode = contextcompression.TargetPreserve
 	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
@@ -82,7 +85,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
 		TokenCounter: counter,
 		Scorer:       r.contextCompressionScorer(callContext, pluginConfig, ctx),
-		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
+		Recovery:     ctx.ContextRecoveryStore,
 		Provenance:   provenance,
 	}
 	result := service.Apply(callContext, compressionRequest)

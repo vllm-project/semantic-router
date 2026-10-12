@@ -163,7 +163,12 @@ func (a *Action) persist(
 	}
 	key, err := a.recovery.Store(ctx, payload)
 	if err != nil {
-		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryWriteFailed
+		reason := ReasonRecoveryWriteFailed
+		if errors.Is(err, contextcompression.ErrRecoveryRequestLimitExceeded) {
+			// The request's shared budget is already spent by an earlier write.
+			reason = ReasonRecoveryLimitExceeded
+		}
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, reason
 		diagnostics.RecoveryStatus = RecoveryFailed
 		return err
 	}

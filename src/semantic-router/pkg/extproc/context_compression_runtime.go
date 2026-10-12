@@ -83,25 +83,13 @@ func (r *OpenAIRouter) contextCompressionScorer(ctx context.Context, cfg *config
 	return scorer
 }
 
-func (r *OpenAIRouter) contextCompressionRecoveryStore(
-	cfg *config.ContextCompressionPluginConfig,
-) contextcompression.RecoveryStore {
-	if cfg == nil {
-		return nil
-	}
-	return r.contextRecoveryStore(cfg.Recovery)
-}
-
-// contextRecoveryStore builds or returns the one shared recovery store. Every
-// context action that can remove content uses this instance, so a removed turn
-// and a compressed block remain retrievable through the same store, scope, and
-// reserved tool.
-func (r *OpenAIRouter) contextRecoveryStore(
-	recovery *config.ContextCompressionRecoveryConfig,
-) contextcompression.RecoveryStore {
-	if recovery == nil || !recovery.Enabled {
-		return nil
-	}
+// contextRecoveryStore builds or returns the one process-wide recovery store.
+// Every context action that can remove content uses this instance, so a removed
+// turn and a compressed block remain retrievable through the same store, scope,
+// and reserved tool. It is built from the merged contract, so its total-bytes
+// bound is the stricter of the actions' bounds whichever request creates it;
+// router construction already requires every decision to agree on that bound.
+func (r *OpenAIRouter) contextRecoveryStore(contract contextRecoveryContract) contextcompression.RecoveryStore {
 	r.contextCompressionMu.Lock()
 	defer r.contextCompressionMu.Unlock()
 	if r.CompressionRecovery != nil {
@@ -110,14 +98,14 @@ func (r *OpenAIRouter) contextRecoveryStore(
 	if r.Config == nil {
 		return nil
 	}
-	storeType := strings.TrimSpace(recovery.Store)
+	storeType := contract.Store
 	if storeType == "response_cache" {
 		storeType = strings.TrimSpace(r.Config.SemanticCache.BackendType)
 	}
 	options, ok, err := recoveryRedisOptions(
 		r.Config,
 		storeType,
-		recovery.MaxTotalBytes,
+		contract.MaxTotalBytes,
 	)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "context_recovery_store_config_failed", map[string]interface{}{

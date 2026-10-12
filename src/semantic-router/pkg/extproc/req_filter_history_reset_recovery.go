@@ -9,50 +9,27 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// defaultHistoryResetRecoveryTTL matches the compression default so one store
-// does not hold two different retention contracts.
-const defaultHistoryResetRecoveryTTL = 15 * time.Minute
-
 // historyResetRecoveryWriter stores removed turns under the request's trusted
 // scope. It is request-local: the scope and TTL are fixed when the action is
-// prepared, so the policy cannot influence where content lands.
+// prepared, so the policy cannot influence where content lands. Its store is
+// the request's recovery store, which charges the shared byte budget.
 type historyResetRecoveryWriter struct {
 	store contextcompression.RecoveryStore
 	scope string
 	ttl   time.Duration
 }
 
-func (w *historyResetRecoveryWriter) Store(
-	ctx context.Context,
-	payload string,
-) (string, error) {
-	if w == nil || w.store == nil || w.scope == "" {
-		return "", fmt.Errorf("context recovery store or trusted scope is unavailable")
-	}
-	key := historyResetRecoveryKey(w.scope, payload)
-	now := time.Now().UTC()
-	entry := contextcompression.RecoveryEntry{
-		Key:       key,
-		Scope:     w.scope,
-		Content:   payload,
-		CreatedAt: now,
-		ExpiresAt: now.Add(w.ttl),
-	}
-	if err := w.store.Put(ctx, entry, w.ttl); err != nil {
+func (w *historyResetRecoveryWriter) Store(ctx context.Context, payload string) (string, error) {
+	key, err := contextcompression.StoreRecoveryContent(ctx, w.store, w.scope, payload, w.ttl)
+	if err != nil {
 		return "", fmt.Errorf("store removed history: %w", err)
 	}
 	return key, nil
-}
-
-func historyResetRecoveryKey(scope string, payload string) string {
-	sum := sha256.Sum256([]byte(scope + "\x00" + payload))
-	return hex.EncodeToString(sum[:12])
 }
 
 // historyResetRecovery prepares recoverable removal. It returns a terminal
@@ -75,28 +52,16 @@ func (r *OpenAIRouter) historyResetRecovery(
 	if contextRecoveryToolConflict(ctx, request) {
 		return nil, nil, historyreset.ReasonReservedToolConflict
 	}
-	settings, err := contextRecoverySettingsForRequest(ctx)
-	if err != nil || settings == nil {
-		return nil, nil, historyreset.ReasonRecoveryUnavailable
-	}
-	store := r.contextRecoveryStore(settings)
 	scope := r.contextCompressionScope(ctx)
-	if store == nil || scope == "" {
+	if ctx.ContextRecovery == nil || ctx.ContextRecoveryStore == nil || scope == "" {
 		return nil, nil, historyreset.ReasonRecoveryUnavailable
 	}
 	writer := &historyResetRecoveryWriter{
-		store: store,
+		store: ctx.ContextRecoveryStore,
 		scope: scope,
-		ttl:   historyResetRecoveryTTL(settings),
+		ttl:   ctx.ContextRecovery.TTL,
 	}
 	return writer, detachedRequestMessages(request), ""
-}
-
-func historyResetRecoveryTTL(settings *config.ContextCompressionRecoveryConfig) time.Duration {
-	if settings.TTLSeconds > 0 {
-		return time.Duration(settings.TTLSeconds) * time.Second
-	}
-	return defaultHistoryResetRecoveryTTL
 }
 
 // detachedRequestMessages copies the complete neutral messages before any

@@ -40,10 +40,6 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 		return
 	}
 	blocked := historyResetBlockedReason(ctx, request)
-	recoverySettings, settingsErr := contextRecoverySettingsForRequest(ctx)
-	if settingsErr != nil {
-		blocked = historyreset.ReasonRecoveryUnavailable
-	}
 	if blocked == "" && historyResetEvidenceBinding(ctx) == "" {
 		// Without a resolved original history there is nothing to bind evidence
 		// to, so no result can be shown to describe this request.
@@ -54,7 +50,7 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 	if blocked == "" {
 		writer, detached, blocked = r.historyResetRecovery(ctx, request)
 	}
-	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, recoverySettings)
+	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy)
 	// The topic-continuity rule has already been evaluated by now. A request
 	// that is already terminal cannot be changed by any result, so it does not
 	// consume one.
@@ -78,18 +74,14 @@ func prepareLooperContextHistorySteps(ctx *RequestContext) {
 	if ctx == nil || !ctx.HistoryResetPolicy.IsEnabled() || ctx.HistoryResetAction != nil {
 		return
 	}
-	action := historyreset.NewInheritedAction(historyResetPolicy(ctx, ctx.HistoryResetPolicy, nil))
+	action := historyreset.NewInheritedAction(historyResetPolicy(ctx, ctx.HistoryResetPolicy))
 	ctx.HistoryResetAction = action
 	ctx.ContextHistorySteps = append(ctx.ContextHistorySteps, action.Step())
 }
 
 // historyResetPolicy translates validated configuration into the policy the
 // pure action executes with. Configuration cannot widen shared eligibility.
-func historyResetPolicy(
-	ctx *RequestContext,
-	configured *config.HistoryResetPluginConfig,
-	recovery *config.ContextCompressionRecoveryConfig,
-) historyreset.Policy {
+func historyResetPolicy(ctx *RequestContext, configured *config.HistoryResetPluginConfig) historyreset.Policy {
 	limits := configured.EffectiveLimits()
 	confidence, _ := configured.EffectiveMinConfidence()
 	policy := historyreset.Policy{
@@ -104,24 +96,13 @@ func historyResetPolicy(
 		policy.Signal = configured.Trigger.Signal
 		policy.AcceptedVersions = append([]string(nil), configured.Trigger.AcceptedVersions...)
 	}
-	// The recovery budget comes from the merged request-level contract, not
-	// from this plugin's own value: one action must not be able to persist
-	// more than the contract another action agreed to.
-	policy.MaxRecoveryBytes = effectiveRecoveryBytes(recovery)
+	// The recovery bound comes from the request's merged contract, not from
+	// this plugin's own value: one action must not be able to persist more
+	// than the contract another action agreed to.
+	if ctx.ContextRecovery != nil && configured.RequiresRecovery() {
+		policy.MaxRecoveryBytes = ctx.ContextRecovery.MaxBytesPerRequest
+	}
 	return policy
-}
-
-// effectiveRecoveryBytes reports the per-request payload bound every context
-// action shares. An omitted bound falls back to a documented default so a
-// configuration that enables recovery can never persist without one.
-func effectiveRecoveryBytes(recovery *config.ContextCompressionRecoveryConfig) int {
-	if recovery == nil {
-		return 0
-	}
-	if recovery.MaxBytesPerRequest > 0 {
-		return recovery.MaxBytesPerRequest
-	}
-	return defaultContextRecoveryBytesPerRequest
 }
 
 // historyResetBlockedReason reports a terminal condition established before

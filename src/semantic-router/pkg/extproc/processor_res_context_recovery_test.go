@@ -106,6 +106,7 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		SourceFormat:                   llmprotocol.OpenAIChatV1,
 		SemanticRequest:                testNeutralRequest("model", "question"),
 	}
+	router.bindContextPolicy(ctx)
 	scope := router.contextCompressionScope(ctx)
 	router.CompressionRecovery.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
 		scope + ":key-1": {
@@ -185,6 +186,7 @@ func TestHandleContextRecoveryFollowupRejectsForgedKey(t *testing.T) {
 		SourceFormat:                   llmprotocol.OpenAIChatV1,
 		SemanticRequest:                testNeutralRequest("model", "question"),
 	}
+	router.bindContextPolicy(ctx)
 	response := []byte(`{
 		"id":"initial","object":"chat.completion","created":1,"model":"model",
 		"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{

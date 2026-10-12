@@ -18,16 +18,18 @@ func verifyContextRecoveryAgreement(cfg *config.RouterConfig) error {
 		declared string
 	)
 	for _, decision := range cfg.AllRoutingDecisions() {
-		settings, err := resolveContextRecoverySettings(&decision)
+		// Effective values are compared, so an omitted bound and an explicitly
+		// configured default agree.
+		contract, err := resolveContextRecoveryContract(&decision)
 		if err != nil {
 			return fmt.Errorf("decision %q: %w", decision.Name, err)
 		}
-		if settings == nil {
+		if contract == nil {
 			continue
 		}
-		current := strings.TrimSpace(settings.Store)
+		current := contract.Store
 		if declared == "" {
-			store, total, declared = current, settings.MaxTotalBytes, decision.Name
+			store, total, declared = current, contract.MaxTotalBytes, decision.Name
 			continue
 		}
 		if !strings.EqualFold(store, current) {
@@ -36,10 +38,10 @@ func verifyContextRecoveryAgreement(cfg *config.RouterConfig) error {
 				declared, decision.Name, store, current,
 			)
 		}
-		if settings.MaxTotalBytes != total {
+		if contract.MaxTotalBytes != total {
 			return fmt.Errorf(
 				"decisions %q and %q request different context recovery max_total_bytes (%d and %d)",
-				declared, decision.Name, total, settings.MaxTotalBytes,
+				declared, decision.Name, total, contract.MaxTotalBytes,
 			)
 		}
 	}

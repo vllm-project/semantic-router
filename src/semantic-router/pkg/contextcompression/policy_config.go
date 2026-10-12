@@ -44,10 +44,10 @@ func PolicyFromConfig(
 	if cfg.Recovery != nil {
 		policy.Recovery = RecoveryPolicy{
 			Enabled:            cfg.Recovery.Enabled,
-			TTL:                durationOrDefault(cfg.Recovery.TTLSeconds, 15*time.Minute),
-			MaxBytesPerRequest: intOrDefault(cfg.Recovery.MaxBytesPerRequest, 10*1024*1024),
-			MaxTotalBytes:      intOrDefault(cfg.Recovery.MaxTotalBytes, 256*1024*1024),
-			MaxRetrievals:      intOrDefault(cfg.Recovery.MaxRetrievals, 8),
+			TTL:                durationOrDefault(cfg.Recovery.TTLSeconds, DefaultRecoveryTTL),
+			MaxBytesPerRequest: intOrDefault(cfg.Recovery.MaxBytesPerRequest, DefaultCompressionRecoveryBytesPerRequest),
+			MaxTotalBytes:      intOrDefault(cfg.Recovery.MaxTotalBytes, DefaultRecoveryMaxTotalBytes),
+			MaxRetrievals:      intOrDefault(cfg.Recovery.MaxRetrievals, DefaultRecoveryMaxRetrievals),
 		}
 	}
 	return policy

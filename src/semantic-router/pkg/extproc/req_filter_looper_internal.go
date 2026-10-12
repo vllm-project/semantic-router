@@ -170,7 +170,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	// Bind the context policy before the internal plugins run: their cache
 	// lookup happens first, and an enabled reset policy must not serve a
 	// cached answer that skipped its evaluation.
-	bindHistoryResetPolicy(ctx)
+	r.bindContextPolicy(ctx)
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
@@ -48,15 +47,10 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if err != nil || len(calls) == 0 {
 		return responseBody, err
 	}
-	if len(calls) > contextRecoveryLimit(recovery) {
+	if len(calls) > recovery.MaxRetrievals {
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
 	}
-	toolMessages, err := r.loadContextRecoveryToolMessages(
-		ctx,
-		requestCtx,
-		recovery,
-		calls,
-	)
+	toolMessages, err := r.loadContextRecoveryToolMessages(ctx, requestCtx, calls)
 	if err != nil {
 		return responseBody, err
 	}
@@ -73,40 +67,24 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	return followup, nil
 }
 
-// activeContextRecovery reports the merged recovery contract for a request
-// that actually issued keys. Any context action may have issued them, so this
-// no longer depends on the compression plugin being configured.
-func activeContextRecovery(
-	requestCtx *RequestContext,
-) *config.ContextCompressionRecoveryConfig {
+// activeContextRecovery reports the recovery contract the request was planned
+// with, for a request that actually issued keys. Any context action may have
+// issued them, so this does not depend on which plugin wrote.
+func activeContextRecovery(requestCtx *RequestContext) *contextRecoveryContract {
 	if requestCtx == nil ||
 		requestCtx.ExpectStreamingResponse ||
 		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
 		return nil
 	}
-	recovery, err := contextRecoverySettingsForRequest(requestCtx)
-	if err != nil || recovery == nil || !recovery.Enabled {
-		return nil
-	}
-	return recovery
-}
-
-func contextRecoveryLimit(
-	recovery *config.ContextCompressionRecoveryConfig,
-) int {
-	if recovery.MaxRetrievals > 0 {
-		return recovery.MaxRetrievals
-	}
-	return 8
+	return requestCtx.ContextRecovery
 }
 
 func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	ctx context.Context,
 	requestCtx *RequestContext,
-	recovery *config.ContextCompressionRecoveryConfig,
 	calls []contextRecoveryCall,
 ) ([]llmprotocol.Message, error) {
-	store := r.contextRecoveryStore(recovery)
+	store := requestCtx.ContextRecoveryStore
 	scope := r.contextCompressionScope(requestCtx)
 	if store == nil || scope == "" {
 		if service := r.contextCompressionService(); service != nil {
