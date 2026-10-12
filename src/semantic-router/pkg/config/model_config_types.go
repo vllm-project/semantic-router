@@ -235,6 +235,7 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
+	CircuitBreaker   *ClassifierCircuitBreaker     `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
 	Name             string                        `yaml:"name,omitempty"`
 	Provider         string                        `yaml:"llm_provider"`
 	ModelRole        string                        `yaml:"model_role"`

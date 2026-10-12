@@ -99,7 +99,7 @@ func (c *llmLabelClassifier) classify(
 	ctx context.Context,
 	input string,
 ) (labelClassification, error) {
-	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	callCtx, cancel := classifierCallContext(ctx, c.timeout, c.client.connector)
 	defer cancel()
 	responseFields := `"scores" and "rationale"`
 	rationaleInstruction := ` "rationale" must be a short reason.`

@@ -21,6 +21,7 @@ var (
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
 		validateExternalModelReasoningContracts,
+		validateExternalClassifierCircuitBreakers,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingModelContracts,

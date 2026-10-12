@@ -76,6 +76,7 @@ func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, labels tas
 
 	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
 		AttemptTimeout:   timeout,
+		CircuitBreaker:   classifierCircuitBreaker(cfg, "http_token_classify"),
 		MaxRetries:       1,
 		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
 		MaxResponseBytes: cfg.GetMaxResponseBytes(),
@@ -153,7 +154,7 @@ func (h *HTTPTokenClassifierInference) classifyTokenResult(ctx context.Context, 
 			return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans parameter is not valid UTF-8")
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, h.timeout)
+	ctx, cancel := classifierCallContext(ctx, h.timeout, h.connector)
 	defer cancel()
 
 	reqBody, err := json.Marshal(request)

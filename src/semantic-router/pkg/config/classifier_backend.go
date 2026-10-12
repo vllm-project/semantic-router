@@ -40,10 +40,11 @@ const defaultRemoteClassifierDeadlineMs = 5000
 // existing local implementation. DeadlineMs is a pointer so omitted and
 // an explicitly invalid zero value cannot be confused during validation.
 type RemoteClassifierBackend struct {
-	Protocol   string `yaml:"protocol" json:"protocol"`
-	Contract   string `yaml:"contract,omitempty" json:"contract,omitempty"`
-	Model      string `yaml:"model" json:"model"`
-	DeadlineMs *int   `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
+	CircuitBreaker *ClassifierCircuitBreaker `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
+	Protocol       string                    `yaml:"protocol" json:"protocol"`
+	Contract       string                    `yaml:"contract,omitempty" json:"contract,omitempty"`
+	Model          string                    `yaml:"model" json:"model"`
+	DeadlineMs     *int                      `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
 }
 
 // UnmarshalYAML rejects stale or misspelled deadline fields instead of letting
@@ -60,7 +61,7 @@ func (b *RemoteClassifierBackend) UnmarshalYAML(unmarshal func(interface{}) erro
 			return fmt.Errorf("backend contains a non-string field name %v", key)
 		}
 		switch name {
-		case "protocol", "contract", "model", "deadline_ms":
+		case "protocol", "contract", "model", "deadline_ms", "circuit_breaker":
 		default:
 			return fmt.Errorf("backend: unsupported field %q (use deadline_ms for the request deadline)", name)
 		}
@@ -97,6 +98,9 @@ func (b *RemoteClassifierBackend) EffectiveDeadlineMs() int {
 func (b *RemoteClassifierBackend) Validate() error {
 	if b == nil {
 		return nil
+	}
+	if err := b.CircuitBreaker.Validate(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(b.Protocol) == "" {
 		return fmt.Errorf("backend.protocol is required")
@@ -152,6 +156,14 @@ func ResolveRemoteClassifierBackend(
 	}
 	if err := validateExternalClassifierModel(external, backend.Model, expectedRole, backend.Protocol); err != nil {
 		return nil, err
+	}
+	if err := external.CircuitBreaker.Validate(); err != nil {
+		return nil, err
+	}
+	if backend.CircuitBreaker != nil {
+		copied := *external
+		copied.CircuitBreaker = backend.CircuitBreaker
+		external = &copied
 	}
 	return external, nil
 }

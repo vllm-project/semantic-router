@@ -112,6 +112,7 @@ func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 
 	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
 		AttemptTimeout:   timeout,
+		CircuitBreaker:   classifierCircuitBreaker(cfg, "http_classify"),
 		MaxRetries:       1,
 		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
 		MaxResponseBytes: cfg.GetMaxResponseBytes(),
@@ -178,7 +179,7 @@ func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (Se
 }
 
 func (h *HTTPClassifierInference) fetchLabelScores(ctx context.Context, text string) ([]httpClassifyLabelScore, error) {
-	ctx, cancel := context.WithTimeout(ctx, h.timeout)
+	ctx, cancel := classifierCallContext(ctx, h.timeout, h.connector)
 	defer cancel()
 
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
