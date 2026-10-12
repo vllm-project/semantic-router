@@ -178,7 +178,7 @@ providers:
 
 | Field | Default | Effect |
 | --- | --- | --- |
-| `lb_policy` | `round_robin` | `round_robin` follows the backend weights; `least_request` prefers the replica with the fewest requests in flight. |
+| `lb_policy` | `round_robin` | `round_robin` follows the backend weights; `least_request` prefers the replica with the fewest requests in flight; `load_aware` prefers the replica whose serving engine reports the least load (see [Balance on serving-engine load](#balance-on-serving-engine-load)). |
 | `connect_timeout` | `10s` | Time to open a connection, TLS handshake included. |
 | `total_timeout` | the listener's `timeout` | Time for the whole call: every attempt and the streamed response. `0s` turns it off. |
 | `idle_timeout` | the listener's `timeout` | Longest wait for more of a streamed response. `0s` turns it off. |
@@ -243,6 +243,55 @@ read that engine's load metrics:
 
 Naming an engine changes nothing on its own; it only tells the Router where
 load evidence for that replica can be found.
+
+### Balance on serving-engine load
+
+`lb_policy: load_aware` sends each request to the replica whose engine reports
+the fewest queued requests, counting the requests the Router already has in
+flight to it. Turn on the collector and name each replica's engine:
+
+```yaml
+providers:
+  models:
+    - name: production
+      reliability:
+        lb_policy: load_aware
+      backend_refs:
+        - name: replica-a
+          provider: vllm
+          endpoint: 10.0.0.1:8000
+          engine: vllm
+        - name: replica-b
+          provider: vllm
+          endpoint: 10.0.0.2:8000
+          engine: vllm
+global:
+  services:
+    observability:
+      backend_telemetry:
+        enabled: true
+        poll_interval: 2s
+```
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `enabled` | `false` | Scrape every backend that names an engine, off the request path. |
+| `poll_interval` | `2s` | Time between scrapes. |
+| `request_timeout` | `1s` | Time for one scrape of one backend. |
+| `ttl` | three poll intervals | How long a scrape stays usable. |
+
+The policy uses telemetry only when every healthy replica of the model has a
+fresh scrape that reports its queue depth. Otherwise, for example while a
+replica's metrics are unreachable or before the first scrape, it balances
+exactly as `least_request`, so a replica is never preferred because its load
+is unknown. A replica its engine reports unhealthy is skipped, but health
+checks and outlier ejection still decide which replicas are in rotation.
+
+The vLLM engine is supported today. Behind Envoy, `load_aware` balances as
+`least_request` because Envoy does not read engine telemetry. The
+`llm_upstream_load_aware_picks_total` metric counts picks by whether
+telemetry or a fallback made them, and `llm_backend_telemetry_scrapes_total`
+counts scrapes per backend.
 
 ### Override timeouts and retries for one decision
 

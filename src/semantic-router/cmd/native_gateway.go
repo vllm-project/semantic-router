@@ -321,7 +321,7 @@ func buildUpstream(mode config.GatewayMode, cfg *config.RouterConfig, previous *
 	if mode != config.GatewayStandalone {
 		topology = topology.WithoutActiveHealthChecks()
 	}
-	return upstream.New(topology, upstream.Options{Previous: previous})
+	return upstream.New(topology, upstream.Options{Previous: previous, Telemetry: backendTelemetryStore})
 }
 
 // validateNativeListeners refuses a reload that changes what the native

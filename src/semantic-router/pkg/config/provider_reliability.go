@@ -9,17 +9,22 @@ import (
 const (
 	ProviderLBPolicyRoundRobin   = "round_robin"
 	ProviderLBPolicyLeastRequest = "least_request"
+	// ProviderLBPolicyLoadAware prefers the replica whose serving engine
+	// reports the least load and falls back to least_request without fresh
+	// telemetry for every replica.
+	ProviderLBPolicyLoadAware = "load_aware"
 )
 
 func validateProviderReliability(modelName string, reliability ProviderReliability) error {
 	switch strings.TrimSpace(reliability.LBPolicy) {
-	case "", ProviderLBPolicyRoundRobin, ProviderLBPolicyLeastRequest:
+	case "", ProviderLBPolicyRoundRobin, ProviderLBPolicyLeastRequest, ProviderLBPolicyLoadAware:
 	default:
 		return fmt.Errorf(
-			"providers.models[%s].reliability.lb_policy must be %q or %q",
+			"providers.models[%s].reliability.lb_policy must be %q, %q or %q",
 			modelName,
 			ProviderLBPolicyRoundRobin,
 			ProviderLBPolicyLeastRequest,
+			ProviderLBPolicyLoadAware,
 		)
 	}
 	if err := validateProviderRetry(modelName, reliability); err != nil {

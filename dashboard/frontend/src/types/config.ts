@@ -44,7 +44,7 @@ export interface ProviderModel {
     completion_per_1m?: number
   }
   reliability?: {
-    lb_policy?: 'round_robin' | 'least_request'
+    lb_policy?: 'round_robin' | 'least_request' | 'load_aware'
     retry_count?: number
     retry_on?: string
     consecutive_5xx?: number

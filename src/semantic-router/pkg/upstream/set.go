@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/net/http/httpguts"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -28,6 +29,15 @@ type Options struct {
 	Rand Rand
 	// Clock drives health checks and outlier sweeps; nil uses real time.
 	Clock Clock
+	// Telemetry is read by load-aware clusters. It must live as long as the
+	// process: clusters carried over to a later Set keep reading it. Nil
+	// makes load-aware clusters balance as least-request.
+	Telemetry TelemetryReader
+}
+
+// TelemetryReader returns a replica's load observation while it is fresh.
+type TelemetryReader interface {
+	Fresh(backendtelemetry.Identity) (backendtelemetry.Observation, bool)
 }
 
 // Set serves every cluster of one topology. It is safe for concurrent use.
@@ -91,7 +101,7 @@ func New(topology Topology, opts Options) (*Set, error) {
 	for _, spec := range topology.Clusters {
 		c := previous[spec.Name]
 		if c == nil || !c.spec.equal(&spec) {
-			c = newCluster(spec, s.shared, rnd, clock)
+			c = newCluster(spec, s.shared, rnd, clock, opts.Telemetry)
 			fresh = append(fresh, c)
 		}
 		c.retain()
@@ -299,7 +309,7 @@ func (c *ClusterSpec) validate() error {
 	if len(c.Endpoints) == 0 {
 		return fmt.Errorf("has no endpoints")
 	}
-	if c.LBPolicy != LBRoundRobin && c.LBPolicy != LBLeastRequest {
+	if c.LBPolicy != LBRoundRobin && c.LBPolicy != LBLeastRequest && c.LBPolicy != LBLoadAware {
 		return fmt.Errorf("unknown lb policy %q", c.LBPolicy)
 	}
 	for _, h := range c.RouteHeaders {
