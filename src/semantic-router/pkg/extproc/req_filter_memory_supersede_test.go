@@ -35,6 +35,12 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	curlyQuotedContraction := storedMemoryTurn{
 		user: "Please translate: ‘I’m happy; I just moved to Denver, and I live there now.’",
 	}
+	curlyQuotedPluralPossessive := storedMemoryTurn{
+		user: "Please translate: ‘My parents’ house is nice; I just moved to Denver, and I live there now.’",
+	}
+	straightQuotedPluralPossessive := storedMemoryTurn{
+		user: "Please translate: 'My parents' house is nice; I just moved to Denver, and I live there now.'",
+	}
 	straightSingleQuotedTranslation := storedMemoryTurn{
 		user: "Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'",
 	}
@@ -141,6 +147,18 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			turns:    []storedMemoryTurn{{user: "I live in Boston.", assistant: "Got it, you live in Boston."}, curlyQuotedContraction},
 			query:    "Does my Boston residence change after asking to translate a Denver move?",
 			injected: []string{"I live in Boston.", curlyQuotedContraction.user},
+		},
+		{
+			name:     "a curly quoted plural possessive keeps the user's fact",
+			turns:    []storedMemoryTurn{{user: "I live in Boston.", assistant: "Got it, you live in Boston."}, curlyQuotedPluralPossessive},
+			query:    "Does my Boston residence change after asking to translate a Denver move?",
+			injected: []string{"I live in Boston.", curlyQuotedPluralPossessive.user},
+		},
+		{
+			name:     "a straight quoted plural possessive keeps the user's fact",
+			turns:    []storedMemoryTurn{{user: "I live in Boston.", assistant: "Got it, you live in Boston."}, straightQuotedPluralPossessive},
+			query:    "Does my Boston residence change after asking to translate a Denver move?",
+			injected: []string{"I live in Boston.", straightQuotedPluralPossessive.user},
 		},
 		{
 			name:     "a straight single-quoted translation keeps the user's fact",

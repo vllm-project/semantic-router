@@ -115,6 +115,9 @@ func injectedContents(t *testing.T, retrieved []datedContent) []string {
 func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 	curlyContractedMove := formatTurnChunk("I’ve moved to Denver, and I live there now.", "")
 	moveAfterCurlyQuote := formatTurnChunk("Please translate: ‘I’m happy.’ I just moved to Denver, and I live there now.", "")
+	moveAfterPossessiveQuote := formatTurnChunk("Please translate: ‘My parents’ house is nice.’ I just moved to Denver, and I live there now.", "")
+	moveBetweenCurlyQuotes := formatTurnChunk("Please translate ‘my parents’ house’, as I just moved to Denver, and I live there now, then ‘hello’.", "")
+	moveBetweenStraightQuotes := formatTurnChunk("Please translate 'my parents' house', as I just moved to Denver, and I live there now, then 'hello'.", "")
 	cases := []struct {
 		name      string
 		retrieved []datedContent
@@ -172,6 +175,21 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			name:      "a real correction follows a curly quoted contraction",
 			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: moveAfterCurlyQuote, daysAgo: 9}},
 			want:      []string{moveAfterCurlyQuote},
+		},
+		{
+			name:      "a real correction follows a quote with a plural possessive",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: moveAfterPossessiveQuote, daysAgo: 9}},
+			want:      []string{moveAfterPossessiveQuote},
+		},
+		{
+			name:      "a real correction between two curly quotes",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: moveBetweenCurlyQuotes, daysAgo: 9}},
+			want:      []string{moveBetweenCurlyQuotes},
+		},
+		{
+			name:      "a real correction between two straight quotes",
+			retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: moveBetweenStraightQuotes, daysAgo: 9}},
+			want:      []string{moveBetweenStraightQuotes},
 		},
 		{
 			name: "a correction keeps unrelated memories",
@@ -468,6 +486,9 @@ func TestReflectionGateKeepsCurlyQuotedApostrophes(t *testing.T) {
 		{name: "inside curly double quotes", text: "Please translate: “They said ‘I’m happy’; I just moved to Denver, and I live there now.”"},
 		{name: "unmatched opening quote", text: "Please translate: ‘I’m happy; I just moved to Denver, and I live there now."},
 		{name: "plural possessive before the quote", text: "The dogs’ leashes are here. Please translate: ‘I’m happy; I just moved to Denver, and I live there now.’"},
+		{name: "plural possessive inside the quote", text: "Please translate: ‘My parents’ house is nice; I just moved to Denver, and I live there now.’"},
+		{name: "plural possessive inside straight quotes", text: "Please translate: 'My parents' house is nice; I just moved to Denver, and I live there now.'"},
+		{name: "plural possessive closing the first of two quotes", text: "Please translate: ‘My parents’ house is nice’ and ‘I just moved to Denver, and I live there now.’"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -694,10 +694,15 @@ func (q *quoteTracker) advance(s string, i int, r rune) bool {
 		case isWordRune(before) && isWordRune(after):
 			return false
 		case r == '’':
-			wasOpen := q.inSmartSingle
+			if !q.inSmartSingle || (isWordRune(before) && closesLater(s, i, r)) {
+				return false
+			}
 			q.inSmartSingle = false
-			return wasOpen
+			return true
 		case q.inSingle:
+			if isWordRune(before) && closesLater(s, i, r) {
+				return false
+			}
 			q.inSingle = false
 			return true
 		case isWordRune(after):
@@ -705,6 +710,28 @@ func (q *quoteTracker) advance(s string, i int, r rune) bool {
 			return true
 		default:
 			return false
+		}
+	}
+	return false
+}
+
+// closesLater reports whether a mark after offset i can still close the open
+// span before another span opens. A mark right after a word, as in "parents’"
+// inside ‘My parents’ house is nice; I just moved’, is then a plural
+// possessive rather than the closing quote.
+func closesLater(s string, i int, r rune) bool {
+	for j, c := range s[i+utf8.RuneLen(r):] {
+		k := i + utf8.RuneLen(r) + j
+		before, after := runeBefore(s, k), runeAfter(s, k, c)
+		switch {
+		case r == '’' && c == '‘':
+			return false
+		case c != r || (isWordRune(before) && isWordRune(after)):
+			continue
+		case r == '\'' && !isWordRune(before) && isWordRune(after):
+			return false
+		default:
+			return true
 		}
 	}
 	return false
