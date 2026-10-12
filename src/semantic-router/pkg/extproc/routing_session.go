@@ -111,7 +111,8 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 	})
 }
 
-func (s *routingSession) ResponseHeaders(header routing.Header, endOfStream bool) (*routing.Effect, error) {
+func (s *routingSession) ResponseHeaders(header routing.Header, endOfStream bool, backend routing.BackendIdentity) (*routing.Effect, error) {
+	s.router.captureNativeBackendIdentity(backend.Name, s.ctx)
 	if s.fallback != nil {
 		// The caller asks the fallback only about failures, so a fallback
 		// candidate's success is recorded here, before its headers are built.

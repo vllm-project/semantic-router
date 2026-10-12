@@ -23,9 +23,7 @@ func captureUpstreamBackendIdentity(req *ext_proc.ProcessingRequest, ctx *Reques
 	// Response attributes are authoritative for the endpoint Envoy actually
 	// selected. Clear any earlier value before parsing so missing or malformed
 	// metadata fails closed, including after an upstream retry.
-	ctx.UpstreamBackendName = ""
-	ctx.UpstreamBackendType = ""
-	ctx.AllowDynamoExtensions = false
+	setUpstreamBackendIdentity(ctx, "", "")
 
 	attributes := req.GetAttributes()[extProcAttributesNamespace]
 	if attributes == nil {
@@ -37,10 +35,36 @@ func captureUpstreamBackendIdentity(req *ext_proc.ProcessingRequest, ctx *Reques
 	backendType := strings.ToLower(strings.TrimSpace(
 		attributes.GetFields()[upstreamBackendTypeAttribute].GetStringValue(),
 	))
-	if backendName == "" || backendType == "" {
+	setUpstreamBackendIdentity(ctx, backendName, backendType)
+}
+
+// captureNativeBackendIdentity resolves a transport-selected endpoint against
+// trusted router configuration. Client/provider headers cannot grant permission.
+func (r *OpenAIRouter) captureNativeBackendIdentity(name string, ctx *RequestContext) {
+	setUpstreamBackendIdentity(ctx, "", "")
+	if r == nil || r.Config == nil || name == "" {
 		return
 	}
-	ctx.UpstreamBackendName = backendName
+	endpoint, found := r.Config.GetEndpointByName(name)
+	if !found {
+		return
+	}
+	setUpstreamBackendIdentity(ctx, endpoint.Name, endpoint.Type)
+}
+
+func setUpstreamBackendIdentity(ctx *RequestContext, name, backendType string) {
+	if ctx == nil {
+		return
+	}
+	ctx.UpstreamBackendName = ""
+	ctx.UpstreamBackendType = ""
+	ctx.AllowDynamoExtensions = false
+	name = strings.TrimSpace(name)
+	backendType = strings.ToLower(strings.TrimSpace(backendType))
+	if name == "" || backendType == "" {
+		return
+	}
+	ctx.UpstreamBackendName = name
 	ctx.UpstreamBackendType = backendType
 	ctx.AllowDynamoExtensions = backendType == "dynamo"
 }

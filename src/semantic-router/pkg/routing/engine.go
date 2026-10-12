@@ -89,7 +89,8 @@ type BodyStream interface {
 
 // UpstreamResponse is the backend's response as the gateway received it.
 type UpstreamResponse struct {
-	Status int
+	Backend BackendIdentity
+	Status  int
 	// Header holds regular headers.
 	Header Header
 	// Body is the response body; nil when the response has none.
@@ -238,7 +239,7 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 		header.Add(field.Name, field.Value)
 	}
 	hasBody := resp.Body != nil
-	effect, err := session.ResponseHeaders(header.Clone(), !hasBody)
+	effect, err := session.ResponseHeaders(header.Clone(), !hasBody, resp.Backend)
 	if err != nil {
 		return nil, err
 	}
