@@ -305,6 +305,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "BackendTelemetryConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "poll_interval": {
+          "type": "string"
+        },
+        "request_timeout": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "BatchClassificationConfig": {
       "properties": {
         "max_batch_size": {
@@ -5126,6 +5144,9 @@
         },
         "profiling": {
           "$ref": "#/$defs/ProfilingConfig"
+        },
+        "backend_telemetry": {
+          "$ref": "#/$defs/BackendTelemetryConfig"
         }
       },
       "additionalProperties": false,
