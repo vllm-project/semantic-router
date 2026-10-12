@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -46,11 +47,19 @@ func (s KnowledgeBaseSource) manifestFileName() string {
 	return s.Manifest
 }
 
+// hostAbsolute reports whether a configured path is absolute on the
+// validation host. Deployment-side paths use the POSIX convention, so a
+// leading "/" counts on every GOOS; filepath.IsAbs alone misses those
+// on Windows (#4942).
+func hostAbsolute(p string) bool {
+	return path.IsAbs(p) || filepath.IsAbs(p)
+}
+
 func (s KnowledgeBaseSource) ResolvePath(baseDir string) string {
 	if s.Path == "" {
 		return ""
 	}
-	if filepath.IsAbs(s.Path) {
+	if hostAbsolute(s.Path) {
 		return filepath.Clean(s.Path)
 	}
 
@@ -104,7 +113,7 @@ func (s KnowledgeBaseSource) candidateRoots(baseDir string) []string {
 func (s KnowledgeBaseSource) runtimeStateCandidateRoot(baseDir string) string {
 	cleanBaseDir := filepath.Clean(strings.TrimSpace(baseDir))
 	cleanSourcePath := cleanKnowledgeBaseSourcePath(s.Path)
-	if cleanBaseDir == "" || cleanSourcePath == "" || filepath.IsAbs(cleanSourcePath) {
+	if cleanBaseDir == "" || cleanSourcePath == "" || hostAbsolute(cleanSourcePath) {
 		return ""
 	}
 	if filepath.Base(cleanBaseDir) == ".vllm-sr" {
