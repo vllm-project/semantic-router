@@ -92,8 +92,8 @@ func (r *OpenAIRouter) contextCompressionScorer(ctx context.Context, cfg *config
 func (r *OpenAIRouter) contextRecoveryStore(contract contextRecoveryContract) contextcompression.RecoveryStore {
 	r.contextCompressionMu.Lock()
 	defer r.contextCompressionMu.Unlock()
-	if r.CompressionRecovery != nil {
-		return r.CompressionRecovery
+	if r.ContextRecoveryBackend != nil {
+		return r.ContextRecoveryBackend
 	}
 	if r.Config == nil {
 		return nil
@@ -121,7 +121,7 @@ func (r *OpenAIRouter) contextRecoveryStore(contract contextRecoveryContract) co
 	if err != nil {
 		return nil
 	}
-	r.CompressionRecovery = store
+	r.ContextRecoveryBackend = store
 	if r.ContextCompression == nil {
 		r.ContextCompression = contextcompression.NewService()
 	}
@@ -262,7 +262,7 @@ func compressionPolicyForRequest(
 	return policy
 }
 
-func (r *OpenAIRouter) contextCompressionScope(ctx *RequestContext) string {
+func (r *OpenAIRouter) contextRecoveryScope(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
 	}

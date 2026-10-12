@@ -501,11 +501,10 @@ type RequestContext struct {
 	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
-	// ContextCompressionRecoveryKeys holds every recovery key issued for this
-	// request, by any context action, and ContextRecoveryToolOwned records
-	// that the router installed the reserved retrieval tool itself.
-	ContextCompressionRecoveryKeys []string
-	ContextRecoveryToolOwned       bool
+	ContextRecoveryKeys            []string
+	// ContextRecoveryToolOwned records that the router installed the reserved
+	// retrieval tool itself, rather than the caller declaring one.
+	ContextRecoveryToolOwned bool
 	// ContextRecovery is the request's effective recovery contract and
 	// ContextRecoveryStore the store every recovery writer and the retrieval
 	// path use; it enforces the request's shared byte budget.

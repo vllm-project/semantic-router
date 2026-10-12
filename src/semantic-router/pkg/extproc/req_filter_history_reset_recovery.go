@@ -52,7 +52,7 @@ func (r *OpenAIRouter) historyResetRecovery(
 	if contextRecoveryToolConflict(ctx, request) {
 		return nil, nil, historyreset.ReasonReservedToolConflict
 	}
-	scope := r.contextCompressionScope(ctx)
+	scope := r.contextRecoveryScope(ctx)
 	if ctx.ContextRecovery == nil || ctx.ContextRecoveryStore == nil || scope == "" {
 		return nil, nil, historyreset.ReasonRecoveryUnavailable
 	}

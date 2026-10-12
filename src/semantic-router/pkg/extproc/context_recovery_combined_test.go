@@ -84,7 +84,7 @@ func runCombinedRecovery(t *testing.T, router *OpenAIRouter, decision *config.De
 	router.prepareContextHistorySteps(ctx, request)
 	err := router.applyContextTransformationPlan(ctx, request)
 	run := combinedRun{ctx: ctx, request: request, err: err}
-	if stub, ok := router.CompressionRecovery.(*recoveryStoreStub); ok {
+	if stub, ok := router.ContextRecoveryBackend.(*recoveryStoreStub); ok {
 		run.stored = stub.entries
 	}
 	return run
@@ -100,7 +100,7 @@ func (run combinedRun) toolOutputPreserved() bool {
 // offers names an entry the store actually holds.
 func (run combinedRun) assertAdvertisedKeysWereStored(t *testing.T) {
 	t.Helper()
-	for _, key := range run.ctx.ContextCompressionRecoveryKeys {
+	for _, key := range run.ctx.ContextRecoveryKeys {
 		found := false
 		for _, entry := range run.stored {
 			found = found || entry.Key == key
@@ -124,8 +124,8 @@ func TestCompressionWriteStopsAtTheResetBound(t *testing.T) {
 	if !run.toolOutputPreserved() {
 		t.Fatal("compression stored content past the merged bound")
 	}
-	if len(run.stored) != 1 || len(run.ctx.ContextCompressionRecoveryKeys) != 1 {
-		t.Fatalf("stored %d entries and advertised %d keys, want only reset's", len(run.stored), len(run.ctx.ContextCompressionRecoveryKeys))
+	if len(run.stored) != 1 || len(run.ctx.ContextRecoveryKeys) != 1 {
+		t.Fatalf("stored %d entries and advertised %d keys, want only reset's", len(run.stored), len(run.ctx.ContextRecoveryKeys))
 	}
 	run.assertAdvertisedKeysWereStored(t)
 }
@@ -218,8 +218,8 @@ func TestCompressionEntriesUseTheMergedTTL(t *testing.T) {
 	run := runCombinedRecovery(t, router, combinedRecoveryDecision(
 		recoveryBounds(1<<20, map[string]interface{}{"ttl_seconds": 900}),
 		recoveryBounds(1<<20, map[string]interface{}{"ttl_seconds": 60}), ""), "old question")
-	if run.err != nil || len(run.ctx.ContextCompressionRecoveryKeys) != 2 {
-		t.Fatalf("expected both writers to store: err=%v keys=%d", run.err, len(run.ctx.ContextCompressionRecoveryKeys))
+	if run.err != nil || len(run.ctx.ContextRecoveryKeys) != 2 {
+		t.Fatalf("expected both writers to store: err=%v keys=%d", run.err, len(run.ctx.ContextRecoveryKeys))
 	}
 	entries := 0
 	for _, key := range server.Keys() {
@@ -250,10 +250,10 @@ func TestRecoveryStoreIsBuiltWithTheMergedTotal(t *testing.T) {
 		SemanticRequest: combinedRecoveryConversation("old question"),
 	}
 	router.bindContextPolicy(ctx)
-	if router.CompressionRecovery == nil {
+	if router.ContextRecoveryBackend == nil {
 		t.Fatal("binding did not build the shared store")
 	}
-	_, err := contextcompression.StoreRecoveryContent(t.Context(), router.CompressionRecovery,
+	_, err := contextcompression.StoreRecoveryContent(t.Context(), router.ContextRecoveryBackend,
 		"scope", strings.Repeat("x", 4096), time.Minute)
 	if err == nil {
 		t.Fatal("the shared store accepted more than the merged total bound")

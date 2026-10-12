@@ -79,7 +79,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	}
 	compressionRequest := contextcompression.Request{
 		Model:        model,
-		Scope:        r.contextCompressionScope(ctx),
+		Scope:        r.contextRecoveryScope(ctx),
 		Request:      requestIR,
 		Policy:       policy,
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),

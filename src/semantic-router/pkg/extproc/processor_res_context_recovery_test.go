@@ -93,22 +93,22 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		Config: &config.RouterConfig{
 			Looper: config.LooperConfig{Endpoint: server.URL},
 		},
-		CompressionRecovery: &recoveryStoreStub{},
+		ContextRecoveryBackend: &recoveryStoreStub{},
 	}
 	ctx := &RequestContext{
-		RequestID:                      "request-1",
-		RequestModel:                   "model",
-		VSRSelectedModel:               "model",
-		VSRSelectedDecisionName:        decision.Name,
-		VSRSelectedDecision:            decision,
-		ContextCompressionRecoveryKeys: []string{"key-1"},
-		Headers:                        map[string]string{"x-authz-user-id": "user-1"},
-		SourceFormat:                   llmprotocol.OpenAIChatV1,
-		SemanticRequest:                testNeutralRequest("model", "question"),
+		RequestID:               "request-1",
+		RequestModel:            "model",
+		VSRSelectedModel:        "model",
+		VSRSelectedDecisionName: decision.Name,
+		VSRSelectedDecision:     decision,
+		ContextRecoveryKeys:     []string{"key-1"},
+		Headers:                 map[string]string{"x-authz-user-id": "user-1"},
+		SourceFormat:            llmprotocol.OpenAIChatV1,
+		SemanticRequest:         testNeutralRequest("model", "question"),
 	}
 	router.bindContextPolicy(ctx)
-	scope := router.contextCompressionScope(ctx)
-	router.CompressionRecovery.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
+	scope := router.contextRecoveryScope(ctx)
+	router.ContextRecoveryBackend.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
 		scope + ":key-1": {
 			Key:     "key-1",
 			Scope:   scope,
@@ -175,16 +175,16 @@ func TestHandleContextRecoveryFollowupRejectsForgedKey(t *testing.T) {
 		}},
 	}
 	router := &OpenAIRouter{
-		Config:              &config.RouterConfig{},
-		CompressionRecovery: &recoveryStoreStub{},
+		Config:                 &config.RouterConfig{},
+		ContextRecoveryBackend: &recoveryStoreStub{},
 	}
 	ctx := &RequestContext{
-		RequestID:                      "request",
-		VSRSelectedDecision:            decision,
-		ContextCompressionRecoveryKeys: []string{"issued-key"},
-		Headers:                        map[string]string{"x-authz-user-id": "user"},
-		SourceFormat:                   llmprotocol.OpenAIChatV1,
-		SemanticRequest:                testNeutralRequest("model", "question"),
+		RequestID:           "request",
+		VSRSelectedDecision: decision,
+		ContextRecoveryKeys: []string{"issued-key"},
+		Headers:             map[string]string{"x-authz-user-id": "user"},
+		SourceFormat:        llmprotocol.OpenAIChatV1,
+		SemanticRequest:     testNeutralRequest("model", "question"),
 	}
 	router.bindContextPolicy(ctx)
 	response := []byte(`{

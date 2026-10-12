@@ -36,8 +36,8 @@ func recoverableResetDecision(t *testing.T, overrides map[string]interface{}) *c
 // inputs a real deployment supplies, without requiring a live backend.
 func recoverableResetRouter() *OpenAIRouter {
 	return &OpenAIRouter{
-		Config:              &config.RouterConfig{},
-		CompressionRecovery: &recoveryStoreStub{},
+		Config:                 &config.RouterConfig{},
+		ContextRecoveryBackend: &recoveryStoreStub{},
 	}
 }
 
@@ -79,8 +79,8 @@ func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 	if len(request.Messages) != 1 {
 		t.Fatalf("expected the prior turn to be removed, got %d messages", len(request.Messages))
 	}
-	if len(ctx.ContextCompressionRecoveryKeys) != 1 {
-		t.Fatalf("expected one issued key, got %v", ctx.ContextCompressionRecoveryKeys)
+	if len(ctx.ContextRecoveryKeys) != 1 {
+		t.Fatalf("expected one issued key, got %v", ctx.ContextRecoveryKeys)
 	}
 	if ctx.HistoryResetDiagnostics.RecoveryStatus != historyreset.RecoveryStored {
 		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
@@ -96,14 +96,14 @@ func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 	if reserved == nil {
 		t.Fatal("the reserved retrieval tool was not installed")
 	}
-	if !strings.Contains(string(reserved.InputSchema), ctx.ContextCompressionRecoveryKeys[0]) {
+	if !strings.Contains(string(reserved.InputSchema), ctx.ContextRecoveryKeys[0]) {
 		t.Fatalf("the reserved tool does not accept the issued key: %s", reserved.InputSchema)
 	}
 
 	// The stored payload must reconstruct the removed turn.
-	store := router.CompressionRecovery.(*recoveryStoreStub)
-	scope := router.contextCompressionScope(ctx)
-	entry, err := store.Get(t.Context(), scope, ctx.ContextCompressionRecoveryKeys[0])
+	store := router.ContextRecoveryBackend.(*recoveryStoreStub)
+	scope := router.contextRecoveryScope(ctx)
+	entry, err := store.Get(t.Context(), scope, ctx.ContextRecoveryKeys[0])
 	if err != nil {
 		t.Fatalf("the issued key is not retrievable: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestRecoverableResetIssuesOneRetrievableKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to encode the replay record: %v", err)
 	}
-	for _, forbidden := range []string{ctx.ContextCompressionRecoveryKeys[0], "old question", "old answer"} {
+	for _, forbidden := range []string{ctx.ContextRecoveryKeys[0], "old question", "old answer"} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("replay record leaked %q: %s", forbidden, encoded)
 		}
@@ -167,7 +167,7 @@ func TestRecoverableResetRefusesStreamingRequests(t *testing.T) {
 	if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonStreamingUnsupported {
 		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
 	}
-	if len(ctx.ContextCompressionRecoveryKeys) != 0 {
+	if len(ctx.ContextRecoveryKeys) != 0 {
 		t.Fatal("no key may be issued for an unsupported request")
 	}
 }
@@ -373,8 +373,8 @@ func TestContextActionsShareOneReservedRetrievalTool(t *testing.T) {
 	if reserved != 1 {
 		t.Fatalf("expected exactly one reserved tool, got %d", reserved)
 	}
-	if len(ctx.ContextCompressionRecoveryKeys) != 2 {
-		t.Fatalf("expected the union of issued keys, got %v", ctx.ContextCompressionRecoveryKeys)
+	if len(ctx.ContextRecoveryKeys) != 2 {
+		t.Fatalf("expected the union of issued keys, got %v", ctx.ContextRecoveryKeys)
 	}
 	for _, key := range []string{"reset-key", "compression-key"} {
 		if !strings.Contains(schema, key) {
@@ -389,7 +389,7 @@ func TestContextRecoveryKeyRegistrationIgnoresEmptyInput(t *testing.T) {
 	if err := registerContextRecoveryKeys(ctx, request, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(request.Tools) != 0 || len(ctx.ContextCompressionRecoveryKeys) != 0 {
+	if len(request.Tools) != 0 || len(ctx.ContextRecoveryKeys) != 0 {
 		t.Fatal("an empty key must not install the reserved tool")
 	}
 }

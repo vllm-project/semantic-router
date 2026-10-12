@@ -575,8 +575,8 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	}
 
 	components.resources.add(func() error {
-		if router.CompressionRecovery != nil {
-			return router.CompressionRecovery.Close()
+		if router.ContextRecoveryBackend != nil {
+			return router.ContextRecoveryBackend.Close()
 		}
 		return nil
 	})

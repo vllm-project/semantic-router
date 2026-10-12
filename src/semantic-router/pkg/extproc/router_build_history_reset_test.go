@@ -136,7 +136,7 @@ func TestBlockedRequestsIgnoreAChangeResult(t *testing.T) {
 			if ctx.HistoryResetDiagnostics.Reason != test.reason {
 				t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
 			}
-			if len(ctx.ContextCompressionRecoveryKeys) != 0 {
+			if len(ctx.ContextRecoveryKeys) != 0 {
 				t.Fatal("a blocked request must not perform recovery I/O")
 			}
 		})

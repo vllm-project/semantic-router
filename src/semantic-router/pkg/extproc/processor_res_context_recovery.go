@@ -73,7 +73,7 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 func activeContextRecovery(requestCtx *RequestContext) *contextRecoveryContract {
 	if requestCtx == nil ||
 		requestCtx.ExpectStreamingResponse ||
-		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
+		len(requestCtx.ContextRecoveryKeys) == 0 {
 		return nil
 	}
 	return requestCtx.ContextRecovery
@@ -85,7 +85,7 @@ func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	calls []contextRecoveryCall,
 ) ([]llmprotocol.Message, error) {
 	store := requestCtx.ContextRecoveryStore
-	scope := r.contextCompressionScope(requestCtx)
+	scope := r.contextRecoveryScope(requestCtx)
 	if store == nil || scope == "" {
 		if service := r.contextCompressionService(); service != nil {
 			service.RecordRecoveryFailure()
@@ -94,7 +94,7 @@ func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 		return nil, fmt.Errorf("context recovery store or trusted scope is unavailable")
 	}
 	toolMessages := make([]llmprotocol.Message, 0, len(calls))
-	allowed := stringSet(requestCtx.ContextCompressionRecoveryKeys)
+	allowed := stringSet(requestCtx.ContextRecoveryKeys)
 	for _, call := range calls {
 		if _, ok := allowed[call.Key]; !ok {
 			return nil, fmt.Errorf("context recovery key was not issued for this request")

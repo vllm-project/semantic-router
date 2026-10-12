@@ -164,7 +164,7 @@ func TestActiveContextRecoveryServesResetOnlyRequests(t *testing.T) {
 			"store":          "redis",
 			"max_retrievals": 2,
 		})),
-		ContextCompressionRecoveryKeys: []string{"issued-key"},
+		ContextRecoveryKeys: []string{"issued-key"},
 	}
 	recoverableResetRouter().bindContextPolicy(ctx)
 	if recovery := activeContextRecovery(ctx); recovery == nil || recovery.Store != "redis" || recovery.MaxRetrievals != 2 {
@@ -177,7 +177,7 @@ func TestActiveContextRecoveryServesResetOnlyRequests(t *testing.T) {
 	}
 
 	ctx.ExpectStreamingResponse = false
-	ctx.ContextCompressionRecoveryKeys = nil
+	ctx.ContextRecoveryKeys = nil
 	if activeContextRecovery(ctx) != nil {
 		t.Fatal("a request that issued no key has nothing to retrieve")
 	}
@@ -192,7 +192,7 @@ func TestRemovedHistoryIsRetrievableThroughTheReservedTool(t *testing.T) {
 	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
 		t.Fatalf("expected the plan to succeed: %v", err)
 	}
-	key := ctx.ContextCompressionRecoveryKeys[0]
+	key := ctx.ContextRecoveryKeys[0]
 
 	if activeContextRecovery(ctx) == nil {
 		t.Fatal("recovery must be active after a recoverable removal")
@@ -223,5 +223,16 @@ func TestRemovedHistoryIsRetrievableThroughTheReservedTool(t *testing.T) {
 		[]contextRecoveryCall{{ID: "call-1", Key: "forged-key"}},
 	); err == nil {
 		t.Fatal("a forged recovery key was accepted")
+	}
+}
+
+// No keys is an ordinary no-op. Issued keys with no request to carry the
+// retrieval tool would strand stored content, so that is reported.
+func TestRegisteringIssuedKeysRequiresARequest(t *testing.T) {
+	if err := registerContextRecoveryKeys(nil, nil); err != nil {
+		t.Fatalf("registering no keys must be a no-op: %v", err)
+	}
+	if err := registerContextRecoveryKeys(&RequestContext{}, nil, "issued-key"); err == nil {
+		t.Fatal("issued keys without a request were reported as published")
 	}
 }

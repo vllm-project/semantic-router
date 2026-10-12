@@ -15,7 +15,7 @@ func contextRecoveryToolConflict(
 	ctx *RequestContext,
 	request *llmprotocol.Request,
 ) bool {
-	if request == nil || (ctx != nil && ctx.ContextRecoveryToolOwned) {
+	if ctx.ContextRecoveryToolOwned {
 		return false
 	}
 	for _, tool := range request.Tools {
@@ -36,13 +36,18 @@ func registerContextRecoveryKeys(
 	request *llmprotocol.Request,
 	keys ...string,
 ) error {
-	if ctx == nil || request == nil || len(keys) == 0 {
+	if len(keys) == 0 {
 		return nil
+	}
+	if ctx == nil || request == nil {
+		// The keys name content already stored; without a request to carry the
+		// retrieval tool it would be unreachable, so this is a failure.
+		return fmt.Errorf("recovery keys were issued without a request to publish them on")
 	}
 	if contextRecoveryToolConflict(ctx, request) {
 		return fmt.Errorf("request defines reserved tool %q", contextcompression.RetrieveToolName)
 	}
-	known := stringSet(ctx.ContextCompressionRecoveryKeys)
+	known := stringSet(ctx.ContextRecoveryKeys)
 	for _, key := range keys {
 		if key == "" {
 			continue
@@ -51,9 +56,9 @@ func registerContextRecoveryKeys(
 			continue
 		}
 		known[key] = struct{}{}
-		ctx.ContextCompressionRecoveryKeys = append(ctx.ContextCompressionRecoveryKeys, key)
+		ctx.ContextRecoveryKeys = append(ctx.ContextRecoveryKeys, key)
 	}
-	if len(ctx.ContextCompressionRecoveryKeys) == 0 {
+	if len(ctx.ContextRecoveryKeys) == 0 {
 		return nil
 	}
 	return applyContextRecoveryTool(ctx, request)
@@ -62,7 +67,7 @@ func registerContextRecoveryKeys(
 // applyContextRecoveryTool installs the reserved tool, or updates the accepted
 // keys of the one this request already installed.
 func applyContextRecoveryTool(ctx *RequestContext, request *llmprotocol.Request) error {
-	schema, err := contextRecoveryToolSchema(ctx.ContextCompressionRecoveryKeys)
+	schema, err := contextRecoveryToolSchema(ctx.ContextRecoveryKeys)
 	if err != nil {
 		return err
 	}
