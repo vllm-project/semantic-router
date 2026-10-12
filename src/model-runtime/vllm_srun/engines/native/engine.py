@@ -320,12 +320,13 @@ class NativeEngineModel(EngineModel):
         # alive faults there (docs/records/cuda-vela-forest-graphs.md).
         if self.graphs is None or torch.version.hip is not None:
             return blocks_of(*inputs)
+        # A replay writes the graph's one output buffer, so the caller gets a copy.
         return self.graphs.run(
             ("forest", prefix_ids.shape, block_ids.shape, shape),
             inputs,
             blocks_of,
             prefix_ids.numel() + block_ids.numel(),
-        )
+        ).clone()
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:

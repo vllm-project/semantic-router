@@ -36,7 +36,14 @@ replay.
 - A capture costs about three forwards, once per shape. For a fixed set of
   questions a single-row request's shape is its token count, so shapes repeat
   as often as request lengths do. Forests above the 4,096-token graph cap
-  (`MAX_GRAPH_TOKENS`) run eagerly, and at most `MAX_GRAPHS` are captured.
+  (`MAX_GRAPH_TOKENS`) run eagerly.
+- A graph holds far more device memory than its output: 100 one-question
+  requests of distinct lengths on the 0.8B left 87 forest graphs and 2,822 MiB
+  more in use than before them (26 MiB with graphs off), about 32 MiB a graph
+  against 0.5 MiB of output. So captures stop at `MAX_GRAPHS` or once the
+  device's used memory has grown by `MAX_GRAPH_BYTES` (4 GiB) since the first
+  capture. With the budget set to 1 GiB the same run stopped at 21 graphs and
+  968 MiB.
 
 ## Exactness
 
@@ -45,8 +52,11 @@ replay.
 - The 4B's answers to 60 generated requests were identical across three passes
   (eager, capture, replay). Its package parity does not fit the 16 GB card
   next to the runtime.
-- `tests/test_gpu_forest_graphs.py` compares replays with the eager forest on
-  three shapes, with eager forwards of the other shapes between replays.
+- `tests/test_gpu_forest_graphs.py` runs forests and ordinary batches through
+  the engine with graphs on and off and compares them, with eager forwards of
+  other shapes between replays and two inputs per shape, so a kept result must
+  survive the next replay. Two forests share their tensor shapes and differ
+  only in lengths and owners.
 
 ## Why ROCm keeps forests eager
 

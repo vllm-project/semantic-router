@@ -22,9 +22,9 @@ four scored panels), so it belongs to the exact profile:
   ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
-  several forwards each. At most ``MAX_GRAPHS`` graphs (and
-  ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) are captured; after that, new shapes
-  run eagerly. Captured graphs are never destroyed while serving: on ROCm,
+  several forwards each. Graphs are captured until there are ``MAX_GRAPHS`` of
+  them or the device's used memory has grown by ``MAX_GRAPH_BYTES`` since the
+  first capture; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
   batches of Index traffic, led to GPU memory access faults. On CUDA the same
   runner also replays Vela 2.0's forest forward (``models/forest.py``) per
@@ -67,7 +67,7 @@ FUSED_SLOTS: dict[str | None, tuple[str, ...]] = {
 }
 MAX_GRAPH_TOKENS = 4096
 MAX_GRAPHS = 512
-MAX_GRAPH_OUTPUT_BYTES = 4 << 30
+MAX_GRAPH_BYTES = 4 << 30
 CAPTURE_AFTER = 2
 MASK_ALIGN = 16
 
@@ -638,8 +638,9 @@ class Masks:
         }
 
 
-def _output_bytes(value: torch.Tensor) -> int:
-    return value.numel() * value.element_size()
+def _device_used(device: torch.device) -> int:
+    free, total = torch.cuda.mem_get_info(device)
+    return total - free
 
 
 class Graphs:
@@ -653,18 +654,18 @@ class Graphs:
         capture_after: int = CAPTURE_AFTER,
         max_graphs: int = MAX_GRAPHS,
         max_tokens: int = MAX_GRAPH_TOKENS,
-        max_output_bytes: int = MAX_GRAPH_OUTPUT_BYTES,
+        max_bytes: int = MAX_GRAPH_BYTES,
     ):
         self.backbone = backbone
         self.masks = masks
         self.capture_after = capture_after
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
-        self.max_output_bytes = max_output_bytes
+        self.max_bytes = max_bytes
         self.graphs: dict[Hashable, dict[str, Any]] = {}
         self.seen: dict[Hashable, int] = {}
         self.failed: set[Hashable] = set()
-        self.output_bytes = 0
+        self.base: int | None = None
         self.pool: Any = None
         self.stats = {
             "captures": 0,
@@ -734,10 +735,12 @@ class Graphs:
         inputs: tuple[torch.Tensor, ...],
         body: Callable[..., torch.Tensor],
     ) -> dict[str, Any] | None:
-        if (
-            len(self.graphs) >= self.max_graphs
-            or self.output_bytes >= self.max_output_bytes
-        ):
+        # A graph costs far more than its output, and part of it is taken only
+        # after the capture, so the budget is the device's growth since the first.
+        used = _device_used(inputs[0].device)
+        if self.base is None:
+            self.base = used
+        if len(self.graphs) >= self.max_graphs or used - self.base >= self.max_bytes:
             self.stats["full"] += 1
             return None
         static = tuple(value.clone() for value in inputs)
@@ -746,7 +749,13 @@ class Graphs:
                 self.pool = torch.cuda.graph_pool_handle()
             stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
             stream.wait_stream(torch.cuda.current_stream())
-            with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
+            # Capture under the caller's autocast, with the cast cache off as capture needs.
+            with torch.autocast(
+                "cuda",
+                dtype=torch.get_autocast_dtype("cuda"),
+                enabled=torch.is_autocast_enabled("cuda"),
+                cache_enabled=False,
+            ):
                 with torch.cuda.stream(stream):
                     for _ in range(2):
                         body(*static)
@@ -765,10 +774,8 @@ class Graphs:
             self.failed.add(key)
             self.stats["failed"] += 1
             return None
-        size = _output_bytes(output)
-        entry = {"inputs": static, "graph": graph, "output": output, "bytes": size}
+        entry = {"inputs": static, "graph": graph, "output": output}
         self.graphs[key] = entry
-        self.output_bytes += size
         self.stats["captures"] += 1
         return entry
 
