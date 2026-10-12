@@ -185,7 +185,8 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 
 # The model runtime: its third-party dependencies in one layer and the package
 # in the next, so a runtime code change does not reinstall its dependencies.
-# The multimodal extra decodes Vela Omni's images (Pillow). Every default model
+# The multimodal extra decodes Vela Omni's and Decision 3.0's images (Pillow)
+# and Decision 3.0's videos (OpenCV with its own FFmpeg). Every default model
 # runs on the native engine, so ONNX Runtime (the onnx extra) is not installed.
 # requirements-lock.txt pins every dependency except PyTorch and what only
 # PyTorch requires, which the accelerator stage owns, so every build of a
@@ -232,6 +233,7 @@ COPY config/config.yaml /app/config/config.yaml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
+COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
 COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
 COPY --link --from=router-build /out/router /usr/local/bin/router
 EXPOSE 50051 8080 9190

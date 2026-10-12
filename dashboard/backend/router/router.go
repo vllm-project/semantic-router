@@ -73,6 +73,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	registerSRBenchRoutes(mux, cfg)
 	mcpManager := SetupMCP(mux, cfg, wf)
 	registerMLPipelineRoutes(mux, cfg, wf)
+	setupTrainingRoutes(mux, cfg, wf)
 	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
 	registerOpenAPIRoute(mux, mux)
 
@@ -80,7 +81,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	mux.HandleFallback("/", handlers.StaticFileServer(cfg.StaticDir))
 	mux.Seal()
 	return &Server{
-		Handler:       wrapWithAuth(mux, authSvc, mux),
+		Handler:       handlers.TrainingErrorEnvelope(wrapWithAuth(mux, authSvc, mux)),
 		routePolicies: mux,
 		mcpManager:    mcpManager,
 		Close: func() error {

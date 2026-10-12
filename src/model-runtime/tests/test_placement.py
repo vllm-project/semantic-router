@@ -86,15 +86,16 @@ def test_gpu_devices_report_memory_and_bf16():
     assert devices and devices[0].total_memory and devices[0].index == 0
 
 
-def test_xpu_and_mps_devices_parse():
+def test_unvalidated_devices_parse():
     assert parse_device("xpu:1") == ("xpu", 1)
     assert parse_device("mps") == ("mps", None)
+    assert parse_device("npu:1") == ("npu", 1)
 
 
 def test_device_names_and_the_auto_order_come_from_the_accelerators():
     assert auto_order() == ["rocm", "cuda", "cpu"]
     assert CPUAccelerator.descriptor()["auto_priority"] == 100
-    with pytest.raises(PlacementError, match="one of cpu, cuda, mps, rocm, xpu"):
+    with pytest.raises(PlacementError, match="one of cpu, cuda, mps, npu, rocm, xpu"):
         parse_device("tpu:0")
     assert device_kind("rocm:1") == "rocm"
     if not GPU:
