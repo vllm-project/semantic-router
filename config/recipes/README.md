@@ -16,6 +16,7 @@ start those inference backends.
 | --- | --- |
 | [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
 | [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
+| [AMD AI PC](amd-ai-pc/README.md) | CPU-only local-first text routing on an AMD AI PC, with explicit opt-in for an external model. |
 | [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
 | [Decision Balance](decision-balance/README.md) | One decision-model call per request sets the reasoning effort and model across GLM-5.3-Flash and two Qwen3.8 models. |
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |

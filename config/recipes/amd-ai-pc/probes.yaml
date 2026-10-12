@@ -1,0 +1,175 @@
+schema_version: v1
+name: amd-ai-pc
+description: >
+  Backend-independent Eval API probes for the AMD AI PC CPU profile. The suite
+  verifies local-by-default routing, explicit external opt-in, and the typed
+  refusals for image input and for input beyond the local window.
+routing_assets:
+  yaml: config/recipes/amd-ai-pc/config.yaml
+  dsl: config/recipes/amd-ai-pc/recipe.dsl
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
+router_eval_endpoint: /api/v1/routing/preview
+evaluation:
+  request_timeout_seconds: 300
+  concurrency: 4
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 100.0
+  min_projection_assertion_percent: 100.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages]
+  min_tag_counts:
+    language: 4
+    negative: 1
+    collision: 3
+    stress: 2
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    collision: 100.0
+    stress: 100.0
+decisions:
+  - id: unsupported_image_input
+    expected_decision: unsupported_image_input
+    expected_selection_status: not_required
+    expected_plugins: [fast_response]
+    objective: Image input is declined because this profile has no qualified local vision path.
+    variants:
+      - id: image_question
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Describe the attached image in one sentence.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [ai_pc_has_images]
+        tags: [language:en, image, shape:messages]
+      - id: image_with_local_only
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Keep this local and read the attached screenshot.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [ai_pc_has_images]
+          keywords: [ai_pc_local_only]
+        notes: The image refusal outranks the local-only route, so the request is declined instead of served by a text-only model.
+        tags: [language:en, collision, image, shape:messages]
+
+  - id: local_window_exceeded
+    expected_decision: local_window_exceeded
+    expected_selection_status: not_required
+    expected_plugins: [fast_response]
+    objective: Input larger than the local window is declined unless the request allows an external model.
+    variants:
+      - id: long_input_without_opt_in
+        query: Summarize the staffing changes in the reports above in five bullet points.
+        padding:
+          text: "The quarterly report lists revenue, costs and staffing for each regional office, with notes on hiring, attrition and budget changes. "
+          repeat: 1000
+          placement: before
+        expected_signals:
+          context: [ai_pc_exceeds_local_window]
+        tags: [language:en, stress:long-input]
+      - id: long_input_local_only_and_opt_in
+        query: Keep this local, although an external model is fine. Summarize the reports above in five bullet points.
+        padding:
+          text: "The quarterly report lists revenue, costs and staffing for each regional office, with notes on hiring, attrition and budget changes. "
+          repeat: 1000
+          placement: before
+        expected_signals:
+          context: [ai_pc_exceeds_local_window]
+          keywords: [ai_pc_local_only, ai_pc_external_ok]
+        notes: Local-only wins over opt-in, so oversized input is declined rather than sent out.
+        tags: [language:en, collision, stress:long-input]
+
+  - id: local_only
+    expected_decision: local_only
+    expected_algorithm: static
+    expected_alias: local/ai-pc
+    objective: Requests marked local-only stay on the local model.
+    variants:
+      - id: keep_local_en
+        query: Keep this local. Rewrite this paragraph about our unreleased pricing so it reads more clearly.
+        expected_signals:
+          keywords: [ai_pc_local_only]
+        tags: [language:en, shape:text]
+      - id: keep_local_zh
+        query: 仅在本地处理，请帮我整理这份内部会议纪要的要点。
+        expected_signals:
+          keywords: [ai_pc_local_only]
+        tags: [language:zh, shape:text]
+      - id: local_only_with_opt_in
+        query: An external model is fine in general, but local only for this one. Draft a reply to this customer email.
+        expected_signals:
+          keywords: [ai_pc_local_only, ai_pc_external_ok]
+        notes: Both phrases appear; the local-only route has the higher priority.
+        tags: [language:en, collision, shape:text]
+
+  - id: external_opt_in
+    expected_decision: external_opt_in
+    expected_algorithm: static
+    expected_alias: cloud/external-chat
+    objective: The external model is used only when the request allows it.
+    forbidden_signals:
+      keywords: [ai_pc_local_only]
+    variants:
+      - id: allowed_en
+        query: You may use a cloud model for this. Compare three approaches to caching in a web service and recommend one.
+        expected_signals:
+          keywords: [ai_pc_external_ok]
+        tags: [language:en, shape:text]
+      - id: allowed_zh
+        query: 可以使用云端模型。请比较三种缓存策略并给出建议。
+        expected_signals:
+          keywords: [ai_pc_external_ok]
+        tags: [language:zh, shape:text]
+      - id: long_input_with_opt_in
+        query: An external model is fine. Summarize the reports above in five bullet points.
+        padding:
+          text: "The quarterly report lists revenue, costs and staffing for each regional office, with notes on hiring, attrition and budget changes. "
+          repeat: 1000
+          placement: before
+        expected_signals:
+          context: [ai_pc_exceeds_local_window]
+          keywords: [ai_pc_external_ok]
+        notes: Oversized input goes to the external model only because the request allowed it.
+        tags: [language:en, stress:long-input]
+
+  - id: local_default
+    expected_decision: local_default
+    expected_algorithm: static
+    expected_alias: local/ai-pc
+    objective: Every request that does not opt in is processed locally.
+    forbidden_signals:
+      keywords: [ai_pc_local_only, ai_pc_external_ok]
+    variants:
+      - id: plain_question
+        query: What is the difference between a process and a thread?
+        tags: [language:en, shape:text]
+      - id: mentions_cloud_without_opt_in
+        query: Explain how a cloud provider bills for object storage.
+        notes: Mentioning the cloud is not consent to send the request there.
+        tags: [language:en, negative, shape:text]
+      - id: multi_turn
+        messages:
+          - role: user
+            content: I am planning a study schedule.
+          - role: assistant
+            content: Tell me how many hours you have each week.
+          - role: user
+            content: About ten hours. Suggest a split across three subjects.
+        tags: [language:en, shape:messages]
