@@ -20,6 +20,9 @@ type ModelCard struct {
 	ModelSHA256    string
 	ManifestSHA256 string
 	Surfaces       []string
+	Modalities     []string
+	ImageMaxBytes  int
+	VideoMaxBytes  int
 	QuestionTypes  []string
 	Presets        []string
 	Heads          []HeadCard
@@ -115,6 +118,7 @@ func (h HeadCard) Accepts(input string) bool {
 func decodeCard(card api.ModelCard) ModelCard {
 	decoded := ModelCard{
 		ID: card.Id, Family: card.Family, Surfaces: append([]string(nil), card.Surfaces...), Ready: card.Ready,
+		Modalities:    derefSlice(card.Modalities),
 		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets),
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
 		ManifestSHA256: deref(card.ManifestSha256), Profile: deref(card.Profile), Engine: deref(card.Engine),
@@ -122,6 +126,8 @@ func decodeCard(card api.ModelCard) ModelCard {
 		Status: string(deref(card.Status)), Reason: deref(card.Reason),
 	}
 	if card.Limits != nil {
+		decoded.ImageMaxBytes = deref(card.Limits.ImageMaxBytes)
+		decoded.VideoMaxBytes = deref(card.Limits.VideoMaxBytes)
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)
 		decoded.MaxScanTokens = deref(card.Limits.MaxScanTokens)
 		decoded.MaxInputs = deref(card.Limits.MaxInputs)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/decisionmedia"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -122,6 +123,11 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
 		recordUserInputModalities(result, message.Content, text)
+		for _, part := range message.Content {
+			if part.Kind == llmprotocol.ContentImage || part.Kind == llmprotocol.ContentVideo {
+				result.DecisionMedia = append(result.DecisionMedia, &decisionmedia.Source{Kind: string(part.Kind), URL: part.URL, MediaType: part.MediaType, Data: part.Data})
+			}
+		}
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)

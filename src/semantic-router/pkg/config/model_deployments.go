@@ -50,8 +50,9 @@ func (d ModelDeployment) PublicModelName() string {
 // the consumer's window must fit the provider's actual task/tokenizer limit.
 // Other overflow policies require the budget to fit that single-forward limit.
 type ModelInputBudget struct {
-	MaxTokens int    `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
-	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
+	Media     *DecisionMediaConfig `yaml:"media,omitempty" json:"media,omitempty"`
+	MaxTokens int                  `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
+	Overflow  string               `yaml:"overflow,omitempty" json:"overflow,omitempty"`
 }
 
 // ModelBinding declares a shared task default or a recipe-local deployment use.
@@ -136,6 +137,9 @@ func (d ModelDeployment) ValidateDecisionInput(name string) error {
 }
 
 func (d ModelDeployment) validate(cfg *RouterConfig) error {
+	if err := d.ValidateDecisionMedia(); err != nil {
+		return err
+	}
 	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}

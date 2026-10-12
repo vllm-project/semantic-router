@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
@@ -252,7 +253,10 @@ func selectionFallbackReasonForError(err error) string {
 
 func selectionRequestContext(ctx *RequestContext) context.Context {
 	if ctx != nil && ctx.TraceContext != nil {
-		return ctx.TraceContext
+		return modelservice.WithDecisionMedia(ctx.TraceContext, ctx.decisionMedia)
+	}
+	if ctx != nil {
+		return modelservice.WithDecisionMedia(context.Background(), ctx.decisionMedia)
 	}
 	return context.Background()
 }

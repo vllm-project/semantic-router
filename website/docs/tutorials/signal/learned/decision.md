@@ -276,3 +276,44 @@ are listed in the `x-vsr-matched-decision-model` response header.
 
 To choose a model, size and hardware, or to run the model on your own GPU
 server, see [Decision models](../../../model-runtime/guides/decisions.md).
+
+## Images and videos in Router decisions
+
+Decision deployments can opt into inline user images and videos. The setting
+is off by default and applies to decision signals, compatible built-in questions
+sharing their call, and the decision model selection algorithm.
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      decision-d3:
+        provider: model_runtime
+        artifact: vllm-sr/d3-lite
+        input:
+          media:
+            images: {max_count: 4}
+            videos: {max_count: 1, max_bytes: 16000000}
+```
+
+Bind your decision question or selector to `decision-d3`. Startup checks that
+the model card advertises each enabled modality. `max_bytes` defaults to the
+card's limit and can only lower it. `max_count` defaults to four images or one
+video and can only lower those defaults. Omitting a modality disables it;
+zero limits mean use the default.
+
+Images must be inline PNG, JPEG, or WebP data URLs. Videos must be inline MP4,
+WebM, QuickTime, or Matroska data URLs. The Router validates base64 and container
+signatures; the runtime owns pixel, duration, and frame limits. The most recent
+eligible attachments are retained in input order within each modality. Remote
+URLs and file references are never fetched for decisions. The backend request
+keeps its original media.
+
+The Router skips malformed, unsupported, excessive, or oversized attachments.
+`vsr_decision_media_skipped_total{kind,reason}` counts skips during deployment
+preparation for a request. It exposes neither URLs nor payloads. Timeouts and
+refused runtime calls retain the existing unknown-signal behavior.
+
+Chat Completions accepts `video_url` parts independently of the decision-media
+opt-in. Dispatch still requires a backend with `video_input` capability. With
+the opt-in absent, decision model calls remain text-only.
