@@ -3,9 +3,10 @@
 
 The tiny Decision fixtures run offline in the built Router image. The tests
 check public auth/discovery and native inference after starting both Engine
-and Router modes with the supported serve flags, and that images and videos
-reach a Decision 3.0 model through the public System One API. Each test owns an
-isolated stack.
+and Router modes with the supported serve flags, that images and videos
+reach a Decision 3.0 model through the public System One API, and that Engine
+mode starts only the Router container by default. Each test owns an isolated
+stack.
 """
 
 import base64
@@ -218,14 +219,14 @@ class EngineStack(unittest.TestCase):
         self.serve(engine=True)
 
     def serve(self, *, engine):
+        # Engine mode is minimal by default; Router mode needs the flag.
         self.cli(
             "serve",
             "--config",
             str(self.config),
-            *(["--engine"] if engine else []),
+            "--engine" if engine else "--minimal",
             "--gateway",
             "standalone",
-            "--minimal",
             "--image-pull-policy",
             "ifnotpresent",
             "--startup-timeout",
@@ -303,6 +304,32 @@ class TestEngineMode(EngineStack):
             status, _ = call(self.base, "/v1/systemone/models")
             self.assertEqual(status, 401)
             self.native()
+
+
+class TestEngineModeContainers(EngineStack):
+    def containers(self):
+        runtime = shutil.which(os.environ.get("CONTAINER_RUNTIME") or "docker") or (
+            shutil.which("podman")
+        )
+        listed = subprocess.run(
+            [runtime, "ps", "-a", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        return {name for name in listed.stdout.split() if name.startswith(self.stack)}
+
+    def test_engine_mode_starts_only_the_router_and_stop_removes_it(self):
+        # No Dashboard, sr-bench, Redis, Jaeger, Prometheus or Grafana.
+        self.assertEqual(self.containers(), {self.container})
+        status = self.cli("status")
+        self.assertIn("Router", status)
+        self.assertNotIn("Dashboard", status)
+        status, models = self.public("/v1/systemone/models")
+        self.assertEqual(status, 200, models)
+        self.stop()
+        self.assertEqual(self.containers(), set())
 
 
 class TestEngineModeImages(EngineStack):
