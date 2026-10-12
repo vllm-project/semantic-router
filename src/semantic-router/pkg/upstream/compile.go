@@ -116,8 +116,11 @@ func clusterOrder(cfg *config.RouterConfig, byModel map[string][]config.VLLMEndp
 func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.VLLMEndpoint) (ClusterSpec, error) {
 	reliability := cfg.ModelConfig[alias].Reliability
 	spec := ClusterSpec{Name: alias, LBPolicy: LBRoundRobin}
-	if reliability.LBPolicy == config.ProviderLBPolicyLeastRequest {
+	switch reliability.LBPolicy {
+	case config.ProviderLBPolicyLeastRequest:
 		spec.LBPolicy = LBLeastRequest
+	case config.ProviderLBPolicyLoadAware:
+		spec.LBPolicy = LBLoadAware
 	}
 	for i, endpoint := range endpoints {
 		ep, err := compileEndpoint(alias, i, endpoint)
@@ -287,13 +290,17 @@ func compileEndpoint(alias string, index int, endpoint config.VLLMEndpoint) (End
 	case scheme == schemeHTTPS && isIPLiteral(endpoint.Address):
 		return EndpointSpec{}, fmt.Errorf("%s HTTPS endpoint must use a DNS hostname so its certificate identity can be verified", where)
 	}
-	return EndpointSpec{
+	spec := EndpointSpec{
 		Name:   endpoint.Name,
 		Scheme: scheme,
 		Host:   endpoint.Address,
 		Port:   endpoint.Port,
 		Weight: max(endpoint.Weight, 1),
-	}, nil
+	}
+	if endpoint.Telemetry.Enabled() {
+		spec.Telemetry = endpoint.TelemetryIdentity()
+	}
+	return spec, nil
 }
 
 // basePath is the path of a provider base URL without its trailing slash.

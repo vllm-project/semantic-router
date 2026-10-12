@@ -9,7 +9,7 @@ import type {
   ModelPricing,
   ProviderReliability,
 } from './configPageSupport'
-import { BACKEND_ENGINES } from './configPageSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import { normalizeModelBackendRefs, normalizeModelReliability } from './configPageModelFormSupport'
 
 interface StructuredModelFieldProps {
@@ -194,7 +194,9 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     key: 'lb_policy',
     label: 'Load balancing',
     type: 'select',
-    options: ['ROUND_ROBIN', 'LEAST_REQUEST', 'RING_HASH', 'MAGLEV'],
+    options: PROVIDER_LB_POLICIES,
+    helpText:
+      'load_aware prefers the replica whose serving engine reports the least load and needs backend telemetry.',
   },
   {
     key: 'retry_count',

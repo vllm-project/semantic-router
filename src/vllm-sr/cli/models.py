@@ -2185,7 +2185,7 @@ class ProviderReliability(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    lb_policy: Literal["round_robin", "least_request", "load_aware"] = "round_robin"
     retry_count: int = Field(default=0, ge=0, le=5)
     retry_on: str = "connect-failure,refused-stream"
     consecutive_5xx: int = Field(default=0, ge=0)
