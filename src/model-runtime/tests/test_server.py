@@ -3,9 +3,11 @@
 import http.client
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -14,6 +16,21 @@ import pytest
 from .conftest import QUESTIONS, STATE
 
 SOURCE = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture
+def socket_root():
+    """A short temp directory for a unix socket.
+
+    `tmp_path` embeds the test name, and the socket path must fit in `sun_path`,
+    which is 104 bytes on darwin. `tmp_path / "run" / "runtime.sock"` does not.
+    `mkdtemp` also gives the directory the 0o700 the server is expected to keep.
+    """
+    directory = tempfile.mkdtemp(prefix="srun-")
+    try:
+        yield Path(directory)
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 class UnixConnection(http.client.HTTPConnection):
@@ -81,9 +98,9 @@ def free_port():
 
 
 @pytest.mark.parametrize("transport", ["uds", "tcp"])
-def test_server_process(qwen35_package, tmp_path, transport):
+def test_server_process(qwen35_package, socket_root, transport):
     if transport == "uds":
-        path = str(tmp_path / "run" / "runtime.sock")
+        path = str(socket_root / "run" / "runtime.sock")
         process = start([str(qwen35_package), "--uds", path])
 
         def connect():
