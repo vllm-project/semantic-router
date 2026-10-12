@@ -414,12 +414,26 @@ func appliedUnknownPolicyHeader(ctx *RequestContext) string {
 	return strings.Join(pairs, ",")
 }
 
+// decisionRankingHeader explains the served decision against its runner-up.
+// It stays silent when the context no longer serves the ranked winner.
+func decisionRankingHeader(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	ranking := ctx.VSRDecisionDiagnostics.Ranking
+	if ranking == nil || ranking.RunnerUp == "" || ranking.Winner != ctx.VSRSelectedDecisionName {
+		return ""
+	}
+	return sanitizeWarningField(ranking.Winner) + " over " + sanitizeWarningField(ranking.RunnerUp) + ": " + ranking.Reason
+}
+
 // addDecisionDetailHeaders adds the intermediate decision/classification details
 // (category, modality, reasoning, session phase, injected-system-prompt, cache
 // similarity). Per the v0.4 contract (#2205) these are demoted off the default
 // surface and emitted only under x-vsr-debug; they remain in the replay record.
 func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
+	builder.addString(headers.VSRDecisionRanking, decisionRankingHeader(ctx))
 	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
 		modalityValue := ctx.ModalityClassification.Modality
 		if ctx.ModalityClassification.Method != "" {
@@ -462,6 +476,7 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedReask, ctx.VSRMatchedReask)
 	builder.addJoined(headers.VSRMatchedPreference, ctx.VSRMatchedPreference)
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
+	builder.addJoined(headers.VSRMatchedAction, ctx.VSRMatchedAction)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
 	builder.addInt(headers.VSRContextTokenCount, ctx.VSRContextTokenCount)
 	builder.addJoined(headers.VSRMatchedStructure, ctx.VSRMatchedStructure)

@@ -18,7 +18,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-lifecycle", pkgtestcases.TestCase{
-		Description: "The Router starts its managed runtimes in process groups, each with a share of its cores (on a node without a GPU, a deployment on device auto joins the CPU group), attaches to an external runtime by served name, and reports each deployment's readiness",
+		Description: "The frontend starts an independent worker for each managed logical deployment, resolves auto placement on the host, attaches to externally owned multi-model runtimes by served name, and reports readiness",
 		Tags:        []string{"model-runtime", "lifecycle", "managed", "attached"},
 		Fn:          testModelRuntimeLifecycle,
 	})
@@ -103,7 +103,7 @@ func checkLivenessAndReadiness(ctx context.Context, runtime *modelruntime.Client
 }
 
 // checkInventory requires the Router's model inventory to list every
-// deployment once: managed ones ready in their process group with the card
+// deployment once: managed ones ready in independent workers with the card
 // their runtime serves, attached ones by served name and transport only, and
 // the one without a runtime not ready. It returns each deployment's state.
 func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[string]string, error) {
@@ -136,16 +136,20 @@ func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[stri
 			return nil, fmt.Errorf("%s shows its socket path %q", name, deployment.Endpoint)
 		}
 	}
+	processOwners := map[string]string{}
 	for _, name := range mrManagedDeployments {
 		deployment := listed[name]
-		// CPU models run in "cpu" or spread over "cpu-0" …
-		group, wantGroup, wantFamily := strings.SplitN(deployment.Process, "-", 2)[0], mrDeviceProcess, "task_heads"
+		wantFamily := "task_heads"
 		if name == mrDecisionDeployment {
-			group, wantGroup, wantFamily = deployment.Process, mrDecisionsProcess, "decision2"
+			wantFamily = "decision2"
 		}
-		if !deployment.Managed || !deployment.Ready || group != wantGroup || deployment.Family != wantFamily {
-			return nil, fmt.Errorf("%s is %+v, want a ready managed %s deployment in the %s group", name, deployment, wantFamily, wantGroup)
+		if !deployment.Managed || !deployment.Ready || deployment.Process == "" || deployment.Family != wantFamily {
+			return nil, fmt.Errorf("%s is %+v, want a ready independent managed %s worker", name, deployment, wantFamily)
 		}
+		if previous, exists := processOwners[deployment.Process]; exists {
+			return nil, fmt.Errorf("independent deployments %s and %s share process %s", previous, name, deployment.Process)
+		}
+		processOwners[deployment.Process] = name
 	}
 	if err := checkInventoryLabels(ctx, session, listed[mrDomainDeployment]); err != nil {
 		return nil, err
@@ -193,12 +197,9 @@ type mrManagedProcess struct {
 	Threads int      `json:"threads"`
 }
 
-// checkManagedProcesses requires the "decisions" process group to serve the
-// decision fixture alone and the device's CPU models, the ones on device auto
-// included, to run in one process ("cpu") or spread over several ("cpu-0" …),
-// each deployment in exactly one process, ready, with the family and surfaces
-// its fixture declares. Every model runs on the CPU of a node without a GPU,
-// so every process must run a share of the Router's cores.
+// checkManagedProcesses requires each logical managed deployment to own one
+// ready worker with its fixture's family and surfaces. CPU thread budgets stay
+// positive without deriving identity from the current consumer set.
 func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (map[string]mrManagedProcess, error) {
 	var runtimes map[string][]string
 	err := modelruntime.Eventually(ctx, mrReadyTimeout, func(ctx context.Context) error {
@@ -222,21 +223,18 @@ func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (m
 	processes := map[string]mrManagedProcess{}
 	owner := map[string]string{}
 	for socket, models := range runtimes {
-		process := strings.SplitN(filepath.Base(socket), "-", 2)[0]
 		sort.Strings(models)
+		if len(models) != 1 {
+			return nil, fmt.Errorf("managed process %s must own one logical deployment, got %v", socket, models)
+		}
 		for _, model := range models {
 			if previous, twice := owner[model]; twice {
 				return nil, fmt.Errorf("%s runs in two processes, %s and %s", model, previous, socket)
 			}
-			owner[model] = socket
-			switch {
-			case process == mrDecisionsProcess && model == mrDecisionDeployment:
-			case process == mrDeviceProcess && slices.Contains(mrDeviceGroup, model):
-			case slices.Contains(mrAutoDeployments, model):
-				return nil, fmt.Errorf("process %s serves %s, which is on device auto: on a node without a GPU it belongs to the %s group", socket, model, mrDeviceProcess)
-			default:
-				return nil, fmt.Errorf("process %s serves %s, which belongs to another group", socket, model)
+			if !slices.Contains(mrManagedDeployments, model) {
+				return nil, fmt.Errorf("process %s serves undeclared deployment %s", socket, model)
 			}
+			owner[model] = socket
 		}
 		threads, err := threadShare(ctx, session, socket)
 		if err != nil {

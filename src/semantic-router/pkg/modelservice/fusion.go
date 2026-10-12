@@ -25,20 +25,13 @@ type bundleTask struct {
 	decision *fusedDecision
 }
 
-// fuse turns one client's parked calls into bundle tasks in call order.
+// fuse turns one client's parked classify, embeddings and rerank calls into
+// bundle tasks in call order.
 func fuse(client *Client, calls []*bundleCall) []*bundleTask {
 	tasks := make([]*bundleTask, 0, len(calls))
 	open := make(map[string]*bundleTask)
 	items := make(map[*bundleTask]api.ClassifyItemList)
-	decisions := make(map[string][]*bundleTask)
-	taken := make(map[*bundleTask]map[string]struct{})
 	for _, call := range calls {
-		if call.decision != nil {
-			if task := fuseDecision(decisions, taken, call); task != nil {
-				tasks = append(tasks, task)
-			}
-			continue
-		}
 		key, list, limit := fusible(client, call.task)
 		task := open[key]
 		if key == "" || task == nil || len(items[task])+len(list) > limit {
@@ -55,11 +48,6 @@ func fuse(client *Client, calls []*bundleCall) []*bundleTask {
 	for task, list := range items {
 		if len(task.calls) > 1 {
 			task.task = fusedClassify(task.task, task.calls, list)
-		}
-	}
-	for _, task := range tasks {
-		if task.decision != nil {
-			task.prepareDecision()
 		}
 	}
 	return tasks

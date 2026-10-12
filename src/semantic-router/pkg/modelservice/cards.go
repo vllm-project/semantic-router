@@ -135,6 +135,10 @@ func decodeCard(card api.ModelCard) ModelCard {
 	return decoded
 }
 
+// ModelCardFromAPI adapts canonical runtime observations for persistent
+// control-plane consumers, including limits, heads, presets and question types.
+func ModelCardFromAPI(card api.ModelCard) ModelCard { return decodeCard(card) }
+
 func decodeHead(head api.HeadCard) HeadCard {
 	return HeadCard{
 		Name: head.Name, Kind: string(head.Kind), Labels: append([]string(nil), head.Labels...),

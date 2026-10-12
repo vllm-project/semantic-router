@@ -104,11 +104,11 @@ export function canAccessDashboardPath(
     return canAccessWithPermission(user, MCP_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
   if (
+    normalizedPath === '/api/router/docs' ||
     normalizedPath.startsWith('/builder') ||
     normalizedPath.startsWith('/models') ||
-    normalizedPath.startsWith('/config') ||
-    normalizedPath.startsWith('/knowledge-bases') ||
-    normalizedPath.startsWith('/taxonomy')
+    normalizedPath.startsWith('/decision-model') ||
+    normalizedPath.startsWith('/config')
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)
   }

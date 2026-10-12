@@ -13,7 +13,7 @@ Use this guide when you need one of the following:
 
 Semantic Router is an Envoy External Processor. In buffered mode the gateway sends the full request body in one ExtProc message. In streamed mode the gateway sends multiple body chunks. Semantic Router's streamed body handler accumulates the chunks, applies the same routing and mutation pipeline at end-of-stream, and then emits one complete mutated request body or an immediate response.
 
-Requests that name a concrete model are accumulated the same way as `auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
+Requests that name a concrete model are accumulated the same way as `vllm-sr/auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
 
 For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
 
@@ -66,9 +66,10 @@ spec:
       timeout_sec: 30
 ```
 
-The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
-for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
-behavior when an existing Gateway invokes ExtProc in a streamed mode.
+The Operator's standalone mode serves HTTP directly and has no Envoy sidecar.
+The `spec.config.streamed_body` setting applies when an existing Gateway
+invokes ExtProc in a streamed mode. Raw Envoy deployments must choose their
+body-processing mode as described below.
 
 ## Agent Router / Envoy Gateway
 
@@ -212,7 +213,7 @@ When the client sends `"stream": true`, Semantic Router calls the candidate mode
 curl -N -i http://localhost:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "stream": true,
     "messages": [
       {"role": "user", "content": "Write and explain a Python debounce decorator."}
@@ -275,7 +276,7 @@ With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Sem
    kubectl logs deploy/semantic-router -n vllm-semantic-router-system | grep -i streamed
    ```
 
-3. Send a large or chunked request with `"model": "auto"` and verify it routes normally.
+3. Send a large or chunked request with `"model": "vllm-sr/auto"` and verify it routes normally.
 
 4. Send a streamed Chat Completions request with `"stream": true` that matches a looper decision and verify SSE output plus `x-vsr-looper-*` headers.
 

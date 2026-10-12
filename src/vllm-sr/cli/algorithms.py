@@ -16,6 +16,7 @@ from cli.config_schema import surface_types
 
 from .config_contract import QuorumFailurePolicy
 from .models_decision import DecisionSelectionConfig
+from .models_native import AlgorithmBudget, NativeQuality, NativeStage
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
@@ -23,6 +24,7 @@ SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 # a Router build's own algorithm.
 RETIRED_ALGORITHM_TYPES = frozenset(
     {
+        "policy",
         "session_aware",
         "elo",
         "rl_driven",
@@ -562,6 +564,8 @@ class AlgorithmConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_algorithm_type(self):
+        if self.type in RETIRED_ALGORITHM_TYPES:
+            raise ValueError(f"unsupported retired algorithm type {self.type!r}")
         if (
             self.type not in SUPPORTED_ALGORITHM_TYPES
             and self.type not in self.extensions
@@ -578,6 +582,11 @@ class AlgorithmConfig(BaseModel):
         if isinstance(data, dict):
             data.update(self.extensions)
         return data
+
+    # Native payloads are structural projections of the generated Go schema.
+    quality: NativeQuality | None = None
+    stages: list[NativeStage] | None = None
+    budget: AlgorithmBudget | None = None
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None
@@ -596,6 +605,27 @@ class AlgorithmConfig(BaseModel):
     decision: DecisionSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
+
+    @model_validator(mode="after")
+    def native_execution_fields(self):
+        if self.type == "cascade":
+            if self.minimum_candidates is not None:
+                raise ValueError("cascade uses authored stages, not minimum_candidates")
+            if "on_error" not in self.model_fields_set:
+                self.on_error = None
+            elif self.on_error:
+                raise ValueError("native algorithms do not support on_error")
+            if not self.quality or not self.stages or not self.budget:
+                raise ValueError(
+                    "cascade requires quality, stages and algorithm.budget"
+                )
+        elif (
+            self.quality is not None
+            or self.stages is not None
+            or self.budget is not None
+        ):
+            raise ValueError("native budget, quality and stages require cascade")
+        return self
 
     @model_validator(mode="after")
     def normalize_prompt_fallback(self):

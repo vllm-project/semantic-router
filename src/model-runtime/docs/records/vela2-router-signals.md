@@ -62,7 +62,9 @@ of the 0.3B, `@Vela-2.0-0.3B`:
   - Over the accuracy run below, 480 of the rows' 116,430 distinct texts (0.4%)
     still sent one question in a second call. That host ran at a load of about
     120 on 160 cores, and a signal that started more than the bundle's 2 ms
-    window late missed it.
+    window late missed it. The Router no longer sends a deployment's questions
+    on that window, only once every signal that asks it has asked
+    ([#4741](https://github.com/vllm-project/semantic-router/issues/4741)).
 - **Whole text:** a signal on the 0.3B reads the whole text up to the model's
   8,192 tokens. The Router no longer samples or chunks it as it does for the
   sequence classifiers. Beyond 8,192 tokens the model truncates, so a prompt

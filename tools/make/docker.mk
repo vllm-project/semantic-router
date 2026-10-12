@@ -202,7 +202,7 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  PROVIDER_MOCKER_IMAGE - Existing mocker image to reuse (otherwise build locally)"
-	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
+	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to rocm for ROCm defaults, cuda for CUDA defaults)"
 	@echo "  VLLM_SR_ACCELERATOR - runtime PyTorch build of the router image: cpu, rocm or cuda (default from VLLM_SR_PLATFORM)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm and CUDA)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm and CUDA)"
@@ -263,7 +263,7 @@ VLLM_SR_BUILDPLATFORM ?= linux/amd64
 endif
 
 # AMD platform defaults (can still be overridden via env/CLI variables)
-ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),amd)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),rocm)
 ifeq ($(origin VLLM_SR_IMAGE),file)
 VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_ROCM)
 endif
@@ -282,7 +282,7 @@ endif
 endif
 
 # NVIDIA platform defaults (can still be overridden via env/CLI variables)
-ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),nvidia)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),cuda)
 ifeq ($(origin VLLM_SR_IMAGE),file)
 VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_CUDA)
 endif

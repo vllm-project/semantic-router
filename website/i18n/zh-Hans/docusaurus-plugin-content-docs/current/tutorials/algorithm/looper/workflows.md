@@ -15,7 +15,7 @@ Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness �
 循环、任务状态和工具执行权限。当 Flow 返回工具调用时，Harness 执行工具并回传
 结果，让 Flow 恢复待处理的工作流。
 
-运行时也支持通过 `global.integrations.looper.flow.model_names` 使用直接 Flow 模型 slug。内置默认值是 `vllm-sr/flow`。直接 Flow 调用只评估 `algorithm.type=workflows` 的决策；它们不会静默回退到普通单模型路由。
+通过 `entrypoints` 将公开模型名映射到 recipe 来暴露 flow。公开名字没有内置分发逻辑：所选 recipe 评估自己的 signals 和 decisions，由 `algorithm.type=workflows` 启动算法。若入口只应运行 flow 策略，请将这些策略放在独立 recipe 中。
 
 ## 主要优势
 
@@ -37,24 +37,23 @@ Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness �
 
 ## 配置
 
-注册直接模型 slug：
+将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
 
 ```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: default
 global:
   integrations:
     looper:
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
+      max_response_bytes_mb: 32
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
           file:
             directory: .vllm-sr/flow-state
 ```
-
-每个别名都应使用没有任何模型使用的名字。如果别名同时也是某个模型的名字，它会截获该模型的流量：该模型的每个请求都只评估 workflows 决策，因此无法再直接请求该模型；没有匹配任何 workflows 决策的请求会以 [`no_route`](../../../api/router.md#routing-errors) 失败。Router 仍会加载这样的配置，但会输出 `looper_alias_shadows_model` 警告，指出该别名、`providers.models` 是否提供它，以及路由到它的决策；`vllm-sr config validate` 也会报告同样的警告。
 
 配置一条动态 Flow 决策：
 
@@ -126,7 +125,6 @@ routing:
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | 触发 Flow 执行的直接请求模型 slug；使用没有任何模型使用的名字 |
 | `state.store_backend` | string | `file` | 待处理工具调用工作流状态后端：`memory`、`file` 或 `redis` |
 | `state.ttl_seconds` | int | `1800` | 待处理工具调用工作流状态的 TTL |
 | `mode` | string | `static` | `static` 角色执行或 `dynamic` 规划器生成执行 |

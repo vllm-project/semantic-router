@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -74,31 +75,21 @@ func emitStructuredPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 }
 
 func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+	raw, ok := normalizePluginConfigMap(p.Configuration)
 	if !ok {
 		return
 	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
+	// Keep the canonical field order while retaining raw omission, false and
+	// zero; an effective capture struct would erase the inheritance contract.
+	typ := reflect.TypeOf(config.RouterReplayPluginConfig{})
+	for index := 0; index < typ.NumField(); index++ {
+		key := strings.Split(typ.Field(index).Tag.Get("json"), ",")[0]
+		if value, exists := raw[key]; exists {
+			fmt.Fprintf(sb, "    %s: %s\n", key, formatPluginConfigValue(value))
+			delete(raw, key)
+		}
 	}
-	if cfg.MaxRecords != 0 {
-		fmt.Fprintf(sb, "    max_records: %d\n", cfg.MaxRecords)
-	}
-	if cfg.CaptureRequestBody {
-		fmt.Fprintf(sb, "    capture_request_body: true\n")
-	}
-	if cfg.CaptureResponseBody {
-		fmt.Fprintf(sb, "    capture_response_body: true\n")
-	}
-	if cfg.MaxBodyBytes != 0 {
-		fmt.Fprintf(sb, "    max_body_bytes: %d\n", cfg.MaxBodyBytes)
-	}
-	if cfg.MaxToolTraceBytes != 0 {
-		fmt.Fprintf(sb, "    max_tool_trace_bytes: %d\n", cfg.MaxToolTraceBytes)
-	}
-	if cfg.MaxToolTraceSteps != 0 {
-		fmt.Fprintf(sb, "    max_tool_trace_steps: %d\n", cfg.MaxToolTraceSteps)
-	}
+	writePluginConfigMap(sb, raw, "    ")
 }
 
 func emitMemoryPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {

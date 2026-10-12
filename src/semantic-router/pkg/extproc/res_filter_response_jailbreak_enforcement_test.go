@@ -424,7 +424,7 @@ func TestResponseJailbreakSignalReadsTheSelectedRecipeRules(t *testing.T) {
 	assertBlocked(t, router, guarded, content)
 
 	plain := &RequestContext{TraceContext: context.Background(), Headers: map[string]string{}}
-	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, plain)
+	router.resolveEntrypointForRequest(config.DefaultEntrypointModel, plain)
 	if recipe := plain.Routing.SelectedRecipe(); recipe == nil || recipe.Name != config.DefaultRecipeName {
 		t.Fatalf("auto model resolved %+v, want the default recipe", recipe)
 	}
@@ -448,9 +448,9 @@ func startResponseStageReplay(t *testing.T, router *OpenAIRouter, ctx *RequestCo
 	replayConfig.Enabled = true
 	ctx.RequestID = "response-stage-replay"
 	ctx.SourceFormat = llmprotocol.OpenAIChatV1
-	ctx.SemanticRequest = testNeutralRequest("MoM", "hello")
+	ctx.SemanticRequest = testNeutralRequest("vllm-sr/auto", "hello")
 	ctx.RouterReplayPluginConfig = &replayConfig
-	router.startRouterReplay(ctx, "MoM", "model-a", responseStageRouteName)
+	router.startRouterReplay(ctx, "vllm-sr/auto", "model-a", responseStageRouteName)
 	if ctx.RouterReplayID == "" {
 		t.Fatal("the request path did not open a replay record")
 	}

@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "a65e60e035f593b80c0a9c1963c34a53abe90444"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/pii.md"
-  outdated: true
+  outdated: false
 ---
 
 # 个人身份信息信号 {#pii-signal}
@@ -50,6 +50,7 @@ routing:
 ```
 
 `pii_types_allowed` 为空时，任意检测到的 PII 都可能使信号匹配。
+`threshold` 可省略：未设置阈值的规则接受 PII 模型报告的所有片段，而 Vela 2.0 模型只报告高于其规格校准阈值的片段。
 
 ## 完整的本地扫描 {#complete-local-scans}
 
@@ -87,7 +88,7 @@ global:
 ## Vela 2.0 {#vela-20}
 
 把 `pii_classifier` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。
-这个 PII 问题会与该部署针对同一文本的 [`decision`](tutorials/signal/learned/decision.md) 问题在同一次调用中发送：
+这个 PII 问题会与该部署针对同一文本的 [`decision`](decision.md) 问题在同一次调用中发送：
 
 ```yaml
 global:
@@ -104,17 +105,31 @@ global:
 ```
 
 - 模型识别与 Vela 1.0 PII 相同的 17 种实体类型，并在片段中直接给出类型名，因此绑定不需要 `mapping_path`。
-- 模型自行读取完整文本（长文本分窗口读取），路由器把每段文本整体发送：部署不设置 `input`，PII 模块也不设置 `window`。
+- Router 将每段文本作为一个状态发送。运行时必须在模型与扫描预算内覆盖准入文本；超出策略的内容是未扫描，不是干净。一个状态不保证一次 forward，也不代表无限上下文。详见 [PII 运行时指南](../../../model-runtime/guides/pii)。
 - 模型校准后的阈值决定它报告哪些片段；规则的 `threshold` 与 `pii_types_allowed` 随后像 Vela 1.0 一样作用于这些片段，片段概率是其中各词概率的平均值。
 - `head` 只能是 `router`，即回答 PII 问题的片段头。
 
-已有配置保持其 Vela 1.0 PII 绑定不变。
+显式 Vela 1.0 PII 绑定保留该专用模型；未绑定的任务使用配置的默认判断模型部署。
+
+## 用判断模型检测存在性与类别 {#presence-and-categories-with-a-decision-model}
+
+判断模型可以回答是否存在 PII、出现了哪些类别，而不定位字符。显式选择此任务契约：
+
+```yaml
+routing:
+  model_bindings:
+    pii_classifier:
+      deployment: primary
+      contract: decision.v1
+```
+
+它使用 `pii_presence`（`noul`）和 `pii_categories`（`set`）。没有原生 `set` 头时，任务编译器可按类别组合多个 `noul` 问题。仍必须覆盖完整输入。这些结果不含实体偏移，不能被当成脱敏片段；需要精确位置时，使用具有原生 `span` 能力的模型和 `token_spans.v1`。任务可用仅表示契约可执行，不保证检测准确率。
 
 ## 远程后端 {#remote-backend-token_spansv1}
 
 没有 `backend` 时，PII 检测保持本地模型。远程 PII 分类器使用共享 backend 块：`model` 命名 `global.model_catalog.external[]` 中带 `model_role: classification` 的条目，协议是 `http_classify`，约定是 `token_spans.v1`。服务接收 `{"inputs": "<request text>"}`，并回答实体片段：其 `start`/`end` 是该精确字符串中的 Unicode 码点偏移，`label` 来自已配置的 PII 映射，`score` 在 `[0, 1]` 内，以及片段 `text`，必须等于它指向的切片。HuggingFace token 分类拼写 `entity_group` 与 `word` 作为别名接受。裸 JSON 片段列表或信封 `{"spans": [...], "truncated_at": n, "model": "..."}` 都有效；信封的 `model` 若存在，必须等于目录条目的 `llm_model_name`。
 
-当片段超出文本、与自身重叠、携带未知或范围外标签、分数越界、别名值冲突，或正文不是片段列表时，Router 拒绝整个响应，而不是部分接受。已声明的 `truncated_at` 保留截止前的片段，并将其余内容标记为未打分。被拒绝或部分响应对 PII 规则的影响由 `on_error` 决定：`allow`（默认）把未读内容当作未匹配，`block` 将其匹配为 `classification_error`，因此未核验文本不能当作干净通过。模型完全没有读取的内容（超过模型输入上限或[扫描上限](../../../model-runtime/reference.md#long-inputs)的输入、被截断的输入，或未能在信号截止时间内扫描的输入）无论 `on_error` 如何设置都会以 `unscanned` 匹配，因此长请求按私有内容路由；设置 `classifier.pii.on_unscanned: allow` 可将其交给 `on_error`。
+当片段超出文本、与自身重叠、携带未知或范围外标签、分数越界、别名值冲突，或正文不是片段列表时，Router 拒绝整个响应，而不是部分接受。已声明的 `truncated_at` 保留截止前的片段，并将其余内容标记为未打分。被拒绝或部分响应对 PII 规则的影响由 `on_error` 决定：`allow`（默认）把未读内容当作未匹配，`block` 将其匹配为 `classification_error`，因此未核验文本不能当作干净通过。模型完全没有读取的内容（超过模型输入上限或[扫描上限](../../../model-runtime/reference#long-inputs)的输入、被截断的输入，或未能在信号截止时间内扫描的输入）无论 `on_error` 如何设置都会以 `unscanned` 匹配，因此长请求按私有内容路由；设置 `classifier.pii.on_unscanned: allow` 可将其交给 `on_error`。
 
 PII 映射不能将 `classification_error` 声明为实体标签。带 `B-`、`I-` 或 `E-` 前缀的别名（含叠放前缀）也被保留，并在任一映射方向的映射加载时被拒绝。
 

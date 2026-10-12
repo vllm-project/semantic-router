@@ -20,6 +20,7 @@ type CanonicalProviderDefaults struct {
 type CanonicalProviderModel struct {
 	Name             string                `yaml:"name"`
 	Catalog          string                `yaml:"catalog,omitempty"`
+	Deployment       string                `yaml:"deployment,omitempty"`
 	Reasoning        *CanonicalReasoning   `yaml:"reasoning,omitempty"`
 	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
 	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`

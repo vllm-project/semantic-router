@@ -244,6 +244,16 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: test-learning-tools
     inventory: routing-authoring-calibration-and-learning-tools-framework-discovery
+  bench-tools:
+    display_name: Benchmark Tools
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: test-bench-tools
+    inventory: bench-research-tools-pytest-discovery
 
   harness-tools:
     display_name: CI Harness
@@ -269,7 +279,7 @@ verifications:
 # Versioned required inventory, shared by ci/full, nightly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 full_cpu:
-  version: 3
+  version: 4
   required:
     - quality
     - generated-contracts
@@ -296,6 +306,7 @@ full_cpu:
     - e2e-unit
     - e2e.standalone
     - e2e.envoy-ai-gateway
+    - e2e.routing-errors
     - e2e.local-classifier-backend
     - e2e.dashboard
     - e2e.remote-embedding

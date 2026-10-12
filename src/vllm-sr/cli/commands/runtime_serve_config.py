@@ -17,17 +17,19 @@ from pathlib import Path
 import yaml
 
 from cli.bootstrap import is_setup_mode_config
+from cli.commands.runtime_mode_config import apply_instance_options
 from cli.commands.runtime_observability import (
     reconcile_runtime_tracing,
     recover_runtime_tracing_projection,
     validate_package_tracing_mode,
 )
 from cli.commands.runtime_paths import (
-    _atomic_write_private_bytes,
     _runtime_config_output_path,
     _same_document,
     materialize_runtime_config,
+    recover_pending_runtime_config_projection,
     resolve_state_root_dir,
+    write_journaled_runtime_config_projection,
 )
 from cli.commands.runtime_support import (
     build_effective_config_bytes,
@@ -37,10 +39,8 @@ from cli.commands.runtime_support import (
 )
 from cli.container_services import container_status_strict
 from cli.decision_model import (
-    canonical_decision_model,
-    configured_decision_model,
+    decision_model_deployment,
     gpu_requirement_error,
-    set_decision_model,
 )
 from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
@@ -77,70 +77,20 @@ def _prepare_runtime_config_replacement(
     stop_runtime_before_config_replacement(stack_layout)
 
 
-def validate_decision_model_flag(
-    decision_model: str | None, resolved_target: str, platform: str
-) -> str | None:
-    """Check `serve --decision-model` before anything changes; its canonical name."""
-
-    if decision_model is None:
-        return None
-    canonical = canonical_decision_model(decision_model)
-    error = gpu_requirement_error(
-        canonical, platform, local_host=resolved_target == "docker"
-    )
-    if error:
-        raise ValueError(error)
-    return canonical
-
-
 def _check_served_decision_model(
     document: dict | None, platform: str | None, *, local_host: bool
 ) -> None:
     """Fail before startup when the config's decision model needs a GPU it lacks."""
 
     try:
-        decision_model = configured_decision_model(document)
+        deployment = decision_model_deployment(document)
     except ValueError as error:
         raise ValueError(f"global.model_catalog.system.{error}") from error
     error = gpu_requirement_error(
-        decision_model, (platform or "").strip().lower(), local_host=local_host
+        deployment, (platform or "").strip().lower(), local_host=local_host
     )
     if error:
         raise ValueError(error)
-
-
-def _apply_decision_model_version(
-    effective_config_path: Path,
-    decision_model: str,
-    stack_layout: RuntimeStackLayout,
-    *,
-    minimal: bool,
-    readonly: bool,
-) -> None:
-    """Write the decision model into the active config, the Router's next version.
-
-    The write changes the active document after the CLI materialized it, as a
-    Dashboard edit does, so later starts keep it. The Router records the new
-    document as a configuration version when it starts; the previous one stays
-    in the history, where `vllm-sr config rollback` restores it.
-    """
-
-    document = yaml.safe_load(effective_config_path.read_bytes()) or {}
-    if not set_decision_model(document, decision_model):
-        log.info("Decision model: %s (already active)", decision_model)
-        return
-    candidate = yaml.safe_dump(
-        document, default_flow_style=False, sort_keys=False, allow_unicode=True
-    ).encode("utf-8")
-    _prepare_runtime_config_replacement(
-        candidate, stack_layout, minimal=minimal, readonly=readonly
-    )
-    _atomic_write_private_bytes(effective_config_path, candidate)
-    log.info(
-        "Decision model: %s, written to the active config as a new version "
-        "(vllm-sr config versions lists it once the Router starts)",
-        decision_model,
-    )
 
 
 def _prepare_docker_runtime_config(
@@ -153,7 +103,9 @@ def _prepare_docker_runtime_config(
     *,
     minimal: bool = False,
     readonly: bool = False,
-    decision_model: str | None = None,
+    engine: bool = False,
+    available_devices: tuple[int, ...] = (),
+    model_options: dict | None = None,
 ):
     stack_layout = resolve_runtime_stack()
     state_root_dir = Path(resolve_state_root_dir(str(config_path)))
@@ -169,6 +121,7 @@ def _prepare_docker_runtime_config(
         timeout_seconds=0,
     )
     try:
+        recover_pending_runtime_config_projection(effective_config_path)
         recover_pending_recipe_activation_for_stack(
             runtime_config_path=effective_config_path,
             state_root_dir=state_root_dir,
@@ -217,6 +170,7 @@ def _prepare_docker_runtime_config(
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
                 replace_active=replace_active_config,
+                preserve_unchanged_source=algorithm is None,
                 before_replace=lambda: _prepare_runtime_config_replacement(
                     effective_config_bytes,
                     stack_layout,
@@ -228,22 +182,22 @@ def _prepare_docker_runtime_config(
             source_candidate_selected = active_bytes == effective_config_bytes or (
                 _same_document(active_bytes, effective_config_bytes)
             )
+        candidate = yaml.safe_load(effective_config_path.read_bytes()) or {}
+        if apply_instance_options(
+            candidate,
+            engine=engine,
+            platform=platform or "cpu",
+            available_devices=available_devices,
+            model_options=model_options,
+        ):
+            candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
+            _prepare_runtime_config_replacement(
+                candidate_bytes, stack_layout, minimal=minimal, readonly=readonly
+            )
+            write_journaled_runtime_config_projection(
+                effective_config_path, candidate_bytes
+            )
         setup_mode = is_setup_mode_config(effective_config_path)
-        if decision_model and setup_mode:
-            log.warning(
-                "--decision-model=%s waits for a runnable config: choose the "
-                "decision model in the Dashboard's setup, or serve with the flag "
-                "again once a config is activated",
-                decision_model,
-            )
-        elif decision_model:
-            _apply_decision_model_version(
-                effective_config_path,
-                decision_model,
-                stack_layout,
-                minimal=minimal,
-                readonly=readonly,
-            )
         if not setup_mode:
             _check_served_decision_model(
                 yaml.safe_load(effective_config_path.read_bytes()),
@@ -277,7 +231,9 @@ def _prepare_effective_serve_config(
     replace_active_config: bool,
     minimal: bool = False,
     readonly: bool = False,
-    decision_model: str | None = None,
+    engine: bool = False,
+    available_devices: tuple[int, ...] = (),
+    model_options: dict | None = None,
 ):
     """Prepare the target-specific active config and its optional runtime lock."""
 
@@ -299,7 +255,9 @@ def _prepare_effective_serve_config(
             replace_active_config,
             minimal=minimal,
             readonly=readonly,
-            decision_model=decision_model,
+            engine=engine,
+            available_devices=available_devices,
+            model_options=model_options,
         )
         return effective_path, setup_mode, runtime_lock, None
 
@@ -312,7 +270,12 @@ def _prepare_effective_serve_config(
         platform,
         materialize_local_runtime=False,
     )
-    if decision_model:
-        set_decision_model(effective_config_document, decision_model)
+    apply_instance_options(
+        effective_config_document,
+        engine=engine,
+        platform=platform or "cpu",
+        available_devices=available_devices,
+        model_options=model_options,
+    )
     _check_served_decision_model(effective_config_document, platform, local_host=False)
     return config_path, source_setup_mode, None, effective_config_document

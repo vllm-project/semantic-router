@@ -77,6 +77,7 @@ def migrate_config_data(
         canonical["global"] = global_config
     if "setup" in source:
         canonical["setup"] = deepcopy(source["setup"])
+    _migrate_entrypoint_names(canonical)
     _normalize_response_cache_plugins(canonical)
     migrate_v03_catalog_contract(
         canonical,
@@ -597,3 +598,28 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 def _clone_list(value: Any) -> list[Any]:
     return deepcopy(value) if isinstance(value, list) else []
+
+
+def _migrate_entrypoint_names(canonical: dict[str, Any]) -> None:
+    """Explicit migration only; the runtime never accepts retired alias fields."""
+    global_config = _as_dict(canonical.get("global"))
+    router = _as_dict(global_config.get("router"))
+    explicit = router.pop("auto_model_names", None)
+    single = router.pop("auto_model_name", None)
+    if "include_config_models_in_list" in router:
+        router.setdefault(
+            "list_backend_models", router.pop("include_config_models_in_list")
+        )
+    names = explicit if isinstance(explicit, list) else ([single] if single else [])
+    names = list(
+        dict.fromkeys(str(name).strip() for name in names if str(name).strip())
+    )
+    entries = canonical.get("entrypoints", [])
+    if names and not any(entry.get("recipe") == "default" for entry in entries):
+        canonical["entrypoints"] = [
+            {"model_names": names, "recipe": "default"},
+            *entries,
+        ]
+    if "router" in global_config:
+        global_config["router"] = router
+        canonical["global"] = global_config

@@ -38,7 +38,6 @@ describe('configuration delete confirmation contracts', () => {
 
   it.each([
     ['./ConfigPageSignalsSection.tsx', 'signalsPendingDelete', 'confirmDeleteSignals'],
-    ['./ConfigPageTaxonomyClassifiers.tsx', 'deleteTarget', 'confirmDelete'],
     ['./ConfigPageLegacyCategoriesSection.tsx', 'removeTarget', 'confirmRemoveModel'],
   ])('removes native browser confirmation from %s', (path, targetState, confirmAction) => {
     const source = readSource(path)

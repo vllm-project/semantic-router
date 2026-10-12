@@ -55,10 +55,7 @@ func (c *Classifier) evaluateDecisionModelSignals(
 		deployment := c.Config.DecisionQuestionDeployment(rule)
 		if _, seen := byDeployment[deployment]; !seen {
 			order = append(order, deployment)
-			stateOf[deployment] = text
-			if rule.Deployment == "" {
-				stateOf[deployment] = wholeText
-			}
+			stateOf[deployment] = wholeText
 		}
 		byDeployment[deployment] = append(byDeployment[deployment], rule)
 	}
@@ -90,7 +87,15 @@ func (c *Classifier) evaluateDecisionDeployment(
 	callCtx, cancel := decisionCallContext(ctx, rules)
 	defer cancel()
 	started := time.Now()
-	response, err := c.decider().Decide(callCtx, deployment, request)
+	var response modelservice.Response
+	var err error
+	if card, ok := c.decisionTaskCard(deployment); ok {
+		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
+	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+		err = modelservice.ErrUnavailable
+	} else {
+		response, err = c.decider().Decide(callCtx, deployment, request)
+	}
 	latency := time.Since(started).Seconds()
 	if err != nil {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
@@ -124,6 +129,9 @@ func (c *Classifier) evaluateDecisionDeployment(
 // decisionCallContext bounds a deployment's call by the shortest timeout its
 // rules set. Questions to the decision model that set none join the built-in
 // signals' call, so they take its deadline rather than the default timeout.
+// Once the stage sends a call, its questions wait for it as long as its
+// latest caller does: a timeout bounds the wait for the other askers, never
+// an answer of a call the stage waits for anyway (modelservice.Bundle).
 func decisionCallContext(ctx context.Context, rules []config.DecisionSignalRule) (context.Context, context.CancelFunc) {
 	var timeout time.Duration
 	for _, rule := range rules {

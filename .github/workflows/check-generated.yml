@@ -25,8 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Check Schema, OpenAPI, and CRD References
-        run: make config-schema-check api-docs-check docs-crd-check model-runtime-client-check
+      - name: Check Schema, OpenAPI, CRD, and Runtime References
+        run: make config-schema-check api-docs-check docs-crd-check model-runtime-client-check decision-runtime-catalog-check
       - name: Record Generated Contract Evidence
         env:
           VERIFICATIONS: ${{ inputs.verifications }}
@@ -34,7 +34,7 @@ jobs:
           python3 -m pip install PyYAML==6.0.3
           python3 tools/ci/workflow_evidence.py --verifications "$VERIFICATIONS" --id generated-contracts \
             --check config-schema-check --check api-docs-check --check docs-crd-check \
-            --check model-runtime-client-check \
+            --check model-runtime-client-check --check decision-runtime-catalog-check \
             --output .agent-harness/generated-contracts-result.json
       - uses: actions/upload-artifact@v4
         with:

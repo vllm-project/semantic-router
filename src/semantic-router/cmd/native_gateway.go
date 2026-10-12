@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -122,7 +124,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
 			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
-			"tls": serverOpts.TLS != nil,
+			"models": spec.Models, "tls": serverOpts.TLS != nil,
 		})
 	}
 	return bound, nil
@@ -198,25 +200,51 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 	if err != nil {
 		return gateway.Serving{}, nil, err
 	}
-	set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
-	if !ok {
-		lease.Release()
-		return gateway.Serving{}, nil, errors.New("the serving configuration has no upstream set")
-	}
 	cfg := lease.Snapshot.Config()
-	return gateway.Serving{
-		Engine:          routing.NewEngine(lease.Router, s.engine),
-		Upstream:        set,
+	nativeListener, _ := systemone.SelectListener(cfg.Listeners, listener)
+	models, _ := lease.Snapshot.Part(configsnapshot.ComponentModelService).(*extproc.FrontendModels)
+	remote, _ := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
+	local := func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
+		result, err := models.SystemOne(ctx, deployment, body)
+		return result.Status, result.Body, err
+	}
+	var nativeRouter systemone.Router
+	if lease.Router != nil {
+		nativeRouter = lease.Router
+	}
+	serving := gateway.Serving{
+		SystemOne:       systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote)),
+		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
+		Models:          listenerModels(cfg, listener),
 		IdentityHeaders: []string{cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader()},
 		TrustIdentity:   listenerIdentityTrust(cfg, listener),
-	}, lease.Release, nil
+	}
+	if cfg.RoutingEnabled() {
+		set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
+		if !ok || lease.Router == nil {
+			lease.Release()
+			return gateway.Serving{}, nil, errors.New("the serving configuration has no routing pipeline")
+		}
+		serving.Engine = routing.NewEngine(lease.Router, s.engine)
+		serving.Upstream = set
+	}
+	return serving, lease.Release, nil
 }
 
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	for _, listener := range cfg.Listeners {
 		if listener.Name == name {
 			return listener.APIKeys
+		}
+	}
+	return nil
+}
+
+func listenerModels(cfg *config.RouterConfig, name string) []string {
+	for _, listener := range cfg.Listeners {
+		if listener.Name == name {
+			return listener.Models
 		}
 	}
 	return nil
@@ -251,6 +279,9 @@ func upstreamPart(mode config.GatewayMode) configsnapshot.PartBuilder {
 		Component: configsnapshot.ComponentUpstream,
 		Build: func(_ context.Context, candidate *configsnapshot.Snapshot, previous configsnapshot.Part) (configsnapshot.Part, error) {
 			prev, _ := previous.(*upstream.Set)
+			if !candidate.Config().RoutingEnabled() {
+				return upstream.New(upstream.Topology{}, upstream.Options{})
+			}
 			set, err := buildUpstream(mode, candidate.Config(), prev)
 			if err != nil && mode != config.GatewayStandalone {
 				// Envoy carries the client traffic and accepts backends the

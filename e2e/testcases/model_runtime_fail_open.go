@@ -18,7 +18,7 @@ func init() {
 		Fn:          testModelRuntimeFailOpen,
 	})
 	pkgtestcases.Register("model-runtime-supervision", pkgtestcases.TestCase{
-		Description: "A crashed managed runtime is restarted by the Router; requests succeed meanwhile and the other process group stays ready",
+		Description: "A crashed managed runtime is restarted by the Router; requests succeed meanwhile and the other independent workers stay ready",
 		Tags:        []string{"model-runtime", "supervision", "fail-open"},
 		// It kills a runtime process, so a retry would not start from a clean state.
 		MutatesClusterState: true,
@@ -89,7 +89,7 @@ func testModelRuntimeSupervision(ctx context.Context, client *kubernetes.Clients
 	started := time.Now()
 
 	// Until the restart is ready, every request must still succeed, and the
-	// device group, a separate process, must stay ready.
+	// other deployment workers must stay ready.
 	var requests int
 	err = modelruntime.Eventually(ctx, mrReadyTimeout, func(ctx context.Context) error {
 		if _, chatErr := session.chat(ctx, freshPrompt("Write a Go function that merges two sorted slices.")); chatErr != nil {
@@ -106,7 +106,7 @@ func testModelRuntimeSupervision(ctx context.Context, client *kubernetes.Clients
 			}
 		}
 		if metrics.DeploymentRestarts(mrDecisionDeployment) <= before.DeploymentRestarts(mrDecisionDeployment) {
-			return fmt.Errorf("no restart of the decisions process recorded yet")
+			return fmt.Errorf("no restart of the decision worker recorded yet")
 		}
 		if !metrics.DeploymentReady(mrDecisionDeployment) {
 			return fmt.Errorf("%s is restarting", mrDecisionDeployment)

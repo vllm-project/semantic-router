@@ -2,7 +2,7 @@
 title: 安全加固
 description: 保护推理监听器、控制面板、凭据、回放数据、存储和容器运行时访问。
 translation:
-  source_commit: "33349fdab9ad294da19ebd11588f8adbe8771b4a"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/security-hardening.md"
   outdated: false
 ---
@@ -17,7 +17,7 @@ Semantic Router 位于客户端和模型 provider 之间的请求路径上。将
 
 ```mermaid
 flowchart LR
-    Client["Client"] --> Listener["Public Envoy listener"]
+    Client["Client"] --> Listener["Standalone frontend / external gateway"]
     Listener --> Router["Semantic Router"]
     Router --> Provider["Model providers"]
     Admin["Authenticated Dashboard / API"] --> Router
@@ -36,7 +36,9 @@ flowchart LR
 
 ## 保护公共监听器
 
-维护中的 Envoy 配置会在客户端请求到达 Router 之前移除内部控制标头。在提供自定义 Envoy 或网关配置时也要这样做。内部示例如下：
+standalone 前端会移除不受信任的身份和代理控制标头。请分别配置 listener API key、Chat 模型允许列表和原生模型访问权限，见 [Gateway 模式](gateway-modes)。Dashboard 登录凭据不能代替公网推理凭据。
+
+维护中的 Envoy 配置也会移除内部控制标头。自定义 Envoy 或网关配置应保持该边界，例如：
 
 ```yaml
 request_headers_to_remove:
@@ -68,7 +70,7 @@ api_key: ${MODEL_API_KEY}
 
 不要提交字面 API 密钥、密码、授权标头、凭据查询参数，或包含用户信息的 URL。
 
-对于 `vllm-sr serve --target k8s`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
+对于 `vllm-sr serve --target kubernetes`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
 
 现有的 chart 原生 Secret 引用（例如控制面板 JWT Secret）仍是外部对象，不会被复制到 CLI 管理的 Secret。对每个手动管理的 Secret 使用相同的命名空间和 release 所有权纪律。
 
@@ -157,7 +159,7 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 
 能读取它的是：运行 `vllm-sr serve` 的用户、Router 和控制面板进程，以及任何能通过容器运行时检查这些容器的人。要轮换它，删除状态文件并运行 `vllm-sr serve`：它会生成新值，并用新值重建 Router 和控制面板。
 
-### 配方存储权限
+### 配方存储权限 {#recipe-store-permissions}
 
 `vllm-sr serve` 在启动栈之前读取控制面板的配方存储，并完成中断的激活，使用的是运行它的用户。因此存储 `<state-root>/.vllm-sr/recipe-store/<stack>` 与该用户的组共享：其中的文件组可读，目录组可写。外层的 `.vllm-sr` 只对其所有者和控制面板开放，所以其他主机用户无法到达存储；存储中只有包和配置文档，没有凭据。
 

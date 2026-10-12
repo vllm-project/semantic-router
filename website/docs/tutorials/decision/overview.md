@@ -136,8 +136,9 @@ final tie-break, so ranking never depends on map or file order.
 
 The eval API reports how one request was ranked under `decision_ranking`: the
 strategy that ran, the tier the winner came from, whether that pool was
-comparable and which decision made it incomparable, and the key that separated
-the winner from the decision behind it.
+comparable and which decision made it incomparable, the key that separated
+the winner from the decision behind it, that decision as `runner_up`, and a
+`reason` stating the values compared, such as `priority 150 > 100`.
 
 A catch-all ranks after every real match under either strategy, whatever
 priority it carries, so an unconditional fallback stays a fallback. The

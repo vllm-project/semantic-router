@@ -65,7 +65,11 @@ class KernelSet:
         return True
 
     def describe(self) -> dict[str, str]:
-        return {name: self.select(name).source for name in sorted(self.available)}
+        return {
+            name: self.select(name).source
+            for name in sorted(self.available)
+            if self.has(name)
+        }
 
 
 # ---------------------------------------------------------------------------

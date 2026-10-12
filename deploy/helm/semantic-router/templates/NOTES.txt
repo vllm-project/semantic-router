@@ -1,13 +1,5 @@
 {{- $standalone := eq (include "semantic-router.gatewayMode" .) "standalone" -}}
 {{- $clientPort := .Values.service.api.port -}}
-{{- $routerTag := .Values.image.tag | default .Chart.AppVersion | toString -}}
-{{- if and (regexMatch "^v?[0-9]+\\.[0-9]+\\.[0-9]+$" $routerTag) (semverCompare "<0.5.0-0" (trimPrefix "v" $routerTag)) }}
-WARNING: the Router image {{ .Values.image.repository }}:{{ $routerTag }} predates
-  this chart: its entrypoint takes the chart's Router flags (-gateway,
-  -listener-address) for a config path, so the Router will not start. Until
-  the first release with standalone mode, install the published chart
-  (--version 0.0.0-latest), or set image.tag=latest and dashboard.image.tag=latest.
-{{ end -}}
 {{- if $standalone -}}
 {{- $clientPort = (include "semantic-router.primaryListener" . | fromYaml).port -}}
 {{- end -}}

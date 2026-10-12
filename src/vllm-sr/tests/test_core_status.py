@@ -432,7 +432,7 @@ def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
         envoy_image=None,
         dashboard_image="dashboard:missing",
         pull_policy="never",
-        env_vars={"VLLM_SR_PLATFORM": "amd"},
+        env_vars={"VLLM_SR_PLATFORM": "rocm"},
         dashboard_disabled=True,
     )
 

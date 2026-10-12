@@ -9,6 +9,10 @@ from cli.container_cli import container_status
 from cli.container_runtime import get_container_runtime
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.gateway_mode import GATEWAY_EXTPROC
+from cli.instance_setup import (
+    attach_controller,
+    stop_managed_controller,
+)
 from cli.runtime_lifecycle import validate_startup_timeout
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import resolve_runtime_stack
@@ -61,9 +65,19 @@ class ContainerBackend:
                 startup_timeout=startup_timeout,
                 gateway=gateway,
             )
+        # This control plane changes capabilities in the persistent frontend. It has only
+        # a group-restricted Unix socket, never a public Docker control port.
+        attach_controller(
+            source_config_file or config_file,
+            runtime_config_file or config_file,
+            env_vars,
+            gateway,
+            startup_timeout,
+        )
 
     def teardown(self) -> None:
         with self._lifecycle_lock():
+            stop_managed_controller()
             stop_vllm_sr()
 
     @staticmethod

@@ -19,6 +19,7 @@ func baseSystemStatus() SystemStatus {
 	return SystemStatus{
 		Overall:        "not_running",
 		DeploymentType: "none",
+		ServingMode:    servingModeUnknown,
 		Services:       []ServiceStatus{},
 		Version:        statusVersion(),
 	}

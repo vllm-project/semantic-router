@@ -356,6 +356,10 @@ async function mockCommon(
     })
   })
 
+  await page.route(/\/api\/router\/api\/v1\/observability\/replays(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ json: replayRecordsResponse })
+  })
+
   await page.route('**/api/router/api/v1/observability/replays/*', async (route) => {
     const requestURL = new URL(route.request().url())
     const replayID = requestURL.pathname.split('/').pop()
@@ -412,6 +416,50 @@ async function expectBalancedDesktopFrame(page: Page, locator: Locator) {
 }
 
 test.describe('Layout top navigation', () => {
+  test('keeps the three System One pages in separate desktop columns', async ({ page }) => {
+    await mockCommon(page)
+    await page.goto('/dashboard')
+    for (const width of [1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.getByRole('button', { name: 'Build', exact: true }).click()
+      const menu = page.getByRole('navigation', { name: 'Build' })
+      await menu.getByRole('tab', { name: /System One/ }).click()
+      const sections = menu.locator('section')
+      await expect(sections).toHaveCount(3)
+      const boxes = await sections.evaluateAll((elements) =>
+        elements.map((element) => {
+          const { x, y, right } = element.getBoundingClientRect()
+          return { x, y, right }
+        }),
+      )
+      expect(
+        Math.max(...boxes.map((box) => box.y)) - Math.min(...boxes.map((box) => box.y)),
+      ).toBeLessThan(2)
+      expect(boxes[0].right).toBeLessThan(boxes[1].x)
+      expect(boxes[1].right).toBeLessThan(boxes[2].x)
+      expect(boxes[2].right).toBeLessThan(width)
+      await page.keyboard.press('Escape')
+    }
+  })
+
+  test('browsing menus does not fetch an unvisited Model Hub route', async ({ page }) => {
+    await mockCommon(page)
+    const hubRequests: string[] = []
+    page.on('request', (request) => {
+      if (/ModelHubPage|\/api\/models\/catalog|model_catalog\.json/.test(request.url()))
+        hubRequests.push(request.url())
+    })
+    await page.goto('/dashboard')
+    await page.getByRole('button', { name: 'System', exact: true }).click()
+    const menu = page.getByRole('navigation', { name: 'System' })
+    const modelHub = menu.getByRole('link', { name: 'Model Hub', exact: true })
+    await modelHub.hover()
+    // A hover used to trigger an import while a user was only scanning menus.
+    await page.waitForTimeout(350)
+    expect(hubRequests).toEqual([])
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
   test('hides Evaluation and explains direct access when the service is unavailable', async ({
     page,
   }) => {
@@ -500,8 +548,11 @@ test.describe('Layout top navigation', () => {
     await expect(mobileNavigation.getByText('Routing', { exact: true })).toBeVisible()
     await expect(
       mobileNavigation.getByRole('heading', { name: 'Knowledge Base', level: 3 }),
-    ).toBeVisible()
-    await expect(mobileNavigation.getByText('Integration', { exact: true })).toBeVisible()
+    ).toHaveCount(0)
+    await expect(mobileNavigation.getByText('Integration', { exact: true })).toHaveCount(0)
+    await operateToggle.click()
+    await expect(mobileNavigation.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
+    await buildToggle.click()
     await expect(mobileNavigation.getByRole('link', { name: 'Builder' })).toBeVisible()
     await mobileNavigation.getByRole('link', { name: 'Signals' }).click()
     await expect(page).toHaveURL(/\/config\/signals$/)
@@ -515,7 +566,9 @@ test.describe('Layout top navigation', () => {
     await page.goto('/dashboard')
 
     await expect(page.getByRole('group', { name: 'Workflow navigation' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /^(Build|System)$/ })).toHaveCount(0)
+    await expect(
+      page.locator('header').getByRole('button', { name: /^(Build|System)$/ }),
+    ).toHaveCount(0)
 
     await page.setViewportSize({ width: 900, height: 700 })
     const menuButton = page.getByRole('button', { name: 'Toggle menu' })
@@ -577,16 +630,15 @@ test.describe('Layout top navigation', () => {
       'rgb(244, 244, 241)',
     )
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
+    const systemOneTab = buildMenu.getByRole('tab', { name: /System One/ })
     const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
-    const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge Base/ })
-    const integrationsTab = buildMenu.getByRole('tab', { name: /Integration/ })
+    await expect(buildMenu.getByRole('tab', { name: /Knowledge Base|Integration/ })).toHaveCount(0)
     await expect(routingTab).toBeFocused()
     await expect(routingTab).toHaveAttribute('aria-selected', 'true')
     await expect(routingTab).toHaveAttribute(
       'aria-controls',
       'layout-mega-menu-build-routing-panel',
     )
-    await expect(knowledgeTab).not.toHaveAttribute('aria-controls', /.+/)
     await expect(buildMenu.getByRole('link', { name: 'Builder' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'Brain' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'Signals' })).toBeVisible()
@@ -594,19 +646,21 @@ test.describe('Layout top navigation', () => {
 
     await routingTab.focus()
     await page.keyboard.press('ArrowDown')
+    await expect(systemOneTab).toBeFocused()
+    await expect(buildMenu).toHaveAttribute('data-section-count', '3')
+    for (const label of ['Decision Models', 'Decision Playground', 'Decision Monitoring']) {
+      await expect(buildMenu.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
+    await page.keyboard.press('ArrowDown')
     await expect(outcomesTab).toBeFocused()
     await expect(outcomesTab).toHaveAttribute('aria-selected', 'true')
-    await page.keyboard.press('ArrowDown')
-    await expect(knowledgeTab).toBeFocused()
-    await expect(knowledgeTab).toHaveAttribute('aria-selected', 'true')
-    await expect(buildMenu.getByRole('link', { name: 'Bases' })).toBeVisible()
     await page.keyboard.press('End')
-    await expect(integrationsTab).toBeFocused()
-    await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
+    await expect(outcomesTab).toBeFocused()
+    await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toHaveCount(0)
     await page.keyboard.press('Home')
     await expect(routingTab).toBeFocused()
     await page.keyboard.press('ArrowRight')
-    await expect(buildMenu.getByRole('link', { name: 'Model Hub', exact: true })).toBeFocused()
+    await expect(buildMenu.getByRole('link', { name: 'Models', exact: true })).toBeFocused()
 
     const buildBounds = await buildMenu.boundingBox()
     expect(buildBounds).not.toBeNull()
@@ -633,6 +687,7 @@ test.describe('Layout top navigation', () => {
     await expect(operateMenu.getByRole('link', { name: 'Tracing' })).toBeVisible()
     await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
     await expect(operateMenu.getByRole('link', { name: 'Global Config' })).toBeVisible()
+    await expect(operateMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
     await expect(operateMenu.getByRole('link', { name: 'Users' })).toBeVisible()
 
     await page.keyboard.press('Escape')
@@ -775,7 +830,7 @@ test.describe('Layout top navigation', () => {
     expect(firstTabBounds).not.toBeNull()
     expect(Math.abs(firstTabBounds!.y - initialBounds.y)).toBeLessThanOrEqual(2)
 
-    for (const category of [/Knowledge Base/, /Integration/]) {
+    for (const category of [/System One/, /Outcomes/]) {
       await buildMenu.getByRole('tab', { name: category }).click()
       const nextBounds = await buildMenu.boundingBox()
       expect(nextBounds).not.toBeNull()
@@ -848,12 +903,12 @@ test.describe('Layout top navigation', () => {
 
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
-    const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge Base/ })
+    const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
     await expect(routingTab).toHaveAttribute('aria-selected', 'true')
 
-    await knowledgeTab.click()
-    await expect(knowledgeTab).toHaveAttribute('aria-selected', 'true')
-    await expect(buildMenu.getByRole('link', { name: 'Bases' })).toBeVisible()
+    await outcomesTab.click()
+    await expect(outcomesTab).toHaveAttribute('aria-selected', 'true')
+    await expect(buildMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
     await expect(routingTab).toHaveAttribute('aria-selected', 'false')
   })
 
@@ -892,12 +947,12 @@ test.describe('Layout top navigation', () => {
 
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
-    const integrationsTab = buildMenu.getByRole('tab', { name: /Integration/ })
+    const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
     await routingTab.focus()
     await page.keyboard.press('End')
 
-    await expect(integrationsTab).toBeFocused()
-    await expect(integrationsTab).toBeInViewport()
+    await expect(outcomesTab).toBeFocused()
+    await expect(outcomesTab).toBeInViewport()
     expect(
       await buildMenu.evaluate(
         (element) => element.getBoundingClientRect().bottom <= window.innerHeight,
@@ -922,10 +977,18 @@ test.describe('Layout top navigation', () => {
 
     await expect(page).toHaveURL(/\/insights$/)
     await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible()
-    await expect(page.getByText('Total Saved')).toBeVisible()
-    await expect(page.getByText('Saved %')).toBeVisible()
-    await expect(page.getByText('Baseline Spend')).toBeVisible()
-    await expect(page.getByText('Actual Spend')).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Savings', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Saved %', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Baseline', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('article').getByText('Estimated Model Cost', { exact: true }),
+    ).toBeVisible()
     await expect(
       page.getByText('See what the router picked, what signals fired, and how much it saved.'),
     ).toBeVisible()
@@ -953,7 +1016,7 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByText('Total Tokens').first()).toBeVisible()
     await expect(
       page.getByText(
-        '1 filtered record excluded from cost totals because usage or pricing data is incomplete.',
+        '1 filtered record excluded from estimates. Each row explains what was not recorded. Historical rows without captured prices are not repriced.',
       ),
     ).toBeVisible()
     await expect(
@@ -962,13 +1025,13 @@ test.describe('Layout top navigation', () => {
       ),
     ).toBeVisible()
     await expect(
-      page.getByRole('article').filter({ hasText: 'Total Saved' }).getByRole('strong'),
+      page.getByRole('article').filter({ hasText: 'Estimated Savings' }).getByRole('strong'),
     ).toHaveText('$0.0060')
     await expect(
       page.getByRole('article').filter({ hasText: 'Saved %' }).getByRole('strong'),
     ).toHaveText('75.0%')
-    await expect(page.getByRole('columnheader', { name: 'Actual Cost' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Saved vs Baseline' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Estimated Cost' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Estimated Savings' })).toBeVisible()
 
     await page.goto('/replay')
     await expect(page).toHaveURL(/\/dashboard$/)
@@ -994,6 +1057,35 @@ test.describe('Layout top navigation', () => {
     await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0)
   })
 
+  test('retired knowledge routes fall back without fetching KB or embedded-map resources', async ({ page }) => {
+    await mockCommon(page)
+    const featureRequests: string[] = []
+    page.on('request', (request) => {
+      if (/\/api\/.*knowledge-bases|\/embedded\/wizmap|KnowledgeMapPage|TaxonomyPage/.test(request.url())) {
+        featureRequests.push(request.url())
+      }
+    })
+    for (const path of ['/knowledge-bases/bases', '/knowledge-bases/privacy_kb/map', '/taxonomy/labels']) {
+      await page.goto(path)
+      await expect(page).toHaveURL(/\/dashboard$/)
+      await expect(page.getByRole('heading', { name: 'Router Intelligence' })).toBeVisible()
+      await expect(page.locator('iframe')).toHaveCount(0)
+    }
+    expect(featureRequests).toEqual([])
+  })
+
+  test('opens MCP from System with its existing permission and URL', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page, { user: readUser })
+    await page.goto('/dashboard')
+    await page.getByRole('group', { name: 'Workflow navigation' }).getByRole('button', { name: 'System' }).click()
+    const systemMenu = page.getByRole('navigation', { name: 'System' })
+    await systemMenu.getByRole('tab', { name: /Platform & Access/ }).click()
+    await systemMenu.getByRole('link', { name: 'MCP Servers' }).click()
+    await expect(page).toHaveURL(/\/config\/mcp$/)
+    await expect(page.getByRole('heading', { name: 'MCP Servers', exact: true })).toBeVisible()
+  })
+
   test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({
     page,
   }) => {
@@ -1011,13 +1103,13 @@ test.describe('Layout top navigation', () => {
     await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
     await expect(operateMenu.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(operateMenu.getByRole('link', { name: 'Global Config' })).toBeVisible()
+    await expect(operateMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
 
     await workflowGroup.getByRole('button', { name: 'Build' }).click()
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
     await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
-    await buildMenu.getByRole('tab', { name: /Integration/ }).click()
-    await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
+    await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toHaveCount(0)
 
     await page.goto('/ml-setup')
 

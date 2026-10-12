@@ -10,11 +10,12 @@ func validState() State {
 	return State{
 		SchemaVersion:         SchemaVersion,
 		Revision:              1,
+		Turn:                  1,
 		PolicyFingerprint:     "policy-fp",
 		CatalogFingerprint:    "catalog-fp",
 		CapabilityFingerprint: "capability-fp",
 		Tools: []ToolState{
-			{Name: "search", DefinitionFingerprint: "def-fp-1", FirstSeenTurn: 0},
+			{Name: "search", DefinitionFingerprint: "def-fp-1", FirstSeenTurn: 1},
 			{Name: "lookup", DefinitionFingerprint: "def-fp-2", Pinned: true, FirstSeenTurn: 1},
 		},
 		CreatedAt:  now.Add(-time.Hour),
@@ -109,8 +110,8 @@ func TestState_Validate_MaxToolsZeroMeansUnbounded(t *testing.T) {
 func TestState_Validate_DuplicateToolNames_Err(t *testing.T) {
 	s := validState()
 	s.Tools = []ToolState{
-		{Name: "search", DefinitionFingerprint: "fp-1"},
-		{Name: "search", DefinitionFingerprint: "fp-2"},
+		{Name: "search", DefinitionFingerprint: "fp-1", FirstSeenTurn: 1},
+		{Name: "search", DefinitionFingerprint: "fp-2", FirstSeenTurn: 1},
 	}
 	if err := s.Validate(16, 16384); err == nil {
 		t.Fatal("expected error: duplicate tool name")

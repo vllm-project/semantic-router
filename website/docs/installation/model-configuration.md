@@ -86,7 +86,7 @@ can serve the requested task, the Router returns `unsupported_capability`.
 
 ## Configure Models in the Dashboard
 
-Open **Build → Models → Add Model**. You can then:
+Open **Build → Routing → Models → Add Model**. You can then:
 
 1. Choose a Provider, connect it, and select discovered or built-in model IDs.
 2. Enter a model ID when the Provider cannot list models.

@@ -67,7 +67,7 @@ from a repository checkout with its `multimodal` extra, which reads images
 
 ```bash
 pip install "./src/model-runtime[multimodal]"
-vllm-sr serve vllm-sr/Vela-1.0-Omni-Nano --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Omni-Nano --device cpu --port 8100
 curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
   -d '{"input": [{"type": "text", "text": "a photograph of a passport page"}]}'
 ```
