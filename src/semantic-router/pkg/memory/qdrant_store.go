@@ -240,10 +240,18 @@ func memoryToPayload(mem *Memory) map[string]any {
 }
 
 func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
+	startTime := time.Now()
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", "store", status, time.Since(startTime).Seconds())
+	}()
+
 	if err := ctx.Err(); err != nil {
+		status = "error"
 		return err
 	}
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 	if mem.ID == "" {
@@ -288,7 +296,6 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		return fmt.Errorf("qdrant upsert failed: %w", err)
 	}
 
-	RecordMemoryStoreOperation("qdrant", "store", "success", 0)
 	return nil
 }
 
@@ -383,11 +390,19 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error {
+	startTime := time.Now()
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", "update", status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
 	if _, err := s.Get(ctx, id); err != nil {
+		status = "error"
 		return err
 	}
 
@@ -416,7 +431,6 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		return fmt.Errorf("qdrant update failed: %w", err)
 	}
 
-	RecordMemoryStoreOperation("qdrant", "update", "success", 0)
 	return nil
 }
 
@@ -527,7 +541,14 @@ func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 }
 
 func (s *QdrantStore) Forget(ctx context.Context, id string) error {
+	startTime := time.Now()
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", "forget", status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 
@@ -545,15 +566,22 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 		return fmt.Errorf("qdrant delete failed: %w", err)
 	}
 
-	RecordMemoryStoreOperation("qdrant", "forget", "success", 0)
 	return nil
 }
 
 func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
+	startTime := time.Now()
+	status := "success"
+	defer func() {
+		RecordMemoryStoreOperation("qdrant", "forget_by_scope", status, time.Since(startTime).Seconds())
+	}()
+
 	if !s.enabled {
+		status = "error"
 		return fmt.Errorf("qdrant store is not enabled")
 	}
 	if scope.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user_id is required for ForgetByScope")
 	}
 
@@ -583,7 +611,6 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		return fmt.Errorf("qdrant ForgetByScope failed: %w", err)
 	}
 
-	RecordMemoryStoreOperation("qdrant", "forget_by_scope", "success", 0)
 	return nil
 }
 
