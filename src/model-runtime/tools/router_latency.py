@@ -27,6 +27,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+# Connection-level failures retried once by preview(); measurement loops
+# tolerate them so one lost request cannot discard a finished pass.
+CONNECTION_ERRORS = (http.client.HTTPException, OSError)
+
 EDGE = [
     "Ünïcödé, 中文, العربية, हिन्दी, 🚀 and emoji 👩‍💻 in one line.",
     "Contact John Doe at john.doe@example.com or +1 (415) 555-0100; SSN 123-45-6789.",
@@ -108,7 +112,7 @@ class Client:
                 except ValueError:
                     parsed = {"raw": data[:200].decode(errors="replace")}
                 return elapsed, response.status, parsed
-            except (http.client.HTTPException, OSError):
+            except CONNECTION_ERRORS:
                 conn.close()
                 self.local.conn = None
                 if attempt:
@@ -137,6 +141,19 @@ def outcome(parsed: dict[str, Any]) -> dict[str, Any]:
         "signals": signals,
         "signal_ms": signal_ms,
     }
+
+
+def outcome_record(
+    status: int | str, parsed: dict[str, Any] | None = None, ms: float | None = None
+) -> dict[str, Any]:
+    """Build one outcome row; ``parsed=None`` yields the error placeholder."""
+    record: dict[str, Any] = {"status": status}
+    if ms is not None:
+        record["ms"] = round(ms, 3)
+    record.update(
+        outcome(parsed) if parsed is not None else {"decision": None, "model": None}
+    )
+    return record
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -168,7 +185,7 @@ def concurrent_pass(client: Client, work: list[str], concurrency: int) -> dict:
         nonlocal failures
         try:
             elapsed, status, _ = client.preview(text)
-        except (http.client.HTTPException, OSError):
+        except CONNECTION_ERRORS:
             with lock:
                 failures += 1
             return
@@ -198,20 +215,16 @@ def cmd_run(args: argparse.Namespace) -> None:
         for text in texts:
             try:
                 elapsed, status, parsed = client.preview(text)
-            except (http.client.HTTPException, OSError):
+            except CONNECTION_ERRORS:
                 errors += 1
                 if repeat == 0:
-                    outcomes.append(
-                        {"status": "error", "decision": None, "model": None}
-                    )
+                    outcomes.append(outcome_record("error"))
                 continue
             sequential.append(elapsed)
             if status != 200:
                 errors += 1
             if repeat == 0:
-                outcomes.append(
-                    {"status": status, "ms": round(elapsed, 3), **outcome(parsed)}
-                )
+                outcomes.append(outcome_record(status, parsed, elapsed))
     result["passes"]["sequential"] = {
         **summary(sequential, time.perf_counter() - started),
         "errors": errors,
@@ -219,7 +232,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     result["outcomes"] = outcomes
     try:
         result["first_response"] = client.preview(texts[0])[2]
-    except (http.client.HTTPException, OSError):
+    except CONNECTION_ERRORS:
         result["first_response"] = {"error": "first input request failed"}
     for concurrency in args.concurrency:
         result["passes"][f"concurrency_{concurrency}"] = concurrent_pass(
