@@ -207,7 +207,7 @@ behavior was verified.
 
 Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
-it and all required checks pass.
+it, all required checks pass, and all review conversations are resolved.
 
 ### Troubleshoot the merge queue
 
@@ -215,9 +215,24 @@ Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
 comment on the PR. The **Reason** and **Hint** explain whether the PR is
 waiting or was dequeued because its branch could not be updated.
 
+If the PR is approved and PR Gate is green but no **Merge Queue Status**
+comment appears, open Mergify's **Summary** check and inspect the unmet
+conditions under **queue approved pull requests**. The Summary check can
+succeed while that rule's conditions remain unmet. Items marked
+**🛡 GitHub branch protection** are inherited from branch protection.
+[.mergify.yml](.mergify.yml) defines the repository's queue rules, while the
+Summary check shows the effective conditions, including inherited requirements.
+
 - **Waiting in the queue:** the queue processes PRs serially, so a long wait
-  can be normal. See [.mergify.yml](.mergify.yml) for the current settings.
+  can be normal.
   Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
+- **Unresolved review conversation:** every review thread must be resolved,
+  including threads marked **Outdated** after a push or branch update. Use
+  the **Conversations** menu on **Files changed** to find them. The PR author
+  can resolve a thread once it is addressed, including on a fork PR; reviewers
+  should resolve their own addressed threads when approving. See
+  [GitHub's conversation-resolution guidance][review-conversations].
+  `@mergifyio queue` does not bypass this requirement.
 - **Workflow permission refusal:** until
   [#3902](https://github.com/vllm-project/semantic-router/issues/3902) is resolved,
   Mergify cannot update a branch when the update includes workflow changes
@@ -241,13 +256,15 @@ to update your fork's `main` before retrying the push. GitHub permits workflow
 files without that scope when the same paths and contents already exist on
 another branch in the fork. See [GitHub's scope documentation][oauth-scopes].
 
-Once PR Gate passes on the new head and the required approvals still hold,
-the rule requeues the PR automatically. The `@mergifyio queue` command and
+Once PR Gate passes on the new head, the required approvals still hold, and
+all review conversations are resolved, the rule requeues the PR automatically.
+The `@mergifyio queue` command and
 **Requeue** checkbox require write permission by default; contributors do not
 need them for this recovery.
 
 [fork-permissions]: https://docs.github.com/en/pull-requests/how-tos/work-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork
 [oauth-scopes]: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
+[review-conversations]: https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/commenting-on-a-pull-request#resolving-conversations
 
 ## Repository map
 
