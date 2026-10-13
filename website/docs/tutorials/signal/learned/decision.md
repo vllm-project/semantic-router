@@ -313,6 +313,11 @@ eligible attachments are retained in input order within each modality. Remote
 URLs and file references are never fetched for decisions. The backend request
 keeps its original media.
 
+`vllm-sr route preview --request-file request.json` applies the same deployment
+media policy to request signals and decision model selection as live routing.
+Include the inline attachments in the request's `messages`; they are not included
+in the preview response. Response-stage checks do not inherit request media.
+
 The Router skips malformed, unsupported, excessive, or oversized attachments.
 `vsr_decision_media_skipped_total{kind,reason}` counts skips during deployment
 preparation for a request. It exposes neither URLs nor payloads. Timeouts and

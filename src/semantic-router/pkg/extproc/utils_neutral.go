@@ -72,6 +72,7 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
+		DecisionMedia:  decisionmedia.FromRequest(request),
 		JailbreakInput: extractJailbreakInput(request),
 	}
 	switch request.ToolChoice.Mode {
@@ -123,11 +124,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
 		recordUserInputModalities(result, message.Content, text)
-		for _, part := range message.Content {
-			if part.Kind == llmprotocol.ContentImage || part.Kind == llmprotocol.ContentVideo {
-				result.DecisionMedia = append(result.DecisionMedia, &decisionmedia.Source{Kind: string(part.Kind), URL: part.URL, MediaType: part.MediaType, Data: part.Data})
-			}
-		}
+
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
