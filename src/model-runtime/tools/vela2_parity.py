@@ -307,12 +307,17 @@ def device_executor(device: str) -> Any:
 
 
 def load_runtime(
-    package: Path, device: str, engine: str = "native", reduced: str | None = None
+    package: Path,
+    device: str,
+    engine: str = "native",
+    reduced: str | None = None,
+    options: EngineOptions | None = None,
 ) -> Any:
     """The package through the vela2 family on the named engine plugin.
 
     ``reduced`` loads it as ``max_speed`` does, consenting to that copy kind on
     the device for this process (the built-in table's consent follows records).
+    ``options`` replaces the default engine options (fast paths switched off).
     """
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
@@ -320,7 +325,7 @@ def load_runtime(
     family = Vela2Family()
     verified = family.verify(PackageRef(package))
     spec = family.describe(verified)
-    options = EngineOptions()
+    options = options or EngineOptions()
     if reduced is not None:
         field = "reduced_cpu" if device == "cpu" else "reduced_gpu"
         spec = replace(spec, dtype=replace(spec.dtype, **{field: reduced}))

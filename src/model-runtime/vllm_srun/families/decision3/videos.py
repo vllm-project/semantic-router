@@ -28,6 +28,7 @@ from typing import Any
 
 import torch
 
+from ...errors import MediaError
 from .images import _PREPROCESS, _resize
 
 FPS = 2.0
@@ -123,11 +124,24 @@ def sample_indices(total: int, fps: float) -> list[int]:
     return [int(i) for i in np.linspace(0, total - 1, count).round().astype(int)]
 
 
+FORMAT_MESSAGE = "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
+
+
+def _malformed(message: str) -> MediaError:
+    return MediaError("video_malformed", message)
+
+
+def _too_large() -> MediaError:
+    return MediaError(
+        "video_too_large",
+        f"each video must be at most {MAX_VIDEO_BYTES:,} bytes",
+        MAX_VIDEO_BYTES,
+    )
+
+
 def _payload(value: Any) -> bytes:
     if not isinstance(value, str) or not value.startswith("data:"):
-        raise ValueError(
-            "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
-        )
+        raise MediaError("video_format", FORMAT_MESSAGE)
     header, separator, encoded = value.partition(",")
     kind = header.strip().lower()
     if (
@@ -135,19 +149,19 @@ def _payload(value: Any) -> bytes:
         or not kind.startswith("data:video/")
         or not kind.endswith(";base64")
     ):
-        raise ValueError("a data URL video is data:video/<format>;base64,<data>")
-    if kind[len("data:video/") :].split(";")[0] not in DATA_URL_FORMATS:
-        raise ValueError(
-            "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
+        raise MediaError(
+            "video_format", "a data URL video is data:video/<format>;base64,<data>"
         )
+    if kind[len("data:video/") :].split(";")[0] not in DATA_URL_FORMATS:
+        raise MediaError("video_format", FORMAT_MESSAGE)
     if len(encoded) > 4 * -(-MAX_VIDEO_BYTES // 3):
-        raise ValueError(f"each video must be at most {MAX_VIDEO_BYTES:,} bytes")
+        raise _too_large()
     try:
         payload = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
-        raise ValueError("invalid base64 video data") from exc
+        raise _malformed("invalid base64 video data") from exc
     if len(payload) > MAX_VIDEO_BYTES:
-        raise ValueError(f"each video must be at most {MAX_VIDEO_BYTES:,} bytes")
+        raise _too_large()
     return payload
 
 
@@ -179,14 +193,16 @@ def decode(value: Any) -> Video:
     try:
         reader = cv2.VideoCapture(path, api)
         if not reader.isOpened():
-            raise ValueError("the video could not be opened")
+            raise _malformed("the video could not be opened")
         width = int(reader.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
         if width <= 0 or height <= 0:
-            raise ValueError("the video has no frame size")
+            raise _malformed("the video has no frame size")
         if width * height > MAX_SOURCE_PIXELS:
-            raise ValueError(
-                f"video frames must have at most {MAX_SOURCE_PIXELS:,} pixels"
+            raise MediaError(
+                "video_pixels",
+                f"video frames must have at most {MAX_SOURCE_PIXELS:,} pixels",
+                MAX_SOURCE_PIXELS,
             )
         fps = float(reader.get(cv2.CAP_PROP_FPS) or 0.0)
         if not (math.isfinite(fps) and SOURCE_FPS[0] <= fps <= SOURCE_FPS[1]):
@@ -201,9 +217,13 @@ def decode(value: Any) -> Video:
             reader.release()
             reader = cv2.VideoCapture(path, api)
         if total <= 0:
-            raise ValueError("the video has no frames")
+            raise _malformed("the video has no frames")
         if total / fps > MAX_SECONDS:
-            raise ValueError(f"each video must be at most {MAX_SECONDS} seconds long")
+            raise MediaError(
+                "video_too_long",
+                f"each video must be at most {MAX_SECONDS} seconds long",
+                MAX_SECONDS,
+            )
         indices = sample_indices(total, fps)
         wanted = set(indices)
         for number in range(indices[-1] + 1):
@@ -215,13 +235,13 @@ def decode(value: Any) -> Video:
                     frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                     kept.append(number)
     except cv2.error as exc:
-        raise ValueError(f"invalid video data ({exc.__class__.__name__})") from exc
+        raise _malformed(f"invalid video data ({exc.__class__.__name__})") from exc
     finally:
         if reader is not None:
             reader.release()
         os.unlink(path)
     if not frames:
-        raise ValueError("no frame of the video could be decoded")
+        raise _malformed("no frame of the video could be decoded")
     return _video(frames, kept, fps, total, digest)
 
 
@@ -236,7 +256,7 @@ def _video(
     try:
         stacked = np.stack(frames)
     except ValueError as exc:
-        raise ValueError("all frames of a video must have the same size") from exc
+        raise _malformed("all frames of a video must have the same size") from exc
     return Video(
         np.ascontiguousarray(stacked), float(fps), tuple(indices), int(total), digest
     )
@@ -261,9 +281,11 @@ def smart_resize(
         height = int(height * scale)
         width = int(width * scale)
     if max(height, width) / min(height, width) > MAX_ASPECT_RATIO:
-        raise ValueError(
+        raise MediaError(
+            "video_aspect_ratio",
             f"absolute aspect ratio must be smaller than {MAX_ASPECT_RATIO}, got "
-            f"{max(height, width) / min(height, width)}"
+            f"{max(height, width) / min(height, width)}",
+            MAX_ASPECT_RATIO,
         )
     h_bar = round(height / factor) * factor
     w_bar = round(width / factor) * factor
