@@ -3,6 +3,8 @@ package modelservice
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -86,6 +88,59 @@ func TestDecodeReadsSetsSpansAndTheirThresholds(t *testing.T) {
 func nanValue() float64 {
 	zero := 0.0
 	return zero / zero
+}
+
+func TestDecodeRejectsOutOfRangeSetAndSpanProbabilities(t *testing.T) {
+	for name, probability := range map[string]float64{
+		"negative": -0.1, "above one": 999, "nan": math.NaN(), "infinity": math.Inf(1),
+		"zero": 0, "one": 1,
+	} {
+		for _, preset := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/preset=%t", name, preset), func(t *testing.T) {
+				kind, noul := "noul", 0.5
+				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability}}}
+				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: probability}}}
+				body := api.DecisionResponse{
+					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &noul}},
+					Sets:    &sets, Spans: &spans,
+				}
+				questions := []Question{topicsQuestion("topics"), entitiesQuestion("cities")}
+				if preset {
+					questions = []Question{{ID: "topics", Preset: "harm"}, {ID: "cities", Preset: "pii"}}
+				}
+				response := decodeResponse(body, questions)
+				want := "invalid_model_output"
+				if probability == 0 || probability == 1 {
+					want = ""
+				}
+				for _, question := range questions {
+					if got := response.Answers[question.ID]; got.Error != want {
+						t.Errorf("%s: error = %q, want %q (answer %+v)", question.ID, got.Error, want, got)
+					}
+				}
+			})
+			t.Run(fmt.Sprintf("%s/span_noul/preset=%t", name, preset), func(t *testing.T) {
+				kind := "noul"
+				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: 0.5}}}
+				body := api.DecisionResponse{
+					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &probability}},
+					Spans:   &spans,
+				}
+				question := entitiesQuestion("cities")
+				if preset {
+					question = Question{ID: "cities", Preset: "pii"}
+				}
+				got := decodeResponse(body, []Question{question}).Answers["cities"]
+				if probability == 0 || probability == 1 {
+					if got.Error != "" || got.Noul != probability || len(got.Spans) != 1 {
+						t.Fatalf("valid span noul: got %+v", got)
+					}
+				} else if got.Error != "invalid_model_output" || got.Noul != 0 || len(got.Spans) != 0 {
+					t.Fatalf("invalid span noul must clear evidence: got %+v", got)
+				}
+			})
+		}
+	}
 }
 
 // stage runs calls as participants of one bundle, as a request stage's signals do.
