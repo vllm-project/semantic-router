@@ -26,7 +26,8 @@ func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 
 		globalYAML, err := readEffectiveGlobalYAML(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read global config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read global config: %v", err)
+			http.Error(w, "Failed to read global config", http.StatusInternalServerError)
 			return
 		}
 
@@ -71,7 +72,8 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 
 		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read config: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
 

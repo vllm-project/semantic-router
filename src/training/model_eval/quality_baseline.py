@@ -197,7 +197,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     for finding in findings:
         logger.warning("gap: %s", finding)
 
-    texts, labels, split_rows, dropped_rows = load_rows(
+    texts, labels, split_rows, matched, dropped_rows = load_rows(
         spec, mapping, args.limit, dataset_revision
     )
     summary, model_config = _measure(args, measured, served, texts, labels, mapping)
@@ -209,6 +209,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         spec=spec,
         dataset_revision=dataset_revision,
         split_rows=split_rows,
+        matched=matched,
         dropped_rows=dropped_rows,
         mapping=mapping,
         findings=findings,
@@ -307,6 +308,7 @@ def _build_result(
     spec: Any,
     dataset_revision: str,
     split_rows: int,
+    matched: dict[str, Any] | None,
     dropped_rows: dict[str, int],
     mapping: dict[str, int],
     findings: list[str],
@@ -332,6 +334,7 @@ def _build_result(
             "revision": dataset_revision,
             "rows_available": split_rows,
             "rows_scored": summary["metrics"]["rows"],
+            "stratum_matched": matched,
             "dropped_rows": dict(dropped_rows),
         },
         "label_mapping": mapping,

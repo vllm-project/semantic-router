@@ -8,6 +8,7 @@ import sys
 
 from cli.consts import PLATFORM_ROCM
 from cli.container_images import _normalize_platform
+from cli.terminal import HEADLINE
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -64,7 +65,8 @@ def append_amd_gpu_passthrough(cmd, normalized_platform):
         cmd.extend(["--cap-add", "SYS_PTRACE"])
         cmd.extend(["--security-opt", "seccomp=unconfined"])
         log.info(
-            f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}"
+            f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}",
+            extra=HEADLINE,
         )
 
     if missing_devices:
@@ -205,12 +207,17 @@ def append_nvidia_gpu_passthrough(cmd, runtime: str):
         # `--gpus all` only for Docker, which understands the nvidia container
         # toolkit shim natively.
         cmd.extend(["--device", "nvidia.com/gpu=all"])
-        log.info("NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)")
+        log.info(
+            "NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)",
+            extra=HEADLINE,
+        )
         return
 
     cmd.extend(["--gpus", "all"])
     cmd.extend(["--runtime", "nvidia"])
-    log.info("NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)")
+    log.info(
+        "NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)", extra=HEADLINE
+    )
 
 
 def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool, runtime: str):

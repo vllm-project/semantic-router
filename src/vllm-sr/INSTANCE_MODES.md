@@ -2,8 +2,13 @@
 
 Use Router mode to route Chat, Responses and Messages requests to backend LLMs.
 Use Engine mode to ask decision models native System One questions without
-configuring Chat backends. Both modes use the same instance, Dashboard,
-listeners and model deployments.
+configuring Chat backends. Both modes use the same instance, listeners and model
+deployments. On the docker target, Engine mode starts only the Router container;
+`--dashboard` adds the Dashboard (and with it the host controller that
+`vllm-sr instance` talks to), `--observability` adds Jaeger, Prometheus and
+Grafana, and `--no-minimal` starts the whole stack. Without `--config`, and with
+no `config.yaml` in the working directory, Engine mode keeps each model's
+configuration and state in `~/.local/state/vllm-sr/engine/<model>`.
 
 ## Start an instance
 
@@ -11,10 +16,14 @@ listeners and model deployments.
 # Serve a decision model through the native System One API.
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 
-# Inspect the instance and its model readiness.
-vllm-sr instance --config config.yaml status
-vllm-sr instance --config config.yaml models
+# Inspect the stack and its public native models.
+vllm-sr status
+curl -s localhost:8899/v1/systemone/models
 ```
+
+With the Dashboard (`--dashboard`, or Router mode), `vllm-sr instance --config
+<config> status` and `models` also report the instance's mode and model
+readiness from its host controller.
 
 A new Engine instance publishes the selected model on port 8899. Discover its
 public model ID with `GET /v1/systemone/models`, then send questions to

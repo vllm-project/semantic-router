@@ -21,8 +21,9 @@ Startup sets `global.router.enabled`: every `serve` invocation without `-e`
 starts Router mode; `-e` starts Engine mode and preserves saved routing without
 initializing its consumers or Chat backends. Dashboard displays this startup
 mode and manages model deployments independently. It does not switch modes.
-The Dashboard and native API remain available in either mode. Listener keys
-and native model grants still apply.
+The native API is available in either mode. On the docker target, Engine mode
+starts only the Router container unless `--dashboard`, `--observability` or
+`--no-minimal` asks for more. Listener keys and native model grants still apply.
 
 Model resources use either **managed** workers, which the frontend starts and
 supervises, or **attached** workers, whose lifecycle belongs to another owner.
