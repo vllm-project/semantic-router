@@ -18,6 +18,7 @@ from cli.container_observability import (
     _render_template_copy,
     _run_service_start,
 )
+from cli.container_run_command import restart_policy_args
 from cli.container_runtime import get_container_runtime
 from cli.container_services import _replace_existing_container
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -78,6 +79,7 @@ def container_start_jaeger(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--network",
         network_name,
         "-e",
@@ -148,6 +150,7 @@ def container_start_prometheus(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--network",
         network_name,
         "-v",
@@ -208,6 +211,7 @@ def container_start_grafana(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--network",
         network_name,
         "-e",

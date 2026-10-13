@@ -66,6 +66,16 @@ vllm-sr stop
 
 使用 `--minimal` 在不启动控制面板和可观测性栈（Jaeger、Prometheus、Grafana）的情况下运行。使用 `--readonly` 保持控制面板可用但不允许更改配置。在将监听器暴露到受信任主机之外之前，固定镜像并复核[安全加固](security-hardening)。
 
+### 让栈在崩溃和重启后继续运行
+
+`vllm-sr serve` 创建的容器默认没有重启策略：崩溃的容器会保持停止状态，主机重启后栈也不会恢复。在服务器上，请带上重启策略启动：
+
+```bash
+vllm-sr serve --config config.yaml --restart-policy unless-stopped
+```
+
+`unless-stopped` 和 `always` 会重启退出的容器，并在 Docker 守护进程启动时重新启动栈；`on-failure` 只重启失败的容器。`vllm-sr stop` 仍然会停止栈。策略只作用于本次启动创建的容器，因此每次 `serve` 都要传入。使用 Podman 时，还需要启用它的重启服务（`systemctl enable --now podman-restart.service`），带策略的容器才会在重启后恢复。
+
 使用 `--gateway extproc` 时，Envoy 默认使用安全的 `info` 日志级别。若要临时排查问题，在启动栈之前设置 `VLLM_SR_ENVOY_LOG_LEVEL=debug`，完成后取消设置：debug 日志可能在日志中暴露转发的请求标头，包括 provider 的 `Authorization` 标头。
 
 ## 何时迁移到 Kubernetes

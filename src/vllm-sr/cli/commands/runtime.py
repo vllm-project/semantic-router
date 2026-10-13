@@ -49,6 +49,7 @@ from cli.consts import (
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
+from cli.container_run_command import RESTART_POLICIES, RESTART_POLICY_ENV
 from cli.deployment_backend import (
     DEFAULT_TARGET,
     TARGET_DOCKER,
@@ -430,6 +431,17 @@ def _execute_serve(
     help=f"Image pull policy: always, ifnotpresent, never (default: {DEFAULT_IMAGE_PULL_POLICY})",
 )
 @click.option(
+    "--restart-policy",
+    type=click.Choice(list(RESTART_POLICIES), case_sensitive=False),
+    default=None,
+    help=(
+        "Restart policy of the containers this start creates: no (default), "
+        "on-failure, unless-stopped, always. unless-stopped and always restart a "
+        "crashed container and bring the stack back after a host reboot "
+        "(Podman also needs its podman-restart service); vllm-sr stop still stops it."
+    ),
+)
+@click.option(
     "--startup-timeout",
     type=click.IntRange(min=1),
     default=None,
@@ -582,6 +594,7 @@ def serve(
     envoy_image: str | None,
     dashboard_image: str | None,
     image_pull_policy: str,
+    restart_policy: str | None,
     readonly: bool,
     minimal: bool | None,
     with_dashboard: bool,
@@ -616,6 +629,9 @@ def serve(
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)
     reject_envoy_options(ctx, resolve_gateway(gateway))
+    if restart_policy is not None:
+        # Every container builder of this start reads the policy from here.
+        os.environ[RESTART_POLICY_ENV] = restart_policy.lower()
     if minimal is None:
         minimal = engine and resolved_target == TARGET_DOCKER
     workspace = (

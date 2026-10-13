@@ -62,7 +62,7 @@ SERVE_OPTION_GROUPS = (
         "Container options (docker target)",
         frozenset({MODE_DOCKER}),
         "the docker target",
-        ("image_pull_policy", "container_runtime", "runtime"),
+        ("image_pull_policy", "restart_policy", "container_runtime", "runtime"),
     ),
     OptionGroup(
         "Docker target",
