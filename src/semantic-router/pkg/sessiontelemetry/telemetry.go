@@ -276,6 +276,7 @@ func recordRouterSessionUsage(publicSessionID string, model string, p TurnParams
 		PromptTokens:                p.PromptTokens,
 		CachedPromptTokens:          p.CachedPromptTokens,
 		CacheWriteTokens:            p.CacheWriteTokens,
+		CacheWrite1hTokens:          p.CacheWrite1hTokens,
 		EstimatedCachedPromptTokens: p.EstimatedCachedPromptTokens,
 		CompletionTokens:            p.CompletionTokens,
 		Cost:                        costThisTurn,

@@ -84,6 +84,8 @@ type SessionUsageParams struct {
 	PromptTokens                int
 	CachedPromptTokens          int
 	CacheWriteTokens            int
+	CacheWrite5mTokens          int
+	CacheWrite1hTokens          int
 	EstimatedCachedPromptTokens int
 	CompletionTokens            int
 	Cost                        float64
@@ -223,10 +225,12 @@ func RecordSessionUsage(p SessionUsageParams) {
 	}
 	st.lastSeen = now
 	usage := modelpricing.Normalize(modelpricing.Usage{
-		PromptTokens:      p.PromptTokens,
-		CachedInputTokens: p.CachedPromptTokens,
-		CacheWriteTokens:  p.CacheWriteTokens,
-		CompletionTokens:  p.CompletionTokens,
+		PromptTokens:       p.PromptTokens,
+		CachedInputTokens:  p.CachedPromptTokens,
+		CacheWriteTokens:   p.CacheWriteTokens,
+		CacheWrite5mTokens: p.CacheWrite5mTokens,
+		CacheWrite1hTokens: p.CacheWrite1hTokens,
+		CompletionTokens:   p.CompletionTokens,
 	})
 	st.cumulativePrompt += int64(usage.PromptTokens)
 	st.cumulativeCached += int64(usage.CachedInputTokens)

@@ -269,8 +269,8 @@ func newAnthropicUsageWire() *anthropicUsageWire {
 			Ephemeral1hInputTokens: &ephemeral1h,
 			Ephemeral5mInputTokens: &ephemeral5m,
 		},
-		InferenceGeo:  "global",
-		ServiceTier:   "standard",
+		InferenceGeo: "global",
+		ServiceTier:  "standard",
 	}
 }
 
