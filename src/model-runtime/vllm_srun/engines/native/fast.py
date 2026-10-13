@@ -23,14 +23,17 @@ four scored panels), so it runs at the published precision by default:
   ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
-  several forwards each. Graphs are captured until there are ``MAX_GRAPHS`` of
-  them or the captures have taken ``MAX_GRAPH_BYTES`` of device memory or half
-  of what was free at the first, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
-  evicting large graphs from the shared memory pool, between large eager
-  batches of Index traffic, led to GPU memory access faults. On CUDA the same
-  runner also replays Vela 2.0's forest forward (``models/forest.py``) per
-  exact forest shape; ROCm keeps forests eager, because an eager forward while
-  a forest graph of eight or more Vela-4B layers is alive faults there.
+  several forwards each. Once graph count or captured bytes crosses three
+  quarters of its limit, a new shape must be observed
+  ``HOT_CAPTURE_AFTER`` times before capture, so early sparse traffic does not
+  immediately consume the remaining capacity. This is admission control, not
+  eviction: the hard limits still win. Captured graphs are never destroyed
+  while serving: on ROCm, evicting large graphs from the shared memory pool
+  between large eager batches of Index traffic led to GPU memory access faults.
+  On CUDA the same runner also replays Vela 2.0's forest forward
+  (``models/forest.py``) per exact forest shape; ROCm
+  keeps forests eager, because an eager forward while a forest graph of eight or
+  more Vela-4B layers is alive faults there.
 """
 
 from __future__ import annotations
@@ -72,6 +75,9 @@ MAX_GRAPH_TOKENS = 4096
 MAX_GRAPHS = 512
 MAX_GRAPH_BYTES = 4 << 30
 CAPTURE_AFTER = 2
+# After three quarters of capacity, require four times the reuse evidence.
+GRAPH_PRESSURE_DIVISOR = 4
+HOT_CAPTURE_AFTER = CAPTURE_AFTER * GRAPH_PRESSURE_DIVISOR
 MASK_ALIGN = 16
 
 
@@ -707,6 +713,7 @@ class Graphs:
         masks: Masks,
         *,
         capture_after: int = CAPTURE_AFTER,
+        hot_capture_after: int = HOT_CAPTURE_AFTER,
         max_graphs: int = MAX_GRAPHS,
         max_tokens: int = MAX_GRAPH_TOKENS,
         max_bytes: int = MAX_GRAPH_BYTES,
@@ -714,6 +721,7 @@ class Graphs:
         self.backbone = backbone
         self.masks = masks
         self.capture_after = capture_after
+        self.hot_capture_after = max(capture_after, hot_capture_after)
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
         self.max_bytes = max_bytes
@@ -725,11 +733,21 @@ class Graphs:
         self.pool: Any = None
         self.stream: Any = None
         self.stats = {
+            "lookups": 0,
+            "misses": 0,
             "captures": 0,
             "replays": 0,
             "eager": 0,
             "full": 0,
             "failed": 0,
+        }
+        self.eager_reasons = {
+            "warmup": 0,
+            "pressure": 0,
+            "too_large": 0,
+            "not_inference": 0,
+            "capture_failed": 0,
+            "full": 0,
         }
 
     def __call__(
@@ -752,31 +770,57 @@ class Graphs:
         tokens: int,
     ) -> torch.Tensor:
         """``body(*inputs)``, replayed from the graph of ``key`` once captured (the module docstring)."""
+        self.stats["lookups"] += 1
         entry = self.graphs.get(key)
         if entry is None:
-            if (
-                key in self.failed
-                or tokens > self.max_tokens
-                or not torch.is_inference_mode_enabled()
-            ):
-                self.stats["eager"] += 1
-                return body(*inputs)
+            self.stats["misses"] += 1
+            if key in self.failed:
+                return self._run_eager("capture_failed", inputs, body)
+            if tokens > self.max_tokens:
+                return self._run_eager("too_large", inputs, body)
+            if not torch.is_inference_mode_enabled():
+                return self._run_eager("not_inference", inputs, body)
             if len(self.seen) > 1 << 16:
                 self.seen.clear()
-            self.seen[key] = self.seen.get(key, 0) + 1
-            if self.seen[key] < self.capture_after:
-                self.stats["eager"] += 1
-                return body(*inputs)
+            observed = self.seen[key] = self.seen.get(key, 0) + 1
+            pressure = self._under_pressure()
+            capture_after = self.hot_capture_after if pressure else self.capture_after
+            if observed < capture_after:
+                reason = "pressure" if pressure else "warmup"
+                return self._run_eager(reason, inputs, body)
             entry = self._capture(key, inputs, body)
             if entry is None:
-                self.stats["eager"] += 1
-                return body(*inputs)
+                reason = "capture_failed" if key in self.failed else "full"
+                if reason == "capture_failed":
+                    self.seen.pop(key, None)
+                return self._run_eager(reason, inputs, body)
+            self.seen.pop(key, None)
         for static, value in zip(entry["inputs"], inputs, strict=True):
             static.copy_(value)
         entry["graph"].replay()
         self.stats["replays"] += 1
         output: torch.Tensor = entry["output"]
         return output
+
+    def _under_pressure(self) -> bool:
+        """Whether ordinary captures have crossed three quarters of a hard limit."""
+        graph_margin = self.max_graphs // GRAPH_PRESSURE_DIVISOR
+        if graph_margin and len(self.graphs) >= self.max_graphs - graph_margin:
+            return True
+        if self.budget is None:
+            return False
+        byte_margin = self.budget // GRAPH_PRESSURE_DIVISOR
+        return bool(byte_margin and self.spent >= self.budget - byte_margin)
+
+    def _run_eager(
+        self,
+        reason: str,
+        inputs: tuple[torch.Tensor, ...],
+        body: Callable[..., torch.Tensor],
+    ) -> torch.Tensor:
+        self.stats["eager"] += 1
+        self.eager_reasons[reason] += 1
+        return body(*inputs)
 
     def eager(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
@@ -855,4 +899,11 @@ class Graphs:
         return entry
 
     def receipt(self) -> dict[str, Any]:
-        return {**self.stats, "cached": len(self.graphs)}
+        return {
+            **self.stats,
+            "cached": len(self.graphs),
+            "candidates": len(self.seen),
+            "spent_bytes": self.spent,
+            "budget_bytes": self.budget,
+            "eager_reasons": dict(self.eager_reasons),
+        }

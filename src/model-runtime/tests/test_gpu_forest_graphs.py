@@ -10,11 +10,14 @@ Two inputs share each shape, so a result kept from one must survive the other's 
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 torch = pytest.importorskip("torch")
 
 from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.config import ModelConfig, ServeConfig  # noqa: E402
 from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_srun.families.vela2.family import Vela2Family  # noqa: E402
 from vllm_srun.plugins.base import (  # noqa: E402
@@ -23,6 +26,7 @@ from vllm_srun.plugins.base import (  # noqa: E402
     PackageRef,
     TreeBatch,
 )
+from vllm_srun.runtime import Runtime  # noqa: E402
 from vllm_srun.testing.vela2 import write_decoder_package  # noqa: E402
 
 pytestmark = pytest.mark.gpu
@@ -109,6 +113,55 @@ def test_engine_graph_replays_equal_the_eager_engine(tmp_path):
     ), stats
 
 
+def test_runtime_surface_exposes_graph_admission(tmp_path):
+    """A served CUDA model answers requests while graph admission stays observable."""
+    accelerator = CUDAAccelerator()
+    if not accelerator.available():
+        pytest.skip("needs a CUDA GPU")
+    package = write_decoder_package(tmp_path / "served-decoder")
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), device="cuda:0", name="graph"),),
+            exit_on_device_error=False,
+        )
+    )
+    runtime.start(background=False)
+    question = {"q": {"type": "noul", "instructions": "Is this about cooking?"}}
+    try:
+        served = runtime.served[0]
+        graphs = served.model.engine_model.graphs
+        assert graphs is not None
+        graphs.max_graphs = 4
+        graphs.hot_capture_after = 4
+        graphs.budget = 1 << 60  # Exercise graph-count pressure deterministically.
+        for words in [1, 9, 17, 25] * 3:
+            status, body = asyncio.run(
+                runtime.call(
+                    "decisions",
+                    {
+                        "model": "graph",
+                        "state": "word " * words,
+                        "questions": question,
+                    },
+                )
+            )
+            assert status == 200, body
+
+        stats = graphs.receipt()
+        assert served.health.state == "ready" and served.device_failure() is None
+        assert (
+            stats["captures"] > 0
+            and stats["replays"] > 0
+            and stats["eager_reasons"]["pressure"] > 0
+            and stats["lookups"] == stats["eager"] + stats["replays"]
+            and stats["misses"] >= stats["captures"]
+            and sum(stats["eager_reasons"].values()) == stats["eager"]
+            and stats["cached"] <= graphs.max_graphs
+        ), stats
+    finally:
+        runtime.stop()
+
+
 def test_no_graph_is_captured_past_the_memory_budget(tmp_path):
     (model,) = load(tmp_path, (True,))
     model.graphs.max_bytes = 0
@@ -116,7 +169,58 @@ def test_no_graph_is_captured_past_the_memory_budget(tmp_path):
     for _ in range(3):
         model.tree(batch)
     stats = model.receipt()["graphs"]
-    assert stats["captures"] == 0 and stats["full"] > 0, stats
+    assert (
+        stats["captures"] == 0
+        and stats["full"] > 0
+        and stats["eager_reasons"]["full"] > 0
+    ), stats
+
+
+def test_cache_pressure_admits_a_late_hot_shape(tmp_path):
+    """At 75% capacity, a later shape waits until it proves it is hot."""
+    graphed, eager = load(tmp_path, (True, False))
+    graphs = graphed.graphs
+    assert graphs is not None
+    graphs.max_graphs = 4
+    graphs.hot_capture_after = 4
+    graphs.budget = 1 << 60  # Isolate graph-count pressure from byte pressure.
+    generator = torch.Generator().manual_seed(5)
+    early = [forest(*case, generator) for case in FORESTS[:3]]
+    late = rows(ROWS[0], generator)
+
+    def assert_same(batch):
+        for got, want in zip(
+            outputs(graphed, batch), outputs(eager, batch), strict=True
+        ):
+            assert torch.equal(got, want)
+
+    for batch in early:
+        assert_same(batch)
+        assert_same(batch)
+    assert graphed.receipt()["graphs"]["cached"] == 3
+
+    for _ in range(3):
+        assert_same(late)
+    before = graphed.receipt()["graphs"]
+    assert (
+        before["cached"] == 3
+        and before["candidates"] == 1
+        and before["lookups"] == before["eager"] + before["replays"] == 9
+        and before["misses"] == 9
+        and before["eager_reasons"]["warmup"] == 3
+        and before["eager_reasons"]["pressure"] == 3
+    ), before
+
+    assert_same(late)
+    after = graphed.receipt()["graphs"]
+    assert (
+        after["cached"] == 4
+        and after["candidates"] == 0
+        and after["captures"] == 4
+        and after["lookups"] == after["eager"] + after["replays"] == 10
+        and after["misses"] == 10
+        and after["spent_bytes"] < after["budget_bytes"]
+    ), after
 
 
 def test_eager_memory_does_not_spend_the_graph_budget(tmp_path):
