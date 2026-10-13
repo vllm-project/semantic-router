@@ -43,6 +43,17 @@ median ms):
 On d3, a repeated 1.6 MP PNG with 8 questions takes 1,278 ms instead of
 1,888 ms.
 
+## Tokenizing a request at once (every profile, exact)
+
+A request's question prompts are tokenized in one batch call, which runs
+without the GIL, so the worker thread keeps launching forwards meanwhile.
+On the 4,000-request public sample (3,969 requests, 29,200 questions, mostly
+long states) on one d3-edge worker of an MI300X, all 3,969 exact answers are
+byte-identical, and the sample takes 111.7 s instead of 126.0 s on `exact`
+(8 clients) and 92.9 s instead of 115.4 s on `batching` (48 clients). The GPU
+was busy 56% of the time before, because the worker thread waited for the
+GIL; afterwards, 70% to 84%.
+
 ## `batching` for Decision 3.0
 
 Rows of concurrent requests share forwards. Text rows run in one left-padded

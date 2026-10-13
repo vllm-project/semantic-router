@@ -503,6 +503,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         items: list[Item] = []
         errors: dict[str, dict[str, Any]] = {}
         tokens = 0
+        rendered: list[tuple[str, str, list[str], list[Any], str]] = []
         for question_id, question in questions.items():
             kind = question.get("type") if isinstance(question, dict) else None
             try:
@@ -520,25 +521,37 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                         INVALID_QUESTION,
                         "the state or question contains a literal image or video placeholder token",
                     )
-                ids = self.tokenizer.encode(text, add_special_tokens=False).ids
-                length = len(ids) - images - videos + visual
-                if length > self.limit:
-                    raise QuestionError(
-                        MAX_LENGTH_EXCEEDED,
-                        f"the question prompt has {length} tokens, over the maximum context length of "
-                        f"{self.limit} tokens; nothing was truncated",
-                    )
-                if media:
-                    ids = self._expand(ids, media)
             except QuestionError as exc:
                 errors[question_id] = question_error(kind, exc)
                 continue
+            rendered.append((question_id, kind, keys, descriptions, text))
+        # One call for all questions: the tokenizer releases the GIL for a batch, not for a single text.
+        encodings = self.tokenizer.encode_batch(
+            [entry[-1] for entry in rendered], add_special_tokens=False
+        )
+        for (question_id, kind, keys, descriptions, _), encoding in zip(
+            rendered, encodings, strict=True
+        ):
+            ids = encoding.ids
+            length = len(ids) - images - videos + visual
+            if length > self.limit:
+                errors[question_id] = question_error(
+                    kind,
+                    QuestionError(
+                        MAX_LENGTH_EXCEEDED,
+                        f"the question prompt has {length} tokens, over the maximum context length of "
+                        f"{self.limit} tokens; nothing was truncated",
+                    ),
+                )
+                continue
+            if media:
+                ids = self._expand(ids, media)
             tokens += len(ids)
             items.append(Item(question_id, kind, ids, keys, descriptions, media))
         return RequestPlan(
             question_ids=list(questions),
             items=items,
-            errors=errors,
+            errors={key: errors[key] for key in questions if key in errors},
             input_tokens=tokens,
             complete_inputs=frozenset(
                 key

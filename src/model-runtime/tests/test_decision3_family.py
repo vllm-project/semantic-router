@@ -412,6 +412,38 @@ def test_score_levels_must_be_distinct(d3_runtime):
     assert "distinct" in body["answers"]["s"]["message"]
 
 
+def test_a_request_is_tokenized_at_once_and_reports_errors_in_question_order(
+    d3_runtime, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    short = {"type": "noul", "instructions": "Is it short?"}
+    long = {"type": "noul", "instructions": "word " * 400}
+    invalid = {
+        "type": "score",
+        "instructions": "How hard?",
+        "criteria": ["Easy", "Easy"],
+    }
+    alone = model.plan("state", {"a": short})
+    monkeypatch.setattr(model, "limit", len(alone.items[0].ids) + 50)
+    plan = model.plan("state", {"l": long, "a": short, "s": invalid})
+    assert [item.question_id for item in plan.items] == ["a"]
+    assert plan.items[0].ids == alone.items[0].ids
+    assert list(plan.errors) == ["l", "s"]
+    assert plan.errors["l"]["error"] == "max_length_exceeded"
+    assert plan.errors["s"]["error"] == "invalid_question"
+    text = prompt.render(
+        prompt.user_prompt(
+            "state",
+            short["instructions"],
+            prompt.option_texts("noul", None),
+            model.codes,
+        )
+    )
+    assert (
+        alone.items[0].ids == model.tokenizer.encode(text, add_special_tokens=False).ids
+    )
+
+
 def test_questions_run_eight_per_pass_in_request_order(d3_runtime):
     model = d3_runtime.lookup(None).model
     questions = {f"q{i}": QUESTIONS["reasoning"] for i in range(BATCH_SIZE + 3)}
