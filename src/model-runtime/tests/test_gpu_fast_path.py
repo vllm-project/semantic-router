@@ -198,7 +198,7 @@ def test_full_graph_cache_runs_eager():
 
 
 def test_captures_share_one_stream(monkeypatch):
-    """Every capture runs on one stream: BLAS keeps a workspace per stream (about 75 MiB on
+    """Every warm-up and capture runs on one stream: BLAS keeps a workspace per stream (about 75 MiB on
     MI300X), and torch hands out up to 32 pooled streams, so a stream per capture held up to
     32 workspaces."""
     accelerator, device = _device()
@@ -212,7 +212,18 @@ def test_captures_share_one_stream(monkeypatch):
         created.append(stream_class(*args, **kwargs))
         return created[-1]
 
+    # torch.cuda.graph makes its own default capture stream on first use, made here so
+    # that only the runtime's streams are counted, whatever ran before this test.
+    monkeypatch.setattr(torch.cuda.graph, "default_capture_stream", stream_class())
     monkeypatch.setattr(torch.cuda, "Stream", counted)
+    captured = []
+    begin = torch.cuda.CUDAGraph.capture_begin
+
+    def recorded(self, *args, **kwargs):
+        captured.append(torch.cuda.current_stream().cuda_stream)
+        return begin(self, *args, **kwargs)
+
+    monkeypatch.setattr(torch.cuda.CUDAGraph, "capture_begin", recorded)
     torch_device = accelerator.torch_device(device)
     shapes = [[8], [24], [40], [56]]
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
@@ -224,6 +235,7 @@ def test_captures_share_one_stream(monkeypatch):
                 graphs(ids, mask, lengths)
     assert graphs.receipt()["captures"] == len(shapes)
     assert len({stream.cuda_stream for stream in created} - {0}) == 1
+    assert set(captured) == {graphs.stream.cuda_stream}
 
 
 def test_attention_prep_above_2gib():
