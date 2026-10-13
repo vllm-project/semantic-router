@@ -262,6 +262,27 @@ def test_captures_share_one_stream(monkeypatch):
     assert set(captured) == {graphs.stream.cuda_stream}
 
 
+def test_a_full_graph_cache_admits_only_its_captured_shapes():
+    """A shape the cache can neither replay nor capture is not admitted, so callers do not pad toward it."""
+    accelerator, device = _device()
+    fused = build(qwen3_5(4, 1024, 16, 8), 7, False, accelerator, device)
+    fast.install_fused(fused)
+    graphs = fast.Graphs(fused, fast.Masks(), max_graphs=1)
+    torch_device = accelerator.torch_device(device)
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        for seed, lengths in enumerate([[8], [24]]):
+            ids, mask = batch(
+                lengths, torch.Generator().manual_seed(seed), torch_device
+            )
+            assert graphs.admits((1, lengths[0], False), lengths[0])
+            for _ in range(3):
+                graphs(ids, mask, lengths)
+    assert graphs.receipt()["captures"] == 1 and graphs.receipt()["full"] > 0
+    assert graphs.admits((1, 8, False), 8)
+    assert not graphs.admits((1, 24, False), 24)
+    assert not graphs.admits((1, 40, False), 40)
+
+
 def test_attention_prep_above_2gib():
     """A q projection above 2 GiB (9 x 16,384 tokens at Nox-4B's widths) runs fused, without the eager fallback."""
     accelerator, device = _device()

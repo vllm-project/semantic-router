@@ -452,10 +452,9 @@ class EngineModel(ABC):
         """Whether decoder forwards replay captured device graphs."""
         return False
 
-    @property
-    def graph_tokens(self) -> int:
-        """The most padded tokens a decoder forward may hold and still replay a graph (0: none)."""
-        return 0
+    def replays_shape(self, rows: int, width: int, padded: bool) -> bool:
+        """Whether a decoder forward of this shape replays a captured graph or may still capture one."""
+        return False
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         """Run a decoder backbone and gather the requested rows (on the device)."""
@@ -827,6 +826,14 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
     def forward_token_budget(self) -> int | None:
         """Most padded tokens one forward may hold; None when nothing limits it."""
+        return None
+
+    def coalesced_token_budget(self) -> int | None:
+        """Most padded tokens a forward of a coalescing profile should hold; None leaves it to the profile.
+
+        A family whose forwards take long per token keeps coalesced forwards short this way, so a full queue is
+        answered over several forwards in expected-finish order instead of in one long one.
+        """
         return None
 
     def shared_context(
