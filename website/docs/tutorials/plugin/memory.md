@@ -48,6 +48,20 @@ threshold inherits the global setting; calibrate that value for the selected
 embedding model and search mode before adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
+### Reflection and `max_inject_tokens`
+
+When reflection is enabled under `global.stores.memory.reflection` (the default
+heuristic gate), retrieved memories are trimmed to `max_inject_tokens` before
+injection. The gate estimates size with a script-aware heuristic, not the
+upstream model tokenizer: about **1.3 tokens per Latin word unit** and about
+**1.5 tokens per Han, Hiragana, Katakana, or Hangul character**, with the
+combined estimate rounded **up** (`ceil`). Space-free CJK text therefore counts
+many characters toward the budget instead of collapsing to a single whitespace
+word. Operators tuning `max_inject_tokens` for Chinese, Japanese, or Korean
+traffic should expect tighter trimming than the old English-only estimate.
+Thai and other scripts without spaces are not fully segmented here. Exact
+tokenizer accounting for routing budgets is tracked separately ([#3050](https://github.com/vllm-project/semantic-router/issues/3050)).
+
 ## Observability
 
 Router Memory exposes bounded Prometheus metrics on the Router scrape endpoint.
@@ -56,6 +70,78 @@ Retrieval volume is tracked by `llm_memory_retrieval_total` with `backend` and
 histograms without per-user labels. If you upgrade from a release that labeled
 memory metrics with `user_id`, follow the [Router Memory Prometheus label release
 note](../../release-notes/router-memory-prometheus-labels).
+
+## In-memory Store capabilities and lifecycle
+
+The Go `InMemoryStore` implements the memory `Store` interface for tests and
+proofs of concept. It is not a selectable `global.stores.memory` backend; the
+three configured backends above remain the runtime choices. The following
+inventory covers this implementation only, as an initial slice of
+[the backend capability and lifecycle work](https://github.com/vllm-project/semantic-router/issues/4393).
+
+| Operation | Enabled behavior and supported options | Observed behavior after `Close` |
+| --- | --- | --- |
+| `Store` | Insert by unique ID; reject duplicates. Use a supplied embedding or generate one through the configured provider. Assign `CreatedAt` if absent. | No data is stored and no embedding is requested. Currently returns `nil` for an uncanceled context; error alignment is tracked in [#4842](https://github.com/vllm-project/semantic-router/pull/4842). |
+| `Retrieve` | Cosine similarity, score descending. A nonempty `UserID` restricts results to that user; an empty `UserID` searches all users. Optional `ProjectID` and `Types` filters still apply. Apply the supplied `Threshold`; truncate only for a positive `Limit`. Hybrid search and adaptive threshold options are not implemented. | No results and no embedding work; currently returns `nil, nil`. Error alignment is tracked in #4842. |
+| `Get` | Look up an ID; missing IDs return an error. | Disabled error, no memory. |
+| `Update` | Require an existing ID. Update content, type, and update time; regenerate the embedding when content changes. Apply nonempty project and source values. | Disabled error. |
+| `List` | Require `UserID`; optional `Types` filter. Use the shared limit/offset and ordering contract from [#4325](https://github.com/vllm-project/semantic-router/issues/4325). | Disabled error, no page. |
+| `Forget` | Delete an existing ID; missing IDs return an error. | Disabled error. |
+| `ForgetByScope` | Match `UserID` exactly, plus optional `ProjectID` and `Types`; no matches is a successful no-op. Callers must supply a user ID; this implementation does not reject an empty one. | Disabled error. |
+| `IsEnabled` | `true` immediately after construction; no background initialization. | `false`. |
+| `CheckConnection` | `nil`; there is no external connection or remote health probe. | Disabled error. |
+| `Close` | Clear retained memories and disable the instance. | Repeated calls succeed. |
+
+Unlike Milvus and Valkey, which reject an empty retrieval `UserID`, the in-memory
+implementation treats it as an omitted user filter. Callers requiring user
+isolation must supply a nonempty `UserID`; project and type filters alone do not
+isolate users. The scope test below records this backend-specific behavior, not
+a shared contract for all stores.
+
+Each instance has its own process-local map. Data is visible to subsequent
+operations on that instance, but a new instance starts empty; there is no disk
+persistence or reconnect/restart recovery. `Store`, `Get`, `List`, and retrieval results
+retain or return memory pointers rather than copies, so callers must not mutate
+shared records concurrently. The store owns its map, while the embedding
+provider belongs to the caller and can be reused by another store after close.
+Drain active callers before closing: this slice verifies sequential shutdown,
+not a concurrent close/drain or router reload guarantee.
+
+The closed-state error behavior is inconsistent: `Store` and `Retrieve` currently
+return success-shaped no-ops, while the other data operations return disabled
+errors. [#4842](https://github.com/vllm-project/semantic-router/pull/4842) tracks
+alignment to `ErrStoreDisabled` / `ErrStoreClosed` across all backends, including
+moving the in-memory enabled checks under the lock to fix the `Store` vs `Close`
+race. Until that change lands, these are observations of the current
+implementation. The lifecycle tests assert no retained data or embedding work
+after close without establishing the current `nil` errors as a write/retrieval
+guarantee or depending on the disabled error wording.
+
+### Verification coverage
+
+`src/semantic-router/pkg/memory/inmemory_store_lifecycle_test.go` uses small
+precomputed vectors and an injected function provider, with no database or model
+downloads. It checks resource release, repeated close, disabled operations,
+post-close writes, fresh-instance isolation, and provider reuse.
+`inmemory_store_retrieve_scope_test.go` checks explicit and empty user IDs,
+including project and type filters with memories from two users. Cancellation
+coverage stays in `embedding_cancellation_test.go`, including
+`TestCanceledStoreDoesNotPersistPrecomputedEmbedding`; this slice does not add a
+new cancellation or pagination contract. After building the native libraries
+required by the Router module, run the focused checks from its directory:
+
+```bash
+go test ./pkg/memory \
+  -run '^(TestInMemoryStore(CloseReleasesMemories|ClosedOperations|ClosedWritesDoNotPersist|LifetimeAndEmbeddingOwnership|RetrieveUserScope)|TestCanceledStoreDoesNotPersistPrecomputedEmbedding)$' \
+  -count=1
+```
+
+The fixtures do not use native inference, but compiling the whole `memory`
+package still requires its other backends' native dependencies, including
+Valkey GLIDE.
+
+The other backends' lifecycle matrices and Router reload/drain integration remain
+part of the parent issue.
 
 ## Upgrading the embedding model
 

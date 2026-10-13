@@ -134,6 +134,7 @@ type ExactLookup struct {
 type SemanticLookup struct {
 	Identity  CacheIdentity
 	Threshold float32
+	MaxAge    *time.Duration
 }
 
 type CacheWrite struct {

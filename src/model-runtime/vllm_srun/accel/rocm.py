@@ -54,15 +54,40 @@ class ROCmAccelerator(GPUAccelerator):
             kernels.register(
                 Kernel(name, getattr(fused, name), "triton-gfx942", exact=True)
             )
-        from .triton_fp64_conv import FP64_ACCUMULATE, fp64_conv
+        from .triton_fp64_conv import (
+            FP64_ACCUMULATE,
+            FP64_NAIVE,
+            fp64_conv,
+            gdn_prep_fp64,
+        )
 
+        if kernels.select("chunk_gated_delta_rule").source == "fla":
+            kernels.register(
+                Kernel(
+                    "gdn_prep",
+                    gdn_prep_fp64,
+                    "triton-gfx942-fp64-naive",
+                    exact=True,
+                    variant=FP64_NAIVE,
+                )
+            )
+        default = kernels.select("causal_conv1d").fn
         kernels.register(
             Kernel(
                 "causal_conv1d",
-                fp64_conv(kernels.select("causal_conv1d").fn),
+                fp64_conv(default),
                 "triton-gfx942-fp64",
                 exact=True,
                 variant=FP64_ACCUMULATE,
+            )
+        )
+        kernels.register(
+            Kernel(
+                "causal_conv1d",
+                fp64_conv(default, minimum=0),
+                "triton-gfx942-fp64-naive",
+                exact=True,
+                variant=FP64_NAIVE,
             )
         )
         return kernels

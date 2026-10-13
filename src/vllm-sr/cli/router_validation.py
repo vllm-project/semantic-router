@@ -224,6 +224,7 @@ def _container_image(container_name: str) -> str:
         result = subprocess.run(
             [
                 get_container_runtime(),
+                "container",
                 "inspect",
                 "--format",
                 "{{.Config.Image}}",

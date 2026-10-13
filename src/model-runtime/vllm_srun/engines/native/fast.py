@@ -22,18 +22,21 @@ four scored panels), so it belongs to the exact profile:
   ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
-  several forwards each. At most ``MAX_GRAPHS`` graphs (and
-  ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) are captured; after that, new shapes
-  run eagerly. Captured graphs are never destroyed while serving: on ROCm,
+  several forwards each. Graphs are captured until there are ``MAX_GRAPHS`` of
+  them or the device's used memory has grown since the first capture by
+  ``MAX_GRAPH_BYTES`` or by half of what was free then, whichever is less; after that, new shapes run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
-  batches of Index traffic, led to GPU memory access faults.
+  batches of Index traffic, led to GPU memory access faults. On CUDA the same
+  runner also replays Vela 2.0's forest forward (``models/forest.py``) per
+  exact forest shape; ROCm keeps forests eager, because an eager forward while
+  a forest graph of eight or more Vela-4B layers is alive faults there.
 """
 
 from __future__ import annotations
 
 import math
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
@@ -64,7 +67,7 @@ FUSED_SLOTS: dict[str | None, tuple[str, ...]] = {
 }
 MAX_GRAPH_TOKENS = 4096
 MAX_GRAPHS = 512
-MAX_GRAPH_OUTPUT_BYTES = 4 << 30
+MAX_GRAPH_BYTES = 4 << 30
 CAPTURE_AFTER = 2
 MASK_ALIGN = 16
 
@@ -219,11 +222,18 @@ def _prepare_qwen3(layer: Qwen3Layer) -> dict[str, Any]:
 
 
 def fused_applies(hidden_states: torch.Tensor) -> bool:
-    """The fused kernels reproduce the eager layer under BF16 autocast on an FP32 or BF16 stream."""
+    """The fused kernels reproduce the eager layer under BF16 autocast on an FP32 or BF16 stream.
+
+    A BF16 stream without autocast (a backbone held in BF16 and run eagerly, as
+    Decision 3.0's released runtime runs it) rounds the same way: every op the
+    kernels replace already reads and writes BF16 there.
+    """
+    if not hidden_states.is_cuda:
+        return False
+    if not torch.is_autocast_enabled("cuda"):
+        return hidden_states.dtype == torch.bfloat16
     return (
         hidden_states.dtype in (torch.float32, torch.bfloat16)
-        and hidden_states.is_cuda
-        and torch.is_autocast_enabled("cuda")
         and torch.get_autocast_dtype("cuda") == torch.bfloat16
     )
 
@@ -425,7 +435,10 @@ def _gated_delta(
     mask: torch.Tensor | Tree | None,
     kernels: KernelSet,
 ) -> torch.Tensor:
-    if kernels.select("causal_conv1d").variant is not None:
+    conv = kernels.select("causal_conv1d").variant
+    if conv is not None and (
+        not kernels.has("gdn_prep") or kernels.select("gdn_prep").variant != conv
+    ):
         # The model's released convolution (a kernel variant) is not what gdn_prep fuses.
         eager: torch.Tensor = m(normed, mask, kernels)
         return eager
@@ -625,10 +638,6 @@ class Masks:
         }
 
 
-def _output_bytes(value: torch.Tensor) -> int:
-    return value.numel() * value.element_size()
-
-
 class Graphs:
     """Graphs of the backbone forward per exact padded shape (see the module docstring)."""
 
@@ -640,19 +649,21 @@ class Graphs:
         capture_after: int = CAPTURE_AFTER,
         max_graphs: int = MAX_GRAPHS,
         max_tokens: int = MAX_GRAPH_TOKENS,
-        max_output_bytes: int = MAX_GRAPH_OUTPUT_BYTES,
+        max_bytes: int = MAX_GRAPH_BYTES,
     ):
         self.backbone = backbone
         self.masks = masks
         self.capture_after = capture_after
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
-        self.max_output_bytes = max_output_bytes
-        self.graphs: dict[tuple[int, int, bool], dict[str, Any]] = {}
-        self.seen: dict[tuple[int, int, bool], int] = {}
-        self.failed: set[tuple[int, int, bool]] = set()
-        self.output_bytes = 0
+        self.max_bytes = max_bytes
+        self.graphs: dict[Hashable, dict[str, Any]] = {}
+        self.seen: dict[Hashable, int] = {}
+        self.failed: set[Hashable] = set()
+        self.base: int | None = None
+        self.budget = max_bytes
         self.pool: Any = None
+        self.stream: Any = None
         self.stats = {
             "captures": 0,
             "replays": 0,
@@ -666,28 +677,42 @@ class Graphs:
     ) -> torch.Tensor:
         rows, length = input_ids.shape
         padded = any(n != length for n in lengths)
-        key = (rows, length, padded)
+        return self.run(
+            (rows, length, padded),
+            (input_ids, attention_mask),
+            lambda ids, mask: self.eager(ids, mask, padded),
+            rows * length,
+        )
+
+    def run(
+        self,
+        key: Hashable,
+        inputs: tuple[torch.Tensor, ...],
+        body: Callable[..., torch.Tensor],
+        tokens: int,
+    ) -> torch.Tensor:
+        """``body(*inputs)``, replayed from the graph of ``key`` once captured (the module docstring)."""
         entry = self.graphs.get(key)
         if entry is None:
             if (
                 key in self.failed
-                or rows * length > self.max_tokens
+                or tokens > self.max_tokens
                 or not torch.is_inference_mode_enabled()
             ):
                 self.stats["eager"] += 1
-                return self.eager(input_ids, attention_mask, padded)
+                return body(*inputs)
             if len(self.seen) > 1 << 16:
                 self.seen.clear()
             self.seen[key] = self.seen.get(key, 0) + 1
             if self.seen[key] < self.capture_after:
                 self.stats["eager"] += 1
-                return self.eager(input_ids, attention_mask, padded)
-            entry = self._capture(key, input_ids, attention_mask, padded)
+                return body(*inputs)
+            entry = self._capture(key, inputs, body)
             if entry is None:
                 self.stats["eager"] += 1
-                return self.eager(input_ids, attention_mask, padded)
-        entry["input_ids"].copy_(input_ids)
-        entry["attention_mask"].copy_(attention_mask)
+                return body(*inputs)
+        for static, value in zip(entry["inputs"], inputs, strict=True):
+            static.copy_(value)
         entry["graph"].replay()
         self.stats["replays"] += 1
         output: torch.Tensor = entry["output"]
@@ -703,53 +728,59 @@ class Graphs:
 
     def _capture(
         self,
-        key: tuple[int, int, bool],
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        padded: bool,
+        key: Hashable,
+        inputs: tuple[torch.Tensor, ...],
+        body: Callable[..., torch.Tensor],
     ) -> dict[str, Any] | None:
-        if (
-            len(self.graphs) >= self.max_graphs
-            or self.output_bytes >= self.max_output_bytes
-        ):
+        # A graph costs far more than its output, and part of it is taken only
+        # after the capture, so the budget is the device's growth since the first.
+        free, total = torch.cuda.mem_get_info(inputs[0].device)
+        used = total - free
+        if self.base is None:
+            # Half of what is free leaves room for eager forwards on a shared card.
+            self.base, self.budget = used, min(self.max_bytes, free // 2)
+        if len(self.graphs) >= self.max_graphs or used - self.base >= self.budget:
             self.stats["full"] += 1
             return None
-        static = {
-            "input_ids": input_ids.clone(),
-            "attention_mask": attention_mask.clone(),
-        }
-
-        def body() -> torch.Tensor:
-            return self.eager(static["input_ids"], static["attention_mask"], padded)
-
+        static = tuple(value.clone() for value in inputs)
         try:
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-            stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+                # One capture stream: BLAS keeps a workspace per stream, so a new stream per
+                # capture would leave a workspace behind for every graph.
+                self.stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
+            stream = self.stream
             stream.wait_stream(torch.cuda.current_stream())
-            with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
+            # Capture under the caller's autocast, with the cast cache off as capture needs.
+            with torch.autocast(
+                "cuda",
+                dtype=torch.get_autocast_dtype("cuda"),
+                enabled=torch.is_autocast_enabled("cuda"),
+                cache_enabled=False,
+            ):
                 with torch.cuda.stream(stream):
                     for _ in range(2):
-                        body()
+                        body(*static)
                 torch.cuda.current_stream().wait_stream(stream)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
                 # Device work is serialized, but other threads may still query the device
                 # meanwhile (placement); global capture mode would fail them and the capture.
                 with torch.cuda.graph(
-                    graph, pool=self.pool, capture_error_mode="thread_local"
+                    graph,
+                    pool=self.pool,
+                    stream=stream,
+                    capture_error_mode="thread_local",
                 ):
-                    output = body()
+                    output = body(*static)
             torch.cuda.synchronize()
         except Exception:
             torch.cuda.synchronize()
             self.failed.add(key)
             self.stats["failed"] += 1
             return None
-        size = _output_bytes(output)
-        entry = {**static, "graph": graph, "output": output, "bytes": size}
+        entry = {"inputs": static, "graph": graph, "output": output}
         self.graphs[key] = entry
-        self.output_bytes += size
         self.stats["captures"] += 1
         return entry
 

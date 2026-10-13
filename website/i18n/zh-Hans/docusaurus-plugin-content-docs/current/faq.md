@@ -44,9 +44,11 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 `/v1/systemone`；`/v1/decisions` 是别名。原生模型发现使用
 `/v1/systemone/models`，Chat 模型发现使用 `/v1/models`。
 
-当前 System One 请求指定具体的已部署模型。通过 `vllm-sr/auto` 自动选择原生模型
-仍在路线图中；默认 Chat 入口已经使用这个名称。完整请求与授权方式见
-[System One 指南](model-runtime/guides/decisions)和[快速开始](model-runtime/quickstart)。
+两种模式都可以用具体模型 ID 直接推理。Router 模式还可以显式声明
+`api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生级联。
+默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
+[System One 级联指南（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)和
+[快速开始](model-runtime/quickstart)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
 

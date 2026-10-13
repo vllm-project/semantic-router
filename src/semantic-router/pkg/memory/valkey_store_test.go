@@ -732,3 +732,91 @@ func TestErrValkeyMemoryAlreadyExists(t *testing.T) {
 	doubleWrapped := fmt.Errorf("valkey store failed: %w", wrapped)
 	assert.ErrorIs(t, doubleWrapped, errValkeyMemoryAlreadyExists)
 }
+
+func TestBuildRetrieveSearchCmdProjectScope(t *testing.T) {
+	t.Parallel()
+
+	store := &ValkeyStore{indexName: "mem_idx"}
+	embedding := []float32{0.1, 0.2}
+
+	without := store.buildRetrieveSearchCmd(RetrieveOptions{UserID: "alice", Limit: 5}, embedding, 5)
+	query := without[2]
+	assert.Contains(t, query, "@user_id:{alice}")
+	assert.NotContains(t, query, "@project_id:")
+
+	withProject := store.buildRetrieveSearchCmd(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: "proj-1",
+		Limit:     5,
+	}, embedding, 5)
+	assert.Contains(t, withProject[2], "@user_id:{alice}")
+	assert.Contains(t, withProject[2], "@project_id:{proj\\-1}")
+
+	escaped := store.buildRetrieveSearchCmd(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: `p"x`,
+		Limit:     5,
+	}, embedding, 5)
+	assert.Contains(t, escaped[2], `@project_id:{p\"x}`)
+	assert.NotContains(t, escaped[2], `@project_id:{p"x}`)
+}
+
+func TestStoredValkeyProjectScopeSeparatesExplicitDefault(t *testing.T) {
+	t.Parallel()
+
+	embedding := []float32{0.1, 0.2}
+	unscoped := &Memory{ID: "unscoped", Content: "no project", UserID: "alice"}
+	explicit := &Memory{ID: "named", Content: "default project", UserID: "alice", ProjectID: "default"}
+
+	unscopedFields, err := valkeyBuildHashFields(unscoped, embedding)
+	require.NoError(t, err)
+	explicitFields, err := valkeyBuildHashFields(explicit, embedding)
+	require.NoError(t, err)
+
+	assert.Empty(t, unscopedFields["project_id"])
+	assert.Equal(t, "default", explicitFields["project_id"])
+
+	var unscopedMeta, explicitMeta map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(unscopedFields["metadata"]), &unscopedMeta))
+	require.NoError(t, json.Unmarshal([]byte(explicitFields["metadata"]), &explicitMeta))
+	assert.Empty(t, unscopedMeta["project_id"])
+	assert.Equal(t, "default", explicitMeta["project_id"])
+
+	store := &ValkeyStore{indexName: "mem_idx"}
+	query := store.buildRetrieveSearchCmd(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: "default",
+		Limit:     5,
+	}, embedding, 5)
+	assert.Contains(t, query[2], "@project_id:{default}")
+	assert.Contains(t, query[2], "EF_RUNTIME 20")
+	assert.Equal(t, []string{"PARAMS", "2", "BLOB", string(valkeyFloat32ToBytes(embedding))}, query[3:7])
+}
+
+func TestValkeyProjectScopeDoesNotWidenPastEfRuntime(t *testing.T) {
+	t.Parallel()
+
+	// A full 4096-row legacy window must not become KNN 8192 / EF_RUNTIME 8192.
+	assert.Equal(t, 0, nextProjectScopedSearchTopK("default", 4_096, 4_096, 0, maxValkeyVectorEfRuntime))
+	assert.Equal(t, 4_096, nextProjectScopedSearchTopK("default", 2_048, 2_048, 0, maxValkeyVectorEfRuntime))
+	// Milvus can keep doubling; its search window is 16384.
+	assert.Equal(t, 8_192, nextProjectScopedSearchTopK("default", 4_096, 4_096, 0, maxProjectScopedSearchTopK))
+
+	store := &ValkeyStore{indexName: "mem_idx"}
+	cmd := store.buildRetrieveSearchCmdWithTopK(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: "default",
+	}, []float32{0.1, 0.2}, 8_192)
+	assert.Contains(t, cmd[2], "KNN 4096 @embedding $BLOB EF_RUNTIME 4096")
+	assert.NotContains(t, cmd[2], "8192")
+	limitAt := -1
+	for i, part := range cmd {
+		if part == "LIMIT" {
+			limitAt = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, limitAt, 0)
+	require.Less(t, limitAt+2, len(cmd))
+	assert.Equal(t, "4096", cmd[limitAt+2])
+}
