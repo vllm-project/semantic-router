@@ -163,7 +163,8 @@ function install_func_e_if_needed {
 # Installs func-e into BIN_OUT.
 function install_func_e {
   echo "Installing func-e..."
-  curl -sSL https://func-e.io/install.sh | bash -s -- -b "${BIN_OUT}" "${FUNC_E_VERSION}"
+  # Include download URLs and HTTP failures in the harness log if installation fails.
+  curl -sSL https://func-e.io/install.sh | bash -s -- -d -b "${BIN_OUT}" "${FUNC_E_VERSION}"
 }
 
 # Starts Envoy in the background, logging to ENVOY_LOG.
