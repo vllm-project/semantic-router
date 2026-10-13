@@ -89,12 +89,14 @@ class CacheIdentityTests(CacheFixture, unittest.TestCase):
         with test_file.open("rb") as stream:
             self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
 
-        with patch(
-            "src.training.model_classifier.sequence_repair.retention.hasattr",
-            return_value=False,
+        with (
+            patch(
+                "src.training.model_classifier.sequence_repair.retention.hasattr",
+                return_value=False,
+            ),
+            test_file.open("rb") as stream,
         ):
-            with test_file.open("rb") as stream:
-                self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
+            self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
 
     def test_exact_cache_covers_only_explicit_replay_and_derives_compatibility(self):
         cache = self.load()
