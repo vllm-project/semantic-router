@@ -608,3 +608,105 @@ def test_threads_stay_within_the_container_unless_configured(monkeypatch):
         assert cpu.cap_threads(None) is None
     finally:
         torch.set_num_threads(before)
+
+
+def test_repeated_media_are_processed_once_and_answer_alike(
+    d3_runtime, png_url, mp4_url, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    image, clip = png_url(120, 90, 7), mp4_url(96, 64, frames=12, fps=8.0, seed=7)
+    decoded = {"images": 0, "videos": 0}
+    image_decode, video_decode = img.decode, vid.decode
+
+    def count_image(value):
+        decoded["images"] += 1
+        return image_decode(value)
+
+    def count_video(value):
+        decoded["videos"] += 1
+        return video_decode(value)
+
+    monkeypatch.setattr(img, "decode", count_image)
+    monkeypatch.setattr(vid, "decode", count_video)
+    body = {"state": "What is shown?", "questions": QUESTIONS, "images": [image]}
+    first, second = call(d3_runtime, body), call(d3_runtime, body)
+    assert first == second and first[0] == 200
+    assert decoded["images"] == 1
+    video = {"state": "What happens?", "questions": QUESTIONS, "videos": [clip]}
+    first, second = call(d3_runtime, video), call(d3_runtime, video)
+    assert first == second and first[0] == 200
+    assert decoded["videos"] == 1
+    assert model.media_cache.stats()["hits"] >= 2
+
+
+def test_passes_of_one_size_reuse_the_tower_features_of_their_images(
+    d3_runtime, png_url, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    questions = {f"q{i}": QUESTIONS["reasoning"] for i in range(2 * BATCH_SIZE)}
+    body = {
+        "state": "What is shown?",
+        "questions": questions,
+        "images": [png_url(80, 60, 9)],
+    }
+    model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
+    calls = []
+    tower = model.engine_model.tower_features
+
+    def counted(name, pixel_values, grids):
+        calls.append(len(grids))
+        return tower(name, pixel_values, grids)
+
+    monkeypatch.setattr(model.engine_model, "tower_features", counted)
+    status, cached = call(d3_runtime, body)
+    assert status == 200 and calls == [BATCH_SIZE]
+    model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
+    status, again = call(d3_runtime, body)
+    assert again == cached and calls == [BATCH_SIZE, BATCH_SIZE]
+
+
+def test_coalesced_batches_mix_requests_and_read_each_image_once(
+    d3_runtime, png_url, monkeypatch
+):
+    model = d3_runtime.lookup(None).model
+    plans = [
+        model.plan_images("Shown?", QUESTIONS, [png_url(80, 60, 21)]),
+        model.plan("Merge two sorted lists.", QUESTIONS),
+        model.plan_images(
+            "Shown?", QUESTIONS, [png_url(64, 96, 22), png_url(64, 64, 23)]
+        ),
+    ]
+    items = [item for plan in plans for item in plan.items]
+    exact = [value for plan in plans for value in model.run(list(plan.items))]
+    calls = []
+    tower = model.engine_model.tower_features
+
+    def counted(name, pixel_values, grids):
+        calls.append(len(grids))
+        return tower(name, pixel_values, grids)
+
+    model.feature_cache = type(model.feature_cache)(model.feature_cache.max_bytes)
+    monkeypatch.setattr(model.engine_model, "tower_features", counted)
+    mixed = model.run_approximate(items)
+    assert sorted(calls) == [1, 2]
+    assert len(mixed) == len(exact)
+    for got, want in zip(mixed, exact, strict=True):
+        assert got is not None and want is not None
+        assert max(abs(a - b) for a, b in zip(got, want, strict=True)) < 0.05
+
+
+def test_coalesced_forwards_follow_the_measured_cost_per_token(d3_runtime):
+    from vllm_srun.families.decision3 import family
+
+    model = d3_runtime.lookup(None).model
+    saved = model._token_seconds
+    try:
+        model._token_seconds = family.COALESCED_FORWARD_SECONDS / 10_000
+        limit = model.forward_token_budget()
+        assert model.coalesced_token_budget() == (
+            10_000 if limit is None else min(10_000, limit)
+        )
+        model._token_seconds = 1.0
+        assert model.coalesced_token_budget() == family.MIN_COALESCED_TOKENS
+    finally:
+        model._token_seconds = saved
