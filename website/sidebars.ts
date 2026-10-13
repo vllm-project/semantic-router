@@ -93,6 +93,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
+                'tutorials/signal/heuristic/topic-continuity',
               ],
             },
             {
@@ -524,6 +525,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
+        'benchmarking/agent-routing-protection',
         {
           type: 'category',
           label: 'sr-bench 1.0',

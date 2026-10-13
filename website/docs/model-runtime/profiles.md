@@ -63,4 +63,6 @@ for these:
 - cacheable repeated work can reuse recent results while they remain in the
   worker's bounded result cache (`--result-cache-entries`); replicas have
   independent worker caches;
+- Decision 3.0 models decode and preprocess a repeated image or video once,
+  and reuse its vision-tower features for later passes of the same size;
 - long inputs are split into windows only when you ask for windowing.
