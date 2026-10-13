@@ -71,7 +71,7 @@ func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, labels tas
 	if deadline > 0 {
 		timeout = deadline
 	} else if cfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
+		timeout = time.Duration(cfg.TimeoutSeconds * float64(time.Second))
 	}
 
 	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{

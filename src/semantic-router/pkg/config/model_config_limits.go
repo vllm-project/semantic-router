@@ -43,5 +43,5 @@ func (e *ExternalModelConfig) GetTimeout() time.Duration {
 	if e.TimeoutSeconds <= 0 {
 		return time.Duration(DefaultClassifierTimeoutSeconds) * time.Second
 	}
-	return time.Duration(e.TimeoutSeconds) * time.Second
+	return time.Duration(e.TimeoutSeconds * float64(time.Second))
 }

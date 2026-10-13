@@ -110,7 +110,7 @@ func TestNewHTTPClassifierInference(t *testing.T) {
 func TestNewHTTPClassifierInference_DefaultTimeout(t *testing.T) {
 	tests := []struct {
 		name            string
-		timeoutSeconds  int
+		timeoutSeconds  float64
 		expectedTimeout time.Duration
 	}{
 		{name: "unset uses the http_classify default", timeoutSeconds: 0, expectedTimeout: 5 * time.Second},
