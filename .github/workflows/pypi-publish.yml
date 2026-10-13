@@ -125,7 +125,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.dev.outputs.version || inputs.version }}
         run: |
           python -m pip install --upgrade pip
-          python -m pip install build twine pyyaml
+          python -m pip install build==1.6.1 twine==7.0.0 PyYAML==6.0.3
           if [[ "$PACKAGE_CHANNEL" == "stable" ]]; then
             python ../../tools/release/snapshot_model_catalog.py \
               --check --version "$RELEASE_VERSION"
@@ -181,7 +181,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+          python -m pip install build==1.6.1 twine==7.0.0 PyYAML==6.0.3 jsonschema==4.26.0
           TAG="${RELEASE_TAG:-v${RELEASE_VERSION}}"
           python tools/ci/package_contract.py --build-only --mode release \
             --tag "$TAG" --output .agent-harness/package
@@ -208,7 +208,7 @@ jobs:
           name: vllm-sr-dist
           path: dist
 
-      - run: pip install twine
+      - run: pip install twine==7.0.0
 
       - name: Publish explicit test package
         env:
@@ -248,7 +248,7 @@ jobs:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
         run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
-      - run: pip install twine
+      - run: pip install twine==7.0.0
 
       - name: Publish verified package
         env:
