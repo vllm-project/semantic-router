@@ -424,23 +424,25 @@ func checkedAnswer(answer Answer) Answer {
 }
 
 func validAnswerNumbers(answer Answer) bool {
-	if answer.Confidence < 0 || answer.Confidence > 1 {
-		return false
+	probabilities := []float64{answer.Confidence}
+	finiteOnly := []float64{answer.Score, answer.Threshold}
+	if answer.Type == "span" {
+		probabilities = append(probabilities, answer.Noul)
+	} else {
+		finiteOnly = append(finiteOnly, answer.Noul)
 	}
-	values := []float64{answer.Noul, answer.Score, answer.Confidence, answer.Threshold}
 	for _, probability := range answer.Probabilities {
-		if probability < 0 || probability > 1 {
-			return false
-		}
-		values = append(values, probability)
+		probabilities = append(probabilities, probability)
 	}
 	for _, span := range answer.Spans {
-		if span.Probability < 0 || span.Probability > 1 {
+		probabilities = append(probabilities, span.Probability)
+	}
+	for _, probability := range probabilities {
+		if math.IsNaN(probability) || math.IsInf(probability, 0) || probability < 0 || probability > 1 {
 			return false
 		}
-		values = append(values, span.Probability)
 	}
-	for _, value := range values {
+	for _, value := range finiteOnly {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return false
 		}

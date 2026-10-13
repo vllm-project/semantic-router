@@ -119,6 +119,26 @@ func TestDecodeRejectsOutOfRangeSetAndSpanProbabilities(t *testing.T) {
 					}
 				}
 			})
+			t.Run(fmt.Sprintf("%s/span_noul/preset=%t", name, preset), func(t *testing.T) {
+				kind := "noul"
+				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: 0.5}}}
+				body := api.DecisionResponse{
+					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &probability}},
+					Spans:   &spans,
+				}
+				question := entitiesQuestion("cities")
+				if preset {
+					question = Question{ID: "cities", Preset: "pii"}
+				}
+				got := decodeResponse(body, []Question{question}).Answers["cities"]
+				if probability == 0 || probability == 1 {
+					if got.Error != "" || got.Noul != probability || len(got.Spans) != 1 {
+						t.Fatalf("valid span noul: got %+v", got)
+					}
+				} else if got.Error != "invalid_model_output" || got.Noul != 0 || len(got.Spans) != 0 {
+					t.Fatalf("invalid span noul must clear evidence: got %+v", got)
+				}
+			})
 		}
 	}
 }

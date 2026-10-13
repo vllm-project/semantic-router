@@ -13,7 +13,8 @@ const probabilitySumTolerance = 0.02
 // invalid_model_output, so neither the decision signal nor the selector acts on
 // it. The built-in runtime cannot produce such an answer, but an engine
 // attached through a deployment's endpoint can. A preset question takes its
-// type from the model; checkedAnswer enforces its numeric bounds at decode.
+// type from the model; checkedAnswer enforces its confidence and probability
+// bounds at decode.
 func checkAnswers(questions []Question, response Response) Response {
 	for _, question := range questions {
 		answer, ok := response.Answers[question.ID]
