@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // createValkeyMemoryStore creates a ValkeyStore backend.
@@ -90,7 +91,7 @@ func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port in
 			Port: port,
 		}).
 		WithClientName("vllm_agentic_memory_client").
-		WithClientInfoTag("semantic-router")
+		WithClientInfoTag(valkeyutil.ClientInfoTag)
 
 	if vc.Password != "" {
 		clientConfig = clientConfig.WithCredentials(

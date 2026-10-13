@@ -87,7 +87,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 			Port: valkeyConfig.Connection.Port,
 		}).
 		WithClientName("vllm_cache_client").
-		WithClientInfoTag("semantic-router")
+		WithClientInfoTag(valkeyutil.ClientInfoTag)
 
 	if valkeyConfig.Connection.Password != "" {
 		clientConfig = clientConfig.WithCredentials(

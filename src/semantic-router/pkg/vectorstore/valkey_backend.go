@@ -50,7 +50,7 @@ func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
 	clientConfig := glideconfig.NewClientConfiguration().
 		WithAddress(&glideconfig.NodeAddress{Host: host, Port: port}).
 		WithClientName("vllm_vector_store_client").
-		WithClientInfoTag("semantic-router").
+		WithClientInfoTag(valkeyutil.ClientInfoTag).
 		WithRequestTimeout(time.Duration(timeout) * time.Second)
 
 	if cfg.Password != "" {
