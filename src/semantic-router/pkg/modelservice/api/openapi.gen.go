@@ -71,6 +71,24 @@ const (
 	UnsupportedSurface ErrorBodyCode = "unsupported_surface"
 )
 
+// Defines values for ErrorBodyReason.
+const (
+	ImageAspectRatio ErrorBodyReason = "image_aspect_ratio"
+	ImageFormat      ErrorBodyReason = "image_format"
+	ImageMalformed   ErrorBodyReason = "image_malformed"
+	ImagePixels      ErrorBodyReason = "image_pixels"
+	ImageTooLarge    ErrorBodyReason = "image_too_large"
+	ImageUnsupported ErrorBodyReason = "image_unsupported"
+	VideoAspectRatio ErrorBodyReason = "video_aspect_ratio"
+	VideoFormat      ErrorBodyReason = "video_format"
+	VideoMalformed   ErrorBodyReason = "video_malformed"
+	VideoPixels      ErrorBodyReason = "video_pixels"
+	VideoTokens      ErrorBodyReason = "video_tokens"
+	VideoTooLarge    ErrorBodyReason = "video_too_large"
+	VideoTooLong     ErrorBodyReason = "video_too_long"
+	VideoUnsupported ErrorBodyReason = "video_unsupported"
+)
+
 // Defines values for GoldenStatusStatus.
 const (
 	GoldenStatusStatusFailed     GoldenStatusStatus = "failed"
@@ -603,12 +621,25 @@ type EmbeddingsUsage struct {
 
 // ErrorBody defines model for ErrorBody.
 type ErrorBody struct {
-	Code    ErrorBodyCode `json:"code"`
-	Message string        `json:"message"`
+	Code ErrorBodyCode `json:"code"`
+
+	// Limit The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
+	// for `video_too_long`, input tokens for `video_tokens` and the longer side over the shorter for
+	// `*_aspect_ratio`.
+	Limit   *int   `json:"limit,omitempty"`
+	Message string `json:"message"`
+
+	// Reason Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+	// data, so a gateway may show them where it must not show `message`.
+	Reason *ErrorBodyReason `json:"reason,omitempty"`
 }
 
 // ErrorBodyCode defines model for ErrorBody.Code.
 type ErrorBodyCode string
+
+// ErrorBodyReason Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+// data, so a gateway may show them where it must not show `message`.
+type ErrorBodyReason string
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {

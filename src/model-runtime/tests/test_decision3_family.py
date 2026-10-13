@@ -111,28 +111,39 @@ def test_images_reach_the_model_and_count_as_input_tokens(d3_runtime, png_url):
 
 
 @pytest.mark.parametrize(
-    "images,reason",
+    "images,message,reason",
     [
-        ("data:image/png;base64,AAAA", "images must be a list"),
+        ("data:image/png;base64,AAAA", "images must be a list", "image_format"),
         (
             ["https://example.com/a.png"],
             "images[0]: images must be base64 PNG, JPEG or WebP data URLs",
+            "image_format",
         ),
         (
             ["data:image/gif;base64,R0lGODlhAQABAAAAACw="],
             "images[0]: images must be base64 PNG, JPEG or WebP",
+            "image_format",
         ),
-        (["data:image/png;base64,not base64!"], "images[0]: invalid base64 image data"),
-        (["data:image/png;base64,iVBORw0KGgo="], "images[0]: invalid image data"),
+        (
+            ["data:image/png;base64,not base64!"],
+            "images[0]: invalid base64 image data",
+            "image_malformed",
+        ),
+        (
+            ["data:image/png;base64,iVBORw0KGgo="],
+            "images[0]: invalid image data",
+            "image_malformed",
+        ),
     ],
 )
-def test_malformed_images_fail_the_request(d3_runtime, images, reason):
+def test_malformed_images_fail_the_request(d3_runtime, images, message, reason):
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": images}
     )
     assert status == 400
     assert body["error"]["code"] == "invalid_request"
-    assert reason in body["error"]["message"]
+    assert message in body["error"]["message"]
+    assert body["error"]["reason"] == reason and "limit" not in body["error"]
 
 
 def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
@@ -141,11 +152,19 @@ def test_oversized_and_extreme_images_are_refused(d3_runtime, png_url):
         d3_runtime, {"state": "x", "questions": QUESTIONS, "images": [huge]}
     )
     assert status == 400 and "8,000,000 bytes" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "image_too_large",
+        img.MAX_IMAGE_BYTES,
+    )
     status, body = call(
         d3_runtime,
         {"state": "x", "questions": QUESTIONS, "images": [png_url(2010, 10, 3)]},
     )
     assert status == 400 and "aspect ratio" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "image_aspect_ratio",
+        img.MAX_ASPECT_RATIO,
+    )
 
 
 def test_a_text_model_refuses_images(d3_text_package, png_url):
@@ -158,6 +177,7 @@ def test_a_text_model_refuses_images(d3_text_package, png_url):
             runtime, {"state": "x", "questions": QUESTIONS, "images": [png_url(64, 64)]}
         )
         assert status == 400 and "images are not supported" in body["error"]["message"]
+        assert body["error"]["reason"] == "image_unsupported"
         assert call(runtime, {"state": "x", "questions": QUESTIONS})[0] == 200
     finally:
         runtime.stop()
@@ -286,23 +306,36 @@ def test_videos_reach_the_model_and_count_as_input_tokens(d3_runtime, mp4_url, p
 
 
 @pytest.mark.parametrize(
-    "videos,reason",
+    "videos,message,reason",
     [
-        ("data:video/mp4;base64,AAAA", "videos must be a list"),
-        (["https://example.com/a.mp4"], "videos[0]: videos must be base64 MP4"),
-        (["data:video/avi;base64,AAAA"], "videos[0]: videos must be base64 MP4"),
-        (["data:video/mp4;base64,not base64!"], "videos[0]: invalid base64 video data"),
-        (["data:video/mp4;base64,AAAAAAAA"], "videos[0]: "),
+        ("data:video/mp4;base64,AAAA", "videos must be a list", "video_format"),
+        (
+            ["https://example.com/a.mp4"],
+            "videos[0]: videos must be base64 MP4",
+            "video_format",
+        ),
+        (
+            ["data:video/avi;base64,AAAA"],
+            "videos[0]: videos must be base64 MP4",
+            "video_format",
+        ),
+        (
+            ["data:video/mp4;base64,not base64!"],
+            "videos[0]: invalid base64 video data",
+            "video_malformed",
+        ),
+        (["data:video/mp4;base64,AAAAAAAA"], "videos[0]: ", "video_malformed"),
     ],
 )
-def test_malformed_videos_fail_the_request(d3_runtime, videos, reason):
+def test_malformed_videos_fail_the_request(d3_runtime, videos, message, reason):
     pytest.importorskip("cv2")
     status, body = call(
         d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": videos}
     )
     assert status == 400
     assert body["error"]["code"] == "invalid_request"
-    assert reason in body["error"]["message"]
+    assert message in body["error"]["message"]
+    assert body["error"]["reason"] == reason and "limit" not in body["error"]
 
 
 def test_oversized_videos_are_refused(d3_runtime):
@@ -312,6 +345,22 @@ def test_oversized_videos_are_refused(d3_runtime):
         d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": [huge]}
     )
     assert status == 400 and "32,000,000 bytes" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "video_too_large",
+        vid.MAX_VIDEO_BYTES,
+    )
+
+
+def test_videos_over_the_duration_limit_are_refused(d3_runtime, mp4_url):
+    clip = mp4_url(32, 32, frames=vid.MAX_SECONDS + 2, fps=1.0, seed=5)
+    status, body = call(
+        d3_runtime, {"state": "x", "questions": QUESTIONS, "videos": [clip]}
+    )
+    assert status == 400 and "300 seconds" in body["error"]["message"]
+    assert (body["error"]["reason"], body["error"]["limit"]) == (
+        "video_too_long",
+        vid.MAX_SECONDS,
+    )
 
 
 def test_a_text_model_refuses_videos(d3_text_package, mp4_url):
@@ -324,6 +373,7 @@ def test_a_text_model_refuses_videos(d3_text_package, mp4_url):
             {"state": "x", "questions": QUESTIONS, "videos": [mp4_url(32, 32, 4)]},
         )
         assert status == 400 and "reads no videos" in body["error"]["message"]
+        assert body["error"]["reason"] == "video_unsupported"
     finally:
         runtime.stop()
 

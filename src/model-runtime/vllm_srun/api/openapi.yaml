@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 2.3.0
+  version: 2.4.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
@@ -1178,6 +1178,18 @@ components:
           enum: [invalid_request, model_not_found, request_too_large, unsupported_surface, overloaded, internal_error, not_ready]
         message:
           type: string
+        reason:
+          type: string
+          description: |
+            Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
+            data, so a gateway may show them where it must not show `message`.
+          enum: [image_format, image_too_large, image_pixels, image_aspect_ratio, image_malformed, image_unsupported, video_format, video_too_large, video_too_long, video_pixels, video_aspect_ratio, video_malformed, video_tokens, video_unsupported]
+        limit:
+          type: integer
+          description: |
+            The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
+            for `video_too_long`, input tokens for `video_tokens` and the longer side over the shorter for
+            `*_aspect_ratio`.
     ModelList:
       type: object
       required: [object, data, api_version, limits]

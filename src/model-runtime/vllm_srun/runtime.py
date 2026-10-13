@@ -350,7 +350,14 @@ class ServedModel:
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )
-        self.health.set("loading", f"loading weights on {placement.device.label}")
+        needed = f"needs about {placement.estimated_bytes / (1 << 30):.1f} GiB"
+        free = device.free_memory
+        self.health.set(
+            "loading",
+            f"loading weights on {device.label} ("
+            + (needed if free is None else f"{needed}, {free / (1 << 30):.1f} GiB free")
+            + ")",
+        )
         pinned = self.kernel_choices
 
         def execute(work: Any) -> Any:
@@ -947,7 +954,7 @@ class Runtime:
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            raise RuntimeServiceError.invalid(exc) from exc
         return Prepared(served, request, plan)
 
     def finish(
@@ -1071,9 +1078,7 @@ class Runtime:
             try:
                 split = split_states(body) if surface == "decisions" else None
             except ValueError as exc:
-                failed = _error_outcome(
-                    RuntimeServiceError("invalid_request", str(exc))
-                )
+                failed = _error_outcome(RuntimeServiceError.invalid(exc))
                 joins.append((len(parts), None, failed))
                 continue
             if split is None:
