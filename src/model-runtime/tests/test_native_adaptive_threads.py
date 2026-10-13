@@ -8,6 +8,8 @@ path the host's numerics take: serving on a bit-identical host, retired on
 one that drifts.
 """
 
+import types
+
 import pytest
 import torch
 import vllm_srun.engines.native.threads as adaptive
@@ -168,18 +170,78 @@ def test_the_warm_base_pass_pairs_with_the_shadow_timing():
 
     The cold configured pass that serves the request pays cold caches; the
     shadow pays warm ones. Timing a second, warm configured pass and filing
-    it under base keeps the caches out of which count looks fastest — and
-    the warm pass never advances the exploration window on its own.
+    it under base keeps the caches out of which count looks fastest — on
+    every request, including the ones whose shadow count is base itself, so
+    base's samples never mix cold with warm.
     """
     resolver = adaptive.AdaptiveThreads(base=4, explore=6)
     resolver.start()
-    for _ in range(2):
-        resolver.pick(64)  # cycles the shadow counts; base still serves
-        resolver.record_base(64, 8.0)  # warm configured pass
-        resolver.record(64, 5.0)  # shadow pass: warm caches, faster
-    assert resolver._samples[4] == [(64, 8.0)] * 2
-    assert resolver._seen == 2  # the shadow drives the window, not the warm pass
+    for _ in range(3):
+        picked = resolver.pick(64)  # cycles 1, 2, then base itself
+        resolver.record_base(64, 8.0)  # the warm configured pass, always
+        if picked != 4:
+            resolver.record(64, 5.0)  # shadow pass: warm caches, faster
+    assert resolver._samples[4] == [(64, 8.0)] * 3  # no cold sample ever
+    assert resolver._seen == 2  # only shadow timings advance the window
     assert resolver._table is None
+
+
+def test_level_1_runs_one_pass_per_request_after_adoption():
+    """Past the table, level 1 stops shadowing: one forward per request.
+
+    Once the table builds, level 1's report is done and pick()'s learned
+    count has nothing left to measure — so the configured count serves in
+    a single pass, even when the learned count differs from it. Before the
+    fix, every request paid the served pass plus a dead shadow forever.
+    """
+    resolver = adaptive.AdaptiveThreads(base=4, explore=9, serve=False)
+    fake = types.SimpleNamespace(
+        threads_resolver=resolver,
+        device=types.SimpleNamespace(type="cpu"),
+        _cpu_threads=4,
+        _bit_equal=NativeEngineModel._bit_equal,
+    )
+    resolver.start()
+    calls = {"n": 0}
+
+    def run():
+        calls["n"] += 1
+        return "ok"
+
+    for _ in range(14):  # exploration: nine shadow samples over ~14 requests
+        resolver.pick(96)
+        NativeEngineModel._with_threads(fake, 96, run)
+    assert resolver.adopted
+    calls["n"] = 0
+    for _ in range(10):
+        assert NativeEngineModel._with_threads(fake, 96, run) == "ok"
+    assert calls["n"] == 10  # one pass per request, no dead shadow
+    assert adaptive.CpuTeam._active == 4  # the configured count serves
+
+
+def test_a_single_count_budget_never_explorers():
+    """A budget that allows only the configured count has nothing to learn.
+
+    With --threads 1 the allowed counts are just base: an exploration
+    window could never close (no shadow advances it), so the resolver
+    starts adopted and every request is one pass from the start.
+    """
+    resolver = adaptive.AdaptiveThreads(base=1, explore=9, serve=False)
+    assert resolver.adopted and resolver.pick(96) == 1
+    fake = types.SimpleNamespace(
+        threads_resolver=resolver,
+        device=types.SimpleNamespace(type="cpu"),
+        _cpu_threads=1,
+    )
+    calls = {"n": 0}
+
+    def run():
+        calls["n"] += 1
+        return "ok"
+
+    for _ in range(5):
+        assert NativeEngineModel._with_threads(fake, 96, run) == "ok"
+    assert calls["n"] == 5
 
 
 def test_level_2_transition_only_when_serving():
@@ -234,7 +296,7 @@ def test_level_1_reports_the_learned_counts_but_never_serves_them(
     try:
         client = TestClient(create_app(runtime))
         resolver = runtime.served[0].model.engine_model.threads_resolver
-        for i in range(60):
+        for i in range(100):
             r = client.post(
                 "/v1/decisions", json={"state": f"state {i}", "questions": QUESTIONS}
             )
@@ -263,7 +325,7 @@ def test_level_2_serves_the_learned_count_after_adoption(
     try:
         client = TestClient(create_app(runtime))
         resolver = runtime.served[0].model.engine_model.threads_resolver
-        for i in range(80):
+        for i in range(130):
             r = client.post(
                 "/v1/decisions", json={"state": f"state {i}", "questions": QUESTIONS}
             )
@@ -275,7 +337,7 @@ def test_level_2_serves_the_learned_count_after_adoption(
         sampled = [tokens for per in resolver._samples.values() for tokens, _ in per]
         count = resolver.pick(sampled[0])
         r = client.post(
-            "/v1/decisions", json={"state": "state 80", "questions": QUESTIONS}
+            "/v1/decisions", json={"state": "state 130", "questions": QUESTIONS}
         )
         assert r.status_code == 200
         assert adaptive.CpuTeam._active == count

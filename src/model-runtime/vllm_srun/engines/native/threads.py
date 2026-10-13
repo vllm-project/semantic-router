@@ -128,6 +128,12 @@ class AdaptiveThreads:
         self.counts = sorted({c for c in pool if 1 <= c <= self.base})
         if self.base not in self.counts:
             self.counts.append(self.base)
+        if self.counts == [self.base]:
+            # The budget allows only the configured count: nothing to
+            # explore, and an exploration window could never close.
+            self._table: dict[int, int] | None = {}
+        else:
+            self._table = None
         self.explore = max(explore, len(self.counts) * _MIN)
         self.serving = serve
         self._lock = threading.Lock()
@@ -137,7 +143,7 @@ class AdaptiveThreads:
             count: [] for count in self.counts
         }
         self._seen = 0
-        self._table: dict[int, int] | None = None
+        self._cycled = 0
         self._transition = 0
 
     def start(self) -> None:
@@ -160,7 +166,9 @@ class AdaptiveThreads:
             if not self._started:
                 return self.base
             if self._table is None:
-                return self.counts[self._seen % len(self.counts)]
+                count = self.counts[self._cycled % len(self.counts)]
+                self._cycled += 1
+                return count
             return self._table.get(_bucket(tokens), self.base)
 
     def record(self, tokens: int, forward_ms: float, exact: bool = True) -> None:
@@ -196,8 +204,9 @@ class AdaptiveThreads:
 
         A model's first forward on fresh input pays cold caches; pairing the
         cold configured-count pass with warm shadow passes would credit the
-        caches to the other counts. The warm base pass restores an even
-        comparison; the cold pass's timing is discarded.
+        caches to the other counts. The warm pass only archives: it advances
+        no window, and base's own samples sit in the round-robin like any
+        other count's.
         """
         with self._lock:
             if self._started and self._table is None:
@@ -225,7 +234,11 @@ class AdaptiveThreads:
             counts = [count for b, count in medians if b == bucket]
             table[bucket] = min(counts, key=lambda count: medians[(bucket, count)])
         self._table = table
-        self._transition = _TRANSITION if self.serving else 0
+        # A transition verifies counts that are new to execution: a table
+        # that picked the configured count everywhere introduces nothing,
+        # so there is nothing to verify and serving can start at once.
+        new_counts = set(table.values()) - {self.base}
+        self._transition = _TRANSITION if self.serving and new_counts else 0
         if table:
             edges = (
                 "0-31",

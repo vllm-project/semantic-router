@@ -357,14 +357,14 @@ class NativeEngineModel(EngineModel):
 
         The served answer always comes from the configured count. Exploration
         times the allowed counts against it in shadow passes that must
-        reproduce the served answer bit for bit — a cold configured pass
-        times nothing, and a warm configured pass timed beside the shadows
-        keeps the caches out of the comparison — and the shadow restores the
-        configured count before it returns, so everything after the engine,
-        a family's readout included, never inherits the shadow's team size.
-        Past adoption the learned counts serve only where serving was
-        opted into (level 2); otherwise the table reports and the answers
-        stay on the configured count.
+        reproduce the served answer bit for bit. The serving pass pays cold
+        caches, so its timing is discarded: every configured-count sample in
+        the table is a warm pass timed beside the warm shadows, and the
+        shadow restores the configured count before it returns, so
+        everything after the engine — a family's readout included — never
+        inherits the shadow's team size. Past adoption the table is final:
+        level 2 serves the learned count, level 1 keeps the configured
+        count serving, and both run exactly one pass per request.
         """
         resolver = self.threads_resolver
         if resolver is None:
@@ -372,31 +372,29 @@ class NativeEngineModel(EngineModel):
                 adaptive_threads.CpuTeam.apply(self._cpu_threads)
             return run()
         count = resolver.pick(tokens)
-        if resolver.adopted and resolver.serving:
-            adaptive_threads.CpuTeam.apply(count)
+        if resolver.adopted:
+            # The table is final — one pass, nothing left to measure.
+            # Level 2 serves the learned count; level 1 keeps serving the
+            # configured one.
+            adaptive_threads.CpuTeam.apply(count if resolver.serving else resolver.base)
             return run()
         base = resolver.base
-        # Exploring (or reporting): the configured count serves; another
-        # count only shadows.
+        # Exploring: the configured count serves; another count only shadows.
         adaptive_threads.CpuTeam.apply(base)
         started = time.perf_counter()
         try:
             result = run()
         finally:
-            cold_ms = time.perf_counter() - started
-        if count == base:
-            resolver.record(tokens, cold_ms * 1000.0)
-            return result
-        adaptive_threads.CpuTeam.apply(count)
-        started = time.perf_counter()
-        try:
-            shadow = run()
-        finally:
-            shadow_ms = (time.perf_counter() - started) * 1000.0
-            adaptive_threads.CpuTeam.apply(base)
-        resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
-        if resolver.adopted:
-            return result
+            pass  # the serving pass pays cold caches; its timing is discarded
+        if count != base:
+            adaptive_threads.CpuTeam.apply(count)
+            started = time.perf_counter()
+            try:
+                shadow = run()
+            finally:
+                shadow_ms = (time.perf_counter() - started) * 1000.0
+                adaptive_threads.CpuTeam.apply(base)
+            resolver.record(tokens, shadow_ms, exact=self._bit_equal(result, shadow))
         # A warm configured-count pass, timed beside the warm shadow: the
         # caches both just built, so the counts compare evenly.
         started = time.perf_counter()
