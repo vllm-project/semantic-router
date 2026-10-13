@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,8 @@ import (
 const (
 	DefaultRedisKeyPrefix = "router_replay:"
 	DefaultRedisPoolSize  = 10
+
+	redisScanBatch = 100
 )
 
 // RedisStore implements Storage using Redis as the backend.
@@ -23,7 +27,9 @@ const (
 type RedisStore struct {
 	client      *redis.Client
 	keyPrefix   string
+	indexKey    string
 	ttl         time.Duration
+	sweep       retentionSweep
 	asyncWrites bool
 	asyncChan   chan asyncOp
 	done        chan struct{}
@@ -84,10 +90,18 @@ func NewRedisStore(cfg *RedisConfig, ttlSeconds int, asyncWrites bool) (*RedisSt
 	store := &RedisStore{
 		client:      client,
 		keyPrefix:   keyPrefix,
+		indexKey:    redisIndexKey(keyPrefix),
 		ttl:         time.Duration(ttlSeconds) * time.Second,
 		asyncWrites: asyncWrites,
 		done:        make(chan struct{}),
 		lifecycle:   newStorageLifecycle(),
+	}
+
+	indexCtx, indexCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer indexCancel()
+	if err := store.indexExisting(indexCtx); err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("failed to index existing replay records: %w", err)
 	}
 
 	if asyncWrites {
@@ -137,18 +151,24 @@ func (r *RedisStore) Add(ctx context.Context, record Record) (string, error) {
 		record.Timestamp = time.Now().UTC()
 	}
 
-	data, err := json.Marshal(record)
+	data, err := encodeRecord(&record, MaxRecordBytes)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal record: %w", err)
+		return "", err
 	}
 
 	key := r.keyPrefix + record.ID
 
 	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
+		pipe := r.client.TxPipeline()
+		pipe.Set(ctx, key, data, r.ttl)
+		pipe.ZAdd(ctx, r.indexKey, redis.Z{Score: redisIndexScore(record.Timestamp), Member: record.ID})
+		if _, err := pipe.Exec(ctx); err != nil {
+			return err
 		}
-		return r.client.Set(ctx, key, data, 0).Err()
+		if r.ttl > 0 && r.sweep.due() {
+			return r.trimIndex(ctx)
+		}
+		return nil
 	}
 
 	if r.asyncWrites {
@@ -172,7 +192,11 @@ func (r *RedisStore) Get(ctx context.Context, id string) (Record, bool, error) {
 		return Record{}, false, err
 	}
 	defer release()
-	return r.getRecord(ctx, id)
+	record, found, err := r.getRecord(ctx, id)
+	if !found || isExpired(record, r.ttl) {
+		return Record{}, false, err
+	}
+	return record, true, nil
 }
 
 func (r *RedisStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
@@ -204,60 +228,152 @@ func (r *RedisStore) List(ctx context.Context) ([]Record, error) {
 }
 
 func (r *RedisStore) listRecords(ctx context.Context) ([]Record, error) {
-	// Scan for all keys with our prefix
+	if err := r.trimIndex(ctx); err != nil {
+		return nil, err
+	}
+	return listAll(r.scan(ctx))
+}
+
+func (r *RedisStore) QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error) {
+	release, err := r.lifecycle.beginMutation()
+	if err != nil {
+		return RecordPage{}, err
+	}
+	defer release()
+	if err := r.trimIndex(ctx); err != nil {
+		return RecordPage{}, err
+	}
+	count := func() (int, error) {
+		n, err := r.client.ZCard(ctx, r.indexKey).Result()
+		return int(n), err
+	}
+	return collectPage(filters, limit, offset, count, r.scan(ctx))
+}
+
+func (r *RedisStore) ScanMetadata(ctx context.Context, visit func(Record) error) error {
+	release, err := r.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := r.trimIndex(ctx); err != nil {
+		return err
+	}
+	return scanAll(r.scan(ctx), visit)
+}
+
+// Equal scores come back in reverse ID order, same as PostgreSQL.
+func (r *RedisStore) scan(ctx context.Context) recordScan {
+	return func(from int, visit func(Record) bool) error {
+		var missing []interface{}
+		defer func() {
+			if len(missing) > 0 {
+				_ = r.client.ZRem(ctx, r.indexKey, missing...).Err()
+			}
+		}()
+		for start := int64(from); ; start += redisScanBatch {
+			ids, err := r.client.ZRevRange(ctx, r.indexKey, start, start+redisScanBatch-1).Result()
+			if err != nil {
+				return fmt.Errorf("failed to read replay index: %w", err)
+			}
+			if len(ids) == 0 {
+				return nil
+			}
+			keys := make([]string, len(ids))
+			for i, id := range ids {
+				keys[i] = r.keyPrefix + id
+			}
+			values, err := r.client.MGet(ctx, keys...).Result()
+			if err != nil {
+				return fmt.Errorf("failed to get records: %w", err)
+			}
+			for i, value := range values {
+				data, ok := value.(string)
+				if !ok {
+					missing = append(missing, ids[i])
+					continue
+				}
+				var record Record
+				if err := json.Unmarshal([]byte(data), &record); err != nil {
+					continue
+				}
+				if !visit(record) {
+					return nil
+				}
+			}
+			if len(ids) < redisScanBatch {
+				return nil
+			}
+		}
+	}
+}
+
+func (r *RedisStore) trimIndex(ctx context.Context) error {
+	if r.ttl <= 0 {
+		return nil
+	}
+	cutoff := "(" + strconv.FormatFloat(redisIndexScore(retentionCutoff(r.ttl)), 'f', -1, 64)
+	return r.client.ZRemRangeByScore(ctx, r.indexKey, "-inf", cutoff).Err()
+}
+
+// indexExisting indexes records written before the index existed.
+func (r *RedisStore) indexExisting(ctx context.Context) error {
+	exists, err := r.client.Exists(ctx, r.indexKey).Result()
+	if err != nil || exists > 0 {
+		return err
+	}
 	var cursor uint64
-	var keys []string
-
 	for {
-		var batch []string
-		var err error
-		batch, cursor, err = r.client.Scan(ctx, cursor, r.keyPrefix+"*", 100).Result()
+		keys, next, err := r.client.Scan(ctx, cursor, r.keyPrefix+"*", redisScanBatch).Result()
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan keys: %w", err)
+			return err
 		}
-		keys = append(keys, batch...)
-		if cursor == 0 {
-			break
+		if err := r.indexKeys(ctx, keys); err != nil {
+			return err
 		}
+		if next == 0 {
+			return nil
+		}
+		cursor = next
 	}
+}
 
+func (r *RedisStore) indexKeys(ctx context.Context, keys []string) error {
+	keys = slices.DeleteFunc(keys, func(key string) bool { return key == r.indexKey })
 	if len(keys) == 0 {
-		return []Record{}, nil
+		return nil
 	}
-
-	// Get all records
-	pipe := r.client.Pipeline()
-	cmds := make([]*redis.StringCmd, len(keys))
-	for i, key := range keys {
-		cmds[i] = pipe.Get(ctx, key)
+	values, err := r.client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return err
 	}
-
-	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
-		return nil, fmt.Errorf("failed to get records: %w", err)
-	}
-
-	records := make([]Record, 0, len(keys))
-	for _, cmd := range cmds {
-		data, err := cmd.Bytes()
-		if errors.Is(err, redis.Nil) {
+	var members []redis.Z
+	for i, value := range values {
+		data, ok := value.(string)
+		if !ok {
 			continue
 		}
-		if err != nil {
-			continue // Skip failed records
+		var record struct {
+			Timestamp time.Time `json:"timestamp"`
 		}
-
-		var record Record
-		if err := json.Unmarshal(data, &record); err != nil {
-			continue // Skip malformed records
+		if json.Unmarshal([]byte(data), &record) != nil {
+			continue
 		}
-		records = append(records, record)
+		members = append(members, redis.Z{Score: redisIndexScore(record.Timestamp), Member: strings.TrimPrefix(keys[i], r.keyPrefix)})
 	}
+	if len(members) == 0 {
+		return nil
+	}
+	return r.client.ZAdd(ctx, r.indexKey, members...).Err()
+}
 
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Timestamp.After(records[j].Timestamp)
-	})
+// redisIndexKey stays outside the default record key pattern.
+func redisIndexKey(prefix string) string {
+	return strings.TrimSuffix(prefix, ":") + "_index"
+}
 
-	return records, nil
+func redisIndexScore(t time.Time) float64 {
+	return float64(t.UnixMilli())
 }
 
 // UpdateStatus updates the response status and flags for a record.
@@ -383,15 +499,11 @@ func (r *RedisStore) updateRecord(
 		if !mutate(&record) {
 			return nil
 		}
-		data, err := json.Marshal(record)
+		data, err := encodeRecord(&record, MaxRecordBytes)
 		if err != nil {
-			return fmt.Errorf("failed to marshal record: %w", err)
+			return err
 		}
-		key := r.keyPrefix + id
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
-		}
-		return r.client.Set(ctx, key, data, 0).Err()
+		return r.client.Set(ctx, r.keyPrefix+id, data, r.ttl).Err()
 	}
 	if !r.asyncWrites {
 		return fn()
