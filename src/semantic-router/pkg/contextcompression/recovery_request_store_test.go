@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// countingRecoveryStore counts the writes that reach the backing store.
 type countingRecoveryStore struct {
 	testRecoveryStore
 	puts int
@@ -19,8 +18,6 @@ func (store *countingRecoveryStore) Put(ctx context.Context, entry RecoveryEntry
 	return store.testRecoveryStore.Put(ctx, entry, ttl)
 }
 
-// Two writes that each fit but together exceed the request's limit: the
-// second is refused before it reaches the backing store.
 func TestRequestRecoveryStoreRejectsAWriteBeyondTheSharedBudget(t *testing.T) {
 	backing := &countingRecoveryStore{}
 	store := NewRequestRecoveryStore(backing, 10)
@@ -41,7 +38,6 @@ func TestRequestRecoveryStoreRejectsAWriteBeyondTheSharedBudget(t *testing.T) {
 	}
 }
 
-// Budget is spent only by writes the backing store accepted.
 func TestRequestRecoveryStoreChargesOnlySuccessfulWrites(t *testing.T) {
 	backing := &countingRecoveryStore{testRecoveryStore: testRecoveryStore{err: errors.New("backend down")}}
 	store := NewRequestRecoveryStore(backing, 10)
@@ -56,9 +52,7 @@ func TestRequestRecoveryStoreChargesOnlySuccessfulWrites(t *testing.T) {
 	}
 }
 
-// The shared write derives the key from scope and content and stores an entry
-// whose expiry matches its TTL. A TTL that is not positive is a caller error:
-// this layer adds no default of its own.
+// A non-positive TTL is the caller's error: this layer adds no default.
 func TestStoreRecoveryContentBuildsTheEntry(t *testing.T) {
 	backing := &testRecoveryStore{}
 	key, err := StoreRecoveryContent(context.Background(), backing, "scope", "content", time.Minute)

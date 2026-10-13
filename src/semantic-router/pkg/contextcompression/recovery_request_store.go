@@ -73,8 +73,8 @@ func (s *RequestRecoveryStore) Close() error {
 }
 
 // StoreRecoveryContent writes one recoverable entry and returns its key. It is
-// the single entry-building protocol: the key is derived from the scope and
-// content, so the same content in the same scope is stored once.
+// the single entry-building protocol; the key is derived deterministically from
+// the scope and content.
 func StoreRecoveryContent(
 	ctx context.Context,
 	store RecoveryStore,

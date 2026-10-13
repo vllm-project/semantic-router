@@ -14,7 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// combinedToolOutput is the live turn's tool result compression stores.
 var combinedToolOutput = strings.Repeat("large recoverable tool output ", 200)
 
 // combinedRecoveryConversation has one prior turn reset removes and a live
@@ -96,8 +95,6 @@ func (run combinedRun) toolOutputPreserved() bool {
 		last.Content[0].ToolResult.Content[0].Text == combinedToolOutput
 }
 
-// assertAdvertisedKeysWereStored checks that every key the retrieval tool
-// offers names an entry the store actually holds.
 func (run combinedRun) assertAdvertisedKeysWereStored(t *testing.T) {
 	t.Helper()
 	for _, key := range run.ctx.ContextRecoveryKeys {
@@ -111,9 +108,6 @@ func (run combinedRun) assertAdvertisedKeysWereStored(t *testing.T) {
 	}
 }
 
-// A compression write uses the merged contract, not its own looser bound:
-// reset's 4 KiB limit stops compression's 6 KB write although compression
-// alone would allow 8 KiB.
 func TestCompressionWriteStopsAtTheResetBound(t *testing.T) {
 	router := recoverableResetRouter()
 	run := runCombinedRecovery(t, router, combinedRecoveryDecision(
@@ -130,7 +124,6 @@ func TestCompressionWriteStopsAtTheResetBound(t *testing.T) {
 	run.assertAdvertisedKeysWereStored(t)
 }
 
-// And the other way round: compression's 4 KiB bound limits reset too.
 func TestResetWriteStopsAtTheCompressionBound(t *testing.T) {
 	router := recoverableResetRouter()
 	run := runCombinedRecovery(t, router, combinedRecoveryDecision(
@@ -144,10 +137,8 @@ func TestResetWriteStopsAtTheCompressionBound(t *testing.T) {
 	run.assertAdvertisedKeysWereStored(t)
 }
 
-// Both writers share one request budget. Reset runs first and stores the
-// removed turn; compression's write fits the bound alone but not the
-// remainder, so the request store refuses it before it reaches the backing
-// store, and compression's failure mode decides what the provider receives.
+// Reset runs before compression in the context stage, so compression gets
+// only what reset left of the budget.
 func TestCompressionGetsOnlyTheRemainderOfTheRequestBudget(t *testing.T) {
 	limit := len(combinedToolOutput) + 200
 	oldQuestion := strings.Repeat("old question ", 30)
@@ -179,8 +170,6 @@ func TestCompressionGetsOnlyTheRemainderOfTheRequestBudget(t *testing.T) {
 	}
 }
 
-// One request budget means a request-scoped store: two requests do not share
-// a budget, and each starts from the full limit.
 func TestRequestsDoNotShareARecoveryBudget(t *testing.T) {
 	limit := len(combinedToolOutput) + 200
 	router := recoverableResetRouter()
@@ -207,12 +196,10 @@ func miniredisRecoveryRouter(t *testing.T) (*OpenAIRouter, *miniredis.Miniredis)
 	redis.Connection.Host = server.Host()
 	redis.Connection.Port = port
 	cfg := &config.RouterConfig{}
-	cfg.SemanticCache.Redis = redis
+	cfg.Redis = redis
 	return &OpenAIRouter{Config: cfg}, server
 }
 
-// Reset's shorter TTL applies to the entry compression writes, because both
-// writers use the merged contract.
 func TestCompressionEntriesUseTheMergedTTL(t *testing.T) {
 	router, server := miniredisRecoveryRouter(t)
 	run := runCombinedRecovery(t, router, combinedRecoveryDecision(
@@ -236,9 +223,8 @@ func TestCompressionEntriesUseTheMergedTTL(t *testing.T) {
 	}
 }
 
-// The process-wide store is built from the merged contract when a request is
-// bound, so a request that never runs reset still creates it with reset's
-// stricter total bound.
+// The request is streaming, so reset never runs; binding alone must build the
+// store, and with the merged total.
 func TestRecoveryStoreIsBuiltWithTheMergedTotal(t *testing.T) {
 	router, _ := miniredisRecoveryRouter(t)
 	decision := combinedRecoveryDecision(
