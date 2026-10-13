@@ -98,10 +98,7 @@ func TestRecoveryContractNormalizesEachActionBeforeMerging(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			contract, err := resolveContextRecoveryContract(recoveryDecision(t, test.compression, test.reset))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			contract := mergeRecoveryContracts(activeRecoveryContracts(recoveryDecision(t, test.compression, test.reset)))
 			if contract == nil || *contract != test.want {
 				t.Fatalf("contract = %+v, want %+v", contract, test.want)
 			}
@@ -114,19 +111,22 @@ func TestRecoveryContractIsAbsentWhenNoActionNeedsIt(t *testing.T) {
 		map[string]interface{}{"enabled": true},
 		map[string]interface{}{"enabled": false},
 	)
-	if contract, err := resolveContextRecoveryContract(decision); err != nil || contract != nil {
-		t.Fatalf("unexpected contract %+v (err=%v)", contract, err)
+	if contract := mergeRecoveryContracts(activeRecoveryContracts(decision)); contract != nil {
+		t.Fatalf("unexpected contract %+v", contract)
 	}
 }
 
-func TestRecoveryContractRejectsDisagreeingStores(t *testing.T) {
-	decision := recoveryDecision(t,
+// Router construction rejects a decision whose actions name different stores,
+// including a candidate that reaches construction without config parsing.
+func TestRecoveryAgreementRejectsDisagreeingStoresWithinADecision(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{*recoveryDecision(t,
 		compressionRecovery(map[string]interface{}{"enabled": true, "store": "redis"}),
 		enabledResetRecovery(map[string]interface{}{"enabled": true, "store": "valkey"}),
-	)
-	contract, err := resolveContextRecoveryContract(decision)
+	)}
+	err := verifyContextRecoveryAgreement(cfg)
 	if err == nil || !strings.Contains(err.Error(), "disagree") {
-		t.Fatalf("disagreeing stores were accepted: %+v (err=%v)", contract, err)
+		t.Fatalf("disagreeing stores were accepted: %v", err)
 	}
 }
 

@@ -1,13 +1,11 @@
 package extproc
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // contextRecoveryContract is one request's effective recovery contract: the
@@ -51,12 +49,9 @@ func effectiveRecoveryContract(
 	return contract
 }
 
-// resolveContextRecoveryContract merges the recovery settings of every
-// recovery-enabled context action on the decision. Each action keeps its own
-// per-request default; every field then resolves to the stricter effective
-// value, so neither action can widen the other's bounds. Incompatible stores
-// are rejected rather than silently resolved in one action's favour.
-func resolveContextRecoveryContract(decision *config.Decision) (*contextRecoveryContract, error) {
+// activeRecoveryContracts returns the effective contract of every
+// recovery-enabled context action on the decision.
+func activeRecoveryContracts(decision *config.Decision) []contextRecoveryContract {
 	var active []contextRecoveryContract
 	if compression := decision.GetContextCompressionConfig(); compression != nil &&
 		compression.Enabled && compression.Recovery != nil && compression.Recovery.Enabled {
@@ -67,14 +62,20 @@ func resolveContextRecoveryContract(decision *config.Decision) (*contextRecovery
 		active = append(active, effectiveRecoveryContract(
 			reset.Recovery, config.DefaultHistoryResetRecoveryBytesPerRequest))
 	}
+	return active
+}
+
+// mergeRecoveryContracts merges the actions' effective contracts. Each action
+// keeps its own per-request default; every bound then resolves to the
+// stricter effective value, so neither action can widen the other's. The
+// actions' stores must agree, which configuration validation and router
+// construction both enforce before a decision can be bound.
+func mergeRecoveryContracts(active []contextRecoveryContract) *contextRecoveryContract {
 	if len(active) == 0 {
-		return nil, nil
+		return nil
 	}
 	merged := active[0]
 	for _, next := range active[1:] {
-		if !strings.EqualFold(merged.Store, next.Store) {
-			return nil, fmt.Errorf("context recovery stores disagree: %q and %q", merged.Store, next.Store)
-		}
 		if next.TTL < merged.TTL {
 			merged.TTL = next.TTL
 		}
@@ -82,7 +83,7 @@ func resolveContextRecoveryContract(decision *config.Decision) (*contextRecovery
 		merged.MaxTotalBytes = min(merged.MaxTotalBytes, next.MaxTotalBytes)
 		merged.MaxRetrievals = min(merged.MaxRetrievals, next.MaxRetrievals)
 	}
-	return &merged, nil
+	return &merged
 }
 
 // bindContextPolicy binds the selected decision's context policies once the
@@ -94,18 +95,7 @@ func (r *OpenAIRouter) bindContextPolicy(ctx *RequestContext) {
 		return
 	}
 	bindHistoryResetPolicy(ctx)
-	contract, err := resolveContextRecoveryContract(ctx.VSRSelectedDecision)
-	if err != nil {
-		// Configuration validation rejects disagreeing stores, so this is a
-		// candidate that bypassed validation. Recovery stays unavailable and
-		// each action's failure mode decides.
-		logging.ComponentWarnEvent("extproc", "context_recovery_contract_invalid", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"decision":   ctx.VSRSelectedDecisionName,
-			"error":      err.Error(),
-		})
-		return
-	}
+	contract := mergeRecoveryContracts(activeRecoveryContracts(ctx.VSRSelectedDecision))
 	if contract == nil {
 		return
 	}

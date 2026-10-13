@@ -36,8 +36,8 @@ type RequestRecoveryStore struct {
 	used    int
 }
 
-// NewRequestRecoveryStore wraps the process-wide store for one request. A
-// limit of zero or less leaves the aggregate unbounded.
+// NewRequestRecoveryStore wraps the process-wide store for one request. The
+// limit is the request's normalized, positive byte budget.
 func NewRequestRecoveryStore(backing RecoveryStore, limit int) *RequestRecoveryStore {
 	return &RequestRecoveryStore{backing: backing, limit: limit}
 }
@@ -46,7 +46,7 @@ func (s *RequestRecoveryStore) Put(ctx context.Context, entry RecoveryEntry, ttl
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	size := len(entry.Content)
-	if s.limit > 0 && s.used+size > s.limit {
+	if s.used+size > s.limit {
 		return ErrRecoveryRequestLimitExceeded
 	}
 	if err := s.backing.Put(ctx, entry, ttl); err != nil {

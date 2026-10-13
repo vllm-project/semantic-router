@@ -18,12 +18,16 @@ func verifyContextRecoveryAgreement(cfg *config.RouterConfig) error {
 		declared string
 	)
 	for _, decision := range cfg.AllRoutingDecisions() {
+		active := activeRecoveryContracts(&decision)
+		for _, action := range active {
+			if !strings.EqualFold(active[0].Store, action.Store) {
+				return fmt.Errorf("decision %q: context recovery stores disagree: %q and %q",
+					decision.Name, active[0].Store, action.Store)
+			}
+		}
 		// Effective values are compared, so an omitted bound and an explicitly
 		// configured default agree.
-		contract, err := resolveContextRecoveryContract(&decision)
-		if err != nil {
-			return fmt.Errorf("decision %q: %w", decision.Name, err)
-		}
+		contract := mergeRecoveryContracts(active)
 		if contract == nil {
 			continue
 		}
