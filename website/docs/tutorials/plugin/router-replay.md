@@ -52,6 +52,13 @@ request and response bodies enabled, personal data enabled, 10,000 records,
 4,096 bytes per body, no per-field tool-trace byte limit, and 100 tool steps.
 Storage, retention and asynchronous writes are global service settings.
 
+`ttl_seconds` (30 days by default) applies to every store backend. Older
+records drop out of lists, Insights and lookups right away, and database
+backends delete them in the background. Each stored record is also capped at
+1 MiB, or 64 KiB on Milvus, whose `data` column is that size. A larger record
+has its text cut, starting with raw tool arguments and output, and the matching
+truncation flags set.
+
 ### Limit capture on a decision
 
 Add this fragment to the decision's `plugins` to record bounded excerpts:
