@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.errors import PackageError
 from vllm_srun.families.vela2.family import (
@@ -23,6 +25,7 @@ from vllm_srun.plugins.base import (
     SurfacePlan,
     TreeBatch,
 )
+from vllm_srun.runtime import Runtime
 from vllm_srun.testing.vela2 import write_decoder_package, write_encoder_package
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -98,6 +101,68 @@ def test_verification_checks_sums_and_manifest_weights(packages, tmp_path) -> No
     (copy / "SHA256SUMS").unlink()
     with pytest.raises(PackageError, match="MODEL_MANIFEST"):
         Vela2Family().verify(PackageRef(copy))
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_incomplete_builtin_modernbert_package_stays_not_ready(
+    packages, tmp_path, monkeypatch, damage
+) -> None:
+    from vllm_srun.registry import builtin
+    from vllm_srun.registry.tables.common import BuiltinModel
+
+    family = Vela2Family()
+    complete = family.verify(PackageRef(packages["encoder"]))
+    details = complete.details["package"]
+    repo_id, revision = "vllm-sr/Fixture-ModernBERT", "a" * 40
+    entry = BuiltinModel(
+        repo_id=repo_id,
+        revision=revision,
+        family="vela2",
+        model_sha256=complete.model_sha256,
+        manifest_sha256="",
+        loaded_parameters=0,
+        backbone="modernbert",
+        min_device_memory_gib=1,
+        files=details.files,
+    )
+    real_lookup = builtin.lookup
+    monkeypatch.setattr(
+        builtin, "lookup", lambda name: entry if name == repo_id else real_lookup(name)
+    )
+
+    root = Path(shutil.copytree(packages["encoder"], tmp_path / damage))
+    weights = root / "model.safetensors"
+    if damage == "missing":
+        weights.unlink()
+    else:
+        weights.write_bytes(b"corrupt")
+
+    resolves = 0
+
+    def resolve_fixture(model, **_options):
+        nonlocal resolves
+        resolves += 1
+        assert model == repo_id
+        return PackageRef(root, repo_id, revision)
+
+    monkeypatch.setattr("vllm_srun.runtime.resolve", resolve_fixture)
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=repo_id, device="cpu"),),
+            load_attempts=3,
+            load_retry_seconds=0.001,
+        )
+    )
+    runtime.start(background=True)
+    try:
+        assert not runtime.wait(timeout=10)
+        health = runtime.served[0].health
+        assert health.state == "failed"
+        assert health.reason is not None and health.reason.startswith("PackageError:")
+        assert "model.safetensors" in health.reason
+        assert resolves == 1
+    finally:
+        runtime.stop()
 
 
 def test_bundled_engine_is_never_imported(models) -> None:
