@@ -52,6 +52,11 @@ func validateLeafSignalReference(
 ) error {
 	signalType := strings.ToLower(strings.TrimSpace(node.Type))
 	name := strings.TrimSpace(node.Name)
+	if name != node.Name {
+		return fmt.Errorf(
+			"routing.decisions[%q]: signal %s name %q contains surrounding whitespace; %q expected",
+			decisionName, signalType, node.Name, name)
+	}
 	if signalType == SignalTypeProjection {
 		// Projection output references are validated after the projection DAG
 		// has been checked and its output names are available.
