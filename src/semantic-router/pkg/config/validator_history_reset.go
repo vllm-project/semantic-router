@@ -153,8 +153,11 @@ func validateHistoryResetEnablement(typed *HistoryResetPluginConfig, scope strin
 func validateDecisionContextRecoveryAgreement(decision *Decision) error {
 	compression := decision.GetContextCompressionConfig()
 	reset := decision.GetHistoryResetConfig()
-	if compression == nil || compression.Recovery == nil || !compression.Recovery.Enabled ||
-		!reset.RequiresRecovery() {
+	// Only actions that are enabled and enable recovery share a store; a
+	// disabled action's recovery block is validated on its own and constrains
+	// nothing else.
+	if compression == nil || !compression.Enabled || compression.Recovery == nil || !compression.Recovery.Enabled ||
+		!reset.IsEnabled() || !reset.RequiresRecovery() {
 		return nil
 	}
 	compressionStore := strings.TrimSpace(compression.Recovery.Store)

@@ -281,42 +281,45 @@ func TestGetHistoryResetConfigReadsTheDecisionPlugin(t *testing.T) {
 // that asks for two different stores is rejected instead of silently losing
 // one action's content.
 func TestDecisionRejectsDisagreeingContextRecoveryStores(t *testing.T) {
-	decision := &Decision{
-		Name: "context",
-		Plugins: []DecisionPlugin{
-			{
-				Type: DecisionPluginContextCompression,
-				Configuration: MustStructuredPayload(map[string]interface{}{
-					"enabled":  true,
-					"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
-				}),
+	decision := func(compressionEnabled, resetEnabled bool, resetStore string) *Decision {
+		return &Decision{
+			Name: "context",
+			Plugins: []DecisionPlugin{
+				{
+					Type: DecisionPluginContextCompression,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled":  compressionEnabled,
+						"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
+					}),
+				},
+				{
+					Type: DecisionPluginHistoryReset,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled":  resetEnabled,
+						"recovery": map[string]interface{}{"enabled": true, "store": resetStore},
+					}),
+				},
 			},
-			{
-				Type: DecisionPluginHistoryReset,
-				Configuration: MustStructuredPayload(map[string]interface{}{
-					"enabled":  false,
-					"recovery": map[string]interface{}{"enabled": true, "store": "valkey"},
-				}),
-			},
-		},
-	}
-	err := validateDecisionContextRecoveryAgreement(decision)
-	if err == nil {
-		t.Fatal("disagreeing recovery stores were accepted")
-	}
-	if !strings.Contains(err.Error(), "must match") {
-		t.Fatalf("unexpected error %v", err)
+		}
 	}
 
-	matching := decision.Plugins[1].Configuration
-	decision.Plugins[1].Configuration = MustStructuredPayload(map[string]interface{}{
-		"enabled":  false,
-		"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
-	})
-	if err = validateDecisionContextRecoveryAgreement(decision); err != nil {
+	err := validateDecisionContextRecoveryAgreement(decision(true, true, "valkey"))
+	if err == nil || !strings.Contains(err.Error(), "must match") {
+		t.Fatalf("disagreeing stores of two enabled actions were accepted: %v", err)
+	}
+	if err = validateDecisionContextRecoveryAgreement(decision(true, true, "redis")); err != nil {
 		t.Fatalf("matching stores were rejected: %v", err)
 	}
-	decision.Plugins[1].Configuration = matching
+	// A disabled action shares nothing, so its dormant recovery block cannot
+	// make the decision's configuration invalid.
+	for name, disabled := range map[string]*Decision{
+		"reset disabled":       decision(true, false, "valkey"),
+		"compression disabled": decision(false, true, "valkey"),
+	} {
+		if err = validateDecisionContextRecoveryAgreement(disabled); err != nil {
+			t.Fatalf("%s: a dormant recovery store was enforced: %v", name, err)
+		}
+	}
 }
 
 // An enabled trigger must name a topic-continuity rule the recipe declares:

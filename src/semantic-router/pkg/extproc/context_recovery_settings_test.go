@@ -236,3 +236,55 @@ func TestRegisteringIssuedKeysRequiresARequest(t *testing.T) {
 		t.Fatal("issued keys without a request were reported as published")
 	}
 }
+
+// A disabled history reset performs no reset work, and that includes taking
+// no part in shared recovery, even with a recovery block configured.
+func TestDisabledResetTakesNoPartInSharedRecovery(t *testing.T) {
+	compression := compressionRecovery(map[string]interface{}{
+		"enabled": true, "store": "redis", "max_bytes_per_request": 8 * mib,
+	})
+	reset := func(enabled bool) map[string]interface{} {
+		policy := enabledResetRecovery(map[string]interface{}{
+			"enabled": true, "store": "redis", "max_bytes_per_request": 1 * mib,
+		})
+		policy["enabled"] = enabled
+		return policy
+	}
+	bound := func(t *testing.T, router *OpenAIRouter, decision *config.Decision) *RequestContext {
+		t.Helper()
+		ctx := &RequestContext{RequestID: "request", VSRSelectedDecision: decision}
+		router.bindContextPolicy(ctx)
+		return ctx
+	}
+
+	ctx := bound(t, recoverableResetRouter(), recoveryDecision(t, compression, reset(false)))
+	if ctx.ContextRecovery == nil || ctx.ContextRecovery.MaxBytesPerRequest != 8*mib {
+		t.Fatalf("a disabled reset changed compression's contract: %+v", ctx.ContextRecovery)
+	}
+
+	router, _ := miniredisRecoveryRouter(t)
+	ctx = bound(t, router, recoveryDecision(t, nil, reset(false)))
+	if ctx.ContextRecovery != nil || ctx.ContextRecoveryStore != nil || router.ContextRecoveryBackend != nil {
+		t.Fatal("a disabled reset alone bound recovery or built a backend")
+	}
+
+	ctx = bound(t, recoverableResetRouter(), recoveryDecision(t, compression, reset(true)))
+	if ctx.ContextRecovery == nil || ctx.ContextRecovery.MaxBytesPerRequest != 1*mib {
+		t.Fatalf("an enabled reset did not restore the stricter contract: %+v", ctx.ContextRecovery)
+	}
+
+	// Router construction does not hold a dormant reset's store against the
+	// decision either.
+	dormant := recoveryDecision(t, compression, enabledResetRecovery(map[string]interface{}{
+		"enabled": true, "store": "valkey",
+	}))
+	dormant.Plugins[1].Configuration = config.MustStructuredPayload(map[string]interface{}{
+		"enabled":  false,
+		"recovery": map[string]interface{}{"enabled": true, "store": "valkey"},
+	})
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{*dormant}
+	if err := verifyContextRecoveryAgreement(cfg); err != nil {
+		t.Fatalf("a dormant reset's store was enforced at construction: %v", err)
+	}
+}

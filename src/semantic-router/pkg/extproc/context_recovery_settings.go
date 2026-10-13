@@ -49,8 +49,6 @@ func effectiveRecoveryContract(
 	return contract
 }
 
-// activeRecoveryContracts returns the effective contract of every
-// recovery-enabled context action on the decision.
 func activeRecoveryContracts(decision *config.Decision) []contextRecoveryContract {
 	var active []contextRecoveryContract
 	if compression := decision.GetContextCompressionConfig(); compression != nil &&
@@ -58,7 +56,8 @@ func activeRecoveryContracts(decision *config.Decision) []contextRecoveryContrac
 		active = append(active, effectiveRecoveryContract(
 			compression.Recovery, contextcompression.DefaultCompressionRecoveryBytesPerRequest))
 	}
-	if reset := decision.GetHistoryResetConfig(); reset.RequiresRecovery() {
+	// A disabled action takes no part, even with a recovery block configured.
+	if reset := decision.GetHistoryResetConfig(); reset.IsEnabled() && reset.RequiresRecovery() {
 		active = append(active, effectiveRecoveryContract(
 			reset.Recovery, config.DefaultHistoryResetRecoveryBytesPerRequest))
 	}
