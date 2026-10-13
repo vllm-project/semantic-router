@@ -11,9 +11,11 @@ import tempfile
 import unittest
 from collections import UserDict
 from pathlib import Path
+from unittest.mock import patch
 
 from src.training.model_classifier.sequence_repair.retention import (
     RetentionCache,
+    file_digest,
     masked_teacher_kl,
     row_identity,
     tokenizer_file_receipt,
@@ -78,6 +80,22 @@ class CacheFixture:
 
 
 class CacheIdentityTests(CacheFixture, unittest.TestCase):
+    def test_file_digest_python_310_fallback(self):
+        test_file = self.root / "digest_test.bin"
+        payload = b"test payload for file digest verification"
+        test_file.write_bytes(payload)
+        expected = hashlib.sha256(payload).hexdigest()
+
+        with test_file.open("rb") as stream:
+            self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
+
+        with patch(
+            "src.training.model_classifier.sequence_repair.retention.hasattr",
+            return_value=False,
+        ):
+            with test_file.open("rb") as stream:
+                self.assertEqual(file_digest(stream, "sha256").hexdigest(), expected)
+
     def test_exact_cache_covers_only_explicit_replay_and_derives_compatibility(self):
         cache = self.load()
         self.assertEqual(cache.receipt["replay_rows"], len(self.rows) - 1)

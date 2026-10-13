@@ -59,6 +59,16 @@ class ImageArtifactTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate"):
                 images.oci_images(path)
 
+    def test_sha256_and_fallback_without_hashlib_file_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "digest.bin"
+            content = b"sample image artifact bytes"
+            path.write_bytes(content)
+            expected = hashlib.sha256(content).hexdigest()
+            self.assertEqual(images.sha256(path), expected)
+            with patch("image_artifacts.hasattr", return_value=False):
+                self.assertEqual(images.sha256(path), expected)
+
     def test_identity_rejects_stale_source_and_changed_archive(self):
         with (
             tempfile.TemporaryDirectory() as tmp,

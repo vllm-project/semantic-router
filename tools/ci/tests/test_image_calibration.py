@@ -28,6 +28,15 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
             "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
         )
 
+    def test_file_digest_fallback_without_hashlib_file_digest(self):
+        path = self.root / "known_fallback.txt"
+        path.write_bytes(b"abc")
+        with patch("image_artifacts.hasattr", return_value=False):
+            self.assertEqual(
+                image_calibration.file_sha(path),
+                "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            )
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

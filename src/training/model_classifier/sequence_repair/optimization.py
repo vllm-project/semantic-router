@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 
 from .model import load_model, save_adapter
+from .retention import file_digest
 from .task_head import task_head_scope, tensor_digest
 
 
@@ -167,7 +168,7 @@ def initial_artifact_receipt(base, adapter):
         path = root / name
         if path.is_file():
             with path.open("rb") as stream:
-                files[name] = hashlib.file_digest(stream, "sha256").hexdigest()
+                files[name] = file_digest(stream, "sha256").hexdigest()
     result = {"base_files": files}
     if adapter is not None:
         for filename in ("adapter_model.safetensors", "adapter_config.json"):
@@ -176,7 +177,7 @@ def initial_artifact_receipt(base, adapter):
                 result[filename] = None
                 continue
             with path.open("rb") as stream:
-                result[filename] = hashlib.file_digest(stream, "sha256").hexdigest()
+                result[filename] = file_digest(stream, "sha256").hexdigest()
     return result
 
 
