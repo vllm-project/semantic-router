@@ -809,6 +809,21 @@ Each model pins the FLA kernel choices of its release
 (`registry/kernel_choices.json`, from the autotune cache its release runs
 used), so every process rounds as the release did (§11).
 
+A package may hold its projections quantized, declared by a compressed-tensors
+`quantization_config` in `config.json` (`quantization.py`): FP8 weights with
+one scale per output channel and FP8 activations per token (`float-quantized`,
+FP8_DYNAMIC), or 4-bit integer weights in groups, symmetric (GPTQ) or with
+zero points (AWQ), and BF16 activations (`pack-quantized`). Any other scheme is
+refused. The targeted layers become `Float8Linear` or `Int4Linear` on the meta
+backbone and load the stored tensors as they are
+(`engines/native/quantized.py`): FP8 runs `torch._scaled_mm` after one Triton
+kernel quantizes the activations per row, and needs FP8 matrix units; int4
+unpacks its weights to BF16 with one Triton kernel per call (plain torch on a
+CPU) and multiplies in BF16, which keeps the memory but not the time. A
+quantized package is its own model: its manifest's parameter counts are the
+logical ones, placement counts its files, and its answers are compared with
+the BF16 package's in `docs/records/decision3-quantized.md`.
+
 ## 9. Scheduler and planner
 
 ```text

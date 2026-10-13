@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from ..accel.kernels import KernelSet
     from ..config import ServeConfig
+    from ..quantization import QuantizedWeights
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -196,7 +197,8 @@ class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
     ``branches`` names extra layer stacks that share the embedding; an encoder
-    batch selects one with ``EncoderBatch.branch``.
+    batch selects one with ``EncoderBatch.branch``. ``quantized`` names the linear
+    layers the checkpoint holds as int4 or FP8 weights (``quantization.py``).
     """
 
     model_type: str
@@ -205,6 +207,7 @@ class BackboneSpec:
     weight_prefix: str = ""
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
+    quantized: QuantizedWeights | None = None
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
