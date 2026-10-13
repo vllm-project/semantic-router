@@ -72,6 +72,48 @@ func TestParallelSkipCannotHideHopBudgetExhaustion(t *testing.T) {
 	}
 }
 
+func TestNestedParallelSkipCannotHideRunCeilings(t *testing.T) {
+	tests := []struct {
+		name    string
+		limits  Limits
+		pricing Pricing
+		want    error
+		calls   int
+	}{
+		{name: "tokens", limits: Limits{MaxTokens: 1}, want: ErrTokenLimit, calls: 1},
+		{name: "cost", limits: Limits{MaxCost: 1}, pricing: pricePerToken{"a": 1}, want: ErrCostLimit, calls: 1},
+		{name: "unknown cost", limits: Limits{MaxCost: 2}, pricing: pricePerToken{"a": 1}, want: ErrCostUnknown, calls: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			caller := &fakeCaller{}
+			program := &Program{
+				Steps: Sequence{
+					parallel("outer", &Parallel{
+						Branches: []Sequence{
+							{call("first", "a")},
+							{parallel("inner", &Parallel{Branches: branchesOf("b")})},
+						},
+						MaxConcurrency: 1,
+						MinSuccess:     1,
+						OnError:        OnErrorSkip,
+					}),
+					aggregate("join", Concat{Separator: ","}),
+					respond(),
+				},
+				Limits: tt.limits,
+			}
+			outcome, err := run(t, program, caller, func(o *Options) { o.Pricing = tt.pricing })
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("err %v, want %v", err, tt.want)
+			}
+			if outcome.Response != nil || len(caller.requests()) != tt.calls {
+				t.Fatalf("response %+v, sent %d calls, want %d", outcome.Response, len(caller.requests()), tt.calls)
+			}
+		})
+	}
+}
+
 func TestPhysicalRetryBudgetExhaustionFailsTheGraph(t *testing.T) {
 	calls := 0
 	program := &Program{
