@@ -147,6 +147,7 @@ def _container_env(container_name: str) -> dict[str, str]:
         result = subprocess.run(
             [
                 get_container_runtime(),
+                "container",
                 "inspect",
                 "--format",
                 "{{json .Config.Env}}",
