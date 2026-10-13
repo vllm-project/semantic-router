@@ -4,7 +4,7 @@ description: 用精确的字符位置找出请求里的个人信息，并按它�
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/model-runtime/guides/pii.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 

@@ -4,7 +4,7 @@ description: 模型 runtime 的命令选项、models 文件、HTTP API、环境�
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/model-runtime/reference.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
@@ -121,7 +121,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 任务分发到多个模型的 bundle，报告的是最后答完那个模型的 `queue`、`forward` 和 `post`。客户端自己这次调用的时间减去 `total` 就是传输：它的编解码、连接和 HTTP 交换。router 把它作为每次调用的指标记下来。
 
-完全服务不了的请求返 HTTP 错误，带 `{"error": {"code", "message"}}`：400 `invalid_request`、404 `model_not_found`、413 `request_too_large`、422 `unsupported_surface`（模型不服务这个端点）、429 `overloaded`、503 `not_ready`。请求里单个条目失败（一个输入或一个问题）只带自己的错误码，不牵连其他条目。
+完全服务不了的请求返 HTTP 错误，带 `{"error": {"code", "message"}}`：400 `invalid_request`、404 `model_not_found`、413 `request_too_large`、422 `unsupported_surface`（模型不服务这个端点）、429 `overloaded`、503 `not_ready`。部署的所有 worker 都在忙时，Router 同样返回 429 `overloaded`；没有就绪 worker 时返回 503 `not_ready`；两者都带 `Retry-After`（1 秒和 5 秒）。Engine 模式下，调用超过 Router 的 30 秒预算时返回 504 `systemone_deadline_exceeded`。请求里单个条目失败（一个输入或一个问题）只带自己的错误码，不牵连其他条目。
 
 ### 长输入 {#long-inputs}
 

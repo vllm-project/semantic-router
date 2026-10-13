@@ -24,6 +24,7 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 	}{
 		{name: "static", algorithm: "static", known: true},
 		{name: "multi_factor", algorithm: "multi_factor", known: true},
+		{name: "random", algorithm: "random", known: true},
 		{name: "prompt helper", algorithm: "prompt"},
 		{name: "looper", algorithm: "fusion"},
 		{name: "shadow call", algorithm: "static", plugin: "shadow_dispatch"},
