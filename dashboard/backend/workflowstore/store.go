@@ -27,7 +27,7 @@ func Open(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("workflowstore: create dir: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=1")
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=1&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("workflowstore: open: %w", err)
 	}
@@ -78,8 +78,10 @@ CREATE TABLE IF NOT EXISTS mcp_server (
 	json TEXT NOT NULL
 );
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return s.initTrainingSchema()
 }
 
 // Close releases the database handle.

@@ -356,7 +356,9 @@ def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
         )
     )
     before = source.read_bytes()
-    monkeypatch.setattr(runtime, "_resolve_serve_config", lambda *args: (source, False))
+    monkeypatch.setattr(
+        runtime, "_resolve_serve_config", lambda *args, **kwargs: (source, False)
+    )
     deployed = {}
     monkeypatch.setattr(
         runtime, "_deploy_serve_backend", lambda **kwargs: deployed.update(kwargs)

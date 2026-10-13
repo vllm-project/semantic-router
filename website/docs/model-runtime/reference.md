@@ -170,7 +170,16 @@ A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface` (the
 model does not serve that endpoint), 429 `overloaded`, 503 `not_ready`. A
-failed item of a request (one input or one question) carries its own error
+rejected image or video adds its `reason` (for example `video_too_long`,
+`image_too_large` or `video_malformed`) and, when it broke a limit, the
+`limit`. These fixed words never carry request data, so the Router's public
+System One API answers with them and keeps the runtime's message private: it
+says `video longer than 300 s` where the runtime says why in its own words.
+The Router answers a deployment whose workers are all busy the same way, 429
+`overloaded`, and one with no ready worker 503 `not_ready`; both carry
+`Retry-After` (1 and 5 seconds). In Engine mode a call that runs past the
+Router's 30-second budget returns 504 `systemone_deadline_exceeded`.
+A failed item of a request (one input or one question) carries its own error
 code and never fails the others.
 
 ### Long inputs
@@ -444,7 +453,8 @@ frames is one group of input tokens after its timestamp, and the videos of a
 request take at most `limits.video_max_tokens` input tokens. An entry of
 `states` may carry its own `images` and `videos`. Their tokens count in
 `usage`. A malformed or over-limit image or video, or one sent to a model
-without its modality, fails the request with 400 `invalid_request`. A worker
+without its modality, fails the request with 400 `invalid_request` and its
+`reason`. A worker
 started directly reads bodies of at most `--max-request-bytes`, so raise it to
 send large videos; the Router gives the workers it manages 64 MiB.
 
