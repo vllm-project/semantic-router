@@ -32,7 +32,7 @@ Where $o_t$ is the observation (verification result) and $a_t$ is the action (ch
 
 $$\pi^* = \arg\max_\pi \mathbb{E}\left[\sum_{t=0}^{\infty} \gamma^t (P_t - \lambda C_t)\right]$$
 
-Where $P_t$ is performance, $C_t$ is cost, and $\lambda$ (`cost_lambda`) controls the tradeoff.
+Where $P_t$ is performance, $C_t$ is cost, and $\lambda$ (`cost_quality_tradeoff`) controls the tradeoff.
 
 ## Select Flow (Pre-selection Mode)
 
@@ -79,10 +79,9 @@ Some routes need dynamic cost-quality optimization instead of always picking the
 
 ## Known Limitations
 
-- Cascaded mode (with verification) adds latency — each verification step is an extra inference.
-- Self-verification via entailment requires a separate LLM endpoint (`verifier_server_url`).
-- POMDP particle filtering adds computational overhead for belief updates.
-- Without sufficient historical data, POMDP beliefs may not converge.
+- `verification_threshold`, configured costs, `cost_quality_tradeoff`, and `discount_factor` affect the one-model score. `max_escalations` and `use_logprob_verification` currently do not.
+- This decision algorithm does not itself make multiple backend calls. Use `confidence` for request-time generation and escalation.
+- AutoMix is experimental. Validate it on your own traffic before relying on it for an SLO.
 
 ## Configuration
 
@@ -90,36 +89,25 @@ Some routes need dynamic cost-quality optimization instead of always picking the
 algorithm:
   type: automix
   automix:
-    verification_threshold: 0.7       # Self-verification confidence threshold
+    verification_threshold: 0.78       # Self-verification confidence threshold
     max_escalations: 2                # Maximum escalation attempts
     cost_aware_routing: true          # Enable cost-quality optimization
     cost_quality_tradeoff: 0.3        # Balance: 0=pure quality, 1=pure cost
     discount_factor: 0.95             # POMDP discount factor (γ)
     use_logprob_verification: true    # Use logprobs for confidence
-    enable_self_verification: false   # LLM-based entailment verification
-    verification_samples: 5           # Samples for confidence (k in paper)
-    use_pomdp_router: true            # Full POMDP routing (vs simple threshold)
-    belief_particles: 100             # Number of POMDP particles
-    cost_lambda: 0.5                  # POMDP cost-performance tradeoff
-    verifier_server_url: ""           # AutoMix verification server URL
-    enable_cascade: false             # Enable full cascade execution mode
 ```
+
+Only the fields above are part of the current decision-level AutoMix contract.
+`max_escalations` and `use_logprob_verification` are accepted for compatibility
+but do not affect AutoMix selection.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `verification_threshold` | float | `0.7` | Confidence threshold for self-verification (0–1) |
+| `verification_threshold` | float | `0.78` | Confidence threshold for self-verification (0–1) |
 | `max_escalations` | int | `2` | Maximum escalation attempts |
 | `cost_aware_routing` | bool | `true` | Enable cost-quality tradeoff optimization |
 | `cost_quality_tradeoff` | float | `0.3` | Cost-quality balance (0=quality, 1=cost) |
 | `discount_factor` | float | `0.95` | POMDP discount factor γ (0–1) |
 | `use_logprob_verification` | bool | `true` | Use logprobs for confidence estimation |
-| `enable_self_verification` | bool | `false` | Enable LLM-based entailment verification |
-| `verification_samples` | int | `5` | Number of verification samples (k) |
-| `verification_temperature` | float | `0.7` | Temperature for verification sampling |
-| `use_pomdp_router` | bool | `true` | Full POMDP routing vs. simple threshold |
-| `belief_particles` | int | `100` | Number of POMDP belief particles |
-| `cost_lambda` | float | `0.5` | POMDP cost-performance tradeoff λ |
-| `verifier_server_url` | string | — | URL of AutoMix self-verification server |
-| `enable_cascade` | bool | `false` | Enable full cascade execution mode |
