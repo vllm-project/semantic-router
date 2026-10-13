@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 from cli.runtime_stack import MAX_PORT_OFFSET
-from runtime_http import call, page_requests, write_fixture
+from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
@@ -386,7 +386,7 @@ class TestEngineModeRestartPolicy(EngineStack):
                     status, _ = self.public("/v1/systemone/models")
                 except OSError:  # the listener is not back yet
                     status = None
-                if status == 200:
+                if status == HTTP_OK:
                     break
             time.sleep(2)
         self.assertGreater(int(self.inspect("{{.RestartCount}}")), restarts)
