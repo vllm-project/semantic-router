@@ -94,7 +94,7 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 	// Build delete expression
 	// NOTE: IDs are system-generated UUIDs, so injection risk is minimal.
 	// For production with user-controlled IDs, consider escaping quotes or using parameterized queries.
-	deleteExpr := fmt.Sprintf("id == \"%s\"", id)
+	deleteExpr := fmt.Sprintf("id == %q", id)
 
 	err := m.retryWithBackoff(ctx, func() error {
 		return m.client.Delete(
