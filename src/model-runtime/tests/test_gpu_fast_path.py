@@ -269,12 +269,12 @@ def test_a_full_graph_cache_admits_only_its_captured_shapes():
     fast.install_fused(fused)
     graphs = fast.Graphs(fused, fast.Masks(), max_graphs=1)
     torch_device = accelerator.torch_device(device)
+    assert graphs.admits((1, 8, False), 8)
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         for seed, lengths in enumerate([[8], [24]]):
             ids, mask = batch(
                 lengths, torch.Generator().manual_seed(seed), torch_device
             )
-            assert graphs.admits((1, lengths[0], False), lengths[0])
             for _ in range(3):
                 graphs(ids, mask, lengths)
     assert graphs.receipt()["captures"] == 1 and graphs.receipt()["full"] > 0

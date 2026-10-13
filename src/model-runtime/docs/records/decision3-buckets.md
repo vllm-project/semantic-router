@@ -3,17 +3,22 @@
 Decision 3.0 graphs are captured per exact padded shape, so real traffic, where
 almost every prompt has its own length, keeps meeting shapes it has not
 captured and runs them eagerly. Under the approximate profiles (`batching`,
-`max_speed`) a text forward whose rows times padded width fit the graph limit
-(`MAX_GRAPH_TOKENS`, 4,096) now pads its width up to a multiple of 32 tokens,
-on the left like every d3 row. Prompts of nearby lengths then share one graph.
-The exact profile, image and video requests and larger forwards are unchanged.
+`max_speed`) a text forward now pads its width up to a multiple of 32 tokens,
+on the left like every d3 row, when the padded shape replays a captured graph
+or the graph cache can still capture it: within the graph limit
+(`MAX_GRAPH_TOKENS`, 4,096), not failed before, and with room left in the cache
+(`Graphs.admits`). Prompts of nearby lengths then share one graph. Once the
+cache is full, only shapes it already holds are padded, so no forward pays for
+padding it cannot replay. The exact profile, media passes and larger forwards
+are unchanged.
 
-- **Date:** 2026-10-13.
+- **Date:** 2026-10-13 (bucket size), 2026-10-14 (serving).
 - **Device:** one AMD Instinct MI300X (gfx942) in the router's ROCm image
   `vllm-sr-rocm:latest` built 2026-10-11 (PyTorch 2.12.0, Triton 3.7.0,
   FLA 0.5.2), pinned kernel choices.
 - **Model:** `vllm-sr/d3-flash` at the built-in revision `521525ef`.
-- **Code:** the Decision 3.0 graphs branch against this branch.
+- **Code:** main with the cross-request batching of #5006, the Decision 3.0
+  graphs branch, and this branch.
 
 ## Why 32 tokens
 
@@ -30,28 +35,34 @@ the work.
 
 `vllm-srun serve --profile batching` over HTTP, 240 two-question requests of
 new lengths (5 to 250 words), each concurrency after a 16-request warm-up. The
-second pass sends 240 other prompts of the same length distribution to the
-same server.
+second set sends 240 other prompts of the same length distribution to the same
+server. Every server was started fresh. Main ran twice, and the two runs show
+the run-to-run spread at concurrency 16.
 
-| Concurrency | Exact | Batching | Batching with buckets |
-| --- | --- | --- | --- |
-| 1, first pass | 20.0 rps, p50 41.8 ms, p95 74.7 ms | 20.3 rps, p50 43.6 ms, p95 76.6 ms | 33.2 rps, p50 29.6 ms, p95 36.5 ms |
-| 1, second pass | 29.7 rps, p50 30.8 ms, p95 69.2 ms | 22.4 rps, p50 43.0 ms, p95 76.8 ms | 34.7 rps, p50 29.1 ms, p95 36.5 ms |
-| 4, first pass | 24.0 rps | 40.6 rps | 41.2 rps |
-| 4, second pass | 33.4 rps | 38.6 rps | 43.6 rps |
-| 16, first pass | 39.3 rps | 41.7 rps | 43.4 rps |
-| 16, second pass | 40.1 rps | 45.1 rps | 44.3 rps |
+| Concurrency | Main, run 1 | Main, run 2 | Graphs | Graphs and buckets | Buckets with #5009 |
+| --- | --- | --- | --- | --- | --- |
+| 1, first set | 24.3 rps | 25.2 rps | 21.6 rps | 33.6 rps | 33.5 rps |
+| 1, second set | 24.2 rps | 25.1 rps | 23.7 rps | 34.9 rps | 34.9 rps |
+| 4, first set | 42.9 rps | 44.5 rps | 39.9 rps | 40.8 rps | 40.9 rps |
+| 4, second set | 45.0 rps | 45.8 rps | 42.8 rps | 44.5 rps | 44.6 rps |
+| 16, first set | 46.7 rps | 40.8 rps | 37.9 rps | 41.1 rps | 40.1 rps |
+| 16, second set | 45.9 rps | 45.5 rps | 47.3 rps | 43.7 rps | 42.8 rps |
 
-Buckets help single requests most, because one request's forward is small and
-host-bound until it replays a graph. Batches at concurrency 16 are mostly
-above the graph limit or GPU-bound, so they gain nothing, and they are left
-unpadded.
+One request at a time went from a median of 39 to 41 ms to 29 ms, and from a
+p95 of 44 to 47 ms to 36 ms. Buckets help single requests most, because one request's forward is small and
+host-bound until it replays a graph, and graphs alone do not help there: new
+lengths keep meeting shapes not captured yet. At concurrency 4 the stack stays
+1 to 8% below main, and at 16 it is within main's own spread on the first set
+and 4 to 5% below it on the second. Coalesced forwards meet many shapes and
+pay for their captures, which likely explains it, though the capture time was
+not measured separately. With the graph budget fix of #5009 every number stays
+within 1 rps.
 
 ## Answers
 
-Against the exact profile on the same prompts, buckets changed 0 to 2 of 480
-decisions per run (largest probability change 0.016), the same range as
-batching without buckets (0 to 2 of 480, 0.019). In process, on 600 oasst1
+Against the exact profile on the same prompts, buckets changed 0 to 1 of 480
+decisions per run (largest probability change 0.015), the same range as main's
+batching (0 to 2 of 480, 0.015). In process, on 600 oasst1
 train prompts with three questions each, 32-token left padding changed 5 of
 1,800 decisions (domain 1, reasoning 2, difficulty 2; largest probability
 change 0.013). Right padding was not better (4 of 1,800 at 32 tokens, 8 of

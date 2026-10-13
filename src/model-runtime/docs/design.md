@@ -778,9 +778,9 @@ layers follow the package's `layer_types`, so a pruned backbone (d3-edge keeps
 them) loads as it is. The FP32 readout scores the question's codes at the last
 position, and the answer is the softmax over them at the package temperature.
 A request's questions run in request order, eight per forward. Under the
-approximate profiles (`batching`, `max_speed`) a text forward small enough to
-replay a graph pads its width to a multiple of 32 tokens, so prompts of nearby
-lengths share one captured graph
+approximate profiles (`batching`, `max_speed`) a text forward pads its width to
+a multiple of 32 tokens when the padded shape replays a captured graph or the
+graph cache can still capture it, so prompts of nearby lengths share one graph
 ([`decision3-buckets.md`](records/decision3-buckets.md)).
 
 A request's `images` (base64 PNG, JPEG or WebP data URLs) are decoded by PIL
