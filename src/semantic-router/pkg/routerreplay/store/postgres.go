@@ -244,6 +244,9 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 		return "", err
 	}
 	defer release()
+	if _, err = encodeRecord(&record, MaxRecordBytes); err != nil {
+		return "", err
+	}
 	insertRecord, err := newPostgresInsertRecord(record)
 	if err != nil {
 		return "", err
@@ -296,6 +299,9 @@ func (p *PostgresStore) getRecord(ctx context.Context, id string) (Record, bool,
 	}
 	if err != nil {
 		return Record{}, false, fmt.Errorf("failed to query record: %w", err)
+	}
+	if isExpired(record, p.ttl) {
+		return Record{}, false, nil
 	}
 	return record, true, nil
 }
@@ -655,6 +661,10 @@ func (p *PostgresStore) UpdateToolTrace(ctx context.Context, id string, trace To
 		return err
 	}
 	defer release()
+	trace, err = fitToolTrace(trace)
+	if err != nil {
+		return err
+	}
 	traceJSON, err := postgresToolTraceJSON(trace)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tool trace: %w", err)

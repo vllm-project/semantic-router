@@ -22,7 +22,7 @@ type MemoryStore struct {
 	records    []*Record
 	byID       map[string]*Record
 	maxRecords int
-	ttl        int // Not used in memory store, but kept for interface compatibility
+	ttl        time.Duration
 }
 
 // NewMemoryStore creates a new in-memory storage backend.
@@ -35,7 +35,7 @@ func NewMemoryStore(maxRecords int, ttlSeconds int) *MemoryStore {
 		records:    make([]*Record, 0, maxRecords),
 		byID:       make(map[string]*Record),
 		maxRecords: maxRecords,
-		ttl:        ttlSeconds,
+		ttl:        time.Duration(ttlSeconds) * time.Second,
 	}
 }
 
@@ -53,6 +53,9 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 	}
 	if record.LifecycleState == "" {
 		record.LifecycleState = LifecycleInProgress
+	}
+	if _, err := encodeRecord(&record, MaxRecordBytes); err != nil {
+		return "", err
 	}
 
 	// Evict oldest if at capacity
@@ -76,7 +79,7 @@ func (m *MemoryStore) Get(ctx context.Context, id string) (Record, bool, error) 
 	defer m.mu.RUnlock()
 
 	rec, ok := m.byID[id]
-	if !ok {
+	if !ok || isExpired(*rec, m.ttl) {
 		return Record{}, false, nil
 	}
 
@@ -85,15 +88,45 @@ func (m *MemoryStore) Get(ctx context.Context, id string) (Record, bool, error) 
 
 // List returns all records ordered by timestamp descending.
 func (m *MemoryStore) List(ctx context.Context) ([]Record, error) {
+	return listAll(m.scan)
+}
+
+func (m *MemoryStore) QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error) {
+	return collectPage(filters, limit, offset, m.count, m.scan)
+}
+
+func (m *MemoryStore) ScanMetadata(ctx context.Context, visit func(Record) error) error {
+	return scanAll(m.scan, visit)
+}
+
+func (m *MemoryStore) count() (int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	result := make([]Record, len(m.records))
-	for i := len(m.records) - 1; i >= 0; i-- {
-		result[len(m.records)-1-i] = cloneRecord(*m.records[i])
+	live := 0
+	for _, rec := range m.records {
+		if !isExpired(*rec, m.ttl) {
+			live++
+		}
 	}
+	return live, nil
+}
 
-	return result, nil
+func (m *MemoryStore) scan(from int, visit func(Record) bool) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for i := len(m.records) - 1; i >= 0; i-- {
+		if isExpired(*m.records[i], m.ttl) {
+			continue
+		}
+		if from > 0 {
+			from--
+			continue
+		}
+		if !visit(cloneRecord(*m.records[i])) {
+			break
+		}
+	}
+	return nil
 }
 
 // UpdateStatus updates the response status and flags for a record.
@@ -231,6 +264,10 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
+	trace, err := fitToolTrace(trace)
+	if err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
