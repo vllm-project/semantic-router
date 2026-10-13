@@ -25,6 +25,8 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+from ...errors import MediaError
+
 # Preprocessing runs on one thread: PyTorch's OpenMP backend keeps a thread team
 # per calling thread, and a team per request thread outnumbers the cores, so every
 # parallel region of the resize and normalization would pay a wake-up.
@@ -76,9 +78,19 @@ class ProcessedImage:
     digest: str
 
 
+def _too_large() -> MediaError:
+    return MediaError(
+        "image_too_large",
+        f"each image must be at most {MAX_IMAGE_BYTES:,} bytes",
+        MAX_IMAGE_BYTES,
+    )
+
+
 def _payload(value: Any) -> bytes:
     if not isinstance(value, str) or not value.startswith("data:"):
-        raise ValueError("images must be base64 PNG, JPEG or WebP data URLs")
+        raise MediaError(
+            "image_format", "images must be base64 PNG, JPEG or WebP data URLs"
+        )
     header, separator, encoded = value.partition(",")
     kind = header.strip().lower()
     if (
@@ -86,17 +98,21 @@ def _payload(value: Any) -> bytes:
         or not kind.startswith("data:image/")
         or not kind.endswith(";base64")
     ):
-        raise ValueError("a data URL image is data:image/<format>;base64,<data>")
+        raise MediaError(
+            "image_format", "a data URL image is data:image/<format>;base64,<data>"
+        )
     if kind[len("data:image/") : -len(";base64")] not in DATA_URL_FORMATS:
-        raise ValueError("images must be base64 PNG, JPEG or WebP data URLs")
+        raise MediaError(
+            "image_format", "images must be base64 PNG, JPEG or WebP data URLs"
+        )
     if len(encoded) > 4 * -(-MAX_IMAGE_BYTES // 3):
-        raise ValueError(f"each image must be at most {MAX_IMAGE_BYTES:,} bytes")
+        raise _too_large()
     try:
         payload = base64.b64decode(encoded, validate=True)
     except binascii.Error as exc:
-        raise ValueError("invalid base64 image data") from exc
+        raise MediaError("image_malformed", "invalid base64 image data") from exc
     if len(payload) > MAX_IMAGE_BYTES:
-        raise ValueError(f"each image must be at most {MAX_IMAGE_BYTES:,} bytes")
+        raise _too_large()
     return payload
 
 
@@ -108,10 +124,12 @@ def decode(value: Any) -> tuple[Any, str]:
     try:
         with Image.open(io.BytesIO(payload)) as image:
             if image.format not in IMAGE_FORMATS:
-                raise ValueError("images must be PNG, JPEG or WebP")
+                raise MediaError("image_format", "images must be PNG, JPEG or WebP")
             if image.width * image.height > MAX_SOURCE_PIXELS:
-                raise ValueError(
-                    f"each image must have at most {MAX_SOURCE_PIXELS:,} pixels"
+                raise MediaError(
+                    "image_pixels",
+                    f"each image must have at most {MAX_SOURCE_PIXELS:,} pixels",
+                    MAX_SOURCE_PIXELS,
                 )
             image.verify()
         with Image.open(io.BytesIO(payload)) as image:
@@ -122,7 +140,9 @@ def decode(value: Any) -> tuple[Any, str]:
         UnidentifiedImageError,
         Image.DecompressionBombError,
     ) as exc:
-        raise ValueError(f"invalid image data ({type(exc).__name__})") from exc
+        raise MediaError(
+            "image_malformed", f"invalid image data ({type(exc).__name__})"
+        ) from exc
 
 
 def smart_resize(
@@ -130,9 +150,11 @@ def smart_resize(
 ) -> tuple[int, int]:
     """Transformers' ``smart_resize``: both sides a multiple of ``factor``, the area within the budget."""
     if max(height, width) / min(height, width) > MAX_ASPECT_RATIO:
-        raise ValueError(
+        raise MediaError(
+            "image_aspect_ratio",
             f"absolute aspect ratio must be smaller than {MAX_ASPECT_RATIO}, got "
-            f"{max(height, width) / min(height, width)}"
+            f"{max(height, width) / min(height, width)}",
+            MAX_ASPECT_RATIO,
         )
     h_bar = round(height / factor) * factor
     w_bar = round(width / factor) * factor
