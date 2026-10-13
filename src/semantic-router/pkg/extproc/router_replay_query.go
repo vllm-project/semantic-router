@@ -43,13 +43,11 @@ func (filters routerReplayFilters) storageFilters() store.QueryFilters {
 func (r *OpenAIRouter) queryRouterReplayPage(query routerReplayListQuery) (routerReplayListResponse, error) {
 	readers := r.routerReplayReaders()
 	if len(readers) == 1 {
-		page, supported, err := readers[0].QueryPage(query.filters.storageFilters(), query.limit, query.offset, query.showDetails)
+		page, err := readers[0].QueryPage(query.filters.storageFilters(), query.limit, query.offset, query.showDetails)
 		if err != nil {
 			return routerReplayListResponse{}, err
 		}
-		if supported {
-			return routerReplayPagePayload(page, query), nil
-		}
+		return routerReplayPagePayload(page, query), nil
 	}
 	if query.offset > math.MaxInt-query.limit {
 		return routerReplayListResponse{}, errors.New("replay offset is too large")
@@ -63,17 +61,9 @@ func (r *OpenAIRouter) queryRouterReplayPage(query routerReplayListQuery) (route
 	var sourced []sourcedRecord
 	total := 0
 	for _, reader := range readers {
-		page, supported, err := reader.QueryPage(query.filters.storageFilters(), query.offset+query.limit, 0, false)
+		page, err := reader.QueryPage(query.filters.storageFilters(), query.offset+query.limit, 0, false)
 		if err != nil {
 			return routerReplayListResponse{}, err
-		}
-		if !supported {
-			all, listErr := reader.ListRecords()
-			if listErr != nil {
-				return routerReplayListResponse{}, listErr
-			}
-			page.Records = filterRouterReplayRecords(all, query.filters)
-			page.Total = len(page.Records)
 		}
 		for _, record := range page.Records {
 			sourced = append(sourced, sourcedRecord{record: record, reader: reader})
@@ -141,19 +131,9 @@ func (r *OpenAIRouter) queryRouterReplaySession(sessionID string, recipe *string
 		filters.RecipeSet = true
 	}
 	for _, reader := range r.routerReplayReaders() {
-		page, supported, err := reader.QueryPage(filters, math.MaxInt, 0, true)
+		page, err := reader.QueryPage(filters, math.MaxInt, 0, true)
 		if err != nil {
 			return nil, err
-		}
-		if !supported {
-			all, listErr := reader.ListRecords()
-			if listErr != nil {
-				return nil, listErr
-			}
-			page.Records = filterTrajectoryRecordsBySession(all, sessionID)
-			if recipe != nil {
-				page.Records = filterTrajectoryRecordsByRecipe(page.Records, *recipe)
-			}
 		}
 		records = append(records, page.Records...)
 	}

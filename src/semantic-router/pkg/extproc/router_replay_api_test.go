@@ -240,10 +240,10 @@ func TestHandleRouterReplayAPIListRejectsInvalidShowDetails(t *testing.T) {
 }
 
 func TestHandleRouterReplayAPIListReturnsPayloadTooLargeWhenShowDetailsTrue(t *testing.T) {
-	oversizedBody := strings.Repeat("x", 5*1024*1024)
-	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
+	// Each record fits the store limit; five of them do not fit one response.
+	router := newReplayAPITestRouterWithRecords(t, 5, strings.Repeat("x", store.MaxRecordBytes))
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=1&showDetails=true")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=5&showDetails=true")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
