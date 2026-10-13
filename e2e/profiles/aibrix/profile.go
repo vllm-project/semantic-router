@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -189,7 +188,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		Namespace:   namespaceSemanticRouter,
 		ValuesFiles: []string{"e2e/profiles/aibrix/values.yaml"},
 		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
+			"gateway.mode":     "extproc",
+			"image.repository": "ghcr.io/vllm-project/semantic-router/vllm-sr",
 			"image.tag":        opts.ImageTag,
 			"image.pullPolicy": "Never", // Use local image, don't pull from registry
 		},

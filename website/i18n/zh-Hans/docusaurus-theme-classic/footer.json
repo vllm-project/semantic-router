@@ -33,7 +33,7 @@
   },
   "link.item.label.Hugging Face": {
     "message": "Hugging Face",
-    "description": "The label of footer link with label=Hugging Face linking to https://huggingface.co/LLM-Semantic-Router"
+    "description": "The label of footer link with label=Hugging Face linking to https://huggingface.co/vllm-sr"
   },
   "link.item.label.GitHub Discussions": {
     "message": "GitHub 讨论区",

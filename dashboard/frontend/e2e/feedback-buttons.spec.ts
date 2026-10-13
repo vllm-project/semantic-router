@@ -39,6 +39,7 @@ test.describe('FeedbackButtons', () => {
             object: 'model',
             owned_by: 'vllm-semantic-router',
             description: 'Intelligent Router for Mixture-of-Models',
+            routing: { resolution: 'virtual', selectable: true, default_route: true },
           }],
         }),
       })

@@ -35,7 +35,7 @@ type VectorStoreConfig struct {
 	MaxFileSizeMB int `json:"max_file_size_mb,omitempty" yaml:"max_file_size_mb,omitempty"`
 
 	// EmbeddingModel specifies the model for document embeddings.
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
+	// Options: "mmbert" (default), "qwen3", "multimodal"
 	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
 
 	// EmbeddingDimension is the dimensionality of the embedding vectors.
@@ -301,7 +301,7 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 		c.MaxFileSizeMB = 50
 	}
 	if c.EmbeddingModel == "" {
-		c.EmbeddingModel = "bert"
+		c.EmbeddingModel = DefaultEmbeddingModel
 	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2

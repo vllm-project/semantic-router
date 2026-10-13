@@ -1,0 +1,77 @@
+{
+  "calls": [
+    {
+      "route": "judge",
+      "model": "judge",
+      "body": {
+        "max_completion_tokens": 512,
+        "messages": [
+          {
+            "content": "Choose model-b for geography.\n\nChoose exactly one candidate from this list:\n- model-a\n- model-b\nReturn only JSON: {\"selected_model\":\"\u003cexact candidate name\u003e\",\"rationale\":\"\u003cshort reason\u003e\"}.",
+            "role": "system"
+          },
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "judge",
+        "response_format": {
+          "type": "json_object"
+        },
+        "temperature": 0
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "header": {
+        "x-fixture-client": "the client's own header"
+      },
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-b"
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "application/json",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "upstream",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-algorithm": "prompt",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "model-b",
+      "x-vsr-selected-recipe": "default"
+    },
+    "body": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "model-b says Paris in detail (1b997d5a)",
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": "\u003cvolatile\u003e",
+      "id": "\u003cvolatile\u003e",
+      "model": "model-b",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 5,
+        "prompt_tokens": 10,
+        "total_tokens": 15
+      }
+    }
+  }
+}

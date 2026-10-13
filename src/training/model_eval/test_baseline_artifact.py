@@ -17,13 +17,13 @@ from constants import VELA_RELEASE_REVISIONS  # noqa: E402
 from provenance.crossref import artifact_identity_digest, file_digest  # noqa: E402
 from provenance.emit import write_manifest  # noqa: E402
 
-REPO = "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
+REPO = "vllm-sr/mmbert32k-jailbreak-detector-merged"
 REVISION = "b" * 40
 CONFIG_JSON = b'{"architectures": ["ModernBertForSequenceClassification"]}'
 
 
 def test_served_vela_download_uses_the_router_pin_not_hub_head(tmp_path, monkeypatch):
-    repo = "llm-semantic-router/Vela-1.0-Encoder-307M-Feedback"
+    repo = "vllm-sr/Vela-1.0-Encoder-307M-Feedback"
     site = LoadSite(
         "feedback", "models/" + repo.rsplit("/", maxsplit=1)[-1], None, None, None, ()
     )
@@ -42,7 +42,7 @@ def test_served_vela_download_uses_the_router_pin_not_hub_head(tmp_path, monkeyp
     args = argparse.Namespace(
         artifact_manifest=None, artifact_dir=None, artifact_repo=None
     )
-    measured = resolve_measured_artifact(args, served)
+    measured = resolve_measured_artifact(args, served, lambda repo: None)
     assert measured.revision == VELA_RELEASE_REVISIONS[repo]
     assert calls[0][:2] == (repo, VELA_RELEASE_REVISIONS[repo])
 
@@ -97,14 +97,43 @@ def artifact_manifest(tmp_path, directory, repo=REPO):
     return write_manifest(manifest, tmp_path / "artifact.manifest.yaml")
 
 
-def resolve(manifest, artifact_dir=None, artifact_repo=None):
+def resolve(manifest, artifact_dir=None, artifact_repo=None, validate_repo=None):
     args = argparse.Namespace(
         config=pathlib.Path("config/config.yaml"),
         artifact_dir=artifact_dir,
         artifact_manifest=manifest,
         artifact_repo=artifact_repo,
     )
-    return resolve_measured_artifact(args, served_artifact())
+    return resolve_measured_artifact(
+        args, served_artifact(), validate_repo or (lambda repo: None)
+    )
+
+
+def refuse(repo):
+    raise BaselineError(f"{repo} refused")
+
+
+def test_a_refused_artifact_is_never_downloaded(monkeypatch):
+    monkeypatch.setattr(baseline_artifact, "resolve_hf_revision", lambda _: REVISION)
+    monkeypatch.setattr(
+        baseline_artifact,
+        "download_artifact",
+        lambda *args: pytest.fail("must refuse before downloading"),
+    )
+    with pytest.raises(BaselineError, match=f"{REPO} refused"):
+        resolve(None, validate_repo=refuse)
+
+
+def test_a_refused_local_artifact_is_never_read(tmp_path, monkeypatch):
+    directory = artifact_dir(tmp_path, "local")
+    manifest = artifact_manifest(tmp_path, directory)
+    monkeypatch.setattr(
+        baseline_artifact,
+        "verify_artifact_bytes",
+        lambda *args: pytest.fail("must refuse before reading the bytes"),
+    )
+    with pytest.raises(BaselineError, match=f"{REPO} refused"):
+        resolve(manifest, artifact_dir=directory, validate_repo=refuse)
 
 
 def test_a_local_artifact_matching_its_manifest_is_measured(tmp_path):
@@ -225,4 +254,4 @@ def test_a_candidate_repo_the_manifest_does_not_describe_is_refused(tmp_path):
     manifest = artifact_manifest(tmp_path, directory)
 
     with pytest.raises(BaselineError, match="--artifact-manifest describes"):
-        resolve(manifest, artifact_repo="llm-semantic-router/some-candidate")
+        resolve(manifest, artifact_repo="vllm-sr/some-candidate")

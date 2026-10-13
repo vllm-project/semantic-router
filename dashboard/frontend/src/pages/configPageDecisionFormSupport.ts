@@ -3,6 +3,7 @@ import type {
   DecisionCondition,
   DecisionFormState,
   DecisionPluginConfiguration,
+  DecisionRuleSet,
 } from './configPageSupport'
 
 function validateCondition(condition: DecisionCondition, path: string): void {
@@ -31,11 +32,27 @@ function conditionUsesOnError(condition: DecisionCondition): boolean {
   )
 }
 
+// The Router accepts one leaf condition as the whole rule tree: `rules: {type, name}`.
+export const isSingleConditionRules = (rules: DecisionRuleSet | undefined): boolean =>
+  Boolean(
+    rules &&
+      !rules.operator &&
+      !rules.conditions?.length &&
+      (rules.type || rules.name || rules.label || rules.predicate || rules.on_error),
+  )
+
 export const decisionRulesForSave = (
   value: DecisionFormState['rules'],
 ): DecisionConfig['rules'] => {
   const rules = JSON.parse(JSON.stringify(value || {})) as DecisionConfig['rules']
   const conditions = rules.conditions || []
+  if (isSingleConditionRules(rules)) {
+    validateCondition(rules, 'The root condition')
+    if (rules.on_unknown && conditionUsesOnError(rules)) {
+      throw new Error('Rules on_unknown cannot be combined with condition on_error.')
+    }
+    return rules
+  }
   if (!rules.operator && conditions.length === 0) return {}
   if (!rules.operator || !['AND', 'OR', 'NOT'].includes(rules.operator)) {
     throw new Error('Rules need an AND, OR, or NOT root operator.')

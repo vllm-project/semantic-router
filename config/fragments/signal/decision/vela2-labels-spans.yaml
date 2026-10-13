@@ -1,0 +1,48 @@
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+        profile: exact
+    # The PII signal asks the same deployment's ready-made PII question, in the
+    # same call as the decision questions below.
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+routing:
+  signals:
+    decision:
+      - name: support_topics
+        description: Which support topics the request mentions.
+        deployment: vela2
+        question:
+          type: set
+          instructions: Which topics does the request mention?
+          labels:
+            - key: billing
+              description: Payments, invoices or refunds
+            - key: shipping
+              description: Deliveries, tracking or returns
+            - key: account
+              description: Logins, passwords or account settings
+        timeout_ms: 1000
+      - name: order_numbers
+        description: Where the request quotes an order or account number.
+        deployment: vela2
+        question:
+          type: span
+          instructions: Which spans are order or account numbers?
+          labels:
+            - key: order_number
+              description: A customer order or account number
+          head: router
+        predicate:
+          gte: 0.8
+        timeout_ms: 1000
+    pii:
+      - name: personal_data
+        threshold: 0.5
+        pii_types_allowed: [EMAIL_ADDRESS]

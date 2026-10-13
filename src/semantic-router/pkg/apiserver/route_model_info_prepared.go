@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -117,8 +117,6 @@ func preparedModelNameAndType(id binding.Identity) (string, string) {
 		return id.Name, "fact_check_classification"
 	case "hallucination_detector":
 		return id.Name, "hallucination_detection"
-	case "hallucination_explainer":
-		return id.Name, "nli_explainer"
 	case "feedback_detector":
 		return id.Name, "feedback_detection"
 	}
@@ -135,7 +133,7 @@ func modelsUseGPU(models []ModelInfo) bool {
 		}
 		device, _, _ := strings.Cut(model.Metadata["device"], ":")
 		switch device {
-		case "cuda", "rocm", "migraphx", "metal":
+		case "cuda", "rocm", "xpu", "mps":
 			return true
 		}
 	}

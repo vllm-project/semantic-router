@@ -5,10 +5,7 @@
 `remom` runs several candidate models across bounded rounds and synthesizes
 their responses into one answer.
 
-The runtime also supports a direct ReMoM model slug through
-`global.integrations.looper.remom.model_names`. The built-in default is
-`vllm-sr/remom`. Direct ReMoM calls evaluate only decisions with
-`algorithm.type=remom`, matching the direct Fusion and Flow model surfaces.
+Expose `remom` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=remom` activates the algorithm. Use a dedicated recipe when this entrypoint should run only remom policies.
 
 **Inspired by**: [PaCoRe](https://arxiv.org/abs/2601.05593) — extended to support mixture of models.
 
@@ -87,17 +84,12 @@ Some tasks benefit from parallel exploration and later synthesis rather than one
 
 ## Configuration
 
-Register the direct model slug:
+Map the public name to the recipe shown below. Move the `routing` block into a named recipe to isolate it from default routing.
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      remom:
-        model_names:
-          - vllm-sr/remom
+entrypoints:
+  - model_names: [vllm-sr/remom]
+    recipe: default
 ```
 
 Configure a ReMoM decision:

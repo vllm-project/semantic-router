@@ -85,8 +85,8 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 	if cfg.GroundingMinKeep <= 0 {
 		cfg.GroundingMinKeep = 1
 	}
-	if cfg.GroundingNLIContradictionPenalty <= 0 {
-		cfg.GroundingNLIContradictionPenalty = 1.0
+	if cfg.GroundingContradictionPenalty <= 0 {
+		cfg.GroundingContradictionPenalty = 1.0
 	}
 	if strings.TrimSpace(cfg.GroundingOnError) == "" {
 		cfg.GroundingOnError = cfg.OnError
@@ -237,7 +237,7 @@ func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGr
 	dst.GroundingPolicy = src.Policy
 	dst.GroundingMinScore = src.MinScore
 	dst.GroundingMinKeep = src.MinKeep
-	dst.GroundingNLIContradictionPenalty = src.NLIContradictionPenalty
+	dst.GroundingContradictionPenalty = src.ContradictionPenalty
 	dst.GroundingOnError = src.OnError
 }
 

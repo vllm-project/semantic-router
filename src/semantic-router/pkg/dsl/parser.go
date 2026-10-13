@@ -208,9 +208,6 @@ func mergeProgram(dst, src *Program) {
 	if src.CandidateRequirements != nil {
 		dst.CandidateRequirements = src.CandidateRequirements.Clone()
 	}
-	if src.DataPolicy != nil {
-		dst.DataPolicy = src.DataPolicy.Clone()
-	}
 	if src.Strategy != "" {
 		dst.Strategy = src.Strategy
 	}

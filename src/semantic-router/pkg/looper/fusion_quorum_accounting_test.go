@@ -52,7 +52,7 @@ func TestFallbackAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 			Model string `json:"model"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		ordinal, _ := strconv.Atoi(r.Header.Get("x-vsr-looper-iteration"))
+		ordinal, _ := strconv.Atoi(r.Header.Get(testHopIteration))
 		mu.Lock()
 		iterations[payload.Model] = ordinal
 		mu.Unlock()
@@ -85,7 +85,7 @@ func TestFallbackAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 		},
 	}
 
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
+	resp, err := fusionHopsTo(server.URL).
 		Execute(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -163,7 +163,7 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 			Model string `json:"model"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		ordinal, _ := strconv.Atoi(r.Header.Get("x-vsr-looper-iteration"))
+		ordinal, _ := strconv.Atoi(r.Header.Get(testHopIteration))
 		recorder.record(payload.Model, ordinal)
 
 		writeCanaryReasoningCompletion(w, payload.Model, "usable answer from "+payload.Model, "")
@@ -184,7 +184,7 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 		},
 	}
 
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
+	resp, err := fusionHopsTo(server.URL).
 		Execute(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -346,7 +346,7 @@ func TestJudgeOrdinalsContinuePanelAttemptSequence(t *testing.T) {
 					Model string `json:"model"`
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-				ordinal, _ := strconv.Atoi(r.Header.Get("x-vsr-looper-iteration"))
+				ordinal, _ := strconv.Atoi(r.Header.Get(testHopIteration))
 				recorder.record(payload.Model, ordinal)
 
 				switch payload.Model {
@@ -376,7 +376,7 @@ func TestJudgeOrdinalsContinuePanelAttemptSequence(t *testing.T) {
 				},
 			}
 
-			resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
+			resp, err := fusionHopsTo(server.URL).
 				Execute(context.Background(), req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)

@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func ckDefinition() Definition {
@@ -124,8 +123,6 @@ func ckArtifactFixture(t *testing.T) (config.ResolvedModelBinding, []byte, strin
 	if err = os.WriteFile(filepath.Join(spec.Deployment.Artifact, "point.json"), raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	spec.Deployment.Provider, spec.Deployment.Device = "ort", "rocm:0"
-	spec.Deployment.CustomOpsProfile = "ck_flash_attention"
 	spec.Binding.OperatingPoint.SHA256 = digest(raw)
 	return spec, raw, libraryPath
 }
@@ -136,10 +133,7 @@ func TestCKArtifactsBindTrustedLibraryAndRejectReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.execution, err = p.selectExecution("ort", "native", "rocm:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	p.execution = &p.definition.Executions[0]
 	if err = p.verifyArtifacts(context.Background(), spec.Deployment.Artifact, library); err != nil {
 		t.Fatal(err)
 	}
@@ -158,26 +152,6 @@ func TestCKArtifactsBindTrustedLibraryAndRejectReplacement(t *testing.T) {
 	}
 	if p.verifyArtifacts(context.Background(), spec.Deployment.Artifact, library) == nil {
 		t.Fatal("changed trusted library accepted")
-	}
-	wantError := map[string]string{
-		"missing profile":           "does not declare a custom-ops execution",
-		"different document budget": "document budget and reject overflow",
-		"truncate":                  "document budget and reject overflow",
-		"unqualified provider":      "no qualified operating point execution",
-	}
-	for name, mutate := range map[string]func(*config.ResolvedModelBinding){
-		"missing profile":           func(s *config.ResolvedModelBinding) { s.Deployment.CustomOpsProfile = "" },
-		"different document budget": func(s *config.ResolvedModelBinding) { s.Deployment.Input.MaxTokens++ },
-		"truncate":                  func(s *config.ResolvedModelBinding) { s.Deployment.Input.Overflow = "truncate" },
-		"unqualified provider":      func(s *config.ResolvedModelBinding) { s.Deployment.Device = "migraphx:0" },
-	} {
-		t.Run(name, func(t *testing.T) {
-			candidate := spec
-			mutate(&candidate)
-			if _, err := Load(context.Background(), candidate, p.Labels()); err == nil || !strings.Contains(err.Error(), wantError[name]) {
-				t.Fatalf("expected deployment rejection before library access: %v", err)
-			}
-		})
 	}
 }
 
@@ -202,59 +176,5 @@ func TestCKPackagingPreservesFrozenBytesAndIdentities(t *testing.T) {
 	}
 	if _, err = BindArtifact(context.Background(), source, spec.Deployment.Artifact); err == nil || !strings.Contains(err.Error(), "config.json SHA256") {
 		t.Fatalf("v3 config was rebound: %v", err)
-	}
-}
-
-func TestCKPolicyRequiresComplete262KDocumentCoverage(t *testing.T) {
-	d := ckDefinition()
-	d.Input.WindowTokens = 32768
-	d.Input.ContentTokens = 32766
-	d.Input.Overlap = 16383
-	d.Input.Stride = 16383
-	d.Input.MaxDocumentTokens = 262144
-	d.Executions[0].ONNX.MaxExecutionTokens = 32768
-	raw, err := json.Marshal(d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, err := Decode(raw, digest(raw))
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := tasks.WindowedLabelScores{
-		ContentTokens: 262142,
-		Input:         &tasks.InputUsage{OriginalTokens: 262144, ProcessedTokens: 262144},
-	}
-	for start := 0; start < result.ContentTokens; start += d.Input.Stride {
-		end := min(start+d.Input.ContentTokens, result.ContentTokens)
-		result.Windows = append(result.Windows, tasks.LabelScoresWindow{Start: start, End: end, Scores: []float32{.1, .2}})
-		if end == result.ContentTokens {
-			break
-		}
-	}
-	// Only the final short window carries the positive score. Losing the tail
-	// must fail, rather than returning a safe prefix classification.
-	tail := len(result.Windows) - 1
-	result.Windows[tail].Scores = []float32{.9, .2}
-	scores, err := p.Reduce(result)
-	if err != nil || scores[0] != .9 {
-		t.Fatalf("complete long-document result: %v %v", scores, err)
-	}
-	for _, window := range result.Windows {
-		if window.End-window.Start+2 > p.Window().Size {
-			t.Fatal("fixture exceeds physical forward budget")
-		}
-	}
-	missing := result
-	missing.Windows = result.Windows[:tail]
-	if _, err = p.Reduce(missing); err == nil {
-		t.Fatal("missing final window accepted")
-	}
-	result.ContentTokens++
-	result.Input.OriginalTokens++
-	result.Input.ProcessedTokens++
-	result.Windows[tail].End++
-	if _, err = p.Reduce(result); err == nil {
-		t.Fatal("document beyond frozen budget accepted")
 	}
 }

@@ -153,3 +153,12 @@ ROUTE keep_7b (description = "Keep lower-uplift MMLU domains on the local 7B lan
   WHEN (projection("no_escalation") OR keyword("local_domain_override"))
   MODEL "local/small-7b" (reasoning = false)
 }
+
+# =============================================================================
+# ENTRYPOINTS
+# =============================================================================
+
+ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+}

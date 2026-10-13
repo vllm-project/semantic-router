@@ -19,12 +19,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
-// List all ML pipeline jobs
-export async function listJobs(): Promise<MLJob[]> {
-  const response = await fetch(`${API_BASE}/jobs`);
-  return handleResponse<MLJob[]>(response);
-}
-
 // Get a specific job by ID
 export async function getJob(jobId: string): Promise<MLJob> {
   const response = await fetch(`${API_BASE}/jobs/${jobId}`);

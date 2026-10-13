@@ -55,10 +55,12 @@ projection or an explicit verification marker; a raw FactCheck match alone does
 not bypass that policy or veto ordinary recovery. Code-repair routes keep their
 existing priority over verified recovery for coding failures.
 
-All score weights and thresholds remain fixed. For example, a FactCheck match
-adds 0.34 and persistent dissatisfaction adds up to 0.08 to verification
-pressure. If that combined score reaches the 0.42 evidence threshold, verified
-recovery applies. A score below the threshold follows the other recovery rules.
+All score weights and thresholds remain fixed. A FactCheck match adds 0.34 to
+verification pressure, and persistent dissatisfaction and an explicit
+wrong-answer correction add up to 0.08 each. FactCheck with one of them stays
+below the 0.45 evidence threshold, so a repeated question follows the other
+recovery rules. FactCheck with a full-confidence verification marker (0.28) or
+a health or legal domain (0.18) reaches it, and verified recovery applies.
 
 ## Requirements
 

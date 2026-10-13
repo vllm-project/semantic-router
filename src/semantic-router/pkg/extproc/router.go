@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -19,25 +20,39 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/handoff"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	rerankers            map[config.RecipeName]modelruntime.PairScorer
+	// KVHandoff is an optional trusted deployment adapter; nil disables transfer.
+	KVHandoff KVHandoffPlanner
+
+	nativeExecutors map[string]*systemone.Executor
+	// signals is the signal runtime this router extracts signals with; a
+	// later generation can share it.
+	signals   *signalRuntime
+	rerankers map[config.RecipeName]modelruntime.PairScorer
+	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
+	decisionDecider      modelservice.Decider
+	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
 	cacheEmbeddings      *embedding.Set
@@ -46,21 +61,23 @@ type OpenAIRouter struct {
 	Classifier           *classification.Classifier
 	// RecipeClassifiers selects the isolated classifier graph for each routing
 	// request. Classifier is the default-recipe accessor.
-	RecipeClassifiers     *classification.RecipeClassifiers
-	ClassificationService *services.ClassificationService
-	Cache                 cache.CacheBackend
-	ResponseCache         *cache.ResponseCacheService
-	responseCacheMu       sync.Mutex
-	ContextCompression    *contextcompression.Service
-	CompressionRecovery   contextcompression.RecoveryStore
-	CompressionEmbedding  embedding.Provider
-	CompressionScorer     contextcompression.RelevanceScorer
-	compressionScorers    map[string]contextcompression.RelevanceScorer
-	contextCompressionMu  sync.Mutex
-	ToolsDatabase         *tools.ToolsDatabase
-	ToolsRegistry         *tools.Registry // retriever strategy registry
-	toolSelectionDBMu     sync.Mutex
-	toolSelectionDBByPath map[string]*tools.ToolsDatabase
+	RecipeClassifiers      *classification.RecipeClassifiers
+	ClassificationService  *services.ClassificationService
+	Cache                  cache.CacheBackend
+	ResponseCache          *cache.ResponseCacheService
+	responseCacheMu        sync.Mutex
+	kvAddressRegistryStore kvtransfer.AddressRegistry
+	kvAddressRegistryMu    sync.Mutex
+	ContextCompression     *contextcompression.Service
+	CompressionRecovery    contextcompression.RecoveryStore
+	CompressionEmbedding   embedding.Provider
+	CompressionScorer      contextcompression.RelevanceScorer
+	compressionScorers     map[string]contextcompression.RelevanceScorer
+	contextCompressionMu   sync.Mutex
+	ToolsDatabase          *tools.ToolsDatabase
+	ToolsRegistry          *tools.Registry // retriever strategy registry
+	toolSelectionDBMu      sync.Mutex
+	toolSelectionDBByPath  map[string]*tools.ToolsDatabase
 	// toolEmbedder embeds request-supplied tool definitions for tool_selection
 	// filter mode, memoizing them across requests. Set once at router
 	// construction and read-only afterwards; nil (remote provider construction
@@ -82,9 +99,12 @@ type OpenAIRouter struct {
 	LookupTable          lookuptable.LookupTable
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          memory.Store
+	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
-	looperClient         *looper.Client
+	// hopCaller, when set, sends Looper hops instead of the configuration
+	// snapshot's upstream set.
+	hopCaller graph.Caller
 
 	memoryPersistence *memory.PersistenceRunner
 
@@ -105,9 +125,15 @@ type OpenAIRouter struct {
 	RecipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCaller              fallbackTransportCaller
 
-	routerLearningMu        sync.Mutex
-	routerLearningRuntime   *routerLearningRuntime
-	generation              *routerGeneration
+	routerLearningMu      sync.Mutex
+	routerLearningRuntime *routerLearningRuntime
+	generation            *routerGeneration
+	// configVersion is the version of the configuration snapshot this router
+	// serves, 0 when it serves without the lifecycle.
+	configVersion atomic.Uint64
+	// extensions holds the decoded payloads of extension plugins by their
+	// configuration, so a generation decodes each one once.
+	extensions              sync.Map
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
 	handoffNow              func() time.Time
@@ -290,10 +316,28 @@ func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fall
 	if r == nil {
 		return nil
 	}
+	orch := r.FallbackOrchestrator
 	if ctx != nil && ctx.Routing.RecipeName() != "" && r.RecipeFallbackOrchestrators != nil {
-		if orch, ok := r.RecipeFallbackOrchestrators[ctx.Routing.RecipeName()]; ok && orch != nil {
-			return orch
+		if recipe, ok := r.RecipeFallbackOrchestrators[ctx.Routing.RecipeName()]; ok && recipe != nil {
+			orch = recipe
 		}
 	}
-	return r.FallbackOrchestrator
+	return orch.For(fallbackOverrides(ctx)...)
+}
+
+// fallbackOverrides are the layers a request sets over its recipe's fallback
+// policy, the least specific first: the matched decision's, then, for a
+// request-graph hop, its step's.
+func fallbackOverrides(ctx *RequestContext) []*fallback.FallbackOverride {
+	if ctx == nil {
+		return nil
+	}
+	var overrides []*fallback.FallbackOverride
+	if ctx.VSRSelectedDecision != nil {
+		overrides = append(overrides, ctx.VSRSelectedDecision.Fallback)
+	}
+	if ctx.Hop != nil {
+		overrides = append(overrides, ctx.Hop.Fallback)
+	}
+	return overrides
 }

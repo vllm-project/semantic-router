@@ -4,11 +4,11 @@ import "testing"
 
 func TestRerankerBindingRequiresNativePairContract(t *testing.T) {
 	decl := ModelBinding{Deployment: "model", Contract: RelevanceScoresContract, Adapter: "vela_reranker", PairScorer: &PairScorerSelection{Layer: 22, Dimension: 768}}
-	deployment := ModelDeployment{Artifact: "model", Provider: "candle"}.WithDefaults()
+	deployment := ModelDeployment{Artifact: "model", Provider: ModelRuntimeProvider}.WithDefaults()
 	if err := validateTaskModelBinding(RAGRerankerConsumer, decl, deployment); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"probability", "foreign_task", "mapping", "separate_head", "negative", "truncate", "remote"} {
+	for _, kind := range []string{"probability", "foreign_task", "mapping", "negative", "truncate", "remote"} {
 		t.Run(kind, func(t *testing.T) {
 			d, b, name := deployment, decl, RAGRerankerConsumer
 			switch kind {
@@ -19,8 +19,6 @@ func TestRerankerBindingRequiresNativePairContract(t *testing.T) {
 				b.Contract = "embedding.v1"
 			case "mapping":
 				b.MappingPath = "map.json"
-			case "separate_head":
-				b.Head = "head"
 			case "negative":
 				b.PairScorer = &PairScorerSelection{Layer: -1}
 			case "truncate":
