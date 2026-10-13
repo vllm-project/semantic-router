@@ -114,7 +114,7 @@ func requireAnthropicContentFields(object map[string]json.RawMessage, typeName s
 		"image":       {"source"},
 		"document":    {"source"},
 		"tool_use":    {"id", "input", "name"},
-		"tool_result": {"content", "tool_use_id"},
+		"tool_result": {"tool_use_id"},
 	}
 	for _, name := range requiredByType[typeName] {
 		if _, present := object[name]; present {
