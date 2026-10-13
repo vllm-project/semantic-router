@@ -37,6 +37,10 @@ revision `28c39125`: 14,031 requests of one question each (the rows of
 | AWQ int4 | 314 | 97.76% | 0.8309 | 16.5 GB |
 | GPTQ int4 | 284 | 97.98% | 0.8310 | 16.4 GB |
 
+The AWQ calibration rows (128 of the first train shard) share no state with
+the test split. Of the 1,000 train rows used below for the AWQ layer
+experiment and the latency, 8 share their state text with a test request.
+
 On 1,000 rows of the train shard, keeping the last one, two or four decoder
 layers of the AWQ package in BF16 changed 24, 24 and 25 answers against 24
 without: the flips do not come from those layers.
@@ -55,7 +59,10 @@ answered a second time):
 | AWQ int4 | 45.1 ms | 60.2 ms | 67.5 ms | 86.1 ms |
 
 FP8 pays per layer for one activation quantization and one scaled GEMM launch,
-which costs more host time than it saves without graphs. Int4 layers unpack
+which costs more host time than it saves without graphs. After loading, the
+packages hold 52.3 GB (BF16), 32.2 GB (FP8) and 16.9 GB (AWQ) of device memory,
+and 52.9, 32.9 and 17.5 GB at the peak of the 20 longest of those 1,000 rows
+(up to 5,928 characters of state), each in its own process. Int4 layers unpack
 their weights to BF16 on every call and then multiply in BF16: they save
 memory, not time.
 
