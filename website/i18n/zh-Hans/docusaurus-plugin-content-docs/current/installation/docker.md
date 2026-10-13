@@ -2,7 +2,7 @@
 title: Docker 部署
 description: 将 Semantic Router 作为本地或单主机容器栈运行，并连接你单独运维的模型后端。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "9be5c38a1a746675535001e9fa45712e93a2cc7f"
   source_file: "docs/installation/docker.md"
   outdated: false
 ---
