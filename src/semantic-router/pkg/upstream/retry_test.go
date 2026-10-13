@@ -194,7 +194,7 @@ func TestDoReturnsTheLastOutcomeWhenRetriesRunOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertLocalReply(t, resp, http.StatusServiceUnavailable, "upstream connect error or disconnect/reset before headers. "+
-		"retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: 111")
+		"retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: "+refusedErrno)
 }
 
 func TestDoRetryPrefersAnotherEndpoint(t *testing.T) {
