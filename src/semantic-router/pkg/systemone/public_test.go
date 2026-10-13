@@ -208,3 +208,42 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicNativeRefusalsTellClientsWhenToRetry(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	for _, test := range []struct {
+		name       string
+		status     int
+		body       string
+		err        error
+		wantStatus int
+		wantCode   string
+		wantRetry  string
+	}{
+		{"worker overloaded", 429, `{"error":{"code":"overloaded","message":"busy"}}`, nil, 429, "overloaded", "1"},
+		{"pool overloaded", 429, `{"error":{"code":"overloaded","message":"busy"}}`, io.ErrUnexpectedEOF, 429, "overloaded", "1"},
+		{"model not ready", 503, `{"error":{"code":"not_ready","message":"loading"}}`, nil, 503, "not_ready", "5"},
+		{"transport failure", 0, ``, io.ErrUnexpectedEOF, 503, "systemone_unavailable", "5"},
+		{"engine deadline", 0, ``, context.DeadlineExceeded, 504, "systemone_deadline_exceeded", ""},
+		{"rejected request", 400, `{"error":{"code":"invalid_request","message":"bad"}}`, nil, 400, "invalid_request", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+				return test.status, []byte(test.body), test.err
+			})
+			response := httptest.NewRecorder()
+			handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+			var got struct {
+				Error struct{ Code string } `json:"error"`
+			}
+			if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus || got.Error.Code != test.wantCode {
+				t.Fatalf("got %d %s", response.Code, response.Body.String())
+			}
+			if retry := response.Header().Get("Retry-After"); retry != test.wantRetry {
+				t.Fatalf("Retry-After %q, want %q", retry, test.wantRetry)
+			}
+		})
+	}
+}

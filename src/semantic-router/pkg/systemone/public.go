@@ -114,7 +114,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, http.StatusServiceUnavailable, "systemone_unresolved")
 			return
 		}
-		if routed && errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")
 			return
 		}
@@ -203,7 +203,18 @@ func publicSystemOneError(w http.ResponseWriter, status int, code string) {
 	publicSystemOneErrorMessage(w, status, code, strings.ReplaceAll(code, "_", " "))
 }
 
+// retryAfterSeconds tells a client when a temporarily refused request may succeed:
+// a full model at once, a model that is starting or restarting a little later.
+var retryAfterSeconds = map[string]string{
+	string(api.Overloaded):  "1",
+	string(api.NotReady):    "5",
+	"systemone_unavailable": "5",
+}
+
 func publicSystemOneErrorMessage(w http.ResponseWriter, status int, code, message string) {
+	if seconds, ok := retryAfterSeconds[code]; ok {
+		w.Header().Set("Retry-After", seconds)
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code, "type": "systemone_error", "message": message}})
 }
