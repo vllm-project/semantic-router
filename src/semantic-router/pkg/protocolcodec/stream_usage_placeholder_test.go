@@ -93,6 +93,45 @@ func TestChatStreamLeadingZeroUsageSnapshotStillMerges(t *testing.T) {
 	}
 }
 
+func TestAnthropicStreamSettlesExplicitZeroOutputBesidePositiveInput(t *testing.T) {
+	payload := []byte(
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"provider-model\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":15}}}\n\n" +
+			"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":0}}\n\n" +
+			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	)
+	stream, err := NewBuiltinEngine().NewStream(
+		llmprotocol.AnthropicMessagesV1,
+		llmprotocol.AnthropicMessagesV1,
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, events, _, err := stream.Push(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, finalEvents, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, terminal, usage := summarizeStreamEvents(t, append(events, finalEvents...))
+	if terminal != 1 || usage == nil {
+		t.Fatalf("explicit-zero stream lost its terminal usage: terminals=%d usage=%+v", terminal, usage)
+	}
+	if usage.OutputTotal.Value == nil || *usage.OutputTotal.Value != 0 {
+		t.Fatalf("explicit final output_tokens 0 was discarded, output unsettled: %+v", usage.OutputTotal)
+	}
+	if usage.InputTotal.Value == nil || *usage.InputTotal.Value != 15 {
+		t.Fatalf("input evidence changed beside the explicit zero: %+v", usage.InputTotal)
+	}
+	if usage.Total.Value == nil || *usage.Total.Value != 15 {
+		t.Fatalf("total not settled from input 15 + output 0: %+v", usage.Total)
+	}
+}
+
 func summarizeStreamEvents(t *testing.T, events []llmprotocol.Event) (string, int, *llmprotocol.Usage) {
 	t.Helper()
 	text, terminal := "", 0
