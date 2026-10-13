@@ -36,38 +36,53 @@ func (r *OpenAIRouter) handleRouterReplayDatasetAPI(
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
+	_, manifest, _, failure := r.buildRouterReplayDataset(method, rawQuery)
+	if failure != nil {
+		return failure
+	}
+	return r.createRouterReplayJSONResponse(200, manifest)
+}
+
+// buildRouterReplayDataset reads the selection and policy from the query and
+// builds the manifest over it. Every route that serves a view of the dataset
+// starts here, so they all describe the same examples. A non-nil response is
+// the error to return.
+func (r *OpenAIRouter) buildRouterReplayDataset(
+	method string,
+	rawQuery string,
+) (url.Values, shadowdataset.Manifest, []routerreplay.RoutingRecord, *ext_proc.ProcessingResponse) {
 	if method != "GET" {
-		return r.createErrorResponse(405, "method not allowed")
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(405, "method not allowed")
 	}
 
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
-		return r.createErrorResponse(400, "invalid query parameters")
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, "invalid query parameters")
 	}
 	filters, err := parseRouterReplayFilters(values)
 	if err != nil {
-		return r.createErrorResponse(400, err.Error())
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
 	policy, err := parseShadowDatasetPolicy(values)
 	if err != nil {
-		return r.createErrorResponse(400, err.Error())
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
 
 	records, err := r.queryRouterReplayDatasetRecords(filters)
 	if err != nil {
 		if errors.Is(err, errRouterReplayDatasetTooLarge) {
-			return r.createErrorResponse(400, err.Error())
+			return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 		}
-		return r.createErrorResponse(500, "router replay storage query failed")
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(500, "router replay storage query failed")
 	}
 
 	// Build validates the policy, so a malformed seed or split plan is reported
 	// as the caller error it is rather than checked twice.
 	manifest, err := shadowdataset.Build(records, policy)
 	if err != nil {
-		return r.createErrorResponse(400, err.Error())
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
-	return r.createRouterReplayJSONResponse(200, manifest)
+	return values, manifest, records, nil
 }
 
 // parseShadowDatasetPolicy reads the export policy from the query. Splits are
