@@ -585,10 +585,17 @@ func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath str
 	const activationTimeout = 20 * time.Second
 	deadline := time.Now().Add(activationTimeout)
 	for {
-		if s.activeConfigDocumentHash() == runtimeHash {
+		// The runtime serves the document before the lifecycle reports its
+		// attempt finished; wait for that report so the response and audit
+		// already carry this write's outcome. Read the served hash first: once
+		// it matches, the attempt that published it is already reported.
+		served := s.activeConfigDocumentHash() == runtimeHash
+		activation := s.configActivationAfter(runtimeHash, afterAttempt)
+		preparing := activation != nil && activation.Status == string(configsnapshot.AttemptPreparing)
+		if served && !preparing {
 			return runtimeHash, "active"
 		}
-		if activation := s.configActivationAfter(runtimeHash, afterAttempt); activation != nil && activation.Status == "failed" {
+		if activation != nil && activation.Status == "failed" {
 			return runtimeHash, "failed"
 		}
 		if time.Now().After(deadline) {
