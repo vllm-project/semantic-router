@@ -88,6 +88,24 @@ func embedForWrite(ctx context.Context, text string, cfg EmbeddingConfig) ([]flo
 	return vector, nil
 }
 
+// memoryUpdateEmbedding keeps an existing vector only when its content still
+// describes the memory being written. An explicitly supplied vector is
+// authoritative; otherwise changed content must be embedded before persistence.
+func memoryUpdateEmbedding(ctx context.Context, memory, existing *Memory, cfg EmbeddingConfig) ([]float32, error) {
+	if len(memory.Embedding) > 0 {
+		return memory.Embedding, nil
+	}
+	if existing != nil && memory.Content == existing.Content && len(existing.Embedding) > 0 {
+		return existing.Embedding, nil
+	}
+
+	vector, err := embedForWrite(ctx, memory.Content, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+	return vector, nil
+}
+
 // StorageDimension binds a fixed-width index to its prepared representation.
 // Store-only callers without a provider must supply an explicit schema width.
 func StorageDimension(configured int, cfg EmbeddingConfig) (int, error) {

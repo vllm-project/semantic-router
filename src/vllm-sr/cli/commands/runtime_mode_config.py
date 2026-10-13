@@ -21,8 +21,13 @@ INSTANCE MODES:
   vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm -dp 2 --device-ids 0
 
 Without --engine the instance starts in Router mode, including on restart.
---engine (-e) disables recipe routing; the frontend, Dashboard and native
-System One APIs remain available. Saved routing configuration is retained.
+--engine (-e) disables recipe routing and serves the model. On the docker
+target only the Router container (the frontend, the native System One APIs
+and the model runtime) starts; --dashboard, --observability or --no-minimal
+add the rest. Without --config, and with no ./config.yaml, Engine mode keeps
+each model's config and state in ~/.local/state/vllm-sr/engine/<model> and
+prints a short summary (--verbose prints every detail). Saved routing
+configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
 Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
@@ -108,7 +113,12 @@ def _placements(resource, options, platform, available_devices, authored):
 
 
 def apply_instance_options(
-    document, *, engine=False, model_options=None, platform="cpu", available_devices=()
+    document,
+    *,
+    engine=False,
+    model_options=None,
+    platform="cpu",
+    available_devices=(),
 ):
     """Apply startup capabilities without widening grants or replacing saved policy."""
     before = deepcopy(document)
