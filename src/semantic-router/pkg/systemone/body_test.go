@@ -28,10 +28,10 @@ var bodyCases = []string{
 	`{"model":["a"]}`, `{"model":{"x":1}}`, `{"mod\u0065l":"esc"}`, `{"model":"\u0061\u00e9\ud83d\ude00"}`,
 	`{"model":"a\"b"}`, `{"model":"a\\"}`, `{"model":"a\\\"b"}`, `{"model":"a\/b\b\f\n\r\t"}`, `{"model":"a\x"}`,
 	`{"model":"a\u12"}`, `{"model":"a\u12g4"}`, "{\"model\":\"a\x01b\"}", "{\"model\":\"a\x7fb\"}",
-	"{\"model\":\"caf\xc3\xa9\"}", "{\"model\":\"bad\xff\"}", `{"a":{"model":"inner"},"model":"outer"}`,
+	"{\"model\":\"\xc3\xa9t\xc3\xa9\"}", "{\"model\":\"bad\xff\"}", `{"a":{"model":"inner"},"model":"outer"}`,
 	`{"a":{"model":"inner"}}`, `{"a":[1,2,{"b":null}],"model":"m"}`, `{"a":[1,2,]}`, `{"a":[,1]}`, `{"a":01}`,
 	`{"a":-0}`, `{"a":-}`, `{"a":1.}`, `{"a":1.5e+10}`, `{"a":1e}`, `{"a":.5}`, `{"a":+1}`, `{"a":1E-2}`,
-	`{"a":tru}`, `{"a":truex}`, `{"a":nul}`, `{"a":false,"model":"m"}`, `{"a" : "b" , "model" : "m" }`,
+	`{"a":tr}`, `{"a":truex}`, `{"a":nul}`, `{"a":false,"model":"m"}`, `{"a" : "b" , "model" : "m" }`,
 	`{"a":"b" "model":"m"}`, `{"a":"b",,"model":"m"}`, `{1:"b"}`, `{"a":"unterminated}`, `{"a":"\`,
 	`{"model":"m"}{}`, `{"model":"m"}]`, "\ufeff{\"model\":\"m\"}", `{"images":["data:image/png;base64,AAAA"],"model":"m"}`,
 }
