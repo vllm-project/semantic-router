@@ -175,11 +175,16 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 	// If upstream returned an error status (e.g. 503) whose metric was deferred waiting
 	// for the response body, but the stream terminated before the body arrived, record it now.
 	if ctx != nil && !ctx.UpstreamErrorMetricRecorded && ctx.UpstreamStatusCode >= 400 {
-		if ctx.UpstreamStatusCode == 503 {
-			_, _, connectTimeoutStr := r.getEffectiveTimeouts(ctx)
+		if ctx.UpstreamStatusCode == 503 && errors.Is(err, io.EOF) {
+			totalTimeoutStr, _, connectTimeoutStr := r.getEffectiveTimeouts(ctx)
 			if connDur, ok := parseDurationSafe(connectTimeoutStr); ok {
 				elapsed := time.Since(ctx.StartTime)
-				if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) {
+				if !ctx.ProcessingStartTime.IsZero() {
+					elapsed = time.Since(ctx.ProcessingStartTime)
+				}
+				_, hasReq := parseDurationSafe(totalTimeoutStr)
+				if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) &&
+					(!hasReq || elapsed <= connDur+500*time.Millisecond) {
 					recordProcessTimeout(ctx)
 					ctx.UpstreamErrorMetricRecorded = true
 					return nil
@@ -324,10 +329,13 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 		}
 
 		// Check if request exceeded connect_timeout
-		if connDur, ok := parseDurationSafe(connectTimeoutStr); ok {
-			reqDur, hasReq := parseDurationSafe(totalTimeoutStr)
-			if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) && (!hasReq || elapsed < timeoutThreshold(reqDur, 300*time.Millisecond)) {
-				return true
+		if errors.Is(err, io.EOF) {
+			if connDur, ok := parseDurationSafe(connectTimeoutStr); ok {
+				_, hasReq := parseDurationSafe(totalTimeoutStr)
+				if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) &&
+					(!hasReq || elapsed <= connDur+500*time.Millisecond) {
+					return true
+				}
 			}
 		}
 	}

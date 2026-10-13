@@ -2948,6 +2948,12 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 						ConnectTimeout: "5s",
 					},
 				},
+				"reset-model": {
+					Reliability: config.ProviderReliability{
+						TotalTimeout:   "15s",
+						ConnectTimeout: "1s",
+					},
+				},
 				"unreachable-model": {
 					Reliability: config.ProviderReliability{
 						ConnectTimeout: "1s",
@@ -2977,17 +2983,34 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 		t.Fatalf("expected timeout to increase on request timeout deadline: before=%v after=%v", before3, after3)
 	}
 
-	// Case 4: Connect timeout exceeded (elapsed >= 1s) -> records timeout
+	// Case 4: Normal upstream reset after connect-timeout interval (elapsed 2s > connect_timeout 1s, but < 15s total timeout)
+	// does NOT record timeout and preserves the receive error.
 	ctx4 := &RequestContext{
-		RequestModel:        "unreachable-model",
+		RequestModel:        "reset-model",
 		UpstreamStatusCode:  0,
-		ProcessingStartTime: time.Now().Add(-1050 * time.Millisecond),
+		ProcessingStartTime: time.Now().Add(-2 * time.Second),
 	}
-	before4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
-	_ = r.handleProcessReceiveError(ctx4, io.EOF)
-	after4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
-	if after4 != before4+1 {
-		t.Fatalf("expected timeout to increase on connect timeout: before=%v after=%v", before4, after4)
+	before4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "reset-model"})
+	unavailErr := status.Error(codes.Unavailable, "upstream connection reset")
+	retErr := r.handleProcessReceiveError(ctx4, unavailErr)
+	if retErr == nil {
+		t.Fatalf("expected handleProcessReceiveError to preserve codes.Unavailable, got nil")
+	}
+	after4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "reset-model"})
+	if after4 != before4 {
+		t.Fatalf("expected timeout NOT to increase on normal upstream reset after connect interval: before=%v after=%v", before4, after4)
+	}
+
+	// Also verify io.EOF after connect interval does not record false timeout
+	ctx4EOF := &RequestContext{
+		RequestModel:        "reset-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-2 * time.Second),
+	}
+	_ = r.handleProcessReceiveError(ctx4EOF, io.EOF)
+	after4EOF := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "reset-model"})
+	if after4EOF != before4 {
+		t.Fatalf("expected timeout NOT to increase on io.EOF after connect interval: before=%v after=%v", before4, after4EOF)
 	}
 
 	// Case 5: Stalled stream idle timeout exceeded (idle gap >= 2s) -> records timeout
@@ -3101,7 +3124,7 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 		t.Fatalf("expected timeout NOT to increase on subsecond early pre-header reset: before=%v after=%v", before11, after11)
 	}
 
-	// Case 12: Subsecond pre-header verified connect timeout (elapsed 105ms >= 100ms connect deadline) -> records timeout
+	// Case 12: Subsecond pre-header verified total timeout deadline (elapsed 105ms >= 100ms deadline) -> records timeout
 	ctx12 := &RequestContext{
 		RequestModel:        "subsecond-model",
 		UpstreamStatusCode:  0,
@@ -3111,7 +3134,7 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 	_ = r.handleProcessReceiveError(ctx12, io.EOF)
 	after12 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
 	if after12 != before12+1 {
-		t.Fatalf("expected timeout to increase on subsecond pre-header connect timeout: before=%v after=%v", before12, after12)
+		t.Fatalf("expected timeout to increase on subsecond pre-header total timeout deadline: before=%v after=%v", before12, after12)
 	}
 
 	// Case 13: Subsecond 503 early disconnect (elapsed 1ms << 100ms connect deadline) -> records upstream_5xx, NOT timeout
@@ -3143,6 +3166,38 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 	after14Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
 	if after14Timeout != before14Timeout+1 {
 		t.Fatalf("expected timeout to increase on subsecond 503 connect timeout: before=%v after=%v", before14Timeout, after14Timeout)
+	}
+
+	// Case 15: 503 after connect interval on model with longer total timeout (elapsed 2s > connect_timeout 1s, total_timeout 15s)
+	// does NOT record timeout and records upstream_5xx instead.
+	ctx15 := &RequestContext{
+		RequestModel:       "reset-model",
+		UpstreamStatusCode: 503,
+		StartTime:          time.Now().Add(-2 * time.Second),
+	}
+	before15Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "reset-model"})
+	before15_5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "reset-model"})
+	_ = r.handleProcessReceiveError(ctx15, io.EOF)
+	after15Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "reset-model"})
+	after15_5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "reset-model"})
+	if after15Timeout != before15Timeout {
+		t.Fatalf("expected timeout NOT to increase on 503 after connect interval: before=%v after=%v", before15Timeout, after15Timeout)
+	}
+	if after15_5xx != before15_5xx+1 {
+		t.Fatalf("expected upstream_5xx to increase on 503 after connect interval: before=%v after=%v", before15_5xx, after15_5xx)
+	}
+
+	// Case 16: Unreachable model (connect_timeout=1s, no total_timeout) connect timeout pre-header EOF -> records timeout
+	ctx16 := &RequestContext{
+		RequestModel:        "unreachable-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-1050 * time.Millisecond),
+	}
+	before16 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
+	_ = r.handleProcessReceiveError(ctx16, io.EOF)
+	after16 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
+	if after16 != before16+1 {
+		t.Fatalf("expected timeout to increase on unreachable model connect timeout pre-header EOF: before=%v after=%v", before16, after16)
 	}
 }
 
