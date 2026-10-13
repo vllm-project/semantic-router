@@ -809,6 +809,17 @@ Each model pins the FLA kernel choices of its release
 (`registry/kernel_choices.json`, from the autotune cache its release runs
 used), so every process rounds as the release did (§11).
 
+Repeated media are read once, on every profile and without changing an
+answer: image and video data URLs are keyed by the SHA-256 of their text,
+and a hit reuses the processed patch rows; the tower's features of a
+request's images are kept by the images' digests and the number of copies
+one tower call holds, which is what a pass of that many rows runs, so later
+passes of that size reuse them. Under `batching`, text rows of concurrent
+requests share a pass, media rows of any requests share another, each
+request's images go through the tower once, and a coalesced forward is sized
+to about 0.3 seconds of device time at the measured cost per token
+([record](records/decision3-batching.md)).
+
 A package may hold its projections quantized, declared by a compressed-tensors
 `quantization_config` in `config.json` (`quantization.py`): FP8 weights with
 one scale per output channel and FP8 activations per token (`float-quantized`,

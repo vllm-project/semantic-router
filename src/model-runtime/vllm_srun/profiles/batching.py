@@ -7,9 +7,9 @@ scheduler collects requests for at most ``batch_window_ms``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from ..plugins.base import Batch, Job, Profile
+from ..plugins.base import Batch, Job, LoadedModel, Profile
 from ..scheduler.planner import cost, padded
 
 if TYPE_CHECKING:
@@ -26,6 +26,10 @@ class BatchingProfile(Profile):
 
     def __init__(self, max_batch_tokens: int = DEFAULT_MAX_BATCH_TOKENS):
         self.max_batch_tokens = max_batch_tokens
+        self.model: LoadedModel[Any, Any] | None = None
+
+    def bind(self, model: LoadedModel[Any, Any]) -> None:
+        self.model = model
 
     @classmethod
     def from_config(cls, config: ServeConfig) -> BatchingProfile:
@@ -33,6 +37,9 @@ class BatchingProfile(Profile):
 
     def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
         budget = min(token_budget or self.max_batch_tokens, self.max_batch_tokens)
+        coalesced = self.model.coalesced_token_budget() if self.model else None
+        if coalesced:
+            budget = min(budget, coalesced)
         rows = sorted(
             ((job, index) for job in jobs for index in range(len(job.items))),
             key=lambda pair: -cost(pair[0].items[pair[1]]),
