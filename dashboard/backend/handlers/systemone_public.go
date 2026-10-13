@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -30,7 +31,12 @@ func PublicSystemOneHandler(upstream string, providers ...routerauth.CredentialP
 			return
 		}
 		if r.Method == http.MethodPost {
-			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, decisionModelRequestLimit))
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, systemone.RequestLimit))
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				decisionModelError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The native request exceeds 48 MiB")
+				return
+			}
 			if err != nil || !json.Valid(body) {
 				decisionModelError(w, 400, "invalid_request", "Unable to read bounded native request")
 				return

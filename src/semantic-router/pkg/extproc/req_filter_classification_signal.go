@@ -14,16 +14,18 @@ import (
 )
 
 type signalEvaluationInput struct {
-	evaluationText         string
-	allMessagesText        string
-	compressedText         string
-	skipCompressionSignals map[string]bool
-	currentUserText        string
-	priorUserMessages      []string
-	hasAssistantReply      bool
-	conversationFacts      classification.ConversationFacts
-	requestFacts           classification.RequestFacts
-	compression            promptCompressionRun
+	toolResultTexts          []string
+	toolResultScanIncomplete bool
+	evaluationText           string
+	allMessagesText          string
+	compressedText           string
+	skipCompressionSignals   map[string]bool
+	currentUserText          string
+	priorUserMessages        []string
+	hasAssistantReply        bool
+	conversationFacts        classification.ConversationFacts
+	requestFacts             classification.RequestFacts
+	compression              promptCompressionRun
 }
 
 // promptCompressionRun reports what prompt compression did to the evaluation
@@ -35,11 +37,13 @@ type promptCompressionRun struct {
 
 func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
 	input := signalEvaluationInput{
-		evaluationText:    history.currentUserMessage,
-		compressedText:    history.currentUserMessage,
-		allMessagesText:   strings.Join(history.nonUserMessages, " "),
-		currentUserText:   history.currentUserMessage,
-		priorUserMessages: append([]string(nil), history.priorUserMessages...),
+		evaluationText:           history.currentUserMessage,
+		compressedText:           history.currentUserMessage,
+		allMessagesText:          strings.Join(history.nonUserMessages, " "),
+		currentUserText:          history.currentUserMessage,
+		priorUserMessages:        append([]string(nil), history.priorUserMessages...),
+		toolResultTexts:          append([]string(nil), history.toolResultTexts...),
+		toolResultScanIncomplete: history.toolResultScanIncomplete,
 		// Feedback applies to a new textual user turn after an answer. Tool
 		// results and assistant prefills must not reclassify stale user text.
 		hasAssistantReply: history.hasAssistantReply && history.lastMessageRole == "user" && history.lastUserHasText,
@@ -129,6 +133,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedReask = signals.MatchedReaskRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
+	ctx.VSRMatchedAction = signals.MatchedActionRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedStructure = signals.MatchedStructureRules

@@ -3,6 +3,7 @@ package extproc
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -104,4 +105,12 @@ func applyResponseCacheRequestTTL(ctx *RequestContext, configured int) int {
 		return requested
 	}
 	return configured
+}
+
+func responseCacheMaxAgeDuration(ctx *RequestContext) *time.Duration {
+	if ctx == nil || ctx.CacheMaxAgeSeconds == nil {
+		return nil
+	}
+	value := time.Duration(*ctx.CacheMaxAgeSeconds) * time.Second
+	return &value
 }

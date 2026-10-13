@@ -88,15 +88,26 @@ func TestPublicSystemOneDoesNotFollowManagementRedirectOrLeakFailures(t *testing
 	}
 }
 
+func TestPublicSystemOneRefusesOverLimitBodiesAsTooLarge(t *testing.T) {
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls.Add(1) }))
+	defer upstream.Close()
+	response := httptest.NewRecorder()
+	PublicSystemOneHandler(upstream.URL)(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(strings.Repeat("x", systemone.RequestLimit+1))))
+	if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), `"code":"request_too_large"`) || calls.Load() != 0 {
+		t.Fatalf("over-limit native request: %d %s, upstream calls %d", response.Code, response.Body.String(), calls.Load())
+	}
+}
+
 func TestPublicSystemOnePreservesBoundedHTMLLikeInput(t *testing.T) {
-	state := strings.Repeat("<>&", decisionModelRequestLimit/4)
+	state := strings.Repeat("<>&", systemone.RequestLimit/4)
 	body := `{"model":"judge","state":"` + state + `","questions":{}}`
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 		}
-		if len(data) > decisionModelRequestLimit+8192 {
+		if len(data) > systemone.RequestLimit+8192 {
 			t.Error("native payload expanded beyond the frontend transport limit")
 		}
 		var forwarded systemone.ForwardRequest
