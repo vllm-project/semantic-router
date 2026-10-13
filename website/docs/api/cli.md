@@ -1502,7 +1502,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--envoy-image TEXT` | Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
-| `--restart-policy CHOICE` | Restart policy of the containers this start creates: no (default), on-failure, unless-stopped, always. unless-stopped and always restart a crashed container and bring the stack back after a host reboot (Podman also needs its podman-restart service); vllm-sr stop still stops it. Choices: no, on-failure, unless-stopped, always. |
+| `--restart-policy CHOICE` | Restart policy of the containers this start creates: no (default), on-failure, unless-stopped, always. unless-stopped and always restart a crashed container and bring the stack back after a host reboot; vllm-sr stop still stops it. Choices: no, on-failure, unless-stopped, always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
 | `--minimal / --no-minimal` | Start without the Dashboard, sr-bench and the observability stack (Jaeger, Prometheus, Grafana). The default in engine mode; --no-minimal starts them all. |

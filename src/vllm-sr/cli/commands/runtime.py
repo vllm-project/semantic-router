@@ -437,8 +437,8 @@ def _execute_serve(
     help=(
         "Restart policy of the containers this start creates: no (default), "
         "on-failure, unless-stopped, always. unless-stopped and always restart a "
-        "crashed container and bring the stack back after a host reboot "
-        "(Podman also needs its podman-restart service); vllm-sr stop still stops it."
+        "crashed container and bring the stack back after a host reboot; "
+        "vllm-sr stop still stops it."
     ),
 )
 @click.option(
