@@ -343,8 +343,9 @@ Limits left unset take the device's memory class (`scheduler/calibration.py`:
 GPU the runtime then calibrates the token budget after the golden check, from
 merged forwards of the model's calibration rows (`calibration_items`) at
 doubling budgets: the smallest budget whose cost per token is within 2% of
-the cheapest, no larger than one forward in 0.3 s or than 85% of the free
-device memory. It logs the chosen values and their source, and `engine_args`
+the cheapest timed or, while the cost still falls, what one forward does in
+0.3 s (interpolated between the timed forwards); never more than that or than
+85% of the free device memory. It logs the chosen values and their source, and `engine_args`
 reports them.
 
 The batcher (`scheduler/batching.py`) plans the rows of every queued request

@@ -6,9 +6,11 @@ On a GPU the runtime then calibrates the token budget once the golden check
 has warmed the model's kernels (``calibrate``): it times merged forwards of the
 model's calibration rows (``LoadedModel.calibration_items``) at doubling
 budgets up to the class's and keeps the smallest budget whose cost per token is
-within ``KNEE_TOLERANCE`` of the cheapest measured (the efficiency knee), no
-larger than what one forward does in ``MAX_FORWARD_SECONDS`` and than what fits
-the device's free memory with ``MEMORY_MARGIN`` to spare. A limit the engine
+within ``KNEE_TOLERANCE`` of the cheapest measured (the efficiency knee) or,
+while the cost per token still falls, what one forward does in
+``MAX_FORWARD_SECONDS`` (interpolated between the timed forwards); never more
+than that, nor than what fits the device's free memory with ``MEMORY_MARGIN``
+to spare. A limit the engine
 arguments set is never changed, and a model without calibration rows keeps its
 class's limits.
 """
@@ -193,25 +195,15 @@ def calibrate(
         if forward.seconds <= MAX_FORWARD_SECONDS
         and (memory_cap is None or forward.tokens <= memory_cap)
     ]
-    if fitting:
-        latency_cap = fitting[-1].tokens
-    else:
-        first = forwards[0]
-        latency_cap = max(
-            MIN_CALIBRATED_TOKENS // 4,
-            int(first.tokens * MAX_FORWARD_SECONDS / first.seconds)
-            // ROW_TOKENS
-            * ROW_TOKENS,
-        )
-    cheapest = min(
-        (forward.seconds / forward.tokens for forward in fitting), default=None
-    )
+    latency_cap = _latency_cap(forwards, fitting)
+    # The knee is where the cost per token stops falling, over every timed forward; when it
+    # still falls past the forwards that fit, the latency cap decides.
+    cheapest = min(forward.seconds / forward.tokens for forward in forwards)
     knee = next(
         (
             forward.tokens
             for forward in fitting
-            if cheapest is not None
-            and forward.seconds / forward.tokens <= (1 + KNEE_TOLERANCE) * cheapest
+            if forward.seconds / forward.tokens <= (1 + KNEE_TOLERANCE) * cheapest
         ),
         latency_cap,
     )
@@ -225,6 +217,34 @@ def calibrate(
         memory_cap=memory_cap,
         forwards=tuple(forwards),
         seconds=clock() - started,
+    )
+
+
+def _latency_cap(forwards: list[Forward], fitting: list[Forward]) -> int:
+    """The most tokens one forward holds in ``MAX_FORWARD_SECONDS``, between the timed forwards.
+
+    Time grows about linearly with tokens past the smallest forwards, so the cap lies on the line
+    through the largest forward that fits and the next one, or through the origin and the smallest
+    forward when none fits; it is rounded down to whole calibration rows.
+    """
+
+    def rows(tokens: float) -> int:
+        return max(MIN_CALIBRATED_TOKENS // 4, int(tokens) // ROW_TOKENS * ROW_TOKENS)
+
+    if not fitting:
+        first = forwards[0]
+        return rows(first.tokens * MAX_FORWARD_SECONDS / first.seconds)
+    last = fitting[-1]
+    later = [forward for forward in forwards if forward.tokens > last.tokens]
+    if not later or later[0].seconds <= MAX_FORWARD_SECONDS:
+        return last.tokens
+    over = later[0]
+    per_token = (over.seconds - last.seconds) / (over.tokens - last.tokens)
+    if per_token <= 0:
+        return last.tokens
+    return min(
+        over.tokens,
+        rows(last.tokens + (MAX_FORWARD_SECONDS - last.seconds) / per_token),
     )
 
 

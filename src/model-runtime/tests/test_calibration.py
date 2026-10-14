@@ -109,13 +109,31 @@ def test_a_slow_model_caps_one_forward_at_the_latency_target():
     clock = Clock()
     model = TimedModel(clock, overhead=0.0, per_token=4e-5)
     chosen = run(model, clock)
-    # 8,192 tokens take 0.33 s: timing stops there.
+    # 8,192 tokens take 0.33 s: timing stops there, and 0.3 s holds 7,500 tokens
+    # (7,424 in whole rows); the cost per token is flat, so the knee is smaller.
     assert [forward.tokens for forward in chosen.forwards] == [4096, 8192]
-    assert chosen.latency_cap == chosen.max_num_batched_tokens == 4096
+    assert chosen.latency_cap == 7424
+    assert chosen.knee == chosen.max_num_batched_tokens == 4096
     clock = Clock()
     slower = run(TimedModel(clock, overhead=0.0, per_token=1e-4), clock)
     # Even 4,096 tokens take 0.41 s: the budget scales down to what 0.3 s holds.
     assert slower.max_num_batched_tokens == 2816
+
+
+def test_a_cost_still_falling_at_the_latency_target_keeps_the_target():
+    clock = Clock()
+    # A 4B model's forwards on one MI325X: 16,384 tokens in 258 ms, 32,768 in 504 ms.
+    model = TimedModel(clock, overhead=0.0108, per_token=1.505e-5)
+    chosen = run(model, clock)
+    assert [forward.tokens for forward in chosen.forwards] == [
+        4096,
+        8192,
+        16_384,
+        32_768,
+    ]
+    # 0.3 s holds 19,216 tokens, 19,200 in whole rows; 16,384 still costs 2.4 % more per token
+    # than 32,768, so no smaller budget is on the plateau.
+    assert chosen.latency_cap == chosen.knee == chosen.max_num_batched_tokens == 19_200
 
 
 def test_the_budget_stays_within_free_device_memory():

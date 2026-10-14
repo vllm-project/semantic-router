@@ -96,9 +96,11 @@ the limits of its device's memory class:
 On a GPU the runtime then calibrates the token budget once the model passed
 its readiness check, in a few seconds: it times merged forwards of 4,096
 tokens up to the class's budget and keeps the smallest budget whose cost per
-token is within 2% of the cheapest (the efficiency knee), no larger than what
-one forward does in about 0.3 s and than what fits the device's free memory
-with 15% to spare. The worker logs the values it chose and where they came
+token is within 2% of the cheapest it timed (the efficiency knee) or, while the
+cost per token still falls, what one forward does in about 0.3 s; never more
+than that, nor than what fits the device's free memory with 15% to spare. On an
+MI325X that is 32,768 tokens for d3-edge, 18,944 for d3-mini and 3,328 for d3.
+The worker logs the values it chose and where they came
 from, and `GET /v1/models` reports them in `engine_args`. A value you set is
 never changed.
 
