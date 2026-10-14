@@ -19,6 +19,7 @@ import socket
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 import uuid
 import zlib
@@ -26,7 +27,7 @@ from pathlib import Path
 
 import yaml
 from cli.runtime_stack import MAX_PORT_OFFSET
-from runtime_http import call, page_requests, write_fixture
+from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
@@ -330,6 +331,72 @@ class TestEngineModeContainers(EngineStack):
         self.assertEqual(status, 200, models)
         self.stop()
         self.assertEqual(self.containers(), set())
+
+
+class TestEngineModeRestartPolicy(EngineStack):
+    """--restart-policy brings the stack back after its process exits."""
+
+    def serve(self, *, engine):
+        self.cli(
+            "serve",
+            "--config",
+            str(self.config),
+            "--engine" if engine else "--minimal",
+            "--gateway",
+            "standalone",
+            "--image-pull-policy",
+            "ifnotpresent",
+            "--startup-timeout",
+            "300",
+            "--restart-policy",
+            "unless-stopped",
+        )
+
+    def runtime(self, *arguments):
+        binary = shutil.which(os.environ.get("CONTAINER_RUNTIME") or "docker") or (
+            shutil.which("podman")
+        )
+        return subprocess.run(
+            [binary, *arguments],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    def inspect(self, template):
+        result = self.runtime("inspect", "-f", template, self.container)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_the_router_comes_back_after_its_process_exits(self):
+        self.assertEqual(
+            self.inspect("{{.HostConfig.RestartPolicy.Name}}"), "unless-stopped"
+        )
+        status, _ = self.public("/v1/systemone/models")
+        self.assertEqual(status, 200)
+        restarts = int(self.inspect("{{.RestartCount}}"))
+        # The Router exits as on a crash; the runtime, not the CLI, restarts it.
+        self.runtime("exec", self.container, "sh", "-c", "kill -TERM 1; kill -TERM -1")
+        deadline = time.monotonic() + 240
+        status = None
+        while time.monotonic() < deadline:
+            if int(self.inspect("{{.RestartCount}}")) > restarts:
+                try:
+                    status, _ = self.public("/v1/systemone/models")
+                except OSError:  # the listener is not back yet
+                    status = None
+                if status == HTTP_OK:
+                    break
+            time.sleep(2)
+        self.assertGreater(int(self.inspect("{{.RestartCount}}")), restarts)
+        self.assertEqual(status, 200)
+        self.stop()
+        self.assertNotEqual(
+            self.runtime("inspect", self.container).returncode,
+            0,
+            "vllm-sr stop must still remove a container with a restart policy",
+        )
 
 
 class TestEngineModeImages(EngineStack):

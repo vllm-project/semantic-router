@@ -167,6 +167,11 @@ class DtypePolicy:
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
 
+    @property
+    def needs_gpu_bf16(self) -> bool:
+        """Whether GPU autocast or weight storage requires BF16 support."""
+        return self.autocast == "bfloat16" or self.gpu_weights == "bfloat16"
+
 
 @dataclass(frozen=True)
 class LoRASpec:
@@ -822,6 +827,14 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
     def forward_token_budget(self) -> int | None:
         """Most padded tokens one forward may hold; None when nothing limits it."""
+        return None
+
+    def coalesced_token_budget(self) -> int | None:
+        """Most padded tokens a forward of a coalescing profile should hold; None leaves it to the profile.
+
+        A family whose forwards take long per token keeps coalesced forwards short this way, so a full queue is
+        answered over several forwards in expected-finish order instead of in one long one.
+        """
         return None
 
     def shared_context(

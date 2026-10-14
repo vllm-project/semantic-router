@@ -16,6 +16,24 @@ ORDINARY_PORT_MAPPING_LENGTH = 2
 HOST_GATEWAY_ALIAS = "host.docker.internal"
 HOST_GATEWAY_IP_ENV = "VLLM_SR_HOST_GATEWAY_IP"
 DOCKER_BRIDGE_PROBE_TIMEOUT_SECONDS = 10
+RESTART_POLICY_ENV = "VLLM_SR_RESTART_POLICY"
+RESTART_POLICIES = ("no", "on-failure", "unless-stopped", "always")
+
+
+def restart_policy_args():
+    """The `--restart` arguments every long-running stack container receives.
+
+    `vllm-sr serve --restart-policy` sets RESTART_POLICY_ENV for the start; the
+    runtime default (`no`) adds nothing, so containers keep today's behavior.
+    """
+    policy = os.getenv(RESTART_POLICY_ENV, "").strip().lower()
+    if not policy or policy == "no":
+        return []
+    if policy not in RESTART_POLICIES:
+        raise ValueError(
+            f"{RESTART_POLICY_ENV} must be one of {', '.join(RESTART_POLICIES)}; got {policy!r}"
+        )
+    return ["--restart", policy]
 
 
 def build_base_run_command(
@@ -34,6 +52,7 @@ def build_base_run_command(
             f"nofile={nofile_limit}:{nofile_limit}",
         ]
     )
+    cmd.extend(restart_policy_args())
     if network_name:
         cmd.extend(["--network", network_name])
     return cmd

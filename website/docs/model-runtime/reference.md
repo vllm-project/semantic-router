@@ -175,6 +175,10 @@ rejected image or video adds its `reason` (for example `video_too_long`,
 `limit`. These fixed words never carry request data, so the Router's public
 System One API answers with them and keeps the runtime's message private: it
 says `video longer than 300 s` where the runtime says why in its own words.
+The Router answers a deployment whose workers are all busy the same way, 429
+`overloaded`, and one with no ready worker 503 `not_ready`; both carry
+`Retry-After` (1 and 5 seconds). In Engine mode a call that runs past the
+Router's 30-second budget returns 504 `systemone_deadline_exceeded`.
 A failed item of a request (one input or one question) carries its own error
 code and never fails the others.
 
