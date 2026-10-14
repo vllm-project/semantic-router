@@ -207,6 +207,49 @@ questions for PII and unsupported claims, and its 0.3B answers the router's
 compatible questions within a routing stage. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 
+### External NLI models
+
+Compatible ModernBERT NLI classifiers can answer `choice` and `noul`
+questions through the same endpoint. For example, the Apache-2.0
+[`MoritzLaurer/ModernBERT-base-zeroshot-v2.0`](https://huggingface.co/MoritzLaurer/ModernBERT-base-zeroshot-v2.0)
+model has about 150M parameters and can run on a CPU:
+
+```bash
+vllm-sr serve MoritzLaurer/ModernBERT-base-zeroshot-v2.0 \
+  --revision d421c4545a438fd006fb43f8b981c5d908faa1e1 --device cpu --port 8100
+```
+
+Use a hypothesis template with exactly one `{label}` placeholder for Choice,
+and an affirmative statement for Noul:
+
+```json
+{
+  "state": "Write a Python function to sort a list.",
+  "questions": {
+    "domain": {
+      "type": "choice",
+      "instructions": "This request is about {label}.",
+      "criteria": {"code": "programming", "math": "mathematics", "travel": "travel planning"}
+    },
+    "code": {"type": "noul", "instructions": "This request is about programming."}
+  }
+}
+```
+
+Choice descriptions fill the template; null descriptions use the option key.
+Choice scores are a softmax over candidate entailment logits. Noul is the
+probability of entailment against all non-entailment labels; a supplied
+`true` description overrides the statement, while non-null `false`
+descriptions are unsupported. These scores are not calibrated confidence.
+Score, Set and Span are unsupported for these models.
+
+The classifier metadata must name `entailment` and `not_entailment`, or
+`entailment`, `contradiction` and `neutral`. Other classifiers keep their
+existing `/v1/classify` surface. Check `/v1/models` for supported question
+types. Hypotheses exceeding the token budget are rejected, and each choice
+uses one text–hypothesis pair, so work grows with the number of choices.
+Readiness without recorded golden answers remains `unverified`.
+
 ## Check it
 
 Ask the model the same question directly with `/v1/decisions`; see the
