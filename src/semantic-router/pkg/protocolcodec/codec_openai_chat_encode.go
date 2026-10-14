@@ -79,7 +79,7 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 			return diagnostics, err
 		}
 	}
-	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation != "auto" {
+	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation != llmprotocol.TruncationAuto {
 		return diagnostics, nil
 	}
 	err := appendLossy(
