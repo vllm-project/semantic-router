@@ -88,18 +88,18 @@ the limits of its device's memory class:
 | Device memory | `max_num_batched_tokens` | `max_num_seqs` |
 | --- | ---: | ---: |
 | 160 GB and more (MI300X, MI325X, B200) | 32,768 | 256 |
-| 70 to 160 GB | 16,384 | 128 |
-| 35 to 70 GB | 8,192 | 64 |
-| under 35 GB | 4,096 | 32 |
+| 64 to 160 GB | 16,384 | 128 |
+| 32 to 64 GB | 8,192 | 64 |
+| under 32 GB | 4,096 | 32 |
 | CPU | 65,536 | 8,192 |
 
 On a GPU the runtime then calibrates the token budget once the model passed
 its readiness check, in a few seconds: it times merged forwards of 4,096
-tokens up to the class's budget and keeps the smallest budget whose cost per
-token is within 2% of the cheapest it timed (the efficiency knee) or, while the
-cost per token still falls, what one forward does in about 0.3 s; never more
-than that, nor than what fits the device's free memory with 15% to spare. On an
-MI325X that is 32,768 tokens for d3-edge, 18,944 for d3-mini and 3,328 for d3.
+tokens up to the class's budget and keeps the largest budget whose cost per
+token is within 2% of the cheapest it timed (the efficiency knee), but never
+more than one forward does in about 0.3 s, nor than what fits the device's
+free memory with 15% to spare. On an MI325X that is 32,768 tokens for d3-edge,
+about 19,000 for d3-mini (its 0.3 s cap) and 3,328 for d3.
 The worker logs the values it chose and where they came
 from, and `GET /v1/models` reports them in `engine_args`. A value you set is
 never changed.

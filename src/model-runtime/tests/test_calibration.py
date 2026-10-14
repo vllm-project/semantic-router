@@ -52,11 +52,11 @@ class Clock:
 
 
 class TimedModel:
-    """Merged forwards that take ``overhead + tokens * per_token`` seconds of a fake clock and peak at ``bytes_per_token``."""
+    """Merged forwards that take ``overhead + tokens * per_token + tokens**2 * growth`` seconds of a fake clock and peak at ``bytes_per_token``."""
 
-    def __init__(self, clock, overhead, per_token, bytes_per_token=0):
+    def __init__(self, clock, overhead, per_token, bytes_per_token=0, growth=0.0):
         self.clock, self.overhead, self.per_token = clock, overhead, per_token
-        self.bytes_per_token = bytes_per_token
+        self.bytes_per_token, self.growth = bytes_per_token, growth
         self.peak = 0
         self.sizes = []
 
@@ -66,7 +66,9 @@ class TimedModel:
     def run_approximate(self, items):
         tokens = sum(items)
         self.sizes.append(tokens)
-        self.clock.now += self.overhead + tokens * self.per_token
+        self.clock.now += (
+            self.overhead + tokens * self.per_token + tokens * tokens * self.growth
+        )
         self.peak = tokens * self.bytes_per_token
         return [None] * len(items)
 
@@ -95,13 +97,18 @@ def test_a_steep_cost_curve_keeps_the_largest_budget():
     assert "knee 32768" in chosen.describe()
 
 
-def test_a_flat_cost_curve_keeps_the_smallest_budget_on_the_plateau():
+def test_a_flat_cost_curve_keeps_the_largest_budget_on_the_plateau():
     clock = Clock()
     chosen = run(TimedModel(clock, overhead=0.0002, per_token=5e-6), clock)
-    assert chosen.max_num_batched_tokens == chosen.knee == 4096
+    assert chosen.max_num_batched_tokens == chosen.knee == 32_768
+
+
+def test_a_cost_per_token_that_rises_stops_at_the_knee():
     clock = Clock()
-    # 4,096 tokens cost 4 % more per token than 32,768, beyond the plateau's 2 %.
-    chosen = run(TimedModel(clock, overhead=0.001, per_token=5e-6), clock)
+    # 4,096 and 8,192 tokens cost the same per token, 16,384 3.5 % more and 32,768 12 % more,
+    # although a 32,768-token forward fits in 0.2 s.
+    chosen = run(TimedModel(clock, overhead=0.001, per_token=5e-6, growth=3e-11), clock)
+    assert chosen.latency_cap == 32_768
     assert chosen.max_num_batched_tokens == chosen.knee == 8192
 
 
@@ -110,10 +117,9 @@ def test_a_slow_model_caps_one_forward_at_the_latency_target():
     model = TimedModel(clock, overhead=0.0, per_token=4e-5)
     chosen = run(model, clock)
     # 8,192 tokens take 0.33 s: timing stops there, and 0.3 s holds 7,500 tokens
-    # (7,424 in whole rows); the cost per token is flat, so the knee is smaller.
+    # (7,424 in whole rows); the flat cost per token reaches past 4,096 tokens.
     assert [forward.tokens for forward in chosen.forwards] == [4096, 8192]
-    assert chosen.latency_cap == 7424
-    assert chosen.knee == chosen.max_num_batched_tokens == 4096
+    assert chosen.latency_cap == chosen.knee == chosen.max_num_batched_tokens == 7424
     clock = Clock()
     slower = run(TimedModel(clock, overhead=0.0, per_token=1e-4), clock)
     # Even 4,096 tokens take 0.41 s: the budget scales down to what 0.3 s holds.
@@ -131,9 +137,13 @@ def test_a_cost_still_falling_at_the_latency_target_keeps_the_target():
         16_384,
         32_768,
     ]
-    # 0.3 s holds 19,216 tokens, 19,200 in whole rows; 16,384 still costs 2.4 % more per token
-    # than 32,768, so no smaller budget is on the plateau.
+    # 0.3 s holds 19,216 tokens, 19,200 in whole rows; the cheapest forward does not fit.
     assert chosen.latency_cap == chosen.knee == chosen.max_num_batched_tokens == 19_200
+    clock = Clock()
+    # The same device on another start: 16,384 tokens within 2 % of 32,768 per token.
+    model = TimedModel(clock, overhead=0.004, per_token=1.52e-5)
+    chosen = run(model, clock)
+    assert chosen.latency_cap == chosen.knee == chosen.max_num_batched_tokens == 19_456
 
 
 def test_the_budget_stays_within_free_device_memory():

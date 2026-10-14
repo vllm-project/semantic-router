@@ -5,14 +5,12 @@ A GPU takes the limits of its memory class (``DEVICE_CLASSES``); the CPU keeps
 On a GPU the runtime then calibrates the token budget once the golden check
 has warmed the model's kernels (``calibrate``): it times merged forwards of the
 model's calibration rows (``LoadedModel.calibration_items``) at doubling
-budgets up to the class's and keeps the smallest budget whose cost per token is
-within ``KNEE_TOLERANCE`` of the cheapest measured (the efficiency knee) or,
-while the cost per token still falls, what one forward does in
-``MAX_FORWARD_SECONDS`` (interpolated between the timed forwards); never more
-than that, nor than what fits the device's free memory with ``MEMORY_MARGIN``
-to spare. A limit the engine
-arguments set is never changed, and a model without calibration rows keeps its
-class's limits.
+budgets up to the class's and keeps the largest budget whose cost per token is
+within ``KNEE_TOLERANCE`` of the cheapest measured (the efficiency knee), but
+never more than one forward does in ``MAX_FORWARD_SECONDS`` (interpolated
+between the timed forwards) nor than what fits the device's free memory with
+``MEMORY_MARGIN`` to spare. A limit the engine arguments set is never changed,
+and a model without calibration rows keeps its class's limits.
 """
 
 from __future__ import annotations
@@ -35,8 +33,6 @@ ROW_TOKENS = 256
 # The smallest budget calibration times, and the smallest it chooses.
 MIN_CALIBRATED_TOKENS = 1024
 # Cost per token within this fraction of the cheapest measured counts as the plateau.
-# Serving adds a fixed cost per forward that these timings leave out, so the knee
-# stays close to the cheapest budget.
 KNEE_TOLERANCE = 0.02
 # Longest one merged forward should hold the device, so a request that arrives
 # during it waits about this long at most.
@@ -59,9 +55,9 @@ class DeviceClass:
 
 DEVICE_CLASSES = (
     DeviceClass("160 GB and more", 150, 32_768, 256),
-    DeviceClass("70 to 160 GB", 60, 16_384, 128),
-    DeviceClass("35 to 70 GB", 30, 8_192, 64),
-    DeviceClass("under 35 GB", 0, 4_096, 32),
+    DeviceClass("64 to 160 GB", 60, 16_384, 128),
+    DeviceClass("32 to 64 GB", 30, 8_192, 64),
+    DeviceClass("under 32 GB", 0, 4_096, 32),
 )
 
 
@@ -196,16 +192,19 @@ def calibrate(
         and (memory_cap is None or forward.tokens <= memory_cap)
     ]
     latency_cap = _latency_cap(forwards, fitting)
-    # The knee is where the cost per token stops falling, over every timed forward; when it
-    # still falls past the forwards that fit, the latency cap decides.
+    # On the plateau the largest budget is as cheap on the device and saves serving's cost per
+    # forward; the smallest would follow timing noise. When the plateau reaches past the
+    # forwards that fit, the latency cap decides.
     cheapest = min(forward.seconds / forward.tokens for forward in forwards)
-    knee = next(
-        (
-            forward.tokens
-            for forward in fitting
-            if forward.seconds / forward.tokens <= (1 + KNEE_TOLERANCE) * cheapest
-        ),
-        latency_cap,
+    plateau = [
+        forward
+        for forward in forwards
+        if forward.seconds / forward.tokens <= (1 + KNEE_TOLERANCE) * cheapest
+    ]
+    knee = (
+        plateau[-1].tokens
+        if plateau[-1] in fitting and plateau[-1].tokens < latency_cap
+        else latency_cap
     )
     chosen = min(knee, latency_cap, budget)
     if memory_cap is not None:

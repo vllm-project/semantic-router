@@ -338,15 +338,15 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 | `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0) |
 
 Limits left unset take the device's memory class (`scheduler/calibration.py`:
-32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 70 GB,
-8,192 / 64 from 35 GB, 4,096 / 32 below; the CPU keeps 65,536 / 8,192). On a
+32,768 tokens and 256 rows at 160 GB and more, 16,384 / 128 from 64 GB,
+8,192 / 64 from 32 GB, 4,096 / 32 below; the CPU keeps 65,536 / 8,192). On a
 GPU the runtime then calibrates the token budget after the golden check, from
 merged forwards of the model's calibration rows (`calibration_items`) at
-doubling budgets: the smallest budget whose cost per token is within 2% of
-the cheapest timed or, while the cost still falls, what one forward does in
-0.3 s (interpolated between the timed forwards); never more than that or than
-85% of the free device memory. It logs the chosen values and their source, and `engine_args`
-reports them.
+doubling budgets: the largest budget whose cost per token is within 2% of
+the cheapest timed (on a flat curve the smallest would follow timing noise),
+but never more than one forward does in 0.3 s (interpolated between the timed
+forwards) nor than 85% of the free device memory holds. It logs the chosen
+values and their source, and `engine_args` reports them.
 
 The batcher (`scheduler/batching.py`) plans the rows of every queued request
 together (`coalesced`), one lane at a time (`LoadedModel.lane`; Decision 3.0:
