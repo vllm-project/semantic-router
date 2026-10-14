@@ -1,28 +1,29 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import bundledCatalog from '../modelCatalogDocument'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
-import { getBuiltInModelCatalog } from '../utils/modelCatalogApi'
-
-const fallbackCatalog = bundledCatalog as unknown as BuiltInModelCatalog
+import modelCatalogMetadata from '../modelCatalogMetadata'
+import { modelCatalogResource } from '../utils/modelCatalogResource'
 
 export default function useBuiltInModelCatalog() {
-  const [catalog, setCatalog] = useState<BuiltInModelCatalog>(fallbackCatalog)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [source, setSource] = useState<'bundled' | 'server'>('bundled')
+  const cached = modelCatalogResource.peek()
+  const [catalog, setCatalog] = useState(cached?.catalog ?? modelCatalogMetadata)
+  const [error, setError] = useState<string | null>(cached?.error ?? null)
+  const [loading, setLoading] = useState(!cached)
+  const [ready, setReady] = useState(Boolean(cached))
+  const [source, setSource] = useState<'bundled' | 'server'>(cached?.source ?? 'bundled')
   const [attempt, setAttempt] = useState(0)
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
-    void getBuiltInModelCatalog(controller.signal)
-      .then((nextCatalog) => {
+    void modelCatalogResource
+      .read(controller.signal, attempt > 0)
+      .then((result) => {
         if (controller.signal.aborted) return
-        setCatalog(nextCatalog)
-        setSource('server')
-        setError(null)
+        setCatalog(result.catalog)
+        setSource(result.source)
+        setError(result.error)
+        setReady(true)
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return
@@ -34,5 +35,5 @@ export default function useBuiltInModelCatalog() {
     return () => controller.abort()
   }, [attempt])
 
-  return { catalog, error, loading, source, retry }
+  return { catalog, error, loading, ready, source, retry }
 }

@@ -758,6 +758,7 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	second, err := encodeSSE(stopEvent.Type, stopEvent)
 	var diagnostics llmprotocol.Diagnostics
 	appendAnthropicPartialCacheOmission(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
+	appendAnthropicPartialOutputOmission(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
 	return [][]byte{first, second}, diagnostics, err
 }
 

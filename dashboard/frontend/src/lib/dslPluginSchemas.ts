@@ -88,12 +88,6 @@ function getHallucinationPluginFieldSchema(): FieldSchema[] {
   return [
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'use_nli',
-      label: 'Use NLI',
-      type: 'boolean',
-      description: 'Use Natural Language Inference for detection',
-    },
-    {
       key: 'hallucination_action',
       label: 'Action',
       type: 'select',

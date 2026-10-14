@@ -69,9 +69,10 @@ Model IDs are namespaced, for example `organization/model`. Benchmark and
 index IDs use full semantic versions. A changed dataset, grader, prompt
 protocol, or aggregation rule requires a new benchmark version.
 
-The default intelligence index uses MMLU-Pro, GPQA Diamond, Humanity's Last
-Exam, SWE-bench Verified, and Terminal-Bench 2.1 at equal weight. It emits a
-headline score only at 60% coverage. A new model may ship with less evidence;
+Intelligence 1.0 uses MMLU-Pro, GPQA Diamond, the frozen text-only HLE subset,
+LiveCodeBench v6, SciCode and Terminal-Bench 2.1. It requires complete evidence
+at every node: General, Reasoning, Coding and Agentic contribute 20%, 40%,
+20% and 20% respectively. See the [index contract](../proposals/open-intelligence-index-and-model-arena.md). A new model may ship with less evidence;
 the Hub then shows the available components and `Not yet measured` rather than
 inventing a value. Two available values for one model and versioned metric are
 rejected. Vendor-published results retain their exact model variant, reasoning
@@ -83,7 +84,7 @@ does not disclose the runtime effort, use `unspecified`; keep whether the result
 was vendor-published or independently measured in `evidence.provenance` and
 `evidence.verification`.
 
-Generation emits exactly those five benchmark slots for every model and every
+Generation emits exactly those six benchmark slots for every model and every
 selectable reasoning effort. A slot without trustworthy evidence is explicit
 `missing`, never zero. When a source reports several efforts, author a separate
 evaluation record for each effort; results from `high`, `xhigh`, or `max` are
@@ -309,12 +310,12 @@ catalog ID only records availability; the user must set
 `external_model_ids` entry) explicitly.
 
 Treat multiple `backend_refs` on one alias as homogeneous replicas in one
-Envoy pool. HTTP endpoint address, port, and weight may differ; HTTPS replicas
+transport pool. HTTP endpoint address, port, and weight may differ; HTTPS replicas
 may vary by port and weight but keep one DNS hostname. Provider ID,
 protocol/model mapping, credential source, auth and default headers, effective
 request path, and DNS/TLS behavior must otherwise match. Split heterogeneous providers or
 credentials into separate aliases so Router request shaping cannot diverge
-from the endpoint Envoy selects. The config loader and CLI generator reject an
+from the endpoint the transport selects. The config loader and CLI generator reject an
 unsafe mixed pool with the differing semantic fields named and never include
 credential values in the error.
 

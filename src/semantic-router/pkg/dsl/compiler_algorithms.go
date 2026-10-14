@@ -5,6 +5,7 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 type algorithmSubConfigCompiler func(*Compiler, *config.AlgorithmConfig, map[string]Value)
 
 var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
+	"cascade": compileCascadeAlgorithm,
 	"confidence": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Confidence = c.compileConfidenceAlgo(fields)
 	},
@@ -46,6 +47,7 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"mlp":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"random": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 }
 
 func (c *Compiler) compilePromptAlgo(
@@ -98,6 +100,13 @@ func (c *Compiler) compileDecisionModelAlgo(
 
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
+	if spec.AlgoType != config.DecisionAlgorithmCascade {
+		for _, name := range []string{"budget", "stages"} {
+			if _, present := spec.Fields[name]; present {
+				c.addError(spec.Pos, "algorithm.%s requires cascade", name)
+			}
+		}
+	}
 	if minimum, ok := getIntField(spec.Fields, "minimum_candidates"); ok {
 		algo.MinimumCandidates = minimum
 	}

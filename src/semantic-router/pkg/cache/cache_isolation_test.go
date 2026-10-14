@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -25,7 +25,7 @@ var _ = Describe("Cache lookup isolation (regression #2473)", func() {
 				Enabled:             true,
 				SimilarityThreshold: threshold,
 				MaxEntries:          16,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() { _ = backend.Close() }()

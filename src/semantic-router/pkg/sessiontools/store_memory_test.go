@@ -306,6 +306,7 @@ func TestMemoryStore_StaleRevisionRejectedAfterExpiryAndReadmission(t *testing.T
 	if final.State.Revision == staleRevision {
 		t.Fatalf("final revision (%d) must not equal writer A's stale revision (%d)", final.State.Revision, staleRevision)
 	}
+	assertMemoryMembership(t, store, key, quota)
 }
 
 // TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission
@@ -395,6 +396,7 @@ func TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission(t *te
 		t.Fatalf("PolicyFingerprint = %q, want %q (writer A's stale CAS must not have applied)",
 			final.State.PolicyFingerprint, "writer-b")
 	}
+	assertMemoryMembership(t, store, key, quota)
 }
 
 // TestMemoryStore_ExpiredReadmission_ABARace guards against the ABA race

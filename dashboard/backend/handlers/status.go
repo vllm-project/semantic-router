@@ -34,20 +34,24 @@ type RouterRuntimeStatus struct {
 
 // SystemStatus represents the overall system status
 type SystemStatus struct {
-	Overall        string               `json:"overall"`
-	DeploymentType string               `json:"deployment_type"`
-	Services       []ServiceStatus      `json:"services"`
-	RouterRuntime  *RouterRuntimeStatus `json:"router_runtime,omitempty"`
-	Models         *RouterModelsInfo    `json:"models,omitempty"`
-	Endpoints      []string             `json:"endpoints,omitempty"`
-	Version        string               `json:"version,omitempty"`
-	History        statusstore.History  `json:"history"`
+	Overall        string `json:"overall"`
+	DeploymentType string `json:"deployment_type"`
+	// ServingMode identifies the configured upstream, independently of its
+	// deployment topology or the engines used by its model runtimes.
+	ServingMode   string               `json:"serving_mode"`
+	Services      []ServiceStatus      `json:"services"`
+	RouterRuntime *RouterRuntimeStatus `json:"router_runtime,omitempty"`
+	Models        *RouterModelsInfo    `json:"models,omitempty"`
+	Endpoints     []string             `json:"endpoints,omitempty"`
+	Version       string               `json:"version,omitempty"`
+	History       statusstore.History  `json:"history"`
 }
 
-// StatusHandler returns the status of vLLM-SR services
-// Aligns with the vllm-sr Python CLI by using the same Docker-based detection
-func StatusHandler(routerAPIURL, envoyURL, configDir string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
-	return NewStatusMonitor(routerAPIURL, envoyURL, configDir, nil, credentialProvider...).Handler()
+// StatusHandler returns the status of vLLM-SR services, from the Router's and
+// Envoy's HTTP probes and the stack's files; the Dashboard never asks a
+// container runtime.
+func StatusHandler(routerAPIURL, envoyURL, configDir string, stack StackState, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
+	return NewStatusMonitor(routerAPIURL, envoyURL, configDir, stack, nil, credentialProvider...).Handler()
 }
 
 // Handler serves the live snapshot together with server-observed hourly history.
@@ -60,7 +64,7 @@ func (m *StatusMonitor) Handler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.credentialProvider...)
+		status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.stack, m.credentialProvider...)
 		status.History = readStatusHistory(r, m.historyStore, status.Services)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {

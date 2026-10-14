@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -27,8 +28,8 @@ func TestExpandEnvString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := expandEnvString(tt.input); got != tt.want {
-				t.Fatalf("expandEnvString(%q) = %q, want %q", tt.input, got, tt.want)
+			if got := processEnv.expandString(tt.input); got != tt.want {
+				t.Fatalf("expandString(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -144,7 +145,7 @@ func TestExpandEnvSubstitutionsInMapLeavesNonStringsUntouched(t *testing.T) {
 		"password": "${POSTGRES_PASSWORD}",
 	}
 	t.Setenv("POSTGRES_PASSWORD", "secret")
-	expandEnvSubstitutionsInMap(raw)
+	processEnv.expandMap(raw)
 
 	if raw["port"] != 5432 {
 		t.Fatalf("port = %v, want 5432", raw["port"])
@@ -159,7 +160,111 @@ func TestExpandEnvSubstitutionsInMapLeavesNonStringsUntouched(t *testing.T) {
 
 func TestExpandEnvStringUnsetVariableIsEmpty(t *testing.T) {
 	_ = os.Unsetenv("DEFINITELY_MISSING_ENV_FOR_CONFIG_TEST")
-	if got := expandEnvString("${DEFINITELY_MISSING_ENV_FOR_CONFIG_TEST}"); got != "" {
-		t.Fatalf("expandEnvString for missing var = %q, want empty string", got)
+	if got := processEnv.expandString("${DEFINITELY_MISSING_ENV_FOR_CONFIG_TEST}"); got != "" {
+		t.Fatalf("expandString for missing var = %q, want empty string", got)
+	}
+}
+
+func TestExpandStringKeepsUnsetReferences(t *testing.T) {
+	t.Setenv("TOKEN", "process-value")
+	keep := envExpander{lookup: noEnv, keepUnset: true}
+	for input, want := range map[string]string{
+		"${OPENAI_API_KEY}":       "${OPENAI_API_KEY}",
+		"Bearer $TOKEN":           "Bearer $TOKEN",
+		"${HOST:-127.0.0.1}:8000": "127.0.0.1:8000",
+		"${TIMEOUT-30s}":          "30s",
+		"cost-$$value":            "cost-$value",
+	} {
+		if got := keep.expandString(input); got != want {
+			t.Fatalf("expandString(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func deferredEnvDocument(maxTokens, apiKey string) []byte {
+	return []byte(`version: v0.3
+providers:
+  defaults:
+    model: model-a
+  models:
+    - name: model-a
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+routing:
+  modelCards:
+    - name: model-a
+  signals:
+    context:
+      - name: probe
+        min_tokens: 8K
+        max_tokens: ` + maxTokens + `
+  decisions:
+    - name: default
+      rules:
+        operator: AND
+      modelRefs:
+        - model: model-a
+      plugins:
+        - type: rag
+          configuration:
+            enabled: true
+            backend: openai
+            backend_config:
+              vector_store_id: vs_probe
+              api_key: ` + apiKey + `
+`)
+}
+
+func TestValidateYAMLBytesDeferringEnv(t *testing.T) {
+	// Values in this process must not decide the outcome.
+	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
+	t.Setenv("DEFER_PROBE_KEY", "")
+	tests := []struct {
+		name      string
+		maxTokens string
+		apiKey    string
+		wantErr   string
+	}{
+		{name: "required value without a default", maxTokens: "64K", apiKey: "${DEFER_PROBE_KEY}"},
+		{name: "token count without a default", maxTokens: "${DEFER_PROBE_MAX}", apiKey: "sk-probe"},
+		{name: "default", maxTokens: "${DEFER_PROBE_MAX:-64K}", apiKey: "sk-probe"},
+		{name: "invalid default", maxTokens: "${DEFER_PROBE_MAX:-lots}", apiKey: "sk-probe", wantErr: "invalid token count format: lots"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateYAMLBytesDeferringEnv(deferredEnvDocument(tt.maxTokens, tt.apiKey))
+			if tt.wantErr == "" && err != nil {
+				t.Fatalf("ValidateYAMLBytesDeferringEnv() error = %v", err)
+			}
+			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("ValidateYAMLBytesDeferringEnv() error = %v, want one containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
+	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
+	t.Setenv("DEFER_PROBE_HOST", "process-host")
+	document := strings.Replace(
+		string(deferredEnvDocument("${DEFER_PROBE_MAX:-64K}", "${DEFER_PROBE_KEY}")),
+		"endpoint: 127.0.0.1:8000", "endpoint: ${DEFER_PROBE_HOST:-127.0.0.1}:8000", 1,
+	)
+
+	cfg, err := ParseYAMLBytesDeferringEnv([]byte(document))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v", err)
+	}
+	if got := cfg.ContextRules[0].MaxTokens; got != "${DEFER_PROBE_MAX:-64K}" {
+		t.Fatalf("max_tokens = %q, want the reference as written", got)
+	}
+	if got := cfg.VLLMEndpoints[0].Address; got != "127.0.0.1" {
+		t.Fatalf("backend address = %q, want the reference default", got)
+	}
+
+	_, err = ParseYAMLBytesDeferringEnv(deferredEnvDocument("${DEFER_PROBE_MAX:-lots}", "sk-probe"))
+	if err == nil || !strings.Contains(err.Error(), "invalid token count format: lots") {
+		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v, want the invalid default", err)
 	}
 }

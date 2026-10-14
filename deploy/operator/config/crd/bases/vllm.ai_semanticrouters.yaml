@@ -967,10 +967,19 @@ spec:
                     type: object
                 type: object
               args:
-                description: Container arguments
+                description: |-
+                  Router arguments, after the gateway mode flags the Operator passes
+                  (-gateway=standalone -listener-address=0.0.0.0, or -gateway=extproc).
+                  The gateway mode follows spec.gateway, so args may not set those flags.
                 items:
+                  maxLength: 4096
                   type: string
+                maxItems: 64
                 type: array
+                x-kubernetes-validations:
+                - message: 'spec.args must not set -gateway or -listener-address:
+                    the gateway mode follows spec.gateway'
+                  rule: self.all(a, !a.matches('^--?(gateway|listener-address)(=|$)'))
               autoscaling:
                 description: Autoscaling configuration
                 properties:
@@ -1074,8 +1083,6 @@ spec:
                             type: string
                           use_cpu:
                             type: boolean
-                          use_modernbert:
-                            type: boolean
                         type: object
                       pii_model:
                         description: |-
@@ -1090,8 +1097,8 @@ spec:
                             description: |-
                               Backend names a remote token classifier speaking token_spans.v1. Its
                               absence keeps local PII inference. The local selectors this replaces are
-                              model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
-                              token windows are only supported by the local mmbert32k model.
+                              model_id and use_cpu above. Explicit token windows are only supported by
+                              the local model.
                             properties:
                               contract:
                                 description: |-
@@ -1153,12 +1160,6 @@ spec:
                             type: string
                           use_cpu:
                             type: boolean
-                          use_mmbert_32k:
-                            description: UseMmBERT32K selects the local model that
-                              supports token windows.
-                            type: boolean
-                          use_modernbert:
-                            type: boolean
                           window:
                             description: |-
                               Window scans original content tokens with explicit overlap. Omission or
@@ -1187,16 +1188,13 @@ spec:
                             or set it to token_spans.v1
                           rule: '!has(self.backend) || !has(self.backend.contract)
                             || self.backend.contract == ''token_spans.v1'''
-                        - message: backend cannot be combined with local use_mmbert_32k
-                          rule: '!has(self.backend) || !has(self.use_mmbert_32k) ||
-                            !self.use_mmbert_32k'
-                        - message: max_sequence_length requires local use_mmbert_32k
+                        - message: max_sequence_length applies to the local model;
+                            omit it with backend
                           rule: '!has(self.max_sequence_length) || self.max_sequence_length
-                            == 0 || (!has(self.backend) && has(self.use_mmbert_32k)
-                            && self.use_mmbert_32k)'
-                        - message: window requires local use_mmbert_32k
-                          rule: '!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k)
-                            && self.use_mmbert_32k)'
+                            == 0 || !has(self.backend)'
+                        - message: window applies to the local model; omit it with
+                            backend
+                          rule: '!has(self.window) || !has(self.backend)'
                         - message: window.size must not exceed max_sequence_length
                             (512 when omitted or zero)
                           rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
@@ -1446,6 +1444,19 @@ spec:
                         rule: '!(has(self.hard_below) && has(self.easy_above)) ||
                           double(self.hard_below) < double(self.easy_above)'
                     type: array
+                  decision_model:
+                    description: |-
+                      DecisionModel selects the declared deployment that answers default judgment tasks.
+                      Omitted uses the Router's primary deployment. Artifact identity belongs in
+                      model_deployments; the reference never infers a model family or alias.
+                    properties:
+                      deployment:
+                        description: Deployment is an exact key in model_deployments.
+                        minLength: 1
+                        type: string
+                    required:
+                    - deployment
+                    type: object
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,
                       etc.)
@@ -1463,6 +1474,41 @@ spec:
                           description: Description provides information about what
                             this decision handles
                           type: string
+                        fallback:
+                          description: |-
+                            Fallback overrides the cross-model fallback policy for this decision's
+                            requests, over the recipe's and the router's
+                          properties:
+                            enabled:
+                              description: Enabled turns cross-model fallback on or
+                                off for this decision
+                              type: boolean
+                            max_attempts:
+                              description: MaxAttempts bounds the candidates tried,
+                                the first one included
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            per_attempt_timeout:
+                              description: PerAttemptTimeout bounds each candidate's
+                                attempt
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            retryable_status_codes:
+                              description: RetryableStatusCodes are the statuses that
+                                move on to the next candidate
+                              items:
+                                format: int32
+                                maximum: 599
+                                minimum: 100
+                                type: integer
+                              type: array
+                            total_timeout:
+                              description: TotalTimeout bounds the whole fallback
+                                chain
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                          type: object
                         modelRefs:
                           description: ModelRefs contains model references for this
                             decision
@@ -1518,6 +1564,71 @@ spec:
                           description: Priority is used for decision ordering - higher
                             priority decisions are evaluated first
                           type: integer
+                        reliability:
+                          description: |-
+                            Reliability overrides the timeouts and retries of the provider model
+                            that serves this decision's requests
+                          properties:
+                            first_byte_timeout:
+                              description: |-
+                                FirstByteTimeout bounds the wait for the first response byte
+                                (standalone mode only)
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            idle_timeout:
+                              description: |-
+                                IdleTimeout bounds the wait for more of a streamed response
+                                (standalone mode only)
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            per_try_timeout:
+                              description: PerTryTimeout bounds each attempt until
+                                its response starts
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            retriable_status_codes:
+                              description: RetriableStatusCodes adds statuses retried
+                                under retriable-status-codes
+                              items:
+                                format: int32
+                                maximum: 599
+                                minimum: 100
+                                type: integer
+                              type: array
+                            retry_after_max:
+                              description: |-
+                                RetryAfterMax honors a response's Retry-After up to this bound
+                                (standalone mode only)
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            retry_back_off_base:
+                              description: |-
+                                RetryBackOffBase is the base of the randomized exponential wait between
+                                retries (standalone mode only)
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            retry_back_off_max:
+                              description: RetryBackOffMax caps that wait (standalone
+                                mode only)
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                            retry_count:
+                              description: RetryCount is the number of retries after
+                                the first attempt
+                              format: int32
+                              maximum: 5
+                              minimum: 0
+                              type: integer
+                            retry_on:
+                              description: RetryOn adds retry conditions, with Envoy's
+                                names (5xx, reset, ...)
+                              type: string
+                            total_timeout:
+                              description: 'TotalTimeout bounds the whole call: every
+                                attempt and the response'
+                              pattern: ^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$
+                              type: string
+                          type: object
                         rules:
                           description: Rules defines the combination of conditions
                             using AND/OR logic
@@ -1594,10 +1705,11 @@ spec:
                         description: Embedding configuration for embedding-based classification
                         properties:
                           backend:
-                            description: Backend selects the embedding provider backend.
+                            description: |-
+                              Backend selects the embedding provider backend: the built-in model
+                              runtime (the default) or an external OpenAI-compatible endpoint.
                             enum:
-                            - candle
-                            - openvino
+                            - model_runtime
                             - openai_compatible
                             type: string
                           enable_soft_matching:
@@ -1685,11 +1797,6 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
-                      gemma_model_path:
-                        description: |-
-                          Path to EmbeddingGemma-300M model directory
-                          Gemma provides 8K context and fast embeddings (768 dimensions)
-                        type: string
                       mmbert_model_path:
                         description: |-
                           Path to mmBERT 2D Matryoshka embedding model directory
@@ -1887,7 +1994,8 @@ spec:
                         minimum: 0
                         type: integer
                       model_id:
-                        default: models/Vela-1.0-Encoder-307M-Guard
+                        description: ModelID binds the guard to one model; empty runs
+                          the decision model.
                         type: string
                       on_error:
                         description: |-
@@ -1910,26 +2018,18 @@ spec:
                           type: string
                         type: array
                       threshold:
-                        default: "0.5"
-                        description: Jailbreak detection threshold (0.0-1.0). Stored
-                          as string to avoid float precision issues.
+                        description: |-
+                          Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
+                          precision issues; empty takes the threshold calibrated for the model.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       use_cpu:
                         default: true
                         type: boolean
-                      variant:
-                        description: |-
-                          Variant selects a local Candle-backed model variant. It is mutually
-                          exclusive with Backend. When both are omitted, the operator uses mmbert32k.
-                        enum:
-                        - candle
-                        - mmbert32k
-                        type: string
                       window:
                         description: |-
                           Window enables explicit scanning of all input tokens. Omission or null
-                          keeps whole-input inference. Only the local mmbert32k variant supports it.
+                          keeps whole-input inference. Only the local model supports it.
                         nullable: true
                         properties:
                           overlap:
@@ -1950,13 +2050,12 @@ spec:
                           rule: '!has(self.overlap) || self.overlap < self.size'
                     type: object
                     x-kubernetes-validations:
-                    - message: max_sequence_length requires the local mmbert32k variant
+                    - message: max_sequence_length applies to the local model; omit
+                        it with backend
                       rule: '!has(self.max_sequence_length) || self.max_sequence_length
-                        == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant)
-                        == 0 || self.variant == ''mmbert32k''))'
-                    - message: window requires the local mmbert32k variant
-                      rule: '!has(self.window) || (!has(self.backend) && (!has(self.variant)
-                        || size(self.variant) == 0 || self.variant == ''mmbert32k''))'
+                        == 0 || !has(self.backend)'
+                    - message: window applies to the local model; omit it with backend
+                      rule: '!has(self.window) || !has(self.backend)'
                     - message: window.size must not exceed max_sequence_length (512
                         when omitted or zero)
                       rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
@@ -3491,10 +3590,17 @@ spec:
                   type: object
                 type: array
               gateway:
-                description: Gateway integration for reusing existing gateways
+                description: |-
+                  Gateway selects what serves client traffic. Omitted, the Router runs
+                  standalone: it serves the OpenAI-compatible API on port 8801 itself,
+                  with no Envoy, and the Service exposes that port. With existingRef, the
+                  Router serves ext_proc gRPC on port 50051 for that Gateway, whose
+                  ext_proc policy and routes you manage.
                 properties:
                   existingRef:
-                    description: ExistingRef references an existing Gateway to use
+                    description: |-
+                      ExistingRef references an existing Gateway that calls the Router over
+                      ext_proc. Setting it selects extproc mode.
                     properties:
                       name:
                         description: Name of the Gateway
@@ -3524,7 +3630,7 @@ spec:
                     - IfNotPresent
                     type: string
                   repository:
-                    default: ghcr.io/vllm-project/semantic-router/extproc
+                    default: ghcr.io/vllm-project/semantic-router/vllm-sr
                     description: Repository is the container image repository
                     type: string
                   tag:
@@ -4617,8 +4723,10 @@ spec:
                   type: object
                 type: array
               gatewayMode:
-                description: 'GatewayMode indicates deployment mode: standalone or
-                  gateway-integration'
+                description: |-
+                  GatewayMode is what serves client traffic: standalone (the Router's own
+                  listener on port 8801) or gateway-integration (the Gateway in
+                  spec.gateway, with the Router serving ext_proc)
                 type: string
               observedGeneration:
                 description: ObservedGeneration reflects the generation of the most

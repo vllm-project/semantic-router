@@ -429,7 +429,7 @@ func TestReconcileDiscardsStaticModelBindings(t *testing.T) {
 		{"pii_classifier", "token_spans.v1", "mmbert32k", ""},
 		{
 			"prompt_guard", "label_distribution.v1", "modernbert",
-			"  model_catalog: {modules: {prompt_guard: {variant: mmbert32k, max_sequence_length: 32768, window: {size: 128, overlap: 63}}}}\n",
+			"  model_catalog: {modules: {prompt_guard: {max_sequence_length: 32768, window: {size: 128, overlap: 63}}}}\n",
 		},
 	} {
 		binding := fmt.Sprintf("%s: {deployment: removed-deployment, contract: %s, adapter: %s}\n",

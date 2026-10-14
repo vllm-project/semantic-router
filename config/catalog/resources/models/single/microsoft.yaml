@@ -115,3 +115,40 @@
   - efficient
   - hybrid
   released_at: '2025-07-09'
+- id: microsoft/phi-4-reasoning-plus
+  display_name: Phi-4 Reasoning Plus
+  description: Open-weight 14B Phi-4 reasoning model with additional reinforcement learning for math, science, and coding.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: Φ
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus
+    license: MIT
+  family: phi-4
+  parameter_size: 14B
+  revision: 69baf8528e1bcf05f475034d9e5dd32875ed125f
+  released_at: '2025-04-30'
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
+  tags:
+  - open_weights
+  - reasoning
+  - dense

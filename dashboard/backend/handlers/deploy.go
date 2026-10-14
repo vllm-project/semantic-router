@@ -69,10 +69,20 @@ type DeployPreviewResponse struct {
 // DeployPreviewHandler returns the current config and the merged preview
 // so the frontend can show a side-by-side diff before confirming deploy.
 // POST /api/router/config/deploy/preview
-func DeployPreviewHandler(configPath string) http.HandlerFunc {
+func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if readonlyMode {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":   "readonly_mode",
+				"message": "Dashboard is in read-only mode. Deploy is disabled.",
+			})
 			return
 		}
 
@@ -307,8 +317,9 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
 	// Step 6: Propagate the new config to the managed runtime before returning.
-	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
-		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", err), http.StatusInternalServerError)
+	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+	if applyErr != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", applyErr), http.StatusInternalServerError)
 		return
 	}
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -335,6 +346,10 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		DSLSnapshot: req.DSL,
 	})
 
+	if restartMessage != "" {
+		writeRestartRequiredResponse(w, version, restartMessage)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",
@@ -396,6 +411,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 // Node-level merging makes the transport forward-compatible: a new signal or
 // projection is carried without adding another field-by-field merge branch.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
+	preserveBaseDecisionAdaptations(baseRoot, fragmentRoot)
 	fragmentRouting := mappingValueNode(fragmentRoot, "routing")
 	if mode == DeployModeReplace {
 		if fragmentRouting == nil {
@@ -570,8 +586,9 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
-		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
+	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+	if applyErr != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", applyErr), http.StatusInternalServerError)
 		return
 	}
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -595,6 +612,10 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 		DSLSnapshot: readArchivedDSL(configDir),
 	})
 
+	if restartMessage != "" {
+		writeRestartRequiredResponse(w, version, restartMessage)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",

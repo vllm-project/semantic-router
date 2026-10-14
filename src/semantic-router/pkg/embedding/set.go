@@ -13,6 +13,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
+// ErrModelNotPrepared reports a model the generation prepared no provider for:
+// none of its consumers asked for it.
+var ErrModelNotPrepared = errors.New("was not prepared for this generation")
+
 // Set is one generation's immutable snapshot of prepared embedding providers.
 // Views select dimensions/layers without loading or discovering models in requests.
 // Its owner closes it only after the generation's users drain.
@@ -42,7 +46,7 @@ func (s *Set) Get(model string, dimension, layer int) (Provider, error) {
 	}
 	provider, ok := s.providers[model]
 	if !ok {
-		return nil, fmt.Errorf("%w: embedding model %q was not prepared for this generation", binding.ErrCapability, model)
+		return nil, fmt.Errorf("%w: embedding model %q %w", binding.ErrCapability, model, ErrModelNotPrepared)
 	}
 	if dimension < 0 || dimension > math.MaxInt32 || layer < 0 || layer > math.MaxInt32 {
 		return nil, fmt.Errorf("%w: dimension and layer must fit nonnegative int32", binding.ErrCapability)
@@ -91,11 +95,10 @@ func (s *Set) Select(text string, quality, latency float32, dimension int) (stri
 	words := len(strings.Fields(text))
 	// Input budgets belong to the selected deployment's tokenizer and overflow
 	// policy; whitespace counts here only guide the existing model preference.
-	preferred := "qwen3"
+	order := []string{"qwen3", "mmbert"}
 	if (words <= 512 && quality <= 0.7 && latency > 0.7) || (words > 512 && words <= 2048) || (dimension > 0 && dimension < 768 && latency > 0.5) {
-		preferred = "gemma"
+		order = []string{"mmbert", "qwen3"}
 	}
-	order := []string{preferred, "mmbert", "gemma", "qwen3"}
 	for _, model := range order {
 		if s.Has(model) {
 			return model, nil

@@ -1,5 +1,7 @@
 # Native engine performance on ROCm (MI325X)
 
+> **Phase 1 record** (Decision 2.0, [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and its follow-ups). The Phases 2–4 records are the `decision1-*`, `vela1-*`, `vela2-*`, `embed-*`, `stores-*`, `router-latency-cpu*`, `router-latency-rocm*`, `rocm-router-image` and `removal-footprint*` files.
+
 The native engine against each released package's own runtime, on the
 same node and GPU type.
 
@@ -17,9 +19,9 @@ same node and GPU type.
 Benches (`tools/gpu_bench.py`; the released side
 `v2/release/runtime_bench.py`):
 
-- **Single request:** the first 400 typed-final prompts as single requests on
-  the exact profile; two untimed passes (graphs captured), then one timed
-  pass.
+- **Single request:** the first 400 typed-final prompts as single requests,
+  each alone ("exact" below); two untimed passes (graphs captured), then one
+  timed pass.
 - **Many questions:** the public request of `tools/many_questions.py` (one
   ~300-token ticket) at 16, 64 and 128 questions; p50 of 20 runs.
 - **Throughput:** 512 pre-rendered requests in waves of C concurrent requests
@@ -40,7 +42,7 @@ Benches (`tools/gpu_bench.py`; the released side
 ## Many questions about one input (ms, p50)
 
 "Shared" is the released runtime's `share_context=True` against the native
-`shared_context` profile; the two answer identically (parity record).
+runtime's shared context; the two answer identically (parity record).
 
 | Model | Questions | Exact, released | Exact, native | Shared, released | Shared, native |
 | --- | --- | --- | --- | --- | --- |
@@ -63,14 +65,14 @@ Benches (`tools/gpu_bench.py`; the released side
 | | 64 | 2,583.7 | 2,551.0 | 868.0 | 817.0 |
 | | 128 | 5,319.0 | 5,286.0 | 1,690.8 | 1,561.9 |
 
-- `shared_context` is 1.8–3.4× faster than exact at 128 questions.
+- Shared context is 1.8–3.4× faster than exact at 128 questions.
 - Native exact at 128 questions costs up to 2% over the released runtime on
   Nox and Lux: batches above 4,096 padded tokens run without graphs (graph cap
   below).
 
 ## Throughput (requests/s, single-question requests)
 
-| Model | Exact (any C) | `batching` C = 1 | C = 4 | C = 16 | C = 64 |
+| Model | Exact (any C) | Batched, C = 1 | C = 4 | C = 16 | C = 64 |
 | --- | --- | --- | --- | --- | --- |
 | Kai-0.6B | 234 | 154 | 402 | 681 | 837 |
 | Eos-0.8B | 197 | 138 | 371 | 606 | 721 |
@@ -81,8 +83,9 @@ Benches (`tools/gpu_bench.py`; the released side
 
 - Exact runs one request per forward, so concurrency does not raise its
   throughput.
-- `batching` coalesces the questions of concurrent requests: 3.6× (Kai) to
-  1.9× (Vega) at C = 64. At C = 1 it pays the 2 ms window.
+- Batching, the runtime's default now, coalesces the questions of concurrent
+  requests: 3.6× (Kai) to 1.9× (Vega) at C = 64. At C = 1 it pays the 2 ms
+  window.
 
 ## Graph cap
 

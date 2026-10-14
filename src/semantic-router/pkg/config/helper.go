@@ -10,11 +10,7 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-const (
-	DefaultAutoModelName    = "MoM"
-	LegacyAutoModelAlias    = "auto"
-	DefaultVSRAutoModelName = "vllm-sr/auto"
-)
+const DefaultEntrypointModel = "vllm-sr/auto"
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
@@ -77,38 +73,7 @@ func (c *RouterConfig) resolveModelConfigKey(modelName string) (string, bool) {
 	return "", false
 }
 
-// GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
-// Returns the configured AutoModelName if set, otherwise defaults to "MoM"
-// This is the primary model name that triggers automatic routing
-func (c *RouterConfig) GetEffectiveAutoModelName() string {
-	if c.AutoModelName != "" {
-		return c.AutoModelName
-	}
-	return DefaultAutoModelName
-}
-
-func DefaultAutoModelNames() []string {
-	return []string{DefaultVSRAutoModelName, LegacyAutoModelAlias, DefaultAutoModelName}
-}
-
-// EffectiveAutoModelNames returns all request model names that trigger
-// automatic routing. auto_model_names is an explicit allow-list; when omitted,
-// vLLM-SR keeps the new namespaced alias plus legacy auto/MoM compatibility.
-func (c *RouterConfig) EffectiveAutoModelNames() []string {
-	if c == nil {
-		return DefaultAutoModelNames()
-	}
-	if c.AutoModelNames != nil {
-		return normalizeAutoModelNames(c.AutoModelNames)
-	}
-	return normalizeAutoModelNames([]string{
-		DefaultVSRAutoModelName,
-		LegacyAutoModelAlias,
-		c.GetEffectiveAutoModelName(),
-	})
-}
-
-func normalizeAutoModelNames(names []string) []string {
+func normalizeEntrypointNames(names []string) []string {
 	seen := make(map[string]bool, len(names))
 	result := make([]string, 0, len(names))
 	for _, name := range names {
@@ -120,15 +85,6 @@ func normalizeAutoModelNames(names []string) []string {
 		result = append(result, trimmed)
 	}
 	return result
-}
-
-// IsAutoModelName checks if the given model name should trigger automatic model selection.
-func (c *RouterConfig) IsAutoModelName(modelName string) bool {
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	return slices.Contains(c.EffectiveAutoModelNames(), normalized)
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching
@@ -332,15 +288,19 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 	return true
 }
 
-// IsPIIClassifierEnabled checks if PII classification is enabled
+// IsPIIClassifierEnabled checks if PII classification is enabled. A local
+// model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	modelConfigured := c.PIIModel.ModelID != "" || c.PIIModel.Backend != nil
-	return c.PIIModel.Active() && modelConfigured && c.PIIMappingPath != ""
+	if c.PIIModel.Backend != nil {
+		return c.PIIModel.Active() && c.PIIMappingPath != ""
+	}
+	return c.PIIModel.Active() && c.PIIModel.ModelID != ""
 }
 
-// IsCategoryClassifierEnabled checks if category classification is enabled
+// IsCategoryClassifierEnabled checks if category classification is enabled. A
+// local model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && c.CategoryMappingPath != ""
+	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && (c.CategoryModel.Backend == nil || c.CategoryMappingPath != "")
 }
 
 // IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
@@ -353,13 +313,17 @@ func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
 	return c.PromptGuard
 }
 
-// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled
+// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled.
+// A local model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	if !c.PromptGuard.Enabled || c.PromptGuard.JailbreakMappingPath == "" {
+	if !c.PromptGuard.Enabled {
 		return false
 	}
 
 	if c.PromptGuard.Backend != nil {
+		if c.PromptGuard.JailbreakMappingPath == "" {
+			return false
+		}
 		backend := c.PromptGuard.Backend
 		contract := RemoteClassifierContractLabelDistribution
 		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
@@ -369,7 +333,6 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return err == nil
 	}
 
-	// For Candle: need model ID
 	return c.PromptGuard.ModelID != ""
 }
 

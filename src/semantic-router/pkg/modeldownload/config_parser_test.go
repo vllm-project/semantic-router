@@ -11,11 +11,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// The balance recipe's classifiers are runtime-served; the router downloads
+// only the embedding it runs itself.
 var expectedAMDModelSpecs = []string{
 	"models/Vela-1.0-Encoder-307M-Embedding",
-	"models/Vela-1.0-Encoder-307M-Domain",
-	"models/Vela-1.0-Encoder-307M-FactCheck",
-	"models/Vela-1.0-Encoder-307M-Feedback",
 }
 
 func TestExtractModelPaths(t *testing.T) {
@@ -36,27 +35,16 @@ func TestExtractModelPaths(t *testing.T) {
 			expected: []string{"models/mom-embedding-pro"},
 		},
 		{
-			name: "Extract GemmaModelPath",
-			config: &config.RouterConfig{
-				InlineModels: config.InlineModels{
-					EmbeddingModels: config.EmbeddingModels{
-						GemmaModelPath: "models/mom-embedding-flash",
-					},
-				},
-			},
-			expected: []string{"models/mom-embedding-flash"},
-		},
-		{
 			name: "Extract both embedding models",
 			config: &config.RouterConfig{
 				InlineModels: config.InlineModels{
 					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath: "models/mom-embedding-pro",
-						GemmaModelPath: "models/mom-embedding-flash",
+						Qwen3ModelPath:  "models/mom-embedding-pro",
+						MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
 					},
 				},
 			},
-			expected: []string{"models/mom-embedding-pro", "models/mom-embedding-flash"},
+			expected: []string{"models/mom-embedding-pro", "models/mmbert-embed-32k-2d-matryoshka"},
 		},
 		{
 			name: "Extract ModelID from classifier",
@@ -249,7 +237,6 @@ func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
 		MoMRegistry: map[string]string{
 			"models/mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
 			"models/mom-halugate-detector":                 "vllm-sr/mom-halugate-detector",
-			"models/mom-halugate-explainer":                "vllm-sr/mom-halugate-explainer",
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -259,9 +246,6 @@ func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
 				},
 				HallucinationModel: config.HallucinationModelConfig{
 					ModelID: "models/mom-halugate-detector",
-				},
-				NLIModel: config.NLIModelConfig{
-					ModelID: "models/mom-halugate-explainer",
 				},
 			},
 		},
@@ -548,8 +532,6 @@ global:
           use_cpu: false
         detector:
           use_cpu: false
-        explainer:
-          use_cpu: false
       feedback_detector:
         use_cpu: false
 `))
@@ -611,11 +593,14 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/Vela-1.0-Encoder-307M-Embedding",
-		"models/mom-embedding-light",
-		"models/Vela-1.0-Encoder-307M-Modality",
-	)
+	assertContainsAllModelSpecs(t, specs, "models/Vela-1.0-Encoder-307M-Embedding")
+	served := cfg.RuntimeServedModelPaths()
+	for _, spec := range specs {
+		if served[spec.LocalPath] && !spec.FilesOnly {
+			t.Fatalf("router downloads the runtime-served %s: %+v", spec.LocalPath, spec)
+		}
+	}
+	assertRuntimeServed(t, cfg, specs, config.Vela2SignalModel)
 }
 
 func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
@@ -679,37 +664,6 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
 			}
 		})
-	}
-}
-
-func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("failed to resolve RISC-V QEMU config path")
-	}
-	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "e2e", "config", "config.riscv-qemu.yaml"))
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", configPath, err)
-	}
-	cfg, err := config.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes() error = %v", err)
-	}
-	if !cfg.IsCategoryClassifierEnabled() {
-		t.Fatal("RISC-V QEMU config must enable the Vela Domain classifier")
-	}
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 1 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
-	}
-	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
-		specs[0].RepoID != "vllm-sr/Vela-1.0-Encoder-307M-Domain" ||
-		specs[0].Revision == "" {
-		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
 	}
 }
 

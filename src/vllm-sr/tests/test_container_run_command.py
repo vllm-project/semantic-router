@@ -1,3 +1,4 @@
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,6 +9,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli import container_run_command  # noqa: E402
+
+_DEFAULT_BRIDGE_PROBE = container_run_command._docker_default_bridge_available
 
 
 def test_append_env_vars_hides_inherited_secret_values():
@@ -88,6 +91,86 @@ def test_append_host_gateway_for_podman(monkeypatch):
     cmd = []
     container_run_command.append_host_gateway(cmd, "podman")
     assert cmd == ["--add-host=host.docker.internal:host-gateway"]
+
+
+@pytest.mark.parametrize("runtime", ["docker", "podman"])
+def test_append_host_gateway_uses_explicit_ip_override(monkeypatch, runtime):
+    monkeypatch.setenv("VLLM_SR_HOST_GATEWAY_IP", " 10.0.0.9 ")
+    monkeypatch.setattr(
+        container_run_command,
+        "_docker_default_bridge_available",
+        lambda: pytest.fail("an explicit address must not probe the daemon"),
+    )
+    cmd = []
+    container_run_command.append_host_gateway(cmd, runtime)
+    assert cmd == ["--add-host=host.docker.internal:10.0.0.9"]
+
+
+def test_append_host_gateway_rejects_non_ip_override(monkeypatch):
+    monkeypatch.setenv("VLLM_SR_HOST_GATEWAY_IP", "host-gateway.example")
+    with pytest.raises(ValueError, match="VLLM_SR_HOST_GATEWAY_IP"):
+        container_run_command.append_host_gateway([], "docker")
+
+
+def test_append_host_gateway_skips_without_docker_default_bridge(monkeypatch):
+    monkeypatch.setattr(
+        container_run_command, "_docker_default_bridge_available", lambda: False
+    )
+    warnings = []
+    monkeypatch.setattr(container_run_command.log, "warning", warnings.append)
+    cmd = []
+    container_run_command.append_host_gateway(cmd, "docker")
+    assert cmd == []
+    assert "VLLM_SR_HOST_GATEWAY_IP" in warnings[0]
+
+
+def test_append_host_gateway_ignores_docker_bridge_for_podman(monkeypatch):
+    monkeypatch.setattr(
+        container_run_command, "_docker_default_bridge_available", lambda: False
+    )
+    cmd = []
+    container_run_command.append_host_gateway(cmd, "podman")
+    assert cmd == ["--add-host=host.docker.internal:host-gateway"]
+
+
+def test_append_host_gateway_noop_for_other_runtimes():
+    cmd = []
+    container_run_command.append_host_gateway(cmd, "nerdctl")
+    assert cmd == []
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        (subprocess.CompletedProcess([], 0, "bridge\n", ""), True),
+        (
+            subprocess.CompletedProcess(
+                [], 1, "", "Error response from daemon: network bridge not found"
+            ),
+            False,
+        ),
+        (
+            subprocess.CompletedProcess(
+                [], 1, "", "Cannot connect to the Docker daemon"
+            ),
+            True,
+        ),
+        (OSError("docker: not found"), True),
+        (subprocess.TimeoutExpired(["docker"], 10), True),
+    ],
+)
+def test_docker_default_bridge_probe(monkeypatch, result, expected):
+    def fake_run(*_args, **_kwargs):
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(container_run_command.subprocess, "run", fake_run)
+    _DEFAULT_BRIDGE_PROBE.cache_clear()
+    try:
+        assert _DEFAULT_BRIDGE_PROBE() is expected
+    finally:
+        _DEFAULT_BRIDGE_PROBE.cache_clear()
 
 
 def test_append_nvidia_gpu_passthrough_uses_gpus_flag_for_docker(monkeypatch):

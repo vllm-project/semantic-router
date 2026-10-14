@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -30,9 +30,7 @@ var (
 func initInputLengthDomain(b *testing.B) {
 	b.Helper()
 	inputLengthOnce.Do(func() {
-		spec := benchmarkModel(b, "domain", "label_distribution.v1")
-		spec.Binding.Deployment += "-input-length"
-		spec.Deployment.Input = inputLengthBudget
+		spec := benchmarkDeployment(b, "domain", "label_distribution.v1", "perf-domain-input-length", inputLengthBudget)
 		if inputLengthDomain, inputLengthErr = benchmarkRuntime.Sequence(context.Background(), spec); inputLengthErr != nil {
 			return
 		}
@@ -49,10 +47,7 @@ func initInputLengthDomain(b *testing.B) {
 		inputLengthUnitTokens, inputLengthTemplateTokens = two-one, 2*one-two
 	})
 	if inputLengthErr != nil {
-		if missingBenchModels(inputLengthErr) {
-			b.Skipf("Failed to initialize domain classifier: %v", inputLengthErr)
-		}
-		b.Fatalf("prepare owned Vela Domain with a %d-token budget: %v", inputLengthBudget.MaxTokens, inputLengthErr)
+		b.Fatalf("prepare Vela Domain with a %d-token budget: %v", inputLengthBudget.MaxTokens, inputLengthErr)
 	}
 }
 
@@ -72,8 +67,9 @@ func recordInputLengthProtocol(b *testing.B) {
 	benchmarkModelMu.Lock()
 	defer benchmarkModelMu.Unlock()
 	identity := benchmarkIdentities[b.Name()]
-	identity.Protocol = fmt.Sprintf("owned-native-v1;max_tokens=%d;overflow=%s;embedding=full-layer/full-dimension;input=repeated-fixture",
-		inputLengthBudget.MaxTokens, inputLengthBudget.Overflow)
+	card := benchmarkCards["domain"]
+	identity.Protocol = fmt.Sprintf("model-runtime-v1;engine=%s;profile=%s;max_tokens=%d;overflow=%s;embedding=full-layer/full-dimension;input=repeated-fixture",
+		card.Engine, card.Profile, inputLengthBudget.MaxTokens, inputLengthBudget.Overflow)
 	benchmarkIdentities[b.Name()] = identity
 }
 

@@ -18,11 +18,10 @@ title: 基准测试
 
 ## 组件微基准 {#component-microbenchmarks}
 
-`perf/` 包包含分类、决策评估、响应缓存操作、ExtProc 处理和 Looper 家族路径的 Go 基准。它们不需要运行中的 Router，但依赖模型的套件需要原生库和基准模型文件。
+`perf/` 包包含分类、决策评估、响应缓存操作、ExtProc 处理和 Looper 家族路径的 Go 基准。它们不需要运行中的 Router。分类和缓存基准通过模型运行时使用目录中固定版本的 Vela 模型，模型在首次启动时下载；先安装一次模型运行时：
 
 ```bash
-make download-models-perf
-make rust
+make model-runtime-install
 make perf-bench-quick
 ```
 
@@ -49,14 +48,12 @@ make benchmark-cache-comparison
 make benchmark-hybrid-vs-milvus
 make benchmark-redis
 make benchmark-valkey
-
-# Native inference implementations
-make benchmark-openvino-classifier
-make benchmark-openvino-embedding
-make benchmark-openvino-vs-candle
 ```
 
-不要把存储或绑定比较解释为端到端路由结果。
+模型延迟和吞吐量由模型运行时的基准按模型测量，记录位于
+[`src/model-runtime/docs/records`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)。
+
+不要把存储或模型比较解释为端到端路由结果。
 网络位置、预热、数据集形状、模型文件和主机争用都会改变结果。
 
 ## 报告结果 {#reporting-results}

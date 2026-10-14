@@ -209,7 +209,7 @@ def test_parse_user_config_rejects_deprecated_provider_model_loras(tmp_path: Pat
         raise AssertionError("expected ConfigParseError")
 
 
-def test_migrate_config_data_preserves_hallucination_endpoint_backend():
+def test_migrate_config_data_turns_the_hallucination_endpoint_into_a_binding():
     legacy = {
         "version": "v0.3",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -241,12 +241,23 @@ def test_migrate_config_data_preserves_hallucination_endpoint_backend():
 
     migrated = migrate_config_data(legacy)
 
-    detector = migrated["global"]["model_catalog"]["modules"][
-        "hallucination_mitigation"
-    ]["detector"]
-    assert detector["backend"] == "endpoint"
-    assert detector["endpoint"] == "http://127.0.0.1:8077/v1"
-    assert detector["include_explanation"] is True
-    assert detector["model_id"] == "KRLabsOrg/lettucedect-v2-qwen-2b"
-    # Legacy detectors are given a stable model_ref during migration.
-    assert detector["model_ref"] == "hallucination_detector"
+    catalog = migrated["global"]["model_catalog"]
+    # Legacy detectors are given a stable model_ref during migration, and the
+    # endpoint shorthand becomes the detector's http_chat binding.
+    assert catalog["modules"]["hallucination_mitigation"]["detector"] == {
+        "include_explanation": True,
+        "model_ref": "hallucination_detector",
+    }
+    assert catalog["external"][0]["llm_endpoint"] == {
+        "address": "127.0.0.1",
+        "port": 8077,
+        "protocol": "http",
+    }
+    assert (
+        catalog["external"][0]["llm_model_name"] == "KRLabsOrg/lettucedect-v2-qwen-2b"
+    )
+    assert catalog["bindings"]["hallucination_detector"] == {
+        "deployment": "hallucination-detector",
+        "contract": "token_spans.v1",
+        "adapter": "http_chat",
+    }

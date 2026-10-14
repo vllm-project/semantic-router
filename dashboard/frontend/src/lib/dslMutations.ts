@@ -11,6 +11,8 @@
 
 import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
+import { keepRouteSettingsOutsideForm } from './dslRouteBlock'
+
 // ---------- Block finding ----------
 
 interface BlockSpan {
@@ -36,13 +38,12 @@ export function findBlock(
     pattern = `^MODEL\\s+${dslNamePattern(name!)}\\s*\\{`
   } else if (construct === 'SIGNAL' && subType) {
     pattern = name
-      ? `^SIGNAL\\s+${escRe(subType)}\\s+${escRe(name)}\\s*\\{`
+      ? `^SIGNAL\\s+${escRe(subType)}\\s+${dslNamePattern(name)}\\s*\\{`
       : `^SIGNAL\\s+${escRe(subType)}\\s+\\S+\\s*\\{`
   } else if (construct === 'ROUTE') {
-    // ROUTE name or ROUTE name (description = "...")
-    pattern = `^ROUTE\\s+${escRe(name!)}\\s*(?:\\([^)]*\\))?\\s*\\{`
+    pattern = dslHeaderPattern('ROUTE', name!)
   } else if (construct === 'PLUGIN' && subType) {
-    pattern = `^PLUGIN\\s+${escRe(name!)}\\s+${escRe(subType)}\\s*\\{`
+    pattern = `^PLUGIN\\s+${dslNamePattern(name!)}\\s+${escRe(subType)}\\s*\\{`
   } else if (construct === 'PROJECTION' && subType) {
     pattern = `^PROJECTION\\s+${escRe(subType)}\\s+${dslNamePattern(name!)}\\s*\\{`
   } else {
@@ -63,7 +64,8 @@ export function findBlock(
   let blockEnd = blockStart
   let foundOpenBrace = false
 
-  for (let i = blockStart; i < src.length; i++) {
+  // Start at the header's own brace: header strings may contain braces.
+  for (let i = match.index + match[0].length - 1; i < src.length; i++) {
     if (src[i] === '{') {
       braceCount++
       foundOpenBrace = true
@@ -249,7 +251,7 @@ export function updateSignal(
   if (!block) return src
 
   const body = serializeFields(fields)
-  const newBlock = `SIGNAL ${signalType} ${name} {\n${body}\n}\n`
+  const newBlock = `SIGNAL ${signalType} ${formatDslName(name)} {\n${body}\n}\n`
 
   return src.slice(0, block.start) + newBlock + src.slice(block.end)
 }
@@ -265,7 +267,7 @@ export function addSignal(
   fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields)
-  const newBlock = `SIGNAL ${signalType} ${name} {\n${body}\n}\n`
+  const newBlock = `SIGNAL ${signalType} ${formatDslName(name)} {\n${body}\n}\n`
 
   // Find last SIGNAL block
   const signalPattern = /^SIGNAL\s+\S+\s+\S+\s*\{/gm
@@ -414,7 +416,7 @@ export function updatePlugin(
   if (!block) return src
 
   const body = serializeFields(fields)
-  const newBlock = `PLUGIN ${name} ${pluginType} {\n${body}\n}\n`
+  const newBlock = `PLUGIN ${formatDslName(name)} ${pluginType} {\n${body}\n}\n`
   return src.slice(0, block.start) + newBlock + src.slice(block.end)
 }
 
@@ -428,7 +430,7 @@ export function addPlugin(
   fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields)
-  const newBlock = `PLUGIN ${name} ${pluginType} {\n${body}\n}\n`
+  const newBlock = `PLUGIN ${formatDslName(name)} ${pluginType} {\n${body}\n}\n`
 
   // Find insertion point — after last PLUGIN or after last SIGNAL
   const pluginPattern = /^PLUGIN\s+\S+\s+\S+\s*\{/gm
@@ -489,6 +491,7 @@ export interface RouteModelInput {
   model: string
   reasoning?: boolean
   effort?: string
+  mode?: string
   lora?: string
   paramSize?: string
   weight?: number
@@ -531,6 +534,7 @@ function serializeRouteBody(input: RouteInput): string {
   if (input.models.length > 0) {
     const modelParts = input.models.map((m) => {
       const attrs: string[] = []
+      if (m.mode) attrs.push(`mode = "${m.mode}"`)
       if (m.reasoning !== undefined) attrs.push(`reasoning = ${m.reasoning}`)
       if (m.effort) attrs.push(`effort = ${quoteDSLString(m.effort)}`)
       if (m.lora) attrs.push(`lora = ${quoteDSLString(m.lora)}`)
@@ -565,11 +569,11 @@ function serializeRouteBody(input: RouteInput): string {
   for (const p of input.plugins) {
     if (p.fields && Object.keys(p.fields).length > 0) {
       const pluginFields = serializeFields(p.fields, '    ')
-      lines.push(`  PLUGIN ${p.name} {`)
+      lines.push(`  PLUGIN ${formatDslName(p.name)} {`)
       lines.push(pluginFields)
       lines.push(`  }`)
     } else {
-      lines.push(`  PLUGIN ${p.name}`)
+      lines.push(`  PLUGIN ${formatDslName(p.name)}`)
     }
   }
 
@@ -589,8 +593,9 @@ export function updateRoute(
 
   const descPart = input.description ? ` (description = ${quoteDSLString(input.description)})` : ''
   const body = serializeRouteBody(input)
-  const newBlock = `ROUTE ${name}${descPart} {\n${body}\n}\n`
-  return src.slice(0, block.start) + newBlock + src.slice(block.end)
+  const newBlock = `ROUTE ${formatDslName(name)}${descPart} {\n${body}\n}\n`
+  const savedBlock = keepRouteSettingsOutsideForm(block.body, newBlock)
+  return src.slice(0, block.start) + savedBlock + src.slice(block.end)
 }
 
 /**
@@ -604,7 +609,7 @@ export function addRoute(
 ): string {
   const descPart = input.description ? ` (description = ${quoteDSLString(input.description)})` : ''
   const body = serializeRouteBody(input)
-  const newBlock = `ROUTE ${name}${descPart} {\n${body}\n}\n`
+  const newBlock = `ROUTE ${formatDslName(name)}${descPart} {\n${body}\n}\n`
 
   // Find last ROUTE block
   const routePattern = /^ROUTE\s+\S+/gm
@@ -650,8 +655,11 @@ export function serializeBoolExpr(expr: BoolExprNode | null): string {
       return `${serializeBoolExpr(expr.left)} AND ${serializeBoolExpr(expr.right)}`
     case 'or':
       return `(${serializeBoolExpr(expr.left)} OR ${serializeBoolExpr(expr.right)})`
-    case 'not':
-      return `NOT ${serializeBoolExpr(expr.expr)}`
+    case 'not': {
+      const operand = serializeBoolExpr(expr.expr)
+      // NOT binds tighter than AND, so an AND operand keeps its parentheses.
+      return expr.expr.type === 'and' ? `NOT (${operand})` : `NOT ${operand}`
+    }
     default:
       return ''
   }
@@ -691,8 +699,16 @@ function dslNamePattern(name: string): string {
   return `(?:${escRe(name)}|${escRe(quoteDSLString(name))})`
 }
 
-function formatDslName(name: string): string {
-  return /^[_A-Za-z][\w]*$/.test(name) ? name : quoteDSLString(name)
+// Optional header options such as (description = "..."); strings may contain parentheses.
+const HEADER_OPTIONS = String.raw`(?:\((?:[^()"]|"(?:[^"\\]|\\.)*")*\))?`
+
+export function dslHeaderPattern(keyword: 'ROUTE' | 'RECIPE', name: string): string {
+  return `^${keyword}\\s+${dslNamePattern(name)}\\s*${HEADER_OPTIONS}\\s*\\{`
+}
+
+// Bare names must match the DSL lexer's Ident token; anything else is quoted.
+export function formatDslName(name: string): string {
+  return /^[A-Za-z_][\w\-./]*$/.test(name) ? name : quoteDSLString(name)
 }
 
 function findBlockFromIndex(src: string, startIndex: number): BlockSpan | null {
