@@ -20,7 +20,11 @@ from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
 from cli.commands.runtime_help import SERVE_HELP
-from cli.commands.runtime_mode_config import MODE_HELP, validate_model_options
+from cli.commands.runtime_mode_config import (
+    MODE_HELP,
+    removed_runtime_profile,
+    validate_model_options,
+)
 from cli.commands.runtime_serve_config import (
     _prepare_effective_serve_config,
 )
@@ -575,13 +579,54 @@ def _execute_serve(
     help="Docker host GPU indices, e.g. 0 or 0,1. One index shares a GPU across replicas; otherwise use one per replica. Existing visibility masks are respected, not changed.",
 )
 @click.option(
-    "--runtime-profile",
+    "--max-num-seqs",
+    type=click.IntRange(min=1),
     default=None,
-    metavar="PROFILE",
     help=(
-        "Model runtime numerics profile (default exact; "
-        "vllm-srun plugins lists the installed ones)."
+        "Most rows one model forward holds, across requests: one per question of "
+        "a decision request, one per input or window otherwise; 1 runs every row "
+        "alone. Unset, the runtime picks it by the device (256 on GPUs with 160 GB "
+        "or more, fewer on smaller ones, 8192 on the CPU)."
     ),
+)
+@click.option(
+    "--max-num-batched-tokens",
+    type=click.IntRange(min=8),
+    default=None,
+    help=(
+        "Tokens one model forward may hold: the sum of its rows for models that "
+        "pack merged rows, else its rows times its longest row. Unset, the runtime "
+        "picks it by the device and a short startup calibration (at most 32768 on "
+        "GPUs with 160 GB or more, 65536 on the CPU)."
+    ),
+)
+@click.option(
+    "--batch-window-ms",
+    type=click.FloatRange(min=0, max=1000),
+    default=None,
+    help="How long the model runtime waits after the first request to collect more (runtime default 2.0).",
+)
+@click.option(
+    "--dtype",
+    type=click.Choice(["auto", "float32", "bfloat16", "float16"]),
+    default=None,
+    help="Precision the model computes in; auto (the runtime default) is the one it was published in.",
+)
+@click.option(
+    "--enable-shared-context/--no-enable-shared-context",
+    default=None,
+    help=(
+        "Compute the shared state of a multi-question decision request once "
+        "(runtime default: on where the model family's records show no accuracy "
+        "loss, Decision 2.0)."
+    ),
+)
+@click.option(
+    "--runtime-profile",
+    hidden=True,
+    expose_value=False,
+    callback=removed_runtime_profile,
+    is_eager=True,
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
@@ -616,15 +661,25 @@ def serve(
     revision: str | None,
     data_parallel_size: int | None,
     device_ids: str | None,
-    runtime_profile: str | None,
+    max_num_seqs: int | None,
+    max_num_batched_tokens: int | None,
+    batch_window_ms: float | None,
+    dtype: str | None,
+    enable_shared_context: bool | None,
 ) -> None:
     ctx = click.get_current_context()
     model_options = validate_model_options(
         model=model,
         revision=revision,
-        runtime_profile=runtime_profile,
         data_parallel_size=data_parallel_size,
         device_ids=device_ids,
+        engine_args={
+            "max_num_seqs": max_num_seqs,
+            "max_num_batched_tokens": max_num_batched_tokens,
+            "batch_window_ms": batch_window_ms,
+            "dtype": dtype,
+            "enable_shared_context": enable_shared_context,
+        },
     )
     resolved_target = resolve_target(target)
     reject_misplaced_options(ctx, resolved_target)

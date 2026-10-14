@@ -3,6 +3,7 @@ import os
 import pytest
 from vllm_srun import cli
 from vllm_srun.cli import build_parser, config_from_args, main
+from vllm_srun.config import EngineArgs
 from vllm_srun.plugins import registry
 
 
@@ -17,8 +18,15 @@ def test_serve_arguments_map_to_the_config():
             "rocm:1",
             "--uds",
             "/tmp/x.sock",
-            "--profile",
-            "shared_context",
+            "--max-num-seqs",
+            "8",
+            "--max-num-batched-tokens",
+            "4096",
+            "--batch-window-ms",
+            "0.5",
+            "--dtype",
+            "bfloat16",
+            "--no-enable-shared-context",
             "--accept-licence",
             "cc-by-4.0",
         ]
@@ -29,24 +37,78 @@ def test_serve_arguments_map_to_the_config():
         "vllm-sr/Decision-2.0-Kai-0.6B",
         "cd49ea38",
     )
-    assert model.device == "rocm:1" and model.profile == "shared_context"
+    assert model.device == "rocm:1"
     assert config.uds == "/tmp/x.sock" and config.host == "127.0.0.1"
     assert config.accept_licences == ("cc-by-4.0",)
-
-
-def test_profiles_are_any_registered_profile_plugin(monkeypatch):
-    with pytest.raises(SystemExit, match="unknown profile 'turbo'"):
-        config_from_args(
-            build_parser().parse_args(["serve", "m", "--profile", "turbo"])
-        )
-    names = registry.names
-    monkeypatch.setattr(
-        registry,
-        "names",
-        lambda kind: [*names(kind), "turbo"] if kind == "profiles" else names(kind),
+    expected = EngineArgs(
+        max_num_seqs=8,
+        max_num_batched_tokens=4096,
+        batch_window_ms=0.5,
+        dtype="bfloat16",
+        enable_shared_context=False,
     )
-    args = build_parser().parse_args(["serve", "m", "--profile", "turbo"])
-    assert config_from_args(args).models[0].profile == "turbo"
+    assert config.engine_args == expected
+    assert model.engine_args(config.engine_args) == expected
+
+
+def test_engine_arguments_default_to_merging_requests():
+    config = config_from_args(build_parser().parse_args(["serve", "m"]))
+    # The batch limits are left to the runtime, which picks them by the device.
+    assert config.engine_args == EngineArgs(
+        max_num_seqs=None,
+        max_num_batched_tokens=None,
+        batch_window_ms=2.0,
+        dtype="auto",
+        enable_shared_context=None,
+    )
+    assert config.media_workers is None
+    assert (
+        config_from_args(
+            build_parser().parse_args(["serve", "m", "--media-workers", "0"])
+        ).media_workers
+        == 0
+    )
+    assert config_from_args(
+        build_parser().parse_args(["serve", "m", "--enable-shared-context"])
+    ).engine_args.enable_shared_context
+
+
+@pytest.mark.parametrize(
+    "argv, message",
+    [
+        (
+            ["--profile", "exact"],
+            "--profile was removed; batching is on by default; set --max-num-seqs, "
+            "--max-num-batched-tokens, --batch-window-ms, --enable-shared-context or "
+            "--dtype instead",
+        ),
+        (["--profile"], "--profile was removed"),
+        (
+            ["--max-batch-tokens", "1024"],
+            "--max-batch-tokens was removed; it is --max-num-batched-tokens",
+        ),
+    ],
+)
+def test_removed_flags_name_their_replacements(capsys, argv, message):
+    with pytest.raises(SystemExit) as exit_:
+        build_parser().parse_args(["serve", "m", *argv])
+    assert exit_.value.code == 2 and message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "argv, message",
+    [
+        (["--max-num-seqs", "0"], "--max-num-seqs must be at least 1"),
+        (
+            ["--max-num-batched-tokens", "4"],
+            "--max-num-batched-tokens must be at least 8",
+        ),
+        (["--batch-window-ms", "-1"], "--batch-window-ms must be between 0 and 1000"),
+    ],
+)
+def test_invalid_engine_arguments_are_refused(argv, message):
+    with pytest.raises(SystemExit, match=message):
+        config_from_args(build_parser().parse_args(["serve", "m", *argv]))
 
 
 def test_models_and_fixture_commands(capsys, tmp_path):
@@ -131,14 +193,20 @@ def test_a_models_file_lists_each_model(tmp_path):
     path.write_text(
         "models:\n"
         "  - {model: vllm-sr/Decision-2.0-Kai-0.6B, name: kai, device: cpu}\n"
-        "  - {model: /models/pii, name: pii, profile: exact, options: {head: default}}\n"
+        "  - {model: /models/pii, name: pii, max_num_seqs: 1, dtype: float32,"
+        " options: {head: default}}\n"
     )
     config = config_from_args(
-        build_parser().parse_args(["serve", "--models", str(path)])
+        build_parser().parse_args(
+            ["serve", "--models", str(path), "--batch-window-ms", "1"]
+        )
     )
     assert [model.name for model in config.models] == ["kai", "pii"]
     assert config.models[1].options == {"head": "default"}
     assert config.served_models() == config.models
+    kai, pii = (model.engine_args(config.engine_args) for model in config.models)
+    assert (kai.max_num_seqs, kai.batch_window_ms, kai.dtype) == (None, 1.0, "auto")
+    assert (pii.max_num_seqs, pii.batch_window_ms, pii.dtype) == (1, 1.0, "float32")
 
 
 @pytest.mark.parametrize(
@@ -148,12 +216,23 @@ def test_a_models_file_lists_each_model(tmp_path):
         ("models:\n  - {name: x}\n", "model"),
         ("models:\n  - {model: a, colour: red}\n", "unknown fields"),
         ("models:\n  - {model: a, name: x}\n  - {model: b, name: x}\n", "duplicate"),
+        (
+            "models:\n  - {model: a, max_num_seqs: 0}\n",
+            "max_num_seqs must be at least 1",
+        ),
+        ("models:\n  - {model: a, dtype: half}\n", "dtype must be one of"),
+        (
+            "models:\n  - {model: a}\n  - {model: b, profile: exact}\n",
+            r"models\[1\]\.profile was removed; batching is on by default; set "
+            "max_num_seqs, max_num_batched_tokens, batch_window_ms, "
+            "enable_shared_context or dtype instead",
+        ),
     ],
 )
 def test_malformed_models_files_are_refused(tmp_path, content, message):
     path = tmp_path / "models.yaml"
     path.write_text(content)
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(SystemExit, match=message):
         config_from_args(build_parser().parse_args(["serve", "--models", str(path)]))
 
 

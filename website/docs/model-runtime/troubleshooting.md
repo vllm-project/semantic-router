@@ -277,8 +277,10 @@ not finish its safety scan within it.
   because every thread waits for the slowest one. A process that uses a ROCm
   GPU can keep one CPU core busy even while idle, and so can an LLM server on
   the same host: give the CPU models cores of their own.
-- Decision models on a GPU can use `shared_context` or `batching`; see
-  [Profiles](./profiles.md).
+- Concurrent requests already share forwards. For many questions about one
+  input, turn on `enable_shared_context` where it is off; to trade throughput
+  for latency, lower `batch_window_ms` or `max_num_seqs`. See
+  [Engine arguments](./engine-args.md).
 
 ## FAQ
 

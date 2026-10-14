@@ -105,6 +105,16 @@ class GPUAccelerator(Accelerator):
             kernels.register(
                 Kernel("chunk_gated_delta_rule", _wrap_delta(delta), "fla", exact=True)
             )
+        varlen = _optional("torch.nn.attention.varlen", "varlen_attn")
+        if varlen is not None:
+            kernels.register(
+                Kernel(
+                    "varlen_attention",
+                    _wrap_varlen(varlen),
+                    "torch-varlen-attention",
+                    exact=False,
+                )
+            )
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
@@ -156,6 +166,26 @@ def _wrap_conv(fn: Any) -> Any:
         return fn(hidden_states, weight, bias=bias, activation=activation)
 
     return conv
+
+
+def _wrap_varlen(fn: Any) -> Any:
+    """PyTorch's variable-length flash attention over packed rows, non-causal, keys with fewer heads in-kernel."""
+
+    def attend(query, key, value, packed, *, scale, groups):
+        cu = packed.cu_seqlens_int32
+        return fn(
+            query,
+            key,
+            value,
+            cu,
+            cu,
+            packed.max_length,
+            packed.max_length,
+            scale=scale,
+            enable_gqa=groups > 1,
+        )
+
+    return attend
 
 
 def _wrap_delta(fn: Any) -> Any:
