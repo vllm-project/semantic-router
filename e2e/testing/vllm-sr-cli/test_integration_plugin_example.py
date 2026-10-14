@@ -84,6 +84,13 @@ def _with_option(arguments: list[str], name: str, value: str) -> list[str]:
     return [*arguments[: at + 1], value, *arguments[at + 2 :]]
 
 
+def _max_num_seqs(arguments: list[str]) -> int:
+    """The rows per forward the command asks for, or the runtime's default."""
+    if "--max-num-seqs" in arguments:
+        return int(_option(arguments, "--max-num-seqs"))
+    return 8192
+
+
 class TestPluginExample(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -184,15 +191,14 @@ class TestPluginExample(unittest.TestCase):
         self.assertEqual(status, HTTP_OK, response)
         self.assertEqual([result["label"] for result in response["results"]], expected)
 
-    def test_the_example_serves_on_its_own_accelerator_and_profile(self):
+    def test_the_example_serves_on_its_own_accelerator_with_engine_args(self):
         (arguments,) = [
             arguments
             for arguments in _serve_commands("vllm-srun serve")
-            if "--profile" in arguments
+            if "--max-num-seqs" in arguments
         ]
-        self._assert_serves_on_its_own_accelerator_and_profile(
-            "vllm-srun serve", arguments, "--profile"
-        )
+        runtime = self._serve(arguments)
+        self._assert_runtime_answers(runtime.base, arguments)
 
     def test_the_guides_container_serves_the_installed_plugin(self):
         (arguments,) = _serve_commands("docker run")
@@ -237,17 +243,9 @@ class TestPluginExample(unittest.TestCase):
             self.fail(
                 f"plugin container did not become ready: {logs.stdout}{logs.stderr}"
             )
-        self._assert_runtime_answers(base, arguments, "--profile")
+        self._assert_runtime_answers(base, arguments)
 
-    def _assert_serves_on_its_own_accelerator_and_profile(
-        self, command: str, arguments: list[str], profile_option: str
-    ):
-        runtime = self._serve(arguments, command)
-        self._assert_runtime_answers(runtime.base, arguments, profile_option)
-
-    def _assert_runtime_answers(
-        self, base: str, arguments: list[str], profile_option: str
-    ):
+    def _assert_runtime_answers(self, base: str, arguments: list[str]):
         prose = " ".join(GUIDE.read_text(encoding="utf-8").split())
         expected = list(OUTCOME.search(prose).groups())
 
@@ -255,11 +253,11 @@ class TestPluginExample(unittest.TestCase):
         self.assertEqual(status, HTTP_OK, models)
         (card,) = models["data"]
         self.assertEqual(
-            (card["accelerator"], card["device"], card["profile"]),
+            (card["accelerator"], card["device"], card["engine_args"]["max_num_seqs"]),
             (
                 _option(arguments, "--device"),
                 _option(arguments, "--device"),
-                _option(arguments, profile_option),
+                _max_num_seqs(arguments),
             ),
         )
         status, response = call(
