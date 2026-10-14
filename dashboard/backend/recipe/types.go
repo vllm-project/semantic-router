@@ -156,6 +156,7 @@ type DeactivateResult struct {
 }
 
 type ExpectedAssertions struct {
+	SignalErrors     map[string]string            `json:"signal_errors,omitempty"`
 	SignalValues     map[string]SignalValueBounds `json:"signal_values,omitempty"`
 	Decision         string                       `json:"decision"`
 	Recipe           string                       `json:"recipe,omitempty"`
@@ -295,6 +296,7 @@ type RequestModelResolver interface {
 }
 
 type ActualOutcome struct {
+	SignalErrors      map[string]string   `json:"signal_errors,omitempty"`
 	SignalValues      map[string]any      `json:"signal_values,omitempty"`
 	Decision          string              `json:"decision"`
 	Model             string              `json:"model,omitempty"`
@@ -311,6 +313,7 @@ type ActualOutcome struct {
 }
 
 type ValidationChecks struct {
+	SignalErrors bool `json:"signal_errors"`
 	SignalValues bool `json:"signal_values"`
 	Decision     bool `json:"decision"`
 	Model        bool `json:"model"`

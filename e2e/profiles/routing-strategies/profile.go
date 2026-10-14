@@ -9,7 +9,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -86,6 +85,7 @@ func (p *Profile) GetTestCases() []string {
 		"entropy-routing",
 		"routing-fallback",
 		"decision-scoped-multi-factor",
+		"decision-scoped-random",
 		"metadata-routing",
 		"input-modality-routing",
 	}

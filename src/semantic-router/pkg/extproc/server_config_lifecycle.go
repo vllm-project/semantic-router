@@ -57,7 +57,7 @@ func (s *Server) configManager() *configsnapshot.Manager {
 }
 
 func (s *Server) newConfigManager(history *configsnapshot.History, parts ...configsnapshot.PartBuilder) *configsnapshot.Manager {
-	opts := configsnapshot.Options{Runtime: routerRuntime{s}, History: history, Parts: parts}
+	opts := configsnapshot.Options{Runtime: routerRuntime{s}, History: history, Parts: append([]configsnapshot.PartBuilder{frontendModelPart()}, parts...)}
 	if s.runtime != nil {
 		opts.Reporter = s.runtime
 	}
@@ -156,6 +156,9 @@ func (r routerRuntime) Validate(_ context.Context, c *configsnapshot.Candidate) 
 		return configsnapshot.Reject(configsnapshot.StageValidate, configsnapshot.CodeShuttingDown, errServerShuttingDown)
 	}
 	candidate := c.Snapshot().Config()
+	if !candidate.RoutingEnabled() {
+		return c.Current()
+	}
 	if err := config.ValidateRoutingPreviewReload(resolveServerConfig(s), candidate); err != nil {
 		return configsnapshot.Reject(configsnapshot.StageValidate, configsnapshot.CodeRestartRequired, err)
 	}
@@ -175,7 +178,7 @@ func (r routerRuntime) Warm(ctx context.Context, c *configsnapshot.Candidate) (c
 	candidate := c.Snapshot().Config()
 	// The Kubernetes source prepares models before it hands a candidate over,
 	// reporting startup progress while it does.
-	if c.Snapshot().Origin().Source != configsnapshot.SourceKubernetes {
+	if candidate.RoutingEnabled() && c.Snapshot().Origin().Source != configsnapshot.SourceKubernetes {
 		c.Step("model_download")
 		if err := ensureReloadConfigModels(candidate); err != nil {
 			return nil, configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeModelUnavailable,
@@ -210,6 +213,9 @@ func (r routerRuntime) Warm(ctx context.Context, c *configsnapshot.Candidate) (c
 // router shares its signal runtime, so classifiers, embeddings and model
 // runtime deployments are not built again.
 func (s *Server) buildCandidateRouter(c *configsnapshot.Candidate) (*OpenAIRouter, error) {
+	if !c.Snapshot().Config().RoutingEnabled() {
+		return nil, nil
+	}
 	key := c.Snapshot().ComponentKey(configsnapshot.ComponentSignals)
 	var router *OpenAIRouter
 	var err error

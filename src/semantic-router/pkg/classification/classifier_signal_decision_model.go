@@ -55,10 +55,7 @@ func (c *Classifier) evaluateDecisionModelSignals(
 		deployment := c.Config.DecisionQuestionDeployment(rule)
 		if _, seen := byDeployment[deployment]; !seen {
 			order = append(order, deployment)
-			stateOf[deployment] = text
-			if rule.Deployment == "" {
-				stateOf[deployment] = wholeText
-			}
+			stateOf[deployment] = wholeText
 		}
 		byDeployment[deployment] = append(byDeployment[deployment], rule)
 	}
@@ -90,7 +87,15 @@ func (c *Classifier) evaluateDecisionDeployment(
 	callCtx, cancel := decisionCallContext(ctx, rules)
 	defer cancel()
 	started := time.Now()
-	response, err := c.decider().Decide(callCtx, deployment, request)
+	var response modelservice.Response
+	var err error
+	if card, ok := c.decisionTaskCard(deployment); ok {
+		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
+	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+		err = modelservice.ErrUnavailable
+	} else {
+		response, err = c.decider().Decide(callCtx, deployment, request)
+	}
 	latency := time.Since(started).Seconds()
 	if err != nil {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))

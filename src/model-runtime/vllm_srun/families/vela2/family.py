@@ -42,8 +42,8 @@ from .request import QUESTION_TYPES, Plan, Question, QuestionReader
 TOKEN_CACHE = 8192
 # On CPU, sequences packed into one 0.3B forward cost more per token together
 # than one by one once the forward holds more than about this many tokens, so
-# coalescing profiles pack short sequences of several requests and run long
-# ones alone.
+# forwards that merge requests pack short sequences of several requests and
+# run long ones alone.
 CPU_PACKED_TOKENS = 2048
 # A question reads a part whole up to this many inputs' worth of tokens by
 # default (``max_scan_tokens``): a few forwards on a CPU, many on a GPU; a
@@ -352,8 +352,8 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
     def forward_token_budget(self) -> int | None:
         """``CPU_PACKED_TOKENS`` for the 0.3B on CPU, else None (nothing limits a forward).
 
-        Only the coalescing profiles plan with it: ``exact_batches`` keeps the
-        packages' own batching of each request.
+        Only forwards that merge requests plan with it: ``exact_batches`` keeps
+        the packages' own batching of a request that runs alone.
         """
         if (
             isinstance(self.member, EncoderMember)
@@ -394,16 +394,14 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         if not truncating or (whole and all(len(p.ids) <= budget for p in parts)):
             together = [q for q in request.questions if q.id not in request.errors]
             rows = rows_for(together, parts)
-            items, mapping = self.member.plan(rows, self.tokens)
+            rows, items, mapping = self._plan_rows(rows)
             if truncating and windowed(mapping):
                 rows = None
         if rows is None:
             whole_rows = rows_for(whole, parts)
-            items, mapping = self.member.plan(whole_rows, self.tokens)
+            whole_rows, items, mapping = self._plan_rows(whole_rows)
             cut_rows = rows_for(truncating, [part.cut(cut) for part in parts])
-            cut_items, cut_mapping = self.member.plan(
-                cut_rows, self.tokens, cut > max_len
-            )
+            cut_rows, cut_items, cut_mapping = self._plan_rows(cut_rows, cut > max_len)
             rows = whole_rows + cut_rows
             mapping = [*mapping, *shifted(cut_mapping, len(items))]
             items = [*items, *cut_items]
@@ -416,6 +414,33 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
             rows=rows,
             mapping=mapping,
         )
+
+    def _plan_rows(
+        self, rows: list[Row], in_windows: bool = True
+    ) -> tuple[list[Row], list[Any], list[Any]]:
+        """Keep the published layout when it fits; isolate strict failures per question.
+
+        A long span can window successfully while a scalar question sharing
+        its original row cannot. Retrying only failed mixed rows prevents
+        either question from borrowing the other's coverage proof.
+        """
+        items, mapping = self.member.plan(rows, self.tokens, in_windows)
+        separate: list[Row] = []
+        retry = False
+        for row, group in zip(rows, mapping, strict=True):
+            if group is None and row.requires_full_input and len(row.questions) > 1:
+                retry = True
+                ordinary = [q for q in row.questions if not q.require_full_input]
+                separate.extend(rows_for(ordinary, row.parts))
+                separate.extend(
+                    Row([q], row.parts) for q in row.questions if q.require_full_input
+                )
+            else:
+                separate.append(row)
+        if retry:
+            items, mapping = self.member.plan(separate, self.tokens, in_windows)
+            return separate, items, mapping
+        return rows, items, mapping
 
     def shared_context(self, items: list[Any], token_budget: int | None) -> int:
         """The decoder trees always pack on the shared-context path; the 0.3B has one exact path."""
@@ -430,8 +455,9 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
         return self.member.run(items, packed=True)
 
     def run_approximate(self, items: list[Any]) -> list[Any]:
-        """Approximate batches run packed: decoder trees, and 0.3B sequences on the engine's
-        reduced copy where it loaded one (``max_speed`` and the package's consent)."""
+        """Batches that merge requests run packed: decoder trees, and 0.3B sequences on the
+        engine's reduced copy where it loaded one (the package's consent, ``BuiltinModel.reduced``).
+        """
         if isinstance(self.member, EncoderMember):
             return self.member.run(items, packed=True, reduced=True)
         return self.member.run(items, packed=True)
@@ -482,6 +508,15 @@ class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
                 }
                 continue
             self.answerer.answer(question, raw, request.state, response)
+            if question.require_full_input and "error" not in answers.get(
+                question_id, {}
+            ):
+                if question.type == "set":
+                    response["sets"][question_id]["input_coverage"] = "complete"
+                    for label in question.names:
+                        answers[f"{question_id}.{label}"]["input_coverage"] = "complete"
+                else:
+                    answers[question_id]["input_coverage"] = "complete"
         used = sum(raw.input_tokens for raw in raws if raw is not None)
         ordered = {
             "answers": answers,

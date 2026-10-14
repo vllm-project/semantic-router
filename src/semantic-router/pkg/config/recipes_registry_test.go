@@ -120,7 +120,7 @@ func TestDefaultRecipeFallsBackToFlatRoutingProfile(t *testing.T) {
 		t.Fatalf("expected the flat decisions in the default recipe, got %+v", recipe.Profile.Decisions)
 	}
 
-	resolved, ok := cfg.RecipeForRoutingModel(DefaultVSRAutoModelName)
+	resolved, ok := cfg.RecipeForRoutingModel(DefaultEntrypointModel)
 	if !ok || resolved == nil || resolved.Name != DefaultRecipeName {
 		t.Fatalf("expected the auto alias to resolve the synthetic default recipe, got %+v, %v", resolved, ok)
 	}
@@ -150,13 +150,12 @@ func TestReachableRoutingRecipesIncludesAutoDefaultAndEntrypointRecipes(t *testi
 	}
 }
 
-func TestReachableRoutingRecipesHonorsExplicitlyDisabledAutoAliases(t *testing.T) {
+func TestReachableRoutingRecipesAlwaysIncludesDefault(t *testing.T) {
 	cfg := &RouterConfig{
-		RouterOptions: RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []RoutingRecipe{{Name: DefaultRecipeName}},
+		Recipes: []RoutingRecipe{{Name: DefaultRecipeName}},
 	}
-	if got := cfg.ReachableRoutingRecipes(); len(got) != 0 {
-		t.Fatalf("reachable recipes = %+v, want none with auto aliases disabled", got)
+	if got := cfg.ReachableRoutingRecipes(); len(got) != 1 || got[0].Name != DefaultRecipeName {
+		t.Fatalf("reachable recipes = %+v, want built-in default", got)
 	}
 
 	cfg.Entrypoints = []EntrypointMapping{{

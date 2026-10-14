@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,11 +33,10 @@ var routingFailures = []routingFailure{
 	routingFailureNoEligibleModel,
 }
 
-// flowAliasCaptureConfig has the shape that broke the response-api-redis
-// profile (#4651): its only backend model is also a Flow alias, so a request
-// for the model evaluates only the workflows decision. The model's small
-// context window lets an auto request outgrow it.
-const flowAliasCaptureConfig = `
+// workflowEntrypointConfig exposes a workflow recipe explicitly. Its unmatched
+// request exercises no_route; the small backend context window separately
+// lets a default recipe request outgrow all available candidates.
+const workflowEntrypointConfig = `
 version: v0.3
 listeners:
   - name: http-8899
@@ -44,8 +44,6 @@ listeners:
     port: 8899
     timeout: 30s
 providers:
-  defaults:
-    model: gpt-oss
   models:
     - name: gpt-oss
       backend_refs:
@@ -63,22 +61,6 @@ routing:
         operator: OR
         keywords: ["plan"]
   decisions:
-    - name: workflow_route
-      priority: 20
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: plan_keywords
-      modelRefs:
-        - model: gpt-oss
-      algorithm:
-        type: workflows
-        workflows:
-          mode: static
-          roles:
-            - name: worker
-              models: [gpt-oss]
     - name: default_route
       priority: 10
       rules:
@@ -86,11 +68,38 @@ routing:
         conditions: []
       modelRefs:
         - model: gpt-oss
+recipes:
+  - name: workflow
+    routing:
+      signals:
+        keywords:
+          - name: plan_keywords
+            operator: OR
+            keywords: ["plan"]
+      decisions:
+        - name: workflow_route
+          priority: 20
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: plan_keywords
+          modelRefs:
+            - model: gpt-oss
+          algorithm:
+            type: workflows
+            workflows:
+              mode: static
+              roles:
+                - name: worker
+                  models: [gpt-oss]
+entrypoints:
+  - model_names: [team/workflow]
+    recipe: workflow
 global:
   integrations:
     looper:
       flow:
-        model_names: [gpt-oss]
         state:
           store_backend: memory
 `
@@ -107,16 +116,16 @@ type routingFailureCase struct {
 func routingFailureCases() []routingFailureCase {
 	return []routingFailureCase{
 		{
-			name:    "flow-alias-captures-the-model",
+			name:    "workflow-entrypoint-no-match",
 			path:    "/v1/chat/completions",
-			body:    `{"model":"gpt-oss","messages":[{"role":"user","content":"Hello there."}]}`,
+			body:    `{"model":"team/workflow","messages":[{"role":"user","content":"Hello there."}]}`,
 			failure: routingFailureNoRoute,
 			event:   "entrypoint_routing_no_selection",
 		},
 		{
-			name:    "flow-alias-captures-the-model-messages",
+			name:    "workflow-entrypoint-no-match-messages",
 			path:    "/v1/messages",
-			body:    `{"model":"gpt-oss","max_tokens":16,"messages":[{"role":"user","content":"Hello there."}]}`,
+			body:    `{"model":"team/workflow","max_tokens":16,"messages":[{"role":"user","content":"Hello there."}]}`,
 			failure: routingFailureNoRoute,
 			event:   "entrypoint_routing_no_selection",
 		},
@@ -155,7 +164,7 @@ func (c routingFailureCase) parityCase() parity.Case {
 // carrying the failure's code and message and nothing about the request,
 // while the log keeps the Router's reason under the request id.
 func TestRoutingFailuresReturnTheirReasonCodeInBothModes(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(flowAliasCaptureConfig))
+	cfg, err := config.ParseYAMLBytes([]byte(workflowEntrypointConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,8 +235,8 @@ func assertRoutingFailureLogged(t *testing.T, logs *observer.ObservedLogs, c rou
 			t.Fatalf("%s does not carry the request id and code: %v", c.event, fields)
 		}
 		if c.failure == routingFailureNoRoute &&
-			(fields["model"] != "gpt-oss" || fields["looper_algorithm"] != config.DecisionAlgorithmWorkflows) {
-			t.Fatalf("%s does not say the Flow alias captured the model: %v", c.event, fields)
+			(fields["model"] != "team/workflow" || fmt.Sprint(fields["recipe"]) != "workflow") {
+			t.Fatalf("%s does not identify the explicit workflow entrypoint: %v", c.event, fields)
 		}
 		return
 	}

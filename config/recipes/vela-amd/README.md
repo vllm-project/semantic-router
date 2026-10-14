@@ -14,9 +14,9 @@ revision. The shared Encoder is a training parent and is not loaded separately.
 
 | Models | Execution | Input policy |
 | --- | --- | --- |
-| Embedding, Reranker | Built-in model runtime on `rocm:0`, `exact` profile | 32,768 tokens, including special tokens; reject overflow |
-| Guard, Domain, Safety, PII, FactCheck, Feedback, Modality | Built-in model runtime on `rocm:0`, `exact` profile | 8,192 tokens, including special tokens; reject overflow |
-| Hazard | Built-in model runtime on `rocm:0`, `exact` profile | The package's operating point: 2,048-token overlapping windows within a 32,768-token logical budget |
+| Embedding, Reranker | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 32,768 tokens, including special tokens; reject overflow |
+| Guard, Domain, Safety, PII, FactCheck, Feedback, Modality | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 8,192 tokens, including special tokens; reject overflow |
+| Hazard | Built-in model runtime on `rocm:0`, FP32, default engine arguments | The package's operating point: 2,048-token overlapping windows within a 32,768-token logical budget |
 
 Every deployment is a `model_runtime` deployment: the Router starts the runtime
 and the runtime loads each pinned package on the GPU and chooses its kernels.
@@ -86,10 +86,10 @@ connect the backend described above, and download the recipe:
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
-`--platform amd` selects the AMD image and device access; the recipe's explicit
+`--platform rocm` selects the AMD image and device access; the recipe's explicit
 deployments select which models use the GPU. It does not override an authored
 CPU deployment. On a shared machine, select the Router's visible GPU with
 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`; deployment index `0` refers to that visible

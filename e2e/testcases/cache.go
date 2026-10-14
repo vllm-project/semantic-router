@@ -238,7 +238,7 @@ func loadCacheCases(filepath string) ([]CacheTestCase, error) {
 }
 
 func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, question, localPort string, verbose bool) CacheResult {
-	return testSingleCacheRequestForModel(ctx, testCase, question, localPort, "MoM", verbose)
+	return testSingleCacheRequestForModel(ctx, testCase, question, localPort, "vllm-sr/auto", verbose)
 }
 
 func testSingleCacheRequestForModel(ctx context.Context, testCase CacheTestCase, question, localPort, model string, verbose bool) CacheResult {
@@ -320,7 +320,7 @@ func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
-	return sendChatRequestForModel(ctx, question, localPort, "MoM", verbose)
+	return sendChatRequestForModel(ctx, question, localPort, "vllm-sr/auto", verbose)
 }
 
 func sendChatRequestForModel(ctx context.Context, question, localPort, model string, verbose bool) (*http.Response, error) {

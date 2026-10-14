@@ -58,14 +58,17 @@ func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest)
 	best := -1.0
 	scores := make([]CandidateScore, 0, len(req.Candidates))
 	for _, c := range req.Candidates {
-		spans, _, err := v.detect(ctx, req.TrustedContext, req.Task, c.Content)
+		evidence, err := v.detect(ctx, req.TrustedContext, req.Task, c.Content)
 		if err != nil {
 			return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
 		}
-		// 0 unsupported spans => 1.0; degrades as spans accumulate (matches
-		// fusion grounding's context mode).
-		score := 1.0 / (1.0 + float64(len(spans)))
-		scores = append(scores, CandidateScore{CandidateID: c.ID, Confidence: score, Flags: spans})
+		// Preserve span-count scoring for localized evidence. A positive
+		// verdict without spans must never be mistaken for a clean answer.
+		score := 1.0 / (1.0 + float64(len(evidence.Spans)))
+		if evidence.Unsupported && len(evidence.Spans) == 0 {
+			score = 1 - peerContradiction(evidence)
+		}
+		scores = append(scores, CandidateScore{CandidateID: c.ID, Confidence: score, Flags: evidence.Spans})
 		if score > best {
 			best = score
 		}
@@ -104,14 +107,14 @@ func NewPeerConsistencyVerifier(detect HallucinationDetectFunc, penalty float64)
 
 // peerContradiction reads one detector answer as contradiction evidence in
 // [0, 1]. A span reported without a score counts as full contradiction.
-func peerContradiction(unsupportedSpans []string, score float32) float64 {
-	if len(unsupportedSpans) == 0 {
+func peerContradiction(evidence GroundingEvidence) float64 {
+	if !evidence.Unsupported && len(evidence.Spans) == 0 {
 		return 0
 	}
-	if score <= 0 {
+	if evidence.Probability == nil || *evidence.Probability <= 0 {
 		return 1
 	}
-	return clamp01(float64(score))
+	return clamp01(float64(*evidence.Probability))
 }
 
 // Kind implements Verifier.
@@ -195,8 +198,8 @@ func (v *PeerConsistencyVerifier) readAgainstPeers(ctx context.Context, req *Ver
 			wg.Add(1)
 			go func(i, j int) {
 				defer wg.Done()
-				spans, score, err := v.detect(ctx, req.Candidates[j].Content, req.Task, req.Candidates[i].Content)
-				contradictions[i][j], errs[i*n+j] = peerContradiction(spans, score), err
+				evidence, err := v.detect(ctx, req.Candidates[j].Content, req.Task, req.Candidates[i].Content)
+				contradictions[i][j], errs[i*n+j] = peerContradiction(evidence), err
 			}(i, j)
 		}
 	}

@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "f538b1e52efaa172923a6764c8ad9ab18e0188af"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: true
+  outdated: false
 ---
 
 # 融合
@@ -11,13 +11,13 @@ translation:
 
 `fusion` 让多个模型回答同一请求，再由裁判模型合成一个最终答案。配方拥有的 `analysis_mode` 决定裁判是使用单独的结构化分析调用、在一次调用中同时完成分析与合成，还是直接合成。兼容性默认值是 `separate`。
 
-同一运行时也支持通过 `global.integrations.looper.fusion.model_names` 使用直接 Fusion 模型 slug。内置默认值是 `vllm-sr/fusion`；仅在你有意需要 OpenRouter 兼容别名时，才把 `openrouter/fusion` 加进去。直接 Fusion 仍由信号驱动：vLLM-SR 用可执行 Fusion 的决策评估请求，然后执行匹配决策的裁判与面板策略。
+通过 `entrypoints` 将公开模型名映射到 recipe 来暴露 fusion。公开名字没有内置分发逻辑：所选 recipe 评估自己的 signals 和 decisions，由 `algorithm.type=fusion` 启动算法。若入口只应运行 fusion 策略，请将这些策略放在独立 recipe 中。
 
 ## 主要优势
 
 - 并发运行分析模型，而不是只选一个模型。
 - 支持显式的 `separate`、`one_call` 和 `none` 裁判执行模式。
-- 将 Fusion 策略保留在 vLLM-SR 决策内：`vllm-sr/auto` 可以选择任意路由，而 `vllm-sr/fusion` 只在 Fusion 路由中智能选择。
+- Fusion 策略属于配方。可将 `vllm-sr/fusion` 映射到只包含 Fusion 决策的独立配方；入口名字本身不会筛选算法。
 - 将裁判、面板、预算、提示词、追踪、回退和依据策略都放在配方所有权下。
 - 仅当剩余可用响应仍满足法定人数时，才在部分面板失败后继续，同时保留失败模型的元数据。
 
@@ -41,15 +41,11 @@ Fusion 始终先执行面板，再遵循决策显式的分析模式：
 
 ```mermaid
 flowchart TD
-    A[Request arrives] --> B{Request model}
-    B -- vllm-sr/auto --> C[Evaluate all decisions]
-    B -- vllm-sr/fusion --> D[Evaluate Fusion decisions only]
+    A[Request arrives] --> B[Resolve entrypoint to its recipe]
+    B --> C[Evaluate that recipe's signals and decisions]
     C --> E{Matched decision uses algorithm.type=fusion?}
-    D --> F{Matched Fusion decision?}
-    E -- No --> G[Use normal selected route]
+    E -- No --> G[Use the matched route or recipe fallback]
     E -- Yes --> H[Resolve recipe-owned Fusion config]
-    F -- Yes --> H
-    F -- No --> J[Return no eligible Fusion decision error]
     H --> M[Run analysis panel concurrently]
     M --> N{Usable responses meet quorum?}
     N -- No --> O[Return typed Fusion quorum error]
@@ -69,7 +65,7 @@ flowchart TD
 
 ## 解决什么问题？
 
-有些提示词更适合多次独立尝试再加一次裁判，而不是单次路由决策。`fusion` 把这种编排放在 Router 策略里，因此客户端可以通过同一个 chat completions 端点使用它。与固定的提供商侧 Fusion 端点不同，`vllm-sr/fusion` 会先用 vLLM-SR 信号和决策优先级，为请求选出正确的 Fusion 路由。
+有些提示词更适合多次独立尝试再加一次裁判，而不是单次路由决策。`fusion` 把这种编排放在 Router 策略里，因此客户端可以通过同一个 chat completions 端点使用它。`vllm-sr/fusion` 这样的入口选择其配置的配方，再由该配方的信号和决策确定是否执行 Fusion。
 
 ## 何时使用
 
@@ -147,56 +143,47 @@ algorithm:
     judge_prompt_version: fusion-v1
 ```
 
-自动路由别名：
+未显式配置指向 `default` 的入口时，默认使用 `vllm-sr/auto`。
+要替换默认公开名字，请通过 `entrypoints` 声明完整别名列表：
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - model_names: [router/default, MoM]
+    recipe: default
 ```
 
-`vllm-sr/auto` 评估所有决策。如果匹配的决策使用 `algorithm.type=fusion`，请求进入 Fusion；否则走匹配的非 Fusion 路由。
+此时只有显式别名指向 `default`，`MoM` 没有特殊含义。
+匹配决策的 algorithm 为 `fusion` 时执行 Fusion。
 
-直接 Fusion slug 注册：
+若要提供专用 Fusion 入口，将公开名字映射到独立 recipe：
 
 ```yaml
-global:
-  integrations:
-    looper:
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      fusion:
-        model_names:
-          - vllm-sr/fusion
+entrypoints:
+  - model_names: [vllm-sr/fusion, openrouter/fusion]
+    recipe: fusion
+recipes:
+  - name: fusion
+    routing:
+      decisions:
+        - name: panel
+          priority: 1
+          rules: {operator: AND, conditions: []}
+          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+          algorithm:
+            type: fusion
+            fusion:
+              model: qwen3-32b
+              analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
-`global.integrations.looper.fusion` 只注册直接请求模型名。它不拥有路由策略、默认路由、裁判选择、面板选择、并发、模板或错误处理。
-
-每个别名都应使用没有任何模型使用的名字。如果别名同时也是某个模型的名字，它会截获该模型的请求：这些请求只评估 Fusion 决策，没有匹配任何决策的请求会以 [`no_route`](../../../api/router.md#routing-errors) 失败。Router 和 `vllm-sr config validate` 都会对这样的别名发出警告。
-
-裁判模型、分析面板、分析模式、采样设置、并发、token 与时间预算、法定人数、模板、提示词版本、追踪可见性、错误策略和依据策略都属于
-`routing.decisions[].algorithm.fusion`。直接 slug 调用只评估可执行 Fusion 的决策，因此 `vllm-sr/fusion` 不会静默回退到普通单模型路由。公开 HTTP 路径执行所选配方策略，不会通过
-`plugins[].id = fusion` 暴露 Fusion 执行覆盖。
-
-若要暴露 OpenRouter 兼容别名，请显式选择加入：
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-          - openrouter/fusion
-```
+公开入口名不能与后端模型冲突。Signals、裁判、面板、并发、预算、模板及错误策略
+均由 recipe 管理。`max_response_bytes_mb` 等共享限制属于
+`global.integrations.looper`，这里不再声明公开名字。
 
 ### 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | 触发 Fusion 决策匹配的直接请求模型 slug |
 | `model` | string | 第一个分析模型 | 配方拥有的裁判/调用模型，用于分析和最终合成 |
 | `analysis_models` | list[string] | `modelRefs` | 配方拥有的并行分析面板模型 |
 | `analysis_mode` | string | `separate` | 配方拥有的裁判执行：`separate`、`one_call` 或 `none` |

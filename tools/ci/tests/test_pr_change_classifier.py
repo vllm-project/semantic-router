@@ -30,6 +30,22 @@ MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+        for path in (
+            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/testcases/routing_error_codes.go",
+            "src/semantic-router/pkg/extproc/routing_failure.go",
+            "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
+        self.assertIn("e2e.routing-errors", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+            "verifications"
+        ][0]
+        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
+
     def test_image_calibration_inputs_select_the_platform_verification(self):
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",

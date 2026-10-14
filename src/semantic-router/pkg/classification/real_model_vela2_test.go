@@ -17,6 +17,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tidwall/sjson"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -42,8 +44,8 @@ const (
 	vela2CPUTolerance = 1e-3
 	// vela2StateTolerance bounds a state's answers in a call with several
 	// states against the same questions asked about that state alone: on CPU,
-	// max_speed packs the states' sequences into one forward and rounds the
-	// last bits differently; exact runs them as separate requests.
+	// the runtime batches the states' sequences into one forward on its packed
+	// FP32 copy, which rounds the last bits differently from a state alone.
 	vela2StateTolerance = 1e-6
 	// vela2Margin keeps a recorded decision (a Choice's top option, a Set
 	// label's selection, a span) this far from its boundary, so a move within
@@ -58,8 +60,11 @@ type vela2Card struct {
 	Repo        string `json:"repo"`
 	Revision    string `json:"revision"`
 	ModelSHA256 string `json:"model_sha256"`
-	Profile     string `json:"profile"`
+	Numerics    string `json:"numerics"`
 	Device      string `json:"device"`
+	EngineArgs  struct {
+		Dtype string `json:"dtype"`
+	} `json:"engine_args"`
 }
 
 func servedCard(t *testing.T, endpoint string) vela2Card {
@@ -96,18 +101,17 @@ func requireVela2Runtime(t *testing.T, env, model string) (string, vela2Card) {
 		}
 		t.Skipf("optional real model %s requires a runtime serving it at %s", spec.RepoID, env)
 	}
-	deployment, err := config.ImplicitModelRuntimeDeployment(model, true)
-	if err != nil {
+	if _, err := config.ImplicitModelRuntimeDeployment(model, true); err != nil {
 		t.Fatal(err)
 	}
 	card := servedCard(t, endpoint)
 	if card.Repo != spec.RepoID || card.Revision != spec.Revision {
 		t.Fatalf("real model %s registers revision %s, but %s serves %s at revision %s", spec.RepoID, spec.Revision, endpoint, card.Repo, card.Revision)
 	}
-	if card.Device != "cpu" || card.Profile != deployment.Profile {
-		t.Fatalf("%s serves %s on %s at profile %s; the Router runs it on cpu at %s", endpoint, card.ID, card.Device, card.Profile, deployment.Profile)
+	if card.Device != "cpu" || card.EngineArgs.Dtype != "auto" {
+		t.Fatalf("%s serves %s on %s at dtype %s; the Router runs it on cpu at dtype auto", endpoint, card.ID, card.Device, card.EngineArgs.Dtype)
 	}
-	t.Logf("real model=%s registered_revision=%s model_sha256=%s profile=%s endpoint=%s", spec.RepoID, spec.Revision, card.ModelSHA256, card.Profile, endpoint)
+	t.Logf("real model=%s registered_revision=%s model_sha256=%s numerics=%s endpoint=%s", spec.RepoID, spec.Revision, card.ModelSHA256, card.Numerics, endpoint)
 	return endpoint, card
 }
 
@@ -307,12 +311,18 @@ func askVela2(t *testing.T, endpoint string, request vela2Call) map[string]inter
 	return answer
 }
 
-// questionsDigest identifies a state's questions as the runtime read them.
+// questionsDigest identifies the model-facing questions. Full-input admission
+// never enters the model's prompt; its request flag and response proof are
+// checked separately. Keep every other raw field and criteria ordering intact.
 func questionsDigest(questions map[string]json.RawMessage) string {
 	var digest bytes.Buffer
 	for _, id := range sortedKeys(questions) {
 		var compact bytes.Buffer
-		_ = json.Compact(&compact, questions[id])
+		question, err := sjson.DeleteBytes(questions[id], "require_full_input")
+		if err != nil {
+			question = questions[id]
+		}
+		_ = json.Compact(&compact, question)
 		fmt.Fprintf(&digest, "%s=%s\n", id, compact.Bytes())
 	}
 	return sha256Hex(digest.Bytes())
@@ -386,6 +396,16 @@ func recordedAnswer(answer map[string]interface{}) map[string]interface{} {
 	for key, value := range answer {
 		if key != "model" && key != "meta" && key != "states" {
 			out[key] = round(value)
+		}
+	}
+	// Coverage is transport evidence, checked before recording. Remove only
+	// the typed envelope field, never an identically named model label.
+	for _, section := range []string{"answers", "sets"} {
+		entries, _ := out[section].(map[string]interface{})
+		for _, value := range entries {
+			if entry, ok := value.(map[string]interface{}); ok {
+				delete(entry, "input_coverage")
+			}
 		}
 	}
 	return out
@@ -481,7 +501,7 @@ type vela2ModelAnswers struct {
 	RepoID        string                      `json:"repo_id"`
 	Revision      string                      `json:"revision"`
 	ModelSHA256   string                      `json:"model_sha256"`
-	Profile       string                      `json:"profile"`
+	Numerics      string                      `json:"numerics"`
 	Items         map[string]vela2ItemAnswers `json:"items"`
 	Hallucination map[string]vela2StateAnswer `json:"hallucination,omitempty"`
 }

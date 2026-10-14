@@ -58,8 +58,8 @@ cases:
       body: '{"model":"no-such-model","messages":[{"role":"user","content":"hi"}]}'
     upstream: chat-ok
 
-  # The Flow alias evaluates only workflows decisions, and the corpus has none.
-  - name: flow-alias-no-route
+  # No entrypoint publishes this name; an algorithm name is not an implicit model.
+  - name: unpublished-flow-model
     request:
       method: POST
       path: /v1/chat/completions

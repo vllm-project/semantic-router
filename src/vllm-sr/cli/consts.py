@@ -28,7 +28,9 @@ def image_tag_for_cli_version(
 
 _DEFAULT_IMAGE_TAG = image_tag_for_cli_version(__version__)
 
-# Docker image configuration
+# Docker image configuration. Every image the CLI pulls by default names its
+# registry: Podman without unqualified-search registries, as Debian and Ubuntu
+# package it, cannot pull a short name, and Docker resolves both to one image.
 VLLM_SR_CONTAINER_IMAGE_DEFAULT = (
     f"ghcr.io/vllm-project/semantic-router/vllm-sr:{_DEFAULT_IMAGE_TAG}"
 )
@@ -38,13 +40,13 @@ VLLM_SR_CONTAINER_IMAGE_ROCM = (
 VLLM_SR_CONTAINER_IMAGE_CUDA = (
     f"ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:{_DEFAULT_IMAGE_TAG}"
 )
-VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.35.3"
+VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "docker.io/envoyproxy/envoy:v1.35.3"
 VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
     f"ghcr.io/vllm-project/semantic-router/dashboard:{_DEFAULT_IMAGE_TAG}"
 )
 DEFAULT_STACK_NAME = "vllm-sr"
-PLATFORM_AMD = "amd"
-PLATFORM_NVIDIA = "nvidia"
+PLATFORM_ROCM = "rocm"
+PLATFORM_CUDA = "cuda"
 RUNTIME_TOPOLOGY_ENV = "VLLM_SR_TOPOLOGY"
 RUNTIME_TOPOLOGY_SPLIT = "split"
 DEFAULT_RUNTIME_TOPOLOGY = RUNTIME_TOPOLOGY_SPLIT

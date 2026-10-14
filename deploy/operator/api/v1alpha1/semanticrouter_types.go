@@ -266,6 +266,13 @@ type PersistenceSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
+// DecisionModelBinding selects one canonical model deployment.
+type DecisionModelBinding struct {
+	// Deployment is an exact key in model_deployments.
+	// +kubebuilder:validation:MinLength=1
+	Deployment string `json:"deployment" yaml:"deployment"`
+}
+
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
 	// Routing contains canonical v0.3 routing configuration under config.routing.
@@ -277,14 +284,11 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
-	// DecisionModel is the Vela model that answers the Router's questions,
-	// global.model_catalog.system.decision_model: Vela-2.0-0.3B (the
-	// default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any
-	// case. It answers the built-in signals and every decision question that
-	// names no deployment; the 4B and 9B need a GPU in the Router pod.
-	// +kubebuilder:validation:Pattern=`^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]|0\.8[Bb]|4[Bb]|9[Bb])|1\.0))?$`
+	// DecisionModel selects the declared deployment that answers default judgment tasks.
+	// Omitted uses the Router's primary deployment. Artifact identity belongs in
+	// model_deployments; the reference never infers a model family or alias.
 	// +optional
-	DecisionModel string `json:"decision_model,omitempty" yaml:"decision_model,omitempty"`
+	DecisionModel *DecisionModelBinding `json:"decision_model,omitempty" yaml:"decision_model,omitempty"`
 
 	// ModelDeployments contains canonical global.model_catalog.deployments.
 	// The router validates provider, device, precision and task compatibility.

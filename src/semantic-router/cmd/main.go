@@ -290,6 +290,9 @@ var ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterC
 }
 
 func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
+	if !cfg.RoutingEnabled() {
+		return nil
+	}
 	reporter := func(progress modeldownload.ProgressState) {
 		state := startupstatus.State{
 			Ready:            false,
@@ -330,7 +333,7 @@ func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, start
 // startup progress, and hands it to the lifecycle through activate. Its own
 // failures are classified as the stage they belong to.
 func applyKubernetesConfigUpdate(ctx context.Context, newConfig *config.RouterConfig, activate func(context.Context, *config.RouterConfig) error, startupWriter startupstatus.StatusWriter, currentConfig ...func() *config.RouterConfig) error {
-	if len(currentConfig) > 0 && currentConfig[0] != nil {
+	if newConfig.RoutingEnabled() && len(currentConfig) > 0 && currentConfig[0] != nil {
 		if err := modeldownload.ValidateReloadArtifacts(currentConfig[0](), newConfig); err != nil {
 			return configsnapshot.Reject(configsnapshot.StageValidate, configsnapshot.CodeArtifactUnavailable,
 				fmt.Errorf("model artifact reload preflight failed: %w", err))

@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,9 @@ type Head struct {
 // encoder that reads them in one sequence does: a Choice question's first
 // option gets 0.7 less 0.05 for every other question asked with it.
 type Model struct {
+	Repo           string
+	Revision       string
+	ModelSHA256    string
 	ID             string
 	Heads          []Head
 	Embedding      *Embedder
@@ -66,7 +70,7 @@ type Runtime struct {
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
 // changes it.
-const APIVersion = "2.2.0"
+const APIVersion = "3.0.0"
 
 // defaultLimits are the runtime's default process limits. Like the runtime,
 // the fake reports its limits in /v1/models and refuses a larger bundle or
@@ -285,9 +289,13 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
-	device, dtype, profile := model.Device, "float32", "exact"
+	device, dtype, numerics := model.Device, "float32", api.ModelCardNumericsExact
+	args := api.EngineArgs{MaxNumSeqs: 8192, MaxNumBatchedTokens: 65536, BatchWindowMs: 2, Dtype: api.Auto}
 	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens, MaxInputs: &maxInputs}
-	card := api.ModelCard{Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
+	if model.ModelSHA256 != "" {
+		sha = model.ModelSHA256
+	}
+	card := api.ModelCard{Repo: &model.Repo, Revision: &model.Revision, Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, EngineArgs: &args, Numerics: &numerics, Limits: &limits}
 	switch {
 	case model.Embedding != nil:
 		card.Surfaces, card.Embedding = []string{"embeddings"}, embeddingCard(model.Embedding)
@@ -444,6 +452,7 @@ func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionRespon
 	if model.Labelled != nil {
 		response := r.decideLabelled(model, body)
 		unscanned(model, body, &response)
+		proveFullInput(body, &response)
 		response.Meta = &api.ResponseMeta{Revision: &revision}
 		return http.StatusOK, response, nil
 	}
@@ -457,7 +466,36 @@ func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionRespon
 			answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_question")}
 		}
 	}
-	return http.StatusOK, api.DecisionResponse{Model: model.ID, Answers: answers, Usage: api.Usage{InputTokens: 10}, Meta: &api.ResponseMeta{Revision: &revision}}, nil
+	response := api.DecisionResponse{Model: model.ID, Answers: answers, Usage: api.Usage{InputTokens: 10}, Meta: &api.ResponseMeta{Revision: &revision}}
+	proveFullInput(body, &response)
+	return http.StatusOK, response, nil
+}
+
+// The fake evaluates complete strings. Mirror the proof emitted by runtimes
+// that honored a strict request, leaving all failed questions unproven.
+func proveFullInput(body api.DecisionRequest, response *api.DecisionResponse) {
+	complete := api.AnswerInputCoverageComplete
+	setComplete := api.SetAnswerInputCoverageComplete
+	for id, question := range body.Questions {
+		if question.RequireFullInput == nil || !*question.RequireFullInput {
+			continue
+		}
+		if answer, ok := response.Answers[id]; ok && answer.Error != nil {
+			continue
+		}
+		for key, answer := range response.Answers {
+			if (key == id || strings.HasPrefix(key, id+".")) && answer.Error == nil {
+				answer.InputCoverage = &complete
+				response.Answers[key] = answer
+			}
+		}
+		if response.Sets != nil {
+			if set, ok := (*response.Sets)[id]; ok {
+				set.InputCoverage = &setComplete
+				(*response.Sets)[id] = set
+			}
+		}
+	}
 }
 
 // jointAnswer is a question's answer, which on a Joint model depends on how
@@ -498,8 +536,15 @@ func answer(question api.Question) api.Answer {
 		if question.Levels != nil {
 			levels = len(*question.Levels)
 		}
+		// Half of the mass on each middle level (one level when the count is odd).
+		probabilities := make(map[string]float64, levels)
+		for index := range levels {
+			probabilities[strconv.Itoa(index)] = 0
+		}
+		probabilities[strconv.Itoa(levels/2)] += 0.5
+		probabilities[strconv.Itoa((levels-1)/2)] += 0.5
 		score, confidence := float64(levels-1)/2, 0.5
-		result.Score, result.Confidence = &score, &confidence
+		result.Score, result.Confidence, result.Probabilities = &score, &confidence, &probabilities
 	default:
 		if question.Choices != nil && len(*question.Choices) > 0 {
 			choices := *question.Choices

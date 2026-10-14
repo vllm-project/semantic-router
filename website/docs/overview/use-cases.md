@@ -19,7 +19,7 @@ while retaining its task loop and tools.
 | A selected inference call benefits from verification. | Run a configured, bounded cascade, panel, or multi-model workflow. | Decide how to use the returned answer in the larger task. |
 | Sensitive work needs an approved execution path. | Apply explicit eligibility and data-handling policy over configured local or remote backends. | Enforce the same boundary in tools, task storage, and other external services. |
 
-Start with the [agent harness guide](/docs/installation/agent-harness) and
+Start with the [agent harness guide](../installation/agent-harness) and
 [Agent Routing recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md).
 
 ## Deployment environments

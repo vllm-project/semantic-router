@@ -195,7 +195,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
-| `decision_model` _string_ | DecisionModel is the Vela model that answers the Router's questions,<br />global.model_catalog.system.decision_model: Vela-2.0-0.3B (the<br />default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any<br />case. It answers the built-in signals and every decision question that<br />names no deployment; the 4B and 9B need a GPU in the Router pod. |  | Pattern: `^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]\|0\.8[Bb]\|4[Bb]\|9[Bb])\|1\.0))?$` <br />Optional: \{\} <br /> |
+| `decision_model` _[DecisionModelBinding](#decisionmodelbinding)_ | DecisionModel selects the declared deployment that answers default judgment tasks.<br />Omitted uses the Router's primary deployment. Artifact identity belongs in<br />model_deployments; the reference never infers a model family or alias. |  | Optional: \{\} <br /> |
 | `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
@@ -252,6 +252,18 @@ _Appears in:_
 | `total_timeout` _string_ | TotalTimeout bounds the whole fallback chain |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `per_attempt_timeout` _string_ | PerAttemptTimeout bounds each candidate's attempt |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retryable_status_codes` _integer array_ | RetryableStatusCodes are the statuses that move on to the next candidate |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+
+#### DecisionModelBinding
+
+DecisionModelBinding selects one canonical model deployment.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `deployment` _string_ | Deployment is an exact key in model_deployments. |  | MinLength: 1 <br /> |
 
 #### DecisionReliabilityConfig
 

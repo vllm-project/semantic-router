@@ -21,8 +21,10 @@ const DefaultBundleTasks = 64
 
 // Client calls one runtime through the generated contract client.
 type Client struct {
-	endpoint string
-	api      *api.ClientWithResponses
+	endpoint   string
+	base       string
+	httpClient api.HttpRequestDoer
+	api        *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
 	bundleTasks atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
@@ -41,11 +43,13 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(httpClient))
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	physical := budgetTransport{next: httpClient}
+	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(physical))
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{endpoint: endpoint, api: generated}
+	client := &Client{endpoint: endpoint, base: base, httpClient: physical, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
 	client.apiMinor.Store(-1)
 	return client, nil
@@ -96,7 +100,7 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	return response.JSON200.Data, nil
 }
 
-// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
+// contractMinor is the minor version of a contract version "3.<minor>.<patch>"
 // of the major this client speaks, or -1.
 func contractMinor(version string) int64 {
 	major, rest, _ := strings.Cut(version, ".")
@@ -252,6 +256,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.Preset != "" {
 		preset := question.Preset
 		encoded := api.Question{Preset: &preset, Threshold: question.Threshold}
+		if question.RequireFullInput {
+			required := true
+			encoded.RequireFullInput = &required
+		}
 		if question.Truncate {
 			overflow := api.QuestionOverflowTruncate
 			encoded.Overflow = &overflow
@@ -261,6 +269,10 @@ func encodeQuestion(question Question) api.Question {
 	questionType := question.Type
 	var instructions interface{} = question.Instructions
 	encoded := api.Question{Type: &questionType, Instructions: &instructions, Threshold: question.Threshold}
+	if question.RequireFullInput {
+		required := true
+		encoded.RequireFullInput = &required
+	}
 	if len(question.Labels) > 0 {
 		var criteria interface{} = labelCriteria(question.Labels)
 		encoded.Criteria = &criteria
@@ -302,10 +314,11 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 	decoded := Response{Model: body.Model, Answers: make(map[string]Answer, len(questions)), InputTokens: body.Usage.InputTokens}
 	for _, question := range questions {
 		if answer, ok := decodeQuestionAnswer(body, question); ok {
+			answer = requireInputCoverage(question, answer)
 			decoded.Answers[question.ID] = answer
 		}
 	}
-	return decoded
+	return checkAnswers(questions, decoded)
 }
 
 func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer, bool) {
@@ -317,6 +330,9 @@ func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer,
 	threshold, _ := lookup(body.Thresholds, id)
 	if set, ok := lookup(body.Sets, id); ok {
 		decoded := Answer{Type: "set", Probabilities: set.Probabilities, Selected: set.Selected, Threshold: threshold}
+		if set.InputCoverage != nil {
+			decoded.InputCoverage = string(*set.InputCoverage)
+		}
 		return checkedAnswer(decoded), true
 	}
 	if spans, ok := lookup(body.Spans, id); ok && answered {
@@ -353,12 +369,32 @@ func lookupString(values *map[string]string, key string) string {
 
 func decodeAnswer(answer api.Answer) Answer {
 	decoded := Answer{}
+	if answer.InputCoverage != nil {
+		decoded.InputCoverage = string(*answer.InputCoverage)
+	}
 	if answer.Type != nil {
 		decoded.Type = *answer.Type
 	}
 	if answer.Error != nil {
 		decoded.Error = string(*answer.Error)
 		return decoded
+	}
+	// Missing scalar values are unknown evidence, never Go's zero/false.
+	switch decoded.Type {
+	case "noul":
+		if answer.Noul == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "score":
+		if answer.Score == nil {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	case "choice":
+		if answer.Choice == nil || *answer.Choice == "" {
+			return Answer{Type: decoded.Type, Error: "missing_answer_value"}
+		}
+	default:
+		return Answer{Type: decoded.Type, Error: "invalid_model_output"}
 	}
 	if answer.Choice != nil {
 		decoded.Choice = *answer.Choice
@@ -378,24 +414,35 @@ func decodeAnswer(answer api.Answer) Answer {
 	return checkedAnswer(decoded)
 }
 
-// checkedAnswer replaces an answer holding a non-finite number with an
-// invalid_model_output error.
+// checkedAnswer rejects non-finite numbers and confidence or probabilities
+// outside [0, 1], including answers whose type comes from a model preset.
 func checkedAnswer(answer Answer) Answer {
-	if !finiteAnswer(answer) {
+	if !validAnswerNumbers(answer) {
 		return Answer{Type: answer.Type, Error: "invalid_model_output"}
 	}
 	return answer
 }
 
-func finiteAnswer(answer Answer) bool {
-	values := []float64{answer.Noul, answer.Score, answer.Confidence, answer.Threshold}
+func validAnswerNumbers(answer Answer) bool {
+	probabilities := []float64{answer.Confidence}
+	finiteOnly := []float64{answer.Score, answer.Threshold}
+	if answer.Type == "span" {
+		probabilities = append(probabilities, answer.Noul)
+	} else {
+		finiteOnly = append(finiteOnly, answer.Noul)
+	}
 	for _, probability := range answer.Probabilities {
-		values = append(values, probability)
+		probabilities = append(probabilities, probability)
 	}
 	for _, span := range answer.Spans {
-		values = append(values, span.Probability)
+		probabilities = append(probabilities, span.Probability)
 	}
-	for _, value := range values {
+	for _, probability := range probabilities {
+		if math.IsNaN(probability) || math.IsInf(probability, 0) || probability < 0 || probability > 1 {
+			return false
+		}
+	}
+	for _, value := range finiteOnly {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return false
 		}

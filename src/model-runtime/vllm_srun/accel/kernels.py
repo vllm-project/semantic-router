@@ -4,7 +4,8 @@ Every kernel slot has a reference implementation that reproduces the
 Transformers code the released packages were scored with. An accelerator may
 register a faster implementation for a slot; it declares whether it is
 bit-exact against the reference on that device. A kernel that is not
-bit-exact is used only when the active profile allows approximate numerics.
+bit-exact is used only for a model whose family consents to it
+(``DtypePolicy.approximate_kernels``) at its published precision.
 A variant is an alternative a model's released runtime ran for a slot (for
 example a different convolution); it runs only for models that name it
 (``ModelSpec.kernel_variants``) and is that model's reference.
@@ -30,7 +31,7 @@ class Kernel:
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours the profile's exactness and the model's variants."""
+    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants."""
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
@@ -65,7 +66,11 @@ class KernelSet:
         return True
 
     def describe(self) -> dict[str, str]:
-        return {name: self.select(name).source for name in sorted(self.available)}
+        return {
+            name: self.select(name).source
+            for name in sorted(self.available)
+            if self.has(name)
+        }
 
 
 # ---------------------------------------------------------------------------

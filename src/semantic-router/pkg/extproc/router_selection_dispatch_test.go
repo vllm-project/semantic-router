@@ -70,6 +70,8 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	}
 	cfg.ModelSelection.Enabled = true
 	cfg.ModelSelection.ML.ModelsPath = "test-model-selection"
+	cfg.ModelSelection.ML.ModelType = config.EmbeddingModelTypeRemote
+	cfg.Decisions = []config.Decision{{Name: "nearest", Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
 	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)

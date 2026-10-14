@@ -18,7 +18,7 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     source_bytes = bootstrap.config_path.read_bytes()
     runtime = tmp_path / ".vllm-sr" / "runtime-config.setup-test.yaml"
     realize_runtime_config(
-        bootstrap.config_path, runtime, algorithm=None, platform="amd"
+        bootstrap.config_path, runtime, algorithm=None, platform="rocm"
     )
     runtime_bytes = runtime.read_bytes()
     layout = resolve_runtime_stack(stack_name="setup-test", port_offset=12000)

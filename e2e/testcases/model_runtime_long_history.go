@@ -54,7 +54,7 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 	if err != nil {
 		return err
 	}
-	response, err := sendLocalChatConversation(ctx, session.gatewayPort, "auto", messages, mrRequestTimeout)
+	response, err := sendLocalChatConversation(ctx, session.gatewayPort, "vllm-sr/auto", messages, mrRequestTimeout)
 	if err != nil {
 		return err
 	}

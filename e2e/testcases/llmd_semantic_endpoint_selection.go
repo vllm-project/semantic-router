@@ -93,7 +93,7 @@ func runLLMDEndpointSelectionCase(
 
 	selectedPods := make([]string, 0, llmdEndpointSelectionAttempts)
 	for attempt := 0; attempt < llmdEndpointSelectionAttempts; attempt++ {
-		response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.prompt, 30*time.Second)
+		response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.prompt, 30*time.Second)
 		if err != nil {
 			return nil, fmt.Errorf("attempt %d request: %w", attempt+1, err)
 		}

@@ -34,14 +34,17 @@ type RouterRuntimeStatus struct {
 
 // SystemStatus represents the overall system status
 type SystemStatus struct {
-	Overall        string               `json:"overall"`
-	DeploymentType string               `json:"deployment_type"`
-	Services       []ServiceStatus      `json:"services"`
-	RouterRuntime  *RouterRuntimeStatus `json:"router_runtime,omitempty"`
-	Models         *RouterModelsInfo    `json:"models,omitempty"`
-	Endpoints      []string             `json:"endpoints,omitempty"`
-	Version        string               `json:"version,omitempty"`
-	History        statusstore.History  `json:"history"`
+	Overall        string `json:"overall"`
+	DeploymentType string `json:"deployment_type"`
+	// ServingMode identifies the configured upstream, independently of its
+	// deployment topology or the engines used by its model runtimes.
+	ServingMode   string               `json:"serving_mode"`
+	Services      []ServiceStatus      `json:"services"`
+	RouterRuntime *RouterRuntimeStatus `json:"router_runtime,omitempty"`
+	Models        *RouterModelsInfo    `json:"models,omitempty"`
+	Endpoints     []string             `json:"endpoints,omitempty"`
+	Version       string               `json:"version,omitempty"`
+	History       statusstore.History  `json:"history"`
 }
 
 // StatusHandler returns the status of vLLM-SR services, from the Router's and

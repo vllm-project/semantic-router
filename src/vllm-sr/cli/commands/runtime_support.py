@@ -73,6 +73,7 @@ PASSTHROUGH_ENV_RULES = (
     ("HF_HOME", False),
     ("HF_HUB_CACHE", False),
     ("VLLM_SR_DETERMINISTIC_EMBEDDINGS", False),
+    ("VLLM_SRUN_CPU_THREADS", False),
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENROUTER_API_KEY", True),

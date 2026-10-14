@@ -1,6 +1,11 @@
 package configsnapshot
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+)
 
 type fingerprintSample struct {
 	Name    string
@@ -70,5 +75,40 @@ func TestFingerprintTerminatesOnACycle(t *testing.T) {
 	loop.Next = loop
 	if fingerprint(loop) == "" {
 		t.Fatal("no fingerprint for a cyclic value")
+	}
+}
+
+func TestSettingsFingerprintKeepsGlobalDefaultsSeparateFromRecipePolicy(t *testing.T) {
+	cfg := &config.RouterConfig{RoutingDefaults: config.RoutingDefaults{Strategy: config.RoutingStrategyPriority}}
+	before := settingsFingerprint(cfg)
+	cfg.Strategy = config.RoutingStrategyConfidence
+	cfg.Fallback = &fallback.FallbackPolicy{Enabled: true, MaxAttempts: 7}
+	if settingsFingerprint(cfg) != before {
+		t.Fatal("default recipe policy changed the shared settings fingerprint")
+	}
+	cfg.RoutingDefaults.Strategy = config.RoutingStrategyConfidence
+	if settingsFingerprint(cfg) == before {
+		t.Fatal("global routing strategy was omitted from the settings fingerprint")
+	}
+	cfg.RoutingDefaults.Strategy = config.RoutingStrategyPriority
+	cfg.RoutingDefaults.Fallback = &fallback.FallbackPolicy{Enabled: true, MaxAttempts: 3}
+	if settingsFingerprint(cfg) == before {
+		t.Fatal("global fallback was omitted from the settings fingerprint")
+	}
+}
+
+func TestSettingsFingerprintTracksGlobalReplayCaptureDefaults(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.RouterReplay.Enabled = true
+	before := settingsFingerprint(cfg)
+	falseValue := false
+	cfg.RouterReplay.CapturePersonalData = &falseValue
+	if settingsFingerprint(cfg) == before {
+		t.Fatal("global Replay privacy default was omitted from the settings fingerprint")
+	}
+	before = settingsFingerprint(cfg)
+	falseValue = true
+	if settingsFingerprint(cfg) == before {
+		t.Fatal("updated Replay privacy default was omitted from the settings fingerprint")
 	}
 }
