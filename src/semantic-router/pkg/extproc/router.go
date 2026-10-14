@@ -97,6 +97,7 @@ type OpenAIRouter struct {
 	LookupTable          lookuptable.LookupTable
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          memory.Store
+	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
 	// hopCaller, when set, sends Looper hops instead of the configuration

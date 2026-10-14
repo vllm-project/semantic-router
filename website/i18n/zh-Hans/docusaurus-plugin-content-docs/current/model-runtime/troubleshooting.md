@@ -5,7 +5,7 @@ description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/troubleshooting.md"
-  outdated: false
+  outdated: true
 ---
 
 # 故障排查与常见问题
@@ -220,7 +220,7 @@ global:
   `--threads` 设置，同一进程中的模型共享这些线程。
 - 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
   的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
-- GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
+- 并发请求本来就共用前向。对同一输入问很多问题时，在默认关闭的地方打开 `enable_shared_context`；想用吞吐换延迟，就调低 `batch_window_ms` 或 `max_num_seqs`。见[引擎参数](model-runtime/engine-args.md)。
 
 ## 常见问题 {#faq}
 

@@ -16,9 +16,22 @@ type ModelDeployment struct {
 	Provider      string           `yaml:"provider" json:"provider"`
 	Device        string           `yaml:"device,omitempty" json:"device,omitempty"`
 	Input         ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
-	// Profile selects a model_runtime numerics profile: exact (the default,
-	// byte-identical to the released packages) or an opt-in faster profile.
-	Profile string `yaml:"profile,omitempty" json:"profile,omitempty"`
+	// MaxNumSeqs bounds the rows (one per question or input) one forward of a
+	// model_runtime deployment holds; 1 runs every row alone. Unset keeps the
+	// runtime's default, which never binds at the default token budget.
+	MaxNumSeqs *int `yaml:"max_num_seqs,omitempty" json:"max_num_seqs,omitempty"`
+	// MaxNumBatchedTokens bounds one forward in padded tokens: its rows times
+	// its longest row (runtime default 65,536).
+	MaxNumBatchedTokens *int `yaml:"max_num_batched_tokens,omitempty" json:"max_num_batched_tokens,omitempty"`
+	// BatchWindowMS is how long the runtime waits after the first request to
+	// collect more (runtime default 2 ms).
+	BatchWindowMS *float64 `yaml:"batch_window_ms,omitempty" json:"batch_window_ms,omitempty"`
+	// Dtype is the precision the backbone computes in: auto (the default, the
+	// precision the model was published in), float32, bfloat16 or float16.
+	Dtype string `yaml:"dtype,omitempty" json:"dtype,omitempty"`
+	// EnableSharedContext computes the shared state of a multi-question
+	// request once; unset leaves it to the model family (on for Decision 2.0).
+	EnableSharedContext *bool `yaml:"enable_shared_context,omitempty" json:"enable_shared_context,omitempty"`
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
 	// not manage (unix:///path, http://host:port or https://host:port).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
@@ -104,9 +117,6 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 		if d.Device == "" && len(d.Replicas) == 0 && d.Endpoint == "" {
 			d.Device = "auto"
 		}
-		if d.Profile == "" {
-			d.Profile = "exact"
-		}
 	}
 	if d.Input.Overflow == "" {
 		d.Input.Overflow = "reject"
@@ -155,8 +165,8 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
-	if d.Profile != "" || d.Endpoint != "" || len(d.Replicas) != 0 || d.ServedName != "" {
-		return fmt.Errorf("profile, endpoint, replicas and served_name apply only to model_runtime deployments")
+	if d.HasEngineArgs() || d.Endpoint != "" || len(d.Replicas) != 0 || d.ServedName != "" {
+		return fmt.Errorf("engine arguments, endpoint, replicas and served_name apply only to model_runtime deployments")
 	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")

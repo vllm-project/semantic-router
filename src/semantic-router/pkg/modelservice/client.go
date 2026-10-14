@@ -100,7 +100,7 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	return response.JSON200.Data, nil
 }
 
-// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
+// contractMinor is the minor version of a contract version "3.<minor>.<patch>"
 // of the major this client speaks, or -1.
 func contractMinor(version string) int64 {
 	major, rest, _ := strings.Cut(version, ".")
@@ -414,24 +414,35 @@ func decodeAnswer(answer api.Answer) Answer {
 	return checkedAnswer(decoded)
 }
 
-// checkedAnswer replaces an answer holding a non-finite number with an
-// invalid_model_output error.
+// checkedAnswer rejects non-finite numbers and confidence or probabilities
+// outside [0, 1], including answers whose type comes from a model preset.
 func checkedAnswer(answer Answer) Answer {
-	if !finiteAnswer(answer) {
+	if !validAnswerNumbers(answer) {
 		return Answer{Type: answer.Type, Error: "invalid_model_output"}
 	}
 	return answer
 }
 
-func finiteAnswer(answer Answer) bool {
-	values := []float64{answer.Noul, answer.Score, answer.Confidence, answer.Threshold}
+func validAnswerNumbers(answer Answer) bool {
+	probabilities := []float64{answer.Confidence}
+	finiteOnly := []float64{answer.Score, answer.Threshold}
+	if answer.Type == "span" {
+		probabilities = append(probabilities, answer.Noul)
+	} else {
+		finiteOnly = append(finiteOnly, answer.Noul)
+	}
 	for _, probability := range answer.Probabilities {
-		values = append(values, probability)
+		probabilities = append(probabilities, probability)
 	}
 	for _, span := range answer.Spans {
-		values = append(values, span.Probability)
+		probabilities = append(probabilities, span.Probability)
 	}
-	for _, value := range values {
+	for _, probability := range probabilities {
+		if math.IsNaN(probability) || math.IsInf(probability, 0) || probability < 0 || probability > 1 {
+			return false
+		}
+	}
+	for _, value := range finiteOnly {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return false
 		}
