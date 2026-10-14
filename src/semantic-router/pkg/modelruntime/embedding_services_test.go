@@ -119,7 +119,7 @@ func TestImplicitEmbeddingSpecResolvesRegistryPackages(t *testing.T) {
 	omni := t.TempDir()
 	cfg.MultiModalModelPath = omni
 	cfg.EmbeddingModels.UseCPU = true
-	spec, err := implicitEmbeddingSpec(cfg, config.DefaultRecipeName, "mmbert")
+	spec, err := cfg.ImplicitEmbeddingBinding(config.DefaultRecipeName, "mmbert")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,13 +129,13 @@ func TestImplicitEmbeddingSpecResolvesRegistryPackages(t *testing.T) {
 		t.Fatalf("mmbert spec %+v", spec)
 	}
 	cfg.EmbeddingModels.UseCPU = false
-	if spec, err = implicitEmbeddingSpec(cfg, config.DefaultRecipeName, "multimodal"); err != nil || spec.Deployment.Artifact != omni || spec.Deployment.Device != "auto" ||
+	if spec, err = cfg.ImplicitEmbeddingBinding(config.DefaultRecipeName, "multimodal"); err != nil || spec.Deployment.Artifact != omni || spec.Deployment.Device != "auto" ||
 		spec.Deployment.Profile != "exact" {
 		t.Fatalf("multimodal spec %+v, %v", spec, err)
 	}
 	cfg.Qwen3ModelPath = "models/mom-embedding-light"
 	for _, model := range []string{"bert", "gemma", "qwen3"} {
-		if _, err := implicitEmbeddingSpec(cfg, config.DefaultRecipeName, model); err == nil {
+		if _, err := cfg.ImplicitEmbeddingBinding(config.DefaultRecipeName, model); err == nil {
 			t.Fatalf("%s must not resolve (unserved model, or a path that is neither registered nor local)", model)
 		}
 	}
