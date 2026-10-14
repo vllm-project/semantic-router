@@ -7,8 +7,8 @@
         --record vllm_srun/registry/golden_answers_vela1.json
 
 The model is served as ``vllm-srun serve`` serves it (verification,
-pinned kernel choices, readiness) and answers its family's golden requests on
-the exact profile, recorded as the readiness check compares them: decision
+pinned kernel choices, readiness) and answers its family's golden requests
+alone, in their released forwards, recorded as the readiness check compares them: decision
 answers, or a surface response's numbers (``LoadedModel.golden_values``).
 ``--record`` merges this device class into the file's entries, keyed by
 repository and pinned revision.

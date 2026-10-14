@@ -5,7 +5,6 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
-        profile: exact
     # The PII signal asks the same deployment's ready-made PII question, in the
     # same call as the decision questions below.
     bindings:

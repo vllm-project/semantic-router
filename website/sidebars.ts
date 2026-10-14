@@ -278,7 +278,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'model-runtime/deploy',
-        'model-runtime/profiles',
+        'model-runtime/engine-args',
         'installation/runtime/external',
         'model-runtime/migrate',
         'model-runtime/troubleshooting',

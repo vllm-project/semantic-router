@@ -352,7 +352,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
     paths = {"effective_config_path": str(active), "models_dir": str(tmp_path)}
 
     def inspect(command, **_kwargs):
-        if command[3] == "{{json .Config.Env}}":
+        if "{{json .Config.Env}}" in command:
             return SimpleNamespace(
                 stdout=json.dumps(
                     [

@@ -4,7 +4,7 @@ description: 模型 runtime 的命令选项、models 文件、HTTP API、环境�
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/model-runtime/reference.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
@@ -25,7 +25,7 @@ is_mtpe: true
 | `--device` | `auto` | `auto`，或镜像跑得动的：`cpu`、`--platform amd` 时的 `rocm[:N]`、`--platform nvidia` 时的 `cuda[:N]`，或镜像里装了插件时的插件加速器。 |
 | `--host` | `127.0.0.1` | runtime 端口发布在哪个宿主地址。 |
 | `--port` | `8100` | runtime 发布在哪个宿主端口。 |
-| `--runtime-profile` | `exact` | `exact`、`shared_context`、`batching`、`max_speed`，或插件加的。 |
+| `--max-num-seqs`、`--max-num-batched-tokens`、`--batch-window-ms`、`--dtype`、`--enable-shared-context` | 已配置的值，或 runtime 默认值 | 默认部署的[引擎参数](./engine-args.md)，与副本数和放置位置无关。 |
 | `--image` | 平台对应的镜像 | 换一个镜像，比如装了插件的。 |
 | `--image-pull-policy` | `always` | `always`、`ifnotpresent` 或 `never`。 |
 | `--container-runtime` | 自动探测 | `docker` 或 `podman`。 |
@@ -44,7 +44,6 @@ is_mtpe: true
 | `--host` | `127.0.0.1` | 监听地址。 |
 | `--port` | `8100` | 监听端口。 |
 | `--uds PATH` | | 监听 Unix socket，不走 TCP。 |
-| `--profile` | `exact` | `exact`、`shared_context`、`batching`、`max_speed`，或插件加的。 |
 | `--engine` | `auto` | 引擎插件：`auto`（首个能跑这个模型的，native 优先）、`native`（PyTorch）或 `onnxruntime`（`onnx` extra）。 |
 | `--family` | 自动探测 | 强制指定模型家族插件。 |
 | `--served-model-name` | 模型名 | API 报告的模型 ID，对一个 `MODEL` 生效。 |
@@ -52,8 +51,11 @@ is_mtpe: true
 | `--memory-budget GIB` | | 预估大小超过这个值的模型，拒绝加载。 |
 | `--max-queue` | `256` | 每个模型排多少请求之后，runtime 开始答 429。 |
 | `--max-queued-tokens` | `4194304` | 每个模型排多少 token 之后答 429。 |
-| `--batch-window-ms` | `2.0` | `batching` 档位等多久来合并请求。 |
-| `--max-batch-tokens` | `65536` | 每次前向的 token 数。 |
+| `--max-num-seqs` | `8192` | 一次前向最多装多少行（跨请求计）：决策请求每个问题一行，其他请求每个输入或窗口一行。`1` 表示每行单独跑。默认值在默认 token 预算下永远不会成为限制。见[引擎参数](./engine-args.md)。 |
+| `--max-num-batched-tokens` | `65536` | 一次前向最多装多少个补齐后的 token：行数乘以最长那一行；对打包行的模型也这样计数。 |
+| `--batch-window-ms` | `2.0` | `--max-num-seqs` 大于 1 时，第一个请求到达后调度器再等多久收集更多请求。 |
+| `--dtype` | `auto` | `auto`（模型发布时的精度）、`float32`、`bfloat16` 或 `float16`（仅 GPU）。 |
+| `--enable-shared-context`、`--no-enable-shared-context` | 由模型家族决定 | 多问题决策请求的共享状态只算一次。只有 Decision 2.0 默认开启。 |
 | `--max-request-bytes` | `8388608` | 请求体上限。 |
 | `--max-bundle-tasks` | `64` | 一个 `/v1/bundle` 请求最多带多少任务。 |
 | `--load-attempts` | `5` | 一个模型加载几次之后就算 `failed`；包损坏或自检失败不重试。 |
@@ -66,7 +68,7 @@ is_mtpe: true
 | `--log-level` | `info` | `debug`、`info`、`warning` 或 `error`。 |
 | `--autotune-cache DIR` | `$VLLM_SRUN_AUTOTUNE_CACHE` | 把编译好的 GPU kernel、以及没有记录选择的模型的 kernel 调优留在多次运行之间。内置模型在 MI300X 和 MI325X 上跑的是记录在案的选择，不调优。 |
 
-其他命令：`vllm-srun models` 列内置模型及钉住的 revision；`vllm-srun plugins` 列已装的家族、引擎、加速器和档位；`vllm-srun devices` 以 JSON 打印本机有哪些设备、`--device auto` 先试哪个。
+其他命令：`vllm-srun models` 列内置模型及钉住的 revision；`vllm-srun plugins` 列已装的家族、引擎和加速器；`vllm-srun devices` 以 JSON 打印本机有哪些设备、`--device auto` 先试哪个。
 
 ## models 文件 {#models-file}
 
@@ -80,10 +82,10 @@ models:
   - model: vllm-sr/Decision-2.0-Kai-0.6B
     name: decision-kai
     device: auto
-    profile: exact
+    enable_shared_context: false
 ```
 
-每条目收 `model`（必填）、`revision`、`name`、`device`、`profile`、`engine`、`family`、`memory_budget_gib` 和 `options`（家族选项；Vela 2.0 模型还收 `max_scan_tokens`，即它的[扫描预算](#long-inputs)）。router 为它托管的进程写这个文件。
+每条目收 `model`（必填）、`revision`、`name`、`device`、`engine`、`family`、`memory_budget_gib`、`options`（家族选项；Vela 2.0 模型还收 `max_scan_tokens`，即它的[扫描预算](#long-inputs)），以及[引擎参数](./engine-args.md) `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype` 和 `enable_shared_context`；条目没写的取进程命令行上的值。router 为它托管的进程写这个文件。
 
 ## HTTP API {#http-api}
 
@@ -101,7 +103,7 @@ models:
 | `GET /health/live` | 存活：进程还在服务请求就返 200 带 `"status": "alive"`，模型就绪与否不论。 |
 | `GET /metrics` | Prometheus 指标。 |
 
-响应带答案和 `usage`。请求里加 `"options": {"return_meta": true}`，还能拿到 `meta`：答这次请求的 revision、模型摘要、档位、引擎、设备和耗时。
+响应带答案和 `usage`。请求里加 `"options": {"return_meta": true}`，还能拿到 `meta`：答这次请求的 revision、模型摘要、`dtype`、`numerics`、引擎、设备和耗时。模型的答案从不受批处理影响时（每行单独跑和在任意批次里跑都一样，且使用发布精度），`numerics` 为 `exact`；一次前向里的其他行可能因舍入改变答案时为 `approximate`。`GET /v1/models` 报告模型的 `engine_args` 和 `numerics`。
 
 `/v1/decisions`、`/v1/systemone`、`/v1/classify`、`/v1/embeddings`、`/v1/rerank` 和 `/v1/bundle` 的响应——出错的也算——带一个 `Server-Timing` 头，是 runtime 为这个请求花的自己的时间，单位毫秒：
 
@@ -121,7 +123,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 任务分发到多个模型的 bundle，报告的是最后答完那个模型的 `queue`、`forward` 和 `post`。客户端自己这次调用的时间减去 `total` 就是传输：它的编解码、连接和 HTTP 交换。router 把它作为每次调用的指标记下来。
 
-完全服务不了的请求返 HTTP 错误，带 `{"error": {"code", "message"}}`：400 `invalid_request`、404 `model_not_found`、413 `request_too_large`、422 `unsupported_surface`（模型不服务这个端点）、429 `overloaded`、503 `not_ready`。请求里单个条目失败（一个输入或一个问题）只带自己的错误码，不牵连其他条目。
+完全服务不了的请求返 HTTP 错误，带 `{"error": {"code", "message"}}`：400 `invalid_request`、404 `model_not_found`、413 `request_too_large`、422 `unsupported_surface`（模型不服务这个端点）、429 `overloaded`、503 `not_ready`。部署的所有 worker 都在忙时，Router 同样返回 429 `overloaded`；没有就绪 worker 时返回 503 `not_ready`；两者都带 `Retry-After`（1 秒和 5 秒）。Engine 模式下，调用超过 Router 的 30 秒预算时返回 504 `systemone_deadline_exceeded`。请求里单个条目失败（一个输入或一个问题）只带自己的错误码，不牵连其他条目。
 
 ### 长输入 {#long-inputs}
 
@@ -322,7 +324,8 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | --- | --- | --- |
 | `provider: model_runtime` | 部署 | 模型跑在模型 runtime 里。 |
 | `artifact`、`revision` | 部署 | Hub 仓库和 commit，或本地绝对路径。 |
-| `device`、`profile` | 部署 | 见[让 router 来跑模型](./deploy.md#describe-a-deployment)。 |
+| `device` | 部署 | 见[让 router 来跑模型](./deploy.md#describe-a-deployment)。 |
+| `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 部署 | 部署的[引擎参数](./engine-args.md)；没设的保持 runtime 默认值。 |
 | `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。 |
 | `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：路由信号走 `on_error`，安全信号按未扫描处理。 |
 | `on_unscanned` | `modules.prompt_guard`、`modules.classifier.pii` | `block`（默认）：模型没整读的内容，规则匹配为 `unscanned`。`allow`：跟随 `on_error`。 |
@@ -359,7 +362,7 @@ router（9190 端口）：
 | `vsr_model_runtime_unknown_answers_total` | `deployment`、`reason` | 按原因分的未知答案。 |
 | `vsr_model_runtime_restarts_total` | `deployment` | 托管进程的重启。 |
 
-runtime（`GET /metrics`）：按端点和状态分的 `vllm_srun_requests_total`、`vllm_srun_request_duration_seconds`、`vllm_srun_queue_duration_seconds`、`vllm_srun_forward_duration_seconds`、`vllm_srun_batch_rows`、`vllm_srun_batch_tokens`、`vllm_srun_bundle_tasks`、按模型和结果分的 `vllm_srun_result_cache_total`、`vllm_srun_queue_depth`、`vllm_srun_ready`、`vllm_srun_model_info`，以及 `vllm_srun_model_memory_bytes`（模型加载后的权重占的字节数，降精度副本也算）。
+runtime（`GET /metrics`）：按端点和状态分的 `vllm_srun_requests_total`、`vllm_srun_request_duration_seconds`、`vllm_srun_queue_duration_seconds`、`vllm_srun_forward_duration_seconds`、`vllm_srun_batch_rows`、`vllm_srun_batch_tokens`、`vllm_srun_bundle_tasks`、按模型和结果分的 `vllm_srun_result_cache_total`、`vllm_srun_queue_depth`、`vllm_srun_ready`、`vllm_srun_model_info`（按模型、revision、家族、引擎、加速器、设备、`dtype` 和 `numerics`），以及 `vllm_srun_model_memory_bytes`（模型加载后的权重占的字节数，降精度副本也算）。
 
 ## 安全 {#security}
 
