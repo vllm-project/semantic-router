@@ -215,7 +215,7 @@ questions through the same endpoint. For example, the Apache-2.0
 model has about 150M parameters and can run on a CPU:
 
 ```bash
-vllm-sr serve MoritzLaurer/ModernBERT-base-zeroshot-v2.0 \
+vllm-srun serve MoritzLaurer/ModernBERT-base-zeroshot-v2.0 \
   --revision d421c4545a438fd006fb43f8b981c5d908faa1e1 --device cpu --port 8100
 ```
 
@@ -238,17 +238,23 @@ and an affirmative statement for Noul:
 
 Choice descriptions fill the template; null descriptions use the option key.
 Choice scores are a softmax over candidate entailment logits. Noul is the
-probability of entailment against all non-entailment labels; a supplied
+probability of `entailment` against `not_entailment`; a supplied
 `true` description overrides the statement, while non-null `false`
 descriptions are unsupported. These scores are not calibrated confidence.
 Score, Set and Span are unsupported for these models.
 
-The classifier metadata must name `entailment` and `not_entailment`, or
-`entailment`, `contradiction` and `neutral`. Other classifiers keep their
+The classifier metadata must name only `entailment` and `not_entailment`.
+Ternary NLI models and other classifiers keep their
 existing `/v1/classify` surface. Check `/v1/models` for supported question
 types. Hypotheses exceeding the token budget are rejected, and each choice
 uses one text–hypothesis pair, so work grows with the number of choices.
 Readiness without recorded golden answers remains `unverified`.
+
+These NLI models read text only. Nonempty `images` or `videos` and malformed
+media fields are rejected as `invalid_request`, including inside bundles and
+named states. Omitted fields, null values and empty lists preserve text-only
+behavior. A successful strict question proves coverage of the complete text
+pair; it never proves coverage of an ignored attachment.
 
 ## Check it
 

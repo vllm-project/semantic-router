@@ -30,6 +30,66 @@ retain their individual requirements. Ordinary answers keep their existing
 shape and scores. Decision serving is limited to binary NLI label sets;
 ternary models retain classification until their normalization contract is defined.
 
+## Text-only media refusal regression (2026-10-14)
+
+With the NLI PR at `d7d3db0b1a3750333754b23bdae0167821f55243` merged into
+main at `a61d0e9ab109abc6cf1ab3c2201f5dbced2fe8fb`, a tiny local ModernBERT
+fixture reproduced the remaining coverage bug through the runtime HTTP app.
+Both `images` and `videos` attachments were ignored by a strict Noul request:
+
+```text
+Before, for either attachment field:
+POST /v1/decisions -> HTTP 200
+answers.q: {type: noul, noul: 0.38494440430142096, input_coverage: complete}
+
+After:
+POST /v1/decisions -> HTTP 400
+error: {code: invalid_request,
+        message: "model nli reads text only; images are not supported"}
+```
+
+Video requests return the corresponding `videos are not supported` message.
+The NLI decision adapter now validates media fields before preparing any
+hypotheses: non-list fields are invalid, and nonempty lists are unsupported.
+This is input validation, not an image/video decoder or a model numerical change.
+
+The new HTTP suite covers both decision aliases, root and named-state inputs,
+ordinary and strict questions, and bundle tasks containing either root or
+named-state attachments. A failed bundle task carries status 400 and no
+decision answers, while an independent valid text task still succeeds with
+complete strict coverage. Direct-request tests also prove hypothesis preparation
+is never reached for unsupported media.
+
+The suite reproduced **32 failures / 36 passing controls** before the fix.
+After the fix, the combined NLI, strict-input, media, shared full-input and API
+contract suites passed **245 tests**. Omitted media, empty lists and null fields
+retain identical text-only answers, usage and strict coverage. The guide now
+states the binary-only label contract and the text-only media restriction.
+
+The direct-worker example now uses `vllm-srun serve`, which accepts the documented
+`--device` and `--port` flags. All **54 documentation/CLI contract tests** passed,
+as did type checking for **114 source files**, generated-client freshness,
+formatting, lint, security, structure and architecture checks.
+
+The broader CPU runtime run passed **1,183 tests**, skipped 31 and deselected 31.
+Three numerical parity failures remained: Qwen's bundled reference,
+Omni packed-text invariance and Qwen3.5's Transformers bit identity. All three
+also failed on the untouched merged baseline. Those implementations were not
+changed by this fix.
+
+These new results use tiny fixtures through the HTTP app. They do not represent
+a new full-checkpoint container or GPU parity run; the earlier checkpoint
+qualification below remains a separate record.
+
+```bash
+HF_HUB_OFFLINE=1 python -m pytest -q \
+  src/model-runtime/tests/test_nli_media.py \
+  src/model-runtime/tests/test_nli.py \
+  src/model-runtime/tests/test_nli_full_input.py \
+  src/model-runtime/tests/test_full_input_contract.py \
+  src/model-runtime/tests/test_api_contract.py
+```
+
 ## Container result
 
 The local router image was built with `make vllm-sr-build` and launched through

@@ -164,6 +164,14 @@ class NLIModel(LoadedModel[Item, Any]):
             if request.body.get("head") == LOGITS_HEAD:
                 raise ValueError("the NLI logits head is private")
             return self.model.plan_surface(surface, request)
+        for field in ("images", "videos"):
+            media = request.body.get(field)
+            if media is not None and not isinstance(media, list):
+                raise ValueError(f"{field} must be a list of data URLs")
+            if media:
+                raise ValueError(
+                    f"model {self.info.id} reads text only; {field} are not supported"
+                )
         if request.options.get("max_tokens") is not None:
             raise ValueError(
                 "NLI decisions reject overflow and do not accept a scan budget"
