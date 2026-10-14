@@ -22,6 +22,7 @@ var errValkeyMemoryAlreadyExists = errors.New("valkey memory already exists")
 // Implements the Store interface with HASH-based storage and FT.SEARCH for vector similarity.
 type ValkeyStore struct {
 	client           valkeyMemoryClient
+	owner            *glide.Client // closed by Close; nil when a test injects client
 	config           config.MemoryConfig
 	valkeyConfig     *config.MemoryValkeyConfig
 	enabled          bool
@@ -112,6 +113,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 
 	store := &ValkeyStore{
 		client:           options.Client,
+		owner:            options.Client,
 		config:           cfg,
 		valkeyConfig:     vc,
 		enabled:          options.Enabled,
@@ -852,8 +854,8 @@ func (v *ValkeyStore) CheckConnection(ctx context.Context) error {
 // closes it. Later calls return ErrStoreClosed; a second Close is a no-op.
 func (v *ValkeyStore) Close() error {
 	return v.life.close("valkey", func() error {
-		if v.client != nil {
-			v.client.Close()
+		if v.owner != nil {
+			v.owner.Close()
 		}
 		return nil
 	})
