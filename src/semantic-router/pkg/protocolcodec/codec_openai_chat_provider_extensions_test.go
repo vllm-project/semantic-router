@@ -83,6 +83,62 @@ func TestOpenAIChatResponseTranslatesProviderExtensionReplies(t *testing.T) {
 	}
 }
 
+// LiteLLM proxied vLLM reply with provider_specific_fields on both the
+// choice and the message (issue #4936). The useful content is already in
+// canonical fields; the decorations are dropped and the response is
+// re-encoded so they are not replayed to the client.
+const litellmChatResponseFixture = `{
+  "id":"chatcmpl-litellm","object":"chat.completion","created":1791782944,
+  "model":"Qwen/Qwen3.8-27B",
+  "system_fingerprint":"vllm-0.26.1rc1.dev1177+ga9a17e709-tp2-58b79d32",
+  "choices":[{
+    "finish_reason":"stop","index":0,
+    "message":{
+      "content":"\n\nok","role":"assistant",
+      "reasoning_content":"We need to respond with exactly ok.",
+      "provider_specific_fields":{"reasoning":"We need to respond with exactly ok.\n","refusal":null}
+    },
+    "provider_specific_fields":{"routed_experts":null,"token_ids":null,"stop_reason":null}
+  }],
+  "usage":{"completion_tokens":29,"prompt_tokens":57,"total_tokens":86,
+    "completion_tokens_details":{"reasoning_tokens":25}}
+}`
+
+func TestOpenAIChatResponseAcceptsLiteLLMProviderSpecificFields(t *testing.T) {
+	response, envelope, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(litellmChatResponseFixture))
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if response.Usage.Total.Value == nil || *response.Usage.Total.Value != 86 {
+		t.Fatalf("usage = %+v", response.Usage)
+	}
+	if len(response.Output) != 1 {
+		t.Fatalf("output = %+v", response.Output)
+	}
+	assertDiagnosticFields(t, diagnostics,
+		"choices.message.provider_specific_fields",
+		"choices.provider_specific_fields",
+	)
+	if !envelope.ResponseReencodeRequired {
+		t.Fatal("LiteLLM decorations must force a re-encode")
+	}
+}
+
+func TestOpenAIChatResponseTranslatesLiteLLMReply(t *testing.T) {
+	translated, err := NewBuiltinEngine().TranslateResponse(
+		llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(litellmChatResponseFixture), nil,
+	)
+	if err != nil {
+		t.Fatalf("TranslateResponse() error = %v", err)
+	}
+	if len(translated.Response.Output) != 1 || translated.Response.Usage.Total.Value == nil {
+		t.Fatalf("translated response = %+v", translated.Response)
+	}
+	if strings.Contains(string(translated.Body), "provider_specific_fields") {
+		t.Fatal("provider_specific_fields must not appear in the re-encoded response")
+	}
+}
+
 func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {
 	body := strings.Replace(groqChatResponseFixture, `"x_groq"`, `"x_unknown":1,"x_groq"`, 1)
 	_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))

@@ -93,10 +93,14 @@ type chatMessageWire struct {
 	AlternateReasoning *string              `json:"reasoning,omitempty"`
 	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
 	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
-	ToolCalls          []chatToolCallWire   `json:"tool_calls,omitempty"`
-	ToolCallID         string               `json:"tool_call_id,omitempty"`
-	Annotations        []chatAnnotationWire `json:"annotations,omitempty"`
-	Name               json.RawMessage      `json:"name,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on each message. The content is opaque provider
+	// metadata and is not replayed to the client.
+	ProviderSpecificFields json.RawMessage      `json:"provider_specific_fields,omitempty"`
+	ToolCalls              []chatToolCallWire   `json:"tool_calls,omitempty"`
+	ToolCallID             string               `json:"tool_call_id,omitempty"`
+	Annotations            []chatAnnotationWire `json:"annotations,omitempty"`
+	Name                   json.RawMessage      `json:"name,omitempty"`
 }
 
 type chatAudioOutputWire struct {
