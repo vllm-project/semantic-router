@@ -136,13 +136,13 @@ func (r *typedAPIRuntime) Embed(_ context.Context, _ string, request modelservic
 func TestTypedClassificationHTTPUsesExistingImageSignalPath(t *testing.T) {
 	deployment := &typedAPIRuntime{card: modelservice.ModelCard{
 		ID: "typed-api-images", Repo: "test/typed-api-images", ModelSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(t.TempDir()))), Revision: strings.Repeat("1", 40),
-		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 8, Device: "cpu", Dtype: "float32", Profile: "exact", Engine: "native",
+		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 8, Device: "cpu", Dtype: "float32", Engine: "native",
 		Embedding: &modelservice.EmbeddingCard{Dimensions: []int{2}, Modalities: []string{"text", "image"}, Normalized: true, Pooling: "mean"},
 	}}
 	runtime := serving.New(deployment, nil)
 	provider, err := runtime.Embedding(context.Background(), config.ResolvedModelBinding{
 		Recipe: config.DefaultRecipeName, Name: "embedding", Binding: config.ModelBinding{Deployment: "vision", Contract: "embedding.v1"},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime.invalid:8100", Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "truncate"}},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime.invalid:8100", Device: "cpu", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}, 0, 0)
 	if err != nil {
 		t.Fatal(err)
