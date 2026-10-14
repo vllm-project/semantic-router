@@ -254,6 +254,11 @@ func (s *ResponseCacheService) LookupSemantic(
 		s.failOpen.Add(1)
 		return CacheResult{}, err
 	}
+	if result.Found && lookup.MaxAge != nil &&
+		(!result.AgeKnown || result.Age > *lookup.MaxAge) {
+		s.staleMisses.Add(1)
+		result = CacheResult{HitKind: HitKindMiss}
+	}
 	if result.Found {
 		result.HitKind = HitKindSemantic
 		result.Source = CacheSourceL2

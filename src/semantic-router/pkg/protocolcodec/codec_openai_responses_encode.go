@@ -23,6 +23,9 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 		return nil, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
+	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIResponsesV1); err != nil {
+		return nil, diagnostics, err
+	}
 	for _, message := range request.Messages {
 		if message.ReasoningEffort != "" {
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,

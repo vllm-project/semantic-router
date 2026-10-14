@@ -112,3 +112,12 @@
 .option[aria-selected='true'] svg {
   color: var(--text-primary);
 }
+
+.groupLabel {
+  padding: 0.65rem 0.65rem 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

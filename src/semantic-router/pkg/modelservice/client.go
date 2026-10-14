@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -32,9 +30,6 @@ type Client struct {
 	// scanning holds the served models whose card reports a scan budget, the
 	// only ones that take a decisions request's max_tokens and overflow.
 	scanning atomic.Pointer[map[string]bool]
-	// apiMinor is the minor version of the contract the runtime serves, as
-	// /v1/models last reported it (-1 until then).
-	apiMinor atomic.Int64
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -44,13 +39,13 @@ func NewClient(endpoint string) (*Client, error) {
 		return nil, err
 	}
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(httpClient))
+	physical := budgetTransport{next: httpClient}
+	generated, err := api.NewClientWithResponses(base, api.WithHTTPClient(physical))
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{endpoint: endpoint, base: base, httpClient: httpClient, api: generated}
+	client := &Client{endpoint: endpoint, base: base, httpClient: physical, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
-	client.apiMinor.Store(-1)
 	return client, nil
 }
 
@@ -85,7 +80,6 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
-	c.apiMinor.Store(contractMinor(response.JSON200.ApiVersion))
 	inputs := make(map[string]int, len(response.JSON200.Data))
 	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
@@ -97,24 +91,6 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	c.maxInputs.Store(&inputs)
 	c.scanning.Store(&scanning)
 	return response.JSON200.Data, nil
-}
-
-// contractMinor is the minor version of a contract version "2.<minor>.<patch>"
-// of the major this client speaks, or -1.
-func contractMinor(version string) int64 {
-	major, rest, _ := strings.Cut(version, ".")
-	minor, _, _ := strings.Cut(rest, ".")
-	value, err := strconv.ParseInt(minor, 10, 64)
-	if major != RuntimeAPIMajor || err != nil || value < 0 {
-		return -1
-	}
-	return value
-}
-
-// takesStates reports whether the runtime answers a decisions call about
-// several states (DecisionRequest.states).
-func (c *Client) takesStates() bool {
-	return c.apiMinor.Load() >= statesMinor
 }
 
 // boundedRead is the request a model without a scan budget takes: it reads one
@@ -317,7 +293,7 @@ func decodeResponse(body api.DecisionResponse, questions []Question) Response {
 			decoded.Answers[question.ID] = answer
 		}
 	}
-	return decoded
+	return checkAnswers(questions, decoded)
 }
 
 func decodeQuestionAnswer(body api.DecisionResponse, question Question) (Answer, bool) {
@@ -413,24 +389,35 @@ func decodeAnswer(answer api.Answer) Answer {
 	return checkedAnswer(decoded)
 }
 
-// checkedAnswer replaces an answer holding a non-finite number with an
-// invalid_model_output error.
+// checkedAnswer rejects non-finite numbers and confidence or probabilities
+// outside [0, 1], including answers whose type comes from a model preset.
 func checkedAnswer(answer Answer) Answer {
-	if !finiteAnswer(answer) {
+	if !validAnswerNumbers(answer) {
 		return Answer{Type: answer.Type, Error: "invalid_model_output"}
 	}
 	return answer
 }
 
-func finiteAnswer(answer Answer) bool {
-	values := []float64{answer.Noul, answer.Score, answer.Confidence, answer.Threshold}
+func validAnswerNumbers(answer Answer) bool {
+	probabilities := []float64{answer.Confidence}
+	finiteOnly := []float64{answer.Score, answer.Threshold}
+	if answer.Type == "span" {
+		probabilities = append(probabilities, answer.Noul)
+	} else {
+		finiteOnly = append(finiteOnly, answer.Noul)
+	}
 	for _, probability := range answer.Probabilities {
-		values = append(values, probability)
+		probabilities = append(probabilities, probability)
 	}
 	for _, span := range answer.Spans {
-		values = append(values, span.Probability)
+		probabilities = append(probabilities, span.Probability)
 	}
-	for _, value := range values {
+	for _, probability := range probabilities {
+		if math.IsNaN(probability) || math.IsInf(probability, 0) || probability < 0 || probability > 1 {
+			return false
+		}
+	}
+	for _, value := range finiteOnly {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return false
 		}

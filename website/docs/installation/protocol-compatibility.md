@@ -40,8 +40,10 @@ Responses object operations, and request examples.
 System One is a separate typed API, available in either startup mode when
 `listeners[].systemone.models` publishes a concrete model. It uses
 `POST /v1/systemone` (alias `/v1/decisions`) and
-`GET /v1/systemone/models`; it does not use this Chat protocol-translation
-matrix or the Chat model allowlist. See the
+`GET /v1/systemone/models`. Router mode can also publish an explicit native
+recipe through an `api: systemone` entrypoint and matching listener grant.
+These typed requests do not use the Chat protocol-translation matrix or the
+Chat model allowlist. See the
 [System One quickstart](../model-runtime/quickstart.md).
 
 ## Backend model protocols
@@ -127,6 +129,14 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+When translating Chat history to an Anthropic Messages backend, empty text
+blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
+behaves like `content: null`. Empty tool results keep their call IDs and use
+`content: []`; an empty system prompt is omitted. Non-empty text, including
+whitespace, is preserved. A conversation message containing only empty text
+is rejected, as is an empty text block carrying a cache directive, because
+removing either would discard a conversation turn or cache boundary.
+
 For an Anthropic Messages client using a Chat Completions or Responses backend,
 `thinking.type: adaptive` uses the backend model's default reasoning behavior;
 `output_config.effort` is retained. `thinking.display: omitted` removes reasoning
@@ -203,6 +213,12 @@ schema, streaming, tools, or error translation.
   backend formats match. Unknown or unsupported request fields fail closed.
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
+- Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
+  Responses requests. The default strict policy rejects this translation with
+  `lossy_translation`; a false or absent flag remains supported. Anthropic
+  backends preserve the flag. Codec callers explicitly using
+  `LossyAllowWithDiagnostic` may omit the flag with a `tool_result.is_error`
+  diagnostic; the tool-result content is not rewritten.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
