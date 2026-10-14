@@ -16,7 +16,7 @@ func (OpenAIChatCodec) Stateless() bool                { return true }
 func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityAudioInput,
-		llmprotocol.CapabilityFileInput,
+		llmprotocol.CapabilityFileInput, llmprotocol.CapabilityVideoInput,
 		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools,
 		llmprotocol.CapabilityReasoning,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
@@ -127,6 +127,7 @@ type chatContentWire struct {
 	Type                  string                     `json:"type"`
 	Text                  string                     `json:"text,omitempty"`
 	Refusal               string                     `json:"refusal,omitempty"`
+	VideoURL              *chatVideoURLWire          `json:"video_url,omitempty"`
 	ImageURL              *chatImageURLWire          `json:"image_url,omitempty"`
 	InputAudio            *chatInputAudioWire        `json:"input_audio,omitempty"`
 	File                  *chatFileWire              `json:"file,omitempty"`
@@ -138,6 +139,10 @@ type chatFileWire struct {
 	Filename string `json:"filename,omitempty"`
 	FileData string `json:"file_data,omitempty"`
 	FileID   string `json:"file_id,omitempty"`
+}
+
+type chatVideoURLWire struct {
+	URL string `json:"url"`
 }
 
 type chatImageURLWire struct {
@@ -520,7 +525,7 @@ func decodeChatResponseMessageContent(raw json.RawMessage) ([]llmprotocol.Conten
 func chatRequestContentAllowed(role llmprotocol.Role, contentType string) bool {
 	switch role {
 	case llmprotocol.RoleUser:
-		return contentType == "text" || contentType == "image_url" || contentType == "input_audio" || contentType == "file"
+		return contentType == "text" || contentType == "image_url" || contentType == "video_url" || contentType == "input_audio" || contentType == "file"
 	case llmprotocol.RoleAssistant:
 		return contentType == "text" || contentType == "refusal"
 	case llmprotocol.RoleSystem, llmprotocol.RoleDeveloper, llmprotocol.RoleTool:
@@ -605,6 +610,14 @@ func decodeChatContent(body json.RawMessage, part chatContentWire) (llmprotocol.
 			text = part.Text
 		}
 		return llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: text}, nil
+	case "video_url":
+		if part.VideoURL == nil || part.VideoURL.URL == "" {
+			return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "video_url_required", "video URL is required", nil)
+		}
+		if mime, data, inline := decodeDataURL(part.VideoURL.URL); inline {
+			return llmprotocol.Content{Kind: llmprotocol.ContentVideo, MediaType: mime, Data: data}, nil
+		}
+		return llmprotocol.Content{Kind: llmprotocol.ContentVideo, URL: part.VideoURL.URL}, nil
 	case "image_url":
 		content, err := decodeChatImageContent(part.ImageURL)
 		content.Cache = decodeAnthropicCacheControl(part.CacheControl)
@@ -625,9 +638,10 @@ func decodeChatContent(body json.RawMessage, part chatContentWire) (llmprotocol.
 
 func validateChatContentVariant(body json.RawMessage, typeName string) error {
 	known := []string{
-		"cache_control", "file", "image_url", "input_audio", "prompt_cache_breakpoint", "refusal", "text", "type",
+		"cache_control", "file", "image_url", "input_audio", "prompt_cache_breakpoint", "refusal", "text", "type", "video_url",
 	}
 	allowedByType := map[string][]string{
+		"video_url":   {"type", "video_url"},
 		"text":        {"cache_control", "prompt_cache_breakpoint", "text", "type"},
 		"refusal":     {"refusal", "type"},
 		"image_url":   {"cache_control", "image_url", "prompt_cache_breakpoint", "type"},

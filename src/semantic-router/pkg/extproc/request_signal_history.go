@@ -4,9 +4,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/decisionmedia"
 )
 
 type signalConversationHistory struct {
+	decisionMedia            []*decisionmedia.Source
 	currentUserMessage       string
 	priorUserMessages        []string
 	nonUserMessages          []string
@@ -47,6 +49,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		return signalConversationHistory{}
 	}
 	return signalConversationHistory{
+		decisionMedia:             result.DecisionMedia,
 		currentUserMessage:        result.UserContent,
 		priorUserMessages:         append([]string(nil), result.PriorUserMessages...),
 		nonUserMessages:           append([]string(nil), result.NonUserMessages...),

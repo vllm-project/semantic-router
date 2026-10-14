@@ -138,6 +138,16 @@ func (w *keyWriter) request(request Request) {
 	} else {
 		w.int(-1)
 	}
+	// Keep the existing text-only key unchanged.
+	if len(request.Images)+len(request.Videos) > 0 {
+		w.string("decision-media-v1")
+		for _, items := range [][]string{request.Images, request.Videos} {
+			w.int(len(items))
+			for _, item := range items {
+				w.string(item)
+			}
+		}
+	}
 	w.int(len(request.Questions))
 	for _, question := range request.Questions {
 		w.question(question)

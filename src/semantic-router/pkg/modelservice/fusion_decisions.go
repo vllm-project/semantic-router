@@ -1,8 +1,10 @@
 package modelservice
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,6 +74,19 @@ func decisionGroup(call *bundleCall) string {
 
 // stateText is the fusion key of a call's state: its text, or its named parts.
 func stateText(request Request) string {
+	if len(request.Images)+len(request.Videos) > 0 {
+		// Hash the ordered inputs instead of retaining another copy of large data URLs.
+		digest := sha256.New()
+		for _, items := range [][]string{request.Images, request.Videos} {
+			fmt.Fprintf(digest, "%d:", len(items))
+			for _, item := range items {
+				fmt.Fprintf(digest, "%d:", len(item))
+				_, _ = io.WriteString(digest, item)
+			}
+		}
+		request.Images, request.Videos = nil, nil
+		return fmt.Sprintf("m%x:%s", digest.Sum(nil), stateText(request))
+	}
 	if request.Parts == nil {
 		return "s" + request.State
 	}
@@ -155,7 +170,7 @@ func fuseDecisions(client *Client, calls []*bundleCall) []*bundleTask {
 		var target *bundleTask
 		if entry.group != "" {
 			for _, task := range open[entry.group] {
-				if task.decision.fits(entry.call, entry.text, multiple, limit) {
+				if task.decision.fits(entry.call, entry.text, multiple, limit) && mediaFusionFits(client, task, entry.call, entry.text) {
 					target = task
 					break
 				}
@@ -231,7 +246,8 @@ func (t *bundleTask) prepareDecision() {
 		states := make(map[string]api.DecisionState, len(d.states)-1)
 		for index, state := range d.states[1:] {
 			state.name = strconv.Itoa(index + 1)
-			states[state.name] = api.DecisionState{State: state.calls[0].task.Decisions.State, Questions: state.questions()}
+			source := state.calls[0].task.Decisions
+			states[state.name] = api.DecisionState{State: source.State, Questions: state.questions(), Images: source.Images, Videos: source.Videos}
 		}
 		body.States = &states
 	}
