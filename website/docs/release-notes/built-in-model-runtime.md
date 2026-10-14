@@ -95,11 +95,11 @@ own settings. See
 - **System One requests lose `options.profile`**
   ([#5071](https://github.com/vllm-project/semantic-router/pull/5071)). A
   request that sets it returns `400` (`invalid_request`): it runs with its
-  deployment's [engine arguments](../model-runtime/engine-args.md). A
+  deployment's [engine arguments](model-runtime/engine-args.md). A
   `return_meta` answer reports `dtype` and `numerics` (`exact` or
   `approximate`) instead of `profile`. The router checks `options` itself and
   refuses any option the
-  [public System One API](../api/router.md#system-one-api-stability) does not
+  [public System One API](api/router.md#system-one-api-stability) does not
   define.
 - **Long inputs cost what their model reads**
   ([#4654](https://github.com/vllm-project/semantic-router/issues/4654)). The
