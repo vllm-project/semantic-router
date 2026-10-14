@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。

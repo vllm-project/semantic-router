@@ -114,7 +114,7 @@ assert_contains "$audit_output" "1 English fallback"
 assert_contains "$audit_output" "cases: 1"
 
 coverage_only_output="$(website/scripts/check-translation-sync.sh --coverage-only 2>&1)" \
-    || fail "coverage-only audit should ignore source drift and metadata work"
+    || fail "coverage-only audit should ignore source drift and source metadata work"
 assert_contains "$coverage_only_output" "0 coverage regressions"
 
 deleted_translation="website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/cases/definitely-current.md"
@@ -219,15 +219,17 @@ commit_at "2026-01-02T00:00:00Z" "add review translations"
 
 for declaration in 'is_mtpe: true' 'is_mtpe: false' 'is_mtpe: false # awaiting review'; do
     write_review_fixture "$declaration"
-    website/scripts/check-translation-sync.sh --locale zh-Hans >/dev/null \
-        || fail "explicit boolean review state should pass: $declaration"
+    for mode in '' '--fix-status' '--coverage-only'; do
+        website/scripts/check-translation-sync.sh --locale zh-Hans ${mode:+"$mode"} >/dev/null \
+            || fail "explicit boolean review state should pass: $declaration ($mode)"
+    done
 done
 
 # Quoted false is truthy in the banner, and nested metadata is not read by it.
 for declaration in '' 'is_mtpe:' 'is_mtpe: pending' 'is_mtpe: 1' 'is_mtpe: "false"' "is_mtpe: 'true'" $'other:\n  is_mtpe: true'; do
     write_review_fixture "$declaration"
     before="$(cksum "$review_file")"
-    for mode in '' '--fix-status'; do
+    for mode in '' '--fix-status' '--coverage-only'; do
         set +e
         review_output="$(website/scripts/check-translation-sync.sh --locale zh-Hans ${mode:+"$mode"} 2>&1)"
         review_status=$?
@@ -237,18 +239,23 @@ for declaration in '' 'is_mtpe:' 'is_mtpe: pending' 'is_mtpe: 1' 'is_mtpe: "fals
         assert_contains "$review_output" "missing or invalid is_mtpe (expected a top-level boolean: true or false)"
         [[ "$(cksum "$review_file")" == "$before" ]] || fail "audit must not assign review state"
     done
-    website/scripts/check-translation-sync.sh --coverage-only >/dev/null \
-        || fail "coverage-only audit should ignore review metadata"
 done
 
 write_review_fixture 'is_mtpe: true'
 printf '# Archived translation without frontmatter\n' > "$review_dir/version-v0.2/review.mdx"
+for mode in '' '--fix-status' '--coverage-only'; do
+    website/scripts/check-translation-sync.sh --locale zh-Hans ${mode:+"$mode"} >/dev/null \
+        || fail "archived translations do not require review declarations ($mode)"
+done
+
+# A current page without frontmatter must fail the same CI gate as an invalid field.
+printf '# Current translation without frontmatter\n' > "$review_file"
 set +e
-review_output="$(website/scripts/check-translation-sync.sh --locale zh-Hans 2>&1)"
+review_output="$(website/scripts/check-translation-sync.sh --coverage-only 2>&1)"
 review_status=$?
 set -e
-[[ $review_status -eq 1 ]] || fail "archived translations also need explicit review state"
-assert_contains "$review_output" "version-v0.2/review.mdx"
+[[ $review_status -eq 1 ]] || fail "current translations need explicit review state"
+assert_contains "$review_output" "current/review.md"
 assert_contains "$review_output" "missing or invalid is_mtpe"
 
 echo "Translation sync behavior test passed."

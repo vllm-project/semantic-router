@@ -71,7 +71,7 @@ Latest Git commit times are the primary drift signal. translation.source_commit
 is a secondary metadata signal: when it is behind but the translated file is not
 older, the file is reported for verification instead of definitely outdated.
 
-Current and versioned translations must declare is_mtpe as a top-level boolean.
+Current translations must declare is_mtpe as a top-level, unquoted boolean.
 The audit reports missing or invalid review state without assigning it.
 
 Missing locale files use Docusaurus's current-English fallback and are reported
@@ -83,7 +83,7 @@ Options:
   -l, --locale LOCALE   Check specific locale only (default: all)
       --fix-status       Update unambiguous translation.outdated flags
       --update-baseline  Record the current locale override paths and exit
-      --coverage-only    Check current-doc coverage without source drift metadata
+      --coverage-only    Check current-doc coverage and review state, without source drift
   -h, --help            Show this help message
 EOF
             exit 0
@@ -316,6 +316,12 @@ check_locale() {
 
     while IFS= read -r -d '' translated_file; do
         local translated_rel_path="${translated_file#"$WEBSITE_DIR/$i18n_dir"/}"
+        local review_state
+        review_state="$(frontmatter_review_state "$translated_file")"
+        if [[ "$review_state" != "true" && "$review_state" != "false" ]]; then
+            metadata_files+=("current/$translated_rel_path|missing or invalid is_mtpe (expected a top-level boolean: true or false)")
+            metadata_count=$((metadata_count + 1))
+        fi
         if [[ ! -f "$DOCS_DIR/$translated_rel_path" ]]; then
             orphaned_translations+=("$translated_rel_path")
             orphaned_translation_count=$((orphaned_translation_count + 1))
@@ -324,19 +330,6 @@ check_locale() {
             unrecorded_coverage_count=$((unrecorded_coverage_count + 1))
         fi
     done < <(find "$WEBSITE_DIR/$i18n_dir" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
-
-    if ! $COVERAGE_ONLY; then
-        local locale_docs_dir="$WEBSITE_DIR/i18n/$locale/docusaurus-plugin-content-docs"
-        local review_state
-        while IFS= read -r -d '' translated_file; do
-            review_state="$(frontmatter_review_state "$translated_file")"
-            if [[ "$review_state" != "true" && "$review_state" != "false" ]]; then
-                local review_path="${translated_file#"$locale_docs_dir"/}"
-                metadata_files+=("$review_path|missing or invalid is_mtpe (expected a top-level boolean: true or false)")
-                metadata_count=$((metadata_count + 1))
-            fi
-        done < <(find "$locale_docs_dir" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
-    fi
 
     while IFS= read -r -d '' source_file; do
         local rel_path="${source_file#"$DOCS_DIR"/}"

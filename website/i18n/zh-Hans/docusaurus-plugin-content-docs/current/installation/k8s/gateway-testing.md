@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 测试 Kubernetes Gateway 部署
 sidebar_label: 测试 Gateway 部署
 description: 验证网关可达性、直接模型请求、语义路由、响应头和后端选择。

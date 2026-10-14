@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: SemanticRouter 自定义资源参考
 sidebar_label: SemanticRouter 自定义资源
 description: vllm.ai/v1alpha1 SemanticRouter 自定义资源的顶层字段指南。

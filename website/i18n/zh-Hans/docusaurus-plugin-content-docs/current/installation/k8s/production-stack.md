@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 与 vLLM Production Stack 集成
 description: 将 Semantic Router 的模型池选择连接到由 vLLM Production Stack 管理的模型服务。
 translation:

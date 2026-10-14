@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 与 llm-d 集成
 description: 由 Semantic Router 选择模型池，由 llm-d 在该池内调度副本。
 translation:
