@@ -5,9 +5,9 @@ expected identity and parameter count; references live in
 ``registry/golden_answers_vela2.json`` and the decoders' (0.8B, 4B, 9B) kernel
 choices in ``registry/kernel_choices.json``: those of the Decision 2.0 model
 each one's backbone comes from (Eos-0.8B, Nox-4B, Lux-9B), the same tuning
-keys. ``reduced`` names the copy
-``max_speed`` may load per device class, where ``docs/records/vela2-parity.md``
-and ``vela2-performance.md`` show it at the accuracy floor and faster. The
+keys. ``reduced`` names the copy the batches that merge requests run per
+device class, where ``docs/records/vela2-parity.md`` and
+``vela2-performance.md`` show it at the accuracy floor and faster. The
 repositories are public; the pins are the revisions the records measured.
 """
 

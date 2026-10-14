@@ -1,14 +1,18 @@
-# Opt-in profiles: accuracy and speed on ROCm (MI325X)
+# Batching and shared context: accuracy and speed on ROCm (MI325X)
 
 > **Phase 1 record** (Decision 2.0, [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and its follow-ups). The Phases 2–4 records are the `decision1-*`, `vela1-*`, `vela2-*`, `embed-*`, `stores-*`, `router-latency-cpu*`, `router-latency-rocm*`, `rocm-router-image` and `removal-footprint*` files.
 
-The `exact` profile, the default, answers bit-identically to the released
-packages ([parity record](rocm-mi325x-parity.md)). The other profiles may move
-an answer by rounding and are opt-in.
+Measured when the runtime still answered each request alone by default, in
+the released packages' batches (*unbatched* below), and batching and shared
+context were opt-in. Unbatched answers are bit-identical to the released
+packages ([parity record](rocm-mi325x-parity.md)), and the golden check still
+compares against them. The runtime now batches by default, as vLLM does, and
+shared context is on by default for Decision 2.0
+([engine arguments](../../../../website/docs/model-runtime/engine-args.md)).
 
-Each profile reports three things:
+Each configuration reports three things:
 
-- the decisions it changes, against the exact path's own noise floor;
+- the decisions it changes, against the unbatched path's own noise floor;
 - the Decision Index delta: a paired bootstrap over scoring cases, whose 95%
   CI must contain 0 or be positive (Index values stay private);
 - the speed it buys.
@@ -19,15 +23,15 @@ Each profile reports three things:
 
 ## Noise floor
 
-The exact path is deterministic within a process, but it is not
+The unbatched path is deterministic within a process, but it is not
 batch-invariant: GEMM kernels depend on the row count, so the same question
 asked alone or inside its request's batch can move by rounding. That
 batch-composition effect is the reference.
 
 Measured with the released runtime, it changes about as many decisions as
-the profiles below. On typed-final with 16 questions per request, it changed
-18 / 2,000 decisions (Kai) and 10 / 2,000 (Eos). On css15 it changed
-35 / 6,547 and 29 / 6,547 (shared-context study,
+batching and shared context below. On typed-final with 16 questions per
+request, it changed 18 / 2,000 decisions (Kai) and 10 / 2,000 (Eos). On css15
+it changed 35 / 6,547 and 29 / 6,547 (shared-context study,
 `src/training/decision2/v2/serving/records/shared-ctx-2026-10-02.md`).
 
 Across processes, the Qwen3.5 sizes' gated-delta kernels (FLA) pick their
@@ -36,7 +40,7 @@ by rounding (|Δp| up to about 0.02) unless they share an autotune cache. The
 parity records share one; the Index comparisons below are paired within one
 process.
 
-## `shared_context`
+## Shared context
 
 Many questions about one input: the shared prefix runs once as one packed
 tree. Attention merges the prefix part and each question's own part by
@@ -49,12 +53,12 @@ log-sum-exp, and the gated-delta layers hand over the prefix state.
     about as many as the noise floor;
   - accuracy deltas on the four panels have 95% CIs containing 0;
   - the Index delta is indistinguishable from 0 at Kai and Eos (CIs contain 0).
-- **Policy:** `available()` sets a break-even threshold per backbone. Below
-  it, the profile keeps the exact path: the request must save that many tokens,
+- **Policy:** a break-even threshold per backbone. Below it, a request runs
+  as it would without shared context: it must save that many tokens,
   (questions − 1) × shared prefix ≥ threshold.
 - **Speed** (128 questions about one ~240-token input):
 
-| Model | Exact | `shared_context` | Speed-up |
+| Model | Unbatched | Shared context | Speed-up |
 | --- | --- | --- | --- |
 | Kai-0.6B | 199 ms | 112 ms | 1.8× |
 | Eos-0.8B | 232 ms | 137 ms | 1.7× |
@@ -63,7 +67,7 @@ log-sum-exp, and the gated-delta layers hand over the prefix state.
 | Lux-9B | 1,320 ms | 448 ms | 2.9× |
 | Vega-27B | 5,286 ms | 1,562 ms | 3.4× |
 
-## `batching`
+## Batching
 
 Questions of concurrent requests share padded batches: rows sorted by length,
 packed up to 65,536 padded tokens, after a 2 ms collection window.
@@ -83,23 +87,25 @@ packed up to 65,536 padded tokens, after a 2 ms collection window.
 
 - **Index**, all 120,226 requests, answered in groups of 16 consecutive
   requests:
-  - Kai: the released runtime's batching against its exact path. The harness's
-    exact sample reproduced the base run on 900 / 900 requests. The paired
-    bootstrap's 95% CI contains 0.
-  - Eos: the native `batching` profile against the native exact path in the same
-    process.
+  - Kai: the released runtime's batching against its unbatched path. The
+    harness's unbatched sample reproduced the base run on 900 / 900 requests.
+    The paired bootstrap's 95% CI contains 0.
+  - Eos: the native runtime batched against the native runtime unbatched, in
+    the same process.
     - 999 of 282,335 decisions changed (0.35%), and no request changed status.
-      The exact path's own batch-composition noise on the multi-question Index
-      sample is 0.30% (Eos) and 0.41% (Kai).
+      The unbatched path's own batch-composition noise on the multi-question
+      Index sample is 0.30% (Eos) and 0.41% (Kai).
     - The paired bootstrap's 95% CI contains 0, but the point estimate leans
       negative (P(Δ ≤ 0) ≈ 0.9). Batching touches every request, including the
       single-question ones the shared-context switch leaves alone, so its CI is
       about twice as wide.
-    - Recommendation: opt-in for throughput, not a default. Kai shows no lean.
+    - The recommendation at the time was to keep batching opt-in. The runtime
+      now batches by default for throughput; this lean is its measured cost
+      on Eos. Kai shows no lean.
 - **Throughput** (requests/s; pre-rendered single-question requests in waves
   of C, steady state):
 
-| Model | Exact | `batching` C = 16 | `batching` C = 64 |
+| Model | Unbatched | Batched, C = 16 | Batched, C = 64 |
 | --- | --- | --- | --- |
 | Kai-0.6B | 234 | 681 | 837 |
 | Eos-0.8B | 197 | 606 | 721 |
@@ -113,25 +119,26 @@ packed up to 65,536 padded tokens, after a 2 ms collection window.
   there, and concurrent traffic would otherwise capture a graph for nearly
   every new large shape.
 
-## `max_speed`
+## Batching and shared context together
 
 Shared-context trees for the multi-question requests that pass the
-shared_context policy; cross-request batching for the rest; approximate
-kernels allowed (none registered yet, so the kernels are the exact ones).
+shared-context policy, cross-request batching for the rest, and approximate
+kernels allowed (none registered on ROCm, so the kernels are the reference
+ones). This is the runtime's default for Decision 2.0 on ROCm today.
 
-- **Decisions:** the union of the two profiles above.
-- **Index** (Eos, native, same process as the exact path):
+- **Decisions:** the union of the two above.
+- **Index** (Eos, native, same process as the unbatched path):
   - 1,007 of 282,335 decisions changed (0.36%), and no request changed status;
   - the paired bootstrap's 95% CI contains 0 and leans negative, as for
-    `batching`: most Index requests are below the shared-context break-even,
+    batching: most Index requests are below the shared-context break-even,
     so they are batched.
-- **Speed:** `shared_context`'s on multi-question requests and `batching`'s
+- **Speed:** shared context's on multi-question requests and batching's
   throughput on the rest.
 
 ## Candidates measured and not shipped
 
 - **Merged projection GEMMs** (q/k/v, gate/up, the gated-delta input
   projections as one GEMM each): 1.4–2.3× faster GEMMs at ≤ 512 tokens, but not
-  bit-identical. They wait for a `max_speed` kernel registration with their own
-  accuracy record.
+  bit-identical. They wait for an approximate-kernel registration with their
+  own accuracy record.
 - **Efficient SDPA with in-kernel GQA:** unavailable on ROCm with a mask.

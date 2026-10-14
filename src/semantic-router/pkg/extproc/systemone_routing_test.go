@@ -38,7 +38,7 @@ func TestSystemOneAutoUsesRecipeSignalsAndNativeBackends(t *testing.T) {
 			probability = 0.99
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"model":%q,"answers":{"task":{"type":"choice","choice":"chat","probabilities":{"chat":%g,"code":%g},"confidence":0.5}},"usage":{"input_tokens":10,"output_tokens":0},"meta":{"profile":"exact"}}`, request.Model, probability, 1-probability)
+		fmt.Fprintf(w, `{"model":%q,"answers":{"task":{"type":"choice","choice":"chat","probabilities":{"chat":%g,"code":%g},"confidence":0.5}},"usage":{"input_tokens":10,"output_tokens":0},"meta":{"dtype":"float32"}}`, request.Model, probability, 1-probability)
 	}))
 	defer backend.Close()
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
