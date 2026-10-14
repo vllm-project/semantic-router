@@ -2,6 +2,7 @@
 package systemone
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -59,19 +60,22 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": models})
 			return
 		}
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, RequestLimit))
+		body, err := readRequestBody(w, r)
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
 			publicSystemOneError(w, http.StatusRequestEntityTooLarge, "request_too_large")
 			return
 		}
-		var request map[string]json.RawMessage
-		if err != nil || json.Unmarshal(body, &request) != nil || request == nil {
+		if err != nil {
 			publicSystemOneError(w, 400, "invalid_request")
 			return
 		}
-		var model string
-		if json.Unmarshal(request["model"], &model) != nil || model == "" {
+		model, valid := requestModel(body)
+		if !valid {
+			publicSystemOneError(w, 400, "invalid_request")
+			return
+		}
+		if model == "" {
 			publicSystemOneError(w, 400, "model_required")
 			return
 		}
@@ -110,7 +114,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, http.StatusServiceUnavailable, "systemone_unresolved")
 			return
 		}
-		if routed && errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")
 			return
 		}
@@ -134,6 +138,18 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 		}
 		_ = json.NewEncoder(w).Encode(result)
 	}
+}
+
+// readRequestBody reads a body of at most RequestLimit bytes into one buffer
+// sized by its declared length, so a large media request is copied once.
+func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	reader := http.MaxBytesReader(w, r.Body, RequestLimit)
+	if r.ContentLength <= 0 || r.ContentLength > RequestLimit {
+		return io.ReadAll(reader)
+	}
+	buffer := bytes.NewBuffer(make([]byte, 0, r.ContentLength+bytes.MinRead))
+	_, err := buffer.ReadFrom(reader)
+	return buffer.Bytes(), err
 }
 
 // SelectListener never unions grants from multiple listeners.
@@ -187,7 +203,18 @@ func publicSystemOneError(w http.ResponseWriter, status int, code string) {
 	publicSystemOneErrorMessage(w, status, code, strings.ReplaceAll(code, "_", " "))
 }
 
+// retryAfterSeconds tells a client when a temporarily refused request may succeed:
+// a full model at once, a model that is starting or restarting a little later.
+var retryAfterSeconds = map[string]string{
+	string(api.Overloaded):  "1",
+	string(api.NotReady):    "5",
+	"systemone_unavailable": "5",
+}
+
 func publicSystemOneErrorMessage(w http.ResponseWriter, status int, code, message string) {
+	if seconds, ok := retryAfterSeconds[code]; ok {
+		w.Header().Set("Retry-After", seconds)
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code, "type": "systemone_error", "message": message}})
 }
