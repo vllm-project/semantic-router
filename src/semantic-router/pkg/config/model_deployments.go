@@ -17,11 +17,13 @@ type ModelDeployment struct {
 	Device        string           `yaml:"device,omitempty" json:"device,omitempty"`
 	Input         ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
 	// MaxNumSeqs bounds the rows (one per question or input) one forward of a
-	// model_runtime deployment holds; 1 runs every row alone. Unset keeps the
-	// runtime's default, which never binds at the default token budget.
+	// model_runtime deployment holds; 1 runs every row alone. Unset leaves it
+	// to the runtime, which picks it by the device's memory class.
 	MaxNumSeqs *int `yaml:"max_num_seqs,omitempty" json:"max_num_seqs,omitempty"`
-	// MaxNumBatchedTokens bounds one forward in padded tokens: its rows times
-	// its longest row (runtime default 65,536).
+	// MaxNumBatchedTokens bounds one forward in tokens: the sum of its rows
+	// for a model that packs merged rows, else its rows times its longest row.
+	// Unset leaves it to the runtime: the device class's budget, adjusted by a
+	// short startup calibration on GPUs.
 	MaxNumBatchedTokens *int `yaml:"max_num_batched_tokens,omitempty" json:"max_num_batched_tokens,omitempty"`
 	// BatchWindowMS is how long the runtime waits after the first request to
 	// collect more (runtime default 2 ms).

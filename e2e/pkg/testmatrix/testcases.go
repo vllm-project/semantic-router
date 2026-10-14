@@ -96,6 +96,12 @@ var DashboardContract = []string{
 	"dashboard-deploy-safe-failure",
 	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
 	"dashboard-deploy-rollback",
+	// The active projection names the served config by version and hash after deploy and rollback (issue #3233)
+	"dashboard-status-active-config",
+	// Logs state their deployment contract and the audit trail records a rejected deploy (issue #3233)
+	"dashboard-logs-diagnostics",
+	// Anonymous and forged sessions are rejected on logs and deploy without touching state (issue #3233)
+	"dashboard-anonymous-access-denied",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
