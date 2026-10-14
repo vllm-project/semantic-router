@@ -47,5 +47,5 @@ func TestResponseIdentityRejectsConflictingStateProvenance(t *testing.T) {
 }
 
 func nativeIdentity(model string) InferenceIdentity {
-	return InferenceIdentity{ModelID: model, Revision: strings.Repeat("a", 40), ModelSHA256: strings.Repeat("b", 64), Engine: "native", Profile: "exact", Numerics: "exact", Accelerator: "cpu"}
+	return InferenceIdentity{ModelID: model, Revision: strings.Repeat("a", 40), ModelSHA256: strings.Repeat("b", 64), Engine: "native", Dtype: "float32", Numerics: "exact", Accelerator: "cpu"}
 }

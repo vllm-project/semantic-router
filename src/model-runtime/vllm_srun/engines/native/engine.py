@@ -74,7 +74,7 @@ class NativeEngineModel(EngineModel):
         reduced_kind: str | None = None,
         towers: dict[str, nn.Module] | None = None,
     ):
-        """``reduced_kind`` asks for a reduced copy of every layer stack, which approximate batches run (``reduced.py``).
+        """``reduced_kind`` asks for a reduced copy of every layer stack, which batches that merge requests run (``reduced.py``).
 
         A copy the device cannot run is skipped, and the receipt says why.
         ``towers`` are the model's other backbones (``ModelSpec.towers``).
@@ -221,6 +221,14 @@ class NativeEngineModel(EngineModel):
     @property
     def replays_graphs(self) -> bool:
         return self.graphs is not None
+
+    @property
+    def approximate_kernels(self) -> bool:
+        return any(
+            not self.kernels.select(name).exact
+            for name in self.kernels.available
+            if self.kernels.has(name)
+        )
 
     def _run_tree(
         self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
@@ -600,6 +608,7 @@ class HostStacks:
 class NativeEngine(Engine):
     name = "native"
     auto_priority = 0
+    dtypes = ("auto", "float32", "bfloat16", "float16")
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -619,9 +628,11 @@ class NativeEngine(Engine):
         if (
             device.accelerator != "cpu"
             and not device.bf16
-            and spec.dtype.autocast == "bfloat16"
+            and spec.dtype.needs_gpu_bf16
         ):
             return f"{device.label} has no BF16 support"
+        if device.accelerator == "cpu" and spec.dtype.cpu_weights == "float16":
+            return "float16 runs on GPUs; use bfloat16 or float32 on a CPU"
         return None
 
     def read(
@@ -684,7 +695,7 @@ class NativeEngine(Engine):
         if lora is not None:
             if options.merge_lora:
                 raise ValueError(
-                    "merged LoRA changes answers; it belongs to the max_speed profile"
+                    "merged LoRA changes answers; the runtime runs adapters unmerged"
                 )
             with torch.device("meta"):
                 attach(

@@ -1,10 +1,11 @@
-# Decision 3.0: content caches and the batching profile
+# Decision 3.0: content caches and cross-request batching
 
-The `decision3` family keeps two content-addressed caches on every profile
-and supports the `batching` profile with media rows of several requests in
-one forward. The caches change no answer. `batching` changes answers by
-rounding, about as much as `exact` itself does when a client sends the same
-questions in separate requests.
+The `decision3` family keeps two content-addressed caches whatever its engine
+arguments, and batches rows of concurrent requests, with media rows of
+several requests in one forward. The caches change no answer. Batching,
+opt-in when this was measured and the runtime's default now, changes answers
+by rounding, about as much as answering each request alone does when a
+client sends the same questions in separate requests.
 
 - **Date:** 2026-10-13.
 - **Device:** AMD Instinct MI325X (gfx942), the router's ROCm image
@@ -13,7 +14,7 @@ questions in separate requests.
 - **Models:** the built-in Decision 3.0 revisions of
   `registry/tables/decision3.py`.
 
-## Content caches (every profile, exact)
+## Content caches (batched or not, exact)
 
 - **Processed media.** A request's image and video data URLs are keyed by the
   SHA-256 of their text. A repeated image or video skips base64 decoding,
@@ -43,18 +44,18 @@ median ms):
 On d3, a repeated 1.6 MP PNG with 8 questions takes 1,278 ms instead of
 1,888 ms.
 
-## Tokenizing a request at once (every profile, exact)
+## Tokenizing a request at once (batched or not, exact)
 
 A request's question prompts are tokenized in one batch call, which runs
 without the GIL, so the worker thread keeps launching forwards meanwhile.
 On the 4,000-request public sample (3,969 requests, 29,200 questions, mostly
 long states) on one d3-edge worker of an MI300X, all 3,969 exact answers are
-byte-identical, and the sample takes 111.7 s instead of 126.0 s on `exact`
-(8 clients) and 92.9 s instead of 115.4 s on `batching` (48 clients). The GPU
+byte-identical, and the sample takes 111.7 s instead of 126.0 s with each
+request alone (8 clients) and 92.9 s instead of 115.4 s batched (48 clients). The GPU
 was busy 56% of the time before, because the worker thread waited for the
 GIL; afterwards, 70% to 84%.
 
-## `batching` for Decision 3.0
+## Batching for Decision 3.0
 
 Rows of concurrent requests share forwards. Text rows run in one left-padded
 pass as a request's rows do. Media rows run in one pass whatever their
@@ -65,25 +66,26 @@ coalesced forward holds as many tokens as its model processes in about
 several short forwards.
 
 **Accuracy.** A 4,000-request stratified sample of the Decision Index 0.3
-public suite (29,339 questions), answered by one worker with
-`"options": {"profile": "exact"}` and then on `batching` with 32 concurrent
+public suite (29,339 questions), answered by one worker with each request
+alone (a request option of the time) and then batched with 32 concurrent
 clients, so rows of different requests shared forwards. Gold accuracy is the
 share of Choice and Noul questions answered with their expected option, with
-a paired bootstrap 95% interval over requests. The last row is `exact`
-against itself, with every question sent as its own request (one row per
-forward instead of eight): the noise of the exact path's batch composition.
+a paired bootstrap 95% interval over requests. The last rows are the
+unbatched path against itself, with every question sent as its own request
+(one row per forward instead of eight): the noise of the unbatched path's
+batch composition.
 
 | Model | Comparison | Argmax agreement | Max / mean \|Δp\| | Gold accuracy | Δ, 95% CI (points) |
 | --- | --- | --- | --- | --- | --- |
-| d3-edge | `batching` vs `exact` | 99.69% (91 changed) | 0.115 / 0.0027 | 75.17% → 75.18% | +0.01 [−0.05, +0.08] |
-| d3-mini | `batching` vs `exact` | 99.87% (38 changed) | 0.059 / 0.0015 | 86.81% → 86.81% | −0.00 [−0.05, +0.04] |
-| d3-edge | `exact`, questions sent one by one | 99.69% (91 changed) | 0.148 / 0.0028 | 75.17% → 75.19% | +0.02 [−0.04, +0.09] |
-| d3-mini | `exact`, questions sent one by one | 99.86% (41 changed) | 0.059 / 0.0015 | 86.81% → 86.79% | −0.02 [−0.06, +0.03] |
+| d3-edge | batched vs alone | 99.69% (91 changed) | 0.115 / 0.0027 | 75.17% → 75.18% | +0.01 [−0.05, +0.08] |
+| d3-mini | batched vs alone | 99.87% (38 changed) | 0.059 / 0.0015 | 86.81% → 86.81% | −0.00 [−0.05, +0.04] |
+| d3-edge | alone, questions sent one by one | 99.69% (91 changed) | 0.148 / 0.0028 | 75.17% → 75.19% | +0.02 [−0.04, +0.09] |
+| d3-mini | alone, questions sent one by one | 99.86% (41 changed) | 0.059 / 0.0015 | 86.81% → 86.79% | −0.02 [−0.06, +0.03] |
 
 **Throughput** (requests/s through Engine mode, two workers on one GPU,
 closed-loop clients; text is a 330-token ticket with one question):
 
-| Model | `exact`, best replica count | `batching`, 2 workers | p50 / p99 at that load |
+| Model | Alone, best replica count | Batched, 2 workers | p50 / p99 at that load |
 | --- | --- | --- | --- |
 | d3-edge | 313 (4 workers) | 1,304 | 47 / 97 ms |
 | d3-lite | 163 (4 workers) | 700 | 91 / 161 ms |

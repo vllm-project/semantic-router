@@ -27,8 +27,9 @@ import (
 // asked alone.
 
 // statesMinor is the minor version of the runtime contract from which a
-// decisions call carries further states.
-const statesMinor = 2
+// decisions call carries further states: every 3.x runtime does. A runtime
+// whose version names no minor gets one task per state.
+const statesMinor = 0
 
 // fusedDecision is a decisions task's states, the request's own state first,
 // and its cache key.

@@ -71,7 +71,7 @@ def model(snapshot):
 
 
 def serve(model, body):
-    request = SurfaceRequest("embeddings", body, None, "exact", True, time.monotonic())
+    request = SurfaceRequest("embeddings", body, None, True, time.monotonic())
     plan = model.plan_surface("embeddings", request)
     return plan, model.finish_surface(plan, model.run(plan.items))
 

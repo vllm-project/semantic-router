@@ -14,6 +14,8 @@ from dataclasses import fields
 
 from .accel.autotune import AUTOTUNE_ENV
 from .config import (
+    DTYPES,
+    EngineArgs,
     ModelConfig,
     ServeConfig,
     load_models_file,
@@ -25,7 +27,30 @@ from .registry import builtin
 
 log = logging.getLogger("vllm_srun")
 SERVE_DEFAULTS = ServeConfig()
+ENGINE_DEFAULTS = EngineArgs()
 MODEL_DEFAULTS = {field.name: field.default for field in fields(ModelConfig)}
+# Flags that were removed, and what replaced them.
+REMOVED_FLAGS = {
+    "--profile": (
+        "batching is on by default; set --max-num-seqs, --max-num-batched-tokens, "
+        "--batch-window-ms, --enable-shared-context or --dtype instead"
+    ),
+    "--max-batch-tokens": "it is --max-num-batched-tokens",
+}
+
+
+class RemovedFlag(argparse.Action):
+    """A removed flag: refuse it and name what replaced it."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        flag = option_string or self.dest
+        parser.error(f"{flag} was removed; {REMOVED_FLAGS[flag]}")
 
 
 def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
@@ -40,7 +65,7 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--models",
         dest="models_file",
-        help="YAML file listing the models to serve with their own name, revision, device and profile",
+        help="YAML file listing the models to serve with their own name, revision, device and engine arguments",
     )
     parser.add_argument(
         "--revision",
@@ -63,11 +88,8 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="TCP port (default: %(default)s)",
     )
     parser.add_argument("--uds", help="serve on this Unix domain socket instead of TCP")
-    parser.add_argument(
-        "--profile",
-        default=MODEL_DEFAULTS["profile"],
-        help="numerics profile plugin (default: %(default)s)",
-    )
+    for flag in REMOVED_FLAGS:
+        parser.add_argument(flag, nargs="?", action=RemovedFlag, help=argparse.SUPPRESS)
     parser.add_argument(
         "--engine",
         default=MODEL_DEFAULTS["engine"],
@@ -99,16 +121,53 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="queued tokens before 429 (default: %(default)s)",
     )
     parser.add_argument(
-        "--batch-window-ms",
-        type=float,
-        default=SERVE_DEFAULTS.batch_window_ms,
-        help="batching window of approximate profiles (default: %(default)s)",
+        "--max-num-seqs",
+        type=int,
+        default=ENGINE_DEFAULTS.max_num_seqs,
+        help=(
+            "most rows one forward holds, across requests: one per question of a "
+            "decision request, one per input or window otherwise; 1 runs every row "
+            "alone. The default never binds at the default --max-num-batched-tokens, "
+            "since a row costs at least 8 padded tokens (default: %(default)s)"
+        ),
     )
     parser.add_argument(
-        "--max-batch-tokens",
+        "--max-num-batched-tokens",
         type=int,
-        default=SERVE_DEFAULTS.max_batch_tokens,
-        help="padded tokens per batched forward (default: %(default)s)",
+        default=ENGINE_DEFAULTS.max_num_batched_tokens,
+        help=(
+            "padded tokens one forward may hold: its rows times its longest row, "
+            "counted so also for models that pack rows without padding "
+            "(default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "--batch-window-ms",
+        type=float,
+        default=ENGINE_DEFAULTS.batch_window_ms,
+        help=(
+            "how long the scheduler waits after the first request to collect more, "
+            "when --max-num-seqs is above 1 (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "--dtype",
+        choices=DTYPES,
+        default=ENGINE_DEFAULTS.dtype,
+        help=(
+            "precision the backbone computes in; auto is the precision the model "
+            "was published in (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "--enable-shared-context",
+        action=argparse.BooleanOptionalAction,
+        default=ENGINE_DEFAULTS.enable_shared_context,
+        help=(
+            "compute the shared state of a multi-question decision request once "
+            "(default: on where the model family's records show no accuracy loss, "
+            "Decision 2.0; off for the others)"
+        ),
     )
     parser.add_argument(
         "--max-request-bytes",
@@ -173,7 +232,22 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _models(args: argparse.Namespace) -> tuple[ModelConfig, ...]:
+def _engine_args(args: argparse.Namespace) -> EngineArgs:
+    try:
+        return EngineArgs(
+            max_num_seqs=args.max_num_seqs,
+            max_num_batched_tokens=args.max_num_batched_tokens,
+            batch_window_ms=args.batch_window_ms,
+            dtype=args.dtype,
+            enable_shared_context=args.enable_shared_context,
+        )
+    except ValueError as exc:
+        raise SystemExit(f"--{str(exc).replace('_', '-')}") from exc
+
+
+def _models(
+    args: argparse.Namespace, engine_args: EngineArgs
+) -> tuple[ModelConfig, ...]:
     """The served models, from MODEL arguments or --models."""
     positional = list(args.model or [])
     if args.models_file:
@@ -183,7 +257,10 @@ def _models(args: argparse.Namespace) -> tuple[ModelConfig, ...]:
             raise SystemExit(
                 "--revision and --served-model-name apply to one MODEL argument"
             )
-        return load_models_file(args.models_file)
+        try:
+            return load_models_file(args.models_file, engine_args)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     if not positional:
         raise SystemExit("serve needs a MODEL argument or --models FILE")
     if len(positional) > 1 and (args.revision or args.served_model_name):
@@ -201,7 +278,6 @@ def _models(args: argparse.Namespace) -> tuple[ModelConfig, ...]:
                 revision=revision or args.revision,
                 name=args.served_model_name,
                 device=args.device,
-                profile=args.profile,
                 engine=args.engine,
                 family=args.family,
                 memory_budget_gib=args.memory_budget,
@@ -211,13 +287,8 @@ def _models(args: argparse.Namespace) -> tuple[ModelConfig, ...]:
 
 
 def config_from_args(args: argparse.Namespace) -> ServeConfig:
-    models = _models(args)
-    profiles = registry.names("profiles")
-    for model in models:
-        if model.profile not in profiles:
-            raise SystemExit(
-                f"unknown profile {model.profile!r}; available: {', '.join(profiles)}"
-            )
+    engine_args = _engine_args(args)
+    models = _models(args, engine_args)
     return ServeConfig(
         models=models,
         host=args.host,
@@ -231,8 +302,7 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         memory_budget_gib=args.memory_budget,
         max_queue=args.max_queue,
         max_queued_tokens=args.max_queued_tokens,
-        batch_window_ms=args.batch_window_ms,
-        max_batch_tokens=args.max_batch_tokens,
+        engine_args=engine_args,
         max_request_bytes=args.max_request_bytes,
         cache_dir=args.cache_dir,
         offline=args.offline,
@@ -257,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands.add_parser(
         "plugins",
-        help="list the installed families, engines, accelerators and profiles",
+        help="list the installed families, engines and accelerators",
     )
     commands.add_parser(
         "devices",

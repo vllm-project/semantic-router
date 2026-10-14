@@ -3,12 +3,13 @@
 The native engine loads d3 packages whose projections are held as
 compressed-tensors FP8 (W8A8, `float-quantized`) or int4 (W4A16,
 `pack-quantized`) weights (`quantization.py`, `engines/native/quantized.py`).
-A quantized package is its own model: its `exact` answers are the ones its
-weights give, and this record compares them with the BF16 package's.
+A quantized package is its own model: its answers are the ones its weights
+give, and this record compares them with the BF16 package's.
 
 - **Date:** 2026-10-14.
 - **Device:** one AMD Instinct MI300X (gfx942), `vllm/vllm-openai-rocm` image
-  (PyTorch 2.12.0, Triton 3.7.1, FLA 0.5.2), exact profile.
+  (PyTorch 2.12.0, Triton 3.7.1, FLA 0.5.2), exact kernels only
+  (`EngineOptions.exact_kernels_only`).
 - **Kernel tables:** also an NVIDIA GeForce RTX 4070 Ti SUPER (Ada, compute
   capability 8.9; PyTorch 2.10.0+cu128, Triton 3.6.0).
 - **Baseline:** `vllm-sr/d3` (27B) at the built-in revision `cbff3a3c`.
@@ -99,17 +100,18 @@ GEMM's time on the RTX 4070 Ti SUPER at these sizes.
 
 ## The fused int4 kernel in a model
 
-Under approximate kernels (`max_speed`), a quantized d3 package's int4 layers
-take the fused kernel for inputs of up to 256 rows on NVIDIA GPUs; the exact
-profile keeps the unpacked product. An AWQ int4 `vllm-sr/d3-mini` (made by
-`awq.py` as above) on the RTX 4070 Ti SUPER, the first 500 of the 1,000 train
-rows, each answered a third time:
+The decision3 family allows approximate kernels for a quantized package
+(`DtypePolicy.approximate_kernels`), so at `--dtype auto` its int4 layers take
+the fused kernel for inputs of up to 256 rows on NVIDIA GPUs; with exact kernels
+only (an explicit `--dtype`) they keep the unpacked product. An AWQ int4
+`vllm-sr/d3-mini` (made by `awq.py` as above) on the RTX 4070 Ti SUPER, the first
+500 of the 1,000 train rows, each answered a third time:
 
-| Package and profile | Changed against the exact int4 answers | Median latency | Device memory |
+| Package and kernels | Changed against the exact-kernel int4 answers | Median latency | Device memory |
 | --- | --- | --- | --- |
-| BF16 `d3-mini`, exact | | 40.7 ms | 9.1 GB |
-| AWQ int4, exact | | 52.0 ms | 3.9 GB |
-| AWQ int4, `max_speed` | 0 of 500 (largest probability change 0.028) | 46.9 ms | 3.9 GB |
+| BF16 `d3-mini`, exact kernels | | 40.7 ms | 9.1 GB |
+| AWQ int4, exact kernels | | 52.0 ms | 3.9 GB |
+| AWQ int4, approximate kernels | 0 of 500 (largest probability change 0.028) | 46.9 ms | 3.9 GB |
 
 Against the BF16 package, the int4 one changes 17 of the 500 answers (96.6%;
 accuracy 0.812 against 0.820).

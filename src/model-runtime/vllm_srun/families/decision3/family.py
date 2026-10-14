@@ -68,7 +68,7 @@ __all__ = ["Decision3Family", "Decision3Model"]
 
 BATCH_SIZE = 8
 VISION_TOWER = "vision"
-# Device time one coalesced forward of an approximate profile should take, so a full queue is
+# Device time one forward that merges requests should take, so a full queue is
 # answered over several short forwards instead of one long one; the running cost per token sizes it.
 COALESCED_FORWARD_SECONDS = 0.3
 # Dense BF16 throughput assumed for the first coalesced forward, before one is measured.
@@ -703,7 +703,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return out
 
     def run_approximate(self, items: list[Item]) -> list[list[float] | None]:
-        """A batch of a coalescing profile: rows of several requests, text rows and media rows in a pass each.
+        """A batch that merges requests: rows of several requests, text rows and media rows in a pass each.
 
         Text rows run as one left-padded pass, as a request's text rows do. Media rows run in one pass whatever
         their requests, each request's images through the tower once and their features copied into its rows
