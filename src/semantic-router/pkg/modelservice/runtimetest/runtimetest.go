@@ -117,7 +117,8 @@ func (r *Runtime) SetFailed(id, reason string) {
 	r.failed[id] = reason
 }
 
-// SetAPIVersion changes the contract version /health and /v1/models report.
+// SetAPIVersion changes the contract version /health and /v1/models report,
+// as a runtime of another release does.
 func (r *Runtime) SetAPIVersion(version string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -429,11 +430,7 @@ func (r *Runtime) model(id *string, surface string) (Model, int, *api.ErrorBody)
 func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *api.ErrorBody) {
 	r.mu.Lock()
 	r.decisions = append(r.decisions, body)
-	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	if body.States != nil && apiVersion < "2.2" {
-		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "unknown request fields: ['states']"}
-	}
 	status, response, errBody := r.decideState(body)
 	if status != http.StatusOK || body.States == nil {
 		return status, response, errBody

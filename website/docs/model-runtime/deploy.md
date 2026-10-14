@@ -245,6 +245,10 @@ global:
 attached runtime; it checks its health and treats it as unavailable while it
 is down.
 
+Run an attached runtime from the same release as the router. The router
+accepts only a runtime that serves exactly its contract version and reports
+any other as `incompatible`, with both versions in the reason.
+
 A runtime started this way listens on `127.0.0.1` unless you pass `--host`.
 Expose it only on a private network: it has no authentication of its own.
 
